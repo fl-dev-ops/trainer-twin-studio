@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { authClient } from "@/lib/auth-client";
+import { BASE_DOMAIN } from "@/lib/base-domain";
 
 function SectionLabel({ children }: { children: string }) {
   return (
@@ -131,7 +132,7 @@ export function FounderForm({ token, email }: { token: string; email: string }) 
                   pattern="[a-z0-9][a-z0-9-]*[a-z0-9]"
                   required
                 />
-                <span className="text-muted-foreground whitespace-nowrap text-sm">.trainertwin.localhost</span>
+                <span className="text-muted-foreground whitespace-nowrap text-sm">.{BASE_DOMAIN}</span>
               </div>
               {slug.length >= 3 && slugState ? (
                 <p className={slugState.available ? "text-sm text-green-600" : "text-destructive text-sm"}>

@@ -15,7 +15,7 @@ import {
   UserRound,
   Users,
 } from "lucide-react";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { SidebarAccountMenu } from "@/components/sidebar-account-menu";
 import {
   Sidebar,
   SidebarContent,
@@ -27,7 +27,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarTrigger,
 } from "@/components/ui/sidebar";
 
 const NAV = [
@@ -108,10 +107,7 @@ export function AppSidebar() {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <div className="flex items-center gap-1 px-1.5 group-data-[collapsible=icon]:flex-col">
-              <ThemeToggle />
-              <SidebarTrigger className="ml-auto group-data-[collapsible=icon]:ml-0" />
-            </div>
+            <SidebarAccountMenu profileHref="/profile" isActive={pathname === "/profile"} />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>

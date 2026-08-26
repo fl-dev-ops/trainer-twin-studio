@@ -12,7 +12,7 @@ import { NextResponse, type NextRequest } from "next/server";
  *   <base>/dash/*            -> dash.<base>/*
  *   <base>/*                 -> sign-in on auth.<base>
  */
-const BASE = "trainertwin.localhost";
+const BASE = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "trainertwin.localhost";
 
 /** Paths that must never be host-rewritten (API, framework + public assets). */
 function isPassthrough(pathname: string) {

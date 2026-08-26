@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "portless trainertwin next dev",
+    "dev": "PORTLESS_WILDCARD=1 portless trainertwin next dev",
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint"

@@ -1,7 +1,8 @@
 """TTS through the studio's /api/tts/speech proxy.
 
-OpenAI-style request ({voice, input}) returning streamed raw PCM at 24 kHz
-mono. Keeps TTS_SERVICE_URL / API keys on the web-app side.
+OpenAI-style request ({voice, input}) returning streamed raw PCM at the
+sample rate advertised by the API. Keeps TTS_SERVICE_URL / API keys on the
+web-app side.
 """
 
 from typing import AsyncGenerator
@@ -11,7 +12,7 @@ from loguru import logger
 from pipecat.frames.frames import ErrorFrame, Frame, TTSAudioRawFrame
 from pipecat.services.tts_service import TTSService
 
-SAMPLE_RATE = 24000
+SAMPLE_RATE = 48000
 
 
 class WebTTSService(TTSService):
@@ -46,10 +47,11 @@ class WebTTSService(TTSService):
                         detail = (await response.aread()).decode(errors="replace")[:200]
                         yield ErrorFrame(error=f"TTS error {response.status_code}: {detail}")
                         return
+                    sample_rate = int(response.headers.get("X-Sample-Rate", SAMPLE_RATE))
                     async for chunk in response.aiter_bytes(self.chunk_size):
                         if chunk:
                             await self.stop_ttfb_metrics()
-                            yield TTSAudioRawFrame(chunk, SAMPLE_RATE, 1, context_id=context_id)
+                            yield TTSAudioRawFrame(chunk, sample_rate, 1, context_id=context_id)
         except Exception as error:
             logger.exception("Web TTS request failed")
             yield ErrorFrame(error=f"Web TTS request failed: {error}")

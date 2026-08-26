@@ -22,3 +22,5 @@ tsconfig.tsbuildinfo
 # local data / build caches
 chroma-data/
 agent/.local/
+.vercel
+.env*

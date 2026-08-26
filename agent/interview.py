@@ -201,7 +201,7 @@ class InterviewSession:
                 "agent": config["agent"]["version"],
                 "domain": config["domain"]["version"],
             }
-            voice_id = agent_data.get("voiceId")
+            voice_id = config["agent"]["data"].get("voiceId")
             if isinstance(voice_id, str) and voice_id:
                 self.voice_id = voice_id
             model_name = configured_model_name()

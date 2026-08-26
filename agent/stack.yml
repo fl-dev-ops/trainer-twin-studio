@@ -1,0 +1,42 @@
+version: "3.8"
+
+services:
+  agent:
+    image: trainertwin-agent:local
+    command: ["uv", "run", "python", "bot.py", "--host", "172.18.0.1", "--port", "7860", "-t", "webrtc"]
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://172.18.0.1:7860/', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+    environment:
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://openrouter.ai/api/v1}
+      LLM_MODEL: ${LLM_MODEL:-openai/gpt-4.1-mini}
+      SARVAM_API_KEY: ${SARVAM_API_KEY}
+      ASSEMBLYAI_API_KEY: ${ASSEMBLYAI_API_KEY:-}
+      WEB_URL: ${WEB_URL}
+      AGENT_DEFAULT_VOICE_ID: ${AGENT_DEFAULT_VOICE_ID:-}
+      PIPECAT_ALLOWED_ORIGINS: ${PIPECAT_ALLOWED_ORIGINS:-}
+    volumes:
+      - trainertwin_agent_data:/app/.local
+    networks:
+      - hostnet
+    stop_grace_period: 30s
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+
+networks:
+  hostnet:
+    external: true
+    name: host
+
+volumes:
+  trainertwin_agent_data:

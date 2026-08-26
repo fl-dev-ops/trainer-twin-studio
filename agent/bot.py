@@ -204,11 +204,11 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
             return fallback_voice["id"]
         try:
             async with httpx.AsyncClient(timeout=10) as client:
-                voices = (await client.get(f"{WEB_URL}/api/tts/voices")).json().get("voices", [])
-                ready = next((v for v in voices if v.get("status") == "ready"), None)
-                if ready:
-                    fallback_voice["id"] = ready["id"]
-                    logger.info("No voice assigned; using fallback studio voice '{}'", ready["name"])
+                response = await client.get(f"{WEB_URL}/api/tts/default-voice")
+                voice = response.json().get("voice")
+                if voice:
+                    fallback_voice["id"] = voice["id"]
+                    logger.info("No voice assigned; using fallback studio voice '{}'", voice["name"])
         except Exception:
             logger.warning("Could not look up a fallback voice")
         return fallback_voice["id"] or ""
