@@ -1,0 +1,24 @@
+# OS
+.DS_Store
+
+# secrets
+.env
+.env.*
+!.env.example
+
+# python
+__pycache__/
+.venv/
+*.egg-info/
+
+# node
+node_modules/
+.next/
+.output/
+dist/
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# local data / build caches
+chroma-data/
+agent/.local/

@@ -1,0 +1,20 @@
+schema_version: 1
+kind: domain
+domain:
+  id: software-engineering-fundamentals
+  name: Software Engineering Fundamentals
+  version: 1
+  principles:
+  - Evaluate correctness, mental models, mechanisms, and application.
+  - Definitions alone do not establish depth.
+  - Hypothetical examples are valid conceptual evidence.
+  - Prefer predictions, edge cases, and trade-offs over terminology.
+  - Never require production experience unless the candidate explicitly claims it.
+  classifications:
+    strong: Correct, relevant, and supported by mechanism or clear reasoning.
+    partial: Contains a correct core but misses an important mechanism or condition.
+    vague: Uses terminology without a coherent mental model.
+    unsupported: Makes a technical claim without reasoning or evidence.
+    contradictory: Conflicts with an earlier conceptual claim.
+    unknown: The candidate clearly does not know.
+    role_violation: The candidate leaves the assigned interview role.

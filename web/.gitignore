@@ -1,0 +1,7 @@
+node_modules
+.env*
+!.env.example
+.next
+tsconfig.tsbuildinfo
+
+/lib/generated/prisma

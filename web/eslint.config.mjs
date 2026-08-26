@@ -1,0 +1,32 @@
+import { defineConfig, globalIgnores } from "eslint/config";
+import nextVitals from "eslint-config-next/core-web-vitals";
+import nextTs from "eslint-config-next/typescript";
+
+const eslintConfig = defineConfig([
+  ...nextVitals,
+  ...nextTs,
+  {
+    files: [
+      "components/agents-ui/**/*.ts",
+      "components/agents-ui/**/*.tsx",
+      "components/ai-elements/**/*.ts",
+      "components/ai-elements/**/*.tsx",
+      "hooks/agents-ui/**/*.ts",
+      "hooks/agents-ui/**/*.tsx",
+    ],
+    rules: {
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/static-components": "off",
+    },
+  },
+  // Override default ignores of eslint-config-next.
+  globalIgnores([
+    // Default ignores of eslint-config-next:
+    ".next/**",
+    "out/**",
+    "build/**",
+    "next-env.d.ts",
+  ]),
+]);
+
+export default eslintConfig;

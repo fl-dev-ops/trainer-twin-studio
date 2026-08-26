@@ -1,0 +1,311 @@
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---- Studio specs ----
+
+model Persona {
+  orgId        String?
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  version   Int      @default(1)
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
+}
+
+model Agent {
+  orgId        String?
+  visibility   String  @default("public") // public | private (within the org)
+  id         String   @id @default(cuid())
+  slug       String   @unique
+  name       String
+  version    Int      @default(1)
+  domainSlug String
+  data       Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  @@index([orgId])
+}
+
+model Domain {
+  orgId        String?
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  version   Int      @default(1)
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([orgId])
+}
+
+// Immutable snapshot taken on every changed save. entityData in {persona|agent|domain}
+
+model SpecVersion {
+  orgId        String?
+  id         String   @id @default(cuid())
+  entityType String
+  entitySlug String
+  version    Int
+  data       Json
+  createdAt  DateTime @default(now())
+
+  @@unique([entityType, entitySlug, version])
+  @@index([entityType, entitySlug])
+  @@index([orgId])
+}
+
+// ---- Copilot working drafts ----
+
+model SpecDraft {
+  orgId        String?
+  id            String    @id @default(cuid())
+  slug          String    @unique
+  name          String
+  personaSlug   String?
+  agentData     Json
+  domainData    Json
+  groundingData Json
+  assumptions   Json
+  gaps          Json
+  status        String    @default("draft") // draft | published
+  revision      Int       @default(1)
+  publishedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  revisions SpecDraftRevision[]
+  @@index([orgId])
+}
+
+model SpecDraftRevision {
+  id        String   @id @default(cuid())
+  draftId   String
+  revision  Int
+  data      Json
+  createdAt DateTime @default(now())
+
+  draft SpecDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+
+  @@unique([draftId, revision])
+  @@index([draftId])
+}
+
+// Invite-only platform: a founder invite authorizes one person to create one
+// organization (with themselves as owner) through the onboarding flow.
+model FounderInvite {
+  id         String    @id @default(cuid())
+  token      String    @unique
+  email      String?
+  acceptedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@map("founder_invite")
+}
+
+// ---- Knowledge ----
+
+model KnowledgeBase {
+  orgId        String?
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  createdAt DateTime @default(now())
+
+  documents KnowledgeDocument[]
+  @@index([orgId])
+}
+
+model KnowledgeDocument {
+  id            String    @id @default(cuid())
+  kbId          String
+  slug          String
+  title         String
+  ext           String
+  size          Int
+  s3SourceKey   String
+  s3MarkdownKey String
+  status        String    @default("uploaded") // uploaded | digesting | indexed | failed
+  error         String?
+  indexedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  kb KnowledgeBase @relation(fields: [kbId], references: [id], onDelete: Cascade)
+
+  @@unique([kbId, slug])
+}
+
+// ---- Learner context (resumes etc.) ----
+
+// Trainer voice for TTS cloning. Audio + transcript in S3 under
+// {basePrefix}/tts-voices/{id}/; identity is a cuid so names can never collide.
+
+model Voice {
+  orgId        String?
+  id              String   @id @default(cuid())
+  name            String
+  kind            String   @default("cloned") // sample | cloned
+  status          String   @default("ready") // ready | failed
+  s3AudioKey      String
+  s3TranscriptKey String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([orgId])
+}
+
+model ContextDocument {
+  orgId        String?
+  id        String   @id @default(cuid())
+  name      String
+  mimeType  String
+  content   Bytes
+  size      Int
+  createdAt DateTime @default(now())
+  @@index([orgId])
+}
+
+// ---- Interview sessions ----
+
+// Interview practice run by a signed-in user of an organization.
+model InterviewSession {
+  orgId        String?
+  id             String    @id @default(cuid())
+  personaSlug    String
+  personaVersion Int
+  agentSlug      String
+  agentVersion   Int
+  domainSlug     String
+  domainVersion  Int
+  status         String    @default("active") // active | completed | abandoned
+  userId         String?
+  contextName    String?
+  transcript     Json?
+  evidence       Json?
+  s3AudioKey     String?
+  startedAt      DateTime  @default(now())
+  endedAt        DateTime?
+  @@index([orgId])
+}
+
+model User {
+  id              String       @id
+  name            String
+  email           String
+  emailVerified   Boolean      @default(false)
+  image           String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  sessions        Session[]
+  accounts        Account[]
+  members         Member[]
+  invitations     Invitation[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id                   String   @id
+  expiresAt            DateTime
+  token                String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  ipAddress            String?
+  userAgent            String?
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeOrganizationId String?
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  issuer                String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+model Organization {
+  id          String       @id
+  name        String
+  slug        String
+  logo        String?
+  createdAt   DateTime
+  metadata    String?
+  members     Member[]
+  invitations Invitation[]
+
+  @@unique([slug])
+  @@map("organization")
+}
+
+model Member {
+  id             String       @id
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           String       @default("member")
+  createdAt      DateTime
+
+  @@index([organizationId])
+  @@index([userId])
+  @@map("member")
+}
+
+model Invitation {
+  id             String       @id
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String
+  role           String?
+  status         String       @default("pending")
+  expiresAt      DateTime
+  createdAt      DateTime     @default(now())
+  inviterId      String
+  user           User         @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([email])
+  @@map("invitation")
+}

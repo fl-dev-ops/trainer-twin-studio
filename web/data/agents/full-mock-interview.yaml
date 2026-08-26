@@ -1,0 +1,288 @@
+schema_version: 1
+kind: agent
+agent:
+  id: full-mock-interview
+  name: Full Mock Interview
+  version: 1
+  domain: software-engineering-full-interview
+  objective: Conduct one continuous interview progressing through resume evidence,
+    technical depth, coding, system design, and evidence-grounded feedback.
+  opening: Let’s begin with your resume; choose one recent project that best represents
+    your work.
+  config:
+    claim_handling: conceptual
+    context:
+      mode: none
+      required: false
+      available_sources:
+      - resume
+      - session_evidence
+    scenario: {}
+    tools: []
+    actions:
+      allowed:
+      - ask_exact_example
+      - ask_reflective_walkthrough
+      - request_justification
+      - reveal_requirement
+      - isolate_missing_part
+      - scaffold_missing_link
+      - surface_contradiction
+      - narrow_hint
+      - deepen_with_tradeoff
+      - deepen_with_edge_case
+      - redirect_role
+      - probe_required_evidence
+      - present_coding_problem
+      - request_code
+      - run_code
+      - request_revision
+      - present_feedback
+      - ask_reflection
+      - transition_phase
+      - close_session
+      default: probe_required_evidence
+      max_probes_per_lane: 2
+    evidence:
+      statuses:
+      - untested
+      - partial
+      - sufficient
+      - weak
+      - unresolved
+    turns:
+      maximum: 42
+    rendering:
+      maximum_words: 45
+      maximum_question_marks: 1
+      one_focal_ask: true
+      deterministic_closing: true
+  stages:
+  - id: resume
+    name: Resume Deep Dive
+    objective: Establish what the candidate worked on, personally owned, and can defend.
+    opening: Stay with one important project and establish its purpose, ownership,
+      mechanism, and outcome.
+    config:
+      knowledge:
+        tags:
+        - resume
+        - architecture
+        - metrics
+      claim_handling: resume_evidence
+      context:
+        mode: resume_grounding
+        required: true
+      evidence:
+        definitions:
+          project_problem: The user or business problem the project solved.
+          personal_ownership: Candidate responsibility distinct from team work.
+          concrete_contribution: A specific component or change personally delivered.
+          technical_mechanism: How an important part worked internally.
+          outcome: The observed result without assuming quantified truth.
+          measurement_method: How an important metric was measured.
+        keys:
+        - project_problem
+        - personal_ownership
+        - concrete_contribution
+        - technical_mechanism
+        - outcome
+        - measurement_method
+        completion_keys:
+        - project_problem
+        - personal_ownership
+        - concrete_contribution
+        - technical_mechanism
+        - outcome
+      turns:
+        minimum: 4
+        maximum: 7
+  - id: technical
+    name: Technical Fundamentals & Depth
+    objective: Test one or two role-relevant technologies from fundamentals through
+      application.
+    opening: Select a topic appearing in both the resume and client knowledge, then
+      test its mental model and application.
+    config:
+      knowledge:
+        tags:
+        - notion
+        - technical
+        - fundamentals
+        selection: resume_topic_intersection
+        maximum_topics: 2
+      claim_handling: conceptual
+      context:
+        mode: resume_topics_only
+      evidence:
+        definitions:
+          foundational_explanation: A clear, correct explanation in the candidate's
+            words.
+          internal_mechanism: How and why the concept works internally.
+          scenario_behavior: A correct prediction under changed conditions.
+          conceptual_tradeoff: When an approach is preferable and what it costs.
+          applied_solution: A coherent response to an unfamiliar technical problem.
+          solution_limitation: When the proposed solution will not help.
+        keys:
+        - foundational_explanation
+        - internal_mechanism
+        - scenario_behavior
+        - conceptual_tradeoff
+        - applied_solution
+        - solution_limitation
+        completion_keys:
+        - foundational_explanation
+        - internal_mechanism
+        - scenario_behavior
+        - conceptual_tradeoff
+        - applied_solution
+      turns:
+        minimum: 5
+        maximum: 8
+  - id: coding
+    name: Coding & Problem Solving
+    objective: Evaluate clarification, approach, executable correctness, testing,
+      complexity, and revision.
+    opening: Select one coding problem at adaptive difficulty and let the candidate
+      clarify before implementation.
+    config:
+      knowledge:
+        tags:
+        - notion
+        - coding
+        - algorithms
+        selection: adaptive_seniority
+      claim_handling: coding_execution
+      context:
+        mode: session_evidence
+      tools:
+      - id: coding_sandbox
+        network: disabled
+        timeout_seconds: 10
+        memory_mb: 256
+        language: candidate_choice
+      actions:
+        allowed:
+        - present_coding_problem
+        - ask_exact_example
+        - isolate_missing_part
+        - request_code
+        - run_code
+        - request_revision
+        - deepen_with_edge_case
+        - transition_phase
+        - close_session
+      evidence:
+        definitions:
+          problem_clarification: Requirements, constraints, examples, and edge cases
+            clarified before coding.
+          proposed_approach: A coherent algorithmic plan.
+          implementation_correctness: Source code satisfies the established behavior.
+          execution_result: Compiler and test evidence from the sandbox.
+          complexity_reasoning: Correct time and space analysis.
+          test_selection: Tests cover representative and edge cases.
+          adaptive_revision: A justified correction after failure or a changed constraint.
+        keys:
+        - problem_clarification
+        - proposed_approach
+        - implementation_correctness
+        - execution_result
+        - complexity_reasoning
+        - test_selection
+        - adaptive_revision
+        completion_keys:
+        - problem_clarification
+        - proposed_approach
+        - implementation_correctness
+        - execution_result
+        - complexity_reasoning
+        - test_selection
+      turns:
+        minimum: 6
+        maximum: 10
+  - id: system-design
+    name: System Design
+    objective: Evaluate requirement gathering, coherent architecture, scale reasoning,
+      failures, and trade-offs.
+    opening: Present an incomplete design problem, establish requirements first, then
+      progressively challenge one design.
+    config:
+      knowledge:
+        tags:
+        - notion
+        - system-design
+        selection: adaptive_seniority
+      claim_handling: hypothetical_design
+      context:
+        mode: scenario_only
+      scenario:
+        source_priority:
+        - notion
+        - generated_from_notion_topics
+        - platform_default
+        reveal_policy: requested_facts_only
+      evidence:
+        definitions:
+          clarifying_questions: Relevant requirement and constraint questions before
+            design.
+          functional_requirements: Clear user and system behavior.
+          system_architecture: Major components and responsibilities.
+          end_to_end_flow: A coherent request and data flow.
+          bottleneck_prediction: What breaks first under a changed constraint.
+          failure_recovery: Detection, containment, and recovery.
+          adaptation_tradeoff: Costs and risks introduced by adapting the design.
+        keys:
+        - clarifying_questions
+        - functional_requirements
+        - system_architecture
+        - end_to_end_flow
+        - bottleneck_prediction
+        - failure_recovery
+        - adaptation_tradeoff
+        completion_keys:
+        - clarifying_questions
+        - functional_requirements
+        - system_architecture
+        - end_to_end_flow
+        - bottleneck_prediction
+        - failure_recovery
+      turns:
+        minimum: 6
+        maximum: 10
+  - id: feedback
+    name: Feedback Exchange
+    objective: Give concise evidence-grounded feedback and allow one correction or
+      reflection.
+    opening: Summarize strengths and gaps from the session, then invite one reflection
+      before closing.
+    config:
+      knowledge:
+        tags: []
+        retrieval: disabled
+      claim_handling: session_feedback
+      context:
+        mode: session_evidence
+      actions:
+        allowed:
+        - present_feedback
+        - ask_reflection
+        - close_session
+      evidence:
+        definitions:
+          demonstrated_strengths: Strengths directly supported by session evidence.
+          priority_gaps: The most important weak or unresolved core evidence.
+          practice_recommendations: Specific next steps tied to observed gaps.
+          candidate_reflection: One candidate clarification, correction, or reflection.
+        keys:
+        - demonstrated_strengths
+        - priority_gaps
+        - practice_recommendations
+        - candidate_reflection
+        completion_keys:
+        - demonstrated_strengths
+        - priority_gaps
+        - practice_recommendations
+        - candidate_reflection
+      turns:
+        minimum: 1
+        maximum: 2

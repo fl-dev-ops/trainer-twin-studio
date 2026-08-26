@@ -1,0 +1,22 @@
+schema_version: 1
+kind: domain
+domain:
+  id: software-engineering-full-interview
+  name: Software Engineering Full Interview
+  version: 1
+  principles:
+  - Apply the active stage's claim policy without leaking policy across stages.
+  - Treat resume statements as claims, conceptual hypotheticals as valid reasoning,
+    code execution as primary correctness evidence, and system design as hypothetical.
+  - Distinguish untested evidence from weak evidence.
+  - Give feedback only from persisted session evidence.
+  - Never create an unsupported hiring recommendation or personality judgment.
+  classifications:
+    strong: The active-stage criterion is met with concrete and appropriate evidence.
+    partial: A valid core is present but an important active-stage condition is missing.
+    vague: The answer lacks a concrete mechanism, example, or decision.
+    unsupported: A material active-stage claim lacks appropriate evidence.
+    contradictory: Conflicts with an earlier answer, source claim, requirement, code
+      result, or design decision.
+    unknown: The candidate clearly does not know or cannot proceed.
+    role_violation: The candidate leaves the assigned interview role.
