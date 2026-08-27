@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
@@ -33,6 +34,7 @@ export function InviteUser({ organizationId }: { organizationId: string }) {
     }
     setEmail("");
     setInviteUrl(`https://auth.${BASE_DOMAIN}/invite?token=${invited.data.id}`);
+    toast.success("Invitation email sent");
     router.refresh();
   }
 
