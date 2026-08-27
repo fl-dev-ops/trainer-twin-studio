@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowUpRight, Bot, BookOpen, Shapes, UserRound } from "lucide-react";
+import { ArrowUpRight, BookOpen, MessagesSquare, Shapes, UserRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,7 +38,7 @@ export default async function DashboardPage() {
 
   const stats = [
     { label: "Personas", value: personas, href: "/personas", icon: UserRound },
-    { label: "Agents", value: agents, href: "/agents", icon: Bot },
+    { label: "Role Plays", value: agents, href: "/agents", icon: MessagesSquare },
     { label: "Domains", value: domains, href: "/domains", icon: Shapes },
     { label: "Knowledge bases", value: kbs, href: "/knowledge", icon: BookOpen },
   ];

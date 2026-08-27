@@ -6,9 +6,9 @@ import { useEffect, useState } from "react";
 import yaml from "js-yaml";
 import {
   ArrowLeft,
-  Bot,
   ChevronRight,
   History,
+  MessagesSquare,
   Plus,
   RotateCcw,
   Save,
@@ -196,7 +196,7 @@ function AgentSettingsPanel({
 export function SpecResourceIndex({ type, specs }: { type: ResourceType; specs: Summary[] }) {
   const router = useRouter();
   const copy = COPY[type];
-  const Icon = type === "personas" ? UserRound : Bot;
+  const Icon = type === "personas" ? UserRound : MessagesSquare;
 
   async function createNew() {
     const slug = prompt(`New ${copy.single} id (for example, my-${copy.single}):`);

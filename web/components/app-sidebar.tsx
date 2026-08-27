@@ -5,10 +5,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   AudioLines,
-  Bot,
   BookOpen,
   Gauge,
   History,
+  MessagesSquare,
   Mic,
   Shapes,
   Sparkles,
@@ -27,6 +27,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarProvider,
 } from "@/components/ui/sidebar";
 
 const NAV = [
@@ -49,7 +50,7 @@ const NAV = [
   {
     label: "Trainer library",
     items: [
-      { title: "Role Plays", href: "/agents", icon: Bot },
+      { title: "Role Plays", href: "/agents", icon: MessagesSquare },
       { title: "Personas", href: "/personas", icon: UserRound },
     ],
   },

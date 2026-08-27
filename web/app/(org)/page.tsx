@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowUpRight, Bot, Clock3 } from "lucide-react";
+import { ArrowUpRight, Clock3, MessagesSquare } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -49,7 +49,7 @@ export default async function LearnerHome() {
         {agents.length === 0 ? (
           <Empty className="min-h-72 border">
             <EmptyHeader>
-              <EmptyMedia variant="icon"><Bot /></EmptyMedia>
+              <EmptyMedia variant="icon"><MessagesSquare /></EmptyMedia>
               <EmptyTitle>No role plays available</EmptyTitle>
               <EmptyDescription>Your trainer has not published any role plays yet.</EmptyDescription>
             </EmptyHeader>
@@ -67,7 +67,7 @@ export default async function LearnerHome() {
                   <CardHeader>
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <span className="grid size-10 place-items-center rounded-lg bg-muted text-muted-foreground">
-                        <Bot className="size-5" aria-hidden="true" />
+                        <MessagesSquare className="size-5" aria-hidden="true" />
                       </span>
                       <Badge variant="outline">v{agent.version}</Badge>
                     </div>
