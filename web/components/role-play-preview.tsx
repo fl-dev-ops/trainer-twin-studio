@@ -6,11 +6,8 @@ import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   CheckCircle2,
-  Clock3,
-  Layers,
   Pencil,
   Play,
-  Scale,
   Search,
   Target,
   UserCheck,
@@ -332,37 +329,6 @@ export function RolePlayPreview({
                     </p>
                   </div>
                 )}
-
-                <div className="grid grid-cols-2 gap-4 pt-1 sm:grid-cols-3">
-                  <div className="rounded-xl bg-muted/40 p-4">
-                    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Clock3 className="size-3.5" /> Max Turns
-                    </span>
-                    <p className="mt-1.5 text-base font-semibold">
-                      {rolePlay.config?.turns?.maximum
-                        ? `${rolePlay.config.turns.maximum} turns`
-                        : "8 turns"}
-                    </p>
-                  </div>
-                  <div className="rounded-xl bg-muted/40 p-4">
-                    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Layers className="size-3.5" /> Structure
-                    </span>
-                    <p className="mt-1.5 text-base font-semibold">
-                      {stages.length
-                        ? `${stages.length} Stage${stages.length > 1 ? "s" : ""}`
-                        : "Single stage"}
-                    </p>
-                  </div>
-                  <div className="col-span-2 rounded-xl bg-muted/40 p-4 sm:col-span-1">
-                    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Scale className="size-3.5" /> Claim Handling
-                    </span>
-                    <p className="mt-1.5 text-base font-semibold capitalize">
-                      {rolePlay.config?.claim_handling || "Conceptual"}
-                    </p>
-                  </div>
-                </div>
               </div>
             </Card>
 
