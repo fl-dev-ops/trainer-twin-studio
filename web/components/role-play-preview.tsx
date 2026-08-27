@@ -5,6 +5,9 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   ArrowLeft,
+  Clock,
+  FileText,
+  MessageSquare,
   Pencil,
   Play,
   Search,
@@ -321,14 +324,14 @@ export function RolePlayPreview({
             {/* Stages / Interview Rounds Breakdown */}
             {stages.length > 0 && (
               <section className="space-y-4">
-                <div className="px-4">
+                {/*<div className="px-4">
                   <h2 className="text-lg font-semibold tracking-tight">
                     Stages & Interview Rounds
                   </h2>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Step-by-step interview phases and evidence criteria
                   </p>
-                </div>
+                </div>*/}
 
                 <div className="space-y-6">
                   {stages.map((stage, idx) => {
@@ -339,7 +342,7 @@ export function RolePlayPreview({
                     return (
                       <div
                         key={stage.id || idx}
-                        className="rounded-2xl bg-muted/30 p-6 space-y-4 transition-colors"
+                        className="rounded-2xl bg-muted/30 p-6 space-y-4 transition-colors border"
                       >
                         <div className="space-y-1">
                           <h3 className="text-base font-semibold text-foreground">
@@ -387,7 +390,7 @@ export function RolePlayPreview({
 
           {/* Right Sidebar Column */}
           <div className="space-y-8">
-            {/* Trainer Twin Card */}
+            {/* Trainer Twin Card with Integrated Stats */}
             <Card className="overflow-hidden">
               <div className="bg-gradient-to-br from-primary/15 via-primary/5 to-transparent p-6 text-center">
                 <div className="relative mx-auto size-28 overflow-hidden rounded-full border-2 border-background shadow-md">
@@ -408,10 +411,58 @@ export function RolePlayPreview({
                   </Badge>
                 </div>
               </div>
-              <CardContent className="p-5 pt-3 text-xs leading-relaxed text-muted-foreground">
-                <p>
-                  Conducts realistic, multi-turn interview role plays modeled after real
-                  evaluation criteria.
+
+              <CardContent className="p-6 space-y-5 border-t">
+                {/* Stats Rows */}
+                <div className="space-y-3.5">
+                  {/* Hours of interviews */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="grid size-10 place-items-center rounded-xl bg-indigo-100 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
+                        <Clock className="size-5" />
+                      </div>
+                      <span className="text-sm font-medium text-muted-foreground">
+                        of interviews
+                      </span>
+                    </div>
+                    <span className="text-lg font-bold tracking-tight text-foreground">
+                      10.5 hrs
+                    </span>
+                  </div>
+
+                  {/* Turns */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="grid size-10 place-items-center rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400">
+                        <MessageSquare className="size-5" />
+                      </div>
+                      <span className="text-sm font-medium text-muted-foreground">
+                        Turns
+                      </span>
+                    </div>
+                    <span className="text-lg font-bold tracking-tight text-foreground">
+                      3,143
+                    </span>
+                  </div>
+
+                  {/* Words */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="grid size-10 place-items-center rounded-xl bg-teal-100 text-teal-700 dark:bg-teal-950/60 dark:text-teal-400">
+                        <FileText className="size-5" />
+                      </div>
+                      <span className="text-sm font-medium text-muted-foreground">
+                        words
+                      </span>
+                    </div>
+                    <span className="text-lg font-bold tracking-tight text-foreground">
+                      109,790
+                    </span>
+                  </div>
+                </div>
+
+                <p className="text-xs leading-relaxed text-muted-foreground border-t pt-4">
+                  Conducts realistic, multi-turn interview role plays modeled after real evaluation criteria.
                 </p>
               </CardContent>
             </Card>
