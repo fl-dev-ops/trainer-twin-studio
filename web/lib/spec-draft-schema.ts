@@ -136,6 +136,7 @@ export const agentSpecSchema = z.object({
     }).strict(),
   }).strict(),
   voiceId: z.string().min(1).optional(),
+  knowledgeBase: slug.optional(),
   stages: z.array(stageSchema).min(1),
 }).strict().superRefine((agent, ctx) => {
   const ids = new Set<string>();

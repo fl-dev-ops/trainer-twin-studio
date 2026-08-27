@@ -103,40 +103,54 @@ export async function publishSpecDraft(slug: string) {
   if (!row) throw new Error(`Draft "${slug}" was not found`);
   const bundle = bundleFromRow(row);
   if (bundle.gaps.length) throw new Error(`Resolve ${bundle.gaps.length} draft gap(s) before publishing`);
+  if (!row.orgId) throw new Error("Save the draft's agent settings before publishing");
+  const orgId = row.orgId;
+  const requestedKnowledge = [...new Set([
+    ...bundle.domain.knowledge_bases,
+    ...(bundle.agent.knowledgeBase ? [bundle.agent.knowledgeBase] : []),
+  ])];
 
   const [persona, knowledgeBases] = await Promise.all([
-    bundle.personaSlug ? db.persona.findUnique({ where: { slug: bundle.personaSlug }, select: { id: true } }) : Promise.resolve(null),
+    bundle.personaSlug
+      ? db.persona.findFirst({ where: { slug: bundle.personaSlug, orgId }, select: { id: true } })
+      : Promise.resolve(null),
     db.knowledgeBase.findMany({
-      where: { slug: { in: bundle.domain.knowledge_bases }, documents: { some: { status: "indexed" } } },
+      where: {
+        orgId,
+        slug: { in: requestedKnowledge },
+        documents: { some: { status: "indexed" } },
+      },
       select: { slug: true },
     }),
   ]);
   if (bundle.personaSlug && !persona) throw new Error(`Persona "${bundle.personaSlug}" was not found`);
   const indexed = new Set(knowledgeBases.map(({ slug }) => slug));
-  const missing = bundle.domain.knowledge_bases.filter((kb) => !indexed.has(kb));
+  const missing = requestedKnowledge.filter((kb) => !indexed.has(kb));
   if (missing.length) throw new Error(`Knowledge bases are missing or not indexed: ${missing.join(", ")}`);
 
   const domainData = bundle.domain;
   const agentData = { ...bundle.agent, knowledge_grounding: bundle.grounding };
   const result = await db.$transaction(async (tx) => {
     const currentDomain = await tx.domain.findUnique({ where: { slug: bundle.domain.id } });
+    if (currentDomain && currentDomain.orgId !== orgId) throw new Error("Domain belongs to another organization");
     let domainVersion = currentDomain?.version ?? 1;
     if (!currentDomain) {
-      await tx.domain.create({ data: { slug: bundle.domain.id, name: bundle.domain.name, version: 1, data: json(domainData) } });
+      await tx.domain.create({ data: { slug: bundle.domain.id, name: bundle.domain.name, version: 1, data: json(domainData), orgId } });
     } else if (JSON.stringify(currentDomain.data) !== JSON.stringify(domainData)) {
       domainVersion += 1;
-      await tx.specVersion.create({ data: { entityType: "domains", entitySlug: currentDomain.slug, version: currentDomain.version, data: json(currentDomain.data) } });
-      await tx.domain.update({ where: { id: currentDomain.id }, data: { name: bundle.domain.name, version: domainVersion, data: json(domainData) } });
+      await tx.specVersion.create({ data: { entityType: "domains", entitySlug: currentDomain.slug, version: currentDomain.version, data: json(currentDomain.data), orgId } });
+      await tx.domain.update({ where: { id: currentDomain.id }, data: { name: bundle.domain.name, version: domainVersion, data: json(domainData), orgId } });
     }
 
     const currentAgent = await tx.agent.findUnique({ where: { slug: bundle.agent.id } });
+    if (currentAgent && currentAgent.orgId !== orgId) throw new Error("Agent belongs to another organization");
     let agentVersion = currentAgent?.version ?? 1;
     if (!currentAgent) {
-      await tx.agent.create({ data: { slug: bundle.agent.id, name: bundle.agent.name, version: 1, domainSlug: bundle.domain.id, data: json(agentData) } });
+      await tx.agent.create({ data: { slug: bundle.agent.id, name: bundle.agent.name, version: 1, domainSlug: bundle.domain.id, data: json(agentData), orgId } });
     } else if (JSON.stringify(currentAgent.data) !== JSON.stringify(agentData)) {
       agentVersion += 1;
-      await tx.specVersion.create({ data: { entityType: "agents", entitySlug: currentAgent.slug, version: currentAgent.version, data: json(currentAgent.data) } });
-      await tx.agent.update({ where: { id: currentAgent.id }, data: { name: bundle.agent.name, version: agentVersion, domainSlug: bundle.domain.id, data: json(agentData) } });
+      await tx.specVersion.create({ data: { entityType: "agents", entitySlug: currentAgent.slug, version: currentAgent.version, data: json(currentAgent.data), orgId } });
+      await tx.agent.update({ where: { id: currentAgent.id }, data: { name: bundle.agent.name, version: agentVersion, domainSlug: bundle.domain.id, data: json(agentData), orgId } });
     }
 
     await tx.specDraft.update({ where: { id: row.id }, data: { status: "published", publishedAt: new Date() } });

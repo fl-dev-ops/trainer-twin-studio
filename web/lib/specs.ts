@@ -127,9 +127,22 @@ export async function saveSpec(type: SpecType, slug: string, text: string, orgId
       throw new Error(`Domain "${domainSlug}" does not exist`);
     }
     if (typeof data.voiceId === "string" && data.voiceId) {
-      if (!(await db.voice.findUnique({ where: { id: data.voiceId }, select: { id: true } }))) {
-        throw new Error(`Voice "${data.voiceId}" does not exist`);
-      }
+      const voice = await db.voice.findFirst({
+        where: {
+          id: data.voiceId,
+          status: "ready",
+          OR: [{ orgId }, { orgId: null }],
+        },
+        select: { id: true },
+      });
+      if (!voice) throw new Error(`Voice "${data.voiceId}" is not available`);
+    }
+    if (typeof data.knowledgeBase === "string" && data.knowledgeBase) {
+      const knowledge = await db.knowledgeBase.findFirst({
+        where: { slug: data.knowledgeBase, orgId },
+        select: { id: true },
+      });
+      if (!knowledge) throw new Error(`Knowledge base "${data.knowledgeBase}" is not available`);
     }
   }
   const relation = domainSlug ? { domainSlug } : {};
@@ -391,16 +404,22 @@ export async function getAgentConfig(personaSlug: string, agentSlug: string, con
   if (!orgId) return null;
   if (agent.orgId !== orgId || domain.orgId !== orgId) return null;
 
-  // Published Domains can restrict retrieval to selected KBs. Legacy specs without
-  // knowledge_bases keep the previous all-indexed behavior.
-  const configuredKnowledge = isRecord(domain.data) && Array.isArray(domain.data.knowledge_bases)
+  // An agent attachment narrows retrieval to exactly one collection. Legacy
+  // agents keep their Domain's selected collections until explicitly configured.
+  const attachedKnowledge = isRecord(agent.data) && typeof agent.data.knowledgeBase === "string"
+    ? [agent.data.knowledgeBase]
+    : [];
+  const domainKnowledge = isRecord(domain.data) && Array.isArray(domain.data.knowledge_bases)
     ? domain.data.knowledge_bases.filter((value): value is string => typeof value === "string")
     : [];
+  const configuredKnowledge = attachedKnowledge.length ? attachedKnowledge : domainKnowledge;
   const indexed = await db.knowledgeDocument.findMany({
     where: {
       status: "indexed",
-      kb: { orgId },
-      ...(configuredKnowledge.length ? { kb: { slug: { in: configuredKnowledge } } } : {}),
+      kb: {
+        orgId,
+        ...(configuredKnowledge.length ? { slug: { in: configuredKnowledge } } : {}),
+      },
     },
     select: { kb: { select: { slug: true } } },
     distinct: ["kbId"],

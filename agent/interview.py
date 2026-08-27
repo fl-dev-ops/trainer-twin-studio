@@ -57,10 +57,10 @@ class ApiKnowledge:
                         params={"q": query, "k": limit},
                     )
                     res.raise_for_status()
-                    for hit in res.json().get("results", []):
+                    for hit in res.json().get("hits", []):
                         scored.append({
                             "text": hit.get("text", ""),
-                            "source": hit.get("docId", ""),
+                            "source": hit.get("source", ""),
                             "score": float(hit.get("score", 0)),
                         })
                 except Exception as error:

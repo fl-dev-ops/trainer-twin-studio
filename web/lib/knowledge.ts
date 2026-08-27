@@ -5,9 +5,12 @@
 // 2. client-side hybrid search: vector ANN + BM25 fused with RRF
 // 3. HNSW tuned at collection creation: cosine space, higher ef_search
 // 4. optional cross-encoder reranking via Cohere when COHERE_API_KEY is set
-import { ChromaClient, type Collection, type EmbeddingFunction } from "chromadb";
+import { ChromaClient, CloudClient, type Collection, type EmbeddingFunction } from "chromadb";
 
 const CHROMA_URL = process.env.CHROMA_URL ?? "http://localhost:8000";
+const CHROMA_API_KEY = process.env.CHROMA_API_KEY ?? "";
+const CHROMA_TENANT = process.env.CHROMA_TENANT ?? "";
+const CHROMA_DATABASE = process.env.CHROMA_DATABASE ?? "";
 const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL ?? "openai/text-embedding-3-small";
 // OpenRouter serves embeddings and reranking alongside LLMs
 const OPENROUTER_BASE_URL = (process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1").replace(/\/$/, "");
@@ -78,8 +81,17 @@ function parseChromaUrl(url: string) {
   return { host: u.hostname, port: Number(u.port) || (u.protocol === "https:" ? 443 : 8000), ssl: u.protocol === "https:" };
 }
 
+function chromaClient(): ChromaClient {
+  // Explicit CHROMA_URL wins (local/self-hosted). Otherwise cloud when configured.
+  if (process.env.CHROMA_URL) return new ChromaClient(parseChromaUrl(CHROMA_URL));
+  if (CHROMA_API_KEY && CHROMA_TENANT && CHROMA_DATABASE) {
+    return new CloudClient({ apiKey: CHROMA_API_KEY, tenant: CHROMA_TENANT, database: CHROMA_DATABASE });
+  }
+  return new ChromaClient(parseChromaUrl(CHROMA_URL));
+}
+
 async function getCollection(kbSlug: string): Promise<Collection> {
-  const client = new ChromaClient(parseChromaUrl(CHROMA_URL));
+  const client = chromaClient();
   return client.getOrCreateCollection({
     name: `kb_${kbSlug}`,
     // Supplying the same function used for precomputed vectors prevents Chroma
