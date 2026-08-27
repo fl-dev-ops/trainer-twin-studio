@@ -6,9 +6,7 @@ import { useEffect, useState } from "react";
 import yaml from "js-yaml";
 import {
   ArrowLeft,
-  ArrowUpRight,
   ChevronRight,
-  Clock3,
   History,
   MessagesSquare,
   Plus,
@@ -26,7 +24,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -284,49 +281,35 @@ export function SpecResourceIndex({ type, specs }: { type: ResourceType; specs: 
                 : "Reusable trainer persona definition.");
 
             return (
-              <Card
+              <Link
                 key={spec.slug}
-                className="flex min-h-60 flex-col transition-colors hover:bg-accent/40"
+                href={`/${type}/${encodeURIComponent(spec.slug)}`}
+                className="group block rounded-xl focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               >
-                <CardHeader>
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <span className="grid size-10 place-items-center rounded-lg bg-muted text-muted-foreground">
-                      <Icon className="size-5" aria-hidden="true" />
-                    </span>
-                    {spec.status === "draft" && (
-                      <Badge variant="outline">Draft</Badge>
-                    )}
-                  </div>
-                  <CardTitle>{spec.name}</CardTitle>
-                  <CardDescription className="line-clamp-3 leading-5">
-                    {objective}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="mt-auto">
-                  <p className="truncate text-xs text-muted-foreground">
-                    {spec.domainSlug ? spec.domainSlug.replaceAll("-", " ") : "Reusable profile"}
-                  </p>
-                </CardContent>
-                <CardFooter className="justify-between gap-3 border-t pt-3">
-                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Clock3 className="size-3.5" aria-hidden="true" /> Guided session
-                  </span>
-                  <div className="flex items-center gap-2">
-                    {type === "agents" && spec.status === "draft" && (
-                      <Button size="sm" variant="outline" onClick={() => publishDraft(spec.slug)}>
-                        <Sparkles data-icon="inline-start" /> Publish
-                      </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      nativeButton={false}
-                      render={<Link href={`/${type}/${encodeURIComponent(spec.slug)}`} />}
-                    >
-                      Start practice <ArrowUpRight data-icon="inline-end" />
-                    </Button>
-                  </div>
-                </CardFooter>
-              </Card>
+                <Card className="flex h-full min-h-56 flex-col transition-colors group-hover:border-foreground/20 group-hover:bg-accent/40">
+                  <CardHeader>
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <span className="grid size-10 place-items-center rounded-lg bg-muted text-muted-foreground">
+                        <Icon className="size-5" aria-hidden="true" />
+                      </span>
+                      {spec.status === "draft" && (
+                        <Badge variant="outline">Draft</Badge>
+                      )}
+                    </div>
+                    <CardTitle className="text-base font-semibold group-hover:text-primary transition-colors">
+                      {spec.name}
+                    </CardTitle>
+                    <CardDescription className="line-clamp-3 leading-5 text-xs sm:text-sm">
+                      {objective}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="mt-auto">
+                    <p className="truncate text-xs text-muted-foreground">
+                      {spec.domainSlug ? spec.domainSlug.replaceAll("-", " ") : "Reusable profile"}
+                    </p>
+                  </CardContent>
+                </Card>
+              </Link>
             );
           })}
           {!specs.length && (
