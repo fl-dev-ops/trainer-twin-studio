@@ -35,7 +35,7 @@ type VersionInfo = { version: number; createdAt: string; label: string };
 
 const LABELS: Record<SpecType, { single: string; title: string; hint: string }> = {
   personas: { single: "persona", title: "Personas", hint: "The trainer voice: style, decision preferences, example phrasings." },
-  agents: { single: "agent", title: "Agents", hint: "Interview structure: phases, evidence lanes, claim handling, turn budgets." },
+  agents: { single: "role play", title: "Role Plays", hint: "Interview structure: phases, evidence lanes, claim handling, turn budgets." },
   domains: { single: "domain", title: "Domains", hint: "Domain principles and answer classifications used by the analyzer." },
 };
 

@@ -49,7 +49,7 @@ const NAV = [
   {
     label: "Trainer library",
     items: [
-      { title: "Agents", href: "/agents", icon: Bot },
+      { title: "Role Plays", href: "/agents", icon: Bot },
       { title: "Personas", href: "/personas", icon: UserRound },
     ],
   },
