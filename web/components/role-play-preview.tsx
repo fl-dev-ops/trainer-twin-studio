@@ -161,9 +161,16 @@ function AssignUsersDialog({
 
           <div className="max-h-64 space-y-1.5 overflow-y-auto rounded-lg border bg-muted/20 p-2">
             {filteredUsers.length === 0 ? (
-              <p className="py-6 text-center text-xs text-muted-foreground">
-                No users found.
-              </p>
+              <div className="space-y-1 py-6 text-center text-xs text-muted-foreground">
+                <p>No learners found.</p>
+                <p className="text-[11px]">
+                  Invite learners from the{" "}
+                  <Link href="/users" className="text-foreground underline underline-offset-2">
+                    Users page
+                  </Link>
+                  .
+                </p>
+              </div>
             ) : (
               filteredUsers.map((user) => {
                 const isChecked = selected.includes(user.id);
@@ -243,17 +250,7 @@ export function RolePlayPreview({
     }
   }
 
-  // Fallback demo users if workspace users aren't loaded yet
-  const usersList: OrganizationUser[] =
-    availableUsers.length > 0
-      ? availableUsers
-      : [
-          { id: "u-1", name: "Alex Chen", email: "alex@example.com" },
-          { id: "u-2", name: "Sarah Jenkins", email: "sarah@example.com" },
-          { id: "u-3", name: "David Kim", email: "david@example.com" },
-          { id: "u-4", name: "Priya Sharma", email: "priya@example.com" },
-        ];
-
+  const usersList: OrganizationUser[] = availableUsers;
   const assignedUsers = usersList.filter((u) => assignedIds.includes(u.id));
 
   return (

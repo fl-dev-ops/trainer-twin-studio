@@ -23,7 +23,7 @@ export default async function RolePlayPreviewPage({
   const [current, members] = await Promise.all([
     readSpec("agents", slug, org.id).catch(() => null),
     db.member.findMany({
-      where: { organizationId: org.id },
+      where: { organizationId: org.id, role: "member" },
       orderBy: { createdAt: "asc" },
       select: {
         id: true,
