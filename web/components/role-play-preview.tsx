@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   ArrowLeft,
-  CheckCircle2,
   Pencil,
   Play,
   Search,
@@ -321,73 +320,68 @@ export function RolePlayPreview({
 
             {/* Stages / Interview Rounds Breakdown */}
             {stages.length > 0 && (
-              <Card className="p-6 sm:p-7">
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between pb-1">
-                    <div>
-                      <h2 className="text-lg font-semibold">Stages & Interview Rounds</h2>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Step-by-step interview phases and evidence criteria
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-6">
-                    {stages.map((stage, idx) => {
-                      const evidenceDefs = stage.config?.evidence?.definitions ?? {};
-                      const evidenceKeys =
-                        stage.config?.evidence?.keys ?? Object.keys(evidenceDefs);
-
-                      return (
-                        <div
-                          key={stage.id || idx}
-                          className="rounded-2xl bg-muted/30 p-5 sm:p-6 space-y-4 transition-colors"
-                        >
-                          <div className="space-y-1">
-                            <h3 className="text-base font-semibold">
-                              {stage.name || `Stage ${idx + 1}`}
-                            </h3>
-                            <p className="text-xs text-muted-foreground leading-relaxed">
-                              {stage.objective}
-                            </p>
-                          </div>
-
-                          {evidenceKeys.length > 0 && (
-                            <div className="space-y-2.5 pt-1">
-                              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                Required Evidence & Assessment
-                              </p>
-                              <div className="grid gap-3 sm:grid-cols-2">
-                                {evidenceKeys.map((key) => {
-                                  const desc = evidenceDefs[key];
-                                  return (
-                                    <div
-                                      key={key}
-                                      className="flex items-start gap-2.5 rounded-xl bg-background/90 p-3 text-xs shadow-2xs"
-                                    >
-                                      <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                                      <div className="space-y-0.5">
-                                        <p className="font-semibold capitalize text-foreground">
-                                          {key.replaceAll("_", " ")}
-                                        </p>
-                                        {desc && (
-                                          <p className="text-[11px] leading-snug text-muted-foreground">
-                                            {desc}
-                                          </p>
-                                        )}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+              <section className="space-y-4">
+                <div className="px-4">
+                  <h2 className="text-lg font-semibold tracking-tight">
+                    Stages & Interview Rounds
+                  </h2>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Step-by-step interview phases and evidence criteria
+                  </p>
                 </div>
-              </Card>
+
+                <div className="space-y-6">
+                  {stages.map((stage, idx) => {
+                    const evidenceDefs = stage.config?.evidence?.definitions ?? {};
+                    const evidenceKeys =
+                      stage.config?.evidence?.keys ?? Object.keys(evidenceDefs);
+
+                    return (
+                      <div
+                        key={stage.id || idx}
+                        className="rounded-2xl bg-muted/30 p-6 space-y-4 transition-colors"
+                      >
+                        <div className="space-y-1">
+                          <h3 className="text-base font-semibold text-foreground">
+                            {stage.name || `Stage ${idx + 1}`}
+                          </h3>
+                          <p className="text-sm text-muted-foreground leading-relaxed">
+                            {stage.objective}
+                          </p>
+                        </div>
+
+                        {evidenceKeys.length > 0 && (
+                          <div className="space-y-3 pt-2">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                              Required Evidence & Assessment
+                            </p>
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              {evidenceKeys.map((key) => {
+                                const desc = evidenceDefs[key];
+                                return (
+                                  <div
+                                    key={key}
+                                    className="rounded-xl bg-background/90 p-4 shadow-xs"
+                                  >
+                                    <p className="text-sm font-semibold capitalize text-foreground">
+                                      {key.replaceAll("_", " ")}
+                                    </p>
+                                    {desc && (
+                                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                                        {desc}
+                                      </p>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
             )}
           </div>
 
