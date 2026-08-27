@@ -6,7 +6,9 @@ import { useEffect, useState } from "react";
 import yaml from "js-yaml";
 import {
   ArrowLeft,
+  ArrowUpRight,
   ChevronRight,
+  Clock3,
   History,
   MessagesSquare,
   Plus,
@@ -20,6 +22,14 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { seedCopilot } from "@/lib/copilot-handoff";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,7 +60,14 @@ import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
 type ResourceType = "personas" | "agents";
-type Summary = { slug: string; name: string; version: number; domainSlug?: string; status?: "draft" | "published" };
+type Summary = {
+  slug: string;
+  name: string;
+  version: number;
+  domainSlug?: string;
+  objective?: string;
+  status?: "draft" | "published";
+};
 type VersionInfo = { version: number; createdAt: string; label: string };
 
 const COPY = {
@@ -240,7 +257,7 @@ export function SpecResourceIndex({ type, specs }: { type: ResourceType; specs: 
 
   return (
     <main className="min-h-0 flex-1 overflow-auto p-5 sm:p-8">
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto max-w-6xl">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <h1 className="text-2xl font-semibold tracking-tight">{copy.title}</h1>
@@ -258,44 +275,62 @@ export function SpecResourceIndex({ type, specs }: { type: ResourceType; specs: 
           </div>
         </header>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
-          {specs.map((spec) => (
-            <article
-              key={spec.slug}
-              className="group min-w-0 overflow-hidden rounded-xl border bg-background transition-colors hover:border-foreground/20 hover:bg-muted/40"
-            >
-              <Link
-                href={`/${type}/${encodeURIComponent(spec.slug)}`}
-                className="flex min-h-40 min-w-0 flex-col p-5 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50"
+        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {specs.map((spec) => {
+            const objective =
+              spec.objective ||
+              (type === "agents"
+                ? "Practice with a guided AI interview trainer."
+                : "Reusable trainer persona definition.");
+
+            return (
+              <Card
+                key={spec.slug}
+                className="flex min-h-60 flex-col transition-colors hover:bg-accent/40"
               >
-                <span className="flex items-center gap-3">
-                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted">
-                    <Icon className="size-4" aria-hidden="true" />
+                <CardHeader>
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <span className="grid size-10 place-items-center rounded-lg bg-muted text-muted-foreground">
+                      <Icon className="size-5" aria-hidden="true" />
+                    </span>
+                    {spec.status === "draft" && (
+                      <Badge variant="outline">Draft</Badge>
+                    )}
+                  </div>
+                  <CardTitle>{spec.name}</CardTitle>
+                  <CardDescription className="line-clamp-3 leading-5">
+                    {objective}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="mt-auto">
+                  <p className="truncate text-xs text-muted-foreground">
+                    {spec.domainSlug ? spec.domainSlug.replaceAll("-", " ") : "Reusable profile"}
+                  </p>
+                </CardContent>
+                <CardFooter className="justify-between gap-3 border-t pt-3">
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Clock3 className="size-3.5" aria-hidden="true" /> Guided session
                   </span>
-                  {spec.status === "draft" ? (
-                    <Badge variant="outline" className="ml-auto">
-                      Draft
-                    </Badge>
-                  ) : null}
-                  <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
-                </span>
-                <span className="mt-5 block truncate text-base font-medium">{spec.name}</span>
-                <span className="mt-1 block truncate text-xs text-muted-foreground">{spec.slug}</span>
-                <span className="mt-auto block truncate pt-4 text-xs text-muted-foreground">
-                  {spec.domainSlug ? `Domain · ${spec.domainSlug}` : "Reusable behavior profile"}
-                </span>
-              </Link>
-              {type === "agents" && spec.status === "draft" && (
-                <div className="flex justify-end border-t px-3 py-2.5">
-                  <Button size="sm" onClick={() => publishDraft(spec.slug)}>
-                    <Sparkles data-icon="inline-start" /> Publish
-                  </Button>
-                </div>
-              )}
-            </article>
-          ))}
+                  <div className="flex items-center gap-2">
+                    {type === "agents" && spec.status === "draft" && (
+                      <Button size="sm" variant="outline" onClick={() => publishDraft(spec.slug)}>
+                        <Sparkles data-icon="inline-start" /> Publish
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      nativeButton={false}
+                      render={<Link href={`/${type}/${encodeURIComponent(spec.slug)}`} />}
+                    >
+                      Start practice <ArrowUpRight data-icon="inline-end" />
+                    </Button>
+                  </div>
+                </CardFooter>
+              </Card>
+            );
+          })}
           {!specs.length && (
-            <div className="rounded-xl border px-5 py-16 text-center md:col-span-2">
+            <div className="rounded-xl border px-5 py-16 text-center md:col-span-2 xl:col-span-3">
               <p className="text-sm font-medium">No {copy.title.toLowerCase()} yet</p>
               <p className="mt-1 text-sm text-muted-foreground">Create the first {copy.single} to get started.</p>
             </div>

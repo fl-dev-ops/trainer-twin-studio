@@ -53,21 +53,42 @@ export async function listSpecSummaries(type: "personas" | "agents", orgId: stri
   }
 
   const [agents, drafts] = await Promise.all([
-    db.agent.findMany({ where: { orgId }, orderBy: [{ order: "asc" }, { slug: "asc" }], select: { slug: true, name: true, version: true, domainSlug: true, visibility: true } }),
+    db.agent.findMany({
+      where: { orgId },
+      orderBy: [{ order: "asc" }, { name: "asc" }],
+      select: { slug: true, name: true, version: true, domainSlug: true, visibility: true, data: true, order: true },
+    }),
     // ponytail: drafts are only written by the still-single-tenant copilot; scope them when it goes multi-tenant
-    db.specDraft.findMany({ orderBy: { slug: "asc" }, select: { slug: true, name: true, revision: true, domainData: true } }),
+    db.specDraft.findMany({ orderBy: { name: "asc" }, select: { slug: true, name: true, revision: true, domainData: true, agentData: true } }),
   ]);
   const published = new Set(agents.map(({ slug }) => slug));
   return [
-    ...agents.map((agent) => ({ ...agent, status: "published" as const })),
-    ...drafts.filter(({ slug }) => !published.has(slug)).map((draft) => ({
-      slug: draft.slug,
-      name: draft.name,
-      version: draft.revision,
-      domainSlug: isRecord(draft.domainData) && typeof draft.domainData.id === "string" ? draft.domainData.id : undefined,
-      status: "draft" as const,
-    })),
-  ].sort((a, b) => a.slug.localeCompare(b.slug));
+    ...agents.map((agent) => {
+      const data = agent.data as { objective?: unknown } | null;
+      const objective = typeof data?.objective === "string" ? data.objective : undefined;
+      return {
+        slug: agent.slug,
+        name: agent.name,
+        version: agent.version,
+        domainSlug: agent.domainSlug,
+        visibility: agent.visibility,
+        objective,
+        status: "published" as const,
+      };
+    }),
+    ...drafts.filter(({ slug }) => !published.has(slug)).map((draft) => {
+      const agent = draft.agentData as { objective?: unknown } | null;
+      const objective = typeof agent?.objective === "string" ? agent.objective : undefined;
+      return {
+        slug: draft.slug,
+        name: draft.name,
+        version: draft.revision,
+        domainSlug: isRecord(draft.domainData) && typeof draft.domainData.id === "string" ? draft.domainData.id : undefined,
+        objective,
+        status: "draft" as const,
+      };
+    }),
+  ];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
