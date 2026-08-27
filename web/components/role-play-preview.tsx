@@ -127,7 +127,6 @@ function AssignUsersDialog({
   function handleSave() {
     onSave(selected);
     setOpen(false);
-    toast.success(`Updated user assignments (${selected.length} assigned)`);
   }
 
   return (
@@ -243,12 +242,37 @@ export function RolePlayPreview({
     }
   }, [storageKey]);
 
-  function saveAssignments(ids: string[]) {
+  async function saveAssignments(ids: string[]) {
+    const newlyAdded = ids.filter((id) => !assignedIds.includes(id));
     setAssignedIds(ids);
     try {
       localStorage.setItem(storageKey, JSON.stringify(ids));
     } catch {
       // ignore
+    }
+
+    if (newlyAdded.length > 0) {
+      try {
+        await fetch("/api/role-play/notify-assignment", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            rolePlaySlug: rolePlay.slug,
+            rolePlayName: rolePlay.name,
+            rolePlayObjective: rolePlay.objective,
+            userIds: newlyAdded,
+            trainerName,
+          }),
+        });
+        toast.success(
+          `Assigned and sent email notification to ${newlyAdded.length} learner${newlyAdded.length > 1 ? "s" : ""}`,
+        );
+      } catch (err) {
+        console.error("Failed to notify users via email:", err);
+        toast.success(`Updated user assignments (${ids.length} assigned)`);
+      }
+    } else {
+      toast.success(`Updated user assignments (${ids.length} assigned)`);
     }
   }
 
