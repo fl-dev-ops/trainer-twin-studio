@@ -94,7 +94,9 @@ export function OrganizationForm({
   const [error, setError] = useState<string | null>(null);
   const [logoError, setLogoError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [accent, setAccent] = useState(organization.accentColor ?? "#ec3013");
+  // Backup previous default brand color: #ec3013
+  const DEFAULT_ACCENT = "#4648D4";
+  const [accent, setAccent] = useState(organization.accentColor ?? DEFAULT_ACCENT);
 
   async function saveOrganization(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -241,8 +243,8 @@ export function OrganizationForm({
                 />
                 <button
                   type="button"
-                  className="text-sm text-muted-foreground underline underline-offset-2"
-                  onClick={() => setAccent("#ec3013")}
+                  className="text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                  onClick={() => setAccent(DEFAULT_ACCENT)}
                 >
                   Reset
                 </button>

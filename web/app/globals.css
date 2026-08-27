@@ -54,8 +54,9 @@
 :root {
     --font-sans: var(--font-geist-sans);
     --font-heading: var(--font-geist-sans);
-    --brand: #ec3013;
-    --brand-strong: #c9270f;
+    /* Backup previous default brand color: #ec3013 (brand), #c9270f (brand-strong) */
+    --brand: #4648D4;
+    --brand-strong: #4648D4;
     --background: oklch(1 0 0);
     --foreground: #201e1d;
     --card: oklch(1 0 0);
