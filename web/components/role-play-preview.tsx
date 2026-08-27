@@ -377,9 +377,6 @@ export function RolePlayPreview({
                         Step-by-step interview phases and evidence criteria
                       </p>
                     </div>
-                    <Badge variant="outline">
-                      {stages.length} Round{stages.length > 1 ? "s" : ""}
-                    </Badge>
                   </div>
 
                   <div className="space-y-6">
@@ -387,32 +384,19 @@ export function RolePlayPreview({
                       const evidenceDefs = stage.config?.evidence?.definitions ?? {};
                       const evidenceKeys =
                         stage.config?.evidence?.keys ?? Object.keys(evidenceDefs);
-                      const turnBudget = stage.config?.turns;
 
                       return (
                         <div
                           key={stage.id || idx}
                           className="rounded-2xl bg-muted/30 p-5 sm:p-6 space-y-4 transition-colors"
                         >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2.5">
-                                <span className="grid size-6 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                                  {idx + 1}
-                                </span>
-                                <h3 className="text-base font-semibold">
-                                  {stage.name || `Stage ${idx + 1}`}
-                                </h3>
-                              </div>
-                              <p className="text-xs text-muted-foreground leading-relaxed pl-8.5">
-                                {stage.objective}
-                              </p>
-                            </div>
-                            {turnBudget && (
-                              <Badge variant="secondary" className="shrink-0 text-xs px-2.5 py-1">
-                                {turnBudget.minimum ?? 3}–{turnBudget.maximum ?? 5} turns
-                              </Badge>
-                            )}
+                          <div className="space-y-1">
+                            <h3 className="text-base font-semibold">
+                              {stage.name || `Stage ${idx + 1}`}
+                            </h3>
+                            <p className="text-xs text-muted-foreground leading-relaxed">
+                              {stage.objective}
+                            </p>
                           </div>
 
                           {stage.opening && (
