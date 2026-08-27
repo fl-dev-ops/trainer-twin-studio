@@ -391,77 +391,77 @@ export function RolePlayPreview({
           {/* Right Sidebar Column */}
           <div className="space-y-8">
             {/* Trainer Twin Card with Integrated Stats */}
-            <Card className="overflow-hidden">
-              <div className="bg-gradient-to-br from-primary/15 via-primary/5 to-transparent p-6 text-center">
-                <div className="relative mx-auto size-28 overflow-hidden rounded-full border-2 border-background shadow-md">
+            <Card className="overflow-hidden p-0! gap-0! space-y-0!">
+              <div className="bg-linear-to-br from-primary/15 via-primary/5 to-transparent p-5 text-center">
+                <div className="relative mx-auto size-20 overflow-hidden rounded-full border-2 border-background shadow-sm">
                   <Image
                     src="/vasanth.png"
                     alt={trainerName}
-                    width={112}
-                    height={112}
+                    width={80}
+                    height={80}
                     className="size-full object-cover"
                     priority
                   />
                 </div>
-                <h2 className="mt-4 text-lg font-bold">{trainerName}</h2>
+                <h2 className="mt-3 text-base font-bold">{trainerName}</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">AI Trainer Twin</p>
-                <div className="mt-3 flex justify-center">
-                  <Badge variant="secondary" className="gap-1.5 px-2.5 py-1 text-xs">
-                    <Volume2 className="size-3.5" /> Voice Cloned
+                <div className="mt-2.5 flex justify-center">
+                  <Badge variant="secondary" className="gap-1 px-2 py-0.5 text-[11px]">
+                    <Volume2 className="size-3" /> Voice Cloned
                   </Badge>
                 </div>
               </div>
 
-              <CardContent className="p-6 space-y-5 border-t">
+              <CardContent className="p-5 space-y-4 border-t">
                 {/* Stats Rows */}
-                <div className="space-y-3.5">
+                <div className="space-y-2.5">
                   {/* Hours of interviews */}
                   <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="grid size-10 place-items-center rounded-xl bg-indigo-100 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
-                        <Clock className="size-5" />
+                    <div className="flex items-center gap-2.5">
+                      <div className="grid size-7 place-items-center rounded-lg bg-indigo-100 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
+                        <Clock className="size-3.5" />
                       </div>
-                      <span className="text-sm font-medium text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">
                         of interviews
                       </span>
                     </div>
-                    <span className="text-lg font-bold tracking-tight text-foreground">
+                    <span className="text-sm font-semibold text-foreground">
                       10.5 hrs
                     </span>
                   </div>
 
                   {/* Turns */}
                   <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="grid size-10 place-items-center rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400">
-                        <MessageSquare className="size-5" />
+                    <div className="flex items-center gap-2.5">
+                      <div className="grid size-7 place-items-center rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400">
+                        <MessageSquare className="size-3.5" />
                       </div>
-                      <span className="text-sm font-medium text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">
                         Turns
                       </span>
                     </div>
-                    <span className="text-lg font-bold tracking-tight text-foreground">
+                    <span className="text-sm font-semibold text-foreground">
                       3,143
                     </span>
                   </div>
 
                   {/* Words */}
                   <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="grid size-10 place-items-center rounded-xl bg-teal-100 text-teal-700 dark:bg-teal-950/60 dark:text-teal-400">
-                        <FileText className="size-5" />
+                    <div className="flex items-center gap-2.5">
+                      <div className="grid size-7 place-items-center rounded-lg bg-teal-100 text-teal-700 dark:bg-teal-950/60 dark:text-teal-400">
+                        <FileText className="size-3.5" />
                       </div>
-                      <span className="text-sm font-medium text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">
                         words
                       </span>
                     </div>
-                    <span className="text-lg font-bold tracking-tight text-foreground">
+                    <span className="text-sm font-semibold text-foreground">
                       109,790
                     </span>
                   </div>
                 </div>
 
-                <p className="text-xs leading-relaxed text-muted-foreground border-t pt-4">
+                <p className="text-xs leading-relaxed text-muted-foreground border-t pt-3.5">
                   Conducts realistic, multi-turn interview role plays modeled after real evaluation criteria.
                 </p>
               </CardContent>
