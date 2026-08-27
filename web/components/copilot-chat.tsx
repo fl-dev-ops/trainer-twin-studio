@@ -345,7 +345,8 @@ export function CopilotChat() {
                 <SheetDescription>Compiled working draft</SheetDescription>
               </div>
               {artifactPreview && (
-                <Button
+                {/*
+              <Button
                   className="ml-auto shrink-0"
                   variant="outline"
                   size="sm"
@@ -354,6 +355,7 @@ export function CopilotChat() {
                 >
                   <Download aria-hidden="true" /> Download
                 </Button>
+              */}
               )}
             </div>
           </SheetHeader>
