@@ -84,7 +84,7 @@ export function ProfileForm({
 export function OrganizationForm({
   organization,
 }: {
-  organization: { id: string; name: string; slug: string; logo?: string | null };
+  organization: { id: string; name: string; slug: string; logo?: string | null; accentColor?: string | null };
 }) {
   const logoInput = useRef<HTMLInputElement>(null);
   const [logo, setLogo] = useState(organization.logo ?? null);
@@ -94,6 +94,7 @@ export function OrganizationForm({
   const [error, setError] = useState<string | null>(null);
   const [logoError, setLogoError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [accent, setAccent] = useState(organization.accentColor ?? "#ec3013");
 
   async function saveOrganization(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -110,12 +111,22 @@ export function OrganizationForm({
       organizationId: organization.id,
       data: { name, logo },
     });
-    setSaving(false);
     if (result.error) {
+      setSaving(false);
       setError(result.error.message ?? "Could not update the organization.");
       return;
     }
-    setSaved(true);
+
+    // ponytail PT-4: accent color saved in a separate fetch, not atomic with org.update(); unify when settings grow.
+    await fetch("/api/org/accent", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accentColor: accent }),
+    });
+
+    // ponytail PT-5: full reload so the server layout re-fetches accentColor and OrgAccentProvider updates.
+    // Swap for router.refresh() once the prop-threading is stable.
+    window.location.reload();
   }
 
   function uploadLogo(file?: File) {
@@ -208,6 +219,37 @@ export function OrganizationForm({
             <Field>
               <FieldLabel>Workspace</FieldLabel>
               <p className="text-sm font-medium">{organization.slug}</p>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="accent-color">Accent color</FieldLabel>
+              <div className="flex items-center gap-3">
+                <input
+                  type="color"
+                  id="accent-color"
+                  value={accent}
+                  onChange={(e) => setAccent(e.target.value)}
+                  className="size-9 shrink-0 cursor-pointer rounded-md border bg-transparent p-0.5"
+                  aria-label="Pick accent color"
+                />
+                <Input
+                  value={accent}
+                  onChange={(e) => setAccent(e.target.value)}
+                  pattern="^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+                  maxLength={7}
+                  className="w-28 font-mono"
+                  aria-label="Hex color value"
+                />
+                <button
+                  type="button"
+                  className="text-sm text-muted-foreground underline underline-offset-2"
+                  onClick={() => setAccent("#ec3013")}
+                >
+                  Reset
+                </button>
+              </div>
+              <FieldDescription>
+                Applies to buttons and interactive highlights across the workspace.
+              </FieldDescription>
             </Field>
           </FieldGroup>
           <div className="flex items-center gap-3">

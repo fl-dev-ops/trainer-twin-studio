@@ -13,10 +13,20 @@ export default async function ProfilePage() {
   const membership = await db.member.findFirst({
     where: { userId: session.user.id },
     select: {
-      organization: { select: { id: true, name: true, slug: true, logo: true } },
+      organization: { select: { id: true, name: true, slug: true, logo: true, metadata: true } },
     },
   });
   if (!membership) redirect("/auth/no-org");
+
+  // ponytail PT-1: parsing accentColor from the metadata blob.
+  const accentColor = (() => {
+    try {
+      const m = JSON.parse(membership.organization.metadata ?? "{}");
+      return typeof m.accentColor === "string" ? m.accentColor : null;
+    } catch {
+      return null;
+    }
+  })();
 
   return (
     <main className="min-h-0 flex-1 overflow-auto p-5 sm:p-8">
@@ -34,7 +44,7 @@ export default async function ProfilePage() {
           <h2 id="organization-heading" className="text-lg font-semibold">
             Organization
           </h2>
-          <OrganizationForm organization={membership.organization} />
+          <OrganizationForm organization={{ ...membership.organization, accentColor }} />
         </section>
       </div>
     </main>
