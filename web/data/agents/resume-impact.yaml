@@ -1,0 +1,99 @@
+schema_version: 1
+kind: agent
+agent:
+  id: resume-impact
+  name: Resume Impact & Quantification
+  version: 1
+  domain: software-engineering-resume
+  objective: Validate one measurable resume claim from baseline through measurement and
+    causal confidence.
+  opening: Select a quantified claim from your resume and explain how the number was
+    derived.
+  config:
+    claim_handling: resume_evidence
+    context:
+      mode: resume_grounding
+      required: true
+      permitted_sources:
+      - pdf
+      - markdown
+      - text
+    scenario: {}
+    tools: []
+    actions:
+      allowed:
+      - ask_exact_example
+      - request_justification
+      - isolate_missing_part
+      - surface_contradiction
+      - narrow_hint
+      - deepen_with_tradeoff
+      - deepen_with_edge_case
+      - redirect_role
+      - probe_required_evidence
+      - transition_phase
+      - close_session
+      default: probe_required_evidence
+      max_probes_per_lane: 2
+      max_grounding_probes_per_lane: 1
+    evidence:
+      statuses:
+      - untested
+      - partial
+      - sufficient
+      - weak
+      - unresolved
+    turns:
+      maximum: 8
+    rendering:
+      maximum_words: 45
+      maximum_question_marks: 1
+      one_focal_ask: true
+      deterministic_closing: true
+  stages:
+  - id: impact-validation
+    name: 'Round 2: Impact & Quantification'
+    objective: Validate one measurable claim from baseline through measurement and
+      causal confidence.
+    opening: Select a quantified claim and ask how the number was derived.
+    config:
+      knowledge:
+        tags:
+        - resume
+        - metrics
+        - experimentation
+      claim_handling: resume_evidence
+      context:
+        mode: resume_grounding
+      evidence:
+        definitions:
+          impact_claim: The exact quantified claim being investigated.
+          impact_baseline: The value and conditions before the change.
+          impact_result: The value under comparable conditions after the change.
+          measurement_method: The metric, tool, instrumentation, or calculation used.
+          impact_causality: Evidence connecting the change to the measured result.
+          metric_confidence: Calibrated confidence, limitations, and uncertainty.
+          measurement_scope: Time period, users, teams, traffic, or sample population.
+          confounding_factors: Other changes or conditions that may have affected the
+            result.
+          business_impact: The practical engineering or business consequence.
+        keys:
+        - impact_claim
+        - impact_baseline
+        - impact_result
+        - measurement_method
+        - impact_causality
+        - metric_confidence
+        - measurement_scope
+        - confounding_factors
+        - business_impact
+        completion_keys:
+        - impact_claim
+        - impact_baseline
+        - impact_result
+        - measurement_method
+        - impact_causality
+        - metric_confidence
+      turns:
+        minimum: 3
+        maximum: 5

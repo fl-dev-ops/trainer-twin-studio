@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     if (input.action === "inventory") {
       const [personas, agents, domains, knowledgeBases, drafts] = await Promise.all([
         db.persona.findMany({ orderBy: { slug: "asc" }, select: { slug: true, name: true, version: true } }),
-        db.agent.findMany({ orderBy: { slug: "asc" }, select: { slug: true, name: true, version: true, domainSlug: true } }),
+        db.agent.findMany({ orderBy: [{ order: "asc" }, { slug: "asc" }], select: { slug: true, name: true, version: true, domainSlug: true } }),
         db.domain.findMany({ orderBy: { slug: "asc" }, select: { slug: true, name: true, version: true } }),
         db.knowledgeBase.findMany({
           orderBy: { slug: "asc" },

@@ -1,0 +1,87 @@
+schema_version: 1
+kind: agent
+agent:
+  id: fundamentals-conceptual
+  name: Fundamentals - Conceptual Understanding
+  version: 1
+  domain: software-engineering-fundamentals
+  objective: Expose the candidate's mental model of how and why a selected concept works.
+  opening: Keep one concept from the fundamentals discussion and test its mechanism,
+    scenarios, edge cases, and trade-offs.
+  config:
+    claim_handling: conceptual
+    context:
+      mode: none
+      required: false
+    scenario: {}
+    tools: []
+    actions:
+      allowed:
+      - ask_exact_example
+      - ask_reflective_walkthrough
+      - request_justification
+      - isolate_missing_part
+      - scaffold_missing_link
+      - surface_contradiction
+      - narrow_hint
+      - deepen_with_tradeoff
+      - deepen_with_edge_case
+      - redirect_role
+      - probe_required_evidence
+      - transition_phase
+      - close_session
+      default: probe_required_evidence
+      max_probes_per_lane: 2
+    evidence:
+      statuses:
+      - untested
+      - partial
+      - sufficient
+      - weak
+      - unresolved
+    turns:
+      maximum: 9
+    rendering:
+      maximum_words: 45
+      maximum_question_marks: 1
+      one_focal_ask: true
+      deterministic_closing: true
+  stages:
+  - id: conceptual-understanding
+    name: 'Round 2: Conceptual Understanding'
+    objective: Expose the candidate's mental model of how and why the selected concept
+      works.
+    opening: Keep one concept from Round 1 and test its mechanism, scenarios, edge cases,
+      and trade-offs.
+    config:
+      knowledge:
+        tags:
+        - mechanisms
+        - tradeoffs
+        - edge-cases
+      claim_handling: conceptual
+      context:
+        mode: none
+      evidence:
+        definitions:
+          internal_mechanism: How the concept works internally and why it behaves that
+            way.
+          conceptual_reasoning: Reasoning that distinguishes mechanism from a memorized
+            rule.
+          scenario_behavior: A correct prediction under a changed scenario.
+          conceptual_tradeoff: When one approach is preferable and what it costs.
+          conceptual_edge_case: Behavior under a meaningful edge case.
+        keys:
+        - internal_mechanism
+        - conceptual_reasoning
+        - scenario_behavior
+        - conceptual_tradeoff
+        - conceptual_edge_case
+        completion_keys:
+        - internal_mechanism
+        - conceptual_reasoning
+        - scenario_behavior
+        - conceptual_tradeoff
+      turns:
+        minimum: 4
+        maximum: 6

@@ -1,0 +1,95 @@
+schema_version: 1
+kind: agent
+agent:
+  id: resume-defense
+  name: Resume Defense & Cross-Examination
+  version: 1
+  domain: software-engineering-resume
+  objective: Test ownership, consistency, technical depth, limitations, and connected
+    claims under pressure.
+  opening: Choose one resume claim and defend it when challenged from a different angle.
+  config:
+    claim_handling: resume_evidence
+    context:
+      mode: resume_grounding
+      required: true
+      permitted_sources:
+      - pdf
+      - markdown
+      - text
+    scenario: {}
+    tools: []
+    actions:
+      allowed:
+      - ask_exact_example
+      - request_justification
+      - isolate_missing_part
+      - surface_contradiction
+      - narrow_hint
+      - deepen_with_tradeoff
+      - deepen_with_edge_case
+      - redirect_role
+      - probe_required_evidence
+      - transition_phase
+      - close_session
+      default: probe_required_evidence
+      max_probes_per_lane: 2
+      max_grounding_probes_per_lane: 1
+    evidence:
+      statuses:
+      - untested
+      - partial
+      - sufficient
+      - weak
+      - unresolved
+    turns:
+      maximum: 9
+    rendering:
+      maximum_words: 45
+      maximum_question_marks: 1
+      one_focal_ask: true
+      deterministic_closing: true
+  stages:
+  - id: resume-defense
+    name: 'Round 3: Resume Defense & Cross-Examination'
+    objective: Test ownership, consistency, technical depth, limitations, and connected
+      claims under pressure.
+    opening: Challenge one related resume claim precisely and require the candidate
+      to defend it.
+    config:
+      knowledge:
+        tags:
+        - resume
+        - architecture
+        - tradeoffs
+      claim_handling: resume_evidence
+      context:
+        mode: resume_grounding
+      evidence:
+        definitions:
+          claim_consistency: Consistency between current answers, prior answers, and
+            resume claims.
+          defense_ownership: Defensible personal ownership rather than team-level language.
+          architecture_depth: Architectural decisions, rationale, and consequences.
+          approach_limitation: The largest limitation or cost of the chosen approach.
+          counterfactual_behavior: What changes under a hypothetical constraint or
+            without the contribution.
+          cross_claim_connection: A credible technical connection between resume claims.
+          simple_explanation: A clear explanation without hiding behind terminology.
+        keys:
+        - claim_consistency
+        - defense_ownership
+        - architecture_depth
+        - approach_limitation
+        - counterfactual_behavior
+        - cross_claim_connection
+        - simple_explanation
+        completion_keys:
+        - claim_consistency
+        - defense_ownership
+        - architecture_depth
+        - approach_limitation
+        - counterfactual_behavior
+      turns:
+        minimum: 4
+        maximum: 6

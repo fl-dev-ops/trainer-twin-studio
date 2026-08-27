@@ -2,11 +2,11 @@ schema_version: 1
 kind: agent
 agent:
   id: resume-mastery
-  name: Resume Mastery
+  name: Resume - Project & Experience Deep Dive
   version: 1
   domain: software-engineering-resume
-  objective: Progressively help the candidate understand, validate, and defend important
-    resume claims with authentic evidence.
+  objective: Establish what the candidate worked on, how it worked, and what they personally
+    owned.
   opening: Choose one important project from your resume and explain the problem it
     was intended to solve.
   config:
@@ -44,7 +44,7 @@ agent:
       - weak
       - unresolved
     turns:
-      maximum: 17
+      maximum: 8
     rendering:
       maximum_words: 45
       maximum_question_marks: 1
@@ -99,96 +99,6 @@ agent:
         - technical_mechanism
         - decision_reasoning
         - outcome
-      turns:
-        minimum: 4
-        maximum: 6
-  - id: impact-validation
-    name: 'Round 2: Impact & Quantification'
-    objective: Validate one measurable claim from baseline through measurement and
-      causal confidence.
-    opening: Select a quantified claim and ask how the number was derived.
-    config:
-      knowledge:
-        tags:
-        - resume
-        - metrics
-        - experimentation
-      claim_handling: resume_evidence
-      context:
-        mode: resume_grounding
-      evidence:
-        definitions:
-          impact_claim: The exact quantified claim being investigated.
-          impact_baseline: The value and conditions before the change.
-          impact_result: The value under comparable conditions after the change.
-          measurement_method: The metric, tool, instrumentation, or calculation used.
-          impact_causality: Evidence connecting the change to the measured result.
-          metric_confidence: Calibrated confidence, limitations, and uncertainty.
-          measurement_scope: Time period, users, teams, traffic, or sample population.
-          confounding_factors: Other changes or conditions that may have affected
-            the result.
-          business_impact: The practical engineering or business consequence.
-        keys:
-        - impact_claim
-        - impact_baseline
-        - impact_result
-        - measurement_method
-        - impact_causality
-        - metric_confidence
-        - measurement_scope
-        - confounding_factors
-        - business_impact
-        completion_keys:
-        - impact_claim
-        - impact_baseline
-        - impact_result
-        - measurement_method
-        - impact_causality
-        - metric_confidence
-      turns:
-        minimum: 3
-        maximum: 5
-  - id: resume-defense
-    name: 'Round 3: Resume Defense & Cross-Examination'
-    objective: Test ownership, consistency, technical depth, limitations, and connected
-      claims under pressure.
-    opening: Challenge one related resume claim precisely and require the candidate
-      to defend it.
-    config:
-      knowledge:
-        tags:
-        - resume
-        - architecture
-        - tradeoffs
-      claim_handling: resume_evidence
-      context:
-        mode: resume_grounding
-      evidence:
-        definitions:
-          claim_consistency: Consistency between current answers, prior answers, and
-            resume claims.
-          defense_ownership: Defensible personal ownership rather than team-level
-            language.
-          architecture_depth: Architectural decisions, rationale, and consequences.
-          approach_limitation: The largest limitation or cost of the chosen approach.
-          counterfactual_behavior: What changes under a hypothetical constraint or
-            without the contribution.
-          cross_claim_connection: A credible technical connection between resume claims.
-          simple_explanation: A clear explanation without hiding behind terminology.
-        keys:
-        - claim_consistency
-        - defense_ownership
-        - architecture_depth
-        - approach_limitation
-        - counterfactual_behavior
-        - cross_claim_connection
-        - simple_explanation
-        completion_keys:
-        - claim_consistency
-        - defense_ownership
-        - architecture_depth
-        - approach_limitation
-        - counterfactual_behavior
       turns:
         minimum: 4
         maximum: 6

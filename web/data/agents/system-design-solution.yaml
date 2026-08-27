@@ -1,0 +1,106 @@
+schema_version: 1
+kind: agent
+agent:
+  id: system-design-solution
+  name: System Design - Solution Development
+  version: 1
+  domain: software-engineering-system-design
+  objective: Build and justify a coherent end-to-end design from established requirements.
+  opening: Ask for a high-level architecture, then progressively deepen the same design.
+  config:
+    claim_handling: hypothetical_design
+    context:
+      mode: scenario_only
+      required: false
+    scenario:
+      problem: Users upload and securely share large files.
+      reveal_policy: requested_facts_only
+      hidden_requirements:
+        users: Authenticated business users share internally or through expiring external
+          links.
+        file_size: Files can be as large as 20 GB.
+        scale: One million daily active users and about 100,000 uploads per day with
+          bursty global traffic.
+        resumability: Uploads resume after network interruption.
+        access: Files are private by default; owners control recipients and link expiry.
+        retention: Default 30 days, configurable by the owning organisation.
+        progress: Clients need accurate upload progress.
+        security: Encrypt in transit and at rest, authorize access, and scan uploads
+          for malware.
+        availability: Downloads survive one application-server failure.
+    tools: []
+    actions:
+      allowed:
+      - ask_exact_example
+      - ask_reflective_walkthrough
+      - request_justification
+      - reveal_requirement
+      - isolate_missing_part
+      - scaffold_missing_link
+      - surface_contradiction
+      - narrow_hint
+      - deepen_with_tradeoff
+      - deepen_with_edge_case
+      - redirect_role
+      - probe_required_evidence
+      - transition_phase
+      - close_session
+      default: probe_required_evidence
+      max_probes_per_lane: 2
+    evidence:
+      statuses:
+      - untested
+      - partial
+      - sufficient
+      - weak
+      - unresolved
+    turns:
+      maximum: 10
+    rendering:
+      maximum_words: 45
+      maximum_question_marks: 1
+      one_focal_ask: true
+      deterministic_closing: true
+  stages:
+  - id: solution-development
+    name: 'Round 2: System Design & Solution Development'
+    objective: Build and justify a coherent end-to-end design from established requirements.
+    opening: Ask for a high-level architecture, then progressively deepen the same design.
+    config:
+      knowledge:
+        tags:
+        - architecture
+        - storage
+        - security
+        - reliability
+      claim_handling: hypothetical_design
+      context:
+        mode: scenario_only
+      evidence:
+        definitions:
+          system_architecture: Major components and responsibilities forming a plausible
+            architecture.
+          end_to_end_flow: Coherent upload, processing, sharing, and download flow.
+          interface_and_storage: Justified API, data model, metadata, and object-storage
+            choices.
+          reliability_security: Error handling, authorization, integrity, resumability,
+            and failure behavior.
+          technology_reasoning: Why major choices fit constraints and what alternatives
+            existed.
+          design_coherence: Components connect into one implementable system.
+        keys:
+        - system_architecture
+        - end_to_end_flow
+        - interface_and_storage
+        - reliability_security
+        - technology_reasoning
+        - design_coherence
+        completion_keys:
+        - system_architecture
+        - end_to_end_flow
+        - reliability_security
+        - technology_reasoning
+        - design_coherence
+      turns:
+        minimum: 5
+        maximum: 7

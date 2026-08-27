@@ -53,7 +53,7 @@ export async function listSpecSummaries(type: "personas" | "agents", orgId: stri
   }
 
   const [agents, drafts] = await Promise.all([
-    db.agent.findMany({ where: { orgId }, orderBy: { slug: "asc" }, select: { slug: true, name: true, version: true, domainSlug: true, visibility: true } }),
+    db.agent.findMany({ where: { orgId }, orderBy: [{ order: "asc" }, { slug: "asc" }], select: { slug: true, name: true, version: true, domainSlug: true, visibility: true } }),
     // ponytail: drafts are only written by the still-single-tenant copilot; scope them when it goes multi-tenant
     db.specDraft.findMany({ orderBy: { slug: "asc" }, select: { slug: true, name: true, revision: true, domainData: true } }),
   ]);

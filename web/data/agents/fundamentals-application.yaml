@@ -1,0 +1,91 @@
+schema_version: 1
+kind: agent
+agent:
+  id: fundamentals-application
+  name: Fundamentals - Depth, Reasoning & Application
+  version: 1
+  domain: software-engineering-fundamentals
+  objective: Apply fundamentals to an unfamiliar debugging, performance, or architecture
+    problem.
+  opening: Introduce one realistic problem based on a concept the candidate appeared
+    comfortable with.
+  config:
+    claim_handling: conceptual
+    context:
+      mode: none
+      required: false
+    scenario: {}
+    tools: []
+    actions:
+      allowed:
+      - ask_exact_example
+      - ask_reflective_walkthrough
+      - request_justification
+      - isolate_missing_part
+      - scaffold_missing_link
+      - surface_contradiction
+      - narrow_hint
+      - deepen_with_tradeoff
+      - deepen_with_edge_case
+      - redirect_role
+      - probe_required_evidence
+      - transition_phase
+      - close_session
+      default: probe_required_evidence
+      max_probes_per_lane: 2
+    evidence:
+      statuses:
+      - untested
+      - partial
+      - sufficient
+      - weak
+      - unresolved
+    turns:
+      maximum: 10
+    rendering:
+      maximum_words: 45
+      maximum_question_marks: 1
+      one_focal_ask: true
+      deterministic_closing: true
+  stages:
+  - id: depth-application
+    name: 'Round 3: Depth, Reasoning & Application'
+    objective: Apply fundamentals to an unfamiliar debugging, performance, or architecture
+      problem.
+    opening: Introduce one realistic problem based on a concept the candidate appeared
+      comfortable with.
+    config:
+      knowledge:
+        tags:
+        - debugging
+        - performance
+        - application
+      claim_handling: conceptual
+      context:
+        mode: none
+      evidence:
+        definitions:
+          problem_investigation: A disciplined plan to observe and locate the real bottleneck
+            or fault.
+          first_principles_reasoning: A solution derived from mechanisms and constraints.
+          applied_solution: A coherent practical response to the unfamiliar problem.
+          solution_limitation: When the proposed solution will not help or may worsen
+            the problem.
+          adaptive_revision: A justified revision after new evidence or constraints.
+          combined_concepts: Correct use of multiple fundamentals in one line of reasoning.
+        keys:
+        - problem_investigation
+        - first_principles_reasoning
+        - applied_solution
+        - solution_limitation
+        - adaptive_revision
+        - combined_concepts
+        completion_keys:
+        - problem_investigation
+        - first_principles_reasoning
+        - applied_solution
+        - solution_limitation
+        - adaptive_revision
+      turns:
+        minimum: 4
+        maximum: 7

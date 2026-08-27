@@ -272,9 +272,11 @@ export function SpecResourceIndex({ type, specs }: { type: ResourceType; specs: 
                   <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted">
                     <Icon className="size-4" aria-hidden="true" />
                   </span>
-                  <Badge variant={spec.status === "draft" ? "outline" : "secondary"} className="ml-auto">
-                    {spec.status === "draft" ? `Draft · r${spec.version}` : `v${spec.version}`}
-                  </Badge>
+                  {spec.status === "draft" ? (
+                    <Badge variant="outline" className="ml-auto">
+                      Draft
+                    </Badge>
+                  ) : null}
                   <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
                 </span>
                 <span className="mt-5 block truncate text-base font-medium">{spec.name}</span>
@@ -536,7 +538,7 @@ export function SpecResourceEditor({
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <header className="flex shrink-0 items-center gap-3 border-b px-4 py-3 sm:px-6">
-        <Button variant="ghost" size="icon-sm" render={<Link href={`/${type}`} />} nativeButton={false} aria-label={`Back to ${copy.title}`}>
+        <Button variant="ghost" size="icon-sm" render={<Link href={type === "agents" ? basePath : `/${type}`} />} nativeButton={false} aria-label={`Back to ${type === "agents" ? "preview" : copy.title}`}>
           <ArrowLeft />
         </Button>
         <div className="min-w-0 flex-1">

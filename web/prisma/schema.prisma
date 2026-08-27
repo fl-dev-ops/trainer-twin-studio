@@ -32,6 +32,7 @@ model Agent {
   version    Int      @default(1)
   domainSlug String
   data       Json
+  order      Int      @default(0)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   @@index([orgId])

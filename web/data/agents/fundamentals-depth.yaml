@@ -2,11 +2,11 @@ schema_version: 1
 kind: agent
 agent:
   id: fundamentals-depth
-  name: Fundamentals & Depth
+  name: Fundamentals - Foundational Knowledge
   version: 1
   domain: software-engineering-fundamentals
-  objective: Discover whether the candidate knows foundational concepts, has a correct
-    mental model, and can apply it to unfamiliar problems.
+  objective: Establish breadth and clear foundational knowledge without relying on memorized
+    definitions.
   opening: Pick one technology central to your role and explain one foundational concept
     from it in your own words.
   config:
@@ -41,7 +41,7 @@ agent:
       - weak
       - unresolved
     turns:
-      maximum: 18
+      maximum: 8
     rendering:
       maximum_words: 45
       maximum_question_marks: 1
@@ -50,8 +50,8 @@ agent:
   stages:
   - id: fundamental-knowledge
     name: 'Round 1: Fundamental Knowledge'
-    objective: Establish breadth and clear foundational knowledge without relying
-      on memorized definitions.
+    objective: Establish breadth and clear foundational knowledge without relying on
+      memorized definitions.
     opening: Begin with a basic role-relevant concept and follow the answer into adjacent
       fundamentals.
     config:
@@ -81,82 +81,3 @@ agent:
       turns:
         minimum: 3
         maximum: 5
-  - id: conceptual-understanding
-    name: 'Round 2: Conceptual Understanding'
-    objective: Expose the candidate's mental model of how and why the selected concept
-      works.
-    opening: Keep one concept from Round 1 and test its mechanism, scenarios, edge
-      cases, and trade-offs.
-    config:
-      knowledge:
-        tags:
-        - mechanisms
-        - tradeoffs
-        - edge-cases
-      claim_handling: conceptual
-      context:
-        mode: none
-      evidence:
-        definitions:
-          internal_mechanism: How the concept works internally and why it behaves
-            that way.
-          conceptual_reasoning: Reasoning that distinguishes mechanism from a memorized
-            rule.
-          scenario_behavior: A correct prediction under a changed scenario.
-          conceptual_tradeoff: When one approach is preferable and what it costs.
-          conceptual_edge_case: Behavior under a meaningful edge case.
-        keys:
-        - internal_mechanism
-        - conceptual_reasoning
-        - scenario_behavior
-        - conceptual_tradeoff
-        - conceptual_edge_case
-        completion_keys:
-        - internal_mechanism
-        - conceptual_reasoning
-        - scenario_behavior
-        - conceptual_tradeoff
-      turns:
-        minimum: 4
-        maximum: 6
-  - id: depth-application
-    name: 'Round 3: Depth, Reasoning & Application'
-    objective: Apply fundamentals to an unfamiliar debugging, performance, or architecture
-      problem.
-    opening: Introduce one realistic problem based on a concept the candidate appeared
-      comfortable with.
-    config:
-      knowledge:
-        tags:
-        - debugging
-        - performance
-        - application
-      claim_handling: conceptual
-      context:
-        mode: none
-      evidence:
-        definitions:
-          problem_investigation: A disciplined plan to observe and locate the real
-            bottleneck or fault.
-          first_principles_reasoning: A solution derived from mechanisms and constraints.
-          applied_solution: A coherent practical response to the unfamiliar problem.
-          solution_limitation: When the proposed solution will not help or may worsen
-            the problem.
-          adaptive_revision: A justified revision after new evidence or constraints.
-          combined_concepts: Correct use of multiple fundamentals in one line of reasoning.
-        keys:
-        - problem_investigation
-        - first_principles_reasoning
-        - applied_solution
-        - solution_limitation
-        - adaptive_revision
-        - combined_concepts
-        completion_keys:
-        - problem_investigation
-        - first_principles_reasoning
-        - applied_solution
-        - solution_limitation
-        - adaptive_revision
-      turns:
-        minimum: 4
-        maximum: 7

@@ -32,7 +32,7 @@ export default async function LearnerHome() {
 
   const agents = await db.agent.findMany({
     where: { orgId: org.id, visibility: "public" },
-    orderBy: { name: "asc" },
+    orderBy: [{ order: "asc" }, { name: "asc" }],
     select: { slug: true, name: true, version: true, domainSlug: true, data: true },
   });
 
@@ -69,7 +69,6 @@ export default async function LearnerHome() {
                       <span className="grid size-10 place-items-center rounded-lg bg-muted text-muted-foreground">
                         <MessagesSquare className="size-5" aria-hidden="true" />
                       </span>
-                      <Badge variant="outline">v{agent.version}</Badge>
                     </div>
                     <CardTitle>{agent.name}</CardTitle>
                     <CardDescription className="line-clamp-3 leading-5">

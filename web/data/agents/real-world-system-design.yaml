@@ -2,17 +2,17 @@ schema_version: 1
 kind: agent
 agent:
   id: real-world-system-design
-  name: Real-World Problem Solving & System Design
+  name: System Design - Problem Understanding
   version: 1
   domain: software-engineering-system-design
-  objective: Evaluate how the candidate clarifies an ambiguous problem, builds a coherent
-    solution, and adapts it under scale, failures, and changing constraints.
+  objective: Determine whether the candidate discovers the problem, constraints, assumptions,
+    and scope before designing.
   opening: Design a system that allows users to upload and securely share large files;
     start by clarifying the problem rather than proposing architecture.
   config:
     claim_handling: hypothetical_design
     context:
-      mode: none
+      mode: scenario_only
       required: false
     scenario:
       problem: Users upload and securely share large files.
@@ -57,7 +57,7 @@ agent:
       - weak
       - unresolved
     turns:
-      maximum: 20
+      maximum: 8
     rendering:
       maximum_words: 45
       maximum_question_marks: 1
@@ -93,8 +93,8 @@ agent:
         definitions:
           clarifying_questions: Relevant questions about users, data, security, traffic,
             and constraints.
-          functional_requirements: A clear statement of what users and the system
-            can do.
+          functional_requirements: A clear statement of what users and the system can
+            do.
           nonfunctional_requirements: Reliability, latency, durability, availability,
             and security expectations.
           scale_constraints: Concrete facts or estimates about users, traffic, throughput,
@@ -126,90 +126,3 @@ agent:
         - queue
         - API
         - implementation
-  - id: solution-development
-    name: 'Round 2: System Design & Solution Development'
-    objective: Build and justify a coherent end-to-end design from established requirements.
-    opening: Ask for a high-level architecture, then progressively deepen the same
-      design.
-    config:
-      knowledge:
-        tags:
-        - architecture
-        - storage
-        - security
-        - reliability
-      claim_handling: hypothetical_design
-      context:
-        mode: scenario_only
-      evidence:
-        definitions:
-          system_architecture: Major components and responsibilities forming a plausible
-            architecture.
-          end_to_end_flow: Coherent upload, processing, sharing, and download flow.
-          interface_and_storage: Justified API, data model, metadata, and object-storage
-            choices.
-          reliability_security: Error handling, authorization, integrity, resumability,
-            and failure behavior.
-          technology_reasoning: Why major choices fit constraints and what alternatives
-            existed.
-          design_coherence: Components connect into one implementable system.
-        keys:
-        - system_architecture
-        - end_to_end_flow
-        - interface_and_storage
-        - reliability_security
-        - technology_reasoning
-        - design_coherence
-        completion_keys:
-        - system_architecture
-        - end_to_end_flow
-        - reliability_security
-        - technology_reasoning
-        - design_coherence
-      turns:
-        minimum: 5
-        maximum: 7
-  - id: scale-and-tradeoffs
-    name: 'Round 3: Scale, Trade-offs & Real-World Challenges'
-    objective: Challenge the design with scale, bottlenecks, failures, cost, security,
-      and changed constraints.
-    opening: Introduce one changed constraint at a time and require the candidate
-      to evolve the existing design.
-    config:
-      knowledge:
-        tags:
-        - scalability
-        - failures
-        - observability
-        - cost
-      claim_handling: hypothetical_design
-      context:
-        mode: scenario_only
-      evidence:
-        definitions:
-          bottleneck_prediction: A reasoned prediction of what breaks first.
-          diagnostic_approach: Metrics, traces, tests, or observations used to locate
-            the problem.
-          scale_adaptation: A concrete evolution of the existing architecture.
-          failure_recovery: Detection, containment, and recovery for a degraded component.
-          adaptation_tradeoff: New costs, complexity, consistency choices, or risks.
-          observability: Signals that drive diagnosis and action.
-          deliberate_nonoptimization: A justified choice about what not to optimize
-            yet.
-        keys:
-        - bottleneck_prediction
-        - diagnostic_approach
-        - scale_adaptation
-        - failure_recovery
-        - adaptation_tradeoff
-        - observability
-        - deliberate_nonoptimization
-        completion_keys:
-        - bottleneck_prediction
-        - diagnostic_approach
-        - scale_adaptation
-        - failure_recovery
-        - adaptation_tradeoff
-      turns:
-        minimum: 5
-        maximum: 7

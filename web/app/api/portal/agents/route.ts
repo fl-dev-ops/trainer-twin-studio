@@ -17,7 +17,7 @@ export async function GET(request: Request) {
 
   const agents = await db.agent.findMany({
     where: { orgId: org.id, visibility: "public" },
-    orderBy: { name: "asc" },
+    orderBy: [{ order: "asc" }, { name: "asc" }],
     select: { slug: true, name: true, version: true, domainSlug: true },
   });
   return NextResponse.json({ org: org.slug, agents });
