@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { LearnerShell } from "@/components/learner-shell";
 import { db } from "@/lib/db";
+import { parseAccentColor } from "@/lib/org";
 
 export const dynamic = "force-dynamic";
 
@@ -15,16 +16,7 @@ export default async function LearnerLayout({ children }: { children: ReactNode 
   });
   if (!org) redirect("/auth/sign-in");
 
-  // ponytail PT-1: parsing accentColor from metadata blob; move to own column when metadata grows.
-  const accentColor = (() => {
-    try {
-      const m = JSON.parse(org.metadata ?? "{}");
-      return typeof m.accentColor === "string" ? m.accentColor : null;
-    } catch {
-      return null;
-    }
-  })();
-
+  const accentColor = parseAccentColor(org.metadata);
   const logo = /^data:image\/(?:png|jpeg|webp);base64,/.test(org.logo ?? "") ? org.logo : null;
   return <LearnerShell orgName={org.name} logo={logo} accentColor={accentColor}>{children}</LearnerShell>;
 }
