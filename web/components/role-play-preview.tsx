@@ -308,27 +308,14 @@ export function RolePlayPreview({
           <div className="space-y-8 lg:col-span-2">
             {/* Primary Overview Card */}
             <Card className="p-6 sm:p-7">
-              <div className="space-y-6">
-                <div>
-                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    <Target className="size-4 text-primary" />
-                    <span>Objective & Opening</span>
-                  </div>
-                  <h2 className="mt-2 text-lg font-semibold leading-snug">
-                    {rolePlay.objective || "Practice interview with guided feedback."}
-                  </h2>
+              <div>
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <Target className="size-4 text-primary" />
+                  <span>Objective</span>
                 </div>
-
-                {rolePlay.opening && (
-                  <div className="rounded-2xl bg-accent/40 p-5 sm:p-6">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Opening Prompt
-                    </p>
-                    <p className="mt-2 text-base font-normal italic leading-relaxed text-foreground">
-                      &ldquo;{rolePlay.opening}&rdquo;
-                    </p>
-                  </div>
-                )}
+                <h2 className="mt-2 text-lg font-semibold leading-snug">
+                  {rolePlay.objective || "Practice interview with guided feedback."}
+                </h2>
               </div>
             </Card>
 
@@ -364,13 +351,6 @@ export function RolePlayPreview({
                               {stage.objective}
                             </p>
                           </div>
-
-                          {stage.opening && (
-                            <div className="rounded-xl bg-muted/60 p-3.5 text-xs text-muted-foreground leading-relaxed">
-                              <span className="font-semibold text-foreground">Opening: </span>
-                              {stage.opening}
-                            </div>
-                          )}
 
                           {evidenceKeys.length > 0 && (
                             <div className="space-y-2.5 pt-1">
@@ -440,41 +420,6 @@ export function RolePlayPreview({
                   evaluation criteria.
                 </p>
               </CardContent>
-            </Card>
-
-            {/* Role Play Configuration Metadata */}
-            <Card className="p-6">
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-sm font-semibold">Specifications</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">Core runtime parameters</p>
-                </div>
-                <div className="space-y-3.5 text-xs pt-1">
-                  <div>
-                    <span className="text-muted-foreground">Domain:</span>
-                    <p className="mt-1 font-semibold capitalize text-foreground">
-                      {rolePlay.domainSlug?.replaceAll("-", " ") || "Software Engineering"}
-                    </p>
-                  </div>
-
-                  <div>
-                    <span className="text-muted-foreground">Knowledge Base:</span>
-                    <p className="mt-1 font-semibold text-foreground">
-                      {rolePlay.knowledgeBaseName ||
-                        (rolePlay.knowledgeBase
-                          ? rolePlay.knowledgeBase
-                          : "General Knowledge")}
-                    </p>
-                  </div>
-
-                  <div>
-                    <span className="text-muted-foreground">Voice Engine:</span>
-                    <p className="mt-1 font-semibold text-foreground">
-                      {rolePlay.voiceName || "Default Trainer Voice"}
-                    </p>
-                  </div>
-                </div>
-              </div>
             </Card>
 
             {/* Assign to Users Card */}
