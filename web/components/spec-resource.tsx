@@ -2,20 +2,20 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import yaml from "js-yaml";
 import {
   ArrowLeft,
   ChevronRight,
   History,
-  MessagesSquare,
   Plus,
   RotateCcw,
   Save,
   Sparkles,
   Trash2,
-  UserRound,
 } from "lucide-react";
+import { MessagesSquareIcon } from "@/components/icons/messages-square-icon";
+import { UserRoundIcon } from "@/components/icons/user-round-icon";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { seedCopilot } from "@/lib/copilot-handoff";
@@ -207,10 +207,61 @@ function AgentSettingsPanel({
   );
 }
 
+function SpecCard({
+  type,
+  spec,
+}: {
+  type: ResourceType;
+  spec: Summary;
+}) {
+  const iconRef = useRef<{ startAnimation: () => void; stopAnimation: () => void }>(null);
+  const objective =
+    spec.objective ||
+    (type === "agents"
+      ? "Practice with a guided AI interview trainer."
+      : "Reusable trainer persona definition.");
+
+  return (
+    <Link
+      href={`/${type}/${encodeURIComponent(spec.slug)}`}
+      className="group block rounded-xl focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+      onMouseEnter={() => iconRef.current?.startAnimation()}
+      onMouseLeave={() => iconRef.current?.stopAnimation()}
+    >
+      <Card className="flex h-full min-h-56 flex-col transition-colors group-hover:border-foreground/20 group-hover:bg-accent/40">
+        <CardHeader>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <span className="grid size-10 place-items-center rounded-lg bg-muted text-muted-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary">
+              {type === "personas" ? (
+                <UserRoundIcon ref={iconRef} size={20} />
+              ) : (
+                <MessagesSquareIcon ref={iconRef} size={20} />
+              )}
+            </span>
+            {spec.status === "draft" && (
+              <Badge variant="outline">Draft</Badge>
+            )}
+          </div>
+          <CardTitle className="text-base font-semibold group-hover:text-primary transition-colors">
+            {spec.name}
+          </CardTitle>
+          <CardDescription className="line-clamp-3 leading-5 text-xs sm:text-sm">
+            {objective}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="mt-auto">
+          <p className="truncate text-xs text-muted-foreground">
+            {spec.domainSlug ? spec.domainSlug.replaceAll("-", " ") : "Reusable profile"}
+          </p>
+        </CardContent>
+      </Card>
+    </Link>
+  );
+}
+
 export function SpecResourceIndex({ type, specs }: { type: ResourceType; specs: Summary[] }) {
   const router = useRouter();
   const copy = COPY[type];
-  const Icon = type === "personas" ? UserRound : MessagesSquare;
 
   async function createNew() {
     const slug = prompt(`New ${copy.single} id (for example, my-${copy.single}):`);
@@ -273,45 +324,9 @@ export function SpecResourceIndex({ type, specs }: { type: ResourceType; specs: 
         </header>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {specs.map((spec) => {
-            const objective =
-              spec.objective ||
-              (type === "agents"
-                ? "Practice with a guided AI interview trainer."
-                : "Reusable trainer persona definition.");
-
-            return (
-              <Link
-                key={spec.slug}
-                href={`/${type}/${encodeURIComponent(spec.slug)}`}
-                className="group block rounded-xl focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-              >
-                <Card className="flex h-full min-h-56 flex-col transition-colors group-hover:border-foreground/20 group-hover:bg-accent/40">
-                  <CardHeader>
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <span className="grid size-10 place-items-center rounded-lg bg-muted text-muted-foreground">
-                        <Icon className="size-5" aria-hidden="true" />
-                      </span>
-                      {spec.status === "draft" && (
-                        <Badge variant="outline">Draft</Badge>
-                      )}
-                    </div>
-                    <CardTitle className="text-base font-semibold group-hover:text-primary transition-colors">
-                      {spec.name}
-                    </CardTitle>
-                    <CardDescription className="line-clamp-3 leading-5 text-xs sm:text-sm">
-                      {objective}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="mt-auto">
-                    <p className="truncate text-xs text-muted-foreground">
-                      {spec.domainSlug ? spec.domainSlug.replaceAll("-", " ") : "Reusable profile"}
-                    </p>
-                  </CardContent>
-                </Card>
-              </Link>
-            );
-          })}
+          {specs.map((spec) => (
+            <SpecCard key={spec.slug} type={type} spec={spec} />
+          ))}
           {!specs.length && (
             <div className="rounded-xl border px-5 py-16 text-center md:col-span-2 xl:col-span-3">
               <p className="text-sm font-medium">No {copy.title.toLowerCase()} yet</p>
