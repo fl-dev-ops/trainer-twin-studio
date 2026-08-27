@@ -6,11 +6,11 @@ import { usePathname } from "next/navigation";
 import {
   AudioLines,
   BookOpen,
-  Gauge,
+  // Gauge,
   History,
   MessagesSquare,
   Mic,
-  Shapes,
+  // Shapes,
   Sparkles,
   UserRound,
   Users,
@@ -34,7 +34,7 @@ const NAV = [
   {
     label: "Workspace",
     items: [
-      { title: "Build", href: "/", icon: Sparkles },
+      { title: "Copilot", href: "/", icon: Sparkles },
       { title: "Users", href: "/users", icon: Users },
       { title: "Knowledge", href: "/knowledge", icon: BookOpen },
       { title: "Sessions", href: "/sessions", icon: History },
@@ -54,13 +54,13 @@ const NAV = [
       { title: "Personas", href: "/personas", icon: UserRound },
     ],
   },
-  {
-    label: "Advanced",
-    items: [
-      { title: "Overview", href: "/overview", icon: Gauge },
-      { title: "Domains", href: "/domains", icon: Shapes },
-    ],
-  },
+  // {
+  //   label: "Advanced",
+  //   items: [
+  //     { title: "Overview", href: "/overview", icon: Gauge },
+  //     { title: "Domains", href: "/domains", icon: Shapes },
+  //   ],
+  // },
 ];
 
 export function AppSidebar() {

@@ -1,24 +1,24 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import {
   ArrowLeft,
-  ArrowUpRight,
-  AudioLines,
-  BookOpen,
   CheckCircle2,
   Clock3,
-  ExternalLink,
   Layers,
-  MessagesSquare,
   Pencil,
   Play,
   Scale,
-  ShieldCheck,
-  Sparkles,
+  Search,
   Target,
-  UserRound,
+  UserCheck,
+  UserPlus,
+  Users,
   Volume2,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,7 +28,24 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { BASE_DOMAIN } from "@/lib/base-domain";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+
+export type OrganizationUser = {
+  id: string;
+  name: string;
+  email: string;
+};
 
 export type RolePlayData = {
   slug: string;
@@ -77,29 +94,170 @@ export type RolePlayData = {
   };
 };
 
+function AssignUsersDialog({
+  slug,
+  availableUsers,
+  assignedUserIds,
+  onSave,
+}: {
+  slug: string;
+  availableUsers: OrganizationUser[];
+  assignedUserIds: string[];
+  onSave: (ids: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<string[]>(assignedUserIds);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    setSelected(assignedUserIds);
+  }, [assignedUserIds, open]);
+
+  const filteredUsers = availableUsers.filter(
+    (u) =>
+      u.name.toLowerCase().includes(search.toLowerCase()) ||
+      u.email.toLowerCase().includes(search.toLowerCase()),
+  );
+
+  function toggleUser(id: string) {
+    setSelected((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
+    );
+  }
+
+  function handleSave() {
+    onSave(selected);
+    setOpen(false);
+    toast.success(`Updated user assignments (${selected.length} assigned)`);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger
+        render={
+          <Button variant="outline" size="sm" className="w-full text-xs" />
+        }
+      >
+        <UserPlus data-icon="inline-start" /> Assign Users
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Assign Users</DialogTitle>
+          <DialogDescription>
+            Select which learners can practice this role play.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3 pt-1">
+          <div className="relative">
+            <Search className="text-muted-foreground absolute top-2.5 left-2.5 size-4" />
+            <Input
+              placeholder="Search learners by name or email..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-8"
+            />
+          </div>
+
+          <div className="max-h-64 space-y-1.5 overflow-y-auto rounded-lg border bg-muted/20 p-2">
+            {filteredUsers.length === 0 ? (
+              <p className="py-6 text-center text-xs text-muted-foreground">
+                No users found.
+              </p>
+            ) : (
+              filteredUsers.map((user) => {
+                const isChecked = selected.includes(user.id);
+                return (
+                  <label
+                    key={user.id}
+                    className="flex cursor-pointer items-center justify-between gap-3 rounded-lg p-2 transition-colors hover:bg-accent/50"
+                  >
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <div className="grid size-7 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                        {user.name.slice(0, 1).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-medium">{user.name}</p>
+                        <p className="truncate text-[11px] text-muted-foreground">
+                          {user.email}
+                        </p>
+                      </div>
+                    </div>
+                    <Checkbox
+                      checked={isChecked}
+                      onCheckedChange={() => toggleUser(user.id)}
+                    />
+                  </label>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        <DialogFooter className="pt-2">
+          <DialogClose render={<Button variant="outline" size="sm" />}>
+            Cancel
+          </DialogClose>
+          <Button size="sm" onClick={handleSave}>
+            Save Assignments
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function RolePlayPreview({
   rolePlay,
   orgSlug,
+  availableUsers = [],
   trainerName = "Vasanth",
 }: {
   rolePlay: RolePlayData;
   orgSlug?: string;
+  availableUsers?: OrganizationUser[];
   trainerName?: string;
 }) {
-  const learnerUrl = orgSlug
-    ? `https://${orgSlug}.${BASE_DOMAIN}/session/${rolePlay.slug}`
-    : `/session/${rolePlay.slug}`;
-
   const stages = rolePlay.stages ?? [];
-  const allowedActions = rolePlay.config?.actions?.allowed ?? [
-    "probe_required_evidence",
-    "surface_contradiction",
-    "scaffold_missing_link",
-    "deepen_with_tradeoff",
-  ];
+  const storageKey = `assigned_users_${rolePlay.slug}`;
+
+  const [assignedIds, setAssignedIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (stored) {
+        setAssignedIds(JSON.parse(stored));
+      }
+    } catch {
+      setAssignedIds([]);
+    }
+  }, [storageKey]);
+
+  function saveAssignments(ids: string[]) {
+    setAssignedIds(ids);
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(ids));
+    } catch {
+      // ignore
+    }
+  }
+
+  // Fallback demo users if workspace users aren't loaded yet
+  const usersList: OrganizationUser[] =
+    availableUsers.length > 0
+      ? availableUsers
+      : [
+          { id: "u-1", name: "Alex Chen", email: "alex@example.com" },
+          { id: "u-2", name: "Sarah Jenkins", email: "sarah@example.com" },
+          { id: "u-3", name: "David Kim", email: "david@example.com" },
+          { id: "u-4", name: "Priya Sharma", email: "priya@example.com" },
+        ];
+
+  const assignedUsers = usersList.filter((u) => assignedIds.includes(u.id));
 
   return (
-    <main className="min-h-0 flex-1 overflow-y-auto bg-muted/20 p-4 sm:p-6 lg:p-8">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4 sm:p-6 lg:p-8">
       <div className="mx-auto max-w-5xl space-y-6">
         {/* Top Navigation & Actions Bar */}
         <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -124,7 +282,7 @@ export function RolePlayPreview({
                   <Badge variant="success">Published</Badge>
                 )}
               </div>
-              <p className="mt-0.5 text-xs text-muted-foreground font-mono">
+              <p className="font-mono text-xs text-muted-foreground mt-0.5">
                 {rolePlay.slug}
               </p>
             </div>
@@ -164,7 +322,7 @@ export function RolePlayPreview({
               </CardHeader>
               <CardContent className="space-y-4">
                 {rolePlay.opening && (
-                  <div className="rounded-xl border bg-accent/30 p-4">
+                  <div className="rounded-xl bg-accent/40 p-4">
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Opening Prompt
                     </p>
@@ -174,24 +332,28 @@ export function RolePlayPreview({
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-3 pt-2 sm:grid-cols-3">
-                  <div className="rounded-lg border bg-background p-3">
+                <div className="grid grid-cols-2 gap-3 pt-1 sm:grid-cols-3">
+                  <div className="rounded-lg bg-muted/40 p-3">
                     <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <Clock3 className="size-3.5" /> Max Turns
                     </span>
                     <p className="mt-1 text-sm font-semibold">
-                      {rolePlay.config?.turns?.maximum ? `${rolePlay.config.turns.maximum} turns` : "8 turns"}
+                      {rolePlay.config?.turns?.maximum
+                        ? `${rolePlay.config.turns.maximum} turns`
+                        : "8 turns"}
                     </p>
                   </div>
-                  <div className="rounded-lg border bg-background p-3">
+                  <div className="rounded-lg bg-muted/40 p-3">
                     <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <Layers className="size-3.5" /> Structure
                     </span>
                     <p className="mt-1 text-sm font-semibold">
-                      {stages.length ? `${stages.length} Stage${stages.length > 1 ? "s" : ""}` : "Single stage"}
+                      {stages.length
+                        ? `${stages.length} Stage${stages.length > 1 ? "s" : ""}`
+                        : "Single stage"}
                     </p>
                   </div>
-                  <div className="col-span-2 rounded-lg border bg-background p-3 sm:col-span-1">
+                  <div className="col-span-2 rounded-lg bg-muted/40 p-3 sm:col-span-1">
                     <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <Scale className="size-3.5" /> Claim Handling
                     </span>
@@ -214,19 +376,22 @@ export function RolePlayPreview({
                         Step-by-step interview phases and evidence criteria
                       </CardDescription>
                     </div>
-                    <Badge variant="outline">{stages.length} Round{stages.length > 1 ? "s" : ""}</Badge>
+                    <Badge variant="outline">
+                      {stages.length} Round{stages.length > 1 ? "s" : ""}
+                    </Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {stages.map((stage, idx) => {
                     const evidenceDefs = stage.config?.evidence?.definitions ?? {};
-                    const evidenceKeys = stage.config?.evidence?.keys ?? Object.keys(evidenceDefs);
+                    const evidenceKeys =
+                      stage.config?.evidence?.keys ?? Object.keys(evidenceDefs);
                     const turnBudget = stage.config?.turns;
 
                     return (
                       <div
                         key={stage.id || idx}
-                        className="rounded-xl border bg-background p-4 transition-colors"
+                        className="rounded-xl bg-muted/30 p-4 transition-colors"
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div>
@@ -234,7 +399,7 @@ export function RolePlayPreview({
                               <span className="grid size-6 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary">
                                 {idx + 1}
                               </span>
-                              <h3 className="font-semibold text-sm">
+                              <h3 className="text-sm font-semibold">
                                 {stage.name || `Stage ${idx + 1}`}
                               </h3>
                             </div>
@@ -250,7 +415,7 @@ export function RolePlayPreview({
                         </div>
 
                         {stage.opening && (
-                          <div className="mt-3 rounded-lg bg-muted/40 p-2.5 text-xs text-muted-foreground">
+                          <div className="mt-3 rounded-lg bg-muted/60 p-2.5 text-xs text-muted-foreground">
                             <span className="font-medium text-foreground">Opening: </span>
                             {stage.opening}
                           </div>
@@ -267,15 +432,15 @@ export function RolePlayPreview({
                                 return (
                                   <div
                                     key={key}
-                                    className="flex items-start gap-2 rounded-md border bg-muted/10 p-2 text-xs"
+                                    className="flex items-start gap-2 rounded-lg bg-background/80 p-2.5 text-xs"
                                   >
-                                    <CheckCircle2 className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
+                                    <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
                                     <div>
                                       <p className="font-medium capitalize text-foreground">
                                         {key.replaceAll("_", " ")}
                                       </p>
                                       {desc && (
-                                        <p className="text-[11px] text-muted-foreground leading-tight mt-0.5">
+                                        <p className="mt-0.5 text-[11px] leading-tight text-muted-foreground">
                                           {desc}
                                         </p>
                                       )}
@@ -292,35 +457,6 @@ export function RolePlayPreview({
                 </CardContent>
               </Card>
             )}
-
-            {/* Assessment & Interaction Strategy */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Trainer Assessment Strategy</CardTitle>
-                <CardDescription>
-                  Actions and probing mechanisms allowed during this role play
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="space-y-1.5">
-                  <span className="text-xs font-semibold text-muted-foreground">
-                    Probing & Feedback Actions:
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {allowedActions.map((action) => (
-                      <Badge key={action} variant="outline" className="capitalize text-xs">
-                        {action.replaceAll("_", " ")}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="rounded-lg border bg-muted/20 p-3 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">Strictness & Policy: </span>
-                  Trainer maintains focused pacing (max 1 focal ask per turn) and enforces evidence satisfaction before advancing.
-                </div>
-              </CardContent>
-            </Card>
           </div>
 
           {/* Right Sidebar Column */}
@@ -348,7 +484,8 @@ export function RolePlayPreview({
               </div>
               <CardContent className="p-4 pt-3 text-xs text-muted-foreground">
                 <p>
-                  Conducts realistic, multi-turn interview role plays modeled after real evaluation criteria.
+                  Conducts realistic, multi-turn interview role plays modeled after real
+                  evaluation criteria.
                 </p>
               </CardContent>
             </Card>
@@ -361,60 +498,79 @@ export function RolePlayPreview({
               <CardContent className="space-y-3 text-xs">
                 <div>
                   <span className="text-muted-foreground">Domain:</span>
-                  <p className="font-medium capitalize text-foreground mt-0.5">
+                  <p className="mt-0.5 font-medium capitalize text-foreground">
                     {rolePlay.domainSlug?.replaceAll("-", " ") || "Software Engineering"}
                   </p>
                 </div>
 
                 <div>
                   <span className="text-muted-foreground">Knowledge Base:</span>
-                  <p className="font-medium text-foreground mt-0.5">
-                    {rolePlay.knowledgeBaseName || (rolePlay.knowledgeBase ? rolePlay.knowledgeBase : "General Knowledge")}
+                  <p className="mt-0.5 font-medium text-foreground">
+                    {rolePlay.knowledgeBaseName ||
+                      (rolePlay.knowledgeBase
+                        ? rolePlay.knowledgeBase
+                        : "General Knowledge")}
                   </p>
                 </div>
 
                 <div>
                   <span className="text-muted-foreground">Voice Engine:</span>
-                  <p className="font-medium text-foreground mt-0.5">
+                  <p className="mt-0.5 font-medium text-foreground">
                     {rolePlay.voiceName || "Default Trainer Voice"}
                   </p>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Learner Access Card */}
+            {/* Assign to Users Card */}
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm">Learner Access</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm">Assign to Users</CardTitle>
+                  <Badge variant="secondary" className="gap-1 text-[11px]">
+                    <Users className="size-3" />
+                    {assignedIds.length} Assigned
+                  </Badge>
+                </div>
                 <CardDescription className="text-xs">
-                  Direct practice link for learners
+                  Grant learners access to practice this role play
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full justify-between text-xs"
-                  nativeButton={false}
-                  render={<a href={learnerUrl} target="_blank" rel="noreferrer" />}
-                >
-                  <span>Open Learner Portal</span>
-                  <ExternalLink className="size-3.5" />
-                </Button>
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="w-full text-xs"
-                  nativeButton={false}
-                  render={<Link href={`/talk?agent=${encodeURIComponent(rolePlay.slug)}`} />}
-                >
-                  <Sparkles data-icon="inline-start" /> Launch Interactive Talk
-                </Button>
+                {assignedUsers.length > 0 ? (
+                  <div className="space-y-1.5 rounded-lg bg-muted/40 p-2.5">
+                    {assignedUsers.slice(0, 3).map((u) => (
+                      <div
+                        key={u.id}
+                        className="flex items-center gap-2 text-xs"
+                      >
+                        <UserCheck className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                        <span className="truncate font-medium">{u.name}</span>
+                      </div>
+                    ))}
+                    {assignedUsers.length > 3 && (
+                      <p className="pt-0.5 text-[11px] text-muted-foreground">
+                        +{assignedUsers.length - 3} more learners assigned
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="rounded-lg bg-muted/30 p-2.5 text-center text-xs text-muted-foreground">
+                    No users assigned yet
+                  </div>
+                )}
+
+                <AssignUsersDialog
+                  slug={rolePlay.slug}
+                  availableUsers={usersList}
+                  assignedUserIds={assignedIds}
+                  onSave={saveAssignments}
+                />
               </CardContent>
             </Card>
           </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

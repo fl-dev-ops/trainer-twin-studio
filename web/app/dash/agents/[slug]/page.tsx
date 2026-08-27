@@ -1,5 +1,9 @@
 import { notFound, redirect } from "next/navigation";
-import { RolePlayPreview, type RolePlayData } from "@/components/role-play-preview";
+import {
+  RolePlayPreview,
+  type OrganizationUser,
+  type RolePlayData,
+} from "@/components/role-play-preview";
 import { db } from "@/lib/db";
 import { getSessionOrg } from "@/lib/org";
 import { readSpecDraft } from "@/lib/spec-drafts";
@@ -16,14 +20,32 @@ export default async function RolePlayPreviewPage({
   const org = await getSessionOrg();
   if (!org) redirect("/auth/no-org");
 
-  const current = await readSpec("agents", slug, org.id).catch(() => null);
+  const [current, members] = await Promise.all([
+    readSpec("agents", slug, org.id).catch(() => null),
+    db.member.findMany({
+      where: { organizationId: org.id },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        user: { select: { id: true, name: true, email: true } },
+      },
+    }),
+  ]);
+
+  const availableUsers: OrganizationUser[] = members.map((m) => ({
+    id: m.user.id || m.id,
+    name: m.user.name || "Unnamed User",
+    email: m.user.email,
+  }));
 
   let rolePlay: RolePlayData | null = null;
 
   if (current) {
     const doc = current.doc as Record<string, unknown>;
     const rawStages = Array.isArray(doc.stages) ? doc.stages : [];
-    const config = (typeof doc.config === "object" && doc.config !== null ? doc.config : {}) as RolePlayData["config"];
+    const config = (typeof doc.config === "object" && doc.config !== null
+      ? doc.config
+      : {}) as RolePlayData["config"];
 
     let voiceName: string | undefined;
     if (typeof doc.voiceId === "string" && doc.voiceId) {
@@ -51,7 +73,8 @@ export default async function RolePlayPreviewPage({
       opening: typeof doc.opening === "string" ? doc.opening : undefined,
       voiceId: typeof doc.voiceId === "string" ? doc.voiceId : undefined,
       voiceName,
-      knowledgeBase: typeof doc.knowledgeBase === "string" ? doc.knowledgeBase : undefined,
+      knowledgeBase:
+        typeof doc.knowledgeBase === "string" ? doc.knowledgeBase : undefined,
       knowledgeBaseName,
       status: "published",
       version: current.version,
@@ -68,13 +91,16 @@ export default async function RolePlayPreviewPage({
     rolePlay = {
       slug: draft.slug,
       name: draft.name,
-      domainSlug: typeof draft.domain?.name === "string" ? draft.domain.name : undefined,
+      domainSlug:
+        typeof draft.domain?.name === "string" ? draft.domain.name : undefined,
       objective: typeof agent?.objective === "string" ? agent.objective : undefined,
       opening: typeof agent?.opening === "string" ? agent.opening : undefined,
       status: "draft",
       version: draft.revision,
       stages: rawStages as RolePlayData["stages"],
-      config: (typeof agent?.config === "object" && agent?.config !== null ? agent.config : {}) as RolePlayData["config"],
+      config: (typeof agent?.config === "object" && agent?.config !== null
+        ? agent.config
+        : {}) as RolePlayData["config"],
     };
   }
 
@@ -82,6 +108,7 @@ export default async function RolePlayPreviewPage({
     <RolePlayPreview
       rolePlay={rolePlay}
       orgSlug={org.slug}
+      availableUsers={availableUsers}
       trainerName="Vasanth"
     />
   );
