@@ -8,7 +8,6 @@ import {
   ArrowLeft,
   Bot,
   ChevronRight,
-  Download,
   History,
   Plus,
   RotateCcw,

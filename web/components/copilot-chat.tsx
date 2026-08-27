@@ -12,7 +12,6 @@ import {
   Circle,
   CircleAlert,
   ChevronDown,
-  Download,
   FileCode2,
   Layers3,
   ListTodo,
@@ -344,9 +343,9 @@ export function CopilotChat() {
                 <SheetTitle className="truncate">{artifactPreview?.filename}</SheetTitle>
                 <SheetDescription>Compiled working draft</SheetDescription>
               </div>
+              {/* artifactPreview download button — hidden for now
               {artifactPreview && (
-                {/*
-              <Button
+                <Button
                   className="ml-auto shrink-0"
                   variant="outline"
                   size="sm"
@@ -355,8 +354,8 @@ export function CopilotChat() {
                 >
                   <Download aria-hidden="true" /> Download
                 </Button>
-              */}
               )}
+              */}
             </div>
           </SheetHeader>
           <div className="min-h-0 flex-1 overflow-auto bg-muted/20 p-4">
