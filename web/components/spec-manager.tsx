@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { History, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { PageContainer } from "@/components/page-container";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,8 +35,8 @@ import type { SpecType } from "@/lib/specs";
 type VersionInfo = { version: number; createdAt: string; label: string };
 
 const LABELS: Record<SpecType, { single: string; title: string; hint: string }> = {
-  personas: { single: "persona", title: "Personas", hint: "The trainer voice: style, decision preferences, example phrasings." },
-  agents: { single: "role play", title: "Role Plays", hint: "Interview structure: phases, evidence lanes, claim handling, turn budgets." },
+  personas: { single: "persona", title: "Personas", hint: "Behavior, communication style, decision preferences, and example phrasings." },
+  agents: { single: "scenario", title: "Scenarios", hint: "Bounded behavior: stages, evidence, claim handling, and turn budgets." },
   domains: { single: "domain", title: "Domains", hint: "Domain principles and answer classifications used by the analyzer." },
 };
 
@@ -148,7 +149,7 @@ export function SpecManager({ type }: { type: SpecType }) {
   }
 
   return (
-    <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 gap-6 overflow-hidden p-6">
+    <PageContainer size="wide" className="flex min-h-0 flex-1 gap-6 overflow-hidden p-6">
       <aside className="flex w-56 shrink-0 flex-col gap-2">
         <Button variant="outline" size="sm" onClick={createNew} className="justify-start">
           <Plus data-icon="inline-start" /> New {LABELS[type].single}
@@ -238,6 +239,6 @@ export function SpecManager({ type }: { type: SpecType }) {
           </Empty>
         </Card>
       )}
-    </div>
+    </PageContainer>
   );
 }

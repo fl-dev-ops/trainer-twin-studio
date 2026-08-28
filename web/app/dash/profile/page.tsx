@@ -1,5 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { PageContainer } from "@/components/page-container";
+import { PageHeader } from "@/components/page-header";
 import { OrganizationForm, ProfileForm } from "@/components/profile-form";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -30,13 +32,12 @@ export default async function ProfilePage() {
 
   return (
     <main className="min-h-0 flex-1 overflow-auto p-5 sm:p-8">
-      <div className="mx-auto max-w-2xl">
-        <header className="border-b pb-6">
-          <h1 className="text-2xl font-semibold tracking-tight">Profile</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Manage the details shown across your TrainerTwin workspace.
-          </p>
-        </header>
+      <PageContainer size="narrow">
+        <PageHeader
+          className="border-b pb-6"
+          title="Profile"
+          description="Manage the details shown across your TrainerTwin workspace."
+        />
 
         <ProfileForm user={session.user} />
 
@@ -46,7 +47,7 @@ export default async function ProfilePage() {
           </h2>
           <OrganizationForm organization={{ ...membership.organization, accentColor }} />
         </section>
-      </div>
+      </PageContainer>
     </main>
   );
 }

@@ -1,4 +1,6 @@
 import { History } from "lucide-react";
+import { PageContainer } from "@/components/page-container";
+import { PageHeader } from "@/components/page-header";
 import { getSessionOrg } from "@/lib/org";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -46,19 +48,15 @@ export default async function SessionsPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Sessions</h1>
-          <p className="text-sm text-muted-foreground">
-            Every voice interview, pinned to the exact spec versions that ran it.
-          </p>
-        </div>
-      </div>
+      <PageContainer size="narrow" className="flex flex-col gap-6">
+      <PageHeader
+        title="Sessions"
+        description="Every run, pinned to the exact resource versions that produced it."
+      />
 
       <Card>
         <CardHeader>
-          <CardTitle>Interview sessions</CardTitle>
+          <CardTitle>Scenario sessions</CardTitle>
           <CardDescription>
             Click a session to review its transcript, evidence coverage and recording.
           </CardDescription>
@@ -85,7 +83,7 @@ export default async function SessionsPage() {
                 <TableRow>
                   <TableHead>Started</TableHead>
                   <TableHead>Persona</TableHead>
-                  <TableHead>Agent</TableHead>
+                  <TableHead>Scenario</TableHead>
                   <TableHead>Domain</TableHead>
                   <TableHead>Context</TableHead>
                   <TableHead>Recording</TableHead>
@@ -128,7 +126,7 @@ export default async function SessionsPage() {
           )}
         </CardContent>
       </Card>
-      </div>
+      </PageContainer>
     </div>
   );
 }

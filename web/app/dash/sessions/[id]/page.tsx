@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
+import { PageContainer } from "@/components/page-container";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -50,7 +51,7 @@ export default async function SessionDetailPage({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+      <PageContainer size="narrow" className="flex flex-col gap-6">
         <Link
           href="/sessions"
           className="text-muted-foreground flex items-center gap-1 text-sm hover:underline"
@@ -132,7 +133,7 @@ export default async function SessionDetailPage({
             )}
           </CardContent>
         </Card>
-      </div>
+      </PageContainer>
     </div>
   );
 }

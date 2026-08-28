@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { MessagesSquareIcon } from "@/components/icons/messages-square-icon";
 import { UserRoundIcon } from "@/components/icons/user-round-icon";
+import { PageContainer } from "@/components/page-container";
+import { PageHeader } from "@/components/page-header";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { seedCopilot } from "@/lib/copilot-handoff";
@@ -71,12 +73,12 @@ const COPY = {
   personas: {
     single: "persona",
     title: "Personas",
-    description: "Reusable trainer behavior, communication style, and decision preferences.",
+    description: "Reusable behavior, communication style, and decision preferences.",
   },
   agents: {
-    single: "role play",
-    title: "Role Plays",
-    description: "Draft and published interview structures, evidence strategies, and progression policies.",
+    single: "scenario",
+    title: "Scenarios",
+    description: "Bounded experiences that bring personas, voices, knowledge, and progression rules together.",
   },
 } as const;
 
@@ -128,9 +130,9 @@ function AgentSettingsPanel({
 }) {
   return (
     <aside className="bg-muted/20 border-t p-4 sm:p-6 lg:overflow-y-auto lg:border-t-0 lg:border-l">
-      <h2 className="text-sm font-semibold">Role play settings</h2>
+      <h2 className="text-sm font-semibold">Scenario settings</h2>
       <p className="text-muted-foreground mt-1 text-xs leading-5">
-        Configure how this role play appears and speaks.
+        Configure how this scenario appears and speaks.
       </p>
       <FieldGroup className="mt-6">
         <Field data-invalid={!name.trim()}>
@@ -143,8 +145,8 @@ function AgentSettingsPanel({
             required
             onChange={(event) => onChange("name", event.target.value)}
           />
-          <FieldDescription>Shown to trainers and learners.</FieldDescription>
-          {!name.trim() ? <FieldError>Enter a role play name.</FieldError> : null}
+          <FieldDescription>Shown wherever this scenario is available.</FieldDescription>
+          {!name.trim() ? <FieldError>Enter a scenario name.</FieldError> : null}
         </Field>
         <Field>
           <FieldLabel>Knowledge base</FieldLabel>
@@ -171,7 +173,7 @@ function AgentSettingsPanel({
             </SelectContent>
           </Select>
           <FieldDescription>
-            Only this collection is searched during learner sessions. <Link href="/knowledge">Manage knowledge</Link>.
+            Only this collection is searched while the scenario runs. <Link href="/knowledge">Manage knowledge</Link>.
           </FieldDescription>
         </Field>
         <Field>
@@ -188,7 +190,7 @@ function AgentSettingsPanel({
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
-                <SelectLabel>Trainer voices</SelectLabel>
+                <SelectLabel>Available voices</SelectLabel>
                 <SelectItem value="none">No assigned voice</SelectItem>
                 {voices.map((voice) => (
                   <SelectItem key={voice.id} value={voice.id}>
@@ -199,7 +201,7 @@ function AgentSettingsPanel({
             </SelectContent>
           </Select>
           <FieldDescription>
-            Used when this role play speaks in learner sessions. <Link href="/voice">Manage voices</Link>.
+            Used whenever this scenario speaks. <Link href="/voice">Manage voices</Link>.
           </FieldDescription>
         </Field>
       </FieldGroup>
@@ -218,8 +220,8 @@ function SpecCard({
   const objective =
     spec.objective ||
     (type === "agents"
-      ? "Practice with a guided AI interview trainer."
-      : "Reusable trainer persona definition.");
+      ? "A guided conversational scenario."
+      : "A reusable behavioral persona.");
 
   return (
     <Link
@@ -271,7 +273,7 @@ export function SpecResourceIndex({ type, specs }: { type: ResourceType; specs: 
     if (type === "agents") {
       const response = await fetch("/api/spec/domains");
       const domains = ((await response.json()).specs ?? []) as string[];
-      if (!domains.length) return toast.error("Create a domain before creating an agent");
+      if (!domains.length) return toast.error("Create a domain before creating a scenario");
       const domain = prompt(`Domain id (${domains.join(", ")}):`, domains[0]);
       if (!domain) return;
       domainLine = `  domain: ${domain}\n`;
@@ -290,10 +292,10 @@ export function SpecResourceIndex({ type, specs }: { type: ResourceType; specs: 
 
   async function designWithCopilot() {
     if (type !== "agents") return;
-    const goal = prompt("What should this role play train? Describe the learner and the desired outcome:");
+    const goal = prompt("What should this scenario accomplish? Describe the participant and desired outcome:");
     if (!goal?.trim()) return;
     seedCopilot(
-      `I want to design a new role play from scratch. Here is what I want it to accomplish: ${goal.trim()}\n\nFollow the spec-builder method and walk me through it.`,
+      `I want to design a new scenario from scratch. Here is what I want it to accomplish: ${goal.trim()}\n\nFollow the spec-builder method and walk me through it.`,
     );
     router.push("/");
   }
@@ -305,23 +307,23 @@ export function SpecResourceIndex({ type, specs }: { type: ResourceType; specs: 
 
   return (
     <main className="min-h-0 flex-1 overflow-auto p-5 sm:p-8">
-      <div className="mx-auto max-w-6xl">
-        <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight">{copy.title}</h1>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">{copy.description}</p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {type === "agents" && (
-              <Button variant="outline" onClick={designWithCopilot}>
-                <Sparkles data-icon="inline-start" /> Design with Copilot
+      <PageContainer size="narrow">
+        <PageHeader
+          title={copy.title}
+          description={copy.description}
+          actions={
+            <>
+              {type === "agents" && (
+                <Button variant="outline" onClick={designWithCopilot}>
+                  <Sparkles data-icon="inline-start" /> Design with Copilot
+                </Button>
+              )}
+              <Button onClick={createNew}>
+                <Plus data-icon="inline-start" /> New {copy.single}
               </Button>
-            )}
-            <Button onClick={createNew}>
-              <Plus data-icon="inline-start" /> New {copy.single}
-            </Button>
-          </div>
-        </header>
+            </>
+          }
+        />
 
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {specs.map((spec) => (
@@ -334,7 +336,7 @@ export function SpecResourceIndex({ type, specs }: { type: ResourceType; specs: 
             </div>
           )}
         </div>
-      </div>
+      </PageContainer>
     </main>
   );
 }
@@ -375,7 +377,7 @@ export function SpecDraftResourceViewer({
 
   function setAgentField(field: AgentField, value: string) {
     const next = updateAgentText(text, field, value);
-    if (!next) return toast.error("The draft role play definition could not be updated");
+    if (!next) return toast.error("The draft scenario definition could not be updated");
     setText(next);
     setDirty(true);
   }
@@ -394,7 +396,7 @@ export function SpecDraftResourceViewer({
     });
     const result = await response.json();
     setSaving(false);
-    if (!response.ok) return toast.error(result.error ?? "Could not save role play settings");
+    if (!response.ok) return toast.error(result.error ?? "Could not save scenario settings");
     setDirty(false);
     toast.success(result.changed ? `Saved as draft r${result.revision}` : "No changes to save");
     router.refresh();
@@ -403,7 +405,7 @@ export function SpecDraftResourceViewer({
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <header className="flex shrink-0 items-center gap-3 border-b px-4 py-3 sm:px-6">
-        <Button variant="ghost" size="icon-sm" render={<Link href="/agents" />} nativeButton={false} aria-label="Back to role plays">
+        <Button variant="ghost" size="icon-sm" render={<Link href="/agents" />} nativeButton={false} aria-label="Back to scenarios">
           <ArrowLeft />
         </Button>
         <div className="min-w-0 flex-1">
@@ -457,15 +459,15 @@ export function SpecDraftResourceViewer({
       </header>
 
       <div className="shrink-0 border-b bg-muted/40 px-4 py-2 text-xs text-muted-foreground sm:px-6">
-        This role play is a working draft. Save settings before publishing it.
+        This scenario is a working draft. Save settings before publishing it.
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[minmax(0,7fr)_minmax(18rem,3fr)] lg:overflow-hidden">
         <section className="flex min-h-[32rem] min-w-0 flex-col p-4 sm:p-6 lg:min-h-0">
           <div className="mb-3">
-            <h2 className="text-sm font-medium">Role play definition</h2>
+            <h2 className="text-sm font-medium">Scenario definition</h2>
             <p className="text-muted-foreground mt-1 text-xs">
-              Draft interview behavior and progression policy.
+              Draft behavior, stages, and progression policy.
             </p>
           </div>
           <textarea
@@ -532,7 +534,7 @@ export function SpecResourceEditor({
 
   function setAgentField(field: AgentField, value: string) {
     const next = updateAgentText(text, field, value);
-    if (!next) return toast.error("Fix the YAML before changing role play settings");
+    if (!next) return toast.error("Fix the YAML before changing scenario settings");
     setText(next);
     setDirty(true);
   }
@@ -589,10 +591,10 @@ export function SpecResourceEditor({
             <Button
               variant="outline"
               size="sm"
-              aria-label="Refine this role play with the spec copilot"
+              aria-label="Refine this scenario with Copilot"
               onClick={() => {
                 seedCopilot(
-                  `Please load my published role play "${slug}" (its current version) with read_spec, then start a working draft so we can revise it together.`,
+                  `Please load my published scenario "${slug}" (its current version) with read_spec, then start a working draft so we can revise it together.`,
                 );
                 router.push("/");
               }}
@@ -659,12 +661,12 @@ export function SpecResourceEditor({
         <section className="flex min-h-[32rem] min-w-0 flex-col p-4 sm:p-6 lg:min-h-0">
           <div className="mb-3">
             <h2 className="text-sm font-medium">
-              {type === "agents" ? "Role play definition" : "Persona definition"}
+              {type === "agents" ? "Scenario definition" : "Persona definition"}
             </h2>
             <p className="text-muted-foreground mt-1 text-xs">
               {type === "agents"
-                ? "Advanced interview behavior and progression policy."
-                : "Advanced trainer behavior and communication policy."}
+                ? "Advanced behavior, stages, and progression policy."
+                : "Advanced behavior and communication policy."}
             </p>
           </div>
           <textarea

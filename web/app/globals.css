@@ -134,6 +134,9 @@
     }
     html {
         @apply font-sans;
+        /* Global UI scale: rem-based sizes (all Tailwind text/spacing) resolve
+           against this. Bump to scale the whole UI; 110% ≈ Chrome zoom 110%. */
+        font-size: 110%;
     }
     svg {
         color: currentColor;

@@ -18,6 +18,7 @@ import {
   Volume2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { PageContainer } from "@/components/page-container";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -142,7 +143,7 @@ function AssignUsersDialog({
         <DialogHeader>
           <DialogTitle>Assign Users</DialogTitle>
           <DialogDescription>
-            Select which learners can practice this role play.
+            Select which users can run this scenario.
           </DialogDescription>
         </DialogHeader>
 
@@ -150,7 +151,7 @@ function AssignUsersDialog({
           <div className="relative">
             <Search className="text-muted-foreground absolute top-2.5 left-2.5 size-4" />
             <Input
-              placeholder="Search learners by name or email..."
+              placeholder="Search users by name or email..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-8"
@@ -160,9 +161,9 @@ function AssignUsersDialog({
           <div className="max-h-72 space-y-2 overflow-y-auto rounded-xl border bg-muted/20 p-2.5">
             {filteredUsers.length === 0 ? (
               <div className="space-y-1.5 py-8 text-center text-xs text-muted-foreground">
-                <p className="font-medium">No learners found</p>
+                <p className="font-medium">No users found</p>
                 <p className="text-[11px]">
-                  Invite learners from the{" "}
+                  Invite users from the{" "}
                   <Link
                     href="/users"
                     className="text-foreground underline underline-offset-2 hover:text-primary"
@@ -281,7 +282,7 @@ export function RolePlayPreview({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6 sm:p-8 lg:p-10">
-      <div className="mx-auto max-w-5xl space-y-8">
+      <PageContainer size="wide" className="flex flex-col gap-8">
         {/* Top Navigation & Actions Bar */}
         <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3.5">
@@ -290,7 +291,7 @@ export function RolePlayPreview({
               size="icon-sm"
               nativeButton={false}
               render={<Link href="/agents" />}
-              aria-label="Back to role plays"
+              aria-label="Back to scenarios"
             >
               <ArrowLeft />
             </Button>
@@ -323,7 +324,7 @@ export function RolePlayPreview({
               nativeButton={false}
               render={<Link href={`/talk?agent=${encodeURIComponent(rolePlay.slug)}`} />}
             >
-              <Play data-icon="inline-start" /> Test Role Play
+              <Play data-icon="inline-start" /> Test Scenario
             </Button>
           </div>
         </header>
@@ -486,7 +487,7 @@ export function RolePlayPreview({
                 </div>
 
                 <p className="text-xs leading-relaxed text-muted-foreground border-t pt-3.5">
-                  Conducts realistic, multi-turn interview role plays modeled after real evaluation criteria.
+                  Runs realistic, multi-turn scenarios using the configured behavior and evaluation criteria.
                 </p>
               </CardContent>
             </Card>
@@ -540,7 +541,7 @@ export function RolePlayPreview({
             </Card>
           </div>
         </div>
-      </div>
+      </PageContainer>
     </div>
   );
 }

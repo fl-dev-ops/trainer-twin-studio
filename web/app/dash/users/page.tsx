@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { Badge } from "@/components/ui/badge";
+import { PageContainer } from "@/components/page-container";
+import { PageHeader } from "@/components/page-header";
 import {
   Card,
   CardContent,
@@ -8,6 +9,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { InviteUser } from "@/components/users/invite-user";
 import { CopyButton } from "@/components/users/copy-button";
 import { BASE_DOMAIN } from "@/lib/base-domain";
@@ -38,24 +47,23 @@ export default async function UsersPage() {
     db.invitation.findMany({
       where: { organizationId: member.organizationId, status: "pending" },
       orderBy: { createdAt: "desc" },
-      select: { id: true, email: true, expiresAt: true },
+      select: { id: true, email: true, role: true, expiresAt: true },
     }),
   ]);
 
-  const users = members.filter((m) => m.role === "member");
-  const trainers = members.filter((m) => m.role !== "member");
+  const orderedMembers = [
+    ...members.filter((item) => item.role !== "member"),
+    ...members.filter((item) => item.role === "member"),
+  ];
 
   return (
     <main className="min-h-0 flex-1 overflow-auto p-5 sm:p-8">
-      <div className="mx-auto max-w-4xl">
-        <header className="flex items-center justify-between border-b pb-6">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Users</h1>
-            <p className="text-muted-foreground mt-1 text-sm">
-              Invite users and manage who can practice with your agents.
-            </p>
-          </div>
-        </header>
+      <PageContainer size="narrow">
+        <PageHeader
+          className="border-b pb-6"
+          title="Users"
+          description="Invite users and manage who can access your scenarios."
+        />
 
         <Card className="mt-6">
           <CardHeader>
@@ -71,51 +79,55 @@ export default async function UsersPage() {
 
         <Card className="mt-6">
           <CardHeader>
-            <CardTitle>Pending invites</CardTitle>
+            <CardTitle>Members and invitations</CardTitle>
+            <CardDescription>Everyone with access or a pending invitation.</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-2">
-            {invitations.length === 0 ? (
-              <p className="text-muted-foreground text-sm">No pending invitations.</p>
-            ) : (
-              invitations.map((inv) => (
-                <div
-                  key={inv.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm"
-                >
-                  <span>{inv.email}</span>
-                  <div className="flex items-center gap-2">
-                    <code className="text-muted-foreground hidden text-xs sm:inline">
-                      /auth/invite?token={inv.id.slice(0, 8)}…
-                    </code>
-                    <CopyButton value={`https://auth.${BASE_DOMAIN}/invite?token=${inv.id}`} />
-                  </div>
-                  <Badge variant="secondary">expires {inv.expiresAt.toLocaleDateString()}</Badge>
-                </div>
-              ))
-            )}
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>User</TableHead>
+                  <TableHead className="w-36"></TableHead>
+                  <TableHead className="w-24"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {orderedMembers.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell>
+                      <span className="block font-medium">{item.user.name}</span>
+                      <span className="block text-sm text-muted-foreground">{item.user.email}</span>
+                    </TableCell>
+                    <TableCell />
+                    <TableCell className="capitalize">
+                      {item.role === "member" ? "user" : item.role}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {invitations.map((invitation) => (
+                  <TableRow key={invitation.id}>
+                    <TableCell>
+                      <span className="block font-medium">{invitation.email}</span>
+                      <span className="block text-sm text-muted-foreground">
+                        Pending invitation · expires {invitation.expiresAt.toLocaleDateString()}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <CopyButton
+                        value={`https://auth.${BASE_DOMAIN}/invite?token=${invitation.id}`}
+                        label="Copy invite"
+                      />
+                    </TableCell>
+                    <TableCell className="capitalize">
+                      {invitation.role === "member" || !invitation.role ? "user" : invitation.role}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
-
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle>Members</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-2">
-            {[...trainers, ...users].map((m) => (
-              <div
-                key={m.id}
-                className="flex items-center justify-between rounded-lg border p-3 text-sm"
-              >
-                <span className="font-medium">{m.user.name}</span>
-                <span className="text-muted-foreground">{m.user.email}</span>
-                <Badge variant={m.role === "member" ? "secondary" : "default"}>
-                  {m.role === "member" ? "user" : m.role}
-                </Badge>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
+      </PageContainer>
     </main>
   );
 }

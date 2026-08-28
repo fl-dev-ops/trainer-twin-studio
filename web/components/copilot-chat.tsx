@@ -3,6 +3,7 @@
 import type { ComponentProps } from "react";
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import type { FileUIPart, UserContent } from "ai";
 import yaml from "js-yaml";
 import type { EveDynamicToolPart, EveMessage } from "eve/react";
@@ -16,8 +17,10 @@ import {
   Layers3,
   ListTodo,
   LoaderCircle,
+  Maximize2,
   Plus,
   Sparkles,
+  X,
 } from "lucide-react";
 import {
   Attachment,
@@ -40,7 +43,11 @@ import {
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
 import { CodeBlock } from "@/components/ai-elements/code-block";
-import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
+import {
+  Message,
+  MessageContent,
+  MessageResponse,
+} from "@/components/ai-elements/message";
 import {
   PromptInput,
   PromptInputActionAddAttachments,
@@ -57,7 +64,7 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import { CircularLoader } from "@/components/prompt-kit/loader";
 import { Button } from "@/components/ui/button";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { Sidebar, SidebarRail, SidebarTrigger } from "@/components/ui/sidebar";
 import {
   Sheet,
   SheetContent,
@@ -70,12 +77,13 @@ import { cn } from "@/lib/utils";
 import { takeCopilotSeed } from "@/lib/copilot-handoff";
 
 const SESSION_KEY = "trainertwin:spec-copilot-session:v3";
+const INPUT_KEY = "trainertwin:spec-copilot-input:v1";
 const TOOL_TITLES: Record<string, string> = {
-  publish_spec_draft: "Publish trainer",
+  publish_spec_draft: "Publish scenario",
   read_spec: "Read specification",
   read_spec_draft: "Read working draft",
   save_spec_draft: "Save working draft",
-  search_knowledge: "Search trainer knowledge",
+  search_knowledge: "Search knowledge",
   studio_inventory: "Inspect workspace",
 };
 type DraftView = SpecDraftBundle & {
@@ -96,20 +104,35 @@ type ArtifactPreview = {
 
 const SAFE_MARKDOWN_COMPONENTS = {
   img: ({ alt }: ComponentProps<"img">) => (
-    <span className="text-xs text-muted-foreground">[Image omitted{alt ? `: ${alt}` : ""}]</span>
+    <span className="text-xs text-muted-foreground">
+      [Image omitted{alt ? `: ${alt}` : ""}]
+    </span>
   ),
 };
 
-export function CopilotChat() {
-  const [savedSession] = useState<{ sessionId: string; streamIndex: number } | undefined>(() => {
+export function CopilotChat({
+  variant = "page",
+  onExpand,
+}: {
+  variant?: "page" | "panel";
+  onExpand?: () => void;
+}) {
+  const panel = variant === "panel";
+  const [savedSession] = useState<
+    { sessionId: string; streamIndex: number } | undefined
+  >(() => {
     try {
-      return JSON.parse(localStorage.getItem(SESSION_KEY) ?? "null") ?? undefined;
+      return (
+        JSON.parse(localStorage.getItem(SESSION_KEY) ?? "null") ?? undefined
+      );
     } catch {
       localStorage.removeItem(SESSION_KEY);
       return undefined;
     }
   });
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(
+    () => sessionStorage.getItem(INPUT_KEY) ?? "",
+  );
   const [localError, setLocalError] = useState<string>();
   const mountedAt = useRef(Date.now());
   const [blueprintOpen, setBlueprintOpen] = useState(false);
@@ -124,19 +147,26 @@ export function CopilotChat() {
       else localStorage.removeItem(SESSION_KEY);
     },
     onEvent(event) {
-      if (event.type === "turn.failed" && Date.parse(event.meta.at) >= mountedAt.current) {
-        setLocalError(event.data.code === "MODEL_CALL_FAILED"
-          ? "The AI model is temporarily unavailable. Please try again."
-          : event.data.message);
+      if (
+        event.type === "turn.failed" &&
+        Date.parse(event.meta.at) >= mountedAt.current
+      ) {
+        setLocalError(
+          event.data.code === "MODEL_CALL_FAILED"
+            ? "The AI model is temporarily unavailable. Please try again."
+            : event.data.message,
+        );
       }
     },
   });
   const busy = agent.status === "submitted" || agent.status === "streaming";
-  const restoring = savedSession !== undefined && agent.events.length === 0 && busy;
+  const restoring =
+    savedSession !== undefined && agent.events.length === 0 && busy;
   const draftTarget = findDraftTarget(agent.data.messages);
   const todos = findTodos(agent.data.messages);
   const scopedDraft = draft?.slug === draftTarget.slug ? draft : undefined;
   const workspaceVisible = todos.length > 0 || scopedDraft !== undefined;
+  const showWorkspace = !panel && workspaceVisible;
 
   // Send a message queued by another page (e.g. "Design with Copilot" on /agents).
   useEffect(() => {
@@ -149,12 +179,27 @@ export function CopilotChat() {
   useEffect(() => {
     if (!draftTarget.slug) return;
     const controller = new AbortController();
-    fetch(`/api/spec-drafts/current?slug=${encodeURIComponent(draftTarget.slug)}`, { cache: "no-store", signal: controller.signal })
-      .then((response) => response.status === 404 ? undefined : response.ok ? response.json() : Promise.reject(new Error("The trainer blueprint could not be loaded.")))
+    fetch(
+      `/api/spec-drafts/current?slug=${encodeURIComponent(draftTarget.slug)}`,
+      { cache: "no-store", signal: controller.signal },
+    )
+      .then((response) =>
+        response.status === 404
+          ? undefined
+          : response.ok
+            ? response.json()
+            : Promise.reject(
+                new Error("The scenario blueprint could not be loaded."),
+              ),
+      )
       .then((value: DraftView | undefined) => setDraft(value))
       .catch((cause: unknown) => {
         if (!(cause instanceof DOMException && cause.name === "AbortError")) {
-          setLocalError(cause instanceof Error ? cause.message : "The trainer blueprint could not be loaded.");
+          setLocalError(
+            cause instanceof Error
+              ? cause.message
+              : "The scenario blueprint could not be loaded.",
+          );
         }
       });
     return () => controller.abort();
@@ -165,25 +210,35 @@ export function CopilotChat() {
     if ((!message && files.length === 0) || busy) return;
     const content: UserContent = [];
     if (message) content.push({ type: "text", text: message });
-    content.push(...files.map(({ mediaType, filename, url }) => ({
-      type: "file" as const,
-      data: url,
-      mediaType,
-      filename,
-    })));
+    content.push(
+      ...files.map(({ mediaType, filename, url }) => ({
+        type: "file" as const,
+        data: url,
+        mediaType,
+        filename,
+      })),
+    );
     setLocalError(undefined);
     setInput("");
+    sessionStorage.removeItem(INPUT_KEY);
     try {
       await agent.send(content);
     } catch (cause) {
-      setInput((current) => current || message);
-      setLocalError(cause instanceof Error ? cause.message : "Message could not be sent.");
+      setInput((current) => {
+        const restored = current || message;
+        if (restored) sessionStorage.setItem(INPUT_KEY, restored);
+        return restored;
+      });
+      setLocalError(
+        cause instanceof Error ? cause.message : "Message could not be sent.",
+      );
       throw cause;
     }
   }
 
   function newConversation() {
     localStorage.removeItem(SESSION_KEY);
+    sessionStorage.removeItem(INPUT_KEY);
     setInput("");
     setLocalError(undefined);
     setDraft(undefined);
@@ -196,27 +251,59 @@ export function CopilotChat() {
     if (!scopedDraft) return;
     const filename = `${scopedDraft.slug}.${type}.yaml`;
     setArtifactPreview({
-      content: yaml.dump({ schema_version: 1, kind: type, [type]: scopedDraft[type] }, { noRefs: true, lineWidth: 100 }),
+      content: yaml.dump(
+        { schema_version: 1, kind: type, [type]: scopedDraft[type] },
+        { noRefs: true, lineWidth: 100 },
+      ),
       downloadUrl: `/api/spec-drafts/${encodeURIComponent(scopedDraft.slug)}/${type}`,
       filename,
     });
   }
 
-  return (
-    <main className="relative flex min-h-0 flex-1 overflow-hidden bg-background">
-      <section className={cn("relative flex min-w-0 flex-1 flex-col", workspaceVisible && "xl:mr-[21rem]")}>
-        <header className="pointer-events-none absolute inset-x-0 top-0 z-20 h-20">
+  const content = (
+    <main
+      className={cn(
+        "relative flex min-h-0 flex-1 overflow-hidden bg-background",
+        panel && "h-full bg-sidebar text-sidebar-foreground",
+      )}
+    >
+      <section
+        className={cn(
+          "relative flex min-w-0 flex-1 flex-col",
+          showWorkspace && "xl:mr-84",
+        )}
+      >
+        <header
+          className={cn(
+            "z-20 h-12 shrink-0",
+            panel
+              ? " bg-sidebar"
+              : "pointer-events-none absolute inset-x-0 top-0 h-20",
+          )}
+        >
+          {!panel && (
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 bg-linear-to-b from-background via-background/70 to-transparent backdrop-blur-md mask-[linear-gradient(to_bottom,black_0%,transparent_100%)]"
+            />
+          )}
           <div
-            aria-hidden="true"
-            className="absolute inset-0 bg-gradient-to-b from-background via-background/70 to-transparent backdrop-blur-md [mask-image:linear-gradient(to_bottom,black_0%,transparent_100%)]"
-          />
-          <div className="pointer-events-auto relative flex h-12 items-center gap-2 px-3 sm:px-4">
-            <SidebarTrigger />
+            className={cn(
+              "relative flex h-12 items-center gap-2 px-3 sm:px-4",
+              !panel && "pointer-events-auto",
+            )}
+          >
+            {!panel && <SidebarTrigger />}
             <h1 className="min-w-0 flex-1 truncate text-sm font-medium">
-              {scopedDraft?.name ?? (agent.data.messages.length > 0 ? "Build a trainer" : "New trainer")}
+              {panel
+                ? "Copilot"
+                : (scopedDraft?.name ??
+                  (agent.data.messages.length > 0
+                    ? "Build a scenario"
+                    : "New scenario"))}
             </h1>
             <div className="ml-auto flex shrink-0 items-center gap-1">
-              {workspaceVisible && (
+              {showWorkspace && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -224,8 +311,19 @@ export function CopilotChat() {
                   onClick={() => setBlueprintOpen(true)}
                   className="size-8 px-0 sm:w-auto sm:px-3 xl:hidden"
                 >
-                  <Layers3 aria-hidden="true" /> <span className="hidden sm:inline">Workspace</span>
+                  <Layers3 aria-hidden="true" />{" "}
+                  <span className="hidden sm:inline">Workspace</span>
                 </Button>
+              )}
+              {panel && (
+                <SidebarTrigger
+                  side="right"
+                  nativeButton={false}
+                  render={<Link href="/" onClick={onExpand} />}
+                  aria-label="Open Copilot full screen"
+                >
+                  <Maximize2 />
+                </SidebarTrigger>
               )}
               <Button
                 variant="ghost"
@@ -235,34 +333,77 @@ export function CopilotChat() {
                 disabled={busy}
                 className="size-8 px-0 sm:w-auto sm:px-3"
               >
-                <Plus aria-hidden="true" /> <span className="hidden sm:inline">New</span>
+                <Plus aria-hidden="true" />{" "}
+                <span className="hidden sm:inline">New</span>
               </Button>
+              {panel && (
+                <SidebarTrigger side="right" aria-label="Close Copilot">
+                  <X />
+                </SidebarTrigger>
+              )}
             </div>
           </div>
         </header>
 
         <Conversation className="min-h-0">
-          <ConversationContent className="mx-auto min-h-full w-full max-w-3xl px-4 pb-48 pt-20 sm:px-8">
+          <ConversationContent
+            className={cn(
+              "mx-auto min-h-full w-full max-w-3xl pb-48",
+              panel ? "px-4 pt-8" : "px-4 pt-20 sm:px-8",
+            )}
+          >
+            {panel && workspaceVisible && (
+              <WorkspacePanel
+                draft={scopedDraft}
+                todos={todos}
+                busy={busy}
+                onPreview={previewArtifact}
+              />
+            )}
             {agent.data.messages.length === 0 && !restoring ? (
-              <ConversationEmptyState title="" description="" className="flex-1">
+              <ConversationEmptyState
+                title=""
+                description=""
+                className="flex-1"
+              >
                 <div className="my-auto flex flex-col items-center text-center">
-                  <Image src="/trainertwin-mark.svg" alt="" width={37} height={28} priority />
-                  <h2 className="mt-6 text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
-                    What should we build?
+                  <Image
+                    src="/trainertwin-mark.svg"
+                    alt=""
+                    width={panel ? 30 : 37}
+                    height={panel ? 23 : 28}
+                    priority
+                  />
+                  <h2
+                    className={cn(
+                      "mt-6 font-semibold tracking-tight text-balance",
+                      panel ? "text-xl" : "text-2xl sm:text-3xl",
+                    )}
+                  >
+                    {panel ? "How can I help?" : "What should we build?"}
                   </h2>
                   <p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
-                    Describe the learner and the outcome. We’ll shape the trainer from there.
+                    Describe the scenario and desired outcome. Copilot can use
+                    your personas, voices, and knowledge.
                   </p>
                 </div>
               </ConversationEmptyState>
             ) : (
               agent.data.messages.map((message) => (
-                <ChatMessage key={message.id} message={message} respond={agent.respond} busy={busy} />
+                <ChatMessage
+                  key={message.id}
+                  message={message}
+                  respond={agent.respond}
+                  busy={busy}
+                />
               ))
             )}
             {busy && <Working />}
             {agent.error && (
-              <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              <div
+                role="alert"
+                className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+              >
                 {agent.error.message}
               </div>
             )}
@@ -270,14 +411,17 @@ export function CopilotChat() {
           <ConversationScrollButton className="bottom-36 z-20" />
         </Conversation>
 
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 px-3 pb-5 pt-14 sm:px-6 sm:pb-7">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 px-3 pb-4 pt-14">
           <div
             aria-hidden="true"
-            className="absolute inset-0 bg-gradient-to-b from-transparent to-background backdrop-blur-md [mask-image:linear-gradient(to_bottom,transparent_0%,black_100%)]"
+            className={cn(
+              "absolute inset-0 bg-linear-to-b from-transparent backdrop-blur-md mask-[linear-gradient(to_bottom,transparent_0%,black_100%)]",
+              panel ? "to-sidebar" : "to-background",
+            )}
           />
           <div className="relative mx-auto max-w-2xl">
             <PromptInput
-              className="pointer-events-auto [&_[data-slot=input-group]]:rounded-2xl [&_[data-slot=input-group]]:bg-background/95 [&_[data-slot=input-group]]:shadow-xl [&_[data-slot=input-group]]:shadow-foreground/10"
+              className="pointer-events-auto **:data-[slot=input-group]:rounded-2xl **:data-[slot=input-group]:bg-background/95 "
               accept="image/*,application/pdf,text/plain,text/markdown,.md"
               maxFiles={5}
               maxFileSize={2 * 1024 * 1024}
@@ -290,8 +434,17 @@ export function CopilotChat() {
                 <PromptInputTextarea
                   name="message"
                   value={input}
-                  onChange={(event) => setInput(event.currentTarget.value)}
-                  placeholder="Describe the trainer you want to build…"
+                  onChange={(event) => {
+                    const value = event.currentTarget.value;
+                    setInput(value);
+                    if (value) sessionStorage.setItem(INPUT_KEY, value);
+                    else sessionStorage.removeItem(INPUT_KEY);
+                  }}
+                  placeholder={
+                    panel
+                      ? "Ask Copilot…"
+                      : "Describe the scenario you want to build…"
+                  }
                   suppressHydrationWarning
                 />
               </PromptInputBody>
@@ -311,36 +464,65 @@ export function CopilotChat() {
                 />
               </PromptInputFooter>
             </PromptInput>
-            {localError && <p role="alert" className="mt-2 text-center text-xs text-destructive">{localError}</p>}
+            {localError && (
+              <p
+                role="alert"
+                className="mt-2 text-center text-xs text-destructive"
+              >
+                {localError}
+              </p>
+            )}
           </div>
         </div>
       </section>
 
-      {workspaceVisible && (
+      {showWorkspace && (
         <>
           <aside className="absolute inset-y-3 right-3 hidden w-80 overflow-y-auto text-sidebar-foreground xl:block">
-            <WorkspacePanel draft={scopedDraft} todos={todos} busy={busy} onPreview={previewArtifact} />
+            <WorkspacePanel
+              draft={scopedDraft}
+              todos={todos}
+              busy={busy}
+              onPreview={previewArtifact}
+            />
           </aside>
 
           <Sheet open={blueprintOpen} onOpenChange={setBlueprintOpen}>
             <SheetContent className="w-[min(92vw,22rem)] bg-background px-2 pb-2 pt-12 text-sidebar-foreground">
               <SheetHeader className="sr-only">
-                <SheetTitle>Trainer workspace</SheetTitle>
-                <SheetDescription>Current tasks and generated files.</SheetDescription>
+                <SheetTitle>Scenario workspace</SheetTitle>
+                <SheetDescription>
+                  Current tasks and generated files.
+                </SheetDescription>
               </SheetHeader>
-              <WorkspacePanel draft={scopedDraft} todos={todos} busy={busy} onPreview={previewArtifact} />
+              <WorkspacePanel
+                draft={scopedDraft}
+                todos={todos}
+                busy={busy}
+                onPreview={previewArtifact}
+              />
             </SheetContent>
           </Sheet>
         </>
       )}
 
-      <Sheet open={artifactPreview !== undefined} onOpenChange={(open) => { if (!open) setArtifactPreview(undefined); }}>
+      <Sheet
+        open={artifactPreview !== undefined}
+        onOpenChange={(open) => {
+          if (!open) setArtifactPreview(undefined);
+        }}
+      >
         <SheetContent className="gap-0 p-0 data-[side=right]:w-[min(94vw,48rem)] data-[side=right]:sm:max-w-3xl">
           <SheetHeader className="border-b px-5 py-4 pr-14">
             <div className="flex min-w-0 items-center gap-3">
-              <FileCode2 className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <FileCode2
+                className="size-4 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
               <div className="min-w-0">
-                <SheetTitle className="truncate">{artifactPreview?.filename}</SheetTitle>
+                <SheetTitle className="truncate">
+                  {artifactPreview?.filename}
+                </SheetTitle>
                 <SheetDescription>Compiled working draft</SheetDescription>
               </div>
               {/* artifactPreview download button — hidden for now
@@ -360,12 +542,30 @@ export function CopilotChat() {
           </SheetHeader>
           <div className="min-h-0 flex-1 overflow-auto bg-muted/20 p-4">
             {artifactPreview && (
-              <CodeBlock code={artifactPreview.content} language="yaml" showLineNumbers className="min-w-full" />
+              <CodeBlock
+                code={artifactPreview.content}
+                language="yaml"
+                showLineNumbers
+                className="min-w-full"
+              />
             )}
           </div>
         </SheetContent>
       </Sheet>
     </main>
+  );
+
+  if (!panel) return content;
+
+  return (
+    <Sidebar
+      id="copilot-panel"
+      side="right"
+      variant="inset"
+      collapsible="offcanvas"
+    >
+      <div className="flex min-h-0 flex-1">{content}</div>
+    </Sidebar>
   );
 }
 
@@ -376,7 +576,11 @@ function PromptAttachments() {
     <PromptInputHeader>
       <Attachments variant="inline">
         {attachments.files.map((file) => (
-          <Attachment key={file.id} data={file} onRemove={() => attachments.remove(file.id)}>
+          <Attachment
+            key={file.id}
+            data={file}
+            onRemove={() => attachments.remove(file.id)}
+          >
             <AttachmentPreview />
             <AttachmentInfo />
             <AttachmentRemove />
@@ -387,14 +591,28 @@ function PromptAttachments() {
   );
 }
 
-function ChatMessage({ message, respond, busy }: { message: EveMessage; respond: Respond; busy: boolean }) {
-  const files = message.parts.flatMap((part, index) => part.type === "file" ? [{
-    id: `${message.id}-${index}`,
-    type: "file" as const,
-    mediaType: part.mediaType,
-    filename: part.filename,
-    url: part.url ?? "",
-  }] : []);
+function ChatMessage({
+  message,
+  respond,
+  busy,
+}: {
+  message: EveMessage;
+  respond: Respond;
+  busy: boolean;
+}) {
+  const files = message.parts.flatMap((part, index) =>
+    part.type === "file"
+      ? [
+          {
+            id: `${message.id}-${index}`,
+            type: "file" as const,
+            mediaType: part.mediaType,
+            filename: part.filename,
+            url: part.url ?? "",
+          },
+        ]
+      : [],
+  );
   return (
     <Message from={message.role}>
       <MessageContent>
@@ -420,11 +638,22 @@ function ChatMessage({ message, respond, busy }: { message: EveMessage; respond:
               >
                 {part.text}
               </MessageResponse>
-            ) : <p key={index} className="whitespace-pre-wrap">{part.text}</p>;
+            ) : (
+              <p key={index} className="whitespace-pre-wrap">
+                {part.text}
+              </p>
+            );
           }
           if (part.type === "dynamic-tool") {
             if (part.toolName === "todo") return null;
-            return <ToolPartView key={part.toolCallId} part={part} respond={respond} busy={busy} />;
+            return (
+              <ToolPartView
+                key={part.toolCallId}
+                part={part}
+                respond={respond}
+                busy={busy}
+              />
+            );
           }
           return null;
         })}
@@ -433,16 +662,29 @@ function ChatMessage({ message, respond, busy }: { message: EveMessage; respond:
   );
 }
 
-function ToolPartView({ part, respond, busy }: { part: EveDynamicToolPart; respond: Respond; busy: boolean }) {
+function ToolPartView({
+  part,
+  respond,
+  busy,
+}: {
+  part: EveDynamicToolPart;
+  respond: Respond;
+  busy: boolean;
+}) {
   const request = part.toolMetadata?.eve?.inputRequest;
   const [answer, setAnswer] = useState("");
-  const title = TOOL_TITLES[part.toolName] ?? part.toolName.replaceAll("_", " ");
+  const title =
+    TOOL_TITLES[part.toolName] ?? part.toolName.replaceAll("_", " ");
 
   if (request && part.state === "approval-requested") {
     const approval = "approval" in part ? part.approval : undefined;
     return (
       <Confirmation approval={approval} state={part.state}>
-        <ConfirmationTitle>{request.kind === "tool-approval" ? "Review before publishing" : "One decision needed"}</ConfirmationTitle>
+        <ConfirmationTitle>
+          {request.kind === "tool-approval"
+            ? "Review before publishing"
+            : "One decision needed"}
+        </ConfirmationTitle>
         <ConfirmationRequest>
           <p className="text-sm">{request.prompt}</p>
           {request.options && (
@@ -452,7 +694,11 @@ function ToolPartView({ part, respond, busy }: { part: EveDynamicToolPart; respo
                   key={option.id}
                   variant={option.style === "primary" ? "default" : "outline"}
                   disabled={busy}
-                  onClick={() => void respond([{ requestId: request.requestId, optionId: option.id }])}
+                  onClick={() =>
+                    void respond([
+                      { requestId: request.requestId, optionId: option.id },
+                    ])
+                  }
                 >
                   {option.label}
                 </ConfirmationAction>
@@ -460,9 +706,25 @@ function ToolPartView({ part, respond, busy }: { part: EveDynamicToolPart; respo
             </ConfirmationActions>
           )}
           {request.allowFreeform && (
-            <form className="mt-3 flex gap-2" onSubmit={(event) => { event.preventDefault(); if (answer.trim()) void respond([{ requestId: request.requestId, text: answer.trim() }]); }}>
-              <input value={answer} onChange={(event) => setAnswer(event.target.value)} aria-label="Your answer" className="h-8 min-w-0 flex-1 rounded-lg border bg-background px-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50" />
-              <Button size="sm" type="submit" disabled={!answer.trim() || busy}>Answer</Button>
+            <form
+              className="mt-3 flex gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (answer.trim())
+                  void respond([
+                    { requestId: request.requestId, text: answer.trim() },
+                  ]);
+              }}
+            >
+              <input
+                value={answer}
+                onChange={(event) => setAnswer(event.target.value)}
+                aria-label="Your answer"
+                className="h-8 min-w-0 flex-1 rounded-lg border bg-background px-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              />
+              <Button size="sm" type="submit" disabled={!answer.trim() || busy}>
+                Answer
+              </Button>
             </form>
           )}
         </ConfirmationRequest>
@@ -487,9 +749,21 @@ function ToolStateIcon({ state }: { state: EveDynamicToolPart["state"] }) {
     return <CircularLoader size="sm" className="shrink-0" />;
   }
   if (state === "output-available" || state === "approval-responded") {
-    return <Check className="size-4 shrink-0 text-muted-foreground" aria-label="Completed" />;
+    return (
+      <Check
+        className="size-4 shrink-0 text-muted-foreground"
+        aria-label="Completed"
+      />
+    );
   }
-  return <CircleAlert className="size-4 shrink-0 text-destructive" aria-label={state === "approval-requested" ? "Waiting for input" : "Tool error"} />;
+  return (
+    <CircleAlert
+      className="size-4 shrink-0 text-destructive"
+      aria-label={
+        state === "approval-requested" ? "Waiting for input" : "Tool error"
+      }
+    />
+  );
 }
 
 function WorkspacePanel({
@@ -503,27 +777,63 @@ function WorkspacePanel({
   busy: boolean;
   onPreview: (type: "agent" | "domain") => void;
 }) {
-  const items = todos.length > 0 ? todos : [
-    ...(draft?.gaps.map((content) => ({ content, priority: "high" as const, status: "pending" as const })) ?? []),
-    ...(draft?.assumptions.map((content) => ({ content: `Confirm: ${content}`, priority: "low" as const, status: "pending" as const })) ?? []),
-  ];
+  const items =
+    todos.length > 0
+      ? todos
+      : [
+          ...(draft?.gaps.map((content) => ({
+            content,
+            priority: "high" as const,
+            status: "pending" as const,
+          })) ?? []),
+          ...(draft?.assumptions.map((content) => ({
+            content: `Confirm: ${content}`,
+            priority: "low" as const,
+            status: "pending" as const,
+          })) ?? []),
+        ];
 
   return (
-    <div className="flex min-h-full flex-col gap-3 p-1 sm:p-3">
+    <div className="flex min-h-0 flex-col gap-3 p-1 sm:p-3">
       {items.length > 0 && (
         <WorkspaceCard icon={ListTodo} title="Todo">
           <ul className="flex flex-col gap-0.5">
             {items.map((item, index) => {
               const completed = item.status === "completed";
               const working = item.status === "in_progress" && busy;
-              const Icon = completed ? Check : working ? LoaderCircle : item.status === "cancelled" ? CircleAlert : Circle;
+              const Icon = completed
+                ? Check
+                : working
+                  ? LoaderCircle
+                  : item.status === "cancelled"
+                    ? CircleAlert
+                    : Circle;
               return (
-                <li key={`${item.content}-${index}`} className="flex gap-2 rounded-lg px-2 py-2 text-sm hover:bg-sidebar-accent">
+                <li
+                  key={`${item.content}-${index}`}
+                  className="flex gap-2 rounded-lg px-2 py-2 text-sm hover:bg-sidebar-accent"
+                >
                   <Icon
                     className={`mt-0.5 size-4 shrink-0 ${working ? "animate-spin text-brand" : completed ? "text-foreground" : "text-muted-foreground"}`}
-                    aria-label={completed ? "Completed" : working ? "In progress" : item.status === "cancelled" ? "Cancelled" : "Pending"}
+                    aria-label={
+                      completed
+                        ? "Completed"
+                        : working
+                          ? "In progress"
+                          : item.status === "cancelled"
+                            ? "Cancelled"
+                            : "Pending"
+                    }
                   />
-                  <span className={completed ? "text-muted-foreground line-through" : "text-sidebar-foreground"}>{item.content}</span>
+                  <span
+                    className={
+                      completed
+                        ? "text-muted-foreground line-through"
+                        : "text-sidebar-foreground"
+                    }
+                  >
+                    {item.content}
+                  </span>
                 </li>
               );
             })}
@@ -541,8 +851,13 @@ function WorkspacePanel({
                 onClick={() => onPreview(type)}
                 className="flex min-w-0 items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
               >
-                <FileCode2 className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                <span className="truncate">{draft.slug}.{type}.yaml</span>
+                <FileCode2
+                  className="size-4 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <span className="truncate">
+                  {draft.slug}.{type}.yaml
+                </span>
               </button>
             ))}
           </div>
@@ -552,7 +867,15 @@ function WorkspacePanel({
   );
 }
 
-function WorkspaceCard({ icon: Icon, title, children }: { icon: typeof ListTodo; title: string; children: React.ReactNode }) {
+function WorkspaceCard({
+  icon: Icon,
+  title,
+  children,
+}: {
+  icon: typeof ListTodo;
+  title: string;
+  children: React.ReactNode;
+}) {
   const [open, setOpen] = useState(true);
   return (
     <details
@@ -563,7 +886,10 @@ function WorkspaceCard({ icon: Icon, title, children }: { icon: typeof ListTodo;
       <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-xs font-medium text-muted-foreground outline-none transition-colors hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sidebar-ring [&::-webkit-details-marker]:hidden">
         <Icon className="size-3.5" aria-hidden="true" />
         <span>{title}</span>
-        <ChevronDown className="ml-auto size-3.5 transition-transform duration-200 group-open:rotate-180" aria-hidden="true" />
+        <ChevronDown
+          className="ml-auto size-3.5 transition-transform duration-200 group-open:rotate-180"
+          aria-hidden="true"
+        />
       </summary>
       <div className="border-t px-1 py-1.5">{children}</div>
     </details>
@@ -571,23 +897,50 @@ function WorkspaceCard({ icon: Icon, title, children }: { icon: typeof ListTodo;
 }
 
 function Working() {
-  return <Message from="assistant"><MessageContent><p className="flex items-center gap-2 text-xs text-muted-foreground"><Sparkles className="size-3.5" /> Working…</p></MessageContent></Message>;
+  return (
+    <Message from="assistant">
+      <MessageContent>
+        <p className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Sparkles className="size-3.5" /> Working…
+        </p>
+      </MessageContent>
+    </Message>
+  );
 }
 
 function findTodos(messages: readonly EveMessage[]): TodoItem[] {
-  for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex--) {
+  for (
+    let messageIndex = messages.length - 1;
+    messageIndex >= 0;
+    messageIndex--
+  ) {
     const parts = messages[messageIndex].parts;
     for (let partIndex = parts.length - 1; partIndex >= 0; partIndex--) {
       const part = parts[partIndex];
       if (part.type !== "dynamic-tool" || part.toolName !== "todo") continue;
-      const value = part.state === "output-available" ? part.output : "input" in part ? part.input : undefined;
-      if (!value || typeof value !== "object" || !("todos" in value) || !Array.isArray(value.todos)) return [];
+      const value =
+        part.state === "output-available"
+          ? part.output
+          : "input" in part
+            ? part.input
+            : undefined;
+      if (
+        !value ||
+        typeof value !== "object" ||
+        !("todos" in value) ||
+        !Array.isArray(value.todos)
+      )
+        return [];
       return value.todos.filter((item): item is TodoItem => {
         if (!item || typeof item !== "object") return false;
         const todo = item as Record<string, unknown>;
-        return typeof todo.content === "string"
-          && ["high", "medium", "low"].includes(String(todo.priority))
-          && ["pending", "in_progress", "completed", "cancelled"].includes(String(todo.status));
+        return (
+          typeof todo.content === "string" &&
+          ["high", "medium", "low"].includes(String(todo.priority)) &&
+          ["pending", "in_progress", "completed", "cancelled"].includes(
+            String(todo.status),
+          )
+        );
       });
     }
   }
@@ -595,17 +948,31 @@ function findTodos(messages: readonly EveMessage[]): TodoItem[] {
 }
 
 function findDraftTarget(messages: readonly EveMessage[]) {
-  for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex--) {
+  for (
+    let messageIndex = messages.length - 1;
+    messageIndex >= 0;
+    messageIndex--
+  ) {
     const parts = messages[messageIndex].parts;
     for (let partIndex = parts.length - 1; partIndex >= 0; partIndex--) {
       const part = parts[partIndex];
       if (part.type !== "dynamic-tool") continue;
-      if (part.toolName !== "save_spec_draft" && part.toolName !== "read_spec_draft") continue;
-      const output = part.state === "output-available" ? part.output : undefined;
-      const slug = output && typeof output === "object" && "slug" in output && typeof output.slug === "string" ? output.slug : undefined;
+      if (
+        part.toolName !== "save_spec_draft" &&
+        part.toolName !== "read_spec_draft"
+      )
+        continue;
+      const output =
+        part.state === "output-available" ? part.output : undefined;
+      const slug =
+        output &&
+        typeof output === "object" &&
+        "slug" in output &&
+        typeof output.slug === "string"
+          ? output.slug
+          : undefined;
       return { signal: `${part.toolCallId}:${part.state}`, slug };
     }
   }
   return { signal: "initial", slug: undefined };
 }
-

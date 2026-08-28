@@ -67,7 +67,7 @@ export function VoiceLibrary({ mine, samples }: { mine: VoiceRow[]; samples: Voi
                 <Mic className="size-5 text-muted-foreground" aria-hidden="true" />
               </span>
               <p className="mt-4 max-w-xs text-sm leading-6 text-muted-foreground">
-                You haven&apos;t cloned a voice yet. Read a short passage aloud and it&apos;s ready for any interview script.
+                You haven&apos;t cloned a voice yet. Read a short passage aloud and it&apos;s ready for any scenario.
               </p>
               <Button className="mt-5" size="sm" render={<Link href="/voice/cloning" />} nativeButton={false}>
                 <Mic data-icon="inline-start" /> Start cloning
@@ -223,7 +223,7 @@ function VoiceRowItem({ voice, sample }: { voice: VoiceRow; sample: boolean }) {
       >
         <span className="block truncate text-sm font-medium capitalize">{name}</span>
         <span className="block truncate text-xs text-muted-foreground">
-          {sample ? "Built-in sample voice" : `Trainer voice clone · ${new Date(voice.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
+          {sample ? "Built-in sample voice" : `Cloned voice · ${new Date(voice.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
         </span>
       </Link>
       {!sample && (

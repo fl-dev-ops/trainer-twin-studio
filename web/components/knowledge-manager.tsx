@@ -15,6 +15,8 @@ import {
   Upload,
 } from "lucide-react";
 import { toast } from "sonner";
+import { PageContainer } from "@/components/page-container";
+import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -101,21 +103,17 @@ export function KnowledgeIndex({ bases }: { bases: Kb[] }) {
 
   return (
     <main className="min-h-0 flex-1 overflow-auto p-5 sm:p-8">
-      <div className="mx-auto max-w-5xl">
-        <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight">Knowledge</h1>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-              Grounding documents stored in S3 and indexed into ChromaDB, one collection per base.
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
+      <PageContainer size="narrow">
+        <PageHeader
+          title="Knowledge"
+          description="Grounding documents stored in S3 and indexed into ChromaDB, one collection per base."
+          actions={
             <Button onClick={handleCreate} disabled={creating}>
               {creating ? <Spinner data-icon="inline-start" /> : <Plus data-icon="inline-start" />}
               New knowledge base
             </Button>
-          </div>
-        </header>
+          }
+        />
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           {bases.map((kb) => (
@@ -142,7 +140,7 @@ export function KnowledgeIndex({ bases }: { bases: Kb[] }) {
             </div>
           )}
         </div>
-      </div>
+      </PageContainer>
     </main>
   );
 }

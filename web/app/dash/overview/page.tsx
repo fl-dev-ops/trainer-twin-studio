@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { ArrowUpRight, BookOpen, MessagesSquare, Shapes, UserRound } from "lucide-react";
+import { PageContainer } from "@/components/page-container";
+import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,25 +40,23 @@ export default async function DashboardPage() {
 
   const stats = [
     { label: "Personas", value: personas, href: "/personas", icon: UserRound },
-    { label: "Role Plays", value: agents, href: "/agents", icon: MessagesSquare },
+    { label: "Scenarios", value: agents, href: "/agents", icon: MessagesSquare },
     { label: "Domains", value: domains, href: "/domains", icon: Shapes },
     { label: "Knowledge bases", value: kbs, href: "/knowledge", icon: BookOpen },
   ];
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">
-            Build and version interview-trainer specs, then run voice sessions.
-          </p>
-        </div>
-        <Button nativeButton={false} render={<Link href="/talk" />}>
-          Start session <ArrowUpRight data-icon="inline-end" />
-        </Button>
-      </div>
+      <PageContainer size="narrow" className="flex flex-col gap-6">
+      <PageHeader
+        title="Dashboard"
+        description="Build and version personas and scenarios, then review their sessions."
+        actions={
+          <Button nativeButton={false} render={<Link href="/talk" />}>
+            Start session <ArrowUpRight data-icon="inline-end" />
+          </Button>
+        }
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
@@ -78,7 +78,7 @@ export default async function DashboardPage() {
       <Card>
         <CardHeader>
           <CardTitle>Recent sessions</CardTitle>
-          <CardDescription>Voice interviews run through the Pipecat agent.</CardDescription>
+          <CardDescription>Recent runs across your published scenarios.</CardDescription>
         </CardHeader>
         <CardContent>
           {sessions.length === 0 ? (
@@ -125,7 +125,7 @@ export default async function DashboardPage() {
           )}
         </CardContent>
       </Card>
-      </div>
+      </PageContainer>
     </div>
   );
 }

@@ -6,12 +6,8 @@ import { usePathname } from "next/navigation";
 import {
   AudioLines,
   BookOpen,
-  // Gauge,
   History,
   MessagesSquare,
-  Mic,
-  // Shapes,
-  Sparkles,
   UserRound,
   Users,
 } from "lucide-react";
@@ -27,40 +23,29 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarProvider,
 } from "@/components/ui/sidebar";
 
 const NAV = [
   {
-    label: "Workspace",
-    items: [
-      { title: "Copilot", href: "/", icon: Sparkles },
-      { title: "Users", href: "/users", icon: Users },
-      { title: "Knowledge", href: "/knowledge", icon: BookOpen },
-      { title: "Sessions", href: "/sessions", icon: History },
-    ],
+    label: "Activity",
+    items: [{ title: "Sessions", href: "/sessions", icon: History }],
   },
   {
-    label: "Voice",
-    items: [
-      { title: "Voices", href: "/voice", icon: AudioLines },
-      { title: "Voice Cloning", href: "/voice/cloning", icon: Mic },
-    ],
+    label: "Create",
+    items: [{ title: "Scenarios", href: "/agents", icon: MessagesSquare }],
   },
   {
-    label: "Trainer library",
+    label: "Library",
     items: [
-      { title: "Role Plays", href: "/agents", icon: MessagesSquare },
       { title: "Personas", href: "/personas", icon: UserRound },
+      { title: "Voices", href: "/voice", icon: AudioLines },
+      { title: "Knowledge", href: "/knowledge", icon: BookOpen },
     ],
   },
-  // {
-  //   label: "Advanced",
-  //   items: [
-  //     { title: "Overview", href: "/overview", icon: Gauge },
-  //     { title: "Domains", href: "/domains", icon: Shapes },
-  //   ],
-  // },
+  {
+    label: "Organization",
+    items: [{ title: "Users", href: "/users", icon: Users }],
+  },
 ];
 
 export function AppSidebar() {
@@ -77,7 +62,7 @@ export function AppSidebar() {
               </span>
               <span className="flex flex-col group-data-[collapsible=icon]:hidden">
                 <span className="font-semibold">TrainerTwin</span>
-                <span className="text-xs text-muted-foreground">Interview studio</span>
+                <span className="text-xs text-muted-foreground">Digital twin studio</span>
               </span>
             </SidebarMenuButton>
           </SidebarMenuItem>
