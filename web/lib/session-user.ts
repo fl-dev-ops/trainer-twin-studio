@@ -13,10 +13,12 @@ export async function resolveSessionUser(): Promise<{
 }> {
   const requestHeaders = await headers();
   const host = requestHeaders.get("host") ?? "";
-  const session = await auth.api.getSession({ headers: requestHeaders });
-  if (!session) return { org: null, user: null, signInUrl: signInUrl(host) };
+  const [session, portalOrg] = await Promise.all([
+    auth.api.getSession({ headers: requestHeaders }),
+    getOrgBySlug(portalSlug(host)),
+  ]);
+  if (!session) return { org: portalOrg, user: null, signInUrl: signInUrl(host) };
 
-  const portalOrg = await getOrgBySlug(portalSlug(host));
   const member = portalOrg
     ? null
     : await db.member.findFirst({

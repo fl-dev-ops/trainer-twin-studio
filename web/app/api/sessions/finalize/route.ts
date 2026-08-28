@@ -8,7 +8,7 @@ import { resolveSessionUser } from "@/lib/session-user";
  */
 export async function POST(request: Request) {
   const { org, user } = await resolveSessionUser();
-  if (!org || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!org) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json().catch(() => null);
   if (!body?.sessionId) return NextResponse.json({ error: "Missing sessionId" }, { status: 400 });
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
   const updated = await db.interviewSession.updateMany({
     where: { id: String(body.sessionId), orgId: org.id },
     data: {
-      userId: user.id,
+      ...(user ? { userId: user.id } : {}),
       ...(transcript ? { transcript } : {}),
       ...(evidence ? { evidence } : {}),
     },

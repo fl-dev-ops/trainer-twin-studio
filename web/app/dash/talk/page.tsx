@@ -17,7 +17,7 @@ export default async function TalkPage() {
     <SessionView
       personas={personas}
       agents={agents}
-      contexts={contexts.map((c) => ({ id: c.id, name: c.name }))}
+      contexts={contexts.map((c) => ({ id: c.id, name: c.name, size: c.size }))}
     />
   );
 }

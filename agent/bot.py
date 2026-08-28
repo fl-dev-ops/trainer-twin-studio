@@ -8,7 +8,10 @@ Run: uv run bot.py -t webrtc   (then connect from the studio's /talk page)
 """
 
 import asyncio
+from datetime import datetime
 import os
+from pathlib import Path
+import sys
 import uuid
 
 from dotenv import load_dotenv
@@ -26,17 +29,53 @@ from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.processors.audio.audio_buffer_processor import AudioBufferProcessor
 from pipecat.runner.types import RunnerArguments, SmallWebRTCRunnerArguments
 from pipecat.services.sarvam.stt import SarvamSTTService
+from pipecat.services.sarvam.tts import SarvamTTSService
 from pipecat.transports.base_transport import BaseTransport, TransportParams
 from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
 from pipecat.workers.runner import WorkerRunner
 
 from interview import InterviewSession, WEB_URL
 from recording import pcm_to_wav, upload_recording
-from web_tts import WebTTSService
+# Remote cloned-voice TTS is kept for production; local testing uses Sarvam below.
+# from web_tts import WebTTSService
 from workspace_bridge import WorkspaceBridge
 import httpx
 
 load_dotenv(override=True)
+
+
+class Tee:
+    """Mirror server output to the terminal and one run-specific log file."""
+
+    def __init__(self, terminal, log_file):
+        self.terminal = terminal
+        self.log_file = log_file
+
+    def write(self, text):
+        self.terminal.write(text)
+        self.log_file.write(text)
+        return len(text)
+
+    def flush(self):
+        self.terminal.flush()
+        self.log_file.flush()
+
+    def __getattr__(self, name):
+        return getattr(self.terminal, name)
+
+
+def setup_run_log() -> Path:
+    log_dir = Path(__file__).parent / "logs"
+    log_dir.mkdir(exist_ok=True)
+    path = log_dir / f"agent-{datetime.now().strftime('%Y%m%d-%H%M%S')}-{os.getpid()}.log"
+    log_file = path.open("a", encoding="utf-8", buffering=1)
+    sys.stdout = Tee(sys.stdout, log_file)
+    sys.stderr = Tee(sys.stderr, log_file)
+    logger.remove()
+    logger.add(sys.__stderr__, colorize=True)
+    logger.add(path, colorize=False)
+    print(f"Run log: {path}")
+    return path
 
 
 class UtteranceCollector(FrameProcessor):
@@ -160,25 +199,39 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         await collector.speak(response)
         if session.closed:
             await _end_web_session("completed")
+            await worker.rtvi.send_server_message({
+                "type": "session-ended",
+                "status": "completed",
+            })
 
     async def _end_web_session(status: str):
+        if not web["session_id"]:
+            return
         # Flush + upload the recording while web["session_id"] is still set.
         try:
             await recorder.stop_recording()
         except Exception:
             logger.exception("Failed to finalize session recording")
-        if not web["session_id"]:
-            return
         try:
             async with httpx.AsyncClient(timeout=10) as client:
-                await client.patch(f"{WEB_URL}/api/sessions", json={"id": web["session_id"], "status": status})
+                response = await client.patch(f"{WEB_URL}/api/sessions", json={"id": web["session_id"], "status": status})
+                response.raise_for_status()
         except Exception:
             logger.warning("Failed to update web session record")
         web["session_id"] = None
 
     stt = await make_stt()
     collector = UtteranceCollector(on_utterance)
-    tts = WebTTSService(web_url=WEB_URL, voice=os.getenv("AGENT_DEFAULT_VOICE_ID", ""))
+    tts = SarvamTTSService(
+        api_key=os.environ["SARVAM_API_KEY"],
+        settings=SarvamTTSService.Settings(
+            model=os.getenv("SARVAM_TTS_MODEL", "bulbul:v3"),
+            voice=os.getenv("SARVAM_SPEAKER", "rohan"),
+            language="en-IN",
+        ),
+    )
+    # Remote cloned-voice TTS (restore for production):
+    # tts = WebTTSService(web_url=WEB_URL, voice=os.getenv("AGENT_DEFAULT_VOICE_ID", ""))
 
     # Records the whole session: user on left, trainer on right (stereo WAV).
     recorder = AudioBufferProcessor(sample_rate=16000, num_channels=2, auto_start_recording=True)
@@ -192,26 +245,28 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         except Exception:
             logger.exception("Failed to upload session recording")
 
-    fallback_voice: dict = {"id": None}
-
-    async def resolve_voice() -> str:
-        """Agent-assigned voice -> AGENT_DEFAULT_VOICE_ID -> first ready studio voice."""
-        if session.voice_id:
-            return session.voice_id
-        if tts.voice:
-            return tts.voice
-        if fallback_voice["id"]:
-            return fallback_voice["id"]
-        try:
-            async with httpx.AsyncClient(timeout=10) as client:
-                response = await client.get(f"{WEB_URL}/api/tts/default-voice")
-                voice = response.json().get("voice")
-                if voice:
-                    fallback_voice["id"] = voice["id"]
-                    logger.info("No voice assigned; using fallback studio voice '{}'", voice["name"])
-        except Exception:
-            logger.warning("Could not look up a fallback voice")
-        return fallback_voice["id"] or ""
+    # Remote cloned-voice resolution (restore with WebTTSService for production):
+    # fallback_voice: dict = {"id": None}
+    #
+    # async def resolve_voice() -> str:
+    #     if override := os.getenv("AGENT_VOICE_ID_OVERRIDE"):
+    #         return override
+    #     if session.voice_id:
+    #         return session.voice_id
+    #     if tts.voice:
+    #         return tts.voice
+    #     if fallback_voice["id"]:
+    #         return fallback_voice["id"]
+    #     try:
+    #         async with httpx.AsyncClient(timeout=10) as client:
+    #             response = await client.get(f"{WEB_URL}/api/tts/default-voice")
+    #             voice = response.json().get("voice")
+    #             if voice:
+    #                 fallback_voice["id"] = voice["id"]
+    #                 logger.info("No voice assigned; using fallback studio voice '{}'", voice["name"])
+    #     except Exception:
+    #         logger.warning("Could not look up a fallback voice")
+    #     return fallback_voice["id"] or ""
 
     pipeline = Pipeline([
         transport.input(),
@@ -244,9 +299,10 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         async def prepare():
             try:
                 opening = await session.start(persona_id, agent_id, context_id)
-                tts.voice = await resolve_voice()
-                if not tts.voice:
-                    logger.warning("No TTS voice available — trainer will be silent")
+                # Remote cloned-voice TTS (restore for production):
+                # tts.voice = await resolve_voice()
+                # if not tts.voice:
+                #     logger.warning("No TTS voice available — trainer will be silent")
                 versions = session.snapshot().get("versions", {})
                 try:
                     async with httpx.AsyncClient(timeout=10) as client:
@@ -258,6 +314,7 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
                             "domainSlug": session._domain.id if session._domain else "",
                             "domainVersion": versions.get("domain", 1),
                         })
+                        response.raise_for_status()
                         web["session_id"] = response.json().get("session", {}).get("id")
                 except Exception:
                     logger.warning("Could not register session with the web app")
@@ -305,4 +362,5 @@ async def bot(runner_args: RunnerArguments):
 if __name__ == "__main__":
     from pipecat.runner.run import main
 
+    setup_run_log()
     main()

@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "PORTLESS_WILDCARD=1 portless trainertwin next dev",
+    "devp": "mkdir -p logs && PORTLESS_WILDCARD=1 portless trainertwin next dev 2>&1 | tee \"logs/web-$(date +%Y%m%d-%H%M%S)-$$.log\"",
+    "dev": "mkdir -p logs && next dev 2>&1 | tee \"logs/web-$(date +%Y%m%d-%H%M%S)-$$.log\"",
     "postinstall": "prisma generate",
     "build": "prisma generate && next build --webpack",
     "start": "next start",

@@ -1,7 +1,5 @@
 import { headers } from "next/headers";
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { SessionView } from "@/components/session-view";
 import { getSessionOrg } from "@/lib/org";
 import { listRunnableSpecs, listUploads } from "@/lib/specs";
@@ -18,29 +16,24 @@ export default async function PortalSessionPage({
   const orgSlug = host.split(":")[0].split(".")[0];
   const org = await getSessionOrg();
   const { agent } = await params;
+  const portalOrgId = (await getOrgId(orgSlug)) ?? "";
 
   // The agent must exist, belong to this org's portal, and be runnable.
-  const agents = await listRunnableSpecs("agents", (await getOrgId(orgSlug)) ?? "");
+  const agents = await listRunnableSpecs("agents", portalOrgId);
   if (!agents.includes(agent)) notFound();
 
   const [personas, contexts] = await Promise.all([
-    listRunnableSpecs("personas", (await getOrgId(orgSlug)) ?? ""),
-    org ? listUploads(org.id) : Promise.resolve([]),
+    listRunnableSpecs("personas", portalOrgId),
+    org?.id === portalOrgId ? listUploads(org.id) : Promise.resolve([]),
   ]);
   if (personas.length === 0) notFound();
 
   return (
-    <main className="min-h-svh">
-      <div className="mx-auto w-full max-w-5xl p-4 sm:p-6">
-        <Link
-          href="/"
-          className="text-muted-foreground flex items-center gap-1 text-sm hover:underline"
-        >
-          <ArrowLeft className="size-4" /> Back to agents
-        </Link>
-      </div>
-      <SessionView personas={personas} agents={[agent]} contexts={contexts.map((c) => ({ id: c.id, name: c.name }))} />
-    </main>
+    <SessionView
+      personas={personas}
+      agents={[agent]}
+      contexts={contexts.map((c) => ({ id: c.id, name: c.name, size: c.size }))}
+    />
   );
 }
 

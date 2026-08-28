@@ -147,6 +147,97 @@
 }
 
 @layer components {
+    .session-header {
+        border-bottom: 1px solid color-mix(in oklab, var(--border) 55%, transparent);
+        background: color-mix(in oklab, var(--card) 85%, transparent);
+        backdrop-filter: blur(18px);
+    }
+
+    .session-tile {
+        border-radius: 1rem;
+        background: var(--card);
+        box-shadow:
+            0 0 0 1px var(--border),
+            0 20px 50px rgb(0 0 0 / 0.24),
+            inset 0 1px 0 rgb(255 255 255 / 0.03);
+    }
+
+    .session-footer {
+        border-top: 1px solid color-mix(in oklab, var(--border) 55%, transparent);
+        background: color-mix(in oklab, var(--card) 90%, transparent);
+        backdrop-filter: blur(18px);
+    }
+
+    .session-controls {
+        width: min(100%, 26rem);
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 9999px;
+        box-shadow: 0 12px 32px rgb(0 0 0 / 0.32);
+    }
+
+    .session-controls button {
+        min-height: 2.5rem;
+    }
+
+    .interview-stage {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr);
+    }
+
+    .interview-surface,
+    .interview-participants {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    .interview-participants {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: repeat(2, minmax(0, 1fr));
+    }
+
+    .interview-stage[data-has-surface="true"] {
+        grid-template-rows: minmax(0, 1fr) 7rem;
+    }
+
+    .interview-stage[data-has-surface="true"] .interview-surface {
+        grid-row: 1;
+    }
+
+    .interview-stage[data-has-surface="true"] .interview-participants {
+        grid-row: 2;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-rows: minmax(0, 1fr);
+    }
+
+    @media (min-width: 48rem) {
+        .interview-participants:not([data-compact="true"]) {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-rows: minmax(0, 1fr);
+        }
+    }
+
+    @media (min-width: 64rem) {
+        .interview-stage[data-has-surface="true"] {
+            grid-template-columns: minmax(0, 1fr) 14rem;
+            grid-template-rows: minmax(0, 1fr);
+        }
+
+        .interview-stage[data-has-surface="true"] .interview-surface {
+            grid-column: 1;
+            grid-row: 1;
+        }
+
+        .interview-stage[data-has-surface="true"] .interview-participants {
+            grid-column: 2;
+            grid-row: 1;
+            grid-template-columns: minmax(0, 1fr);
+            grid-template-rows: repeat(2, minmax(0, 1fr));
+        }
+    }
+
     .playground-rounded [data-slot="button"],
     .playground-rounded [data-slot="input"],
     .playground-rounded [data-slot="textarea"],

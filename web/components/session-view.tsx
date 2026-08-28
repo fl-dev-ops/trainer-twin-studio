@@ -3,19 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import {
-  Code2,
-  FileText,
-  Mic,
-  MicOff,
-  PenLine,
-  PhoneOff,
-  Play,
-  LoaderCircle,
-  Presentation,
-  Upload as UploadIcon,
-  X,
-} from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { LoaderCircle, Play, Upload as UploadIcon, X } from "lucide-react";
 import {
   PipecatClient,
   RTVIEvent,
@@ -24,7 +13,6 @@ import {
   type TransportState,
 } from "@pipecat-ai/client-js";
 import { SmallWebRTCTransport } from "@pipecat-ai/small-webrtc-transport";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -42,22 +30,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { AgentTile } from "@/components/session/agent-tile";
+import { CandidateTile } from "@/components/session/candidate-tile";
+import { SessionControlBar } from "@/components/session/session-control-bar";
+import { TranscriptPanel } from "@/components/session/transcript-panel";
 import { CodeEditor } from "@/components/session/code-editor";
 import { Whiteboard } from "@/components/session/whiteboard";
 import { PresentationViewer } from "@/components/session/presentation-viewer";
 import { PdfViewerSurface } from "@/components/session/pdf-viewer";
 import { PipecatWorkspaceProvider } from "@/lib/pipecat-workspaces";
 import type { AgentSurface } from "@/lib/agent-surface-events";
+import type { Entry } from "@/lib/session-transcript";
+import type { VisualizerState } from "@/components/session/visualizer-bar";
 import { cn } from "@/lib/utils";
 
-type Entry = { role: "user" | "trainer"; text: string };
 type Coverage = Record<string, string>;
+type EndReason = "completed" | "manual" | "disconnected";
 
 type Props = {
   personas: string[];
   agents: string[];
-  contexts: { id: string; name: string }[];
+  contexts: { id: string; name: string; size?: number }[];
 };
 
 const AGENT_URL = process.env.NEXT_PUBLIC_AGENT_URL ?? "http://localhost:7860";
@@ -78,34 +71,44 @@ export function SessionView({ personas, agents, contexts }: Props) {
   const [state_, setState_] = useState<TransportState>("disconnected");
   const [entries, setEntries] = useState<Entry[]>([]);
   const [coverage, setCoverage] = useState<Coverage>({});
-  const [phaseName, setPhaseName] = useState("");
   const [micOn, setMicOn] = useState(true);
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState("");
   const [audioBlocked, setAudioBlocked] = useState(false);
   const [interviewReady, setInterviewReady] = useState(false);
+  const [botSpeaking, setBotSpeaking] = useState(false);
+  const [localLevel, setLocalLevel] = useState(0);
+  const [remoteLevel, setRemoteLevel] = useState(0);
   const [surface, setSurface] = useState<AgentSurface>(null);
+  const [ended, setEnded] = useState(false);
+  const [endReason, setEndReason] = useState<EndReason>("disconnected");
+  const [transcriptOpen, setTranscriptOpen] = useState(true);
   const clientRef = useRef<PipecatClient | null>(null);
   const [rtviClient, setRtviClient] = useState<PipecatClient | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const transcriptRef = useRef<HTMLDivElement>(null);
   // Mirrors of entries/coverage for the finalize call on disconnect.
   const entriesRef = useRef<Entry[]>([]);
   const coverageRef = useRef<Coverage>({});
   const sessionRef = useRef<string | null>(null);
+  const disconnectReasonRef = useRef<EndReason | "error">("disconnected");
 
   const connected = state_ !== "disconnected" && state_ !== "error";
   const preparing = connected && (state_ !== "ready" || !interviewReady);
+  const reduceMotion = useReducedMotion();
+
+  const agentState: VisualizerState = !connected
+    ? "connecting"
+    : preparing
+      ? "thinking"
+      : botSpeaking
+        ? "speaking"
+        : "listening";
 
   useEffect(() => {
     if (!connected) return;
     const timer = setInterval(() => setElapsed((s) => s + 1), 1000);
     return () => clearInterval(timer);
   }, [connected]);
-
-  useEffect(() => {
-    transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight });
-  }, [entries]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -129,13 +132,19 @@ export function SessionView({ personas, agents, contexts }: Props) {
     setError("");
     setAudioBlocked(false);
     setInterviewReady(false);
+    setBotSpeaking(false);
+    setMicOn(true);
+    setLocalLevel(0);
+    setRemoteLevel(0);
+    setEnded(false);
+    disconnectReasonRef.current = "disconnected";
     setEntries([]);
     entriesRef.current = [];
     setCoverage({});
     coverageRef.current = {};
     sessionRef.current = null;
-    setPhaseName("");
     setElapsed(0);
+    setTranscriptOpen(true);
     const transport = new SmallWebRTCTransport({
       webrtcRequestParams: { endpoint: `${AGENT_URL}/api/offer` },
     });
@@ -149,8 +158,10 @@ export function SessionView({ personas, agents, contexts }: Props) {
           audioRef.current.srcObject = new MediaStream([track]);
           void playRemoteAudio();
         },
-        onError: (msg) =>
-          setError((msg.data as { message?: string } | undefined)?.message ?? "Connection error"),
+        onError: (msg) => {
+          disconnectReasonRef.current = "error";
+          setError((msg.data as { message?: string } | undefined)?.message ?? "Connection error");
+        },
         onUserTranscript: (data: TranscriptData) => {
           if (!data.final) return;
           setEntries((prev) => {
@@ -171,9 +182,21 @@ export function SessionView({ personas, agents, contexts }: Props) {
           });
         },
         onDisconnected: () => {
+          const reason = disconnectReasonRef.current;
           setInterviewReady(false);
+          setBotSpeaking(false);
           setSurface(null);
           setState_("disconnected");
+          setRtviClient(null);
+          clientRef.current = null;
+          if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.srcObject = null;
+          }
+          if (reason !== "error") {
+            setEndReason(reason);
+            setEnded(true);
+          }
           // Persist what the browser captured before the socket died.
           if (sessionRef.current) {
             void fetch("/api/sessions/finalize", {
@@ -194,11 +217,19 @@ export function SessionView({ personas, agents, contexts }: Props) {
     clientRef.current = client;
     setRtviClient(client);
 
+    client.on(RTVIEvent.BotStartedSpeaking, () => setBotSpeaking(true));
+    client.on(RTVIEvent.BotStoppedSpeaking, () => setBotSpeaking(false));
+    client.on(RTVIEvent.LocalAudioLevel, (level: number) =>
+      setLocalLevel(Math.min(1, Math.max(0, level))));
+    client.on(RTVIEvent.RemoteAudioLevel, (level: number) =>
+      setRemoteLevel(Math.min(1, Math.max(0, level))));
+
     client.on(RTVIEvent.ServerMessage, (msg: {
       data?: {
         type?: string;
         error?: string;
         sessionId?: string;
+        status?: string;
         state?: { coverage?: Coverage; phase_name?: string };
       };
     }) => {
@@ -206,12 +237,17 @@ export function SessionView({ personas, agents, contexts }: Props) {
       if (payload?.type === "session-started" && typeof payload.sessionId === "string") {
         sessionRef.current = payload.sessionId;
       } else if (payload?.type === "interview-state" && payload.state) {
+        disconnectReasonRef.current = "disconnected";
         setCoverage(payload.state.coverage ?? {});
         coverageRef.current = payload.state.coverage ?? {};
-        setPhaseName(payload.state.phase_name ?? "");
         setInterviewReady(true);
+      } else if (payload?.type === "session-ended" && payload.status === "completed") {
+        disconnectReasonRef.current = "completed";
+        void client.disconnect();
       } else if (payload?.type === "interview-error") {
-        setError(payload.error ?? "Failed to start interview");
+        disconnectReasonRef.current = "error";
+        setError(payload.error ?? "Failed to start session");
+        void client.disconnect();
       }
     });
 
@@ -223,13 +259,18 @@ export function SessionView({ personas, agents, contexts }: Props) {
         contextId: contextId || undefined,
       });
     } catch (e) {
+      disconnectReasonRef.current = "error";
       setError(e instanceof Error ? e.message : "Failed to connect");
+      await client.disconnect().catch(() => {});
+      clientRef.current = null;
+      setRtviClient(null);
       setState_("disconnected");
     }
   }
 
   async function disconnect() {
-    await clientRef.current?.disconnect();
+    disconnectReasonRef.current = "manual";
+    await clientRef.current?.disconnect().catch(() => {});
     clientRef.current = null;
     setRtviClient(null);
     if (audioRef.current) {
@@ -238,7 +279,10 @@ export function SessionView({ personas, agents, contexts }: Props) {
     }
     setAudioBlocked(false);
     setInterviewReady(false);
+    setBotSpeaking(false);
     setState_("disconnected");
+    setEndReason("manual");
+    setEnded(true);
   }
 
   function toggleMic() {
@@ -251,183 +295,86 @@ export function SessionView({ personas, agents, contexts }: Props) {
 
   const mm = String(Math.floor(elapsed / 60)).padStart(2, "0");
   const ss = String(elapsed % 60).padStart(2, "0");
+  const layoutTransition = reduceMotion
+    ? ({ duration: 0 } as const)
+    : ({ type: "spring", stiffness: 300, damping: 32, mass: 0.8 } as const);
 
-  function renderTranscript(className: string) {
+  if (ended) {
     return (
-      <section
-        aria-label="Session transcript"
-        ref={transcriptRef}
-        className={cn("overflow-y-auto rounded-lg border bg-muted p-4", className)}
-      >
-        {entries.length === 0 && (
-          <p className="text-sm text-muted-foreground">
-            {preparing
-              ? "Preparing the interview — compiling context and indexing knowledge…"
-              : "Transcript appears here once you start talking."}
-          </p>
-        )}
-        <div className="flex flex-col gap-3">
-          {entries.map((entry, i) => (
-            <div key={i} className={entry.role === "user" ? "flex justify-end" : "flex justify-start"}>
-              <div
-                className={cn(
-                  "max-w-[80%] rounded-xl px-3.5 py-2.5 text-sm",
-                  entry.role === "user"
-                    ? "bg-primary text-primary-foreground"
-                    : "border bg-background",
-                )}
-              >
-                <div className={cn(
-                  "mb-0.5 text-[11px] font-medium",
-                  entry.role === "user" ? "text-primary-foreground/70" : "text-muted-foreground",
-                )}>
-                  {entry.role === "user" ? "You" : "Trainer"}
-                </div>
-                {entry.text}
-              </div>
-            </div>
-          ))}
-          {preparing && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <LoaderCircle className="size-4 animate-spin" /> Preparing…
-            </div>
-          )}
-        </div>
-      </section>
+      <div className="dark flex h-dvh w-dvw items-center justify-center bg-background p-6 text-foreground">
+        <Card className="w-full max-w-md text-center">
+          <CardHeader>
+            <CardTitle>{endReason === "completed" ? "Session complete" : "Session ended"}</CardTitle>
+            <CardDescription>
+              {endReason === "disconnected"
+                ? "The connection closed unexpectedly. Any captured session data is being saved."
+                : "Your transcript and recording are being saved in Sessions."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex justify-center gap-2">
+            <Button variant="outline" nativeButton={false} render={<Link href="/sessions" />}>
+              View sessions
+            </Button>
+            <Button onClick={() => setEnded(false)}>
+              <Play data-icon="inline-start" /> New session
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
-  const coverageCard = (
-    <Card className="min-h-0 flex-1 overflow-y-auto">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm">Evidence coverage</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-wrap content-start gap-1.5">
-        {Object.keys(coverage).length === 0 && (
-          <p className="text-xs text-muted-foreground">Appears after the first answer.</p>
-        )}
-        {Object.entries(coverage).map(([key, status]) => (
-          <Badge
-            key={key}
-            variant="outline"
-            className={cn(
-              status === "sufficient" && "border-emerald-500/50 text-emerald-600 dark:text-emerald-400",
-              status === "partial" && "border-amber-500/50 text-amber-600 dark:text-amber-400",
-              status === "unresolved" && "border-red-500/50 text-red-600 dark:text-red-400",
-              !["sufficient", "partial", "unresolved"].includes(status) && "text-muted-foreground",
-            )}
-          >
-            {key}: {status}
-          </Badge>
-        ))}
-      </CardContent>
-    </Card>
-  );
-
   return (
-    <div className="grid h-dvh w-dvw grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden bg-background">
+    <div className="dark flex h-dvh w-dvw flex-col overflow-hidden bg-background text-foreground">
       <audio ref={audioRef} autoPlay playsInline className="hidden" />
+
       {/* header */}
-      <header className="flex items-center justify-between border-b px-4 py-2.5">
-        <div className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
+      <header className="session-header flex shrink-0 items-center justify-between px-4 py-3 sm:px-6">
+        <div className="flex min-w-0 items-center gap-3">
           <Link
             href="/"
-            aria-label="Back to TrainerTwin Studio"
-            className="mr-1 grid size-9 shrink-0 place-items-center rounded-md hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Back to studio"
+            className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent"
           >
-            <Image src="/trainertwin-mark.svg" alt="" width={23} height={17} priority />
+            <Image src="/trainertwin-mark.svg" alt="" width={20} height={15} priority />
           </Link>
-          <span aria-hidden="true" className="h-5 w-px shrink-0 bg-border" />
-          {connected ? (
-            <>
-              <time>{mm}:{ss}</time>
-              <span aria-hidden="true" className="text-border">|</span>
-              <span className="truncate max-w-48">
-                {persona} × {agent}
-              </span>
-              {phaseName && (
-                <>
-                  <span aria-hidden="true" className="text-border">|</span>
-                  <span className="truncate">{phaseName}</span>
-                </>
-              )}
-            </>
-          ) : (
-            <span>New session</span>
-          )}
+          <div className="min-w-0">
+            <h1 className="truncate text-sm font-semibold tracking-tight">
+              {connected ? `${persona} × ${agent}` : "New session"}
+            </h1>
+            <p className="hidden text-[11px] text-muted-foreground sm:block">Practice session</p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-3">
           {connected && (
-            <>
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Open code editor"
-                  onClick={() => setSurface({ key: `manual-code-${Date.now()}`, tool: "code", language: "javascript", starterCode: "" })}
-                >
-                  <Code2 />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Open whiteboard"
-                  onClick={() => setSurface({ key: `manual-canvas-${Date.now()}`, tool: "canvas" })}
-                >
-                  <PenLine />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Open PDF viewer"
-                  onClick={() => setSurface({ key: `manual-pdf-${Date.now()}`, tool: "pdf" })}
-                >
-                  <FileText />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Open presentation"
-                  onClick={() => setSurface({ key: `manual-presentation-${Date.now()}`, tool: "presentation" })}
-                >
-                  <Presentation />
-                </Button>
-                {surface && (
-                  <Button variant="ghost" size="icon-sm" aria-label="Close workspace" onClick={() => setSurface(null)}>
-                    <X />
-                  </Button>
-                )}
-                <span aria-hidden="true" className="mx-1 h-5 w-px bg-border" />
-              </div>
-              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span
-                  className={cn(
-                    "inline-block size-2 rounded-full",
-                    state_ === "ready" ? "bg-emerald-500" : "animate-pulse bg-amber-500",
-                  )}
-                />
-                {preparing ? "preparing" : "live"}
-              </span>
-            </>
+            <time className="font-mono text-xs text-muted-foreground">{mm}:{ss}</time>
           )}
-          <ThemeToggle />
-          {connected && (
-            <Button variant="destructive" size="sm" onClick={disconnect}>
-              <PhoneOff data-icon="inline-start" /> End
-            </Button>
-          )}
+          <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <span
+              className={cn(
+                "inline-block size-1.5 rounded-full",
+                state_ === "ready" && interviewReady ? "bg-emerald-500" : "animate-pulse bg-amber-500",
+              )}
+            />
+            {connected ? (preparing ? "Preparing…" : "Connected") : "Disconnected"}
+          </span>
         </div>
       </header>
 
       {/* main */}
-      <main className="min-h-0 overflow-hidden p-3">
+      <main className="relative flex min-h-0 flex-1 overflow-hidden p-3 sm:p-4">
+        {connected && error && (
+          <p role="alert" className="absolute inset-x-4 top-4 z-30 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {error}
+          </p>
+        )}
         {!connected ? (
-          <div className="mx-auto flex h-full max-w-xl items-center">
+          <div className="mx-auto flex h-full w-full max-w-xl items-center">
             <Card className="w-full">
               <CardHeader>
-                <CardTitle>Configure the interview</CardTitle>
+                <CardTitle>Configure the session</CardTitle>
                 <CardDescription>
-                  Pick a persona and agent. The agent server must be running ({AGENT_URL}).
+                  Pick a persona and scenario. The agent server must be running ({AGENT_URL}).
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
@@ -448,14 +395,14 @@ export function SessionView({ personas, agents, contexts }: Props) {
                   </Select>
                 </label>
                 <label className="flex flex-col gap-1.5 text-sm">
-                  <span className="font-medium">Agent</span>
+                  <span className="font-medium">Scenario</span>
                   <Select value={agent} onValueChange={(v) => v !== null && setAgent(v)}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Agent" />
+                      <SelectValue placeholder="Scenario" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
-                        <SelectLabel>Agents</SelectLabel>
+                        <SelectLabel>Scenarios</SelectLabel>
                         {agents.map((a) => (
                           <SelectItem key={a} value={a}>{a}</SelectItem>
                         ))}
@@ -466,7 +413,7 @@ export function SessionView({ personas, agents, contexts }: Props) {
                 <label className="flex flex-col gap-1.5 text-sm">
                   <span className="font-medium">Context document</span>
                   <div className="flex items-center gap-2">
-                    <Select value={contextId} onValueChange={(v) => v !== null && setContextId(v)}>
+                    <Select value={contextId || "none"} onValueChange={(v) => v !== null && setContextId(v === "none" ? "" : v)}>
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="None" />
                       </SelectTrigger>
@@ -492,20 +439,23 @@ export function SessionView({ personas, agents, contexts }: Props) {
                         e.currentTarget.value = "";
                         if (!file) return;
                         setUploadingContext(true);
-                        const form = new FormData();
-                        form.append("file", file);
-                        const res = await fetch("/api/upload", { method: "POST", body: form });
-                        const data = await res.json().catch(() => null);
-                        setUploadingContext(false);
-                        if (!res.ok) {
-                          setError(data?.error ?? "Upload failed");
-                          return;
+                        setError("");
+                        try {
+                          const form = new FormData();
+                          form.append("file", file);
+                          const res = await fetch("/api/upload", { method: "POST", body: form });
+                          const data = await res.json().catch(() => null);
+                          if (!res.ok) throw new Error(data?.error ?? "Upload failed");
+                          setContextList((prev) => [
+                            ...prev,
+                            { id: data.id, name: data.name, size: file.size },
+                          ]);
+                          setContextId(data.id);
+                        } catch (uploadError) {
+                          setError(uploadError instanceof Error ? uploadError.message : "Upload failed");
+                        } finally {
+                          setUploadingContext(false);
                         }
-                        setContextList((prev) => [
-                          ...prev,
-                          { id: data.id, name: data.name, size: file.size },
-                        ]);
-                        setContextId(data.id);
                       }}
                     />
                     <Button
@@ -526,69 +476,109 @@ export function SessionView({ personas, agents, contexts }: Props) {
                 {error && (
                   <p role="alert" className="text-sm text-destructive">{error}</p>
                 )}
-                <Button
-                  onClick={connect}
-                  disabled={!persona || !agent}
-                  className="w-full"
-                >
+                <Button onClick={connect} disabled={!persona || !agent} className="w-full">
                   <Play data-icon="inline-start" /> Start session
                 </Button>
               </CardContent>
             </Card>
           </div>
-        ) : rtviClient ? (
-          <PipecatWorkspaceProvider client={rtviClient} onSurface={setSurface}>
-            <div className="grid h-full min-h-0 grid-cols-1 gap-3 lg:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]">
-              {surface ? (
-                <section aria-label="Session workspace" className="min-h-0 overflow-hidden rounded-lg border">
-                  {surface.tool === "code" && (
-                    <CodeEditor key={surface.key} initialLanguage={surface.language} initialCode={surface.starterCode || undefined} />
-                  )}
-                  {surface.tool === "canvas" && <Whiteboard key={surface.key} />}
-                  {surface.tool === "pdf" && (
-                    <PdfViewerSurface key={surface.key} sourceUrl={surface.sourceUrl} />
-                  )}
-                  {surface.tool === "presentation" && (
-                    <PresentationViewer key={surface.key} sourceUrl={surface.sourceUrl} />
-                  )}
-                </section>
-              ) : (
-                renderTranscript("h-full")
-              )}
+        ) : (
+          rtviClient && (
+            <PipecatWorkspaceProvider client={rtviClient} onSurface={setSurface}>
+              <div className="flex min-h-0 w-full gap-4">
+                <div className="min-h-0 min-w-0 flex-1">
+                  <motion.div
+                    layout
+                    data-has-surface={surface !== null}
+                    transition={layoutTransition}
+                    className="interview-stage h-full min-h-0 gap-4"
+                  >
+                    <AnimatePresence initial={false} mode="wait">
+                      {surface && (
+                        <motion.section
+                          key={surface.key}
+                          aria-label="Session workspace"
+                          layout
+                          initial={reduceMotion ? false : { opacity: 0, scale: 0.97 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={reduceMotion ? undefined : { opacity: 0, scale: 0.98 }}
+                          transition={reduceMotion ? { duration: 0 } : { duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                          className="interview-surface flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border"
+                        >
+                          <div className="flex h-10 shrink-0 items-center justify-end border-b px-2">
+                            <Button variant="ghost" size="icon-sm" aria-label="Close workspace" onClick={() => setSurface(null)}>
+                              <X />
+                            </Button>
+                          </div>
+                          <div className="min-h-0 flex-1">
+                            {surface.tool === "code" && (
+                              <CodeEditor key={surface.key} initialLanguage={surface.language} initialCode={surface.starterCode || undefined} />
+                            )}
+                            {surface.tool === "canvas" && <Whiteboard key={surface.key} />}
+                            {surface.tool === "pdf" && (
+                              <PdfViewerSurface key={surface.key} sourceUrl={surface.sourceUrl} />
+                            )}
+                            {surface.tool === "presentation" && (
+                              <PresentationViewer key={surface.key} sourceUrl={surface.sourceUrl} />
+                            )}
+                          </div>
+                        </motion.section>
+                      )}
+                    </AnimatePresence>
 
-              <aside className="hidden min-h-0 flex-col gap-3 lg:flex">
-                {surface && renderTranscript("min-h-0 flex-1")}
-                {coverageCard}
-              </aside>
-            </div>
-          </PipecatWorkspaceProvider>
-        ) : null}
+                    <motion.div
+                      layout
+                      data-compact={surface !== null}
+                      transition={layoutTransition}
+                      className="interview-participants min-h-0 gap-4"
+                    >
+                      <motion.div layout transition={layoutTransition} className="min-h-0">
+                        <AgentTile persona={persona} state={agentState} level={remoteLevel} compact={surface !== null} />
+                      </motion.div>
+                      <motion.div layout transition={layoutTransition} className="min-h-0">
+                        <CandidateTile level={localLevel} micOn={micOn} compact={surface !== null} />
+                      </motion.div>
+                    </motion.div>
+                  </motion.div>
+                </div>
+
+                <AnimatePresence initial={false}>
+                  {transcriptOpen && (
+                    <motion.div
+                      initial={reduceMotion ? false : { opacity: 0, x: 24 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={reduceMotion ? undefined : { opacity: 0, x: 24 }}
+                      transition={reduceMotion ? { duration: 0 } : { duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+                      className="absolute inset-3 z-20 xl:static xl:inset-auto xl:z-auto xl:w-[22rem] xl:shrink-0"
+                    >
+                      <TranscriptPanel
+                        entries={entries}
+                        coverage={coverage}
+                        preparing={preparing}
+                        onClose={() => setTranscriptOpen(false)}
+                        className="h-full"
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </PipecatWorkspaceProvider>
+          )
+        )}
       </main>
 
       {/* footer controls */}
-      <footer className="relative flex items-center justify-center border-t px-4 py-3">
-        {connected ? (
-          <div className="flex items-center gap-2">
-            {audioBlocked && (
-              <Button variant="outline" onClick={playRemoteAudio}>
-                Enable audio
-              </Button>
-            )}
-            <Button
-              variant={micOn ? "secondary" : "destructive"}
-              size="icon"
-              onClick={toggleMic}
-              aria-label={micOn ? "Mute microphone" : "Unmute microphone"}
-            >
-              {micOn ? <Mic /> : <MicOff />}
-            </Button>
-            <Button variant="destructive" onClick={disconnect}>
-              <PhoneOff data-icon="inline-start" /> End session
-            </Button>
-          </div>
-        ) : (
-          <p className="text-xs text-muted-foreground">Configure and start a session above.</p>
-        )}
+      <footer className="session-footer flex shrink-0 items-center justify-center px-4 py-3">
+        <SessionControlBar
+          audioBlocked={audioBlocked}
+          isConnected={connected}
+          micOn={micOn}
+          transcriptOpen={transcriptOpen}
+          onEnableAudio={playRemoteAudio}
+          onMicToggle={toggleMic}
+          onTranscriptToggle={setTranscriptOpen}
+          onEnd={disconnect}
+        />
       </footer>
     </div>
   );

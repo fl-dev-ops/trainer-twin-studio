@@ -404,8 +404,8 @@ export async function listUploads(orgId: string) {
   });
 }
 
-export async function readUploadBytes(id: string) {
-  return db.contextDocument.findUnique({ where: { id } });
+export async function readUploadBytes(id: string, orgId: string) {
+  return db.contextDocument.findFirst({ where: { id, orgId } });
 }
 
 // ---- Compiled config for the voice agent ----
@@ -449,7 +449,7 @@ export async function getAgentConfig(personaSlug: string, agentSlug: string, con
 
   let context: { name: string; content: string } | null = null;
   if (contextId) {
-    const doc = await readUploadBytes(contextId);
+    const doc = await readUploadBytes(contextId, orgId);
     if (doc) {
       if (/\.pdf$/i.test(doc.name)) {
         // materialize for the agent; it extracts text with the POC loader
