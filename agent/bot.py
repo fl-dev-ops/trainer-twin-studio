@@ -21,6 +21,7 @@ from pipecat.audio.vad.vad_analyzer import VADParams
 from pipecat.frames.frames import (
     BotStartedSpeakingFrame,
     BotStoppedSpeakingFrame,
+    InputAudioRawFrame,
     InterruptionFrame,
     TTSSpeakFrame,
     TranscriptionFrame,
@@ -85,6 +86,17 @@ def setup_run_log() -> Path:
     return path
 
 
+class WebRTCAudioOutputFilter(FrameProcessor):
+    """Ensures user microphone audio (InputAudioRawFrame) is never looped back to the client WebRTC speaker."""
+
+    async def process_frame(self, frame, direction: FrameDirection):
+        await super().process_frame(frame, direction)
+        if isinstance(frame, InputAudioRawFrame):
+            # Dropped so user mic audio is not echoed back to the browser WebRTC audio track
+            return
+        await self.push_frame(frame, direction)
+
+
 class UtteranceCollector(FrameProcessor):
     """Buffers final STT text; when the user stops speaking, hands the utterance to a callback.
 
@@ -107,19 +119,18 @@ class UtteranceCollector(FrameProcessor):
 
         if isinstance(frame, TranscriptionFrame) and frame.text.strip():
             self._buffer.append(frame.text.strip())
-            if not self._speaking:
-                self._schedule_flush(0.4)
-
-        elif isinstance(frame, (UserStartedSpeakingFrame, VADUserStartedSpeakingFrame)):
-            self._speaking = True
-            # If the bot is speaking or a turn is in flight, interrupt immediately!
             if self._bot_speaking or (self._task and not self._task.done()):
-                logger.info("User interrupted bot — broadcasting InterruptionFrame")
+                logger.info("User speech confirmed during bot playback: '{}' — broadcasting InterruptionFrame", frame.text.strip())
                 if self._task and not self._task.done():
                     self._task.cancel()
                 await self.broadcast_interruption()
                 self._bot_speaking = False
 
+            if not self._speaking:
+                self._schedule_flush(0.4)
+
+        elif isinstance(frame, (UserStartedSpeakingFrame, VADUserStartedSpeakingFrame)):
+            self._speaking = True
             if self._flush_task and not self._flush_task.done():
                 self._flush_task.cancel()
             else:
@@ -175,6 +186,7 @@ async def make_stt():
         return AssemblyAISTTService(
             api_key=os.environ["ASSEMBLYAI_API_KEY"],
             vad_force_turn_endpoint=False,
+            audio_passthrough=True,
             settings=AssemblyAISTTService.Settings(
                 model="u3-rt-pro",
                 min_turn_silence=100,
@@ -187,6 +199,7 @@ async def make_stt():
         api_key=os.environ["SARVAM_API_KEY"],
         mode="transcribe",
         sample_rate=16000,
+        audio_passthrough=True,
         settings=SarvamSTTService.Settings(model="saaras:v3", language="en-IN"),
     )
 
@@ -314,6 +327,7 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         collector,
         tts,
         recorder,
+        WebRTCAudioOutputFilter(),
         transport.output(),
     ])
     worker = PipelineWorker(
