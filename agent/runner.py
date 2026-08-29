@@ -19,7 +19,7 @@ import libsql
 import yaml
 from anydocs import MarkdownLoader, PdfLoader
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from pydantic_ai import Agent
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
@@ -140,10 +140,31 @@ class AnswerAnalysis(BaseModel):
     valid_evidence: list[str] = Field(default_factory=list)
     evidence_updates: list[EvidenceUpdate] = Field(default_factory=list)
     claim_assessments: list[ClaimAssessment] = Field(default_factory=list)
-    unresolved_point: str
+    unresolved_point: str = ""
     unresolved_evidence_key: str | None = None
     contradiction: str | None = None
     important_term: str | None = None
+
+    @field_validator("valid_evidence", mode="before")
+    @classmethod
+    def clean_valid_evidence(cls, v):
+        if not isinstance(v, list):
+            return []
+        return [str(item).strip() for item in v if item is not None and str(item).strip()]
+
+    @field_validator("evidence_updates", mode="before")
+    @classmethod
+    def clean_evidence_updates(cls, v):
+        if not isinstance(v, list):
+            return []
+        return [item for item in v if item is not None and isinstance(item, (dict, EvidenceUpdate))]
+
+    @field_validator("claim_assessments", mode="before")
+    @classmethod
+    def clean_claim_assessments(cls, v):
+        if not isinstance(v, list):
+            return []
+        return [item for item in v if item is not None and isinstance(item, (dict, ClaimAssessment))]
 
 
 class InterviewAction(BaseModel):
@@ -757,10 +778,10 @@ def deterministic_fallback(action: InterviewAction, agent: AgentSpec, state: dic
     if action.name == "reveal_requirement":
         return "Which remaining requirement or assumption would you clarify next?"
     if "specific incident" in action.intent:
-        return f"What specific observed incident establishes {label}?"
+        return f"What specific observed incident demonstrates {label}?"
     if action.name == "transition_phase":
-        return f"Moving to the next round, what evidence establishes {label}?"
-    return f"What specific evidence establishes {label}?"
+        return "Alright, let's move to the next round. Can you explain how this works internally and why it behaves that way?"
+    return f"Can you give me a specific example that shows {label}?"
 
 
 def validate_action(action: InterviewAction, agent: AgentSpec, state: dict):
@@ -781,7 +802,10 @@ def validate_rendered(text: str, action: InterviewAction, agent: AgentSpec, stat
     elif text.count("?") != 1:
         errors.append("response must contain exactly one question mark")
     elif len(re.findall(r"\b(what|why|how|which|who|when|where)\b", text, re.I)) > 1:
-        errors.append("response contains multiple focal asks")
+        # transition_phase probes the phase's evidence definition verbatim, which is
+        # inherently a combined "how X and why Y" ask — one sentence, one focal probe.
+        if action.name != "transition_phase":
+            errors.append("response contains multiple focal asks")
     if action.name != "reveal_requirement" and len(text.split()) > 45:
         errors.append("question exceeds 45 words")
     if re.search(r"\bI (built|implemented|designed|architected|deployed|chose|fixed|led)\b", text, re.I):

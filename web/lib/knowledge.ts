@@ -229,6 +229,9 @@ export async function searchKnowledge(kbSlug: string, query: string, topK = 5): 
 
 /** Cross-encoder rerank via OpenRouter when configured; otherwise pass through RRF order. */
 async function rerank(query: string, hits: Hit[], topK: number): Promise<Hit[]> {
+  // ponytail: off by default — the rerank round trip costs seconds of voice silence;
+  // RRF ordering is fine for top-3 prompt context. Set RERANK_ENABLED=1 to re-enable.
+  if (process.env.RERANK_ENABLED !== "1") return hits.slice(0, topK);
   const key = process.env.OPENROUTER_API_KEY ?? process.env.LLM_API_KEY;
   if (!key || hits.length === 0) return hits.slice(0, topK);
   const model = process.env.RERANK_MODEL ?? "cohere/rerank-v3.5";

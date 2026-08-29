@@ -77,7 +77,7 @@ export default async function SessionDetailPage({
           <Card>
             <CardHeader>
               <CardTitle>Recording</CardTitle>
-              <CardDescription>Stereo mix — user left, trainer right.</CardDescription>
+              <CardDescription>Full session recording (mixed audio).</CardDescription>
             </CardHeader>
             <CardContent>
               {/* eslint-disable-next-line jsx-a11y/media-has-caption */}

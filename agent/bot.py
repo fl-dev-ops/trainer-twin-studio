@@ -17,16 +17,23 @@ import uuid
 from dotenv import load_dotenv
 from loguru import logger
 from pipecat.audio.vad.silero import SileroVADAnalyzer
+from pipecat.audio.vad.vad_analyzer import VADParams
 from pipecat.frames.frames import (
+    BotStartedSpeakingFrame,
+    BotStoppedSpeakingFrame,
+    InterruptionFrame,
     TTSSpeakFrame,
     TranscriptionFrame,
     UserStartedSpeakingFrame,
     UserStoppedSpeakingFrame,
+    VADUserStartedSpeakingFrame,
+    VADUserStoppedSpeakingFrame,
 )
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.worker import PipelineParams, PipelineWorker
-from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.processors.audio.audio_buffer_processor import AudioBufferProcessor
+from pipecat.processors.audio.vad_processor import VADProcessor
+from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.runner.types import RunnerArguments, SmallWebRTCRunnerArguments
 from pipecat.services.sarvam.stt import SarvamSTTService
 from pipecat.services.sarvam.tts import SarvamTTSService
@@ -79,31 +86,60 @@ def setup_run_log() -> Path:
 
 
 class UtteranceCollector(FrameProcessor):
-    """Buffers final STT text; when the user stops speaking, hands the utterance to a callback."""
+    """Buffers final STT text; when the user stops speaking, hands the utterance to a callback.
+
+    Handles interruptions: when the user starts speaking while the bot is speaking,
+    it broadcasts an InterruptionFrame to stop TTS audio immediately and cancels any
+    in-flight turn processing.
+    """
 
     def __init__(self, on_utterance):
         super().__init__()
         self._buffer: list[str] = []
         self._on_utterance = on_utterance
         self._speaking = False
+        self._bot_speaking = False
         self._flush_task: asyncio.Task | None = None
         self._task: asyncio.Task | None = None
 
     async def process_frame(self, frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
+
         if isinstance(frame, TranscriptionFrame) and frame.text.strip():
             self._buffer.append(frame.text.strip())
             if not self._speaking:
-                self._schedule_flush(0.1)
-        elif isinstance(frame, UserStartedSpeakingFrame):
+                self._schedule_flush(0.4)
+
+        elif isinstance(frame, (UserStartedSpeakingFrame, VADUserStartedSpeakingFrame)):
             self._speaking = True
-            self._buffer.clear()
-            if self._flush_task:
+            # If the bot is speaking or a turn is in flight, interrupt immediately!
+            if self._bot_speaking or (self._task and not self._task.done()):
+                logger.info("User interrupted bot — broadcasting InterruptionFrame")
+                if self._task and not self._task.done():
+                    self._task.cancel()
+                await self.broadcast_interruption()
+                self._bot_speaking = False
+
+            if self._flush_task and not self._flush_task.done():
                 self._flush_task.cancel()
-        elif isinstance(frame, UserStoppedSpeakingFrame):
+            else:
+                self._buffer.clear()
+
+        elif isinstance(frame, (UserStoppedSpeakingFrame, VADUserStoppedSpeakingFrame)):
             self._speaking = False
-            # Sarvam can emit its final transcript after VAD reports speech stopped.
-            self._schedule_flush(0.1 if self._buffer else 0.5)
+            self._schedule_flush(0.4)
+
+        elif isinstance(frame, BotStartedSpeakingFrame):
+            self._bot_speaking = True
+
+        elif isinstance(frame, BotStoppedSpeakingFrame):
+            self._bot_speaking = False
+
+        elif isinstance(frame, InterruptionFrame):
+            self._bot_speaking = False
+            if self._task and not self._task.done():
+                self._task.cancel()
+
         await self.push_frame(frame, direction)
 
     def _schedule_flush(self, delay: float):
@@ -122,6 +158,8 @@ class UtteranceCollector(FrameProcessor):
     async def _run(self, utterance: str):
         try:
             await self._on_utterance(utterance)
+        except asyncio.CancelledError:
+            logger.info("Turn processing cancelled by interruption")
         except Exception:
             logger.exception("Turn failed")
             await self.push_frame(TTSSpeakFrame("Sorry, something went wrong on my side. Could you repeat that?"))
@@ -233,8 +271,8 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     # Remote cloned-voice TTS (restore for production):
     # tts = WebTTSService(web_url=WEB_URL, voice=os.getenv("AGENT_DEFAULT_VOICE_ID", ""))
 
-    # Records the whole session: user on left, trainer on right (stereo WAV).
-    recorder = AudioBufferProcessor(sample_rate=16000, num_channels=2, auto_start_recording=True)
+    # Records the whole session: user and trainer mixed (mono WAV).
+    recorder = AudioBufferProcessor(sample_rate=16000, num_channels=1, auto_start_recording=True)
 
     @recorder.event_handler("on_audio_data")
     async def on_recording_data(recorder, audio, sample_rate, num_channels):
@@ -270,6 +308,7 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
 
     pipeline = Pipeline([
         transport.input(),
+        VADProcessor(vad_analyzer=SileroVADAnalyzer(params=VADParams(stop_secs=0.4, start_secs=0.15))),
         workspace,
         stt,
         collector,
@@ -353,7 +392,7 @@ async def bot(runner_args: RunnerArguments):
         params=TransportParams(
             audio_in_enabled=True,
             audio_out_enabled=True,
-            vad_analyzer=SileroVADAnalyzer(),
+            vad_analyzer=SileroVADAnalyzer(params=VADParams(stop_secs=0.4, start_secs=0.15)),
         ),
     )
     await run_bot(transport, runner_args)

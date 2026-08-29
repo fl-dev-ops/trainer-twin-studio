@@ -33,10 +33,15 @@ class UtteranceCollectorTest(unittest.IsolatedAsyncioTestCase):
             TranscriptionFrame("Hello", "user", "", finalized=True),
             FrameDirection.DOWNSTREAM,
         )
-        await asyncio.sleep(0.2)
+        # user pauses again mid-utterance, then resumes before the flush grace elapses
+        await collector.process_frame(UserStartedSpeakingFrame(), FrameDirection.DOWNSTREAM)
+        await collector.process_frame(TranscriptionFrame(" world", "user", "", finalized=True), FrameDirection.DOWNSTREAM)
+        await collector.process_frame(UserStoppedSpeakingFrame(), FrameDirection.DOWNSTREAM)
+        await asyncio.sleep(1.0)
 
         self.assertIn(frame, collector.forwarded)
-        self.assertEqual(utterances, ["Hello"])
+        # resume within the grace window must merge, not truncate
+        self.assertEqual(utterances, ["Hello world"])
 
 
 class WebTtsServiceTest(unittest.IsolatedAsyncioTestCase):
