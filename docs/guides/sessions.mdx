@@ -1,5 +1,5 @@
 ---
-title: "Work with sessions"
+title: "Sessions"
 description: "Read practice results and manage session lifecycle records."
 ---
 
@@ -7,14 +7,35 @@ A session is a learner's practice run against a published scenario. TrainerTwin 
 
 ## List sessions
 
-Filter by status, learner, scenario, or combine filters.
+Combine any of these filters:
+
+| Parameter | Description |
+| --- | --- |
+| `userId` | Sessions for one learner |
+| `scenario` | Sessions for one published scenario slug |
+| `status` | `active`, `completed`, or `abandoned` |
+| `from` | Started at or after this ISO 8601 timestamp |
+| `to` | Started at or before this ISO 8601 timestamp |
+| `limit` | Page size, `1`–`100` (default `50`) |
+| `offset` | Records to skip (default `0`) |
 
 ```bash
-curl "https://trainertwin.com/api/v1/sessions?status=completed&userId=user_123&scenario=react-mock-interview" \
+curl "https://trainertwin.com/api/v1/sessions?userId=user_123&status=completed&from=2026-09-01T00:00:00Z&to=2026-09-30T23:59:59Z&limit=25" \
   --header "x-api-key: $TRAINERTWIN_API_KEY"
 ```
 
-Supported statuses are `active`, `completed`, and `abandoned`.
+Results are sorted by start time, newest first. The response includes pagination metadata — page through by increasing `offset` until `offset >= total`:
+
+```json
+{
+  "sessions": [],
+  "pagination": {
+    "limit": 25,
+    "offset": 0,
+    "total": 42
+  }
+}
+```
 
 The list response contains session metadata without transcript or evidence payloads. Fetch one session for the full result.
 
@@ -32,21 +53,9 @@ The detail response includes:
 - Transcript data when available.
 - Evidence data when available.
 
-## End a session
-
-Use `completed` for a finished practice run or `abandoned` when it ended early.
-
-```bash
-curl "https://trainertwin.com/api/v1/sessions/session_123" \
-  --request PATCH \
-  --header "x-api-key: $TRAINERTWIN_API_KEY" \
-  --header "content-type: application/json" \
-  --data '{ "status": "completed" }'
-```
-
-TrainerTwin records the current time as `endedAt`.
-
 ## Delete a session
+
+Deletion is a soft delete: the session is hidden from list and detail results, but the record (including transcript and audio) is retained for auditing.
 
 ```bash
 curl "https://trainertwin.com/api/v1/sessions/session_123" \
@@ -54,4 +63,4 @@ curl "https://trainertwin.com/api/v1/sessions/session_123" \
   --header "x-api-key: $TRAINERTWIN_API_KEY"
 ```
 
-Deletion permanently removes the session record and its stored audio when present.
+A successful deletion returns `204 No Content`. Deleted sessions no longer appear in list or detail responses and cannot be restored through the API.

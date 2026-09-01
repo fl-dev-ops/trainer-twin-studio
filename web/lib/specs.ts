@@ -474,7 +474,7 @@ export async function getAgentConfig(personaSlug: string, agentSlug: string, con
 // ---- Interview sessions ----
 
 export async function listSessions(orgId: string) {
-  return db.interviewSession.findMany({ where: { orgId }, orderBy: { startedAt: "desc" }, take: 50 });
+  return db.interviewSession.findMany({ where: { orgId, deletedAt: null }, orderBy: { startedAt: "desc" }, take: 50 });
 }
 
 export async function createSessionRecord(input: {

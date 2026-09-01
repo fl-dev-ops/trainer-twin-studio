@@ -49,7 +49,7 @@ export default async function LearnerSessionsPage() {
   if (!org) notFound();
 
   const sessions = await db.interviewSession.findMany({
-    where: { orgId: org.id, userId: user.id },
+    where: { orgId: org.id, userId: user.id, deletedAt: null },
     orderBy: { startedAt: "desc" },
     take: 100,
   });

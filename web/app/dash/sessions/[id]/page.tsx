@@ -34,7 +34,7 @@ export default async function SessionDetailPage({
   if (!member) redirect("/auth/no-org");
 
   const row = await db.interviewSession.findFirst({
-    where: { id, orgId: member.organizationId },
+    where: { id, orgId: member.organizationId, deletedAt: null },
   });
   if (!row) notFound();
 

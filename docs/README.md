@@ -4,14 +4,18 @@ Mintlify documentation for TrainerTwin's organization API.
 
 ```bash
 cd docs
-bunx mint dev
+bun install
+bun dev
 ```
+
+The local site runs at `https://docs.trainertwin.localhost` through Portless.
 
 Validate before publishing:
 
 ```bash
-bunx mint validate
-bunx mint broken-links
+bun run validate
+bun run check:links
+bun run check:a11y
 ```
 
 Connect the `docs` directory to a Mintlify project for deployment.

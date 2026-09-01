@@ -1,0 +1,45 @@
+services:
+  # GPU model server — VoxCPM2 via vLLM-Omni, continuous batching.
+  # Cold start ~60s (model load + torch.compile + CUDA-graph warmup).
+  tts-backend:
+    image: vllm/vllm-omni:v0.28.0
+    command: >
+      vllm serve openbmb/VoxCPM2 --omni
+      --host 0.0.0.0 --port 8001
+      --deploy-config /srv/tts/deploy/voxcpm2.yaml
+    volumes:
+      - ./deploy:/srv/tts/deploy:ro
+      - hf-cache:/root/.cache/huggingface   # weights survive restarts (~5 GB)
+    environment:
+      - HF_TOKEN=${HF_TOKEN:-}              # only if the model needs auth
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5m
+      retries: 10
+
+  # Voice resolution + auth proxy — the OpenAI-compatible endpoint clients use.
+  tts-proxy:
+    image: devopsfl/tts-voxcpm2:0.2.0
+    build: .  # local development; production pulls the image above
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_BASE_URL=${APP_BASE_URL}
+      - APP_API_KEY=${APP_API_KEY}
+      - TTS_BACKEND_URL=http://tts-backend:8001
+      - TTS_API_KEY=${TTS_API_KEY:-}
+    depends_on:
+      tts-backend:
+        condition: service_started
+
+volumes:
+  hf-cache:

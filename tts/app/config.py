@@ -1,7 +1,8 @@
 """Environment configuration for the TTS service."""
 
 import os
-from pathlib import Path
+
+import os as _os
 
 
 def _int(name: str, default: int) -> int:
@@ -13,14 +14,15 @@ def _int(name: str, default: int) -> int:
 APP_BASE_URL = os.environ["APP_BASE_URL"].rstrip("/")     # e.g. http://localhost:3000
 APP_API_KEY = os.environ["APP_API_KEY"]                    # shared secret, sent as Bearer
 
-VOXCPM_MODEL_ID = os.environ.get("VOXCPM_MODEL_ID", "voxcpm2")  # advertised model name
-VOXCPM_MODEL = os.environ.get("VOXCPM_MODEL", "openbmb/VoxCPM2")
-LOAD_DENOISER = os.environ.get("LOAD_DENOISER", "false").lower() == "true"
+# vLLM-Omni backend serving VoxCPM2 (`vllm serve openbmb/VoxCPM2 --omni`).
+TTS_BACKEND_URL = _os.environ.get("TTS_BACKEND_URL", "http://localhost:8001").rstrip("/")
 
-CACHE_DIR = Path(os.environ.get("TTS_CACHE_DIR", "/tmp/trainertwin-tts-cache"))
+VOXCPM_MODEL_ID = os.environ.get("VOXCPM_MODEL_ID", "voxcpm2")   # advertised to clients
+VOXCPM_MODEL = os.environ.get("VOXCPM_MODEL", "openbmb/VoxCPM2")  # name the backend knows
 
-CFG_VALUE = float(os.environ.get("TTS_CFG_VALUE", "2.0"))
-INFERENCE_TIMESTEPS = _int("TTS_INFERENCE_TIMESTEPS", 10)
+# VoxCPM2 emits 48 kHz mono s16le PCM when streaming
+SAMPLE_RATE = _int("TTS_SAMPLE_RATE", 48000)
+
 MAX_TEXT_CHARS = _int("TTS_MAX_TEXT_CHARS", 5000)
 
 API_KEY = os.environ.get("TTS_API_KEY")  # bearer check on OUR endpoints; unset = open

@@ -42,7 +42,7 @@ export default async function LearnerSessionDetailPage({
   if (!org) notFound();
 
   const row = await db.interviewSession.findFirst({
-    where: { id, orgId: org.id, userId: user.id },
+    where: { id, orgId: org.id, userId: user.id, deletedAt: null },
   });
   if (!row) notFound();
 

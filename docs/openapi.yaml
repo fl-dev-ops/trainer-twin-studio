@@ -4,7 +4,8 @@ info:
   version: 1.0.0
   description: |
     Organization-scoped API for managing learners, practice sessions, and role-play assignments.
-    Scenario, persona, domain, knowledge, and voice configuration remains dashboard-only.
+    Scenarios can be listed via the API; scenario, persona, domain, knowledge, and voice
+    configuration remains dashboard-only.
 servers:
   - url: https://trainertwin.com/api/v1
     description: Production
@@ -17,9 +18,64 @@ tags:
     description: Invite and manage organization learners.
   - name: Assignments
     description: Assign existing published scenarios to learners.
+  - name: Scenarios
+    description: Read the organization's published role-play scenarios.
   - name: Sessions
     description: Read results and manage practice-session records.
 paths:
+  /scenarios:
+    get:
+      operationId: listScenarios
+      tags: [Scenarios]
+      summary: List scenarios
+      description: Lists the organization's role-play scenarios, most relevant first.
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Organization scenarios.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [scenarios, pagination]
+                properties:
+                  scenarios:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ScenarioSummary'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /scenarios/{scenarioSlug}:
+    parameters:
+      - $ref: '#/components/parameters/ScenarioSlug'
+    get:
+      operationId: getScenario
+      tags: [Scenarios]
+      summary: Get a scenario
+      description: Returns one scenario including its role-play configuration (`data`). The data payload is dashboard-controlled and may gain fields at any time.
+      responses:
+        '200':
+          description: Scenario details.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [scenario]
+                properties:
+                  scenario:
+                    $ref: '#/components/schemas/ScenarioDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
   /users:
     get:
       operationId: listUsers
@@ -344,6 +400,8 @@ paths:
             $ref: '#/components/schemas/SessionStatus'
         - $ref: '#/components/parameters/UserIdFilter'
         - $ref: '#/components/parameters/ScenarioFilter'
+        - $ref: '#/components/parameters/FromFilter'
+        - $ref: '#/components/parameters/ToFilter'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Offset'
       responses:
@@ -392,47 +450,11 @@ paths:
           $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/RateLimited'
-    patch:
-      operationId: updateSession
-      tags: [Sessions]
-      summary: End a session
-      description: Marks a session completed or abandoned and records the current time as endedAt.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [status]
-              properties:
-                status:
-                  type: string
-                  enum: [completed, abandoned]
-      responses:
-        '200':
-          description: Updated session summary.
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [session]
-                properties:
-                  session:
-                    $ref: '#/components/schemas/SessionLifecycle'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '429':
-          $ref: '#/components/responses/RateLimited'
     delete:
       operationId: deleteSession
       tags: [Sessions]
       summary: Delete a session
-      description: Permanently deletes the session record and stored audio when present.
+      description: Soft-deletes the session. It is hidden from list and detail responses; the record is retained for auditing.
       responses:
         '204':
           description: Session deleted.
@@ -448,7 +470,7 @@ components:
       type: apiKey
       in: header
       name: x-api-key
-      description: Organization API key generated in Dashboard → Profile → Developer API.
+      description: Organization API key generated in Dashboard → account menu → Developer API (dash.trainertwin.com/developer).
   parameters:
     Limit:
       name: limit
@@ -486,6 +508,30 @@ components:
       description: Filter by published scenario slug.
       schema:
         type: string
+    ScenarioSlug:
+      name: scenarioSlug
+      in: path
+      required: true
+      description: Scenario slug.
+      schema:
+        type: string
+      example: react-mock-interview
+    FromFilter:
+      name: from
+      in: query
+      description: Only include sessions started at or after this ISO 8601 timestamp.
+      schema:
+        type: string
+        format: date-time
+        example: '2026-09-01T00:00:00Z'
+    ToFilter:
+      name: to
+      in: query
+      description: Only include sessions started at or before this ISO 8601 timestamp.
+      schema:
+        type: string
+        format: date-time
+        example: '2026-09-30T23:59:59Z'
     AssignmentId:
       name: assignmentId
       in: path
@@ -621,6 +667,78 @@ components:
         visibility:
           type: string
           enum: [public, private]
+    ScenarioSummary:
+      type: object
+      required: [slug, name, version, visibility, domainSlug, order, assignmentCount, createdAt, updatedAt]
+      properties:
+        slug:
+          type: string
+          example: react-mock-interview
+        name:
+          type: string
+          example: React mock interview
+        version:
+          type: integer
+          example: 3
+        visibility:
+          type: string
+          enum: [public, private]
+        domainSlug:
+          type: string
+          example: frontend-engineering
+        order:
+          type: integer
+          description: Dashboard display order (ascending).
+          example: 0
+        assignmentCount:
+          type: integer
+          description: Learners currently assigned to this scenario.
+          example: 12
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ScenarioDetail:
+      type: object
+      required: [slug, name, version, visibility, domainSlug, order, assignmentCount, createdAt, updatedAt, data]
+      properties:
+        slug:
+          type: string
+          example: react-mock-interview
+        name:
+          type: string
+          example: React mock interview
+        version:
+          type: integer
+          example: 3
+        visibility:
+          type: string
+          enum: [public, private]
+        domainSlug:
+          type: string
+          example: frontend-engineering
+        order:
+          type: integer
+          description: Dashboard display order (ascending).
+          example: 0
+        assignmentCount:
+          type: integer
+          description: Learners currently assigned to this scenario.
+          example: 12
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        data:
+          type: object
+          additionalProperties: true
+          description: Role-play configuration from the dashboard (objective, difficulty, persona hints). Opaque display data, not a stable contract.
+          example:
+            objective: Assess the candidate's React fundamentals under interview pressure.
     AssignmentTarget:
       type: object
       additionalProperties: false
@@ -722,27 +840,6 @@ components:
           $ref: '#/components/schemas/SessionStatus'
         contextName:
           type: [string, 'null']
-        startedAt:
-          type: string
-          format: date-time
-        endedAt:
-          type: [string, 'null']
-          format: date-time
-    SessionLifecycle:
-      type: object
-      required: [id, agentSlug, status, startedAt]
-      properties:
-        id:
-          type: string
-          example: session_123
-        userId:
-          type: [string, 'null']
-          example: user_123
-        agentSlug:
-          type: string
-          example: react-mock-interview
-        status:
-          $ref: '#/components/schemas/SessionStatus'
         startedAt:
           type: string
           format: date-time

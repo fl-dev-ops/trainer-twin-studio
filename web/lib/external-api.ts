@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 
-export type ExternalApiResource = "users" | "sessions" | "assignments";
+export type ExternalApiResource = "users" | "sessions" | "assignments" | "scenarios";
 export type ExternalApiAction = "read" | "write";
 export type ExternalApiContext = {
   org: { id: string; slug: string; name: string };

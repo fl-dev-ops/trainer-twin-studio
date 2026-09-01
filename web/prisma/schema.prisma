@@ -198,6 +198,7 @@ model InterviewSession {
   s3AudioKey     String?
   startedAt      DateTime  @default(now())
   endedAt        DateTime?
+  deletedAt      DateTime?
   @@index([orgId])
 }
 

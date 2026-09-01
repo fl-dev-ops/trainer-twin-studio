@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   AudioLines,
   BookOpen,
+  BookOpenText,
   History,
   MessagesSquare,
   UserRound,
@@ -24,6 +25,12 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+
+const DOCS_URL =
+  process.env.NEXT_PUBLIC_DOCS_URL ??
+  (process.env.NODE_ENV === "development"
+    ? "https://docs.trainertwin.localhost"
+    : "https://docs.trainertwin.com");
 
 const NAV = [
   {
@@ -73,7 +80,7 @@ export function AppSidebar() {
           <SidebarGroup key={group.label}>
             <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
             <SidebarGroupContent>
-              <SidebarMenu>
+              <SidebarMenu className="gap-1">
                 {group.items.map((item) => {
                   const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
                   return (
@@ -91,7 +98,23 @@ export function AppSidebar() {
         ))}
       </SidebarContent>
       <SidebarFooter>
-        <SidebarMenu>
+        <SidebarMenu className="gap-1">
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              render={
+                <Link
+                  href={DOCS_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="Documentation (opens in a new tab)"
+                />
+              }
+              tooltip="Documentation"
+            >
+              <BookOpenText />
+              <span>Docs</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarAccountMenu profileHref="/profile" isActive={pathname === "/profile"} />
           </SidebarMenuItem>

@@ -1,49 +1,45 @@
-"""TrainerTwin TTS — VoxCPM2 voice cloning behind an OpenAI-compatible API.
+"""TrainerTwin TTS — thin proxy in front of vLLM-Omni serving VoxCPM2.
 
-Pipecat (or any OpenAI SDK client) points at this service:
+    client ── POST /v1/audio/speech {model, voice, input} ──► this service
+                  │ resolve voice-id → presigned URL + transcript (Next.js app)
+                  ▼
+             vLLM-Omni  vllm serve openbmb/VoxCPM2 --omni
+             (ref_audio=presigned URL, ref_text=transcript)
 
-    POST /v1/audio/speech
-    {"model": "voxcpm2", "voice": "<voice-id>", "input": "...", "stream": true}
-
-`voice` is an app-owned ID; references are resolved through the Next.js
-server (see voices.py) and never travel through clients.
+All heavy lifting (batching, model serving, 48 kHz streaming) happens in
+vLLM-Omni. This service only adds auth, voice identity, and request shaping.
 """
 
-import io
 import logging
-import threading
 from contextlib import asynccontextmanager
 
 import httpx
-import numpy as np
-import soundfile as sf
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
 from . import config
-from .voices import AppUnreachable, VoiceNotFound, VoiceStore
+from .voices import AppUnreachable, VoiceNotFound, VoiceStore, client
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-model = None
-store = None
-# ponytail: single GPU => serialize generation with one lock. Concurrent
-# sessions need batching or the nano-vLLM server; swap this out then.
-_generate_lock = threading.Lock()
+store: VoiceStore | None = None
+# one backend client for the process; this proxy is pure I/O, so a handful of
+# uvicorn workers is fine and each gets its own client
+backend: httpx.AsyncClient | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global model, store
-    logger.info("loading %s ...", config.VOXCPM_MODEL)
-    from voxcpm import VoxCPM
-
-    model = VoxCPM.from_pretrained(config.VOXCPM_MODEL, load_denoiser=config.LOAD_DENOISER)
-    store = VoiceStore(config.CACHE_DIR)
-    logger.info("ready")
+    global store, backend
+    app_http = client()
+    backend = httpx.AsyncClient(base_url=config.TTS_BACKEND_URL, timeout=None)
+    store = VoiceStore(app_http)
+    logger.info("proxy ready — backend %s, app %s", config.TTS_BACKEND_URL, config.APP_BASE_URL)
     yield
+    await app_http.aclose()
+    await backend.aclose()
 
 
 app = FastAPI(title="TrainerTwin TTS", lifespan=lifespan)
@@ -65,21 +61,31 @@ class SpeechRequest(BaseModel):
     stream: bool = False
 
 
-def _generate(ref, text: str):
-    """Yield float32 numpy chunks; shared by both response modes."""
-    with _generate_lock:
-        yield from model.generate_streaming(
-            text=text,
-            prompt_wav_path=str(ref.wav_path),
-            prompt_text=ref.transcript,
-            reference_wav_path=str(ref.wav_path),
-            cfg_value=config.CFG_VALUE,
-            inference_timesteps=config.INFERENCE_TIMESTEPS,
-        )
+def build_payload(req: SpeechRequest, meta: dict) -> dict:
+    """Shape the request for the vLLM-Omni speech API."""
+    # streaming on the backend is raw PCM only; mirror the old contract where
+    # stream:true implies pcm regardless of response_format
+    response_format = "pcm" if req.stream else req.response_format
+    payload = {
+        "model": config.VOXCPM_MODEL,
+        "input": req.input,
+        # voice field is required by the OpenAI schema; cloning is driven
+        # entirely by ref_audio (+ ref_text for in-context cloning quality)
+        "voice": "default",
+        "ref_audio": meta["audioUrl"],
+        "response_format": response_format,
+        "stream": req.stream,
+    }
+    if meta["transcript"]:
+        payload["ref_text"] = meta["transcript"]
+    if req.stream:
+        # raw PCM streaming on vLLM-Omni
+        payload["stream_format"] = "audio"
+    return payload
 
 
 @app.post("/v1/audio/speech")
-def speech(req: SpeechRequest, authorization: str | None = Header(None)):
+async def speech(req: SpeechRequest, authorization: str | None = Header(None)):
     _check_auth(authorization)
     if not req.input.strip():
         raise HTTPException(status_code=400, detail="input is empty")
@@ -89,30 +95,34 @@ def speech(req: SpeechRequest, authorization: str | None = Header(None)):
         raise HTTPException(status_code=400, detail="response_format must be wav or pcm")
 
     try:
-        ref = store.get(req.voice)
+        meta = await store.resolve(req.voice)
     except VoiceNotFound as cause:
         raise HTTPException(status_code=404, detail=str(cause)) from cause
     except AppUnreachable as cause:
         raise HTTPException(status_code=502, detail=str(cause)) from cause
 
-    sample_rate = model.tts_model.sample_rate
+    try:
+        upstream = await backend.send(
+            backend.build_request("POST", "/v1/audio/speech", json=build_payload(req, meta)),
+            stream=True,
+        )
+    except httpx.HTTPError as cause:
+        raise HTTPException(status_code=502, detail=f"TTS backend unreachable: {cause}") from cause
+    if upstream.status_code != 200:
+        body = (await upstream.aread()).decode(errors="replace")[:500]
+        await upstream.aclose()
+        raise HTTPException(status_code=502, detail=f"TTS backend error {upstream.status_code}: {body}")
 
     if req.stream:
-        def pcm_chunks():
-            for chunk in _generate(ref, req.input):
-                yield (np.clip(chunk, -1.0, 1.0) * 32767).astype("<i2").tobytes()
-
         return StreamingResponse(
-            pcm_chunks(),
+            upstream.aiter_bytes(),
             media_type="audio/pcm",
-            headers={"X-Sample-Rate": str(sample_rate)},
+            headers={"X-Sample-Rate": str(config.SAMPLE_RATE)},
+            background=upstream.aclose,  # close upstream when the response ends
         )
-
-    # Non-streaming: assemble a complete WAV file.
-    chunks = list(_generate(ref, req.input))
-    buffer = io.BytesIO()
-    sf.write(buffer, np.concatenate(chunks), sample_rate, format="WAV")
-    return Response(content=buffer.getvalue(), media_type="audio/wav")
+    content = await upstream.aread()
+    await upstream.aclose()
+    return Response(content=content, media_type=upstream.headers.get("content-type", "audio/wav"))
 
 
 @app.get("/v1/models")
@@ -132,5 +142,9 @@ async def voices(authorization: str | None = Header(None)):
 
 
 @app.get("/healthz")
-def healthz():
-    return {"ok": model is not None}
+async def healthz():
+    try:
+        r = await backend.get("/health")
+        return {"ok": r.status_code == 200, "backend": config.TTS_BACKEND_URL}
+    except httpx.HTTPError:
+        return JSONResponse({"ok": False, "backend": config.TTS_BACKEND_URL}, status_code=503)

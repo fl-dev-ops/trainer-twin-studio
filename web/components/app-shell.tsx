@@ -6,10 +6,15 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { Sparkles } from "lucide-react";
 import { AppSidebar } from "@/components/app-sidebar";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 
 const CopilotChat = dynamic(
-  () => import("@/components/copilot-chat").then((module) => module.CopilotChat),
+  () =>
+    import("@/components/copilot-chat").then((module) => module.CopilotChat),
   { ssr: false },
 );
 
@@ -47,7 +52,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               aria-controls="copilot-panel"
               onClick={() => setCopilotMounted(true)}
             >
-              <Sparkles data-icon="inline-start" /> Copilot
+              Copilot
             </SidebarTrigger>
           </header>
         )}

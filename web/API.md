@@ -21,10 +21,9 @@ Keys are scoped to one organization, expire after one year, and allow 120 reques
 
 Session records are created when learners begin role-play; integrations cannot create empty sessions.
 
-- `GET /api/v1/sessions?status=completed&userId=…&scenario=slug&limit=50&offset=0`
+- `GET /api/v1/sessions?status=completed&userId=…&scenario=slug&from=…&to=…&limit=50&offset=0`
 - `GET /api/v1/sessions/:id` — includes transcript and evidence
-- `PATCH /api/v1/sessions/:id` with `{ "status": "completed" }` or `{ "status": "abandoned" }`
-- `DELETE /api/v1/sessions/:id`
+- `DELETE /api/v1/sessions/:id` — soft delete; the record is retained but hidden from all responses
 
 ## Assignments
 

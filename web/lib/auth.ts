@@ -73,6 +73,7 @@ export const auth = betterAuth({
           users: ["read", "write"],
           sessions: ["read", "write"],
           assignments: ["read", "write"],
+          scenarios: ["read"],
         },
       },
     }),

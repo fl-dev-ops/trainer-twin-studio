@@ -35,7 +35,7 @@ export default async function DashboardPage() {
     db.agent.count(),
     db.domain.count(),
     db.knowledgeBase.count(),
-    db.interviewSession.findMany({ orderBy: { startedAt: "desc" }, take: 8 }),
+    db.interviewSession.findMany({ where: { deletedAt: null }, orderBy: { startedAt: "desc" }, take: 8 }),
   ]);
 
   const stats = [

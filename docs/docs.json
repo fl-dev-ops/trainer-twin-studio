@@ -26,7 +26,7 @@
           },
           {
             "group": "Guides",
-            "pages": ["guides/users", "guides/assignments", "guides/sessions"]
+            "pages": ["guides/users", "guides/scenarios", "guides/assignments", "guides/sessions"]
           },
           {
             "group": "Resources",

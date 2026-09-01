@@ -1,0 +1,70 @@
+---
+title: "Scenarios"
+description: "Read the organization's role-play scenarios and their configuration."
+---
+
+Scenarios are the role-plays learners can practice (called agents in the dashboard). The API is **read-only** — creating or editing scenario configuration stays in the dashboard.
+
+## List scenarios
+
+```bash
+curl "https://trainertwin.com/api/v1/scenarios?limit=50" \
+  --header "x-api-key: $TRAINERTWIN_API_KEY"
+```
+
+Returns `200`:
+
+```json
+{
+  "scenarios": [
+    {
+      "slug": "react-mock-interview",
+      "name": "React mock interview",
+      "version": 3,
+      "visibility": "public",
+      "domainSlug": "frontend-engineering",
+      "order": 0,
+      "assignmentCount": 12,
+      "createdAt": "2026-08-01T10:00:00.000Z",
+      "updatedAt": "2026-08-30T14:20:00.000Z"
+    }
+  ],
+  "pagination": { "limit": 50, "offset": 0, "total": 1 }
+}
+```
+
+`assignmentCount` is how many learners currently have the scenario assigned — the same number you get from `GET /assignments?scenario=<slug>` with `limit=0` semantics.
+
+## Get a scenario
+
+```bash
+curl "https://trainertwin.com/api/v1/scenarios/react-mock-interview" \
+  --header "x-api-key: $TRAINERTWIN_API_KEY"
+```
+
+Returns the scenario plus its role-play configuration in `data` (objective, difficulty, persona hints — whatever the dashboard configures):
+
+```json
+{
+  "scenario": {
+    "slug": "react-mock-interview",
+    "name": "React mock interview",
+    "version": 3,
+    "visibility": "public",
+    "domainSlug": "frontend-engineering",
+    "order": 0,
+    "assignmentCount": 12,
+    "createdAt": "2026-08-01T10:00:00.000Z",
+    "updatedAt": "2026-08-30T14:20:00.000Z",
+    "data": {
+      "objective": "Assess the candidate's React fundamentals under interview pressure."
+    }
+  }
+}
+```
+
+Unknown slugs return `404`.
+
+## Permissions
+
+Requires the `scenarios` **read** permission. Keys created after this endpoint existed get it automatically; pre-existing keys were granted it by migration. The scenario `data` payload is dashboard-controlled and may gain fields at any time — treat it as opaque display data, not a contract.
