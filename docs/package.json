@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "portless docs.trainertwin sh -c 'mint dev --no-open --port \"$PORT\"'",
     "dev:direct": "mint dev --no-open",
+    "build": "rm -rf dist export.zip && mint export --output export.zip && unzip -q export.zip -d dist && rm export.zip",
     "validate": "mint validate",
     "check:links": "mint broken-links",
     "check:a11y": "mint a11y"
