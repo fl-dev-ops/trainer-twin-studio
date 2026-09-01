@@ -1,0 +1,11 @@
+{
+  "outputDirectory": "dist",
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "trainer-twin-docs.vercel.app" }],
+      "destination": "https://docs.trainertwin.com/:path*",
+      "permanent": true
+    }
+  ]
+}
