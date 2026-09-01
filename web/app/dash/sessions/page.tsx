@@ -28,7 +28,7 @@ import {
 import { db } from "@/lib/db";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-
+import { dashLink } from "@/lib/tenant-link";
 export const dynamic = "force-dynamic";
 
 const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
@@ -70,7 +70,7 @@ export default async function SessionsPage() {
                 </EmptyMedia>
                 <EmptyTitle>No sessions yet</EmptyTitle>
                 <EmptyDescription>
-                  <Link href="/talk" className="underline">
+                  <Link href={dashLink("/talk", org.basePath)} className="underline">
                     Start a voice session
                   </Link>{" "}
                   to see it here.
@@ -97,7 +97,7 @@ export default async function SessionsPage() {
                       {session.startedAt.toISOString().replace("T", " ").slice(0, 16)}
                     </TableCell>
                     <TableCell className="font-medium">
-                      <Link href={`/sessions/${session.id}`} className="underline underline-offset-4">
+                      <Link href={dashLink(`/sessions/${session.id}`, org.basePath)} className="underline underline-offset-4">
                         {session.personaSlug}
                       </Link>{" "}
                       <Badge variant="outline">v{session.personaVersion}</Badge>

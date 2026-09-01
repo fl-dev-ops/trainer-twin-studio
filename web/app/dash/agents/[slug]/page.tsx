@@ -110,6 +110,7 @@ export default async function RolePlayPreviewPage({
       orgSlug={org.slug}
       availableUsers={availableUsers}
       trainerName="Vasanth"
+      basePath={org.basePath}
     />
   );
 }

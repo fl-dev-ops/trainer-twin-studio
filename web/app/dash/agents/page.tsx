@@ -8,5 +8,5 @@ export const dynamic = "force-dynamic";
 export default async function AgentsPage() {
   const org = await getSessionOrg();
   if (!org) redirect("/auth/no-org");
-  return <SpecResourceIndex type="agents" specs={await listSpecSummaries("agents", org.id)} />;
+  return <SpecResourceIndex type="agents" specs={await listSpecSummaries("agents", org.id)} basePath={org.basePath} />;
 }

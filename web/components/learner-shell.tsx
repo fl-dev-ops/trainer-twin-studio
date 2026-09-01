@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { History, Library } from "lucide-react";
+import { getClientBasePath, tenantLink } from "@/lib/tenant-link";
 import { OrgAccentProvider } from "@/components/org-accent-provider";
 import { SidebarAccountMenu } from "@/components/sidebar-account-menu";
 import {
@@ -26,19 +27,21 @@ const NAV = [
   { title: "Role Play Library", href: "/", icon: Library },
   { title: "Past Sessions", href: "/sessions", icon: History },
 ];
-
 export function LearnerShell({
   children,
   orgName,
   logo,
   accentColor,
+  basePath: serverBasePath,
 }: {
   children: ReactNode;
   orgName: string;
   logo: string | null;
   accentColor: string | null;
+  basePath?: string | null;
 }) {
   const pathname = usePathname();
+  const basePath = serverBasePath ?? getClientBasePath();
 
   if (pathname.startsWith("/session/"))
     return (
@@ -54,7 +57,7 @@ export function LearnerShell({
           <SidebarHeader>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton size="lg" render={<Link href="/" />}>
+                <SidebarMenuButton size="lg" render={<Link href={tenantLink("/", basePath)} />}>
                   <span className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-md">
                     {logo ? (
                       <Image
@@ -67,7 +70,7 @@ export function LearnerShell({
                         priority
                       />
                     ) : (
-                      <Image src="/trainertwin-mark.svg" alt="" width={25} height={19} priority />
+                      <Image src={tenantLink("/trainertwin-mark.svg", basePath)} alt="" width={25} height={19} priority />
                     )}
                   </span>
                   <span className="flex min-w-0 flex-col">
@@ -88,7 +91,7 @@ export function LearnerShell({
                     return (
                       <SidebarMenuItem key={item.href}>
                         <SidebarMenuButton
-                          render={<Link href={item.href} />}
+                          render={<Link href={tenantLink(item.href, basePath)} />}
                           isActive={active}
                           tooltip={item.title}
                         >

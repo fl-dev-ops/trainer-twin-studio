@@ -8,5 +8,5 @@ export const dynamic = "force-dynamic";
 export default async function KnowledgePage() {
   const org = await getSessionOrg();
   if (!org) redirect("/auth/no-org");
-  return <KnowledgeIndex bases={await listKnowledgeBases(org.id)} />;
+  return <KnowledgeIndex bases={await listKnowledgeBases(org.id)} basePath={org.basePath} />;
 }

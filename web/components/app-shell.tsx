@@ -16,7 +16,7 @@ const CopilotChat = dynamic(
 /** Dash pages that render without the studio chrome. */
 const FULLSCREEN = ["/voice/cloning", "/talk"];
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({ children, basePath }: { children: ReactNode; basePath?: string | null }) {
   const pathname = usePathname();
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [copilotMounted, setCopilotMounted] = useState(false);
@@ -36,7 +36,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       }}
       style={{ "--sidebar-width-right": "26rem" } as CSSProperties}
     >
-      <AppSidebar />
+      <AppSidebar basePath={basePath} />
       <SidebarInset className="max-h-svh! overflow-hidden">
         {!copilotPage && (
           <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3 sm:px-4">

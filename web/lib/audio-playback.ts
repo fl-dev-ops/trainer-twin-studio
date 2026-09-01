@@ -1,6 +1,4 @@
-"use client";
-
-/** Shared audio-context + streamed-PCM playback used by every TTS surface. */
+import { apiUrl } from "@/lib/api-url";
 
 let sharedContext: AudioContext | null = null;
 const liveSources = new Set<AudioBufferSourceNode>();
@@ -58,9 +56,8 @@ export async function playPcmStream(response: Response): Promise<void> {
     pending = merged.slice(offset);
   }
 }
-
 export async function generateSpeech(voice: string, input: string, stream = true): Promise<Response> {
-  return fetch("/api/tts/speech", {
+  return fetch(apiUrl("/api/tts/speech"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ voice, input, stream, response_format: stream ? "pcm" : "wav" }),

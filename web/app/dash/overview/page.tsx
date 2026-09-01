@@ -20,6 +20,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { db } from "@/lib/db";
+import { resolveSessionUser } from "@/lib/session-user";
+import { dashLink } from "@/lib/tenant-link";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +32,9 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
 };
 
 export default async function DashboardPage() {
+  const { org } = await resolveSessionUser();
+  const basePath = org?.basePath;
+
   const [personas, agents, domains, kbs, sessions] = await Promise.all([
     db.persona.count(),
     db.agent.count(),
@@ -39,12 +44,11 @@ export default async function DashboardPage() {
   ]);
 
   const stats = [
-    { label: "Personas", value: personas, href: "/personas", icon: UserRound },
-    { label: "Scenarios", value: agents, href: "/agents", icon: MessagesSquare },
-    { label: "Domains", value: domains, href: "/domains", icon: Shapes },
-    { label: "Knowledge bases", value: kbs, href: "/knowledge", icon: BookOpen },
+    { label: "Personas", value: personas, href: dashLink("/personas", basePath), icon: UserRound },
+    { label: "Scenarios", value: agents, href: dashLink("/agents", basePath), icon: MessagesSquare },
+    { label: "Domains", value: domains, href: dashLink("/domains", basePath), icon: Shapes },
+    { label: "Knowledge bases", value: kbs, href: dashLink("/knowledge", basePath), icon: BookOpen },
   ];
-
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
       <PageContainer size="narrow" className="flex flex-col gap-6">
@@ -52,7 +56,7 @@ export default async function DashboardPage() {
         title="Dashboard"
         description="Build and version personas and scenarios, then review their sessions."
         actions={
-          <Button nativeButton={false} render={<Link href="/talk" />}>
+          <Button nativeButton={false} render={<Link href={dashLink("/talk", basePath)} />}>
             Start session <ArrowUpRight data-icon="inline-end" />
           </Button>
         }
@@ -84,7 +88,7 @@ export default async function DashboardPage() {
           {sessions.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No sessions yet.{" "}
-              <Link href="/talk" className="underline">
+              <Link href={dashLink("/talk", basePath)} className="underline">
                 Run your first interview
               </Link>
               .

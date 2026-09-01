@@ -176,6 +176,17 @@ model ContextDocument {
   @@index([orgId])
 }
 
+// ---- Host-delegated authentication ----
+
+// BUILTIN: Better Auth sessions (subdomain deployments).
+// HOST_DELEGATED: a host app signs a short-lived Ed25519 assertion per request
+// (e.g. careerwithvasanth.com/interview proxied to this app); identity is JIT-
+// provisioned from the verified assertion, no local login exists for the org.
+enum AuthMode {
+  HOST_DELEGATED
+  BUILTIN
+}
+
 // ---- Interview sessions ----
 
 // Interview practice run by a signed-in user of an organization.
@@ -267,18 +278,25 @@ model Verification {
 }
 
 model Organization {
-  id          String       @id
-  name        String
-  slug        String
-  logo        String?
-  createdAt   DateTime
-  metadata    String?
-  members     Member[]
-  invitations Invitation[]
+  id             String       @id
+  name           String
+  slug           String
+  logo           String?
+  createdAt      DateTime
+  metadata       String?
+  authMode       AuthMode     @default(BUILTIN)
+  hostJwks       Json? // RFC 8037 JWKS: {"keys": [...]}
+  hostIssuer     String? // e.g. "urn:host:careerwithvasanth"
+  hostAudience   String? // e.g. "urn:guest:trainertwin"
+  hostRoleMapping Json? // {"admin": "admin", "user": "member"}
+  config          Json? // Generic JSON config: { "basePath": "/interview", ... }
+  members        Member[]
+  invitations    Invitation[]
 
   @@unique([slug])
   @@map("organization")
 }
+
 
 model Member {
   id             String       @id
@@ -287,12 +305,15 @@ model Member {
   userId         String
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   role           String       @default("member")
+  externalUserId String? // Exact host-app user id for HOST_DELEGATED orgs
   createdAt      DateTime
 
   @@index([organizationId])
   @@index([userId])
+  @@unique([organizationId, externalUserId])
   @@map("member")
 }
+
 
 model Invitation {
   id             String       @id

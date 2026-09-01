@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { authClient } from "@/lib/auth-client";
 import { BASE_DOMAIN } from "@/lib/base-domain";
+import { apiUrl } from "@/lib/api-url";
 
 function SectionLabel({ children }: { children: string }) {
   return (
@@ -38,7 +39,7 @@ export function FounderForm({ token, email }: { token: string; email: string }) 
       return;
     }
     const timer = setTimeout(async () => {
-      const res = await fetch(`/api/onboarding?slug=${encodeURIComponent(slug)}`, { cache: "no-store" });
+      const res = await fetch(apiUrl(`/api/onboarding?slug=${encodeURIComponent(slug)}`), { cache: "no-store" });
       setSlugState(await res.json());
     }, 300);
     return () => clearTimeout(timer);
@@ -69,7 +70,7 @@ export function FounderForm({ token, email }: { token: string; email: string }) 
       return;
     }
 
-    const res = await fetch("/api/onboarding", {
+    const res = await fetch(apiUrl("/api/onboarding"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token, orgName: String(form.get("orgName") ?? "").trim(), slug }),

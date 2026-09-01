@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
+import { tenantSlug } from "@/lib/base-domain";
 import { SessionView } from "@/components/session-view";
 import { getSessionOrg } from "@/lib/org";
 import { listRunnableSpecs, listUploads } from "@/lib/specs";
@@ -13,7 +14,7 @@ export default async function PortalSessionPage({
   params: Promise<{ agent: string }>;
 }) {
   const host = (await headers()).get("host") ?? "";
-  const orgSlug = host.split(":")[0].split(".")[0];
+  const orgSlug = tenantSlug(host, (await headers()).get("x-tenant-slug"));
   const org = await getSessionOrg();
   const { agent } = await params;
   const portalOrgId = (await getOrgId(orgSlug)) ?? "";

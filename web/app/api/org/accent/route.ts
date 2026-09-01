@@ -1,18 +1,17 @@
-import { headers } from "next/headers";
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { resolveSessionUser } from "@/lib/session-user";
 
 function isValidHex(v: string) {
   return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v);
 }
 
 export async function PATCH(request: Request) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { user } = await resolveSessionUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const member = await db.member.findFirst({
-    where: { userId: session.user.id },
+    where: { userId: user.id },
     select: { organizationId: true, role: true, organization: { select: { metadata: true } } },
   });
   if (!member) return NextResponse.json({ error: "No organization" }, { status: 403 });

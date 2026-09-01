@@ -3,6 +3,7 @@ import { Mic } from "lucide-react";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getSessionOrg } from "@/lib/org";
+import { dashLink } from "@/lib/tenant-link";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,7 @@ export default async function VoiceLibraryPage() {
           title="Voices"
           description="Use a built-in sample voice or clone your own for speech generation."
           actions={
-            <Button render={<Link href="/voice/cloning" />} nativeButton={false}>
+            <Button render={<Link href={dashLink("/voice/cloning", org.basePath)} />} nativeButton={false}>
               <Mic data-icon="inline-start" /> Clone voice
             </Button>
           }

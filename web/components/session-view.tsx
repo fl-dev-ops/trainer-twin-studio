@@ -43,7 +43,8 @@ import type { AgentSurface } from "@/lib/agent-surface-events";
 import type { Entry } from "@/lib/session-transcript";
 import type { VisualizerState } from "@/components/session/visualizer-bar";
 import { cn } from "@/lib/utils";
-
+import { apiUrl } from "@/lib/api-url";
+import { getClientBasePath, tenantLink } from "@/lib/tenant-link";
 type Coverage = Record<string, string>;
 type EndReason = "completed" | "manual" | "disconnected";
 
@@ -91,6 +92,7 @@ export function SessionView({ personas, agents, contexts }: Props) {
   const coverageRef = useRef<Coverage>({});
   const sessionRef = useRef<string | null>(null);
   const disconnectReasonRef = useRef<EndReason | "error">("disconnected");
+  const launchTokenRef = useRef<string | null>(null);
 
   const connected = state_ !== "disconnected" && state_ !== "error";
   const preparing = connected && (state_ !== "ready" || !interviewReady);
@@ -143,6 +145,25 @@ export function SessionView({ personas, agents, contexts }: Props) {
     setCoverage({});
     coverageRef.current = {};
     sessionRef.current = null;
+    // Mint a scoped launch token bound to this learner + org (plan §2.6); the
+    // agent verifies it before attaching the identity to the interview session.
+    try {
+      const startRes = await fetch(apiUrl("/api/sessions/start"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ personaSlug: persona, agentSlug: agent, contextId: contextId || undefined }),
+      });
+      const startData = await startRes.json().catch(() => null);
+      if (!startRes.ok || !startData?.token) {
+        throw new Error(startData?.error ?? "Could not start the session");
+      }
+      sessionRef.current = startData.session?.id ?? null;
+      launchTokenRef.current = startData.token;
+    } catch (startError) {
+      disconnectReasonRef.current = "error";
+      setError(startError instanceof Error ? startError.message : "Failed to start session");
+      return;
+    }
     setElapsed(0);
     setTranscriptOpen(true);
     const transport = new SmallWebRTCTransport({
@@ -199,7 +220,7 @@ export function SessionView({ personas, agents, contexts }: Props) {
           }
           // Persist what the browser captured before the socket died.
           if (sessionRef.current) {
-            void fetch("/api/sessions/finalize", {
+            void fetch(apiUrl("/api/sessions/finalize"), {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -257,6 +278,7 @@ export function SessionView({ personas, agents, contexts }: Props) {
         personaId: persona,
         agentId: agent,
         contextId: contextId || undefined,
+        launchToken: launchTokenRef.current ?? undefined,
       });
     } catch (e) {
       disconnectReasonRef.current = "error";
@@ -312,7 +334,7 @@ export function SessionView({ personas, agents, contexts }: Props) {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex justify-center gap-2">
-            <Button variant="outline" nativeButton={false} render={<Link href="/sessions" />}>
+            <Button variant="outline" nativeButton={false} render={<Link href={tenantLink("/sessions", getClientBasePath())} />}>
               View sessions
             </Button>
             <Button onClick={() => setEnded(false)}>
@@ -332,11 +354,10 @@ export function SessionView({ personas, agents, contexts }: Props) {
       <header className="session-header flex shrink-0 items-center justify-between px-4 py-3 sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <Link
-            href="/"
-            aria-label="Back to studio"
+            href={tenantLink("/", getClientBasePath())}
             className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent"
           >
-            <Image src="/trainertwin-mark.svg" alt="" width={20} height={15} priority />
+            <Image src={tenantLink("/trainertwin-mark.svg", getClientBasePath())} alt="" width={20} height={15} priority />
           </Link>
           <div className="min-w-0">
             <h1 className="truncate text-sm font-semibold tracking-tight">
@@ -443,7 +464,7 @@ export function SessionView({ personas, agents, contexts }: Props) {
                         try {
                           const form = new FormData();
                           form.append("file", file);
-                          const res = await fetch("/api/upload", { method: "POST", body: form });
+                          const res = await fetch(apiUrl("/api/upload"), { method: "POST", body: form });
                           const data = await res.json().catch(() => null);
                           if (!res.ok) throw new Error(data?.error ?? "Upload failed");
                           setContextList((prev) => [

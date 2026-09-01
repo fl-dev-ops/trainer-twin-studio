@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Mic } from "lucide-react";
+import { ArrowRight, Loader2, Mic, Play, Square, Volume2 } from "lucide-react";
 import { toast } from "sonner";
+import { apiUrl, dashLink, getClientBasePath } from "@/lib/api-url";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { generateSpeech } from "@/lib/audio-playback";
@@ -41,7 +42,7 @@ export function TtsPlayground({ voiceId }: { voiceId: string }) {
   }, [audioUrl]);
 
   useEffect(() => {
-    fetch("/api/tts/voices")
+    fetch(apiUrl("/api/tts/voices"))
       .then((r) => r.json())
       .then((d) => setVoices(d.voices ?? []))
       .catch(() => toast.error("Could not load voices"));
@@ -72,7 +73,7 @@ export function TtsPlayground({ voiceId }: { voiceId: string }) {
           <h1 className="text-sm font-semibold">
             {voices.find((voice) => voice.id === selected)?.name ?? "Text to Speech"}
           </h1>
-          <Button variant="ghost" size="xs" render={<Link href="/voice" />} nativeButton={false}>
+          <Button variant="ghost" size="xs" render={<Link href={dashLink("/voice", getClientBasePath())} />} nativeButton={false}>
             All voices
           </Button>
         </header>
@@ -111,7 +112,7 @@ export function TtsPlayground({ voiceId }: { voiceId: string }) {
           <div className="grid gap-1.5">
             <div className="flex items-center justify-between">
               <Label htmlFor="voice-picker">Voice</Label>
-              <Button variant="ghost" size="xs" render={<Link href="/voice/cloning" />} nativeButton={false}>
+              <Button variant="ghost" size="xs" render={<Link href={dashLink("/voice/cloning", getClientBasePath())} />} nativeButton={false}>
                 <Mic /> Clone new
               </Button>
             </div>

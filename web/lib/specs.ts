@@ -479,6 +479,7 @@ export async function listSessions(orgId: string) {
 
 export async function createSessionRecord(input: {
   orgId?: string | null;
+  userId?: string | null;
   personaSlug: string; personaVersion: number;
   agentSlug: string; agentVersion: number;
   domainSlug: string; domainVersion: number;

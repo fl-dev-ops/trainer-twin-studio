@@ -1,4 +1,3 @@
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
@@ -20,16 +19,16 @@ import {
 import { InviteUser } from "@/components/users/invite-user";
 import { CopyButton } from "@/components/users/copy-button";
 import { BASE_DOMAIN } from "@/lib/base-domain";
-import { auth } from "@/lib/auth";
+import { resolveSessionUser } from "@/lib/session-user";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 export default async function UsersPage() {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) redirect("/auth/sign-in");
+  const { user } = await resolveSessionUser();
+  if (!user) redirect("/auth/sign-in");
   const member = await db.member.findFirst({
-    where: { userId: session.user.id, role: { in: ["owner", "admin"] } },
+    where: { userId: user.id, role: { in: ["owner", "admin"] } },
     select: { organizationId: true },
   });
   if (!member) redirect("/auth/no-org");

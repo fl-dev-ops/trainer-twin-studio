@@ -1,19 +1,18 @@
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
 import { OrganizationForm, ProfileForm } from "@/components/profile-form";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { resolveSessionUser } from "@/lib/session-user";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProfilePage() {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) redirect("/auth/sign-in");
+  const { user } = await resolveSessionUser();
+  if (!user) redirect("/auth/sign-in");
 
   const membership = await db.member.findFirst({
-    where: { userId: session.user.id },
+    where: { userId: user.id },
     select: {
       organization: { select: { id: true, name: true, slug: true, logo: true, metadata: true } },
     },
@@ -39,7 +38,7 @@ export default async function ProfilePage() {
           description="Manage the details shown across your TrainerTwin workspace."
         />
 
-        <ProfileForm user={session.user} />
+        <ProfileForm user={user} />
 
         <section className="mt-8" aria-labelledby="organization-heading">
           <h2 id="organization-heading" className="text-lg font-semibold">

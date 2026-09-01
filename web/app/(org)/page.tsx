@@ -19,17 +19,19 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
+import { tenantSlug, signInUrl } from "@/lib/base-domain";
 import { db } from "@/lib/db";
-
+import { parseBasePath } from "@/lib/org";
+import { tenantLink } from "@/lib/tenant-link";
 export const dynamic = "force-dynamic";
 
 /** Learner portal: public role plays for the organization on this subdomain. */
 export default async function LearnerHome() {
   const host = (await headers()).get("host") ?? "";
-  const slug = host.split(":")[0].split(".")[0];
-  const org = await db.organization.findUnique({ where: { slug }, select: { id: true } });
-  if (!org) redirect("/auth/sign-in");
-
+  const slug = tenantSlug(host, (await headers()).get("x-tenant-slug"));
+  const org = await db.organization.findUnique({ where: { slug }, select: { id: true, config: true } });
+  if (!org) redirect(signInUrl(host));
+  const basePath = parseBasePath(org.config);
   const agents = await db.agent.findMany({
     where: { orgId: org.id, visibility: "public" },
     orderBy: [{ order: "asc" }, { name: "asc" }],
@@ -87,7 +89,7 @@ export default async function LearnerHome() {
                     <Button
                       size="sm"
                       nativeButton={false}
-                      render={<Link href={`/session/${agent.slug}`} />}
+                      render={<Link href={tenantLink(`/session/${agent.slug}`, basePath)} />}
                     >
                       Start practice <ArrowUpRight data-icon="inline-end" />
                     </Button>

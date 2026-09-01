@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { seedCopilot } from "@/lib/copilot-handoff";
 import { Button } from "@/components/ui/button";
+import { apiUrl, dashLink, getClientBasePath } from "@/lib/api-url";
 import {
   Card,
   CardContent,
@@ -118,6 +119,7 @@ function AgentSettingsPanel({
   knowledgeBase,
   knowledgeBases,
   disabled,
+  basePath,
   onChange,
 }: {
   name: string;
@@ -126,6 +128,7 @@ function AgentSettingsPanel({
   knowledgeBase: string;
   knowledgeBases: KnowledgeOption[];
   disabled?: boolean;
+  basePath?: string | null;
   onChange: (field: AgentField, value: string) => void;
 }) {
   return (
@@ -173,7 +176,7 @@ function AgentSettingsPanel({
             </SelectContent>
           </Select>
           <FieldDescription>
-            Only this collection is searched while the scenario runs. <Link href="/knowledge">Manage knowledge</Link>.
+            Only this collection is searched while the scenario runs. <Link href={dashLink("/knowledge", basePath)}>Manage knowledge</Link>.
           </FieldDescription>
         </Field>
         <Field>
@@ -201,7 +204,7 @@ function AgentSettingsPanel({
             </SelectContent>
           </Select>
           <FieldDescription>
-            Used whenever this scenario speaks. <Link href="/voice">Manage voices</Link>.
+            Used whenever this scenario speaks. <Link href={dashLink("/voice", basePath)}>Manage voices</Link>.
           </FieldDescription>
         </Field>
       </FieldGroup>
@@ -212,9 +215,11 @@ function AgentSettingsPanel({
 function SpecCard({
   type,
   spec,
+  basePath,
 }: {
   type: ResourceType;
   spec: Summary;
+  basePath?: string | null;
 }) {
   const iconRef = useRef<{ startAnimation: () => void; stopAnimation: () => void }>(null);
   const objective =
@@ -225,7 +230,7 @@ function SpecCard({
 
   return (
     <Link
-      href={`/${type}/${encodeURIComponent(spec.slug)}`}
+      href={dashLink(`/${type}/${encodeURIComponent(spec.slug)}`, basePath)}
       className="group block rounded-xl focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
       onMouseEnter={() => iconRef.current?.startAnimation()}
       onMouseLeave={() => iconRef.current?.stopAnimation()}
@@ -261,17 +266,25 @@ function SpecCard({
   );
 }
 
-export function SpecResourceIndex({ type, specs }: { type: ResourceType; specs: Summary[] }) {
+export function SpecResourceIndex({
+  type,
+  specs,
+  basePath: serverBasePath,
+}: {
+  type: ResourceType;
+  specs: Summary[];
+  basePath?: string | null;
+}) {
   const router = useRouter();
+  const basePath = serverBasePath ?? getClientBasePath();
   const copy = COPY[type];
-
   async function createNew() {
     const slug = prompt(`New ${copy.single} id (for example, my-${copy.single}):`);
     if (!slug || !/^[a-z0-9][a-z0-9._-]*$/i.test(slug)) return;
     const key = type === "personas" ? "persona" : "agent";
     let domainLine = "";
     if (type === "agents") {
-      const response = await fetch("/api/spec/domains");
+      const response = await fetch(apiUrl("/api/spec/domains"));
       const domains = ((await response.json()).specs ?? []) as string[];
       if (!domains.length) return toast.error("Create a domain before creating a scenario");
       const domain = prompt(`Domain id (${domains.join(", ")}):`, domains[0]);
@@ -279,7 +292,7 @@ export function SpecResourceIndex({ type, specs }: { type: ResourceType; specs: 
       domainLine = `  domain: ${domain}\n`;
     }
     const text = `schema_version: 1\nkind: ${key}\n\n${key}:\n  id: ${slug}\n  name: ${copy.single} ${slug}\n  version: 1\n${domainLine}`;
-    const response = await fetch(`/api/spec/${type}/${encodeURIComponent(slug)}`, {
+    const response = await fetch(apiUrl(`/api/spec/${type}/${encodeURIComponent(slug)}`), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
@@ -287,7 +300,7 @@ export function SpecResourceIndex({ type, specs }: { type: ResourceType; specs: 
     const result = await response.json();
     if (!response.ok) return toast.error(result.error ?? `Could not create ${copy.single}`);
     toast.success(`Created ${slug}`);
-    router.push(`/${type}/${encodeURIComponent(slug)}`);
+    router.push(dashLink(`/${type}/${encodeURIComponent(slug)}`, getClientBasePath()));
   }
 
   async function designWithCopilot() {
@@ -297,12 +310,12 @@ export function SpecResourceIndex({ type, specs }: { type: ResourceType; specs: 
     seedCopilot(
       `I want to design a new scenario from scratch. Here is what I want it to accomplish: ${goal.trim()}\n\nFollow the spec-builder method and walk me through it.`,
     );
-    router.push("/");
+    router.push(dashLink("/", getClientBasePath()));
   }
 
   function publishDraft(slug: string) {
     seedCopilot(`Publish the working draft "${slug}". Read and validate it first, then call publish_spec_draft so I can review and approve the publication.`);
-    router.push("/");
+    router.push(dashLink("/", getClientBasePath()));
   }
 
   return (
@@ -327,7 +340,7 @@ export function SpecResourceIndex({ type, specs }: { type: ResourceType; specs: 
 
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {specs.map((spec) => (
-            <SpecCard key={spec.slug} type={type} spec={spec} />
+            <SpecCard key={spec.slug} type={type} spec={spec} basePath={basePath} />
           ))}
           {!specs.length && (
             <div className="rounded-xl border px-5 py-16 text-center md:col-span-2 xl:col-span-3">
@@ -344,15 +357,18 @@ export function SpecResourceIndex({ type, specs }: { type: ResourceType; specs: 
 export function SpecDraftResourceViewer({
   slug,
   name,
-  text: initialText,
   revision,
+  text: initialText,
+  basePath: serverBasePath,
 }: {
   slug: string;
   name: string;
-  text: string;
   revision: number;
+  text: string;
+  basePath?: string | null;
 }) {
   const router = useRouter();
+  const basePath = serverBasePath ?? getClientBasePath();
   const [text, setText] = useState(initialText);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -361,7 +377,7 @@ export function SpecDraftResourceViewer({
   const settings = readAgentSettings(text, name);
 
   useEffect(() => {
-    fetch("/api/tts/voices")
+    fetch(apiUrl("/api/tts/voices"))
       .then((response) => response.json())
       .then((data) =>
         setVoices(
@@ -369,7 +385,7 @@ export function SpecDraftResourceViewer({
         ),
       )
       .catch(() => setVoices([]));
-    fetch("/api/knowledge")
+    fetch(apiUrl("/api/knowledge"))
       .then((response) => response.json())
       .then((data) => setKnowledgeBases(data.knowledgeBases ?? []))
       .catch(() => setKnowledgeBases([]));
@@ -385,7 +401,7 @@ export function SpecDraftResourceViewer({
   async function saveSettings() {
     if (!settings.name.trim()) return;
     setSaving(true);
-    const response = await fetch(`/api/spec-drafts/${encodeURIComponent(slug)}/agent`, {
+    const response = await fetch(apiUrl(`/api/spec-drafts/${encodeURIComponent(slug)}/agent`), {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -405,7 +421,7 @@ export function SpecDraftResourceViewer({
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <header className="flex shrink-0 items-center gap-3 border-b px-4 py-3 sm:px-6">
-        <Button variant="ghost" size="icon-sm" render={<Link href="/agents" />} nativeButton={false} aria-label="Back to scenarios">
+        <Button variant="ghost" size="icon-sm" render={<Link href={dashLink("/agents", getClientBasePath())} />} nativeButton={false} aria-label="Back to scenarios">
           <ArrowLeft />
         </Button>
         <div className="min-w-0 flex-1">
@@ -431,7 +447,7 @@ export function SpecDraftResourceViewer({
             size="sm"
             onClick={() => {
               seedCopilot(`Continue the working draft "${slug}". Read it with read_spec_draft before proposing the next change.`);
-              router.push("/");
+              router.push(dashLink("/", getClientBasePath()));
             }}
           >
             <Sparkles data-icon="inline-start" /> Continue in Copilot
@@ -450,7 +466,7 @@ export function SpecDraftResourceViewer({
             disabled={dirty || saving}
             onClick={() => {
               seedCopilot(`Publish the working draft "${slug}". Read and validate it first, then call publish_spec_draft so I can review and approve the publication.`);
-              router.push("/");
+              router.push(dashLink("/", getClientBasePath()));
             }}
           >
             <Sparkles data-icon="inline-start" /> Publish
@@ -484,6 +500,7 @@ export function SpecDraftResourceViewer({
           voices={voices}
           knowledgeBase={settings.knowledgeBase}
           knowledgeBases={knowledgeBases}
+          basePath={basePath}
           onChange={setAgentField}
         />
       </div>
@@ -499,6 +516,7 @@ export function SpecResourceEditor({
   currentVersion,
   shownVersion,
   versions,
+  basePath: serverBasePath,
 }: {
   type: ResourceType;
   slug: string;
@@ -507,24 +525,26 @@ export function SpecResourceEditor({
   currentVersion: number;
   shownVersion: number;
   versions: VersionInfo[];
+  basePath?: string | null;
 }) {
   const router = useRouter();
+  const basePath = serverBasePath ?? getClientBasePath();
+  const specPath = dashLink(`/${type}/${encodeURIComponent(slug)}`, basePath);
   const [text, setText] = useState(initialText);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const historical = shownVersion !== currentVersion;
-  const basePath = `/${type}/${encodeURIComponent(slug)}`;
   const copy = COPY[type];
 
   const [voices, setVoices] = useState<VoiceOption[]>([]);
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeOption[]>([]);
   useEffect(() => {
     if (type !== "agents") return;
-    fetch("/api/tts/voices")
+    fetch(apiUrl("/api/tts/voices"))
       .then((r) => r.json())
       .then((d) => setVoices((d.voices ?? []).filter((voice: { status?: string }) => voice.status === "ready")))
       .catch(() => setVoices([]));
-    fetch("/api/knowledge")
+    fetch(apiUrl("/api/knowledge"))
       .then((response) => response.json())
       .then((data) => setKnowledgeBases(data.knowledgeBases ?? []))
       .catch(() => setKnowledgeBases([]));
@@ -542,7 +562,7 @@ export function SpecResourceEditor({
   async function save(value = text) {
     if (saving) return;
     setSaving(true);
-    const response = await fetch(`/api/spec/${type}/${encodeURIComponent(slug)}`, {
+    const response = await fetch(apiUrl(`/api/spec/${type}/${encodeURIComponent(slug)}`), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text: value }),
@@ -552,16 +572,16 @@ export function SpecResourceEditor({
     if (!response.ok) return toast.error(result.error ?? "Save failed");
     setDirty(false);
     toast.success(result.versionBumped ? `Saved as v${result.version}` : "No changes to save");
-    router.replace(basePath);
+    router.replace(specPath);
     router.refresh();
   }
 
   async function remove() {
     if (!confirm(`Delete ${slug}? Its version history will also be removed.`)) return;
-    const response = await fetch(`/api/spec/${type}/${encodeURIComponent(slug)}`, { method: "DELETE" });
+    const response = await fetch(apiUrl(`/api/spec/${type}/${encodeURIComponent(slug)}`), { method: "DELETE" });
     if (!response.ok) return toast.error(`Could not delete ${slug}`);
     toast.success(`Deleted ${slug}`);
-    router.push(`/${type}`);
+    router.push(dashLink(`/${type}`, getClientBasePath()));
     router.refresh();
   }
 
@@ -573,7 +593,7 @@ export function SpecResourceEditor({
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <header className="flex shrink-0 items-center gap-3 border-b px-4 py-3 sm:px-6">
-        <Button variant="ghost" size="icon-sm" render={<Link href={type === "agents" ? basePath : `/${type}`} />} nativeButton={false} aria-label={`Back to ${type === "agents" ? "preview" : copy.title}`}>
+        <Button variant="ghost" size="icon-sm" render={<Link href={type === "agents" ? specPath : dashLink(`/${type}`, basePath)} />} nativeButton={false} aria-label={`Back to ${type === "agents" ? "preview" : copy.title}`}>
           <ArrowLeft />
         </Button>
         <div className="min-w-0 flex-1">
@@ -596,7 +616,7 @@ export function SpecResourceEditor({
                 seedCopilot(
                   `Please load my published scenario "${slug}" (its current version) with read_spec, then start a working draft so we can revise it together.`,
                 );
-                router.push("/");
+                router.push(dashLink("/", getClientBasePath()));
               }}
             >
               <Sparkles data-icon="inline-start" /> Refine with Copilot
@@ -610,11 +630,11 @@ export function SpecResourceEditor({
             <DropdownMenuLabel>Versions</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem onClick={() => router.push(basePath)}>
+              <DropdownMenuItem onClick={() => router.push(specPath)}>
                 <History /> Current · v{currentVersion}
               </DropdownMenuItem>
               {versions.map((version) => (
-                <DropdownMenuItem key={version.version} onClick={() => router.push(`${basePath}?version=${version.version}`)}>
+                <DropdownMenuItem key={version.version} onClick={() => router.push(`${specPath}?version=${version.version}`)}>
                   <RotateCcw /> {version.label}
                 </DropdownMenuItem>
               ))}
@@ -687,6 +707,7 @@ export function SpecResourceEditor({
             knowledgeBase={settings.knowledgeBase}
             knowledgeBases={knowledgeBases}
             disabled={historical}
+            basePath={basePath}
             onChange={setAgentField}
           />
         ) : null}

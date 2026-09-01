@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
+import { apiUrl } from "@/lib/api-url";
 
 export function ProfileForm({
   user,
@@ -120,7 +121,7 @@ export function OrganizationForm({
     }
 
     // ponytail PT-4: accent color saved in a separate fetch, not atomic with org.update(); unify when settings grow.
-    await fetch("/api/org/accent", {
+    await fetch(apiUrl("/api/org/accent"), {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ accentColor: accent }),

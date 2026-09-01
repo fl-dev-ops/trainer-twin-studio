@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { BASE_DOMAIN } from "@/lib/base-domain";
-import { auth } from "@/lib/auth";
+import { resolveSessionUser } from "@/lib/session-user";
 import { db } from "@/lib/db";
 import { validateOrgSlug } from "@/lib/slugs";
 
@@ -33,8 +33,8 @@ const bodySchema = z.object({
 
 /** Founder onboarding: exchange an invite token for a fresh organization. */
 export async function POST(request: Request) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) return NextResponse.json({ error: "Sign in first" }, { status: 401 });
+  const { user } = await resolveSessionUser();
+  if (!user) return NextResponse.json({ error: "Sign in first" }, { status: 401 });
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid request" }, { status: 400 });
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
           slug,
           createdAt: new Date(),
           members: {
-            create: { id: randomUUID(), userId: session.user.id, role: "owner", createdAt: new Date() },
+            create: { id: randomUUID(), userId: user.id, role: "owner", createdAt: new Date() },
           },
         },
       }),

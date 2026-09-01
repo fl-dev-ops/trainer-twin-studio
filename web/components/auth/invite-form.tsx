@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { authClient } from "@/lib/auth-client";
+import { apiUrl } from "@/lib/api-url";
 
 /** Learner sign-up via trainer invitation: account details + password, then join the org. */
 export function InviteForm({ invitationId, email }: { invitationId: string; email: string }) {
@@ -52,7 +53,7 @@ export function InviteForm({ invitationId, email }: { invitationId: string; emai
       setBusy(false);
       return;
     }
-    const res = await fetch("/api/me/home", { cache: "no-store" });
+    const res = await fetch(apiUrl("/api/me/home"), { cache: "no-store" });
     const { redirect } = await res.json();
     router.push(redirect);
   }

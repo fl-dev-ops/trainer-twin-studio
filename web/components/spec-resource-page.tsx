@@ -46,6 +46,7 @@ export async function SpecResourcePage({
       currentVersion={current.version}
       shownVersion={version}
       versions={await listVersions(type, slug, org.id)}
+      basePath={org.basePath}
     />
   );
 }

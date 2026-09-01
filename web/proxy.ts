@@ -29,10 +29,17 @@ export function proxy(request: NextRequest) {
   const hostHeader = request.headers.get("host") ?? "";
   const host = hostHeader.split(":")[0];
   const port = hostHeader.includes(":") ? `:${hostHeader.split(":")[1]}` : "";
+  const proto = process.env.NODE_ENV !== "production" && !request.nextUrl.protocol.startsWith("https") ? "http" : "https";
   const { pathname } = request.nextUrl;
   const hasSession = Boolean(getSessionCookie(request));
 
   if (isPassthrough(pathname)) return NextResponse.next();
+
+  // Host-delegated subpath hosting (e.g. careerwithvasanth.com/interview): the
+  // host app authenticates and proxies; its x-tenant-slug header marks these
+  // requests. Skip all subdomain routing — the apex-host fallback below would
+  // otherwise redirect every page to auth.<base>/sign-in.
+  if (request.headers.get("x-tenant-slug")) return NextResponse.next();
 
   const inFamily = host === BASE || host.endsWith(`.${BASE}`);
   const sub = inFamily && host !== BASE ? host.slice(0, host.length - BASE.length - 1) : null;
@@ -47,7 +54,7 @@ export function proxy(request: NextRequest) {
   // page — redirect to /sign-in so the URL is always shareable.
   if (sub === "auth") {
     if (pathname === "/") {
-      return NextResponse.redirect(`https://auth.${BASE}${port}/sign-in`);
+      return NextResponse.redirect(`${proto}://auth.${BASE}${port}/sign-in`);
     }
     if (pathname.startsWith("/auth")) return NextResponse.next();
     return rewrite(`/auth${pathname}`);
@@ -57,12 +64,12 @@ export function proxy(request: NextRequest) {
   if (sub === "dash") {
     if (!hasSession) {
       // Preserve the port so local proxies (portless :NNNN) keep working.
-      return NextResponse.redirect(`https://auth.${BASE}${port}/sign-in`);
+      return NextResponse.redirect(`${proto}://auth.${BASE}${port}/sign-in`);
     }
     if (pathname === "/") return rewrite("/dash");
     // Canonicalize: strip the redundant /dash prefix on this host.
     if (pathname.startsWith("/dash/")) {
-      return NextResponse.redirect(`https://dash.${BASE}${port}${pathname.slice(5)}`);
+      return NextResponse.redirect(`${proto}://dash.${BASE}${port}${pathname.slice(5)}`);
     }
     return rewrite(`/dash${pathname}`);
   }
@@ -73,8 +80,7 @@ export function proxy(request: NextRequest) {
 
   // Apex host: hand each area to its subdomain.
   const area = (name: string, rest: string) =>
-    NextResponse.redirect(`https://${name}.${BASE}${port}${rest}`);
-
+    NextResponse.redirect(`${proto}://${name}.${BASE}${port}${rest}`);
   if (pathname.startsWith("/auth/")) {
     return area("auth", pathname.slice("/auth".length) || "/sign-in");
   }

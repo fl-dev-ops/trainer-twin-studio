@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { FileUIPart, UserContent } from "ai";
 import yaml from "js-yaml";
+import { apiUrl, tenantLink, dashLink, getClientBasePath } from "@/lib/api-url";
 import type { EveDynamicToolPart, EveMessage } from "eve/react";
 import { useEveAgent } from "eve/react";
 import {
@@ -180,7 +181,7 @@ export function CopilotChat({
     if (!draftTarget.slug) return;
     const controller = new AbortController();
     fetch(
-      `/api/spec-drafts/current?slug=${encodeURIComponent(draftTarget.slug)}`,
+      apiUrl(`/api/spec-drafts/current?slug=${encodeURIComponent(draftTarget.slug)}`),
       { cache: "no-store", signal: controller.signal },
     )
       .then((response) =>
@@ -319,7 +320,7 @@ export function CopilotChat({
                 <SidebarTrigger
                   side="right"
                   nativeButton={false}
-                  render={<Link href="/" onClick={onExpand} />}
+                  render={<Link href={dashLink("/", getClientBasePath())} onClick={onExpand} />}
                   aria-label="Open Copilot full screen"
                 >
                   <Maximize2 />
@@ -368,7 +369,7 @@ export function CopilotChat({
               >
                 <div className="my-auto flex flex-col items-center text-center">
                   <Image
-                    src="/trainertwin-mark.svg"
+                    src={tenantLink("/trainertwin-mark.svg", getClientBasePath())}
                     alt=""
                     width={panel ? 30 : 37}
                     height={panel ? 23 : 28}

@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
+import { apiUrl } from "@/lib/api-url";
 
 export function SignInForm() {
   const router = useRouter();
@@ -38,7 +39,7 @@ export function SignInForm() {
       router.push(requested);
       return;
     }
-    const res = await fetch("/api/me/home", { cache: "no-store" });
+    const res = await fetch(apiUrl("/api/me/home"), { cache: "no-store" });
     const { redirect } = await res.json();
     router.push(redirect);
   }

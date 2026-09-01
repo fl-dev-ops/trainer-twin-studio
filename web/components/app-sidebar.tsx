@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { getClientBasePath, tenantLink, dashLink } from "@/lib/tenant-link";
 import {
   AudioLines,
   BookOpen,
@@ -48,17 +49,17 @@ const NAV = [
   },
 ];
 
-export function AppSidebar() {
+export function AppSidebar({ basePath: serverBasePath }: { basePath?: string | null }) {
   const pathname = usePathname();
-
+  const basePath = serverBasePath ?? getClientBasePath();
   return (
     <Sidebar variant="inset" collapsible="icon">
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" render={<Link href="/" />}>
+            <SidebarMenuButton size="lg" render={<Link href={dashLink("/", basePath)} />}>
               <span className="grid size-8 place-items-center">
-                <Image src="/trainertwin-mark.svg" alt="" width={25} height={19} priority />
+                <Image src={tenantLink("/trainertwin-mark.svg", basePath)} alt="" width={25} height={19} priority />
               </span>
               <span className="flex flex-col group-data-[collapsible=icon]:hidden">
                 <span className="font-semibold">TrainerTwin</span>
@@ -75,10 +76,11 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 {group.items.map((item) => {
-                  const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                  const targetHref = dashLink(item.href, basePath);
+                  const active = pathname === targetHref || pathname.startsWith(`${targetHref}/`);
                   return (
                     <SidebarMenuItem key={item.href}>
-                      <SidebarMenuButton render={<Link href={item.href} />} isActive={active} tooltip={item.title}>
+                      <SidebarMenuButton render={<Link href={targetHref} />} isActive={active} tooltip={item.title}>
                         <item.icon />
                         <span>{item.title}</span>
                       </SidebarMenuButton>
@@ -93,7 +95,7 @@ export function AppSidebar() {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarAccountMenu profileHref="/profile" isActive={pathname === "/profile"} />
+            <SidebarAccountMenu profileHref={dashLink("/profile", basePath)} isActive={pathname.endsWith("/profile")} />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>

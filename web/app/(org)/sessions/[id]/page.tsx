@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/empty";
 import { db } from "@/lib/db";
 import { resolveSessionUser } from "@/lib/session-user";
-
+import { tenantLink } from "@/lib/tenant-link";
 export const dynamic = "force-dynamic";
 
 type TranscriptEntry = { role: "user" | "trainer"; text: string };
@@ -69,9 +69,9 @@ export default async function LearnerSessionDetailPage({
         <Button
           variant="ghost"
           size="sm"
-          className="self-start"
+          className="-ml-2 mb-2"
           nativeButton={false}
-          render={<Link href="/sessions" />}
+          render={<Link href={tenantLink("/sessions", org.basePath)} />}
         >
           <ArrowLeft data-icon="inline-start" /> All sessions
         </Button>

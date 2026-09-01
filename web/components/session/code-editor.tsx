@@ -28,6 +28,7 @@ import {
   handleCodeRpc,
 } from "@/lib/code-rpc";
 import { useWorkspaceHandlers } from "@/lib/pipecat-workspaces";
+import { apiUrl } from "@/lib/api-url";
 
 const languages = {
   html,
@@ -235,7 +236,7 @@ export function CodeEditor({
     previewTarget.current = null;
 
     try {
-      const response = await fetch("/api/code/run", {
+      const response = await fetch(apiUrl("/api/code/run"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ language, code }),

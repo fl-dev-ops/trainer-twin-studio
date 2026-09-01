@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageContainer } from "@/components/page-container";
+import { apiUrl, dashLink, getClientBasePath } from "@/lib/api-url";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -77,7 +78,7 @@ function formatBytes(n: number) {
 async function createKb(): Promise<string | null> {
   const slug = prompt("New knowledge base id (e.g. product-management):");
   if (!slug || !/^[a-z0-9][a-z0-9._-]*$/i.test(slug)) return null;
-  const res = await fetch(`/api/knowledge/${slug}`, {
+  const res = await fetch(apiUrl(`/api/knowledge/${slug}`), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ slug }),
@@ -90,17 +91,23 @@ async function createKb(): Promise<string | null> {
   return slug;
 }
 
-export function KnowledgeIndex({ bases }: { bases: Kb[] }) {
+export function KnowledgeIndex({
+  bases,
+  basePath: serverBasePath,
+}: {
+  bases: Array<{ slug: string; name: string }>;
+  basePath?: string | null;
+}) {
   const router = useRouter();
+  const basePath = serverBasePath ?? getClientBasePath();
   const [creating, setCreating] = useState(false);
 
   async function handleCreate() {
     setCreating(true);
     const slug = await createKb();
     setCreating(false);
-    if (slug) router.push(`/knowledge/${encodeURIComponent(slug)}`);
+    if (slug) router.push(dashLink(`/knowledge/${encodeURIComponent(slug)}`, basePath));
   }
-
   return (
     <main className="min-h-0 flex-1 overflow-auto p-5 sm:p-8">
       <PageContainer size="narrow">
@@ -119,10 +126,10 @@ export function KnowledgeIndex({ bases }: { bases: Kb[] }) {
           {bases.map((kb) => (
             <Link
               key={kb.slug}
-              href={`/knowledge/${encodeURIComponent(kb.slug)}`}
+              href={dashLink(`/knowledge/${encodeURIComponent(kb.slug)}`, basePath)}
               className="group flex min-h-40 min-w-0 flex-col rounded-xl border bg-background p-5 transition-colors hover:border-foreground/20 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
             >
-              <span className="flex items-center gap-3">
+              <span className="flex items-center justify-between">
                 <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted">
                   <BookOpen className="size-4" aria-hidden="true" />
                 </span>
@@ -145,20 +152,25 @@ export function KnowledgeIndex({ bases }: { bases: Kb[] }) {
   );
 }
 
-export function KnowledgeDetail({ slug }: { slug: string }) {
+export function KnowledgeDetail({
+  slug,
+  basePath: serverBasePath,
+}: {
+  slug: string;
+  basePath?: string | null;
+}) {
   const router = useRouter();
+  const basePath = serverBasePath ?? getClientBasePath();
+  const [reload, setReload] = useState(0);
   const [docs, setDocs] = useState<Doc[] | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [digestingAll, setDigestingAll] = useState(false);
   const [digestingDoc, setDigestingDoc] = useState<string | null>(null);
+  const [digestingAll, setDigestingAll] = useState(false);
   const [preview, setPreview] = useState<{ doc: Doc; url: string } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
-
-  const [reload, setReload] = useState(0);
-
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/knowledge/${slug}`)
+    fetch(apiUrl(`/api/knowledge/${slug}`))
       .then((res) => res.json())
       .then((data) => { if (!cancelled) setDocs(data.files ?? []); })
       .catch(() => { if (!cancelled) setDocs([]); });
@@ -179,7 +191,7 @@ export function KnowledgeDetail({ slug }: { slug: string }) {
     for (const file of files) {
       const form = new FormData();
       form.append("file", file);
-      const res = await fetch(`/api/knowledge/${slug}`, { method: "POST", body: form });
+      const res = await fetch(apiUrl(`/api/knowledge/${slug}`), { method: "POST", body: form });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
         toast.error(`${file.name}: ${data?.error ?? "upload failed"}`);
@@ -202,7 +214,7 @@ export function KnowledgeDetail({ slug }: { slug: string }) {
     else setDigestingAll(true);
     try {
       const res = await fetch(
-        docSlug ? `/api/knowledge/${slug}/digest/${encodeURIComponent(docSlug)}` : `/api/knowledge/${slug}/digest`,
+        apiUrl(docSlug ? `/api/knowledge/${slug}/digest/${encodeURIComponent(docSlug)}` : `/api/knowledge/${slug}/digest`),
         { method: "POST" },
       );
       const data = await res.json().catch(() => null);
@@ -219,7 +231,7 @@ export function KnowledgeDetail({ slug }: { slug: string }) {
 
   async function removeDoc(doc: Doc) {
     if (!confirm(`Delete ${doc.slug} and its embeddings?`)) return;
-    const res = await fetch(`/api/knowledge/${slug}/${encodeURIComponent(doc.slug)}`, {
+    const res = await fetch(apiUrl(`/api/knowledge/${slug}/${encodeURIComponent(doc.slug)}`), {
       method: "DELETE",
     });
     if (res.ok) {
@@ -232,10 +244,10 @@ export function KnowledgeDetail({ slug }: { slug: string }) {
 
   async function deleteBase() {
     if (!confirm(`Delete "${slug}" with all documents and embeddings?`)) return;
-    const res = await fetch(`/api/knowledge/${slug}`, { method: "DELETE" });
+    const res = await fetch(apiUrl(`/api/knowledge/${slug}`), { method: "DELETE" });
     if (res.ok) {
       toast.success("Knowledge base deleted");
-      router.push("/knowledge");
+      router.push(dashLink("/knowledge", basePath));
       router.refresh();
     } else {
       toast.error("Delete failed");
@@ -243,7 +255,7 @@ export function KnowledgeDetail({ slug }: { slug: string }) {
   }
 
   async function openPreview(doc: Doc) {
-    const res = await fetch(`/api/knowledge/${slug}/preview/${encodeURIComponent(doc.slug)}`);
+    const res = await fetch(apiUrl(`/api/knowledge/${slug}/preview/${encodeURIComponent(doc.slug)}`));
     const data = await res.json().catch(() => null);
     if (!res.ok || !data?.url) {
       toast.error("Could not open preview");
@@ -255,7 +267,7 @@ export function KnowledgeDetail({ slug }: { slug: string }) {
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <header className="flex shrink-0 items-center gap-3 border-b px-4 py-3 sm:px-6">
-        <Button variant="ghost" size="icon-sm" render={<Link href="/knowledge" />} nativeButton={false} aria-label="Back to knowledge bases">
+        <Button variant="ghost" size="icon-sm" render={<Link href={dashLink("/knowledge", basePath)} />} nativeButton={false} aria-label="Back to knowledge bases">
           <ArrowLeft />
         </Button>
         <div className="min-w-0 flex-1">

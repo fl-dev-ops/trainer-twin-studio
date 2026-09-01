@@ -15,7 +15,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { dashLink, getClientBasePath } from "@/lib/api-url";
 import {
   Dialog,
   DialogClose,
@@ -36,6 +37,7 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { generateSpeech, playPcmStream, stopPlayback } from "@/lib/audio-playback";
+import { apiUrl } from "@/lib/api-url";
 
 export type VoiceRow = {
   id: string;
@@ -69,7 +71,7 @@ export function VoiceLibrary({ mine, samples }: { mine: VoiceRow[]; samples: Voi
               <p className="mt-4 max-w-xs text-sm leading-6 text-muted-foreground">
                 You haven&apos;t cloned a voice yet. Read a short passage aloud and it&apos;s ready for any scenario.
               </p>
-              <Button className="mt-5" size="sm" render={<Link href="/voice/cloning" />} nativeButton={false}>
+              <Button className="mt-5" size="sm" render={<Link href={dashLink("/voice/cloning", getClientBasePath())} />} nativeButton={false}>
                 <Mic data-icon="inline-start" /> Start cloning
               </Button>
             </div>
@@ -143,7 +145,7 @@ function VoiceRowItem({ voice, sample }: { voice: VoiceRow; sample: boolean }) {
 
     setSaving(true);
     try {
-      const response = await fetch(`/api/tts/voices/${voice.id}`, {
+      const response = await fetch(apiUrl(`/api/tts/voices/${voice.id}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: nextName }),
@@ -163,7 +165,7 @@ function VoiceRowItem({ voice, sample }: { voice: VoiceRow; sample: boolean }) {
   async function deleteVoice() {
     setDeleting(true);
     try {
-      const response = await fetch(`/api/tts/voices/${voice.id}`, { method: "DELETE" });
+      const response = await fetch(apiUrl(`/api/tts/voices/${voice.id}`), { method: "DELETE" });
       if (!response.ok) return toast.error((await response.json()).error ?? "Delete failed");
       stopPlayback();
       setDeleteOpen(false);
@@ -218,7 +220,7 @@ function VoiceRowItem({ voice, sample }: { voice: VoiceRow; sample: boolean }) {
         )}
       </button>
       <Link
-        href={`/voice/${voice.id}`}
+        href={dashLink(`/voice/${voice.id}`, getClientBasePath())}
         className="min-w-0 flex-1 rounded-lg focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
       >
         <span className="block truncate text-sm font-medium capitalize">{name}</span>
@@ -265,7 +267,7 @@ function VoiceRowItem({ voice, sample }: { voice: VoiceRow; sample: boolean }) {
                   <FieldDescription>Up to 60 characters.</FieldDescription>
                 </Field>
                 <DialogFooter>
-                  <DialogClose render={<Button variant="outline" disabled={saving} />}>Cancel</DialogClose>
+                  <DialogClose className={buttonVariants({ variant: "outline" })} disabled={saving}>Cancel</DialogClose>
                   <Button type="submit" disabled={saving || !draft.trim()}>
                     {saving && <LoaderCircle data-icon="inline-start" className="animate-spin" />}
                     Save name

@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/table";
 import { db } from "@/lib/db";
 import { resolveSessionUser } from "@/lib/session-user";
-
+import { tenantLink } from "@/lib/tenant-link";
 export const dynamic = "force-dynamic";
 
 const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
@@ -79,7 +79,7 @@ export default async function LearnerSessionsPage() {
                     Complete a role play and it will appear here.
                   </EmptyDescription>
                 </EmptyHeader>
-                <Button nativeButton={false} render={<Link href="/" />}>
+                <Button nativeButton={false} render={<Link href={tenantLink("/", org.basePath)} />}>
                   Browse role plays <ArrowUpRight data-icon="inline-end" />
                 </Button>
               </Empty>
@@ -116,7 +116,7 @@ export default async function LearnerSessionsPage() {
                           variant="ghost"
                           size="sm"
                           nativeButton={false}
-                          render={<Link href={`/sessions/${session.id}`} />}
+                          render={<Link href={tenantLink(`/sessions/${session.id}`, org.basePath)} />}
                         >
                           Preview <ArrowUpRight data-icon="inline-end" />
                         </Button>

@@ -20,7 +20,8 @@ import {
 import { toast } from "sonner";
 import { PageContainer } from "@/components/page-container";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   Card,
   CardContent,
@@ -40,6 +41,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { apiUrl, dashLink, getClientBasePath } from "@/lib/api-url";
 
 export type OrganizationUser = {
   id: string;
@@ -98,11 +100,13 @@ function AssignUsersDialog({
   slug,
   availableUsers,
   assignedUserIds,
+  basePath,
   onSave,
 }: {
   slug: string;
   availableUsers: OrganizationUser[];
   assignedUserIds: string[];
+  basePath?: string | null;
   onSave: (ids: string[]) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -133,9 +137,7 @@ function AssignUsersDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
-        render={
-          <Button variant="outline" size="sm" className="w-full text-xs" />
-        }
+        className={cn(buttonVariants({ variant: "outline", size: "sm" }), "w-full text-xs cursor-pointer")}
       >
         <UserPlus data-icon="inline-start" /> Assign Users
       </DialogTrigger>
@@ -165,7 +167,7 @@ function AssignUsersDialog({
                 <p className="text-[11px]">
                   Invite users from the{" "}
                   <Link
-                    href="/users"
+                    href={dashLink("/users", basePath)}
                     className="text-foreground underline underline-offset-2 hover:text-primary"
                   >
                     Users page
@@ -204,7 +206,7 @@ function AssignUsersDialog({
         </div>
 
         <DialogFooter className="pt-3">
-          <DialogClose render={<Button variant="outline" size="sm" />}>
+          <DialogClose className={cn(buttonVariants({ variant: "outline", size: "sm" }), "cursor-pointer")}>
             Cancel
           </DialogClose>
           <Button size="sm" onClick={handleSave}>
@@ -221,17 +223,18 @@ export function RolePlayPreview({
   orgSlug,
   availableUsers = [],
   trainerName = "Vasanth",
+  basePath: serverBasePath,
 }: {
   rolePlay: RolePlayData;
   orgSlug?: string;
   availableUsers?: OrganizationUser[];
   trainerName?: string;
+  basePath?: string | null;
 }) {
+  const basePath = serverBasePath ?? getClientBasePath();
   const stages = rolePlay.stages ?? [];
   const storageKey = `assigned_users_${rolePlay.slug}`;
-
   const [assignedIds, setAssignedIds] = useState<string[]>([]);
-
   useEffect(() => {
     try {
       const stored = localStorage.getItem(storageKey);
@@ -254,7 +257,7 @@ export function RolePlayPreview({
 
     if (newlyAdded.length > 0) {
       try {
-        await fetch("/api/role-play/notify-assignment", {
+        await fetch(apiUrl("/api/role-play/notify-assignment"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -290,7 +293,7 @@ export function RolePlayPreview({
               variant="ghost"
               size="icon-sm"
               nativeButton={false}
-              render={<Link href="/agents" />}
+              render={<Link href={dashLink("/agents", basePath)} />}
               aria-label="Back to scenarios"
             >
               <ArrowLeft />
@@ -316,13 +319,13 @@ export function RolePlayPreview({
             <Button
               variant="outline"
               nativeButton={false}
-              render={<Link href={`/agents/${encodeURIComponent(rolePlay.slug)}/edit`} />}
+              render={<Link href={dashLink(`/agents/${encodeURIComponent(rolePlay.slug)}/edit`, basePath)} />}
             >
               <Pencil data-icon="inline-start" /> Edit Spec
             </Button>
             <Button
               nativeButton={false}
-              render={<Link href={`/talk?agent=${encodeURIComponent(rolePlay.slug)}`} />}
+              render={<Link href={dashLink(`/talk?agent=${encodeURIComponent(rolePlay.slug)}`, basePath)} />}
             >
               <Play data-icon="inline-start" /> Test Scenario
             </Button>
@@ -535,6 +538,7 @@ export function RolePlayPreview({
                   slug={rolePlay.slug}
                   availableUsers={usersList}
                   assignedUserIds={assignedIds}
+                  basePath={basePath}
                   onSave={saveAssignments}
                 />
               </div>

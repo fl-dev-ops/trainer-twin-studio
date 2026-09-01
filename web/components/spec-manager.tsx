@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
 import type { SpecType } from "@/lib/specs";
+import { apiUrl } from "@/lib/api-url";
 
 type VersionInfo = { version: number; createdAt: string; label: string };
 
@@ -50,7 +51,7 @@ export function SpecManager({ type }: { type: SpecType }) {
   const [saving, setSaving] = useState(false);
 
   const loadList = useCallback(async () => {
-    const res = await fetch(`/api/spec/${type}`);
+    const res = await fetch(apiUrl(`/api/spec/${type}`));
     const data = await res.json();
     setSpecs(data.specs ?? []);
     return (data.specs ?? []) as string[];
@@ -62,7 +63,7 @@ export function SpecManager({ type }: { type: SpecType }) {
   }, [loadList]);
 
   async function open(id: string) {
-    const res = await fetch(`/api/spec/${type}/${id}`);
+    const res = await fetch(apiUrl(`/api/spec/${type}/${id}`));
     if (!res.ok) return;
     const data = await res.json();
     setSelected(id);
@@ -75,7 +76,7 @@ export function SpecManager({ type }: { type: SpecType }) {
   async function save() {
     if (!selected || saving) return;
     setSaving(true);
-    const res = await fetch(`/api/spec/${type}/${selected}`, {
+    const res = await fetch(apiUrl(`/api/spec/${type}/${selected}`), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
@@ -104,7 +105,7 @@ export function SpecManager({ type }: { type: SpecType }) {
     const key = type === "personas" ? "persona" : type === "agents" ? "agent" : "domain";
     let domainLine = "";
     if (type === "agents") {
-      const response = await fetch("/api/spec/domains");
+      const response = await fetch(apiUrl("/api/spec/domains"));
       const domains = ((await response.json()).specs ?? []) as string[];
       if (domains.length === 0) {
         toast.error("Create a domain before creating an agent");
@@ -115,7 +116,7 @@ export function SpecManager({ type }: { type: SpecType }) {
       domainLine = `  domain: ${domain}\n`;
     }
     const scaffold = `schema_version: 1\nkind: ${key}\n\n${key}:\n  id: ${id}\n  name: ${LABELS[type].single} ${id}\n  version: 1\n${domainLine}`;
-    const res = await fetch(`/api/spec/${type}/${id}`, {
+    const res = await fetch(apiUrl(`/api/spec/${type}/${id}`), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text: scaffold }),
@@ -132,7 +133,7 @@ export function SpecManager({ type }: { type: SpecType }) {
 
   async function remove() {
     if (!selected || !confirm(`Delete ${selected}? Its version history is removed too.`)) return;
-    await fetch(`/api/spec/${type}/${selected}`, { method: "DELETE" });
+    await fetch(apiUrl(`/api/spec/${type}/${selected}`), { method: "DELETE" });
     toast.success(`Deleted ${selected}`);
     setSelected(null);
     setText("");
@@ -140,7 +141,7 @@ export function SpecManager({ type }: { type: SpecType }) {
   }
 
   async function restore(version: number) {
-    const res = await fetch(`/api/version/${type}/${selected}?v=${version}`);
+    const res = await fetch(apiUrl(`/api/version/${type}/${selected}?v=${version}`));
     if (!res.ok) return;
     const data = await res.json();
     setText(data.text);

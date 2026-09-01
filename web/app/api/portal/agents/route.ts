@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getOrgBySlug } from "@/lib/org";
+import { tenantSlug } from "@/lib/base-domain";
 import { db } from "@/lib/db";
 
 /**
@@ -9,7 +10,7 @@ import { db } from "@/lib/db";
 export async function GET(request: Request) {
   const slug =
     new URL(request.url).searchParams.get("org") ??
-    (request.headers.get("host") ?? "").split(".")[0];
+    tenantSlug(request.headers.get("host") ?? "", request.headers.get("x-tenant-slug"));
   if (!slug) return NextResponse.json({ agents: [] });
 
   const org = await getOrgBySlug(slug);

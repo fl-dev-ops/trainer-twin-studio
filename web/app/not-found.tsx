@@ -2,13 +2,18 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { resolveSessionUser } from "@/lib/session-user";
+import { tenantLink } from "@/lib/tenant-link";
 
-export default function NotFound() {
+export default async function NotFound() {
+  const { org } = await resolveSessionUser();
+  const basePath = org?.basePath;
+
   return (
     <main className="grid min-h-0 flex-1 place-items-center overflow-y-auto px-6 py-16">
       <section className="flex max-w-lg flex-col items-start">
         <Image
-          src="/trainertwin-mark.svg"
+          src={tenantLink("/trainertwin-mark.svg", basePath)}
           alt=""
           width={61}
           height={46}
@@ -22,10 +27,10 @@ export default function NotFound() {
           Error 404. The address may be outdated, or the page may have moved. Return to the studio or start a new training session.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
-          <Button nativeButton={false} render={<Link href="/" />}>
+          <Button nativeButton={false} render={<Link href={tenantLink("/", basePath)} />}>
             <ArrowLeft data-icon="inline-start" /> Back to dashboard
           </Button>
-          <Button variant="outline" nativeButton={false} render={<Link href="/talk" />}>
+          <Button variant="outline" nativeButton={false} render={<Link href={tenantLink("/talk", basePath)} />}>
             <Play data-icon="inline-start" /> Start a session
           </Button>
         </div>

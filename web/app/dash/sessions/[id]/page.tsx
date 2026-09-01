@@ -1,4 +1,3 @@
-import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
@@ -11,9 +10,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { auth } from "@/lib/auth";
+import { resolveSessionUser } from "@/lib/session-user";
 import { db } from "@/lib/db";
-
+import { dashLink } from "@/lib/tenant-link";
 export const dynamic = "force-dynamic";
 
 type TranscriptEntry = { role: "user" | "trainer"; text: string };
@@ -24,11 +23,11 @@ export default async function SessionDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) redirect("/auth/sign-in");
+  const { user, org } = await resolveSessionUser();
+  if (!user) redirect("/auth/sign-in");
 
   const member = await db.member.findFirst({
-    where: { userId: session.user.id, role: { in: ["owner", "admin"] } },
+    where: { userId: user.id, role: { in: ["owner", "admin"] } },
     select: { organizationId: true },
   });
   if (!member) redirect("/auth/no-org");
@@ -53,7 +52,7 @@ export default async function SessionDetailPage({
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
       <PageContainer size="narrow" className="flex flex-col gap-6">
         <Link
-          href="/sessions"
+          href={dashLink("/sessions", org?.basePath)}
           className="text-muted-foreground flex items-center gap-1 text-sm hover:underline"
         >
           <ArrowLeft className="size-4" /> All sessions

@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+import { resolveSessionUser } from "@/lib/session-user";
+import { TenantBasePathProvider } from "@/lib/tenant-context";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -20,14 +22,21 @@ export const metadata: Metadata = {
   description: "Build, version, and talk to interview trainer agents",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+  const { org } = await resolveSessionUser();
+  const basePath = org?.basePath || "";
+
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`} suppressHydrationWarning>
+      <head>
+        <meta name="twin-base-path" content={basePath} />
+      </head>
       <body className="min-h-full bg-background font-sans text-foreground">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          {children}
+          <TenantBasePathProvider basePath={basePath}>
+            {children}
+          </TenantBasePathProvider>
         </ThemeProvider>
-        <Toaster />
       </body>
     </html>
   );

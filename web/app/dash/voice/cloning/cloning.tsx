@@ -6,9 +6,10 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { VoiceRecorder } from "@/components/voice-recorder";
+import { dashLink, getClientBasePath } from "@/lib/tenant-link";
 import { randomPassage } from "@/lib/voice-passage";
-
+import { apiUrl } from "@/lib/api-url";
+import { VoiceRecorder } from "@/components/voice-recorder";
 export default function VoiceCloningPage() {
   const router = useRouter();
   const [passage, setPassage] = useState(randomPassage);
@@ -21,11 +22,11 @@ export default function VoiceCloningPage() {
       const form = new FormData();
       form.set("audio", new File([wav], "reference.wav", { type: "audio/wav" }));
       form.set("transcript", passage);
-      const response = await fetch("/api/tts/voices", { method: "POST", body: form });
+      const response = await fetch(apiUrl("/api/tts/voices"), { method: "POST", body: form });
       if (!response.ok) return toast.error((await response.json()).error ?? "Upload failed");
       const { voice } = await response.json();
       toast.success(`Voice "${voice.name}" created`);
-      router.push(`/voice/${voice.id}`);
+      router.push(dashLink(`/voice/${voice.id}`, getClientBasePath()));
     } catch {
       toast.error("Upload failed. Please try again.");
     } finally {
@@ -41,7 +42,7 @@ export default function VoiceCloningPage() {
             variant="ghost"
             size="sm"
             className="-ml-2 text-base font-medium"
-            render={<Link href="/voice" />}
+            render={<Link href={dashLink("/voice", getClientBasePath())} />}
             nativeButton={false}
           >
             <ArrowLeft data-icon="inline-start" /> Voice cloning

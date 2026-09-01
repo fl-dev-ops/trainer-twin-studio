@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { BASE_DOMAIN } from "@/lib/base-domain";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { resolveSessionUser } from "@/lib/session-user";
 
 const TRAINER_ROLES = new Set(["owner", "admin"]);
 
@@ -20,11 +20,10 @@ function familyOrigin(name: string) {
  * Members with no organization -> "/auth/no-org".
  */
 export async function resolveHome(): Promise<string | null> {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) return null;
-
+  const { user } = await resolveSessionUser();
+  if (!user) return null;
   const memberships = await db.member.findMany({
-    where: { userId: session.user.id },
+    where: { userId: user.id },
     select: { role: true, organization: { select: { slug: true } } },
   });
 
