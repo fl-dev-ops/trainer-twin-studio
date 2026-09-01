@@ -5,9 +5,9 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-const root = path.resolve(import.meta.dir, "../app/api/v1");
+const root = path.resolve(import.meta.dirname, "../app/api/v1");
 
-function routeFiles(dir) {
+function routeFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const full = path.join(dir, entry.name);
     return entry.isDirectory() ? routeFiles(full) : full.endsWith("route.ts") ? [full] : [];
