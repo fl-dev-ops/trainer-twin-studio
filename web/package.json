@@ -14,6 +14,7 @@
     "@aws-sdk/client-s3": "^3.1116.0",
     "@aws-sdk/s3-request-presigner": "^3.1116.0",
     "@base-ui/react": "^1.4.0",
+    "@better-auth/api-key": "1.7.1",
     "@chroma-core/default-embed": "^0.1.9",
     "@codemirror/commands": "^6.11.0",
     "@codemirror/lang-html": "^6.4.12",

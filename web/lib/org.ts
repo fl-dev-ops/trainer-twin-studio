@@ -3,6 +3,10 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 export type SessionOrg = { id: string; slug: string; accentColor: string | null };
+export type TrainerOrg = SessionOrg & {
+  role: string;
+  user: { id: string; name: string; email: string };
+};
 
 // ponytail PT-1: accentColor parsed from the metadata JSON blob; move to a
 // typed column on Organization when the metadata bag holds 3+ keys or needs
@@ -32,6 +36,29 @@ export async function getSessionOrg(): Promise<SessionOrg | null> {
     id: member.organization.id,
     slug: member.organization.slug,
     accentColor: parseAccentColor(member.organization.metadata),
+  };
+}
+
+/** The signed-in owner/admin and their organization. */
+export async function getTrainerOrg(): Promise<TrainerOrg | null> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) return null;
+  const member = await db.member.findFirst({
+    where: { userId: session.user.id },
+    select: {
+      role: true,
+      organization: { select: { id: true, slug: true, metadata: true } },
+    },
+  });
+  if (!member || !member.role.split(",").some((role) => ["owner", "admin"].includes(role.trim()))) {
+    return null;
+  }
+  return {
+    id: member.organization.id,
+    slug: member.organization.slug,
+    accentColor: parseAccentColor(member.organization.metadata),
+    role: member.role,
+    user: { id: session.user.id, name: session.user.name, email: session.user.email },
   };
 }
 

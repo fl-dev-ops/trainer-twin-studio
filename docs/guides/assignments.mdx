@@ -1,0 +1,73 @@
+---
+title: "Assign role-plays"
+description: "Recommend published scenarios to organization learners."
+---
+
+Assignments place published scenarios prominently in a learner's portal. They are persistent recommendations, not an access-control boundary.
+
+## Before you assign
+
+You need:
+
+- A learner `userId` from `GET /users`.
+- A published scenario slug from the TrainerTwin dashboard.
+
+Scenario and persona configuration remains dashboard-only.
+
+## Create an assignment
+
+```bash
+curl "https://trainertwin.com/api/v1/assignments" \
+  --request POST \
+  --header "x-api-key: $TRAINERTWIN_API_KEY" \
+  --header "content-type: application/json" \
+  --data '{
+    "userId": "user_123",
+    "scenario": "react-mock-interview"
+  }'
+```
+
+A new assignment returns `201`:
+
+```json
+{
+  "assignment": {
+    "id": "assignment_123",
+    "assignedAt": "2026-09-01T09:30:00.000Z",
+    "userId": "user_123",
+    "scenario": "react-mock-interview"
+  },
+  "created": true,
+  "emailSent": true
+}
+```
+
+Creating the same learner-scenario pair again is safe. TrainerTwin returns the existing assignment with `created: false` and does not send another email.
+
+<Note>
+  Assignment persistence succeeds even when email delivery fails. Check `emailSent` instead of retrying the assignment immediately.
+</Note>
+
+## Change an assignment
+
+Move an assignment to another learner, scenario, or both:
+
+```bash
+curl "https://trainertwin.com/api/v1/assignments/assignment_123" \
+  --request PATCH \
+  --header "x-api-key: $TRAINERTWIN_API_KEY" \
+  --header "content-type: application/json" \
+  --data '{ "scenario": "system-design-interview" }'
+```
+
+A changed assignment sends a notification to the target learner. A no-op update returns `changed: false` and sends no email.
+
+## Remove an assignment
+
+```bash
+curl "https://trainertwin.com/api/v1/assignments/assignment_123" \
+  --request DELETE \
+  --header "x-api-key: $TRAINERTWIN_API_KEY"
+```
+
+Removing an assignment does not remove the scenario or historical practice sessions.

@@ -1,0 +1,47 @@
+---
+title: "TrainerTwin API"
+description: "Connect your learning platform to TrainerTwin's organization-scoped API."
+---
+
+Use the TrainerTwin API to manage learners, inspect practice sessions, and assign published role-play scenarios from your own platform.
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Create a key and make your first API request.
+  </Card>
+  <Card title="Authentication" icon="key-round" href="/authentication">
+    Learn how organization-scoped API keys work.
+  </Card>
+  <Card title="Manage learners" icon="users" href="/guides/users">
+    Invite, list, update, and remove organization learners.
+  </Card>
+  <Card title="Assign role-plays" icon="clipboard-check" href="/guides/assignments">
+    Assign published scenarios and synchronize recommendations.
+  </Card>
+</CardGroup>
+
+## Base URL
+
+```text
+https://trainertwin.com/api/v1
+```
+
+All requests and responses use JSON unless the endpoint returns `204 No Content`.
+
+<Note>
+  The API is designed for server-to-server integrations. Never expose an API key in browser or mobile application code.
+</Note>
+
+## What the API covers
+
+| Resource | Use it to |
+| --- | --- |
+| Users | Invite and manage learners in your organization |
+| Assignments | Assign existing published scenarios to learners |
+| Sessions | Read results and manage practice-session records |
+
+Scenario, persona, domain, knowledge, and voice configuration remain dashboard-only.
+
+<Tip>
+  Open the **API reference** tab to view every endpoint, parameter, request body, response, and generated code example.
+</Tip>

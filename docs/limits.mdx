@@ -1,0 +1,50 @@
+---
+title: "Limits and conventions"
+description: "Pagination, identifiers, timestamps, and platform boundaries."
+---
+
+## Rate limits
+
+Each API key allows **120 requests per minute**. A request over the limit returns `429`.
+
+## Pagination
+
+Collection endpoints accept:
+
+| Parameter | Default | Range |
+| --- | --- | --- |
+| `limit` | `50` | `1`–`100` |
+| `offset` | `0` | `0` or greater |
+
+Responses include:
+
+```json
+{
+  "pagination": {
+    "limit": 50,
+    "offset": 0,
+    "total": 124
+  }
+}
+```
+
+## Identifiers
+
+- User endpoints use the learner's `userId`.
+- Assignment endpoints use the assignment `id`.
+- Session endpoints use the session `id`.
+- Scenario assignments use the published scenario `slug`.
+
+Treat all IDs as opaque strings.
+
+## Dates and times
+
+Timestamps are ISO 8601 strings in UTC, for example `2026-09-01T09:30:00.000Z`.
+
+## Organization isolation
+
+Every resource query is filtered by the organization that owns the API key. A resource from another organization returns `404`, not the other organization's data.
+
+## Dashboard-only configuration
+
+The API does not create or modify scenarios, personas, domains, knowledge bases, or voices. Configure and publish them in the TrainerTwin dashboard before assigning a scenario through the API.

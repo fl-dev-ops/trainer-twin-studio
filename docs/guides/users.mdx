@@ -1,0 +1,67 @@
+---
+title: "Manage learners"
+description: "Invite, list, update, and remove learners in your organization."
+---
+
+The users API manages learners, not trainers. Creating a user sends an organization invitation instead of creating an account with a password.
+
+## Invite a learner
+
+```bash
+curl "https://trainertwin.com/api/v1/users" \
+  --request POST \
+  --header "x-api-key: $TRAINERTWIN_API_KEY" \
+  --header "content-type: application/json" \
+  --data '{ "email": "learner@example.com" }'
+```
+
+The response includes the invitation and whether its email was delivered.
+
+```json
+{
+  "invitation": {
+    "id": "invitation_123",
+    "email": "learner@example.com",
+    "status": "pending",
+    "expiresAt": "2026-09-03T09:30:00.000Z"
+  },
+  "emailSent": true
+}
+```
+
+<Note>
+  A delivery failure does not remove the invitation. Read `emailSent` and handle follow-up in your platform.
+</Note>
+
+Inviting an existing learner returns `409`. Re-inviting a pending email refreshes that invitation's expiry.
+
+## List learners
+
+```bash
+curl "https://trainertwin.com/api/v1/users?limit=50&offset=0" \
+  --header "x-api-key: $TRAINERTWIN_API_KEY"
+```
+
+The response contains accepted learners in `users` and outstanding invitations in `invitations`.
+
+## Update a learner name
+
+```bash
+curl "https://trainertwin.com/api/v1/users/user_123" \
+  --request PATCH \
+  --header "x-api-key: $TRAINERTWIN_API_KEY" \
+  --header "content-type: application/json" \
+  --data '{ "name": "Avery Patel" }'
+```
+
+Email and organization role changes are not supported through this endpoint.
+
+## Remove a learner
+
+```bash
+curl "https://trainertwin.com/api/v1/users/user_123" \
+  --request DELETE \
+  --header "x-api-key: $TRAINERTWIN_API_KEY"
+```
+
+A successful removal returns `204 No Content`. This removes organization membership and assignments, but does not delete the learner's TrainerTwin account or historical sessions.

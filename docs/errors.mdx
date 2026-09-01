@@ -1,0 +1,30 @@
+---
+title: "Errors"
+description: "Handle TrainerTwin API errors consistently."
+---
+
+Errors use a standard JSON shape:
+
+```json
+{
+  "error": "User not found"
+}
+```
+
+## HTTP status codes
+
+| Status | Meaning | Recommended action |
+| --- | --- | --- |
+| `400` | The request body or query is invalid | Correct the request before retrying |
+| `401` | The API key is missing, invalid, expired, or revoked | Replace or rotate the key |
+| `403` | The key creator is no longer an organization trainer | Generate a new key with a current owner or admin |
+| `404` | The resource does not exist in the key's organization | Verify the resource ID or scenario slug |
+| `409` | The requested state conflicts with existing data | Read the current resource before retrying |
+| `429` | The key exceeded 120 requests per minute | Wait for the next rate-limit window |
+| `500` | TrainerTwin could not complete the request | Retry with exponential backoff |
+
+## Retry safely
+
+Retry `429` and transient `5xx` responses. Do not automatically retry validation, authentication, authorization, or conflict responses.
+
+Assignment creation is idempotent for the same learner and scenario. A repeated request returns the existing assignment and does not send another email.

@@ -5,7 +5,7 @@ import {
   type RolePlayData,
 } from "@/components/role-play-preview";
 import { db } from "@/lib/db";
-import { getSessionOrg } from "@/lib/org";
+import { getTrainerOrg } from "@/lib/org";
 import { readSpecDraft } from "@/lib/spec-drafts";
 import { readSpec } from "@/lib/specs";
 
@@ -17,25 +17,29 @@ export default async function RolePlayPreviewPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const org = await getSessionOrg();
+  const org = await getTrainerOrg();
   if (!org) redirect("/auth/no-org");
 
-  const [current, members] = await Promise.all([
+  const [current, members, assignments] = await Promise.all([
     readSpec("agents", slug, org.id).catch(() => null),
     db.member.findMany({
       where: { organizationId: org.id, role: "member" },
       orderBy: { createdAt: "asc" },
       select: {
         id: true,
-        user: { select: { id: true, name: true, email: true } },
+        user: { select: { name: true, email: true } },
       },
+    }),
+    db.rolePlayAssignment.findMany({
+      where: { orgId: org.id, agent: { slug } },
+      select: { memberId: true },
     }),
   ]);
 
-  const availableUsers: OrganizationUser[] = members.map((m) => ({
-    id: m.user.id || m.id,
-    name: m.user.name || "Unnamed User",
-    email: m.user.email,
+  const availableUsers: OrganizationUser[] = members.map((member) => ({
+    id: member.id,
+    name: member.user.name || "Unnamed User",
+    email: member.user.email,
   }));
 
   let rolePlay: RolePlayData | null = null;
@@ -107,9 +111,9 @@ export default async function RolePlayPreviewPage({
   return (
     <RolePlayPreview
       rolePlay={rolePlay}
-      orgSlug={org.slug}
       availableUsers={availableUsers}
-      trainerName="Vasanth"
+      assignedUserIds={assignments.map(({ memberId }) => memberId)}
+      trainerName={org.user.name}
     />
   );
 }

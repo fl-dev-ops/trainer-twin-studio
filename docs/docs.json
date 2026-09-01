@@ -1,0 +1,73 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "luma",
+  "name": "TrainerTwin API",
+  "description": "Integrate organization learners, practice sessions, and role-play assignments with TrainerTwin.",
+  "colors": {
+    "primary": "#4648D4",
+    "light": "#6B6DDF",
+    "dark": "#7072E0"
+  },
+  "logo": {
+    "light": "/logo/mark.svg",
+    "dark": "/logo/mark.svg",
+    "href": "/"
+  },
+  "favicon": "/logo/mark.svg",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "icon": "book-open",
+        "groups": [
+          {
+            "group": "Get started",
+            "pages": ["index", "quickstart", "authentication"]
+          },
+          {
+            "group": "Guides",
+            "pages": ["guides/users", "guides/assignments", "guides/sessions"]
+          },
+          {
+            "group": "Resources",
+            "pages": ["errors", "limits"]
+          }
+        ]
+      },
+      {
+        "tab": "API reference",
+        "icon": "square-terminal",
+        "openapi": "openapi.yaml"
+      }
+    ]
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "Dashboard",
+        "href": "https://dash.trainertwin.com"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Create API key",
+      "href": "https://dash.trainertwin.com/profile"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/fl-dev-ops/trainer-twin-studio"
+    }
+  },
+  "api": {
+    "playground": {
+      "display": "simple"
+    },
+    "url": "full",
+    "examples": {
+      "languages": ["curl", "javascript", "python"],
+      "defaults": "required",
+      "autogenerate": true
+    }
+  }
+}

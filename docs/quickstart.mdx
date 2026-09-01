@@ -1,0 +1,73 @@
+---
+title: "Quickstart"
+description: "Create an API key and make your first TrainerTwin request."
+---
+
+<Steps>
+  <Step title="Generate an API key">
+    Open [Dashboard → Profile](https://dash.trainertwin.com/profile), find **Developer API**, enter a descriptive key name, and select **Generate key**.
+
+    Copy the key immediately. TrainerTwin only displays the full value once.
+  </Step>
+
+  <Step title="Store the key on your server">
+    Save the key in your platform's secret manager or server environment.
+
+    ```bash
+    TRAINERTWIN_API_KEY=tt_your_key
+    ```
+
+    <Warning>
+      Do not put this value in frontend environment variables, source control, logs, or screenshots.
+    </Warning>
+  </Step>
+
+  <Step title="List your learners">
+    Send the key in the `x-api-key` header.
+
+    ```bash
+    curl "https://trainertwin.com/api/v1/users" \
+      --header "x-api-key: $TRAINERTWIN_API_KEY"
+    ```
+
+    A successful response returns organization learners, pending invitations, and pagination metadata.
+
+    ```json
+    {
+      "users": [],
+      "invitations": [],
+      "pagination": {
+        "limit": 50,
+        "offset": 0,
+        "total": 0
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Assign a published scenario">
+    Use a learner ID returned by the users endpoint and a published scenario slug from your TrainerTwin dashboard.
+
+    ```bash
+    curl "https://trainertwin.com/api/v1/assignments" \
+      --request POST \
+      --header "x-api-key: $TRAINERTWIN_API_KEY" \
+      --header "content-type: application/json" \
+      --data '{
+        "userId": "user_123",
+        "scenario": "react-mock-interview"
+      }'
+    ```
+  </Step>
+</Steps>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key-round" href="/authentication">
+    Understand scopes, expiration, and revocation.
+  </Card>
+  <Card title="Assignments guide" icon="clipboard-check" href="/guides/assignments">
+    Learn assignment behavior and email delivery semantics.
+  </Card>
+</CardGroup>

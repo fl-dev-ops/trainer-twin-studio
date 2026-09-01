@@ -33,8 +33,10 @@ model Agent {
   domainSlug String
   data       Json
   order      Int      @default(0)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  assignments RolePlayAssignment[]
+
   @@index([orgId])
 }
 
@@ -266,6 +268,36 @@ model Verification {
   @@map("verification")
 }
 
+model Apikey {
+  id                  String    @id
+  configId            String    @default("default")
+  name                String?
+  start               String?
+  referenceId         String
+  prefix              String?
+  key                 String
+  refillInterval      Int?
+  refillAmount        Int?
+  lastRefillAt        DateTime?
+  enabled             Boolean?  @default(true)
+  rateLimitEnabled    Boolean?  @default(true)
+  rateLimitTimeWindow Int?      @default(60000)
+  rateLimitMax        Int?      @default(120)
+  requestCount        Int?      @default(0)
+  remaining           Int?
+  lastRequest         DateTime?
+  expiresAt           DateTime?
+  createdAt           DateTime
+  updatedAt           DateTime
+  permissions         String?
+  metadata            String?
+
+  @@index([configId])
+  @@index([referenceId])
+  @@index([key])
+  @@map("apikey")
+}
+
 model Organization {
   id          String       @id
   name        String
@@ -275,6 +307,7 @@ model Organization {
   metadata    String?
   members     Member[]
   invitations Invitation[]
+  assignments RolePlayAssignment[]
 
   @@unique([slug])
   @@map("organization")
@@ -285,13 +318,30 @@ model Member {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   userId         String
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role           String       @default("member")
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           String               @default("member")
   createdAt      DateTime
+  assignments    RolePlayAssignment[]
 
   @@index([organizationId])
   @@index([userId])
   @@map("member")
+}
+
+model RolePlayAssignment {
+  id               String       @id @default(cuid())
+  orgId            String
+  agentId          String
+  memberId         String
+  assignedByUserId String
+  assignedAt       DateTime     @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  agent        Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  member       Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([agentId, memberId])
+  @@index([orgId, memberId])
 }
 
 model Invitation {

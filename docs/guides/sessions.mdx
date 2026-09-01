@@ -1,0 +1,57 @@
+---
+title: "Work with sessions"
+description: "Read practice results and manage session lifecycle records."
+---
+
+A session is a learner's practice run against a published scenario. TrainerTwin creates the record when practice begins, so the API does not create empty sessions.
+
+## List sessions
+
+Filter by status, learner, scenario, or combine filters.
+
+```bash
+curl "https://trainertwin.com/api/v1/sessions?status=completed&userId=user_123&scenario=react-mock-interview" \
+  --header "x-api-key: $TRAINERTWIN_API_KEY"
+```
+
+Supported statuses are `active`, `completed`, and `abandoned`.
+
+The list response contains session metadata without transcript or evidence payloads. Fetch one session for the full result.
+
+## Get session results
+
+```bash
+curl "https://trainertwin.com/api/v1/sessions/session_123" \
+  --header "x-api-key: $TRAINERTWIN_API_KEY"
+```
+
+The detail response includes:
+
+- Pinned persona, scenario, and domain versions.
+- Session status and timestamps.
+- Transcript data when available.
+- Evidence data when available.
+
+## End a session
+
+Use `completed` for a finished practice run or `abandoned` when it ended early.
+
+```bash
+curl "https://trainertwin.com/api/v1/sessions/session_123" \
+  --request PATCH \
+  --header "x-api-key: $TRAINERTWIN_API_KEY" \
+  --header "content-type: application/json" \
+  --data '{ "status": "completed" }'
+```
+
+TrainerTwin records the current time as `endedAt`.
+
+## Delete a session
+
+```bash
+curl "https://trainertwin.com/api/v1/sessions/session_123" \
+  --request DELETE \
+  --header "x-api-key: $TRAINERTWIN_API_KEY"
+```
+
+Deletion permanently removes the session record and its stored audio when present.

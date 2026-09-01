@@ -1,0 +1,762 @@
+openapi: 3.1.0
+info:
+  title: TrainerTwin API
+  version: 1.0.0
+  description: |
+    Organization-scoped API for managing learners, practice sessions, and role-play assignments.
+    Scenario, persona, domain, knowledge, and voice configuration remains dashboard-only.
+servers:
+  - url: https://trainertwin.com/api/v1
+    description: Production
+  - url: https://trainertwin.localhost/api/v1
+    description: Local development
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: Users
+    description: Invite and manage organization learners.
+  - name: Assignments
+    description: Assign existing published scenarios to learners.
+  - name: Sessions
+    description: Read results and manage practice-session records.
+paths:
+  /users:
+    get:
+      operationId: listUsers
+      tags: [Users]
+      summary: List learners
+      description: Lists learners and pending invitations in the API key's organization.
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Learners and pending invitations.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [users, invitations, pagination]
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  invitations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Invitation'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    post:
+      operationId: inviteUser
+      tags: [Users]
+      summary: Invite a learner
+      description: Creates or refreshes a pending learner invitation. Email failure does not roll back the invitation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  maxLength: 320
+                  example: learner@example.com
+      responses:
+        '201':
+          description: Invitation created.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invitation, emailSent]
+                properties:
+                  invitation:
+                    $ref: '#/components/schemas/Invitation'
+                  emailSent:
+                    type: boolean
+        '200':
+          description: Existing pending invitation refreshed.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invitation, emailSent]
+                properties:
+                  invitation:
+                    $ref: '#/components/schemas/Invitation'
+                  emailSent:
+                    type: boolean
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /users/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      operationId: getUser
+      tags: [Users]
+      summary: Get a learner
+      responses:
+        '200':
+          description: Learner details.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    patch:
+      operationId: updateUser
+      tags: [Users]
+      summary: Update a learner
+      description: Updates the learner's display name. Email and role changes are not supported.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                  example: Avery Patel
+      responses:
+        '200':
+          description: Updated learner.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    delete:
+      operationId: removeUser
+      tags: [Users]
+      summary: Remove a learner
+      description: Removes the learner's organization membership and assignments without deleting their account or historical sessions.
+      responses:
+        '204':
+          description: Learner removed.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /assignments:
+    get:
+      operationId: listAssignments
+      tags: [Assignments]
+      summary: List assignments
+      parameters:
+        - $ref: '#/components/parameters/UserIdFilter'
+        - $ref: '#/components/parameters/ScenarioFilter'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Organization assignments.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [assignments, pagination]
+                properties:
+                  assignments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AssignmentDetail'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    post:
+      operationId: createAssignment
+      tags: [Assignments]
+      summary: Create an assignment
+      description: Idempotently assigns a published scenario to a learner. Email failure does not roll back the assignment.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignmentTarget'
+      responses:
+        '201':
+          description: Assignment created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssignmentMutation'
+        '200':
+          description: Assignment already existed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssignmentMutation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /assignments/{assignmentId}:
+    parameters:
+      - $ref: '#/components/parameters/AssignmentId'
+    get:
+      operationId: getAssignment
+      tags: [Assignments]
+      summary: Get an assignment
+      responses:
+        '200':
+          description: Assignment details.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [assignment]
+                properties:
+                  assignment:
+                    $ref: '#/components/schemas/AssignmentDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    patch:
+      operationId: updateAssignment
+      tags: [Assignments]
+      summary: Update an assignment
+      description: Moves an assignment to another learner, published scenario, or both.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                userId:
+                  type: string
+                  example: user_123
+                scenario:
+                  type: string
+                  pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'
+                  example: system-design-interview
+      responses:
+        '200':
+          description: Assignment update result.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [assignment, changed]
+                properties:
+                  assignment:
+                    $ref: '#/components/schemas/Assignment'
+                  changed:
+                    type: boolean
+                  emailSent:
+                    type: boolean
+                    description: Present when the assignment changed.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    delete:
+      operationId: deleteAssignment
+      tags: [Assignments]
+      summary: Delete an assignment
+      responses:
+        '204':
+          description: Assignment deleted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /sessions:
+    get:
+      operationId: listSessions
+      tags: [Sessions]
+      summary: List sessions
+      description: Lists practice-session summaries. Use the detail endpoint for transcript and evidence data.
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/SessionStatus'
+        - $ref: '#/components/parameters/UserIdFilter'
+        - $ref: '#/components/parameters/ScenarioFilter'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Practice sessions.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessions, pagination]
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SessionSummary'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /sessions/{sessionId}:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    get:
+      operationId: getSession
+      tags: [Sessions]
+      summary: Get a session
+      description: Returns pinned configuration versions, transcript, and evidence when available.
+      responses:
+        '200':
+          description: Session details.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [session]
+                properties:
+                  session:
+                    $ref: '#/components/schemas/SessionDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    patch:
+      operationId: updateSession
+      tags: [Sessions]
+      summary: End a session
+      description: Marks a session completed or abandoned and records the current time as endedAt.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [completed, abandoned]
+      responses:
+        '200':
+          description: Updated session summary.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [session]
+                properties:
+                  session:
+                    $ref: '#/components/schemas/SessionLifecycle'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    delete:
+      operationId: deleteSession
+      tags: [Sessions]
+      summary: Delete a session
+      description: Permanently deletes the session record and stored audio when present.
+      responses:
+        '204':
+          description: Session deleted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: Organization API key generated in Dashboard → Profile → Developer API.
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      description: Maximum number of records to return.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+    Offset:
+      name: offset
+      in: query
+      description: Number of records to skip.
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    UserId:
+      name: userId
+      in: path
+      required: true
+      description: Learner user ID.
+      schema:
+        type: string
+    UserIdFilter:
+      name: userId
+      in: query
+      description: Filter by learner user ID.
+      schema:
+        type: string
+    ScenarioFilter:
+      name: scenario
+      in: query
+      description: Filter by published scenario slug.
+      schema:
+        type: string
+    AssignmentId:
+      name: assignmentId
+      in: path
+      required: true
+      description: Assignment ID.
+      schema:
+        type: string
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      description: Practice-session ID.
+      schema:
+        type: string
+  responses:
+    BadRequest:
+      description: Invalid request.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing, invalid, expired, or revoked API key.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: API key creator is no longer an organization trainer.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found in the API key's organization.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: Request conflicts with existing organization data.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: API key exceeded 120 requests per minute.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: Resource not found
+    Pagination:
+      type: object
+      additionalProperties: false
+      required: [limit, offset, total]
+      properties:
+        limit:
+          type: integer
+          example: 50
+        offset:
+          type: integer
+          example: 0
+        total:
+          type: integer
+          example: 124
+    User:
+      type: object
+      required: [id, memberId, name, email, emailVerified, role]
+      properties:
+        id:
+          type: string
+          example: user_123
+        memberId:
+          type: string
+          example: member_123
+        name:
+          type: string
+          example: Avery Patel
+        email:
+          type: string
+          format: email
+          example: avery@example.com
+        emailVerified:
+          type: boolean
+        role:
+          type: string
+          const: member
+        createdAt:
+          type: string
+          format: date-time
+    Invitation:
+      type: object
+      required: [id, email, status, expiresAt]
+      properties:
+        id:
+          type: string
+          example: invitation_123
+        email:
+          type: string
+          format: email
+          example: learner@example.com
+        status:
+          type: string
+          const: pending
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    Scenario:
+      type: object
+      required: [slug, name, version, visibility]
+      properties:
+        slug:
+          type: string
+          example: react-mock-interview
+        name:
+          type: string
+          example: React mock interview
+        version:
+          type: integer
+          example: 3
+        visibility:
+          type: string
+          enum: [public, private]
+    AssignmentTarget:
+      type: object
+      additionalProperties: false
+      required: [userId, scenario]
+      properties:
+        userId:
+          type: string
+          example: user_123
+        scenario:
+          type: string
+          pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'
+          example: react-mock-interview
+    Assignment:
+      type: object
+      required: [id, assignedAt, userId, scenario]
+      properties:
+        id:
+          type: string
+          example: assignment_123
+        assignedAt:
+          type: string
+          format: date-time
+        userId:
+          type: string
+          example: user_123
+        scenario:
+          type: string
+          example: react-mock-interview
+    AssignmentMutation:
+      type: object
+      required: [assignment, created]
+      properties:
+        assignment:
+          $ref: '#/components/schemas/Assignment'
+        created:
+          type: boolean
+        emailSent:
+          type: boolean
+          description: Present when a new assignment was created.
+    AssignmentDetail:
+      type: object
+      required: [id, assignedAt, user, scenario]
+      properties:
+        id:
+          type: string
+          example: assignment_123
+        assignedAt:
+          type: string
+          format: date-time
+        user:
+          type: object
+          required: [id, name, email]
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            email:
+              type: string
+              format: email
+        scenario:
+          $ref: '#/components/schemas/Scenario'
+    SessionStatus:
+      type: string
+      enum: [active, completed, abandoned]
+    SessionSummary:
+      type: object
+      required:
+        - id
+        - personaSlug
+        - personaVersion
+        - agentSlug
+        - agentVersion
+        - domainSlug
+        - domainVersion
+        - status
+        - startedAt
+      properties:
+        id:
+          type: string
+          example: session_123
+        userId:
+          type: [string, 'null']
+          example: user_123
+        personaSlug:
+          type: string
+        personaVersion:
+          type: integer
+        agentSlug:
+          type: string
+          example: react-mock-interview
+        agentVersion:
+          type: integer
+        domainSlug:
+          type: string
+        domainVersion:
+          type: integer
+        status:
+          $ref: '#/components/schemas/SessionStatus'
+        contextName:
+          type: [string, 'null']
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: [string, 'null']
+          format: date-time
+    SessionLifecycle:
+      type: object
+      required: [id, agentSlug, status, startedAt]
+      properties:
+        id:
+          type: string
+          example: session_123
+        userId:
+          type: [string, 'null']
+          example: user_123
+        agentSlug:
+          type: string
+          example: react-mock-interview
+        status:
+          $ref: '#/components/schemas/SessionStatus'
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: [string, 'null']
+          format: date-time
+    SessionDetail:
+      allOf:
+        - $ref: '#/components/schemas/SessionSummary'
+        - type: object
+          properties:
+            transcript:
+              description: Structured session transcript when available.
+              type: [object, array, 'null']
+            evidence:
+              description: Structured evaluation evidence when available.
+              type: [object, array, 'null']

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ArrowLeft,
   Clock,
@@ -21,13 +21,7 @@ import { toast } from "sonner";
 import { PageContainer } from "@/components/page-container";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -95,49 +89,59 @@ export type RolePlayData = {
 };
 
 function AssignUsersDialog({
-  slug,
   availableUsers,
   assignedUserIds,
+  disabled,
+  saving,
   onSave,
 }: {
-  slug: string;
   availableUsers: OrganizationUser[];
   assignedUserIds: string[];
-  onSave: (ids: string[]) => void;
+  disabled: boolean;
+  saving: boolean;
+  onSave: (ids: string[]) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<string[]>(assignedUserIds);
   const [search, setSearch] = useState("");
 
-  useEffect(() => {
-    setSelected(assignedUserIds);
-  }, [assignedUserIds, open]);
-
   const filteredUsers = availableUsers.filter(
-    (u) =>
-      u.name.toLowerCase().includes(search.toLowerCase()) ||
-      u.email.toLowerCase().includes(search.toLowerCase()),
+    (user) =>
+      user.name.toLowerCase().includes(search.toLowerCase()) ||
+      user.email.toLowerCase().includes(search.toLowerCase()),
   );
 
+  function handleOpenChange(next: boolean) {
+    if (next) {
+      setSelected(assignedUserIds);
+      setSearch("");
+    }
+    setOpen(next);
+  }
+
   function toggleUser(id: string) {
-    setSelected((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
+    setSelected((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
     );
   }
 
-  function handleSave() {
-    onSave(selected);
-    setOpen(false);
+  async function handleSave() {
+    try {
+      await onSave(selected);
+      setOpen(false);
+    } catch {
+      // The parent reports the server error and keeps the dialog open for retry.
+    }
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger
         render={
-          <Button variant="outline" size="sm" className="w-full text-xs" />
+          <Button variant="outline" size="sm" className="w-full text-xs" disabled={disabled} />
         }
       >
-        <UserPlus data-icon="inline-start" /> Assign Users
+        <UserPlus data-icon="inline-start" /> {disabled ? "Publish to assign" : "Assign learners"}
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
@@ -155,6 +159,7 @@ function AssignUsersDialog({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-8"
+              disabled={saving}
             />
           </div>
 
@@ -194,6 +199,7 @@ function AssignUsersDialog({
                     </div>
                     <Checkbox
                       checked={isChecked}
+                      disabled={saving}
                       onCheckedChange={() => toggleUser(user.id)}
                     />
                   </label>
@@ -204,11 +210,11 @@ function AssignUsersDialog({
         </div>
 
         <DialogFooter className="pt-3">
-          <DialogClose render={<Button variant="outline" size="sm" />}>
+          <DialogClose render={<Button variant="outline" size="sm" disabled={saving} />}>
             Cancel
           </DialogClose>
-          <Button size="sm" onClick={handleSave}>
-            Save Assignments
+          <Button size="sm" disabled={saving} onClick={handleSave}>
+            {saving ? "Saving…" : "Save assignments"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -218,62 +224,56 @@ function AssignUsersDialog({
 
 export function RolePlayPreview({
   rolePlay,
-  orgSlug,
   availableUsers = [],
-  trainerName = "Vasanth",
+  assignedUserIds = [],
+  trainerName = "Trainer",
 }: {
   rolePlay: RolePlayData;
-  orgSlug?: string;
   availableUsers?: OrganizationUser[];
+  assignedUserIds?: string[];
   trainerName?: string;
 }) {
   const stages = rolePlay.stages ?? [];
-  const storageKey = `assigned_users_${rolePlay.slug}`;
+  const [assignedIds, setAssignedIds] = useState<string[]>(assignedUserIds);
+  const [savingAssignments, setSavingAssignments] = useState(false);
 
-  const [assignedIds, setAssignedIds] = useState<string[]>([]);
-
-  useEffect(() => {
+  async function saveAssignments(memberIds: string[]) {
+    setSavingAssignments(true);
     try {
-      const stored = localStorage.getItem(storageKey);
-      if (stored) {
-        setAssignedIds(JSON.parse(stored));
-      }
-    } catch {
-      setAssignedIds([]);
-    }
-  }, [storageKey]);
-
-  async function saveAssignments(ids: string[]) {
-    const newlyAdded = ids.filter((id) => !assignedIds.includes(id));
-    setAssignedIds(ids);
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(ids));
-    } catch {
-      // ignore
-    }
-
-    if (newlyAdded.length > 0) {
-      try {
-        await fetch("/api/role-play/notify-assignment", {
-          method: "POST",
+      const response = await fetch(
+        `/api/role-play/${encodeURIComponent(rolePlay.slug)}/assignments`,
+        {
+          method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            rolePlaySlug: rolePlay.slug,
-            rolePlayName: rolePlay.name,
-            rolePlayObjective: rolePlay.objective,
-            userIds: newlyAdded,
-            trainerName,
-          }),
-        });
-        toast.success(
-          `Assigned and sent email notification to ${newlyAdded.length} learner${newlyAdded.length > 1 ? "s" : ""}`,
-        );
-      } catch (err) {
-        console.error("Failed to notify users via email:", err);
-        toast.success(`Updated user assignments (${ids.length} assigned)`);
+          body: JSON.stringify({ memberIds }),
+        },
+      );
+      const result = await response.json().catch(() => null) as {
+        memberIds?: string[];
+        added?: number;
+        removed?: number;
+        emailFailures?: number;
+        error?: string;
+      } | null;
+      if (!response.ok || !result?.memberIds) {
+        throw new Error(result?.error ?? "Assignments could not be saved");
       }
-    } else {
-      toast.success(`Updated user assignments (${ids.length} assigned)`);
+
+      setAssignedIds(result.memberIds);
+      if (result.emailFailures) {
+        toast.warning(
+          `Assignments saved, but ${result.emailFailures} notification email${result.emailFailures === 1 ? "" : "s"} could not be sent.`,
+        );
+      } else if ((result.added ?? 0) === 0 && (result.removed ?? 0) === 0) {
+        toast.success("Assignments are already up to date");
+      } else {
+        toast.success(`${result.memberIds.length} learner${result.memberIds.length === 1 ? "" : "s"} assigned`);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Assignments could not be saved");
+      throw error;
+    } finally {
+      setSavingAssignments(false);
     }
   }
 
@@ -499,7 +499,9 @@ export function RolePlayPreview({
                   <div>
                     <h3 className="text-sm font-semibold">Assign to Users</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Grant learners practice access
+                      {rolePlay.status === "published"
+                        ? "Assign this role play to learners"
+                        : "Publish this role play before assigning it"}
                     </p>
                   </div>
                   <Badge variant="secondary" className="gap-1 text-[11px]">
@@ -532,9 +534,10 @@ export function RolePlayPreview({
                 )}
 
                 <AssignUsersDialog
-                  slug={rolePlay.slug}
                   availableUsers={usersList}
                   assignedUserIds={assignedIds}
+                  disabled={rolePlay.status !== "published"}
+                  saving={savingAssignments}
                   onSave={saveAssignments}
                 />
               </div>

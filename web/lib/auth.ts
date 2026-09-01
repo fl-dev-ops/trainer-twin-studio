@@ -1,10 +1,23 @@
+import { apiKey } from "@better-auth/api-key";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { organization } from "better-auth/plugins";
+import { createAccessControl } from "better-auth/plugins/access";
+import { adminAc, defaultStatements, memberAc, ownerAc } from "better-auth/plugins/organization/access";
 import { nextCookies } from "better-auth/next-js";
 import { db } from "@/lib/db";
 import { BASE_DOMAIN } from "@/lib/base-domain";
 import { sendInvitationEmail, sendPasswordResetEmail } from "@/lib/email";
+
+const organizationAccess = createAccessControl({
+  ...defaultStatements,
+  apiKey: ["create", "read", "update", "delete"],
+} as const);
+const organizationRoles = {
+  owner: organizationAccess.newRole({ ...ownerAc.statements, apiKey: ["create", "read", "update", "delete"] }),
+  admin: organizationAccess.newRole({ ...adminAc.statements, apiKey: ["create", "read", "update", "delete"] }),
+  member: organizationAccess.newRole({ ...memberAc.statements, apiKey: [] }),
+};
 
 export const auth = betterAuth({
   appName: "TrainerTwin",
@@ -21,6 +34,8 @@ export const auth = betterAuth({
   },
   plugins: [
     organization({
+      ac: organizationAccess,
+      roles: organizationRoles,
       // Invite-only platform: organizations are created exclusively through the
       // founder onboarding flow, never self-serve.
       allowUserToCreateOrganization: false,
@@ -39,6 +54,26 @@ export const auth = betterAuth({
           inviterName,
           inviteUrl: inviteLink,
         });
+      },
+    }),
+    apiKey({
+      references: "organization",
+      defaultPrefix: "tt_",
+      defaultKeyLength: 64,
+      requireName: true,
+      maximumNameLength: 60,
+      enableMetadata: true,
+      keyExpiration: {
+        defaultExpiresIn: 60 * 60 * 24 * 365,
+        disableCustomExpiresTime: true,
+      },
+      rateLimit: { enabled: true, timeWindow: 60_000, maxRequests: 120 },
+      permissions: {
+        defaultPermissions: {
+          users: ["read", "write"],
+          sessions: ["read", "write"],
+          assignments: ["read", "write"],
+        },
       },
     }),
     nextCookies(),
