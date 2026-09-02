@@ -4,7 +4,6 @@ import dynamic from "next/dynamic";
 import type { CSSProperties, ReactNode } from "react";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
-import { Sparkles } from "lucide-react";
 import { AppSidebar } from "@/components/app-sidebar";
 import {
   SidebarInset,

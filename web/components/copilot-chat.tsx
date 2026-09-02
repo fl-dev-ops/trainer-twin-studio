@@ -64,7 +64,7 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import { CircularLoader } from "@/components/prompt-kit/loader";
 import { Button } from "@/components/ui/button";
-import { Sidebar, SidebarRail, SidebarTrigger } from "@/components/ui/sidebar";
+import { Sidebar, SidebarTrigger } from "@/components/ui/sidebar";
 import {
   Sheet,
   SheetContent,
