@@ -1,19 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { BASE_DOMAIN } from "@/lib/base-domain";
 import { resolveSessionUser } from "@/lib/session-user";
 import { db } from "@/lib/db";
 import { validateOrgSlug } from "@/lib/slugs";
 
 export const runtime = "nodejs";
-
-function familyOrigin(requestHost: string | null, name: string) {
-  // Preserve the port so local proxies (portless :NNNN) keep working.
-  const port = requestHost?.includes(":") ? `:${requestHost.split(":")[1]}` : "";
-  return `https://${name}.${BASE_DOMAIN}${port}`;
-}
 
 /** Live slug availability for the onboarding form. */
 export async function GET(request: Request) {
@@ -69,8 +61,7 @@ export async function POST(request: Request) {
         },
       }),
     ]);
-    const host = (await headers()).get("host");
-    return NextResponse.json({ redirect: `${familyOrigin(host, "dash")}/`, slug: org.slug });
+    return NextResponse.json({ redirect: "/", slug: org.slug });
   } catch {
     await db.founderInvite.update({
       where: { token: invite.token },

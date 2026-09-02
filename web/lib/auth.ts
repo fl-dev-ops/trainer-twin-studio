@@ -44,18 +44,14 @@ export const auth = betterAuth({
     nextCookies(),
   ],
   trustedOrigins: (request) => {
-    const allowed = [`https://${BASE_DOMAIN}`, `https://*.${BASE_DOMAIN}`];
-    // Family hosts may carry a local proxy port (portless); trust the caller's
-    // own origin (browsers cannot forge Origin, so this stays safe).
     const origin = request?.headers?.get?.("origin");
-    if (origin?.includes(BASE_DOMAIN)) {
-      allowed.push(origin);
+    const host = request?.headers?.get?.("host");
+    if (!origin || !host) return [];
+    try {
+      return new URL(origin).host === host ? [origin] : [];
+    } catch {
+      return [];
     }
-    return allowed;
-  },
-  advanced: {
-    // One session cookie shared across dash./auth./<org>.<BASE_DOMAIN>.
-    crossSubDomainCookies: { enabled: true, domain: BASE_DOMAIN },
   },
 });
 

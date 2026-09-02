@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenuButton } from "@/components/ui/sidebar";
 import { authClient } from "@/lib/auth-client";
-import { BASE_DOMAIN } from "@/lib/base-domain";
 
 export function SidebarAccountMenu({
   profileHref,
@@ -40,8 +39,7 @@ export function SidebarAccountMenu({
       setSigningOut(false);
       return;
     }
-    const port = window.location.port ? `:${window.location.port}` : "";
-    window.location.assign(`https://auth.${BASE_DOMAIN}${port}/sign-in`);
+    window.location.assign("/auth/sign-in");
   }
 
   return (

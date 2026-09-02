@@ -27,7 +27,7 @@ export default async function OnboardingPage({
           <p className="text-muted-foreground mt-2 text-sm">
             This link is invalid or has already been used. Ask for a fresh invite.
           </p>
-          <Link href="/sign-in" className="text-foreground mt-4 inline-block text-sm underline underline-offset-4">
+          <Link href="/auth/sign-in" className="text-foreground mt-4 inline-block text-sm underline underline-offset-4">
             Sign in
           </Link>
         </div>

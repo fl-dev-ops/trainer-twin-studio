@@ -2,17 +2,10 @@ import { getSessionCookie } from "better-auth/cookies";
 import { NextResponse, type NextRequest } from "next/server";
 
 /**
- * Host-aware routing. Subdomains are the only interface, locally via
- * portless (*.trainertwin.localhost) and in production the same shape.
- *
- *   auth.<base>/*            -> /auth/*          (sign-in, invites, onboarding)
- *   dash.<base>/*            -> /dash/*          (trainer studio, gated)
- *   <org-slug>.<base>/*      -> /*               (learner portal, (org) group)
- *   <base>/auth/*            -> auth.<base>/*    (apex hands off)
- *   <base>/dash/*            -> dash.<base>/*
- *   <base>/*                 -> sign-in on auth.<base>
+ * Temporary single-host routing for the Vercel host/guest integration test.
+ * Auth and dashboard routes stay on this deployment's origin so no wildcard
+ * DNS is required. Revert this commit to restore subdomain routing.
  */
-const BASE = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "trainertwin.localhost";
 
 /** Paths that must never be host-rewritten (API, framework + public assets). */
 function isPassthrough(pathname: string) {
@@ -26,71 +19,38 @@ function isPassthrough(pathname: string) {
 }
 
 export function proxy(request: NextRequest) {
-  const hostHeader = request.headers.get("host") ?? "";
-  const host = hostHeader.split(":")[0];
-  const port = hostHeader.includes(":") ? `:${hostHeader.split(":")[1]}` : "";
-  const proto = process.env.NODE_ENV !== "production" && !request.nextUrl.protocol.startsWith("https") ? "http" : "https";
-  const { pathname } = request.nextUrl;
+  const { pathname, search } = request.nextUrl;
   const hasSession = Boolean(getSessionCookie(request));
 
   if (isPassthrough(pathname)) return NextResponse.next();
 
   // Host-delegated subpath hosting (e.g. careerwithvasanth.com/interview): the
   // host app authenticates and proxies; its x-tenant-slug header marks these
-  // requests. Skip all subdomain routing — the apex-host fallback below would
-  // otherwise redirect every page to auth.<base>/sign-in.
+  // requests. Skip standalone auth routing so the guest page remains mounted.
   if (request.headers.get("x-tenant-slug")) return NextResponse.next();
 
-  const inFamily = host === BASE || host.endsWith(`.${BASE}`);
-  const sub = inFamily && host !== BASE ? host.slice(0, host.length - BASE.length - 1) : null;
+  if (pathname.startsWith("/auth")) return NextResponse.next();
 
-  const rewrite = (path: string) => {
+  // `/dash` is the internal Next.js route namespace. Standalone studio URLs
+  // expose clean paths (`/agents`, `/sessions`, ...), while host-delegated
+  // mounts reach `/dash/*` after their organization basePath is stripped.
+  if (pathname === "/dash" || pathname.startsWith("/dash/")) {
     const url = request.nextUrl.clone();
-    url.pathname = path;
-    return NextResponse.rewrite(url);
-  };
-
-  // Auth host: everything lives under /auth. The bare root has no canonical
-  // page — redirect to /sign-in so the URL is always shareable.
-  if (sub === "auth") {
-    if (pathname === "/") {
-      return NextResponse.redirect(`${proto}://auth.${BASE}${port}/sign-in`);
-    }
-    if (pathname.startsWith("/auth")) return NextResponse.next();
-    return rewrite(`/auth${pathname}`);
+    url.pathname = pathname.slice("/dash".length) || "/";
+    return NextResponse.redirect(url);
   }
 
-  // Dash host: everything lives under /dash, session required.
-  if (sub === "dash") {
-    if (!hasSession) {
-      // Preserve the port so local proxies (portless :NNNN) keep working.
-      return NextResponse.redirect(`${proto}://auth.${BASE}${port}/sign-in`);
-    }
-    if (pathname === "/") return rewrite("/dash");
-    // Canonicalize: strip the redundant /dash prefix on this host.
-    if (pathname.startsWith("/dash/")) {
-      return NextResponse.redirect(`${proto}://dash.${BASE}${port}${pathname.slice(5)}`);
-    }
-    return rewrite(`/dash${pathname}`);
+  if (!hasSession) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/auth/sign-in";
+    url.search = "";
+    if (pathname !== "/") url.searchParams.set("redirect", `${pathname}${search}`);
+    return NextResponse.redirect(url);
   }
 
-  // Any other family subdomain is an org slug: the learner portal serves from
-  // the root ((org) route group), no rewrite needed.
-  if (sub) return NextResponse.next();
-
-  // Apex host: hand each area to its subdomain.
-  const area = (name: string, rest: string) =>
-    NextResponse.redirect(`${proto}://${name}.${BASE}${port}${rest}`);
-  if (pathname.startsWith("/auth/")) {
-    return area("auth", pathname.slice("/auth".length) || "/sign-in");
-  }
-  if (pathname === "/dash") {
-    return area("dash", "/");
-  }
-  if (pathname.startsWith("/dash/")) {
-    return area("dash", pathname.slice("/dash".length));
-  }
-  return area("auth", "/sign-in");
+  const url = request.nextUrl.clone();
+  url.pathname = pathname === "/" ? "/dash" : `/dash${pathname}`;
+  return NextResponse.rewrite(url);
 }
 
 export const config = {

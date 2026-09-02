@@ -16,7 +16,7 @@ function familyOrigin(name: string) {
 
 /**
  * Where should this signed-in user land?
- * Trainers -> dash host, learners -> their org host, null -> not signed in.
+ * Trainers -> same-origin studio root, learners -> their org host, null -> not signed in.
  * Members with no organization -> "/auth/no-org".
  */
 export async function resolveHome(): Promise<string | null> {
@@ -32,6 +32,6 @@ export async function resolveHome(): Promise<string | null> {
   const isTrainer = memberships.some((m) =>
     m.role.split(",").some((r) => TRAINER_ROLES.has(r.trim())),
   );
-  if (isTrainer) return `${await familyOrigin("dash")}/`;
+  if (isTrainer) return "/";
   return `${await familyOrigin(memberships[0].organization.slug)}/`;
 }

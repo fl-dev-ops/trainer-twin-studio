@@ -15,6 +15,5 @@ export function tenantSlug(hostHeader: string, forwardedTenant?: string | null) 
 export function signInUrl(hostHeader: string) {
   const isDev = process.env.NODE_ENV !== "production";
   const proto = isDev ? "http" : "https";
-  const port = hostHeader.includes(":") ? `:${hostHeader.split(":")[1]}` : "";
-  return `${proto}://auth.${BASE_DOMAIN}${port}/sign-in`;
+  return `${proto}://${hostHeader}/auth/sign-in`;
 }

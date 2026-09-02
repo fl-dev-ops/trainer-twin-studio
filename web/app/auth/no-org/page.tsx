@@ -9,7 +9,7 @@ export default function NoOrgPage() {
           Your account isn&apos;t part of an organization yet. Use the invite link
           you were given, or ask your trainer to invite you.
         </p>
-        <Link href="/sign-in" className="text-foreground mt-4 inline-block text-sm underline underline-offset-4">
+        <Link href="/auth/sign-in" className="text-foreground mt-4 inline-block text-sm underline underline-offset-4">
           Sign in
         </Link>
       </div>
