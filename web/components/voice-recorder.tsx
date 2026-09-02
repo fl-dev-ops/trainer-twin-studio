@@ -103,7 +103,11 @@ export function VoiceRecorder({
           for (let i = 0; i < decoded.length; i++)
             mono[i] += data[i] / decoded.numberOfChannels;
         }
-        onFinished(encodeWav(mono, decoded.sampleRate));
+        // 1s trailing silence — stops VoxCPM2 from leaking the reference tail
+        // into generated speech as a chirp (OpenBMB/VoxCPM#272)
+        const padded = new Float32Array(mono.length + decoded.sampleRate);
+        padded.set(mono);
+        onFinished(encodeWav(padded, decoded.sampleRate));
       } catch {
         toast.error(
           "That recording could not be processed. Please record again.",
