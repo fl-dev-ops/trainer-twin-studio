@@ -19,8 +19,8 @@ function client() {
   });
 }
 
-export function kbPrefix(kbSlug: string, docId?: string) {
-  return docId ? `${basePrefix}/${kbSlug}/${docId}` : `${basePrefix}/${kbSlug}`;
+export function kbPrefix(orgId: string, kbSlug: string, docId?: string) {
+  return docId ? `${basePrefix}/${orgId}/${kbSlug}/${docId}` : `${basePrefix}/${orgId}/${kbSlug}`;
 }
 
 export function voicePrefix(voiceId: string) {

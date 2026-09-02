@@ -230,17 +230,16 @@ export async function deleteKnowledge(orgId: string, kbSlug: string, fileSlug?: 
   const kb = await db.knowledgeBase.findFirst({ where: { slug: kbSlug, orgId }, select: { id: true } });
   if (fileSlug === undefined) {
     if (!kb) return;
-    await deletePrefix(kbPrefix(kbSlug));
+    await deletePrefix(kbPrefix(orgId, kbSlug));
     await db.knowledgeBase.delete({ where: { id: kb.id } });
     return;
   }
-  if (!kb) return;
   if (!kb) return;
   const doc = await db.knowledgeDocument.findUnique({
     where: { kbId_slug: { kbId: kb.id, slug: fileSlug } },
   });
   if (!doc) return;
-  await deletePrefix(kbPrefix(kbSlug, doc.id));
+  await deletePrefix(kbPrefix(orgId, kbSlug, doc.id));
   await db.knowledgeDocument.delete({ where: { id: doc.id } });
 }
 
@@ -276,8 +275,8 @@ export async function uploadKnowledgeFile(orgId: string, kbSlug: string, file: F
     },
   });
 
-  const sourceKey = kbPrefix(kbSlug, doc.id) + `/source-${slug}`;
-  const markdownKey = kbPrefix(kbSlug, doc.id) + "/content.md";
+  const sourceKey = kbPrefix(orgId, kbSlug, doc.id) + `/source-${slug}`;
+  const markdownKey = kbPrefix(orgId, kbSlug, doc.id) + "/content.md";
   await Promise.all([
     putObject(sourceKey, bytes, file.type || "application/octet-stream"),
     putObject(markdownKey, markdown, "text/markdown; charset=utf-8"),
@@ -296,8 +295,14 @@ export async function getKnowledgePreviewUrl(orgId: string, kbSlug: string, file
   return presignedGetUrl(doc.s3SourceKey);
 }
 
-/** Indexes (or re-indexes) documents into ChromaDB. */
-export async function digestKnowledge(orgId: string, kbSlug: string, fileSlug?: string) {
+/** Indexes (or re-indexes) documents into ChromaDB.
+ * opts.topicsBySlug optionally supplies per-chunk topic slugs per document slug. */
+export async function digestKnowledge(
+  orgId: string,
+  kbSlug: string,
+  fileSlug?: string,
+  opts?: { topicsBySlug?: Record<string, string[][]> },
+) {
   const kb = await db.knowledgeBase.findFirst({
     where: { slug: kbSlug, orgId },
     include: { documents: true },
@@ -318,7 +323,8 @@ export async function digestKnowledge(orgId: string, kbSlug: string, fileSlug?: 
     for (const d of docs) {
       if (!d.s3MarkdownKey || d.s3MarkdownKey === "pending") continue;
       const markdown = await getObjectText(d.s3MarkdownKey);
-      const chunks = await ingestDoc(kbSlug, d.id, d.slug, markdown);
+      const topics = opts?.topicsBySlug?.[d.slug];
+      const chunks = await ingestDoc(kbSlug, d.id, d.slug, markdown, topics ? { topics } : undefined);
       results.push({ id: d.id, chunks });
     }
     const byId = new Map(results.map((r) => [r.id, r.chunks]));

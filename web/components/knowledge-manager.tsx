@@ -45,6 +45,8 @@ import { PDFViewer } from "@/components/extend/pdf-viewer";
 import { DocxViewerPreview } from "@/components/extend/docx-viewer";
 import { PptxViewerPreview } from "@/components/extend/pptx-viewer";
 import { CsvViewer } from "@/components/extend/csv-viewer";
+import { NotionImport } from "@/components/notion-import";
+import { YouTubeImport } from "@/components/youtube-import";
 
 type Kb = { slug: string; name: string };
 type Doc = {
@@ -269,6 +271,8 @@ export function KnowledgeDetail({ slug }: { slug: string }) {
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <NotionImport kb={slug} onCompleted={() => { void loadDocs(); }} />
+          <YouTubeImport kb={slug} onCompleted={() => { void loadDocs(); }} />
           <input
             ref={fileInput}
             type="file"

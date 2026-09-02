@@ -26,12 +26,17 @@ application/
 1. **Upload + index** — anydoc-supported files (Word, PowerPoint, Excel, OpenDocument,
    RTF, EPUB, CSV, PDF; plus plain .md/.txt) are converted to markdown. Source and markdown
    land in S3 under `S3_BASE_PREFIX/<kb>/<docId>/`, then indexing starts automatically.
-2. **Preview** — presigned S3 URLs rendered in-browser with Extend UI viewers
+2. **Notion import** — a trainer connects a Notion workspace through public OAuth, then selects
+   a root page to import. A worker recursively discovers child pages, stores normalized Markdown
+   in S3, and indexes each page as a document. Connections are scoped to the trainer's organization
+   and authorizing user; encrypted OAuth tokens never reach the browser.
+3. **Preview** — presigned S3 URLs rendered in-browser with Extend UI viewers
    (PDF/DOCX/PPTX/CSV; text fallback).
-3. **Index** — heading-aware paragraph chunks receive OpenRouter embeddings and are upserted
-   into one `kb_<slug>` Chroma collection per knowledge base with `{docId, source}` metadata.
+4. **Index** — heading-aware paragraph chunks receive OpenRouter embeddings and are upserted
+   into one `kb_<slug>` Chroma collection per knowledge base with `{docId, source, chunkIndex,
+   chunkCount}` metadata.
    Manual index buttons remain for retry/re-index. Deletion removes that document's vectors.
-4. **Retrieval** — the agent calls the studio's hybrid search endpoint: vector ANN + BM25,
+5. **Retrieval** — the agent calls the studio's hybrid search endpoint: vector ANN + BM25,
    fused with RRF and optionally reranked through OpenRouter.
 
 ### Sessions
@@ -43,7 +48,7 @@ application/
   render); responses are spoken via Sarvam TTS. Evidence coverage streams to the UI.
 - `InterviewSession` rows in Postgres pin the exact persona/agent/domain versions used.
 
-## Run (four processes)
+## Run (four local processes)
 
 ```bash
 # 0. Postgres running locally, database `trainertwin` (web/.env has DATABASE_URL)
@@ -58,7 +63,7 @@ bun install
 bunx prisma migrate deploy
 bun prisma/seed.ts        # first time: imports ../data YAML + knowledge into S3
 # .env needs S3 settings, OPENROUTER_API_KEY, CHROMA_URL,
-# EVE_ORIGIN=http://localhost:2000, and COPILOT_SERVICE_SECRET
+# EVE_ORIGIN=http://localhost:2000, COPILOT_SERVICE_SECRET, and the Notion OAuth settings below
 bun run dev               # :3000
 
 # 3. Spec Copilot
@@ -74,6 +79,33 @@ uv sync
 WEB_URL=http://localhost:3000 uv run python check.py
 uv run bot.py -t webrtc   # :7860
 ```
+
+### Notion OAuth configuration
+
+Create a public Notion integration and set its redirect URL to
+`<studio-origin>/api/notion/oauth/callback`. Add these server-only values to `web/.env`:
+
+```bash
+NOTION_OAUTH_CLIENT_ID=
+NOTION_OAUTH_CLIENT_SECRET=
+NOTION_OAUTH_REDIRECT_URI=https://dash.trainertwin.localhost/api/notion/oauth/callback
+NOTION_TOKEN_ENCRYPTION_KEY=
+NOTION_API_VERSION=2026-03-11
+```
+
+Generate `NOTION_TOKEN_ENCRYPTION_KEY` with `openssl rand -base64 32`. It must be a stable
+production secret; changing it makes previously
+stored connection tokens unreadable. Do not expose any Notion credential through `NEXT_PUBLIC_*`
+variables or commit it. Trainers connect their own workspace from the knowledge-base page, then
+select a root Notion page to import.
+
+### Notion ingestion pipeline
+
+The Studio is an SQS producer: a successful Notion import request creates the durable source,
+job, and root-page records, then sends their identifiers to the standard queue. Configure Vercel
+with `AWS_REGION`, `INGESTION_QUEUE_URL`, and AWS credentials available through its default
+credential chain. The queue's Lambda consumer performs the recursive Notion fetch, S3 persistence,
+and indexing; no persistent `web` worker is required.
 
 ## Versioning model
 
@@ -92,4 +124,4 @@ Next.js proxies `/eve/v1/*` and never exposes the credential.
 
 - Production chunking and retrieval live in `web/lib/knowledge.ts`; `digest/` holds experiments.
 - The agent imports the POC directly (`POC_PATH`, default `../../synthesizer/poc`).
-- Auth/multi-user and billing are deliberately out of scope for this phase.
+- Organization-scoped authorization applies to knowledge bases, Notion connections, and imports.

@@ -1,0 +1,128 @@
+{
+  "createdAt": "2026-08-26T18:32:00.983Z",
+  "model": "openai/gpt-4o-mini",
+  "fixtureChars": 213528,
+  "passagesTotal": 622,
+  "items": [
+    {
+      "id": "q1",
+      "question": "What is the maximum wait time before a session starts in the Complete Participation group?",
+      "answer": "Max wait time before session starts is 2 minutes.",
+      "goldSpan": "## 2. Cohort Introduction\n\n## 3. Callouts\n\n1. Complete Participation group is ~2 years and above experience. So, extreme basics of web development are not taught during the sessions.\n\n1. This is not a DSA heavy programme.\n\n1. This is not a UI design heavy programme, instead more focus is onto functionality.\n\n1. As stated in the screening call, it’s a placement assisted programme and not guaranteed.\n\n1. I  will be going in-depth of concepts only as much as it is relevant.\n\n1. Max wait time before session starts is 2 minutes."
+    },
+    {
+      "id": "q2",
+      "question": "What is one way to engage with people from specific companies on LinkedIn?",
+      "answer": "Start following their engineering blogs and add comment wherever you feel relevant.",
+      "goldSpan": "### How to connect with right people on LinkedIn\n\n→ Start connecting with people from these companies to begin with.\n\n→ Start following their engineering blogs and add comment wherever you feel relevant.\n\n→ Start liking and commenting to their post, wherever it is relevant. Let this be organic."
+    },
+    {
+      "id": "q3",
+      "question": "What does the bind method do in the context of the greet function?",
+      "answer": "bind creates a new function.",
+      "goldSpan": "#### Example:\n\n```javascript\nfunction greet(city) {\n  console.log(this.name + \" from \" + city);\n}\n\nconst user1 = { name: \"Vasanth\" };\nconst user2 = { name: \"Rahul\" };\n```\n\n1️⃣ bind creates a new function\n\n```javascript\nconst boundGreet = greet.bind(user1);\nconsole.log(boundGreet === greet); // false\n```\n\n2️⃣ this is permanently fixed\n\n```javascript\nboundGreet(\"Bengaluru\");\noutput: \"Vasanth from Bengaluru\"\n```\n\n3️⃣ Cannot be overridden by call or apply\n\n```javascript\nboundGreet.call(user2, \"Mumbai\");\nboundGreet.apply(user2, [\"Delhi\"]);\n```\n\nOutput both times:\n\n```javascript\nVasanth from Mumbai\nVasanth from Delhi\n```\n\n⚠️ Even though we passed user2, this did not change."
+    },
+    {
+      "id": "q4",
+      "question": "What is the purpose of using a constructor function in object creation?",
+      "answer": "Constructors are functions called with new that automatically sets the [[Prototype]] for every object manufactured.",
+      "goldSpan": "This way, all boxes getValue method will refer to the same function, lowering memory usage. However, manually binding the __proto__ for every object creation is still very inconvenient. This is when we would use a constructor function, which automatically sets the [[Prototype]] for every object manufactured. Constructors are functions called with new."
+    },
+    {
+      "id": "q5",
+      "question": "What is the main requirement for the function promiseAllWithConcurrencyLimit in the assignment related to Uber?",
+      "answer": "It should execute no more than limit tasks at any given time.",
+      "goldSpan": "# Assignments\n\n### Promises & Asynchronous JavaScript\n\n#### Uber | Machine Coding: Asynchronous Task Runner (Concurrency Limit)\n\nQuestion: Imagine Uber is fetching data for 100 nearby drivers. To avoid hitting API rate limits or crashing the browser with too many simultaneous requests, you must implement a \"Batch Runner.\"\n\nWrite a function promiseAllWithConcurrencyLimit that takes an array of \"task functions\" (functions that return a promise) and a limit limit. It should execute no more than limit tasks at any given time. As soon as one task finishes, the next one in the queue should start.\n\nSnippet & Input Data:\n\nJavaScript"
+    },
+    {
+      "id": "q6",
+      "question": "What are the key features enabled by Fiber in React?",
+      "answer": "Time slicing, Interruptible rendering, Concurrent rendering, Better scheduling, Priority updates.",
+      "goldSpan": "### What is Fiber?\n\nFiber is React’s new internal architecture.\n\nIt is:\n\n> A data structure + scheduling system\n\nthat breaks rendering into small units of work.\n\n---\n\n#### Fiber enables:\n\n- Time slicing\n\n- Interruptible rendering\n\n- Concurrent rendering\n\n- Better scheduling\n\n- Priority updates\n\n---"
+    },
+    {
+      "id": "q7",
+      "question": "What is the main purpose of useCallback in React?",
+      "answer": "It stops function re-creation.",
+      "goldSpan": "### Important clarification\n\n- useCallback does NOT stop re-render\n\n- useCallback stops function re-creation\n\n- It mainly helps when passing callbacks to memoized children\n\n#### Example WITHOUT useCallback"
+    },
+    {
+      "id": "q8",
+      "question": "What can custom hooks in React do with other custom hooks?",
+      "answer": "Custom hooks can use other custom hooks.",
+      "goldSpan": "### Hook Composition (Very Important)\n\nCustom hooks can use other custom hooks.\n\n```javascript\nfunction useUserProfile(userId) {\n  const user = useFetchUser(userId);\n  const isOnline = useOnlineStatus();\n\nreturn { user, isOnline };\n}\n```\n\n---"
+    },
+    {
+      "id": "q9",
+      "question": "What is the role of the root router in the provided code snippet?",
+      "answer": "The root router only composes — it does not define features.",
+      "goldSpan": "#### Root router composes them\n\n```javascript\n// app/router.tsx\n<Routes>\n  {authRoutes}\n  {dashboardRoutes}\n  {profileRoutes}\n</Routes>\n```\n\n> Root router only composes — it does not define features.\n\n---"
+    },
+    {
+      "id": "q10",
+      "question": "What do Web Vitals measure according to the important clarification?",
+      "answer": "Web Vitals measure real user experience, not lab performance.",
+      "goldSpan": "#### React-specific CLS issues\n\n- Conditional rendering\n\n- Late data rendering without placeholders\n\n- Dynamic height components\n\n---\n\n### Important Clarification (Very Important)\n\n> Web Vitals measure real user experience, not lab performance.\n\nThey are:\n\n- Field metrics (real users)\n\n- Not synthetic benchmarks\n\n---"
+    },
+    {
+      "id": "q11",
+      "question": "What is the global standard for web accessibility published by W3C?",
+      "answer": "WCAG — Web Content Accessibility Guidelines",
+      "goldSpan": "### Accessibility Standards — WCAG\n\nThe global standard is:\n\n> WCAG — Web Content Accessibility Guidelines\n\nPublished by W3C.\n\n---\n\n### WCAG Compliance Levels\n\nWCAG defines three levels of compliance:\n\n---"
+    },
+    {
+      "id": "q12",
+      "question": "What happens when a cross-site POST request is made regarding cookie transmission?",
+      "answer": "Cookie NOT sent",
+      "goldSpan": "#### What happens\n\n- ✅ Same-site navigation → cookie sent\n\n- ✅ Clicking a link from another site (GET) → cookie sent\n\n- ❌ Cross-site POST / PUT / DELETE → cookie NOT sent\n\nBut:\n\n```javascript\nMalicious site sends hidden POST request to example.com\n↓\nCookie NOT sent ❌\n↓\nCSRF prevented\n```"
+    },
+    {
+      "id": "q13",
+      "question": "What is the first step in the lifecycle of a Service Worker?",
+      "answer": "Registration (Main Thread)",
+      "goldSpan": "### How Service Workers Work (Lifecycle)\n\n#### 1️⃣ Registration (Main Thread)\n\n```javascript\nnavigator.serviceWorker.register(\"/sw.js\");\n```\n\n- Happens in your app (React / JS)\n\n- Tells browser: “I want a Service Worker”\n\n---"
+    },
+    {
+      "id": "q14",
+      "question": "Why will an error thrown in an event handler not be caught by React's error boundaries?",
+      "answer": "Event handlers already run inside JS try/catch",
+      "goldSpan": "### Error Boundary vs try/catch\n\n---\n\n### Error Boundaries and Event Handlers\n\nThis will NOT be caught:\n\n```javascript\n<button onClick={() => {\n  throw new Error(\"Click error\");\n}}>\n  Click\n</button>\n```\n\nWhy?\n\n- Event handlers already run inside JS try/catch\n\n- React expects you to handle them manually\n\n---"
+    },
+    {
+      "id": "q15",
+      "question": "What does a recruiter assume if work is not quantified?",
+      "answer": "Average work.",
+      "goldSpan": "## 6️⃣ Quantification — SECRET WEAPON\n\nIf you don’t quantify → recruiter assumes average work.\n\n#### Examples of Metrics\n\n- %\n\n- Time saved\n\n- Revenue impact\n\n- User count\n\n- Performance improvement\n\n- Team size\n\n- Feature adoption\n\n---"
+    },
+    {
+      "id": "q16",
+      "question": "What are the example roles mentioned in the Role-Based Access Control (RBAC) passage?",
+      "answer": "Admin, Manager, User.",
+      "goldSpan": "#### Role-Based Access Control (RBAC)\n\nUsers are assigned roles, and roles have permissions.\n\nExample roles:\n\n- Admin\n\n- Manager\n\n- User\n\nExample UI behavior:\n\n```plain text\nAdmin → Can see user management \npage User → Cannot see admin panel\n```"
+    },
+    {
+      "id": "q17",
+      "question": "What are the key design concerns listed in the System Design Flow passage?",
+      "answer": "Startup latency, Offline fallback, Config caching, Versioning, Safe defaults, Rollback strategy.",
+      "goldSpan": "#### System Design Flow\n\n```plain text\nApp starts\n↓\nFetch config service\n↓\nCache locally\n↓\nEvaluate flags per user\n↓\nRender UI\n```\n\n---\n\n#### Key Design Concerns\n\n- Startup latency\n\n- Offline fallback\n\n- Config caching\n\n- Versioning\n\n- Safe defaults\n\n- Rollback strategy\n\n---"
+    },
+    {
+      "id": "q18",
+      "question": "What are the downsides of the described backend approach in the passage?",
+      "answer": "Many unnecessary requests, Higher server load.",
+      "goldSpan": "#### 📌 Best for\n\n✔ Simple real-time updates\n\n✔ When server cannot push data\n\n#### 📌 Downside\n\n❌ Many unnecessary requests\n\n❌ Higher server load\n\n---\n\n#### 🧑‍💻 Backend (Node.js)\n\nSame as request-response — no change needed.\n\n```plain text\napp.get(\"/status\", (req, res) => {\n  res.json({ status: Math.random() > 0.5 ? \"ON\" : \"OFF\" });\n});\n```\n\n---"
+    },
+    {
+      "id": "q19",
+      "question": "What is the primary function of a Primary/Leader in a data system?",
+      "answer": "Handles writes.",
+      "goldSpan": "#### Primary / Leader\n\nHandles writes.\n\n#### Replica / Follower\n\nServes read requests.\n\n---\n\n### 4️⃣ Data Consistency Models (Strong vs Eventual Consistency)\n\nDefines how quickly all systems see the same data.\n\n---"
+    },
+    {
+      "id": "q20",
+      "question": "What issue arises when the server receives a command to delete characters at a position that has changed in the document?",
+      "answer": "Position 6 now points to B (start of 'Beautiful'), which is wrong.",
+      "goldSpan": "## 🔴 Step 2 — Server Receives B (Created on Old Version)\n\nB says:\n\n```plain text\nDelete 5 chars at pos 6\n```\n\nBut position 6 now points to:\n\n```plain text\nB (start of \"Beautiful\")\n```\n\nThat’s wrong.\n\n---"
+    }
+  ]
+}

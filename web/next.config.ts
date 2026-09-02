@@ -1,8 +1,13 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Shared ingestion modules live beside the web application.
+  turbopack: { root: path.join(__dirname, "..") },
   // Allow dev assets (HMR etc.) on the portless subdomains
   allowedDevOrigins: ["trainertwin.localhost", "*.trainertwin.localhost"],
+  // OAuth callbacks carry short-lived authorization codes; do not print their URLs.
+  logging: { incomingRequests: { ignore: [/\/api\/youtube\/oauth\/callback(?:\?|$)/] } },
   // native/wasm binaries must not be bundled into ESM chunks
   serverExternalPackages: [
     "@firecrawl/anydoc",

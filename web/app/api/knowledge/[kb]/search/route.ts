@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { searchKnowledge } from "@/lib/knowledge";
+import { searchKnowledge, topicFilterSchema } from "@/lib/knowledge";
+import { z } from "zod";
 
 /** Hybrid knowledge retrieval used by the voice agent at session time. */
 export async function GET(req: Request, { params }: { params: Promise<{ kb: string }> }) {
@@ -7,9 +8,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ kb: stri
   const url = new URL(req.url);
   const q = url.searchParams.get("q");
   if (!q?.trim()) return NextResponse.json({ error: "Missing q" }, { status: 400 });
-  const limit = Math.min(Number(url.searchParams.get("k") ?? 3) || 3, 20);
+  const requestedLimit = z.coerce.number().int().positive().safeParse(url.searchParams.get("k") ?? 3);
+  const filter = topicFilterSchema.safeParse(url.searchParams.getAll("topic"));
+  if (!requestedLimit.success || !filter.success) {
+    return NextResponse.json({ error: "Expected a positive integer k and canonical topic slugs" }, { status: 400 });
+  }
+  const limit = Math.min(requestedLimit.data, 20);
   try {
-    const hits = await searchKnowledge(kb, q, limit);
+    const hits = await searchKnowledge(kb, q, limit, { topicFilter: filter.data });
     return NextResponse.json(
       {
         hits: hits.map((h) => ({

@@ -1,0 +1,19 @@
+{
+  "name": "trainertwin-chunk-bench",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "fetch": "bun run src/notion-public-fetch.ts",
+    "fetch:authenticated": "bun run src/notion-fetch.ts",
+    "golden": "bun run src/golden.ts",
+    "bench": "bun run src/runner.ts"
+  },
+  "dependencies": {
+    "@chonkiejs/core": "^0.0.11",
+    "chromadb": "^3.5.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5"
+  }
+}

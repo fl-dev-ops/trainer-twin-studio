@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "portless trainertwin next dev",
+    "dev": "portless trainertwin next dev --webpack",
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1116.0",
+    "@aws-sdk/client-sqs": "^3.1116.0",
     "@aws-sdk/s3-request-presigner": "^3.1116.0",
     "@base-ui/react": "^1.4.0",
     "@chroma-core/default-embed": "^0.1.9",

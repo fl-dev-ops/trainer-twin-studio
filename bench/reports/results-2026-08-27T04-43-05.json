@@ -1,0 +1,1334 @@
+{
+  "rows": [
+    {
+      "strategy": "structural-600",
+      "description": "production chunkMarkdown(target=600)",
+      "chunks": 467,
+      "avgChunkChars": 455,
+      "arm": "vector",
+      "metrics": {
+        "hitAt1": 0.6,
+        "hitAt3": 0.8,
+        "hitAt5": 0.85,
+        "hitAt10": 0.85,
+        "mrrAt10": 0.7041666666666666,
+        "ndcgAt10": 0.7411732909393883
+      },
+      "meanLatencyMs": 2
+    },
+    {
+      "strategy": "structural-600",
+      "description": "production chunkMarkdown(target=600)",
+      "chunks": 467,
+      "avgChunkChars": 455,
+      "arm": "bm25",
+      "metrics": {
+        "hitAt1": 0.7,
+        "hitAt3": 0.75,
+        "hitAt5": 0.85,
+        "hitAt10": 0.85,
+        "mrrAt10": 0.745,
+        "ndcgAt10": 0.770231768402027
+      },
+      "meanLatencyMs": 5
+    },
+    {
+      "strategy": "structural-600",
+      "description": "production chunkMarkdown(target=600)",
+      "chunks": 467,
+      "avgChunkChars": 455,
+      "arm": "hybrid",
+      "metrics": {
+        "hitAt1": 0.65,
+        "hitAt3": 0.85,
+        "hitAt5": 0.85,
+        "hitAt10": 0.85,
+        "mrrAt10": 0.7416666666666666,
+        "ndcgAt10": 0.7696394630357186
+      },
+      "meanLatencyMs": 17
+    },
+    {
+      "strategy": "structural-600",
+      "description": "production chunkMarkdown(target=600)",
+      "chunks": 467,
+      "avgChunkChars": 455,
+      "arm": "hybrid-rerank",
+      "metrics": {
+        "hitAt1": 0.75,
+        "hitAt3": 0.85,
+        "hitAt5": 0.85,
+        "hitAt10": 0.85,
+        "mrrAt10": 0.8,
+        "ndcgAt10": 0.8130929753571458
+      },
+      "meanLatencyMs": 536
+    },
+    {
+      "strategy": "structural-1200",
+      "description": "production chunkMarkdown(target=1200)",
+      "chunks": 275,
+      "avgChunkChars": 774,
+      "arm": "vector",
+      "metrics": {
+        "hitAt1": 0.7,
+        "hitAt3": 0.8,
+        "hitAt5": 0.85,
+        "hitAt10": 0.85,
+        "mrrAt10": 0.7541666666666667,
+        "ndcgAt10": 0.7780803155822426
+      },
+      "meanLatencyMs": 2
+    },
+    {
+      "strategy": "structural-1200",
+      "description": "production chunkMarkdown(target=1200)",
+      "chunks": 275,
+      "avgChunkChars": 774,
+      "arm": "bm25",
+      "metrics": {
+        "hitAt1": 0.55,
+        "hitAt3": 0.75,
+        "hitAt5": 0.85,
+        "hitAt10": 0.85,
+        "mrrAt10": 0.6475000000000001,
+        "ndcgAt10": 0.6974229559439695
+      },
+      "meanLatencyMs": 4
+    },
+    {
+      "strategy": "structural-1200",
+      "description": "production chunkMarkdown(target=1200)",
+      "chunks": 275,
+      "avgChunkChars": 774,
+      "arm": "hybrid",
+      "metrics": {
+        "hitAt1": 0.6,
+        "hitAt3": 0.85,
+        "hitAt5": 0.85,
+        "hitAt10": 0.85,
+        "mrrAt10": 0.7083333333333334,
+        "ndcgAt10": 0.7446394630357187
+      },
+      "meanLatencyMs": 16
+    },
+    {
+      "strategy": "structural-1200",
+      "description": "production chunkMarkdown(target=1200)",
+      "chunks": 275,
+      "avgChunkChars": 774,
+      "arm": "hybrid-rerank",
+      "metrics": {
+        "hitAt1": 0.8,
+        "hitAt3": 0.85,
+        "hitAt5": 0.85,
+        "hitAt10": 0.85,
+        "mrrAt10": 0.825,
+        "ndcgAt10": 0.8315464876785729
+      },
+      "meanLatencyMs": 518
+    },
+    {
+      "strategy": "structural-2000",
+      "description": "production chunkMarkdown(target=2000)",
+      "chunks": 180,
+      "avgChunkChars": 1183,
+      "arm": "vector",
+      "metrics": {
+        "hitAt1": 0.6,
+        "hitAt3": 0.9,
+        "hitAt5": 0.9,
+        "hitAt10": 1,
+        "mrrAt10": 0.7460317460317459,
+        "ndcgAt10": 0.8079041171641574
+      },
+      "meanLatencyMs": 1
+    },
+    {
+      "strategy": "structural-2000",
+      "description": "production chunkMarkdown(target=2000)",
+      "chunks": 180,
+      "avgChunkChars": 1183,
+      "arm": "bm25",
+      "metrics": {
+        "hitAt1": 0.65,
+        "hitAt3": 0.85,
+        "hitAt5": 0.95,
+        "hitAt10": 1,
+        "mrrAt10": 0.7729166666666666,
+        "ndcgAt10": 0.8284803626823445
+      },
+      "meanLatencyMs": 4
+    },
+    {
+      "strategy": "structural-2000",
+      "description": "production chunkMarkdown(target=2000)",
+      "chunks": 180,
+      "avgChunkChars": 1183,
+      "arm": "hybrid",
+      "metrics": {
+        "hitAt1": 0.6,
+        "hitAt3": 0.95,
+        "hitAt5": 1,
+        "hitAt10": 1,
+        "mrrAt10": 0.7708333333333334,
+        "ndcgAt10": 0.8292662662965341
+      },
+      "meanLatencyMs": 15
+    },
+    {
+      "strategy": "structural-2000",
+      "description": "production chunkMarkdown(target=2000)",
+      "chunks": 180,
+      "avgChunkChars": 1183,
+      "arm": "hybrid-rerank",
+      "metrics": {
+        "hitAt1": 0.85,
+        "hitAt3": 1,
+        "hitAt5": 1,
+        "hitAt10": 1,
+        "mrrAt10": 0.9166666666666667,
+        "ndcgAt10": 0.9380929753571458
+      },
+      "meanLatencyMs": 510
+    },
+    {
+      "strategy": "header-context-1200",
+      "description": "production packing + nearest-heading propagated onto every continuation chunk",
+      "chunks": 275,
+      "avgChunkChars": 774,
+      "arm": "vector",
+      "metrics": {
+        "hitAt1": 0.7,
+        "hitAt3": 0.8,
+        "hitAt5": 0.85,
+        "hitAt10": 0.85,
+        "mrrAt10": 0.7541666666666667,
+        "ndcgAt10": 0.7780803155822426
+      },
+      "meanLatencyMs": 2
+    },
+    {
+      "strategy": "header-context-1200",
+      "description": "production packing + nearest-heading propagated onto every continuation chunk",
+      "chunks": 275,
+      "avgChunkChars": 774,
+      "arm": "bm25",
+      "metrics": {
+        "hitAt1": 0.55,
+        "hitAt3": 0.75,
+        "hitAt5": 0.85,
+        "hitAt10": 0.85,
+        "mrrAt10": 0.6475000000000001,
+        "ndcgAt10": 0.6974229559439695
+      },
+      "meanLatencyMs": 5
+    },
+    {
+      "strategy": "header-context-1200",
+      "description": "production packing + nearest-heading propagated onto every continuation chunk",
+      "chunks": 275,
+      "avgChunkChars": 774,
+      "arm": "hybrid",
+      "metrics": {
+        "hitAt1": 0.6,
+        "hitAt3": 0.85,
+        "hitAt5": 0.85,
+        "hitAt10": 0.85,
+        "mrrAt10": 0.7083333333333334,
+        "ndcgAt10": 0.7446394630357187
+      },
+      "meanLatencyMs": 16
+    },
+    {
+      "strategy": "header-context-1200",
+      "description": "production packing + nearest-heading propagated onto every continuation chunk",
+      "chunks": 275,
+      "avgChunkChars": 774,
+      "arm": "hybrid-rerank",
+      "metrics": {
+        "hitAt1": 0.8,
+        "hitAt3": 0.85,
+        "hitAt5": 0.85,
+        "hitAt10": 0.85,
+        "mrrAt10": 0.825,
+        "ndcgAt10": 0.8315464876785729
+      },
+      "meanLatencyMs": 543
+    },
+    {
+      "strategy": "recursive-char-800",
+      "description": "LangChain-style recursive character split (\\n\\n > \\n > '. ' > ' '), target 800",
+      "chunks": 276,
+      "avgChunkChars": 771,
+      "arm": "vector",
+      "metrics": {
+        "hitAt1": 0.2,
+        "hitAt3": 0.35,
+        "hitAt5": 0.4,
+        "hitAt10": 0.5,
+        "mrrAt10": 0.28194444444444444,
+        "ndcgAt10": 0.33318331514864064
+      },
+      "meanLatencyMs": 1
+    },
+    {
+      "strategy": "recursive-char-800",
+      "description": "LangChain-style recursive character split (\\n\\n > \\n > '. ' > ' '), target 800",
+      "chunks": 276,
+      "avgChunkChars": 771,
+      "arm": "bm25",
+      "metrics": {
+        "hitAt1": 0.05,
+        "hitAt3": 0.25,
+        "hitAt5": 0.35,
+        "hitAt10": 0.5,
+        "mrrAt10": 0.17380952380952383,
+        "ndcgAt10": 0.2507085234185621
+      },
+      "meanLatencyMs": 5
+    },
+    {
+      "strategy": "recursive-char-800",
+      "description": "LangChain-style recursive character split (\\n\\n > \\n > '. ' > ' '), target 800",
+      "chunks": 276,
+      "avgChunkChars": 771,
+      "arm": "hybrid",
+      "metrics": {
+        "hitAt1": 0.15,
+        "hitAt3": 0.3,
+        "hitAt5": 0.4,
+        "hitAt10": 0.45,
+        "mrrAt10": 0.2571428571428572,
+        "ndcgAt10": 0.3043737855097246
+      },
+      "meanLatencyMs": 16
+    },
+    {
+      "strategy": "recursive-char-800",
+      "description": "LangChain-style recursive character split (\\n\\n > \\n > '. ' > ' '), target 800",
+      "chunks": 276,
+      "avgChunkChars": 771,
+      "arm": "hybrid-rerank",
+      "metrics": {
+        "hitAt1": 0.25,
+        "hitAt3": 0.35,
+        "hitAt5": 0.45,
+        "hitAt10": 0.55,
+        "mrrAt10": 0.3308333333333333,
+        "ndcgAt10": 0.3830436746547718
+      },
+      "meanLatencyMs": 519
+    },
+    {
+      "strategy": "sentence-overlap-800",
+      "description": "sliding sentence window (~800 chars) with one-sentence overlap",
+      "chunks": 282,
+      "avgChunkChars": 775,
+      "arm": "vector",
+      "metrics": {
+        "hitAt1": 0.05,
+        "hitAt3": 0.05,
+        "hitAt5": 0.05,
+        "hitAt10": 0.05,
+        "mrrAt10": 0.05,
+        "ndcgAt10": 0.05
+      },
+      "meanLatencyMs": 2
+    },
+    {
+      "strategy": "sentence-overlap-800",
+      "description": "sliding sentence window (~800 chars) with one-sentence overlap",
+      "chunks": 282,
+      "avgChunkChars": 775,
+      "arm": "bm25",
+      "metrics": {
+        "hitAt1": 0,
+        "hitAt3": 0,
+        "hitAt5": 0.05,
+        "hitAt10": 0.05,
+        "mrrAt10": 0.0125,
+        "ndcgAt10": 0.02153382790366965
+      },
+      "meanLatencyMs": 5
+    },
+    {
+      "strategy": "sentence-overlap-800",
+      "description": "sliding sentence window (~800 chars) with one-sentence overlap",
+      "chunks": 282,
+      "avgChunkChars": 775,
+      "arm": "hybrid",
+      "metrics": {
+        "hitAt1": 0,
+        "hitAt3": 0.05,
+        "hitAt5": 0.05,
+        "hitAt10": 0.05,
+        "mrrAt10": 0.025,
+        "ndcgAt10": 0.031546487678572877
+      },
+      "meanLatencyMs": 16
+    },
+    {
+      "strategy": "sentence-overlap-800",
+      "description": "sliding sentence window (~800 chars) with one-sentence overlap",
+      "chunks": 282,
+      "avgChunkChars": 775,
+      "arm": "hybrid-rerank",
+      "metrics": {
+        "hitAt1": 0,
+        "hitAt3": 0.05,
+        "hitAt5": 0.05,
+        "hitAt10": 0.05,
+        "mrrAt10": 0.025,
+        "ndcgAt10": 0.031546487678572877
+      },
+      "meanLatencyMs": 534
+    },
+    {
+      "strategy": "chonkie-recursive-512",
+      "description": "@chonkiejs/core RecursiveChunker at 512 char-tokens",
+      "chunks": 616,
+      "avgChunkChars": 347,
+      "arm": "vector",
+      "metrics": {
+        "hitAt1": 0.35,
+        "hitAt3": 0.7,
+        "hitAt5": 0.75,
+        "hitAt10": 0.75,
+        "mrrAt10": 0.5266666666666666,
+        "ndcgAt10": 0.5828858906557876
+      },
+      "meanLatencyMs": 2
+    },
+    {
+      "strategy": "chonkie-recursive-512",
+      "description": "@chonkiejs/core RecursiveChunker at 512 char-tokens",
+      "chunks": 616,
+      "avgChunkChars": 347,
+      "arm": "bm25",
+      "metrics": {
+        "hitAt1": 0.45,
+        "hitAt3": 0.6,
+        "hitAt5": 0.7,
+        "hitAt10": 0.8,
+        "mrrAt10": 0.5395833333333334,
+        "ndcgAt10": 0.5943190193241104
+      },
+      "meanLatencyMs": 5
+    },
+    {
+      "strategy": "chonkie-recursive-512",
+      "description": "@chonkiejs/core RecursiveChunker at 512 char-tokens",
+      "chunks": 616,
+      "avgChunkChars": 347,
+      "arm": "hybrid",
+      "metrics": {
+        "hitAt1": 0.4,
+        "hitAt3": 0.65,
+        "hitAt5": 0.75,
+        "hitAt10": 0.8,
+        "mrrAt10": 0.5441666666666666,
+        "ndcgAt10": 0.6003764260624852
+      },
+      "meanLatencyMs": 18
+    },
+    {
+      "strategy": "chonkie-recursive-512",
+      "description": "@chonkiejs/core RecursiveChunker at 512 char-tokens",
+      "chunks": 616,
+      "avgChunkChars": 347,
+      "arm": "hybrid-rerank",
+      "metrics": {
+        "hitAt1": 0.7,
+        "hitAt3": 0.8,
+        "hitAt5": 0.8,
+        "hitAt10": 0.8,
+        "mrrAt10": 0.75,
+        "ndcgAt10": 0.754670706836327
+      },
+      "meanLatencyMs": 505
+    },
+    {
+      "strategy": "semantic-0.55",
+      "description": "embedding-based semantic merge of adjacent sentences (threshold 0.55, production embeddings)",
+      "chunks": 1616,
+      "avgChunkChars": 128,
+      "arm": "vector",
+      "metrics": {
+        "hitAt1": 0.5,
+        "hitAt3": 0.75,
+        "hitAt5": 0.8,
+        "hitAt10": 0.9,
+        "mrrAt10": 0.6363095238095238,
+        "ndcgAt10": 0.6771679399384917
+      },
+      "meanLatencyMs": 3
+    },
+    {
+      "strategy": "semantic-0.55",
+      "description": "embedding-based semantic merge of adjacent sentences (threshold 0.55, production embeddings)",
+      "chunks": 1616,
+      "avgChunkChars": 128,
+      "arm": "bm25",
+      "metrics": {
+        "hitAt1": 0.6,
+        "hitAt3": 0.65,
+        "hitAt5": 0.75,
+        "hitAt10": 0.85,
+        "mrrAt10": 0.6538095238095238,
+        "ndcgAt10": 0.6904720865757835
+      },
+      "meanLatencyMs": 6
+    },
+    {
+      "strategy": "semantic-0.55",
+      "description": "embedding-based semantic merge of adjacent sentences (threshold 0.55, production embeddings)",
+      "chunks": 1616,
+      "avgChunkChars": 128,
+      "arm": "hybrid",
+      "metrics": {
+        "hitAt1": 0.5,
+        "hitAt3": 0.8,
+        "hitAt5": 0.85,
+        "hitAt10": 0.85,
+        "mrrAt10": 0.6458333333333334,
+        "ndcgAt10": 0.6647366874531618
+      },
+      "meanLatencyMs": 23
+    },
+    {
+      "strategy": "semantic-0.55",
+      "description": "embedding-based semantic merge of adjacent sentences (threshold 0.55, production embeddings)",
+      "chunks": 1616,
+      "avgChunkChars": 128,
+      "arm": "hybrid-rerank",
+      "metrics": {
+        "hitAt1": 0.6,
+        "hitAt3": 0.8,
+        "hitAt5": 0.85,
+        "hitAt10": 0.85,
+        "mrrAt10": 0.7125,
+        "ndcgAt10": 0.7250224015482063
+      },
+      "meanLatencyMs": 856
+    }
+  ],
+  "judged": {
+    "structural-600|hybrid": [
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      }
+    ],
+    "structural-1200|hybrid": [
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      }
+    ],
+    "structural-2000|hybrid": [
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 3,
+        "answerRelevance": 4,
+        "contextPrecision": 3
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      }
+    ],
+    "header-context-1200|hybrid": [
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 4,
+        "contextPrecision": 4
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      }
+    ],
+    "recursive-char-800|hybrid": [
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 3,
+        "answerRelevance": 4,
+        "contextPrecision": 3
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 3,
+        "answerRelevance": 4,
+        "contextPrecision": 3
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 3,
+        "answerRelevance": 4,
+        "contextPrecision": 3
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 2,
+        "contextPrecision": 2
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      }
+    ],
+    "sentence-overlap-800|hybrid": [
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 2,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 2,
+        "answerRelevance": 3,
+        "contextPrecision": 2
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 2,
+        "contextPrecision": 1
+      }
+    ],
+    "chonkie-recursive-512|hybrid": [
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 3,
+        "answerRelevance": 4,
+        "contextPrecision": 3
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 3,
+        "answerRelevance": 3,
+        "contextPrecision": 3
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      }
+    ],
+    "semantic-0.55|hybrid": [
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 2,
+        "answerRelevance": 3,
+        "contextPrecision": 2
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 4
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 4,
+        "answerRelevance": 5,
+        "contextPrecision": 4
+      },
+      {
+        "faithfulness": 2,
+        "answerRelevance": 3,
+        "contextPrecision": 2
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 4
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 1,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 4
+      },
+      {
+        "faithfulness": 1,
+        "answerRelevance": 2,
+        "contextPrecision": 1
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      },
+      {
+        "faithfulness": 5,
+        "answerRelevance": 5,
+        "contextPrecision": 5
+      }
+    ]
+  }
+}

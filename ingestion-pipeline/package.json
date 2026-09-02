@@ -1,0 +1,23 @@
+{
+  "name": "trainertwin-ingestion-pipeline",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "bash scripts/deploy.sh",
+    "build": "bun build src/handler.ts --target=node --format=cjs --outfile dist/index.js",
+    "smoke": "bun run src/smoke.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1116.0",
+    "@aws-sdk/client-sqs": "^3.1116.0",
+    "@openrouter/sdk": "^1.2.75",
+    "chromadb": "^3.5.0",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^20",
+    "@types/pg": "^8.15.6",
+    "typescript": "^5"
+  }
+}

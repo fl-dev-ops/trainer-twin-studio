@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { searchKnowledge } from "@/lib/knowledge";
+import { searchKnowledge, topicFilterSchema } from "@/lib/knowledge";
 import { specDraftBundleSchema } from "@/lib/spec-draft-schema";
 import { publishSpecDraft, readSpecDraft, saveSpecDraft } from "@/lib/spec-drafts";
 
@@ -19,6 +19,7 @@ const requestSchema = z.discriminatedUnion("action", [
     knowledgeBase: slug,
     query: z.string().trim().min(2).max(500),
     limit: z.number().int().min(1).max(8),
+    topicFilter: topicFilterSchema.optional(),
   }).strict(),
 ]);
 
@@ -94,7 +95,7 @@ export async function POST(request: Request) {
       select: { id: true },
     });
     if (!exists) return Response.json({ error: `No indexed knowledge base named "${input.knowledgeBase}"` });
-    const results = await searchKnowledge(input.knowledgeBase, input.query, input.limit);
+    const results = await searchKnowledge(input.knowledgeBase, input.query, input.limit, { topicFilter: input.topicFilter });
     return Response.json({
       query: input.query,
       knowledgeBase: input.knowledgeBase,

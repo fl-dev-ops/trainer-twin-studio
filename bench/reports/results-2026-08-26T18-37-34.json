@@ -1,0 +1,149 @@
+{
+  "rows": [
+    {
+      "strategy": "structural-1200",
+      "description": "production chunkMarkdown(target=1200)",
+      "chunks": 275,
+      "avgChunkChars": 774,
+      "arm": "vector",
+      "metrics": {
+        "hitAt1": 0.7,
+        "hitAt3": 0.9,
+        "hitAt5": 1,
+        "hitAt10": 1,
+        "mrrAt10": 0.8083333333333332,
+        "ndcgAt10": 0.8561606311644852
+      },
+      "meanLatencyMs": 2
+    },
+    {
+      "strategy": "structural-1200",
+      "description": "production chunkMarkdown(target=1200)",
+      "chunks": 275,
+      "avgChunkChars": 774,
+      "arm": "bm25",
+      "metrics": {
+        "hitAt1": 0.6,
+        "hitAt3": 0.8,
+        "hitAt5": 1,
+        "hitAt10": 1,
+        "mrrAt10": 0.7283333333333333,
+        "ndcgAt10": 0.7948459118879392
+      },
+      "meanLatencyMs": 6
+    },
+    {
+      "strategy": "structural-1200",
+      "description": "production chunkMarkdown(target=1200)",
+      "chunks": 275,
+      "avgChunkChars": 774,
+      "arm": "hybrid",
+      "metrics": {
+        "hitAt1": 0.6,
+        "hitAt3": 1,
+        "hitAt5": 1,
+        "hitAt10": 1,
+        "mrrAt10": 0.7666666666666667,
+        "ndcgAt10": 0.8261859507142916
+      },
+      "meanLatencyMs": 5
+    },
+    {
+      "strategy": "header-context-1200",
+      "description": "production packing + nearest-heading propagated onto every continuation chunk",
+      "chunks": 275,
+      "avgChunkChars": 774,
+      "arm": "vector",
+      "metrics": {
+        "hitAt1": 0.7,
+        "hitAt3": 0.9,
+        "hitAt5": 1,
+        "hitAt10": 1,
+        "mrrAt10": 0.8083333333333332,
+        "ndcgAt10": 0.8561606311644852
+      },
+      "meanLatencyMs": 1
+    },
+    {
+      "strategy": "header-context-1200",
+      "description": "production packing + nearest-heading propagated onto every continuation chunk",
+      "chunks": 275,
+      "avgChunkChars": 774,
+      "arm": "bm25",
+      "metrics": {
+        "hitAt1": 0.6,
+        "hitAt3": 0.8,
+        "hitAt5": 1,
+        "hitAt10": 1,
+        "mrrAt10": 0.7283333333333333,
+        "ndcgAt10": 0.7948459118879392
+      },
+      "meanLatencyMs": 5
+    },
+    {
+      "strategy": "header-context-1200",
+      "description": "production packing + nearest-heading propagated onto every continuation chunk",
+      "chunks": 275,
+      "avgChunkChars": 774,
+      "arm": "hybrid",
+      "metrics": {
+        "hitAt1": 0.6,
+        "hitAt3": 1,
+        "hitAt5": 1,
+        "hitAt10": 1,
+        "mrrAt10": 0.7666666666666667,
+        "ndcgAt10": 0.8261859507142916
+      },
+      "meanLatencyMs": 5
+    },
+    {
+      "strategy": "semantic-0.55",
+      "description": "embedding-based semantic merge of adjacent sentences (threshold 0.55, production embeddings)",
+      "chunks": 1616,
+      "avgChunkChars": 128,
+      "arm": "vector",
+      "metrics": {
+        "hitAt1": 0.5,
+        "hitAt3": 0.8,
+        "hitAt5": 0.9,
+        "hitAt10": 0.9,
+        "mrrAt10": 0.6416666666666666,
+        "ndcgAt10": 0.6694752279611839
+      },
+      "meanLatencyMs": 3
+    },
+    {
+      "strategy": "semantic-0.55",
+      "description": "embedding-based semantic merge of adjacent sentences (threshold 0.55, production embeddings)",
+      "chunks": 1616,
+      "avgChunkChars": 128,
+      "arm": "bm25",
+      "metrics": {
+        "hitAt1": 0.6,
+        "hitAt3": 0.7,
+        "hitAt5": 0.9,
+        "hitAt10": 0.9,
+        "mrrAt10": 0.6833333333333333,
+        "ndcgAt10": 0.7361353116146786
+      },
+      "meanLatencyMs": 6
+    },
+    {
+      "strategy": "semantic-0.55",
+      "description": "embedding-based semantic merge of adjacent sentences (threshold 0.55, production embeddings)",
+      "chunks": 1616,
+      "avgChunkChars": 128,
+      "arm": "hybrid",
+      "metrics": {
+        "hitAt1": 0.5,
+        "hitAt3": 0.9,
+        "hitAt5": 0.9,
+        "hitAt10": 0.9,
+        "mrrAt10": 0.6833333333333333,
+        "ndcgAt10": 0.708464552711285
+      },
+      "meanLatencyMs": 7
+    }
+  ],
+  "judged": {}
+}
