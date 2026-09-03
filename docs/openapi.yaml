@@ -432,7 +432,7 @@ paths:
       operationId: getSession
       tags: [Sessions]
       summary: Get a session
-      description: Returns pinned configuration versions, transcript, and evidence when available.
+      description: Returns pinned configuration versions, transcript, evidence, and a presigned download URL for the recording when available.
       responses:
         '200':
           description: Session details.
@@ -857,3 +857,6 @@ components:
             evidence:
               description: Structured evaluation evidence when available.
               type: [object, array, 'null']
+            audioUrl:
+              description: Presigned recording download URL, valid for one hour. Null when no recording exists.
+              type: [string, 'null']

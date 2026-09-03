@@ -81,40 +81,26 @@ export default async function SessionsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Scenario</TableHead>
                   <TableHead>Started</TableHead>
                   <TableHead>Persona</TableHead>
-                  <TableHead>Scenario</TableHead>
-                  <TableHead>Domain</TableHead>
-                  <TableHead>Context</TableHead>
-                  <TableHead>Recording</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {sessions.map((session) => (
                   <TableRow key={session.id}>
+                    <TableCell className="font-medium">
+                      <Link href={`/sessions/${session.id}`} className="underline underline-offset-4">
+                        {session.agentSlug}
+                      </Link>{" "}
+                      <Badge variant="outline">v{session.agentVersion}</Badge>
+                    </TableCell>
                     <TableCell className="text-muted-foreground">
                       {session.startedAt.toISOString().replace("T", " ").slice(0, 16)}
                     </TableCell>
-                    <TableCell className="font-medium">
-                      <Link href={`/sessions/${session.id}`} className="underline underline-offset-4">
-                        {session.personaSlug}
-                      </Link>{" "}
-                      <Badge variant="outline">v{session.personaVersion}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      {session.agentSlug} <Badge variant="outline">v{session.agentVersion}</Badge>
-                    </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {session.domainSlug} <Badge variant="outline">v{session.domainVersion}</Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{session.contextName ?? "—"}</TableCell>
-                    <TableCell>
-                      {session.s3AudioKey ? (
-                        <Badge variant="secondary">audio</Badge>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
+                      {session.personaSlug} <Badge variant="outline">v{session.personaVersion}</Badge>
                     </TableCell>
                     <TableCell>
                       <Badge variant={STATUS_VARIANT[session.status] ?? "outline"}>{session.status}</Badge>
