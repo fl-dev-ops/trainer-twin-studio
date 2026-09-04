@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { disconnectYouTube, listYouTubeImports, previewYouTubeImport, queueYouTubeSync } from "@/lib/youtube-ingestion";
+import { disconnectYouTube, listYouTubeImports, previewYouTubeImport, queueYouTubeSync, refreshYouTubeDocument } from "@/lib/youtube-ingestion";
 import { youtubeRequestSchema, youtubeDisconnectSchema } from "@/lib/youtube";
 import { resolveSessionUser } from "@/lib/session-user";
 import { dashboardUrl } from "@/lib/dashboard-url.server";
@@ -47,9 +47,19 @@ export async function POST(request: Request, { params }: Params) {
   if (!org || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (Number(request.headers.get("content-length") ?? 0) > 8192) return NextResponse.json({ error: "Request too large" }, { status: 413 });
   const parsed = youtubeRequestSchema.safeParse(await readInput(request));
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message || "Invalid YouTube URL" }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message || "Invalid YouTube request" }, { status: 400 });
   const { kb } = await params;
   try {
+    if (parsed.data.action === "refresh-document") {
+      const result = await refreshYouTubeDocument({
+        orgId: org.id,
+        userId: user.id,
+        kbSlug: kb,
+        documentId: parsed.data.documentId,
+      });
+      return NextResponse.json(result, { status: 202 });
+    }
+
     const { action, ...input } = parsed.data;
     const result = await (action === "preview" ? previewYouTubeImport : queueYouTubeSync)({
       orgId: org.id,

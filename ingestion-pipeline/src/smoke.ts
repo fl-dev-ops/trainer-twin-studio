@@ -1,6 +1,6 @@
 import { handler } from "./handler";
 import { parseQueueMessage } from "./message";
-import { normalizeNotionId, sanitizeNotionMarkdown } from "./notion";
+import { normalizeNotionId, sanitizeNotionMarkdown } from "./adapters/notion/acquisition";
 
 const message = parseQueueMessage('{"jobId":"job_1","workItemId":"work_1"}');
 if (message.workItemId !== "work_1") throw new Error("Message parsing failed");

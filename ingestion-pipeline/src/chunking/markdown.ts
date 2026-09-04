@@ -5,6 +5,7 @@ export type PreparedChunk = {
   text: string;
   sectionIds: string[];
   topics: string[];
+  proposedTopics?: string[];
   startSeconds?: number;
   endSeconds?: number;
 };

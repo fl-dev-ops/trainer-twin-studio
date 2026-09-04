@@ -29,9 +29,10 @@ export async function GET(_req: Request, { params }: Params) {
     return NextResponse.json({ files: await listKnowledgeFiles(org.id, base) });
   }
   if (rest[0] === "preview") {
-    const url = await getKnowledgePreviewUrl(org.id, base, rest[1]);
-    if (!url) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    return NextResponse.json({ url });
+    const fileSlug = rest.slice(1).join("/");
+    const preview = await getKnowledgePreviewUrl(org.id, base, fileSlug);
+    if (!preview) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json(preview);
   }
   return NextResponse.json({ error: "Not found" }, { status: 404 });
 }

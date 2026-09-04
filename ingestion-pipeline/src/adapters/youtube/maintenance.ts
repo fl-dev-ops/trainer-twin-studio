@@ -1,13 +1,13 @@
 import { DeleteObjectsCommand, ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 import { SendMessageCommand, SQSClient } from "@aws-sdk/client-sqs";
 import type { Pool } from "pg";
-import type { PipelineConfig } from "./config";
-import { identifierOnlyMessage } from "./message";
-import { removeDocumentStrict } from "./knowledge";
-import { youtubeClient } from "./youtube";
-import { googleRequest, youtubeConfig } from "../../shared/youtube/http.server";
-import { decryptToken, tokenBinding } from "../../shared/youtube/tokens.server";
-import { YouTubeError } from "../../shared/youtube/types";
+import type { PipelineConfig } from "../../config";
+import { identifierOnlyMessage } from "../../message";
+import { removeDocumentStrict } from "../../knowledge";
+import { youtubeClient } from "./processor";
+import { googleRequest, youtubeConfig } from "../../../../shared/youtube/http.server";
+import { decryptToken, tokenBinding } from "../../../../shared/youtube/tokens.server";
+import { YouTubeError } from "../../../../shared/youtube/types";
 
 type Connection = { id: string; orgId: string; userId: string; status: string; lastVerifiedAt: Date; updatedAt: Date; refreshTokenCiphertext: string | null; accessTokenCiphertext: string | null };
 
@@ -36,8 +36,8 @@ async function cleanupConnection(pool: Pool, config: PipelineConfig, connection:
         "tokenExpiresAt" = NULL WHERE id = $1 AND status = 'disconnecting'`, [connection.id]);
     } catch (error) { revocationError = error; }
   }
-  const documents = await pool.query<{ id: string; kbSlug: string; s3SourceKey: string; s3MarkdownKey: string }>(`
-    SELECT document.id, kb.slug AS "kbSlug", document."s3SourceKey", document."s3MarkdownKey"
+  const documents = await pool.query<Document>(`
+    SELECT document.id, kb.slug AS "kbSlug", document."s3SourceKey", document."s3MarkdownKey", document."s3QuestionsKey"
     FROM "KnowledgeDocument" document JOIN "KnowledgeSource" source ON source.id = document."sourceId"
     JOIN "KnowledgeBase" kb ON kb.id = document."kbId" AND kb."orgId" = source."orgId"
     JOIN "YouTubeSourceConfig" config ON config."sourceId" = source.id
@@ -54,7 +54,7 @@ async function cleanupConnection(pool: Pool, config: PipelineConfig, connection:
   }
 }
 
-type Document = { id: string; kbSlug: string; s3SourceKey: string; s3MarkdownKey: string };
+type Document = { id: string; kbSlug: string; s3SourceKey: string | null; s3MarkdownKey: string | null; s3QuestionsKey: string | null };
 
 async function deleteStoredDocuments(pool: Pool, config: PipelineConfig, orgId: string, documents: Document[], deadline: number) {
   const startedAt = Date.now();
@@ -64,7 +64,7 @@ async function deleteStoredDocuments(pool: Pool, config: PipelineConfig, orgId: 
     if (Date.now() > deadline) return false;
     await removeDocumentStrict(config, document.kbSlug, document.id);
     const prefix = `${config.s3BasePrefix}/${orgId}/${document.kbSlug}/${document.id}/`;
-    if (![document.s3SourceKey, document.s3MarkdownKey].every((key) => key === "pending" || key.startsWith(prefix))) {
+    if (![document.s3SourceKey, document.s3MarkdownKey, document.s3QuestionsKey].every((key) => !key || key === "pending" || key.startsWith(prefix))) {
       throw new Error("YouTube cleanup refused a key outside the document prefix");
     }
     let continuationToken: string | undefined;
@@ -99,7 +99,7 @@ async function expireTranscripts(pool: Pool, config: PipelineConfig, deadline: n
     const running = await pool.query(`SELECT item.id FROM "IngestionWorkItem" item JOIN "IngestionJob" job ON job.id = item."jobId"
       WHERE job."sourceId" = $1 AND item.status = 'running' AND item."leaseExpiresAt" > NOW() LIMIT 1`, [source.id]);
     if (running.rowCount) continue;
-    const documents = await pool.query<Document>(`SELECT document.id, kb.slug AS "kbSlug", document."s3SourceKey", document."s3MarkdownKey"
+    const documents = await pool.query<Document>(`SELECT document.id, kb.slug AS "kbSlug", document."s3SourceKey", document."s3MarkdownKey", document."s3QuestionsKey"
       FROM "KnowledgeDocument" document JOIN "KnowledgeBase" kb ON kb.id = document."kbId"
       WHERE document."sourceId" = $1 AND kb."orgId" = $2`, [source.id, source.orgId]);
     if (!(await deleteStoredDocuments(pool, config, source.orgId, documents.rows, deadline))) return;

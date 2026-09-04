@@ -4,7 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import "./env";
 import { parseNotionPageId } from "../../web/lib/notion";
-import { getPublicNotionPage } from "../../ingestion-pipeline/src/notion-public";
+import { getPublicNotionPage } from "../../ingestion-pipeline/src/adapters/notion/public-acquisition";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixtureDir = resolve(here, "../fixtures");

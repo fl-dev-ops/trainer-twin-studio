@@ -119,6 +119,57 @@ export async function queueYouTubeSync(input: ImportContext & YouTubeImportInput
     throw error;
   }
 }
+/** Resolves document -> YouTube source -> active connection and queues refresh. */
+export async function refreshYouTubeDocument(input: {
+  orgId: string;
+  userId: string;
+  kbSlug: string;
+  documentId: string;
+}) {
+  const kb = await knowledgeBase(input.orgId, input.kbSlug);
+  const doc = await db.knowledgeDocument.findFirst({
+    where: {
+      id: input.documentId,
+      kbId: kb.id,
+      source: {
+        orgId: input.orgId,
+        kbId: kb.id,
+        connector: "youtube",
+      },
+    },
+    select: {
+      source: {
+        select: {
+          sourceUrl: true,
+          youtube: {
+            select: {
+              connectionId: true,
+              connection: { select: { id: true, orgId: true, userId: true, status: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!doc || !doc.source || !doc.source.youtube) {
+    throw new YouTubeError("NOT_FOUND", "YouTube document not found");
+  }
+
+  const connection = doc.source.youtube.connection;
+  if (!connection || connection.orgId !== input.orgId || connection.userId !== input.userId || connection.status !== "active") {
+    throw new YouTubeError("RECONNECT_REQUIRED", "Active YouTube connection not found for this document");
+  }
+
+  return queueYouTubeSync({
+    orgId: input.orgId,
+    userId: input.userId,
+    kbSlug: input.kbSlug,
+    url: doc.source.sourceUrl,
+    connectionId: doc.source.youtube.connectionId,
+    refresh: true,
+  });
+}
 
 /** Disables access immediately; maintenance performs retryable token and content cleanup. */
 export async function disconnectYouTube(orgId: string, userId: string, kbSlug: string, connectionId: string) {

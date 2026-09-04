@@ -12,11 +12,14 @@ Each SQS message is exactly:
 
 The handler claims an `IngestionWorkItem`, then loads its source, connector
 configuration, hierarchy, and validated work instructions from Postgres. Notion
-creates one resource item per discovered page. YouTube creates transcript segment
-items spanning at most 15 video minutes plus a final publication item. Segment
-embeddings remain staged in S3 until every segment succeeds; only the publication
-item replaces stable Chroma IDs (`documentId#chunkIndex`). Duplicate delivery is
-ignored while the explicit 11-minute work lease is active.
+creates one resource item per discovered page. YouTube stores the complete timed
+caption transcript as `transcript.json`, creates segment items spanning at most
+15 video minutes, and finishes with a publication item. Each segment makes one
+structured LLM request that extracts substantive spoken questions and predicts
+topic candidates. Question embeddings remain staged in S3 until every segment
+succeeds; only publication writes `questions.json` and replaces stable Chroma
+records with one vector per question. Duplicate delivery is ignored while the
+explicit 11-minute work lease is active.
 
 ## Required Lambda configuration
 
@@ -35,10 +38,11 @@ and either `OPENROUTER_API_KEY` or `LLM_API_KEY` are required. Optional settings
 - `INGESTION_MAX_RECEIVE_COUNT` (default `5`)
 
 OpenRouter calls use `@openrouter/sdk` and its default endpoint; no base-URL setting
-is needed. Topic prompts and normalized-name matching are shared with web ingestion.
-Matching ignores case, spaces, dots, and hyphens, while newly proposed slugs use
-lowercase hyphenated words. Existing slugs are preserved; this is not a topic-row
-merge, a database uniqueness migration, or a large-catalog retrieval implementation.
+is needed. Topic normalization and catalog matching are shared with web ingestion.
+YouTube sends static topic-format examples rather than the catalog to the extraction
+model. Matching ignores case, spaces, dots, and hyphens. Approved matches are stored
+as canonical `topics`; missing labels create `proposed` rows and remain under
+`proposedTopics` until the reconciliation script runs after approval.
 
 The database must expose `IngestionJob.activeKey` and `IngestionWorkItem` with its
 work identity, hierarchy, status, payload, artifact, attempt, and lease fields.
@@ -64,7 +68,7 @@ a Notion workspace. The producer validates a HTTPS Notion URL, creates a
 A unique connector-neutral `identityKey` deduplicates public roots within a knowledge base. Public jobs
 are visible to that knowledge base's organization; OAuth jobs remain user-scoped.
 
-The Lambda uses `src/notion-public.ts`, shared with the benchmark fetcher, to read
+The Lambda uses `src/adapters/notion/public-acquisition.ts`, shared with the benchmark fetcher, to read
 one public page and render Markdown. It enqueues discovered child pages separately,
 then runs the existing cleaner, structural chunker, topic classification, S3 storage,
 and Chroma indexing. It never uses a Notion API token, login cookie, or OAuth fallback.
@@ -83,6 +87,18 @@ base. Follow its job ID through `[JOB:notion-sync] enqueue-*`, Lambda's
 records with matching document/page IDs. Confirm all pages are processed and every
 nonempty document is indexed. Typechecks, a successful queue send, and a Lambda
 build alone do not verify this flow.
+
+## YouTube question artifacts
+
+YouTube documents do not store or expose rendered transcript Markdown. The document
+source key points to the complete private `transcript.json`; its nullable questions
+key points to the published `questions.json` used by the web preview. Chroma stores
+exactly one vector per question, embedding only the displayed question text. Approved
+topics and proposed topic candidates remain separate metadata arrays.
+
+After separately approving proposed topic rows, preview the metadata-only reconciliation
+with `bun run reconcile-youtube-topics`; add `-- --apply` to update matching question
+artifacts and Chroma metadata without regenerating embeddings.
 
 ## Deploy
 

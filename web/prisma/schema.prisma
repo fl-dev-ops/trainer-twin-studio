@@ -195,7 +195,8 @@ model KnowledgeDocument {
   ext               String
   size              Int
   s3SourceKey       String
-  s3MarkdownKey     String
+  s3MarkdownKey     String?
+  s3QuestionsKey    String?
   status            String    @default("uploaded") // uploaded | digesting | indexed | failed
   error             String?
   indexedAt         DateTime?
@@ -524,10 +525,15 @@ model Invitation {
 
 // Canonical topic taxonomy for closed-set classification. "proposed" rows come
 // from the doc-level LLM pass and need approval before wide use.
+enum TopicStatus {
+  proposed
+  approved
+}
+
 model Topic {
-  id          String   @id @default(cuid())
-  slug        String   @unique
+  id          String      @id @default(cuid())
+  slug        String      @unique
   description String
-  status      String   @default("approved") // approved | proposed
-  createdAt   DateTime @default(now())
+  status      TopicStatus @default(approved)
+  createdAt   DateTime    @default(now())
 }

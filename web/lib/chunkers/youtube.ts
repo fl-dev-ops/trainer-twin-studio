@@ -1,1 +1,1 @@
-export * from "../../../ingestion-pipeline/src/chunking/youtube";
+export * from "../../../ingestion-pipeline/src/adapters/youtube/chunking/youtube";

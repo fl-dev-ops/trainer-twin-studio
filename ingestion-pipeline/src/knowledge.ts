@@ -181,11 +181,18 @@ export async function replaceDocumentVectors(
   source: string,
   chunks: PreparedChunk[],
   vectors: number[][],
-  identity: { pageId?: string; pageTitle: string; chunkingVersion: string },
+  identity: {
+    pageId?: string;
+    pageTitle: string;
+    chunkingVersion: string;
+    kind?: "youtube_question";
+    videoId?: string;
+    extractionVersion?: string;
+  },
 ): Promise<number> {
-  if (!chunks.length || vectors.length !== chunks.length) throw new Error("Incomplete document vectors");
+  if (vectors.length !== chunks.length) throw new Error("Incomplete document vectors");
   const dimensions = vectors[0]?.length;
-  if (!dimensions || vectors.some((vector) => vector.length !== dimensions || vector.some((value) => !Number.isFinite(value)))) {
+  if (chunks.length && (!dimensions || vectors.some((vector) => vector.length !== dimensions || vector.some((value) => !Number.isFinite(value))))) {
     throw new Error("Invalid document vectors");
   }
   const startedAt = Date.now();
@@ -196,16 +203,22 @@ export async function replaceDocumentVectors(
   for (let start = 0; start < chunks.length; start += 250) {
     const batch = chunks.slice(start, start + 250);
     await collection.upsert({
-      ids: batch.map((_, offset) => `${docId}#${start + offset}`),
+      ids: batch.map((_, offset) => identity.kind === "youtube_question"
+        ? `${docId}#question-${String(start + offset).padStart(6, "0")}`
+        : `${docId}#${start + offset}`),
       embeddings: vectors.slice(start, start + 250),
       documents: batch.map((chunk) => chunk.text),
       metadatas: batch.map((chunk, offset) => ({
         docId, source, chunkIndex: start + offset, chunkCount: chunks.length,
         pageTitle: identity.pageTitle, chunkingVersion: identity.chunkingVersion,
+        ...(identity.kind ? { kind: identity.kind } : {}),
+        ...(identity.videoId ? { videoId: identity.videoId } : {}),
+        ...(identity.extractionVersion ? { extractionVersion: identity.extractionVersion } : {}),
         ...(identity.pageId ? { pageId: identity.pageId } : {}),
         ...(chunk.startSeconds !== undefined ? { startSeconds: chunk.startSeconds, endSeconds: chunk.endSeconds! } : {}),
         ...(chunk.sectionIds.length ? { sectionIds: chunk.sectionIds } : {}),
         ...(chunk.topics.length ? { topics: chunk.topics } : {}),
+        ...(chunk.proposedTopics?.length ? { proposedTopics: chunk.proposedTopics } : {}),
       })),
     });
   }

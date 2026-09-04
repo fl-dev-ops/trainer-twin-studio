@@ -5,7 +5,8 @@
   "scripts": {
     "deploy": "bash scripts/deploy.sh",
     "build": "bun build src/handler.ts --target=node --format=cjs --outfile dist/index.js",
-    "smoke": "bun run src/smoke.ts"
+    "smoke": "bun run src/smoke.ts",
+    "reconcile-youtube-topics": "bun scripts/reconcile-approved-youtube-topics.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1116.0",

@@ -1,5 +1,5 @@
 import { createDecipheriv } from "node:crypto";
-import type { PipelineConfig } from "./config";
+import type { PipelineConfig } from "../../config";
 
 const BACKOFF_MS = [500, 2_000, 4_500];
 
@@ -123,4 +123,4 @@ export async function listNotionChildPageIds(config: PipelineConfig, pageId: str
   return [...pages];
 }
 
-export { sanitizeNotionMarkdown } from "./cleaners/notion";
+export { sanitizeNotionMarkdown } from "./cleaner";

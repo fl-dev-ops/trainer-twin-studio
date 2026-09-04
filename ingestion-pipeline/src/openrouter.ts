@@ -7,28 +7,34 @@ export function createOpenRouter(apiKey = process.env.OPENROUTER_API_KEY ?? proc
 }
 
 /** Preserve three attempts, including malformed JSON, without stacking SDK retries. */
-export async function generateTopicJson(client: OpenRouter, model: string, system: string, user: string): Promise<unknown> {
+export async function generateTopicJson(
+  client: OpenRouter,
+  model: string,
+  system: string,
+  user: string,
+  operation = "topic-classification",
+): Promise<unknown> {
   for (let attempt = 1; attempt <= 3; attempt++) {
     const startedAt = Date.now();
-    console.info(`[LLM:topic-classification] start model=${model} attempt=${attempt}`);
+    console.info(`[LLM:${operation}] start model=${model} attempt=${attempt}`);
     try {
       const response = await client.chat.send({ chatRequest: {
         model, messages: [{ role: "system", content: system }, { role: "user", content: user }],
         responseFormat: { type: "json_object" }, temperature: 0, stream: false,
       } });
-      if (!("choices" in response)) throw new Error("Expected a non-streaming topic response");
+      if (!("choices" in response)) throw new Error("Expected a non-streaming structured response");
       const content = response.choices[0]?.message.content;
-      if (typeof content !== "string") throw new Error("Expected topic JSON text");
+      if (typeof content !== "string") throw new Error("Expected structured JSON text");
       const result: unknown = JSON.parse(content.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, ""));
-      console.info(`[LLM:topic-classification] complete model=${model} elapsedMs=${Date.now() - startedAt}`);
+      console.info(`[LLM:${operation}] complete model=${model} elapsedMs=${Date.now() - startedAt}`);
       return result;
     } catch (error) {
-      console.error(`[LLM:topic-classification] failed model=${model} attempt=${attempt} elapsedMs=${Date.now() - startedAt} error=${error instanceof Error ? error.name : "UnknownError"}`);
+      console.error(`[LLM:${operation}] failed model=${model} attempt=${attempt} elapsedMs=${Date.now() - startedAt} error=${error instanceof Error ? error.name : "UnknownError"}`);
       if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 500 * attempt * attempt));
     }
   }
   // SDK and JSON parsing errors can contain source text; do not propagate those to job logs.
-  throw new Error("Topic model call failed");
+  throw new Error(`${operation} model call failed`);
 }
 
 /** Batch embeddings once for both web and Lambda, preserving input/vector alignment. */

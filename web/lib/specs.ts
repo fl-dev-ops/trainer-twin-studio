@@ -205,9 +205,31 @@ export async function listKnowledgeFiles(orgId: string, kbSlug: string) {
   const docs = await db.knowledgeDocument.findMany({
     where: { kbId: kb.id },
     orderBy: { slug: "asc" },
-    select: { id: true, slug: true, title: true, ext: true, size: true, status: true, error: true, indexedAt: true, createdAt: true },
+    select: {
+      id: true,
+      slug: true,
+      title: true,
+      ext: true,
+      size: true,
+      status: true,
+      error: true,
+      indexedAt: true,
+      createdAt: true,
+      source: { select: { connector: true } },
+    },
   });
-  return docs;
+  return docs.map((d) => ({
+    id: d.id,
+    slug: d.slug,
+    title: d.title,
+    ext: d.ext,
+    size: d.size,
+    status: d.status,
+    error: d.error,
+    indexedAt: d.indexedAt,
+    createdAt: d.createdAt,
+    connector: d.source?.connector ?? null,
+  }));
 }
 
 export async function readKnowledgeFile(orgId: string, kbSlug: string, fileSlug: string) {
@@ -288,11 +310,37 @@ export async function uploadKnowledgeFile(orgId: string, kbSlug: string, file: F
   return { id: doc.id, slug, markdownChars: markdown.length };
 }
 
-/** Presigned URL for the original file, for the in-browser preview. */
-export async function getKnowledgePreviewUrl(orgId: string, kbSlug: string, fileSlug: string) {
-  const doc = await readKnowledgeFile(orgId, kbSlug, fileSlug);
+export type KnowledgePreview =
+  | { type: "youtube"; url: string; sourceUrl: string }
+  | { type: "document"; url: string };
+
+/** Presigned URL for the original file (or rendered markdown for .md docs, or questions.json for YouTube), for the in-browser preview. */
+export async function getKnowledgePreviewUrl(
+  orgId: string,
+  kbSlug: string,
+  fileSlug: string,
+): Promise<KnowledgePreview | null> {
+  const kb = await db.knowledgeBase.findFirst({ where: { slug: kbSlug, orgId }, select: { id: true } });
+  if (!kb) return null;
+  const doc = await db.knowledgeDocument.findUnique({
+    where: { kbId_slug: { kbId: kb.id, slug: fileSlug } },
+    include: { source: { select: { connector: true, sourceUrl: true } } },
+  });
   if (!doc) return null;
-  return presignedGetUrl(doc.s3SourceKey);
+
+  if (doc.source?.connector === "youtube") {
+    if (!doc.s3QuestionsKey || doc.s3QuestionsKey === "pending" || doc.status !== "indexed") {
+      return null;
+    }
+    const url = await presignedGetUrl(doc.s3QuestionsKey);
+    return { type: "youtube", url, sourceUrl: doc.source.sourceUrl };
+  }
+
+  const key = doc.ext === "md" && doc.s3MarkdownKey && doc.s3MarkdownKey !== "pending"
+    ? doc.s3MarkdownKey
+    : doc.s3SourceKey;
+  const url = await presignedGetUrl(key);
+  return { type: "document", url };
 }
 
 /** Indexes (or re-indexes) documents into ChromaDB.
@@ -305,11 +353,20 @@ export async function digestKnowledge(
 ) {
   const kb = await db.knowledgeBase.findFirst({
     where: { slug: kbSlug, orgId },
-    include: { documents: true },
+    include: { documents: { include: { source: { select: { connector: true } } } } },
   });
   if (!kb) throw new Error("Knowledge base not found");
+
+  if (fileSlug) {
+    const singleDoc = kb.documents.find((d) => d.slug === fileSlug);
+    if (!singleDoc) throw new Error("Document not found");
+    if (singleDoc.source?.connector === "youtube") {
+      throw new Error("YouTube documents cannot be indexed directly; use refresh");
+    }
+  }
+
   const docs = (fileSlug ? kb.documents.filter((d) => d.slug === fileSlug) : kb.documents).filter(
-    (d) => d.status !== "digesting",
+    (d) => d.source?.connector !== "youtube" && d.status !== "digesting",
   );
   if (docs.length === 0) throw new Error("No documents to index");
 

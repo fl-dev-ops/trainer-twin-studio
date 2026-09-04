@@ -6,7 +6,7 @@ import { applySectionTopics, buildClassificationUnits, parseUnitTopicResults } f
 import { createTopicResolver, normalizeTopicSlug, normalizeTopicToken, parseTopicProposals, type TopicInfo } from "./topic-normalization";
 import { TOPIC_DISCOVERY_SYSTEM_PROMPT, TOPIC_ASSIGNMENT_SYSTEM_PROMPT, buildTopicDiscoveryPrompt, buildTopicAssignmentPrompt } from "./topic-prompts";
 
-const TOPIC_MODEL = process.env.TOPIC_MODEL ?? "openai/gpt-4o-mini";
+const TOPIC_MODEL = process.env.TOPIC_MODEL ?? "openai/gpt-5.6-luna";
 const CHUNK_BATCH_SIZE = Number(process.env.TOPIC_CHUNK_BATCH_SIZE ?? 10);
 const CHUNK_SAMPLE_CHARS = 1_500;
 const TOPIC_EXAMPLE_LIMIT = 20;

@@ -12,7 +12,16 @@ export const youtubeImportSchema = z.object({
   refresh: z.boolean().default(false),
 }).strict();
 
-export const youtubeRequestSchema = youtubeImportSchema.extend({ action: z.enum(["preview", "import"]) });
+export const youtubeRefreshDocumentSchema = z.object({
+  action: z.literal("refresh-document"),
+  documentId: z.string().min(1).max(128),
+}).strict();
+
+export const youtubeRequestSchema = z.discriminatedUnion("action", [
+  youtubeImportSchema.extend({ action: z.literal("preview") }).strict(),
+  youtubeImportSchema.extend({ action: z.literal("import") }).strict(),
+  youtubeRefreshDocumentSchema,
+]);
 export const youtubeDisconnectSchema = z.object({ connectionId: z.string().min(1).max(128) }).strict();
 export const youtubePreviewSchema = z.object({
   videoId: z.string(), title: z.string(), channelId: z.string(), channelTitle: z.string(),
@@ -32,3 +41,27 @@ export const youtubeStateSchema = z.object({
 export type YouTubeImportInput = z.infer<typeof youtubeImportSchema>;
 export type YouTubePreview = z.infer<typeof youtubePreviewSchema>;
 export type YouTubeState = z.infer<typeof youtubeStateSchema>;
+export const youtubeExtractedQuestionSchema = z.object({
+  text: z.string().trim().min(1),
+  startSeconds: z.number().finite().nonnegative(),
+  endSeconds: z.number().finite().nonnegative(),
+  topics: z.array(z.string()),
+  proposedTopics: z.array(z.string()),
+}).strict().refine((question) => question.endSeconds >= question.startSeconds, {
+  message: "Question endSeconds must not precede startSeconds",
+});
+
+export const youtubeQuestionsArtifactSchema = z.object({
+  version: z.literal(1),
+  videoId: z.string().min(1),
+  title: z.string(),
+  sourceUrl: z.url(),
+  extractionVersion: z.string().min(1),
+  chunkingVersion: z.string().min(1),
+  questions: z.array(youtubeExtractedQuestionSchema),
+}).strict();
+
+export type YouTubeExtractedQuestion = z.infer<typeof youtubeExtractedQuestionSchema>;
+export type YouTubeQuestionsArtifact = z.infer<typeof youtubeQuestionsArtifactSchema>;
+export type YouTubeRefreshDocumentInput = z.infer<typeof youtubeRefreshDocumentSchema>;
+export type YouTubeRequest = z.infer<typeof youtubeRequestSchema>;

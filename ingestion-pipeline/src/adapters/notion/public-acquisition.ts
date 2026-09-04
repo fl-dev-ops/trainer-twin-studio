@@ -1,4 +1,4 @@
-import { normalizeNotionId, NotionResponseError, type NotionPage } from "./notion";
+import { normalizeNotionId, NotionResponseError, type NotionPage } from "./acquisition";
 
 type RichText = [string, unknown[]?][];
 type Block = {

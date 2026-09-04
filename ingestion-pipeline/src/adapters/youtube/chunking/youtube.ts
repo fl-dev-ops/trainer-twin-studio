@@ -1,6 +1,6 @@
-import { transcriptLine } from "../../../shared/youtube/captions";
-import type { SourceCleaner } from "../cleaners/factory";
-import type { PreparedChunk, PreparedDocument } from "./markdown";
+import { transcriptLine } from "../../../../../shared/youtube/captions";
+import type { SourceCleaner } from "../../source-cleaner";
+import type { PreparedChunk, PreparedDocument } from "../../../chunking/markdown";
 
 export const YOUTUBE_CHUNKING_VERSION = "youtube-timestamped-1200-1800-v2";
 const TARGET_CHUNK_CHARS = 1200;

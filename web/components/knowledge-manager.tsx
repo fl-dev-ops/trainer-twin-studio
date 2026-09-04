@@ -10,6 +10,7 @@ import {
   Eye,
   FileText,
   Plus,
+  RefreshCw,
   Sparkles,
   Trash2,
   Upload,
@@ -47,6 +48,10 @@ import { PptxViewerPreview } from "@/components/extend/pptx-viewer";
 import { CsvViewer } from "@/components/extend/csv-viewer";
 import { NotionImport } from "@/components/notion-import";
 import { YouTubeImport } from "@/components/youtube-import";
+import {
+  youtubeQuestionsArtifactSchema,
+  type YouTubeQuestionsArtifact,
+} from "@/lib/youtube";
 
 type Kb = { slug: string; name: string };
 type Doc = {
@@ -59,6 +64,7 @@ type Doc = {
   error: string | null;
   indexedAt: string | null;
   createdAt: string;
+  connector: string | null;
 };
 
 const STATUS_VARIANT: Record<string, "secondary" | "success" | "warning" | "destructive" | "outline"> = {
@@ -155,11 +161,20 @@ export function KnowledgeDetail({ slug }: { slug: string }) {
   const [uploading, setUploading] = useState(false);
   const [digestingAll, setDigestingAll] = useState(false);
   const [digestingDoc, setDigestingDoc] = useState<string | null>(null);
-  const [preview, setPreview] = useState<{ doc: Doc; url: string } | null>(null);
+  const [refreshingDoc, setRefreshingDoc] = useState<{ documentId: string; jobId: string | null } | null>(null);
+  const [preview, setPreview] = useState<{
+    doc: Doc;
+    url: string;
+    type?: string;
+    sourceUrl?: string;
+  } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const [reload, setReload] = useState(0);
 
+  const loadDocs = useCallback(async () => {
+    setReload((value) => value + 1);
+  }, []);
   useEffect(() => {
     let cancelled = false;
     fetch(`/api/knowledge/${slug}`)
@@ -168,10 +183,63 @@ export function KnowledgeDetail({ slug }: { slug: string }) {
       .catch(() => { if (!cancelled) setDocs([]); });
     return () => { cancelled = true; };
   }, [slug, reload]);
+  const hasPendingDocs = docs?.some((d) => d.status === "digesting");
+  useEffect(() => {
+    if (!hasPendingDocs) return;
+    const interval = window.setInterval(() => {
+      void loadDocs();
+    }, 2000);
+    return () => window.clearInterval(interval);
+  }, [hasPendingDocs, loadDocs]);
 
-  const loadDocs = useCallback(async () => {
-    setReload((value) => value + 1);
-  }, []);
+  useEffect(() => {
+    if (!refreshingDoc?.jobId) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const response = await fetch(`/api/knowledge/${encodeURIComponent(slug)}/youtube`);
+        const state = await response.json();
+        const job = Array.isArray(state?.jobs)
+          ? state.jobs.find((candidate: { id?: unknown }) => candidate.id === refreshingDoc.jobId)
+          : null;
+        if (!job || !["succeeded", "failed"].includes(job.status)) return;
+        if (cancelled) return;
+        setRefreshingDoc(null);
+        await loadDocs();
+        if (job.status === "succeeded") toast.success("YouTube questions refreshed");
+        else toast.error(job.error || "YouTube refresh failed");
+      } catch {
+        // Keep polling through transient status-read failures.
+      }
+    };
+    void poll();
+    const interval = window.setInterval(() => { void poll(); }, 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [refreshingDoc?.jobId, slug, loadDocs]);
+
+  async function refreshDocument(doc: Doc) {
+    setRefreshingDoc({ documentId: doc.id, jobId: null });
+    try {
+      const res = await fetch(`/api/knowledge/${encodeURIComponent(slug)}/youtube`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "refresh-document", documentId: doc.id }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || typeof data?.jobId !== "string") throw new Error(data?.error ?? "Refresh failed");
+      setRefreshingDoc({ documentId: doc.id, jobId: data.jobId });
+      toast.success("YouTube video queued for refresh");
+      await loadDocs();
+    } catch (error) {
+      setRefreshingDoc(null);
+      toast.error(error instanceof Error ? error.message : "Refresh failed");
+    }
+  }
+
+
 
   async function upload(list: FileList | null) {
     if (!list?.length) return;
@@ -250,10 +318,10 @@ export function KnowledgeDetail({ slug }: { slug: string }) {
     const res = await fetch(`/api/knowledge/${slug}/preview/${encodeURIComponent(doc.slug)}`);
     const data = await res.json().catch(() => null);
     if (!res.ok || !data?.url) {
-      toast.error("Could not open preview");
+      toast.error(data?.error ?? "Could not open preview");
       return;
     }
-    setPreview({ doc, url: data.url });
+    setPreview({ doc, url: data.url, type: data.type, sourceUrl: data.sourceUrl });
   }
 
   return (
@@ -352,19 +420,35 @@ export function KnowledgeDetail({ slug }: { slug: string }) {
                         >
                           <Eye />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={`Index ${doc.slug}`}
-                          disabled={digestingDoc !== null || doc.status === "digesting"}
-                          onClick={() => digest(doc.slug)}
-                        >
-                          {digestingDoc === doc.slug ? (
-                            <Spinner />
-                          ) : (
-                            <Sparkles />
-                          )}
-                        </Button>
+                        {doc.connector === "youtube" ? (
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Refresh ${doc.slug}`}
+                            disabled={refreshingDoc !== null || doc.status === "digesting"}
+                            onClick={() => refreshDocument(doc)}
+                          >
+                            {refreshingDoc?.documentId === doc.id || doc.status === "digesting" ? (
+                              <Spinner />
+                            ) : (
+                              <RefreshCw />
+                            )}
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Index ${doc.slug}`}
+                            disabled={digestingDoc !== null || doc.status === "digesting"}
+                            onClick={() => digest(doc.slug)}
+                          >
+                            {digestingDoc === doc.slug ? (
+                              <Spinner />
+                            ) : (
+                              <Sparkles />
+                            )}
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon-sm"
@@ -387,23 +471,33 @@ export function KnowledgeDetail({ slug }: { slug: string }) {
         <DialogContent className="flex h-[85vh] max-w-4xl flex-col sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle className="truncate pr-8">{preview?.doc.slug}</DialogTitle>
-            <DialogDescription>Preview of the original document stored in S3.</DialogDescription>
+            <DialogDescription>
+              {preview?.type === "youtube"
+                ? "Extracted questions and topic links from YouTube video."
+                : "Preview of the original document stored in S3."}
+            </DialogDescription>
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-hidden rounded-lg border">
-            {preview?.doc.ext === "pdf" && (
-              <PDFViewer src={preview.url} fileName={preview.doc.slug} className="h-full" />
-            )}
-            {preview?.doc.ext === "docx" && (
-              <DocxViewerPreview src={preview.url} fileName={preview.doc.slug} className="h-full" isDark={false} onIsDarkChange={() => {}} />
-            )}
-            {(preview?.doc.ext === "pptx" || preview?.doc.ext === "ppsx") && (
-              <PptxViewerPreview src={preview.url} fileName={preview.doc.slug} className="h-full" />
-            )}
-            {preview?.doc.ext === "csv" && (
-              <CsvPreviewLoader url={preview.url} />
-            )}
-            {preview && !["pdf", "docx", "pptx", "ppsx", "csv"].includes(preview.doc.ext) && (
-              <TextPreviewLoader url={preview.url} />
+            {preview?.type === "youtube" ? (
+              <YouTubeQuestionsPreviewLoader url={preview.url} sourceUrl={preview.sourceUrl ?? ""} />
+            ) : (
+              <>
+                {preview?.doc.ext === "pdf" && (
+                  <PDFViewer src={preview.url} fileName={preview.doc.slug} className="h-full" />
+                )}
+                {preview?.doc.ext === "docx" && (
+                  <DocxViewerPreview src={preview.url} fileName={preview.doc.slug} className="h-full" isDark={false} onIsDarkChange={() => {}} />
+                )}
+                {(preview?.doc.ext === "pptx" || preview?.doc.ext === "ppsx") && (
+                  <PptxViewerPreview src={preview.url} fileName={preview.doc.slug} className="h-full" />
+                )}
+                {preview?.doc.ext === "csv" && (
+                  <CsvPreviewLoader url={preview.url} />
+                )}
+                {preview && !["pdf", "docx", "pptx", "ppsx", "csv"].includes(preview.doc.ext) && (
+                  <TextPreviewLoader url={preview.url} />
+                )}
+              </>
             )}
           </div>
         </DialogContent>
@@ -453,5 +547,109 @@ function CenteredSpinner() {
     <div className="grid h-full place-items-center">
       <Spinner className="size-6" />
     </div>
+  );
+}
+
+function formatTimestamp(seconds: number) {
+  const total = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+}
+
+function getTimestampUrl(sourceUrl: string, seconds: number) {
+  const floorSec = Math.max(0, Math.floor(seconds));
+  const separator = sourceUrl.includes("?") ? "&" : "?";
+  return `${sourceUrl}${separator}t=${floorSec}s`;
+}
+
+function YouTubeQuestionsPreviewLoader({ url, sourceUrl }: { url: string; sourceUrl: string }) {
+  const [data, setData] = useState<YouTubeQuestionsArtifact | null>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(url)
+      .then((r) => {
+        if (!r.ok) throw new Error("Fetch failed");
+        return r.json();
+      })
+      .then((json) => {
+        if (cancelled) return;
+        const parsed = youtubeQuestionsArtifactSchema.safeParse(json);
+        if (!parsed.success) {
+          setError(true);
+        } else {
+          setData(parsed.data);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [url]);
+
+  if (error) return <p className="p-4 text-sm text-destructive">Could not load questions.</p>;
+  if (data === null) return <CenteredSpinner />;
+
+  if (data.questions.length === 0) {
+    return (
+      <div className="grid h-full place-items-center p-6 text-center">
+        <div>
+          <p className="text-sm font-medium">No questions extracted</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            No substantive questions were found in this video transcript.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const effectiveSourceUrl = data.sourceUrl || sourceUrl;
+
+  return (
+    <ScrollArea className="h-full">
+      <div className="divide-y p-4">
+        {data.questions.map((q, idx) => (
+          <div key={idx} className="py-3 first:pt-0 last:pb-0">
+            <div className="flex items-start justify-between gap-3">
+              <span className="mt-0.5 shrink-0 text-xs font-semibold text-muted-foreground">
+                Q{idx + 1}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium leading-snug text-foreground">{q.text}</p>
+                {q.topics.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {q.topics.map((t) => (
+                      <Badge key={t} variant="secondary" className="text-xs font-normal">
+                        {t}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {effectiveSourceUrl ? (
+                <a
+                  href={getTimestampUrl(effectiveSourceUrl, q.startSeconds)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground transition-colors hover:text-foreground hover:underline"
+                >
+                  {formatTimestamp(q.startSeconds)}
+                </a>
+              ) : (
+                <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
+                  {formatTimestamp(q.startSeconds)}
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </ScrollArea>
   );
 }

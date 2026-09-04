@@ -27,7 +27,7 @@ let transaction = false;
 
 type Document = {
   id: string; slug: string; sourceId: string | null; kb: string; orgId: string;
-  s3SourceKey: string; s3MarkdownKey: string; status: string;
+  s3SourceKey: string | null; s3MarkdownKey: string | null; s3QuestionsKey: string | null; status: string;
 };
 type VectorScope = { collection: Collection; ids: string[]; retainedIds: string[] };
 
@@ -93,7 +93,7 @@ try {
   const keys = new Set<string>();
   for (const doc of documents.rows) {
     const documentPrefix = `${config.s3BasePrefix}/${doc.orgId}/${doc.kb}/${doc.id}/`;
-    for (const key of [doc.s3SourceKey, doc.s3MarkdownKey]) {
+    for (const key of [doc.s3SourceKey, doc.s3MarkdownKey, doc.s3QuestionsKey]) {
       if (!key || key === "pending") continue;
       if (!key.startsWith(documentPrefix)) {
         throw new Error("An S3 key is outside its document's storage prefix; review it manually");

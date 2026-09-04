@@ -1,3 +1,3 @@
 export * from "./markdown";
-export * from "./youtube";
+export * from "../adapters/youtube/chunking/youtube";
 export * from "./service";
