@@ -153,8 +153,8 @@ export function SessionView({ personas, agents, contexts }: Props) {
       enableMic: true,
       callbacks: {
         onTransportStateChanged: (s) => setState_(s),
-        onTrackStarted: (track) => {
-          if (track.kind !== "audio" || !audioRef.current) return;
+        onTrackStarted: (track, participant) => {
+          if (participant?.local || track.kind !== "audio" || !audioRef.current) return;
           audioRef.current.srcObject = new MediaStream([track]);
           void playRemoteAudio();
         },

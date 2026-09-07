@@ -1,14 +1,15 @@
 """TrainerTwin voice agent.
 
-Pipecat pipeline: STT → utterance collector → TTS. The interview brain is the
-POC Runtime (analyze → deterministic policy → persona render), one call per
-completed learner utterance, spoken via Sarvam TTS.
+Pipecat pipeline: VAD → STT → SmartTurn → utterance collector → TTS. The interview brain is the
+spec-driven Runtime (analyze → deterministic policy → persona render), using
+Studio Persona/Agent/Domain settings, spoken via Sarvam TTS.
 
 Run: uv run bot.py -t webrtc   (then connect from the studio's /talk page)
 """
 
 import asyncio
 from datetime import datetime
+from dataclasses import dataclass
 import os
 from pathlib import Path
 import sys
@@ -16,11 +17,16 @@ import uuid
 
 from dotenv import load_dotenv
 from loguru import logger
+from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnalyzerV3
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams
 from pipecat.frames.frames import (
     BotStartedSpeakingFrame,
     BotStoppedSpeakingFrame,
+    DataFrame,
+    EndWorkerFrame,
+    ErrorFrame,
+    TTSAudioRawFrame,
     InputAudioRawFrame,
     InterruptionFrame,
     TTSSpeakFrame,
@@ -40,6 +46,9 @@ from pipecat.services.sarvam.stt import SarvamSTTService
 from pipecat.services.sarvam.tts import SarvamTTSService
 from pipecat.transports.base_transport import BaseTransport, TransportParams
 from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
+from pipecat.turns.user_stop import TurnAnalyzerUserTurnStopStrategy
+from pipecat.turns.user_turn_processor import UserTurnProcessor
+from pipecat.turns.user_turn_strategies import UserTurnStrategies
 from pipecat.workers.runner import WorkerRunner
 
 from interview import InterviewSession, WEB_URL
@@ -97,6 +106,96 @@ class WebRTCAudioOutputFilter(FrameProcessor):
         await self.push_frame(frame, direction)
 
 
+@dataclass
+class ClosingBoundary(DataFrame):
+    beginning: bool
+
+
+class ClosingGate(FrameProcessor):
+    """Ordered TTS markers, observed after transport drain; never a stale speech-stop flag."""
+
+    def __init__(self, on_complete):
+        super().__init__()
+        self.on_complete = on_complete
+        self.active = False
+        self.audio = False
+        self.done = False
+        self.timer = None
+
+    def arm(self):
+        if self.timer is None:
+            self.timer = asyncio.create_task(self._timeout())
+
+    async def _timeout(self):
+        await asyncio.sleep(30)
+        await self.complete(False)
+
+    async def complete(self, delivered):
+        if self.done:
+            return
+        self.done = True
+        if self.timer and self.timer is not asyncio.current_task():
+            self.timer.cancel()
+        try:
+            await self.on_complete(delivered)
+        finally:
+            await self.push_frame(EndWorkerFrame(), FrameDirection.UPSTREAM)
+
+    async def process_frame(self, frame, direction):
+        await super().process_frame(frame, direction)
+        if direction == FrameDirection.DOWNSTREAM:
+            if isinstance(frame, (InterruptionFrame, ErrorFrame)) and self.active:
+                self.active = False
+            if isinstance(frame, TTSAudioRawFrame) and self.active and frame.audio:
+                self.audio = True
+            if isinstance(frame, ClosingBoundary):
+                if frame.beginning:
+                    self.active, self.audio = True, False
+                else:
+                    await self.complete(self.active and self.audio)
+                return
+        await self.push_frame(frame, direction)
+
+    async def cleanup(self):
+        if self.timer:
+            self.timer.cancel()
+            await asyncio.gather(self.timer, return_exceptions=True)
+        await super().cleanup()
+
+
+class SpeechInputMonitor(FrameProcessor):
+    """Make the mic→STT boundary observable and normalize Sarvam final results."""
+
+    def __init__(self):
+        super().__init__()
+        self._seen_audio = False
+        self._speech_bytes = 0
+
+    async def process_frame(self, frame, direction: FrameDirection):
+        await super().process_frame(frame, direction)
+        if direction == FrameDirection.DOWNSTREAM:
+            if isinstance(frame, InputAudioRawFrame):
+                if not self._seen_audio:
+                    self._seen_audio = True
+                    logger.info(
+                        "Microphone audio received: {} Hz, {} channel(s), {} bytes/frame",
+                        frame.sample_rate, frame.num_channels, len(frame.audio),
+                    )
+                self._speech_bytes += len(frame.audio)
+            elif isinstance(frame, VADUserStartedSpeakingFrame):
+                self._speech_bytes = 0
+            elif isinstance(frame, VADUserStoppedSpeakingFrame):
+                logger.info("VAD pause: {} bytes of microphone audio", self._speech_bytes)
+            elif isinstance(frame, TranscriptionFrame) and frame.text.strip():
+                # Sarvam's completed WebSocket response currently omits this flag.
+                # SmartTurn and the RTVI browser both use it as the final-text signal.
+                frame.finalized = True
+                logger.info("STT final: {}", frame.text.strip())
+            elif isinstance(frame, ErrorFrame):
+                logger.error("Speech input error: {}", frame.error)
+        await self.push_frame(frame, direction)
+
+
 class UtteranceCollector(FrameProcessor):
     """Buffers final STT text; when the user stops speaking, hands the utterance to a callback.
 
@@ -113,10 +212,13 @@ class UtteranceCollector(FrameProcessor):
         self._bot_speaking = False
         self._flush_task: asyncio.Task | None = None
         self._task: asyncio.Task | None = None
+        self.closing = False
 
     async def process_frame(self, frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
 
+        if self.closing and isinstance(frame, (TranscriptionFrame, UserStartedSpeakingFrame, UserStoppedSpeakingFrame)):
+            return
         if isinstance(frame, TranscriptionFrame) and frame.text.strip():
             self._buffer.append(frame.text.strip())
             if self._bot_speaking or (self._task and not self._task.done()):
@@ -129,14 +231,14 @@ class UtteranceCollector(FrameProcessor):
             if not self._speaking:
                 self._schedule_flush(0.4)
 
-        elif isinstance(frame, (UserStartedSpeakingFrame, VADUserStartedSpeakingFrame)):
+        elif isinstance(frame, UserStartedSpeakingFrame):
             self._speaking = True
             if self._flush_task and not self._flush_task.done():
                 self._flush_task.cancel()
             else:
                 self._buffer.clear()
 
-        elif isinstance(frame, (UserStoppedSpeakingFrame, VADUserStoppedSpeakingFrame)):
+        elif isinstance(frame, UserStoppedSpeakingFrame):
             self._speaking = False
             self._schedule_flush(0.4)
 
@@ -165,6 +267,8 @@ class UtteranceCollector(FrameProcessor):
         if utterance and (self._task is None or self._task.done()):
             logger.info("Learner: {}", utterance)
             self._task = asyncio.create_task(self._run(utterance))
+        elif not utterance:
+            logger.warning("SmartTurn ended a user turn, but STT produced no text")
 
     async def _run(self, utterance: str):
         try:
@@ -175,8 +279,23 @@ class UtteranceCollector(FrameProcessor):
             logger.exception("Turn failed")
             await self.push_frame(TTSSpeakFrame("Sorry, something went wrong on my side. Could you repeat that?"))
 
-    async def speak(self, text: str):
+    async def speak(self, text: str, closing: bool = False):
+        if closing:
+            self.closing = True
+            await self.push_frame(ClosingBoundary(beginning=True))
         await self.push_frame(TTSSpeakFrame(text))
+        if closing:
+            await self.push_frame(ClosingBoundary(beginning=False))
+
+    async def cancel_turn(self):
+        for task in (self._task, self._flush_task):
+            if task:
+                task.cancel()
+        await asyncio.gather(*(t for t in (self._task, self._flush_task) if t), return_exceptions=True)
+
+    async def cleanup(self):
+        await self.cancel_turn()
+        await super().cleanup()
 
 
 async def make_stt():
@@ -200,7 +319,7 @@ async def make_stt():
         mode="transcribe",
         sample_rate=16000,
         audio_passthrough=True,
-        settings=SarvamSTTService.Settings(model="saaras:v3", language="en-IN"),
+        settings=SarvamSTTService.Settings(model="saaras:v3", language="en-IN", vad_signals=False),
     )
 
 
@@ -209,6 +328,9 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     workspace = WorkspaceBridge()
     surface_state: dict = {"current": None}
     web: dict = {"session_id": None}
+    starting = False
+    prepare_task = None
+    end_lock = asyncio.Lock()
 
     async def apply_surface(phase_index: int):
         """Open/close the client workspace when the phase's configured surface changes."""
@@ -235,6 +357,8 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
             logger.warning("Failed to update session surface")
 
     async def on_utterance(text: str):
+        if session.closed or starting:
+            return
         if not session.started:
             await collector.speak(
                 "No interview is running yet. Open the studio's talk page and connect from there, "
@@ -242,37 +366,47 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
             )
             return
         response = await session.step(text)
-        await worker.rtvi.send_server_message({
-            "type": "interview-state",
-            "state": session.snapshot(),
-        })
-        await apply_surface(session.state.get("phase_index", 0) if session.state else 0)
-        await collector.speak(response)
         if session.closed:
-            await _end_web_session("completed")
-            await worker.rtvi.send_server_message({
-                "type": "session-ended",
-                "status": "completed",
-            })
+            closing_gate.arm()
+        await collector.speak(response, closing=session.closed)
+        # A UI error must not trigger an invitation to repeat an already graded answer.
+        try:
+            await worker.rtvi.send_server_message({"type": "interview-state", "state": session.snapshot()})
+            await apply_surface(session.state.get("phase_index", 0))
+        except Exception:
+            logger.exception("Could not update session UI")
+
+    async def closing_complete(delivered: bool):
+        await _end_web_session("completed")
+        if not delivered:
+            logger.warning("Closing audio was not delivered completely")
+        await worker.rtvi.send_server_message({"type": "session-ended", "status": "completed", "closingDelivered": delivered})
 
     async def _end_web_session(status: str):
-        if not web["session_id"]:
-            return
-        # Flush + upload the recording while web["session_id"] is still set.
-        try:
-            await recorder.stop_recording()
-        except Exception:
-            logger.exception("Failed to finalize session recording")
-        try:
-            async with httpx.AsyncClient(timeout=10) as client:
-                response = await client.patch(f"{WEB_URL}/api/sessions", json={"id": web["session_id"], "status": status})
-                response.raise_for_status()
-        except Exception:
-            logger.warning("Failed to update web session record")
-        web["session_id"] = None
+        async with end_lock:
+            if not web["session_id"]:
+                return
+            # Serialize completion/disconnect, keeping the ID until successful.
+            try:
+                await recorder.stop_recording()
+                async with httpx.AsyncClient(timeout=10) as client:
+                    response = await client.patch(f"{WEB_URL}/api/sessions", json={"id": web["session_id"], "status": status})
+                    response.raise_for_status()
+            except Exception:
+                logger.exception("Failed to finalize web session; local transcript retained")
+                return
+            web["session_id"] = None
 
     stt = await make_stt()
+    speech_monitor = SpeechInputMonitor()
+    smart_turn = UserTurnProcessor(
+        user_turn_strategies=UserTurnStrategies(
+            stop=[TurnAnalyzerUserTurnStopStrategy(turn_analyzer=LocalSmartTurnAnalyzerV3())],
+        ),
+        user_turn_stop_timeout=5.0,
+    )
     collector = UtteranceCollector(on_utterance)
+    closing_gate = ClosingGate(closing_complete)
     tts = SarvamTTSService(
         api_key=os.environ["SARVAM_API_KEY"],
         settings=SarvamTTSService.Settings(
@@ -321,14 +455,17 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
 
     pipeline = Pipeline([
         transport.input(),
-        VADProcessor(vad_analyzer=SileroVADAnalyzer(params=VADParams(stop_secs=0.4, start_secs=0.15))),
+        VADProcessor(vad_analyzer=SileroVADAnalyzer(params=VADParams(stop_secs=0.2, start_secs=0.15))),
         workspace,
         stt,
+        speech_monitor,
+        smart_turn,
         collector,
         tts,
         recorder,
         WebRTCAudioOutputFilter(),
         transport.output(),
+        closing_gate,
     ])
     worker = PipelineWorker(
         pipeline,
@@ -336,10 +473,16 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         idle_timeout_secs=runner_args.pipeline_idle_timeout_secs,
     )
 
+    @worker.event_handler("on_pipeline_error")
+    async def on_pipeline_error(worker, frame):
+        if collector.closing:
+            await closing_gate.complete(False)
+
     @worker.rtvi.event_handler("on_client_message")
     async def on_client_message(rtvi, msg):
+        nonlocal starting, prepare_task
         data = msg.data if isinstance(msg.data, dict) else {}
-        if msg.type != "start-interview":
+        if msg.type != "start-interview" or starting or session.started or session.closed:
             return
         persona_id = str(data.get("personaId") or "").strip()
         agent_id = str(data.get("agentId") or "").strip()
@@ -349,7 +492,10 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
             return
         logger.info("Starting interview: persona={}, agent={}", persona_id, agent_id)
 
+        starting = True
+
         async def prepare():
+            nonlocal starting
             try:
                 opening = await session.start(persona_id, agent_id, context_id)
                 # Remote cloned-voice TTS (restore for production):
@@ -369,8 +515,11 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
                         })
                         response.raise_for_status()
                         web["session_id"] = response.json().get("session", {}).get("id")
+                        if not web["session_id"]:
+                            raise RuntimeError("Studio did not return a session id")
                 except Exception:
-                    logger.warning("Could not register session with the web app")
+                    await session.abandon("registration_failed")
+                    raise
                 if web["session_id"]:
                     await rtvi.send_server_message({"type": "session-started", "sessionId": web["session_id"]})
                 await rtvi.send_server_message({"type": "interview-state", "state": session.snapshot()})
@@ -382,15 +531,22 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
                 await rtvi.send_server_message({"type": "interview-error", "error": str(error)})
                 await worker.cancel()
 
-        asyncio.create_task(prepare())
+            finally:
+                starting = False
+
+        prepare_task = asyncio.create_task(prepare())
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport, client):
         logger.info("Client disconnected")
         workspace.cancel_pending()
+        await collector.cancel_turn()
+        if prepare_task:
+            prepare_task.cancel()
+            await asyncio.gather(prepare_task, return_exceptions=True)
         surface_state["current"] = None
         await session.abandon("client_disconnected")
-        await _end_web_session("abandoned")
+        await _end_web_session("completed" if session.state.get("end_reason") == "completed" else "abandoned")
         await worker.cancel()
 
     runner = WorkerRunner(handle_sigint=runner_args.handle_sigint)
@@ -406,7 +562,7 @@ async def bot(runner_args: RunnerArguments):
         params=TransportParams(
             audio_in_enabled=True,
             audio_out_enabled=True,
-            vad_analyzer=SileroVADAnalyzer(params=VADParams(stop_secs=0.4, start_secs=0.15)),
+            audio_in_sample_rate=16000,
         ),
     )
     await run_bot(transport, runner_args)

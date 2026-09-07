@@ -1,10 +1,10 @@
 import asyncio
 import unittest
 
-from pipecat.frames.frames import Frame, TranscriptionFrame, UserStartedSpeakingFrame, UserStoppedSpeakingFrame
+from pipecat.frames.frames import EndWorkerFrame, Frame, InputAudioRawFrame, TranscriptionFrame, TTSAudioRawFrame, UserStartedSpeakingFrame, UserStoppedSpeakingFrame, VADUserStoppedSpeakingFrame
 from pipecat.processors.frame_processor import FrameDirection
 
-from bot import UtteranceCollector
+from bot import ClosingBoundary, ClosingGate, SpeechInputMonitor, UtteranceCollector
 
 
 class RecordingCollector(UtteranceCollector):
@@ -16,7 +16,74 @@ class RecordingCollector(UtteranceCollector):
         self.forwarded.append(frame)
 
 
+class RecordingGate(ClosingGate):
+    def __init__(self, on_complete):
+        super().__init__(on_complete)
+        self.forwarded = []
+
+    async def push_frame(self, frame, direction=FrameDirection.DOWNSTREAM):
+        self.forwarded.append((frame, direction))
+
+
+class ClosingGateTest(unittest.IsolatedAsyncioTestCase):
+    async def test_closes_only_after_ordered_audio_boundary(self):
+        delivered = []
+
+        async def complete(value):
+            delivered.append(value)
+
+        gate = RecordingGate(complete)
+        await gate.process_frame(ClosingBoundary(beginning=True), FrameDirection.DOWNSTREAM)
+        audio = TTSAudioRawFrame(b"\0" * 320, 16000, 1)
+        await gate.process_frame(audio, FrameDirection.DOWNSTREAM)
+        await gate.process_frame(ClosingBoundary(beginning=False), FrameDirection.DOWNSTREAM)
+
+        self.assertEqual(delivered, [True])
+        self.assertIn((audio, FrameDirection.DOWNSTREAM), gate.forwarded)
+        self.assertTrue(any(isinstance(frame, EndWorkerFrame) and direction == FrameDirection.UPSTREAM
+                            for frame, direction in gate.forwarded))
+
+
+class RecordingSpeechInputMonitor(SpeechInputMonitor):
+    def __init__(self):
+        super().__init__()
+        self.forwarded = []
+
+    async def push_frame(self, frame, direction=FrameDirection.DOWNSTREAM):
+        self.forwarded.append(frame)
+
+
+class SpeechInputMonitorTest(unittest.IsolatedAsyncioTestCase):
+    async def test_finalizes_sarvam_transcript_without_changing_text(self):
+        monitor = RecordingSpeechInputMonitor()
+        audio = InputAudioRawFrame(b"\0" * 640, 16000, 1)
+        transcript = TranscriptionFrame("hello", "user", "now")
+
+        await monitor.process_frame(audio, FrameDirection.DOWNSTREAM)
+        await monitor.process_frame(transcript, FrameDirection.DOWNSTREAM)
+
+        self.assertTrue(transcript.finalized)
+        self.assertEqual(monitor.forwarded, [audio, transcript])
+
+
 class UtteranceCollectorTest(unittest.IsolatedAsyncioTestCase):
+    async def test_raw_vad_pause_waits_for_smart_turn_stop(self):
+        utterances = []
+
+        async def record(text):
+            utterances.append(text)
+
+        collector = RecordingCollector(record)
+        await collector.process_frame(UserStartedSpeakingFrame(), FrameDirection.DOWNSTREAM)
+        await collector.process_frame(TranscriptionFrame("still thinking", "user", ""), FrameDirection.DOWNSTREAM)
+        await collector.process_frame(VADUserStoppedSpeakingFrame(stop_secs=0.2), FrameDirection.DOWNSTREAM)
+        await asyncio.sleep(0.5)
+        self.assertEqual(utterances, [])
+
+        await collector.process_frame(UserStoppedSpeakingFrame(), FrameDirection.DOWNSTREAM)
+        await asyncio.sleep(0.5)
+        self.assertEqual(utterances, ["still thinking"])
+
     async def test_forwards_frames_and_handles_transcription_after_vad_stop(self):
         utterances = []
 

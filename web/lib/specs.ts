@@ -1,6 +1,3 @@
-import { promises as fs } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import yaml from "js-yaml";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { deletePrefix, getObjectText, kbPrefix, presignedGetUrl, putObject } from "@/lib/s3";
@@ -451,14 +448,11 @@ export async function getAgentConfig(personaSlug: string, agentSlug: string, con
   if (contextId) {
     const doc = await readUploadBytes(contextId, orgId);
     if (doc) {
-      if (/\.pdf$/i.test(doc.name)) {
-        // materialize for the agent; it extracts text with the POC loader
-        const tmp = path.join(tmpdir(), `tt-context-${doc.id}${path.extname(doc.name)}`);
-        await fs.writeFile(tmp, Buffer.from(doc.content));
-        context = { name: doc.name, content: tmp };
-      } else {
-        context = { name: doc.name, content: Buffer.from(doc.content).toString("utf-8") };
-      }
+      // The agent can run on another machine: send readable content, not a web-local path.
+      const { markdown } = await documentToMarkdown(
+        new File([new Uint8Array(doc.content)], doc.name, { type: doc.mimeType }),
+      );
+      context = { name: doc.name, content: markdown };
     }
   }
 
