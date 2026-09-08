@@ -19,8 +19,10 @@ function client() {
   });
 }
 
-export function kbPrefix(kbSlug: string, docId?: string) {
-  return docId ? `${basePrefix}/${kbSlug}/${docId}` : `${basePrefix}/${kbSlug}`;
+export function kbPrefix(knowledgeBaseId: string, docId?: string) {
+  return docId
+    ? `${basePrefix}/knowledge/${knowledgeBaseId}/${docId}`
+    : `${basePrefix}/knowledge/${knowledgeBaseId}`;
 }
 
 export function voicePrefix(voiceId: string) {
@@ -29,6 +31,26 @@ export function voicePrefix(voiceId: string) {
 
 export function recordingKey(sessionId: string) {
   return `${basePrefix}/recordings/${sessionId}.wav`;
+}
+
+export function personaSourcePrefix(personaId: string, sourceId?: string) {
+  return sourceId
+    ? `${basePrefix}/personas/${personaId}/sources/${sourceId}`
+    : `${basePrefix}/personas/${personaId}/sources`;
+}
+
+export async function getObjectBytes(key: string): Promise<Uint8Array> {
+  const res = await client().send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  if (!res.Body) return new Uint8Array(0);
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of res.Body as AsyncIterable<Uint8Array>) {
+    chunks.push(chunk);
+  }
+  const total = chunks.reduce((sum, c) => sum + c.length, 0);
+  const result = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { result.set(chunk, offset); offset += chunk.length; }
+  return result;
 }
 
 export async function putObject(key: string, body: Uint8Array | string, contentType: string) {

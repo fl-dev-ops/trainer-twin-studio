@@ -100,7 +100,7 @@ export async function DELETE(_req: Request, { params }: Params) {
     if (rest.length > 0) {
       const doc = await listKnowledgeFiles(org.id, base);
       const target = doc.find((d) => d.slug === rest.join("/"));
-      if (target) await removeEmbeddings(base, [target.id]);
+      if (target) await removeEmbeddings(org.id, base, [target.id]);
     }
     await deleteKnowledge(org.id, base, rest.length > 0 ? rest.join("/") : undefined);
     return NextResponse.json({ ok: true });

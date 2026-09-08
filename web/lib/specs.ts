@@ -7,7 +7,8 @@ import {
   documentToMarkdown,
   SUPPORTED_DOCUMENT_EXTENSIONS,
 } from "@/lib/documents";
-import { ingestDoc, removeDoc } from "@/lib/knowledge";
+import { ingestDoc, knowledgeCollectionName, removeChunks, removeCollection, removeDoc } from "@/lib/knowledge";
+import { personaCollectionName } from "@/lib/persona-voice";
 
 export type SpecType = "personas" | "agents" | "domains";
 
@@ -26,8 +27,9 @@ export function validSlug(slug: string) {
   return /^[a-z0-9][a-z0-9._-]*$/i.test(slug);
 }
 
+type SpecRow = { id?: string; slug: string; name: string; version: number; data: unknown; orgId: string | null };
 type SpecDelegate = {
-  findUnique(args: { where: { slug: string } }): Promise<{ slug: string; name: string; version: number; data: unknown; orgId: string | null } | null>;
+  findUnique(args: { where: { slug: string } }): Promise<SpecRow | null>;
   findMany(args: { where?: { orgId: string }; orderBy: { slug: "asc" }; select: { slug: true } }): Promise<{ slug: string }[]>;
   create(args: { data: { slug: string; name: string; version: number; data: unknown; orgId: string; domainSlug?: string } }): Promise<{ version: number }>;
   update(args: { where: { slug: string }; data: { name: string; version: number; data: unknown; orgId?: string; domainSlug?: string } }): Promise<unknown>;
@@ -53,12 +55,16 @@ export async function listSpecSummaries(type: "personas" | "agents", orgId: stri
     db.agent.findMany({
       where: { orgId },
       orderBy: [{ order: "asc" }, { name: "asc" }],
-      select: { slug: true, name: true, version: true, domainSlug: true, visibility: true, data: true, order: true },
+      select: { slug: true, name: true, version: true, visibility: true, data: true, order: true },
     }),
-    // ponytail: drafts are only written by the still-single-tenant copilot; scope them when it goes multi-tenant
-    db.specDraft.findMany({ orderBy: { name: "asc" }, select: { slug: true, name: true, revision: true, domainData: true, agentData: true } }),
+    db.specDraft.findMany({
+      where: { orgId },
+      orderBy: { name: "asc" },
+      select: { slug: true, name: true, status: true, revision: true, agentData: true },
+    }),
   ]);
   const published = new Set(agents.map(({ slug }) => slug));
+  const draftsBySlug = new Map(drafts.map((draft) => [draft.slug, draft]));
   return [
     ...agents.map((agent) => {
       const data = agent.data as { objective?: unknown } | null;
@@ -67,10 +73,12 @@ export async function listSpecSummaries(type: "personas" | "agents", orgId: stri
         slug: agent.slug,
         name: agent.name,
         version: agent.version,
-        domainSlug: agent.domainSlug,
         visibility: agent.visibility,
         objective,
         status: "published" as const,
+        draftRevision: draftsBySlug.get(agent.slug)?.status === "draft"
+          ? draftsBySlug.get(agent.slug)?.revision
+          : undefined,
       };
     }),
     ...drafts.filter(({ slug }) => !published.has(slug)).map((draft) => {
@@ -80,7 +88,6 @@ export async function listSpecSummaries(type: "personas" | "agents", orgId: stri
         slug: draft.slug,
         name: draft.name,
         version: draft.revision,
-        domainSlug: isRecord(draft.domainData) && typeof draft.domainData.id === "string" ? draft.domainData.id : undefined,
         objective,
         status: "draft" as const,
       };
@@ -96,18 +103,29 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export async function listRunnableSpecs(type: "personas" | "agents", orgId: string): Promise<string[]> {
   const rows = type === "personas"
     ? await db.persona.findMany({ where: { orgId }, orderBy: { slug: "asc" }, select: { slug: true, data: true } })
-    : await db.agent.findMany({ where: { orgId }, orderBy: { slug: "asc" }, select: { slug: true, data: true } });
-  return rows.filter(({ data }) => {
+    : await db.agent.findMany({ where: { orgId }, orderBy: { slug: "asc" }, select: { slug: true, data: true, personaId: true } });
+  return rows.filter((row) => {
+    const { data } = row;
     if (!isRecord(data)) return false;
     return type === "personas"
       ? isRecord(data.style) && isRecord(data.decision_preferences)
-      : typeof data.objective === "string" && typeof data.opening === "string" && isRecord(data.config);
+      : "personaId" in row && Boolean(row.personaId) && typeof data.objective === "string" && typeof data.opening === "string" && isRecord(data.config);
   }).map(({ slug }) => slug);
+}
+
+export async function listAgentPersonas(orgId: string, slugs: string[]) {
+  const agents = await db.agent.findMany({
+    where: { orgId, slug: { in: slugs } },
+    select: { slug: true, persona: { select: { slug: true } } },
+  });
+  return Object.fromEntries(agents.map((agent) => [agent.slug, agent.persona.slug]));
 }
 
 export async function readSpec(type: SpecType, slug: string, orgId: string) {
   if (!validSlug(slug)) throw new Error(`Invalid id: ${slug}`);
-  const row = await modelFor(type).findUnique({ where: { slug } });
+  const row: SpecRow | null = type === "personas"
+    ? await db.persona.findUnique({ where: { orgId_slug: { orgId, slug } } })
+    : await modelFor(type).findUnique({ where: { slug } });
   if (!row || row.orgId !== orgId) return null;
   const doc = { schema_version: 1, kind: ENTITY_KEY[type], [ENTITY_KEY[type]]: row.data };
   return { text: yaml.dump(doc, { lineWidth: -1 }), doc: row.data as Record<string, unknown>, version: row.version };
@@ -125,7 +143,7 @@ export type SaveResult = {
  */
 export async function saveSpec(type: SpecType, slug: string, text: string, orgId: string): Promise<SaveResult> {
   if (!validSlug(slug)) throw new Error(`Invalid id: ${slug}`);
-  const parsed = yaml.load(text);
+  const parsed = yaml.load(text.replace(/^```(?:ya?ml)?\s*\n?/i, "").replace(/\n?```\s*$/, ""));
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error("Invalid YAML document");
   }
@@ -165,13 +183,18 @@ export async function saveSpec(type: SpecType, slug: string, text: string, orgId
   }
   const relation = domainSlug ? { domainSlug } : {};
 
-  const existing = await modelFor(type).findUnique({ where: { slug } });
+  const existing: SpecRow | null = type === "personas"
+    ? await db.persona.findUnique({ where: { orgId_slug: { orgId, slug } } })
+    : await modelFor(type).findUnique({ where: { slug } });
   if (!existing) {
-    const created = await modelFor(type).create({ data: { slug, name, version: 1, data, orgId, ...relation } });
+    if (type === "agents") throw new Error("Create agents through Agent Studio so a persona is assigned");
+    const created = type === "personas"
+      ? await db.persona.create({ data: { slug, name, version: 1, data, orgId } })
+      : await modelFor(type).create({ data: { slug, name, version: 1, data, orgId, ...relation } });
     return { created: true, versionBumped: false, version: created.version };
   }
 
-  if (!existing || existing.orgId !== orgId) throw new Error("Not found");
+  if (existing.orgId !== orgId) throw new Error("Not found");
   if (JSON.stringify(existing.data) === JSON.stringify(data)) {
     return { created: false, versionBumped: false, version: existing.version };
   }
@@ -179,20 +202,40 @@ export async function saveSpec(type: SpecType, slug: string, text: string, orgId
   const nextVersion = existing.version + 1;
   await db.$transaction(async (tx) => {
     await tx.specVersion.create({
-      data: { entityType: type, entitySlug: slug, version: existing.version, data: existing.data as Prisma.InputJsonValue },
+      data: { entityType: type, entitySlug: slug, version: existing.version, data: existing.data as Prisma.InputJsonValue, orgId },
     });
-    const model = (type === "personas" ? tx.persona : type === "agents" ? tx.agent : tx.domain) as unknown as SpecDelegate;
-    await model.update({ where: { slug }, data: { name, version: nextVersion, data, ...relation } });
+    if (type === "personas") {
+      await tx.persona.update({ where: { orgId_slug: { orgId, slug } }, data: { name, version: nextVersion, data } });
+    } else {
+      const model = (type === "agents" ? tx.agent : tx.domain) as unknown as SpecDelegate;
+      await model.update({ where: { slug }, data: { name, version: nextVersion, data, ...relation } });
+    }
   });
   return { created: false, versionBumped: true, version: nextVersion };
 }
 
 export async function deleteSpec(type: SpecType, slug: string, orgId: string) {
   if (!validSlug(slug)) throw new Error(`Invalid id: ${slug}`);
-  const row = await modelFor(type).findUnique({ where: { slug } });
+  const row: SpecRow | null = type === "personas"
+    ? await db.persona.findUnique({ where: { orgId_slug: { orgId, slug } } })
+    : await modelFor(type).findUnique({ where: { slug } });
   if (!row || row.orgId !== orgId) throw new Error("Not found");
-  await db.specVersion.deleteMany({ where: { entityType: type, entitySlug: slug } });
-  await modelFor(type).delete({ where: { slug } });
+  await db.specVersion.deleteMany({ where: { entityType: type, entitySlug: slug, orgId } });
+  if (type === "personas") {
+    const personaId = row.id;
+    if (!personaId) throw new Error("Persona identity missing");
+    const sources = await db.personaSource.findMany({
+      where: { personaId, orgId },
+      select: { id: true, s3Key: true },
+    });
+    await Promise.all([
+      ...sources.map((source) => deletePrefix(source.s3Key)),
+      ...sources.map((source) => removeChunks(personaCollectionName(personaId), source.id)),
+    ]);
+    await db.persona.delete({ where: { orgId_slug: { orgId, slug } } });
+  } else {
+    await modelFor(type).delete({ where: { slug } });
+  }
 }
 
 export async function listVersions(type: SpecType, slug: string, orgId: string) {
@@ -210,9 +253,9 @@ export async function listVersions(type: SpecType, slug: string, orgId: string) 
 
 export async function readVersion(type: SpecType, slug: string, version: number, orgId: string) {
   const row = await db.specVersion.findUnique({
-    where: { entityType_entitySlug_version: { entityType: type, entitySlug: slug, version } },
+    where: { orgId_entityType_entitySlug_version: { orgId, entityType: type, entitySlug: slug, version } },
   });
-  if (!row || row.orgId !== orgId) return null;
+  if (!row) return null;
   const doc = { schema_version: 1, kind: ENTITY_KEY[type], [ENTITY_KEY[type]]: row.data };
   return { text: yaml.dump(doc, { lineWidth: -1 }), data: row.data };
 }
@@ -261,17 +304,22 @@ export async function deleteKnowledge(orgId: string, kbSlug: string, fileSlug?: 
   const kb = await db.knowledgeBase.findFirst({ where: { slug: kbSlug, orgId }, select: { id: true } });
   if (fileSlug === undefined) {
     if (!kb) return;
-    await deletePrefix(kbPrefix(kbSlug));
+    await Promise.all([
+      deletePrefix(kbPrefix(kb.id)),
+      removeCollection(knowledgeCollectionName(kb.id)),
+    ]);
     await db.knowledgeBase.delete({ where: { id: kb.id } });
     return;
   }
-  if (!kb) return;
   if (!kb) return;
   const doc = await db.knowledgeDocument.findUnique({
     where: { kbId_slug: { kbId: kb.id, slug: fileSlug } },
   });
   if (!doc) return;
-  await deletePrefix(kbPrefix(kbSlug, doc.id));
+  await Promise.all([
+    deletePrefix(kbPrefix(kb.id, doc.id)),
+    removeDoc(kb.id, doc.id),
+  ]);
   await db.knowledgeDocument.delete({ where: { id: doc.id } });
 }
 
@@ -307,8 +355,8 @@ export async function uploadKnowledgeFile(orgId: string, kbSlug: string, file: F
     },
   });
 
-  const sourceKey = kbPrefix(kbSlug, doc.id) + `/source-${slug}`;
-  const markdownKey = kbPrefix(kbSlug, doc.id) + "/content.md";
+  const sourceKey = kbPrefix(kb.id, doc.id) + `/source-${slug}`;
+  const markdownKey = kbPrefix(kb.id, doc.id) + "/content.md";
   await Promise.all([
     putObject(sourceKey, bytes, file.type || "application/octet-stream"),
     putObject(markdownKey, markdown, "text/markdown; charset=utf-8"),
@@ -349,7 +397,7 @@ export async function digestKnowledge(orgId: string, kbSlug: string, fileSlug?: 
     for (const d of docs) {
       if (!d.s3MarkdownKey || d.s3MarkdownKey === "pending") continue;
       const markdown = await getObjectText(d.s3MarkdownKey);
-      const chunks = await ingestDoc(kbSlug, d.id, d.slug, markdown);
+      const chunks = await ingestDoc(kb.id, d.id, d.slug, markdown);
       results.push({ id: d.id, chunks });
     }
     const byId = new Map(results.map((r) => [r.id, r.chunks]));
@@ -376,10 +424,10 @@ export async function digestKnowledge(orgId: string, kbSlug: string, fileSlug?: 
 }
 
 /** Removes a document's embeddings from its ChromaDB collection. */
-export async function removeEmbeddings(kbSlug: string, docIds: string[]) {
-  for (const docId of docIds) {
-    await removeDoc(kbSlug, docId);
-  }
+export async function removeEmbeddings(orgId: string, kbSlug: string, docIds: string[]) {
+  const kb = await db.knowledgeBase.findFirst({ where: { orgId, slug: kbSlug }, select: { id: true } });
+  if (!kb) return;
+  for (const docId of docIds) await removeDoc(kb.id, docId);
 }
 // ---- Learner context documents ----
 
@@ -407,20 +455,18 @@ export async function readUploadBytes(id: string, orgId: string) {
 
 // ---- Compiled config for the voice agent ----
 
-export async function getAgentConfig(personaSlug: string, agentSlug: string, contextId?: string) {
-  const [persona, agent, domain] = await Promise.all([
-    db.persona.findUnique({ where: { slug: personaSlug } }),
-    db.agent.findUnique({ where: { slug: agentSlug } }),
-    (async () => {
-      const a = await db.agent.findUnique({ where: { slug: agentSlug }, select: { domainSlug: true } });
-      return a ? db.domain.findUnique({ where: { slug: a.domainSlug } }) : null;
-    })(),
+export async function getAgentConfigForAgent(agentId: string, orgId: string, contextId?: string) {
+  const agent = await db.agent.findFirst({
+    where: { id: agentId, orgId },
+    include: { persona: true },
+  });
+  if (!agent) return null;
+  const [domain, contextDoc] = await Promise.all([
+    db.domain.findFirst({ where: { slug: agent.domainSlug, orgId } }),
+    contextId ? readUploadBytes(contextId, orgId) : Promise.resolve(null),
   ]);
-  if (!persona || !agent || !domain) return null;
-  // The persona pins the organization; everything else must belong to it.
-  const orgId = persona.orgId;
-  if (!orgId) return null;
-  if (agent.orgId !== orgId || domain.orgId !== orgId) return null;
+  const persona = agent.persona;
+  if (!domain) return null;
 
   // An agent attachment narrows retrieval to exactly one collection. Legacy
   // agents keep their Domain's selected collections until explicitly configured.
@@ -443,45 +489,50 @@ export async function getAgentConfig(personaSlug: string, agentSlug: string, con
     distinct: ["kbId"],
   });
   const knowledgeBases = indexed.map((row) => row.kb.slug);
+  const personaVoiceSources = await db.personaSource.findMany({
+    where: { personaId: persona.id, orgId, status: { in: ["analyzed", "compiling"] } },
+    select: { metadata: true },
+  });
+  const personaVoiceAvailable = personaVoiceSources.some((source) =>
+    isRecord(source.metadata) && typeof source.metadata.voiceMoments === "number" && source.metadata.voiceMoments > 0,
+  );
 
-  let context: { name: string; content: string } | null = null;
-  if (contextId) {
-    const doc = await readUploadBytes(contextId, orgId);
-    if (doc) {
-      // The agent can run on another machine: send readable content, not a web-local path.
-      const { markdown } = await documentToMarkdown(
-        new File([new Uint8Array(doc.content)], doc.name, { type: doc.mimeType }),
-      );
-      context = { name: doc.name, content: markdown };
-    }
+  let context: { id: string; name: string; content: string } | null = null;
+  if (contextDoc) {
+    // The agent can run on another machine: send readable content, not a web-local path.
+    const { markdown } = await documentToMarkdown(
+      new File([new Uint8Array(contextDoc.content)], contextDoc.name, { type: contextDoc.mimeType }),
+    );
+    context = { id: contextDoc.id, name: contextDoc.name, content: markdown };
   }
 
   return {
-    persona: { slug: persona.slug, version: persona.version, data: persona.data },
-    agent: { slug: agent.slug, version: agent.version, data: agent.data },
+    persona: { id: persona.id, slug: persona.slug, version: persona.version, data: persona.data },
+    agent: { id: agent.id, slug: agent.slug, version: agent.version, data: agent.data },
     domain: { slug: domain.slug, version: domain.version, data: domain.data },
     knowledgeBases,
+    personaVoiceAvailable,
     context,
   };
+}
+
+/** Compatibility check used by Studio diagnostics; live agents load by session. */
+export async function getAgentConfig(personaSlug: string, agentSlug: string, contextId?: string) {
+  const agent = await db.agent.findUnique({
+    where: { slug: agentSlug },
+    select: { id: true, orgId: true, persona: { select: { slug: true } } },
+  });
+  if (!agent?.orgId || agent.persona.slug !== personaSlug) return null;
+  return getAgentConfigForAgent(agent.id, agent.orgId, contextId);
 }
 
 // ---- Interview sessions ----
 
 export async function listSessions(orgId: string) {
-  return db.interviewSession.findMany({ where: { orgId, deletedAt: null }, orderBy: { startedAt: "desc" }, take: 50 });
-}
-
-export async function createSessionRecord(input: {
-  orgId?: string | null;
-  personaSlug: string; personaVersion: number;
-  agentSlug: string; agentVersion: number;
-  domainSlug: string; domainVersion: number;
-  contextName?: string;
-}) {
-  return db.interviewSession.create({ data: input });
-}
-
-export async function endSessionRecord(id: string, status: string) {
-  return db.interviewSession.update({ where: { id }, data: { status, endedAt: new Date() } });
+  return db.interviewSession.findMany({
+    where: { orgId, deletedAt: null },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+  });
 }
 

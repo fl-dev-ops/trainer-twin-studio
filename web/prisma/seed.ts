@@ -15,32 +15,33 @@ const DATA = path.join(import.meta.dirname, "../data");
 
 async function seedSpec(dir: "personas" | "agents" | "domains", key: string) {
   const files = (await fs.readdir(path.join(DATA, dir))).filter((f) => f.endsWith(".yaml"));
-  type UpsertDelegate = {
-    upsert(args: {
-      where: { slug: string };
-      update: Record<string, unknown>;
-      create: Record<string, unknown>;
-    }): Promise<unknown>;
+  type SeedDelegate = {
+    findFirst(args: { where: { slug: string; orgId: null } }): Promise<{ id: string } | null>;
+    update(args: { where: { id: string }; data: Record<string, unknown> }): Promise<unknown>;
+    create(args: { data: Record<string, unknown> }): Promise<unknown>;
   };
   for (const file of files) {
     const slug = file.replace(/\.yaml$/, "");
-    const doc = yaml.load(await fs.readFile(path.join(DATA, dir, file), "utf-8")) as Record<string, any>;
+    const doc = yaml.load(await fs.readFile(path.join(DATA, dir, file), "utf-8")) as Record<string, unknown>;
     const entity = doc[key];
-    if (!entity) continue;
+    if (typeof entity !== "object" || entity === null || Array.isArray(entity)) continue;
+    const data = entity as Record<string, unknown>;
     const raw = dir === "personas" ? prisma.persona : dir === "agents" ? prisma.agent : prisma.domain;
-    const model = raw as unknown as UpsertDelegate;
-    const domainSlug = key === "agent" && typeof entity.domain === "string" ? entity.domain : undefined;
+    const model = raw as unknown as SeedDelegate;
+    const domainSlug = key === "agent" && typeof data.domain === "string" ? data.domain : undefined;
+    const persona = key === "agent"
+      ? await prisma.persona.findFirst({ where: { orgId: null }, orderBy: { createdAt: "asc" }, select: { id: true } })
+      : null;
+    if (key === "agent" && !persona) throw new Error("Seed a persona before agents");
     const values = {
-      name: entity.name ?? slug,
-      version: entity.version ?? 1,
-      data: entity,
-      ...(domainSlug ? { domainSlug } : {}),
+      name: typeof data.name === "string" ? data.name : slug,
+      version: typeof data.version === "number" ? data.version : 1,
+      data,
+      ...(domainSlug ? { domainSlug, personaId: persona!.id } : {}),
     };
-    await model.upsert({
-      where: { slug },
-      update: values,
-      create: { slug, ...values },
-    });
+    const existing = await model.findFirst({ where: { slug, orgId: null } });
+    if (existing) await model.update({ where: { id: existing.id }, data: values });
+    else await model.create({ data: { slug, ...values } });
     console.log(`seeded ${dir}/${slug}`);
   }
 }
@@ -60,11 +61,8 @@ async function seedKnowledge() {
 
   const bases = (await fs.readdir(kbRoot, { withFileTypes: true })).filter((d) => d.isDirectory());
   for (const base of bases) {
-    const kb = await prisma.knowledgeBase.upsert({
-      where: { slug: base.name },
-      update: {},
-      create: { slug: base.name, name: base.name.replace(/[-_]/g, " ") },
-    });
+    const kb = await prisma.knowledgeBase.findFirst({ where: { slug: base.name, orgId: null } })
+      ?? await prisma.knowledgeBase.create({ data: { slug: base.name, name: base.name.replace(/[-_]/g, " ") } });
     for (const file of (await fs.readdir(path.join(kbRoot, base.name))).filter((f) => f.endsWith(".md"))) {
       const content = await fs.readFile(path.join(kbRoot, base.name, file), "utf-8");
       const existing = await prisma.knowledgeDocument.findUnique({
@@ -72,8 +70,8 @@ async function seedKnowledge() {
       });
       if (existing) continue;
       const docId = crypto.randomUUID();
-      const sourceKey = `${basePrefix}/${base.name}/${docId}/source-${file}`;
-      const markdownKey = `${basePrefix}/${base.name}/${docId}/content.md`;
+      const sourceKey = `${basePrefix}/knowledge/${kb.id}/${docId}/source-${file}`;
+      const markdownKey = `${basePrefix}/knowledge/${kb.id}/${docId}/content.md`;
       await s3.send(new PutObjectCommand({ Bucket: bucket, Key: sourceKey, Body: content, ContentType: "text/markdown" }));
       await s3.send(new PutObjectCommand({ Bucket: bucket, Key: markdownKey, Body: content, ContentType: "text/markdown" }));
       await prisma.knowledgeDocument.create({

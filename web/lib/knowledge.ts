@@ -90,10 +90,10 @@ function chromaClient(): ChromaClient {
   return new ChromaClient(parseChromaUrl(CHROMA_URL));
 }
 
-async function getCollection(kbSlug: string): Promise<Collection> {
+async function getCollection(name: string): Promise<Collection> {
   const client = chromaClient();
   return client.getOrCreateCollection({
-    name: `kb_${kbSlug}`,
+    name,
     // Supplying the same function used for precomputed vectors prevents Chroma
     // from resolving its optional @chroma-core/default-embed package.
     embeddingFunction: openRouterEmbeddings,
@@ -102,17 +102,31 @@ async function getCollection(kbSlug: string): Promise<Collection> {
   });
 }
 
+export const knowledgeCollectionName = (knowledgeBaseId: string) => `kb_${knowledgeBaseId}`;
+
 /** Replace all chunks of one doc. Idempotent per docId. */
 export async function ingestDoc(
-  kbSlug: string,
+  knowledgeBaseId: string,
   docId: string,
   source: string,
   markdown: string,
 ): Promise<number> {
-  const chunks = chunkMarkdown(markdown);
-  if (chunks.length === 0) return 0;
+  return replaceChunks(knowledgeCollectionName(knowledgeBaseId), docId, source, chunkMarkdown(markdown));
+}
+
+/** Replace all chunks of one doc in any collection. Idempotent per docId. */
+export async function replaceChunks(
+  collectionName: string,
+  docId: string,
+  source: string,
+  chunks: string[],
+): Promise<number> {
+  if (chunks.length === 0) {
+    await removeChunks(collectionName, docId);
+    return 0;
+  }
   const embeddings = await embedTexts(chunks);
-  const collection = await getCollection(kbSlug);
+  const collection = await getCollection(collectionName);
   await collection.delete({ where: { docId } });
   for (let i = 0; i < chunks.length; i += 5000) {
     const batch = chunks.slice(i, i + 5000);
@@ -126,12 +140,25 @@ export async function ingestDoc(
   return chunks.length;
 }
 
-export async function removeDoc(kbSlug: string, docId: string): Promise<void> {
+export async function removeDoc(knowledgeBaseId: string, docId: string): Promise<void> {
+  await removeChunks(knowledgeCollectionName(knowledgeBaseId), docId);
+}
+
+export async function removeChunks(collectionName: string, docId: string): Promise<void> {
   try {
-    const collection = await getCollection(kbSlug);
+    const collection = await getCollection(collectionName);
     await collection.delete({ where: { docId } });
   } catch {
     // collection may not exist yet; deletion proceeds regardless
+  }
+}
+
+export async function removeCollection(collectionName: string): Promise<void> {
+  try {
+    await chromaClient().deleteCollection({ name: collectionName });
+  } catch (error) {
+    const message = String(error).toLowerCase();
+    if (!message.includes("not found") && !message.includes("not be found")) throw error;
   }
 }
 
@@ -148,7 +175,7 @@ export function bm25Scores(query: string, docs: string[]): number[] {
   const avgdl = docTokens.reduce((a, d) => a + d.length, 0) / (n || 1) || 1;
   const df = new Map<string, number>();
   for (const toks of docTokens) for (const t of new Set(toks)) df.set(t, (df.get(t) ?? 0) + 1);
-  return docTokens.map((toks, i) => {
+  return docTokens.map((toks) => {
     const tf = new Map<string, number>();
     for (const t of toks) tf.set(t, (tf.get(t) ?? 0) + 1);
     let s = 0;
@@ -174,8 +201,12 @@ export function rrf(a: string[], b: string[], k = 60): Map<string, number> {
 type Hit = { id: string; docId: string; source: string; text: string; score: number };
 
 /** Hybrid retrieval: vector top-50 + BM25 top-50 -> RRF -> optional reranker. */
-export async function searchKnowledge(kbSlug: string, query: string, topK = 5): Promise<Hit[]> {
-  const collection = await getCollection(kbSlug);
+export async function searchKnowledge(knowledgeBaseId: string, query: string, topK = 5): Promise<Hit[]> {
+  return searchCollection(knowledgeCollectionName(knowledgeBaseId), query, topK);
+}
+
+export async function searchCollection(collectionName: string, query: string, topK = 5): Promise<Hit[]> {
+  const collection = await getCollection(collectionName);
 
   const [queryEmbedding] = await embedTexts([query]);
   const vec = await collection.query({
