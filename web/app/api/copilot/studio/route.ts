@@ -33,6 +33,8 @@ function authorized(request: Request) {
 
 export async function POST(request: Request) {
   if (!authorized(request)) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const orgId = request.headers.get("x-trainertwin-org-id")?.trim();
+  if (!orgId) return Response.json({ error: "Organization is required" }, { status: 400 });
   const parsed = requestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Invalid Copilot request" }, { status: 400 });
 
@@ -40,14 +42,16 @@ export async function POST(request: Request) {
     const input = parsed.data;
     if (input.action === "inventory") {
       const [personas, agents, domains, knowledgeBases, drafts] = await Promise.all([
-        db.persona.findMany({ orderBy: { slug: "asc" }, select: { slug: true, name: true, version: true } }),
-        db.agent.findMany({ orderBy: [{ order: "asc" }, { slug: "asc" }], select: { slug: true, name: true, version: true, domainSlug: true } }),
-        db.domain.findMany({ orderBy: { slug: "asc" }, select: { slug: true, name: true, version: true } }),
+        db.persona.findMany({ where: { orgId }, orderBy: { slug: "asc" }, select: { slug: true, name: true, version: true } }),
+        db.agent.findMany({ where: { orgId }, orderBy: [{ order: "asc" }, { slug: "asc" }], select: { slug: true, name: true, version: true, domainSlug: true } }),
+        db.domain.findMany({ where: { orgId }, orderBy: { slug: "asc" }, select: { slug: true, name: true, version: true } }),
         db.knowledgeBase.findMany({
+          where: { orgId },
           orderBy: { slug: "asc" },
           select: { slug: true, name: true, documents: { select: { title: true, status: true } } },
         }),
         db.specDraft.findMany({
+          where: { orgId },
           orderBy: { updatedAt: "desc" },
           select: { slug: true, name: true, status: true, revision: true, updatedAt: true },
         }),
@@ -63,19 +67,19 @@ export async function POST(request: Request) {
 
     if (input.action === "readSpec") {
       const row = input.type === "persona"
-        ? await db.persona.findUnique({ where: { slug: input.slug }, select: { slug: true, version: true, data: true } })
+        ? await db.persona.findFirst({ where: { slug: input.slug, orgId }, select: { slug: true, version: true, data: true } })
         : input.type === "agent"
-          ? await db.agent.findUnique({ where: { slug: input.slug }, select: { slug: true, version: true, data: true } })
-          : await db.domain.findUnique({ where: { slug: input.slug }, select: { slug: true, version: true, data: true } });
+          ? await db.agent.findFirst({ where: { slug: input.slug, orgId }, select: { slug: true, version: true, data: true } })
+          : await db.domain.findFirst({ where: { slug: input.slug, orgId }, select: { slug: true, version: true, data: true } });
       return Response.json(row ?? { error: `${input.type} "${input.slug}" was not found` });
     }
 
     if (input.action === "readDraft") {
-      return Response.json(await readSpecDraft(input.slug) ?? { error: `Draft "${input.slug}" was not found` });
+      return Response.json(await readSpecDraft(input.slug, orgId) ?? { error: `Draft "${input.slug}" was not found` });
     }
 
     if (input.action === "saveDraft") {
-      const saved = await saveSpecDraft(input.bundle);
+      const saved = await saveSpecDraft(input.bundle, orgId);
       return Response.json({
         slug: saved.slug,
         name: saved.name,
@@ -86,15 +90,15 @@ export async function POST(request: Request) {
     }
 
     if (input.action === "publishDraft") {
-      return Response.json(await publishSpecDraft(input.slug));
+      return Response.json(await publishSpecDraft(input.slug, orgId));
     }
 
-    const exists = await db.knowledgeDocument.findFirst({
-      where: { status: "indexed", kb: { slug: input.knowledgeBase } },
+    const knowledgeBase = await db.knowledgeBase.findFirst({
+      where: { slug: input.knowledgeBase, orgId, documents: { some: { status: "indexed" } } },
       select: { id: true },
     });
-    if (!exists) return Response.json({ error: `No indexed knowledge base named "${input.knowledgeBase}"` });
-    const results = await searchKnowledge(input.knowledgeBase, input.query, input.limit);
+    if (!knowledgeBase) return Response.json({ error: `No indexed knowledge base named "${input.knowledgeBase}"` });
+    const results = await searchKnowledge(knowledgeBase.id, input.query, input.limit);
     return Response.json({
       query: input.query,
       knowledgeBase: input.knowledgeBase,

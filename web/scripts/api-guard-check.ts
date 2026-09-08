@@ -26,4 +26,16 @@ for (const file of routeFiles(root)) {
   }
 }
 assert.ok(handlers > 0, "no v1 handlers found");
+
+const draftRoot = path.resolve(import.meta.dirname, "../app/api/spec-drafts");
+for (const file of routeFiles(draftRoot)) {
+  const source = readFileSync(file, "utf-8");
+  for (const match of source.matchAll(/export async function (GET|POST|PATCH|DELETE|PUT)/g)) {
+    handlers++;
+    const after = source.slice(match.index, match.index + 500);
+    assert.match(after, /getTrainerOrg/, `${file}: ${match[1]} lacks trainer organization auth`);
+    guarded++;
+  }
+}
+
 console.log(`API guard check passed: ${guarded}/${handlers} handlers validated`);

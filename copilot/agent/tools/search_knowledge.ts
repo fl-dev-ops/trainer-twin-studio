@@ -12,6 +12,6 @@ export default defineTool({
     limit: z.number().int().min(1).max(8).default(4),
   }),
   execute(input, ctx) {
-    return callStudio<Record<string, unknown>>({ action: "searchKnowledge", ...input }, ctx.abortSignal);
+    return callStudio<Record<string, unknown>>({ action: "searchKnowledge", ...input }, ctx);
   },
 });

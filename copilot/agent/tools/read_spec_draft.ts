@@ -9,7 +9,7 @@ export default defineTool({
   async execute({ slug }, ctx) {
     const selected = slug ?? designState.get().draftSlug;
     if (!selected) return { error: "No draft is active in this conversation" };
-    const draft = await callStudio<Record<string, unknown> | null>({ action: "readDraft", slug: selected }, ctx.abortSignal);
+    const draft = await callStudio<Record<string, unknown> | null>({ action: "readDraft", slug: selected }, ctx);
     if (draft && !("error" in draft)) designState.update(() => ({ draftSlug: selected }));
     return draft;
   },

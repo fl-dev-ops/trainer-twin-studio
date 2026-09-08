@@ -9,7 +9,7 @@ export default defineTool({
   async execute(bundle, ctx) {
     const saved = await callStudio<{ slug: string; name: string; status: string; revision: number; changed: boolean }>(
       { action: "saveDraft", bundle },
-      ctx.abortSignal,
+      ctx,
     );
     designState.update(() => ({ draftSlug: saved.slug }));
     return { ...saved, libraryPath: `/agents/${saved.slug}` };

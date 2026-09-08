@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import type { FileUIPart, UserContent } from "ai";
-import yaml from "js-yaml";
 import type { EveDynamicToolPart, EveMessage } from "eve/react";
 import { useEveAgent } from "eve/react";
 import {
@@ -13,7 +12,6 @@ import {
   Circle,
   CircleAlert,
   ChevronDown,
-  FileCode2,
   Layers3,
   ListTodo,
   LoaderCircle,
@@ -42,7 +40,6 @@ import {
   ConversationEmptyState,
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
-import { CodeBlock } from "@/components/ai-elements/code-block";
 import {
   Message,
   MessageContent,
@@ -76,7 +73,7 @@ import type { SpecDraftBundle } from "@/lib/spec-draft-schema";
 import { cn } from "@/lib/utils";
 import { takeCopilotSeed } from "@/lib/copilot-handoff";
 
-const SESSION_KEY = "trainertwin:spec-copilot-session:v3";
+const SESSION_KEY = "trainertwin:spec-copilot-session:v4";
 const INPUT_KEY = "trainertwin:spec-copilot-input:v1";
 const TOOL_TITLES: Record<string, string> = {
   publish_spec_draft: "Publish scenario",
@@ -96,12 +93,6 @@ type TodoItem = {
   priority: "high" | "medium" | "low";
   status: "pending" | "in_progress" | "completed" | "cancelled";
 };
-type ArtifactPreview = {
-  content: string;
-  downloadUrl: string;
-  filename: string;
-};
-
 const SAFE_MARKDOWN_COMPONENTS = {
   img: ({ alt }: ComponentProps<"img">) => (
     <span className="text-xs text-muted-foreground">
@@ -137,7 +128,6 @@ export function CopilotChat({
   const mountedAt = useRef(Date.now());
   const [blueprintOpen, setBlueprintOpen] = useState(false);
   const [draft, setDraft] = useState<DraftView>();
-  const [artifactPreview, setArtifactPreview] = useState<ArtifactPreview>();
   const agent = useEveAgent({
     host: "/api",
     initialSession: savedSession,
@@ -242,22 +232,8 @@ export function CopilotChat({
     setInput("");
     setLocalError(undefined);
     setDraft(undefined);
-    setArtifactPreview(undefined);
     setBlueprintOpen(false);
     agent.reset();
-  }
-
-  function previewArtifact(type: "agent" | "domain") {
-    if (!scopedDraft) return;
-    const filename = `${scopedDraft.slug}.${type}.yaml`;
-    setArtifactPreview({
-      content: yaml.dump(
-        { schema_version: 1, kind: type, [type]: scopedDraft[type] },
-        { noRefs: true, lineWidth: 100 },
-      ),
-      downloadUrl: `/api/spec-drafts/${encodeURIComponent(scopedDraft.slug)}/${type}`,
-      filename,
-    });
   }
 
   const content = (
@@ -353,12 +329,7 @@ export function CopilotChat({
             )}
           >
             {panel && workspaceVisible && (
-              <WorkspacePanel
-                draft={scopedDraft}
-                todos={todos}
-                busy={busy}
-                onPreview={previewArtifact}
-              />
+              <WorkspacePanel draft={scopedDraft} todos={todos} busy={busy} />
             )}
             {agent.data.messages.length === 0 && !restoring ? (
               <ConversationEmptyState
@@ -479,12 +450,7 @@ export function CopilotChat({
       {showWorkspace && (
         <>
           <aside className="absolute inset-y-3 right-3 hidden w-80 overflow-y-auto text-sidebar-foreground xl:block">
-            <WorkspacePanel
-              draft={scopedDraft}
-              todos={todos}
-              busy={busy}
-              onPreview={previewArtifact}
-            />
+            <WorkspacePanel draft={scopedDraft} todos={todos} busy={busy} />
           </aside>
 
           <Sheet open={blueprintOpen} onOpenChange={setBlueprintOpen}>
@@ -492,66 +458,15 @@ export function CopilotChat({
               <SheetHeader className="sr-only">
                 <SheetTitle>Scenario workspace</SheetTitle>
                 <SheetDescription>
-                  Current tasks and generated files.
+                  Current scenario tasks.
                 </SheetDescription>
               </SheetHeader>
-              <WorkspacePanel
-                draft={scopedDraft}
-                todos={todos}
-                busy={busy}
-                onPreview={previewArtifact}
-              />
+              <WorkspacePanel draft={scopedDraft} todos={todos} busy={busy} />
             </SheetContent>
           </Sheet>
         </>
       )}
 
-      <Sheet
-        open={artifactPreview !== undefined}
-        onOpenChange={(open) => {
-          if (!open) setArtifactPreview(undefined);
-        }}
-      >
-        <SheetContent className="gap-0 p-0 data-[side=right]:w-[min(94vw,48rem)] data-[side=right]:sm:max-w-3xl">
-          <SheetHeader className="border-b px-5 py-4 pr-14">
-            <div className="flex min-w-0 items-center gap-3">
-              <FileCode2
-                className="size-4 shrink-0 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <div className="min-w-0">
-                <SheetTitle className="truncate">
-                  {artifactPreview?.filename}
-                </SheetTitle>
-                <SheetDescription>Compiled working draft</SheetDescription>
-              </div>
-              {/* artifactPreview download button — hidden for now
-              {artifactPreview && (
-                <Button
-                  className="ml-auto shrink-0"
-                  variant="outline"
-                  size="sm"
-                  nativeButton={false}
-                  render={<a href={artifactPreview.downloadUrl} />}
-                >
-                  <Download aria-hidden="true" /> Download
-                </Button>
-              )}
-              */}
-            </div>
-          </SheetHeader>
-          <div className="min-h-0 flex-1 overflow-auto bg-muted/20 p-4">
-            {artifactPreview && (
-              <CodeBlock
-                code={artifactPreview.content}
-                language="yaml"
-                showLineNumbers
-                className="min-w-full"
-              />
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
     </main>
   );
 
@@ -770,12 +685,10 @@ function WorkspacePanel({
   draft,
   todos,
   busy,
-  onPreview,
 }: {
   draft?: DraftView;
   todos: TodoItem[];
   busy: boolean;
-  onPreview: (type: "agent" | "domain") => void;
 }) {
   const items =
     todos.length > 0
@@ -841,28 +754,6 @@ function WorkspacePanel({
         </WorkspaceCard>
       )}
 
-      {draft && (
-        <WorkspaceCard icon={FileCode2} title="Content">
-          <div className="flex flex-col gap-0.5">
-            {(["agent", "domain"] as const).map((type) => (
-              <button
-                key={type}
-                type="button"
-                onClick={() => onPreview(type)}
-                className="flex min-w-0 items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-              >
-                <FileCode2
-                  className="size-4 shrink-0 text-muted-foreground"
-                  aria-hidden="true"
-                />
-                <span className="truncate">
-                  {draft.slug}.{type}.yaml
-                </span>
-              </button>
-            ))}
-          </div>
-        </WorkspaceCard>
-      )}
     </div>
   );
 }

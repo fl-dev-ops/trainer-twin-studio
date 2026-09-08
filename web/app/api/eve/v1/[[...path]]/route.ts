@@ -1,3 +1,5 @@
+import { getTrainerOrg } from "@/lib/org";
+
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
@@ -7,14 +9,16 @@ async function proxy(request: Request, { params }: Params) {
   const origin = process.env.EVE_ORIGIN;
   const secret = process.env.COPILOT_SERVICE_SECRET;
   if (!origin || !secret) return Response.json({ error: "Copilot is not configured" }, { status: 503 });
+  const org = await getTrainerOrg();
+  if (!org) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const path = (await params).path?.map(encodeURIComponent).join("/") ?? "";
   const target = new URL(`/eve/v1/${path}`, origin);
   target.search = new URL(request.url).search;
 
   const headers = new Headers(request.headers);
-  // ponytail: one service principal while Studio is single-user; forward verified user JWTs when multi-tenant auth lands.
-  headers.set("authorization", `Basic ${Buffer.from(`studio:${secret}`).toString("base64")}`);
+  // The authenticated organization becomes Eve's durable session principal.
+  headers.set("authorization", `Basic ${Buffer.from(`${org.id}:${secret}`).toString("base64")}`);
   for (const name of ["cookie", "host", "content-length", "accept-encoding"]) headers.delete(name);
 
   try {

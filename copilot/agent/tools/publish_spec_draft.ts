@@ -11,6 +11,6 @@ export default defineTool({
   async execute({ slug }, ctx) {
     const selected = slug ?? designState.get().draftSlug;
     if (!selected) throw new Error("No draft is active in this conversation");
-    return callStudio<Record<string, unknown>>({ action: "publishDraft", slug: selected }, ctx.abortSignal);
+    return callStudio<Record<string, unknown>>({ action: "publishDraft", slug: selected }, ctx);
   },
 });

@@ -11,6 +11,6 @@ export default defineTool({
   description: "Read one current TrainerTwin Persona, Agent, or Domain specification by slug.",
   inputSchema,
   execute(input, ctx) {
-    return callStudio<Record<string, unknown>>({ action: "readSpec", ...input }, ctx.abortSignal);
+    return callStudio<Record<string, unknown>>({ action: "readSpec", ...input }, ctx);
   },
 });
