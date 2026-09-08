@@ -1,5 +1,6 @@
-import { SpecManager } from "@/components/spec-manager";
+import { redirect } from "next/navigation";
 
+/** Domains are generated implementation details, never a Studio surface. */
 export default function DomainsPage() {
-  return <SpecManager type="domains" />;
+  redirect("/agents");
 }

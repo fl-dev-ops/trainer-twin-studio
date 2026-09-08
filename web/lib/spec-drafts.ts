@@ -28,16 +28,17 @@ function bundleFromRow(row: {
   });
 }
 
-export async function listSpecDrafts() {
+export async function listSpecDrafts(orgId: string) {
   return db.specDraft.findMany({
+    where: { orgId },
     orderBy: { updatedAt: "desc" },
     select: { slug: true, name: true, status: true, revision: true, updatedAt: true, publishedAt: true },
   });
 }
 
-export async function readSpecDraft(slug: string) {
-  const row = await db.specDraft.findUnique({
-    where: { slug },
+export async function readSpecDraft(slug: string, orgId: string) {
+  const row = await db.specDraft.findFirst({
+    where: { slug, orgId },
     include: { revisions: { orderBy: { revision: "desc" }, take: 20, select: { revision: true, createdAt: true } } },
   });
   if (!row) return null;
@@ -51,9 +52,12 @@ export async function readSpecDraft(slug: string) {
   };
 }
 
-export async function saveSpecDraft(input: unknown) {
+export async function saveSpecDraft(input: unknown, orgId: string) {
   const bundle = specDraftBundleSchema.parse(input);
   const existing = await db.specDraft.findUnique({ where: { slug: bundle.slug } });
+  if (existing?.orgId && existing.orgId !== orgId) {
+    throw new Error("Draft belongs to another organization");
+  }
   if (!existing) {
     const created = await db.specDraft.create({
       data: {
@@ -65,6 +69,7 @@ export async function saveSpecDraft(input: unknown) {
         groundingData: json(bundle.grounding),
         assumptions: json(bundle.assumptions),
         gaps: json(bundle.gaps),
+        orgId,
       },
     });
     return { ...bundle, status: created.status, revision: created.revision, changed: true };
@@ -92,19 +97,18 @@ export async function saveSpecDraft(input: unknown) {
         gaps: json(bundle.gaps),
         status: "draft",
         revision,
+        orgId,
       },
     }),
   ]);
   return { ...bundle, status: "draft", revision, changed: true };
 }
 
-export async function publishSpecDraft(slug: string) {
-  const row = await db.specDraft.findUnique({ where: { slug } });
+export async function publishSpecDraft(slug: string, orgId: string) {
+  const row = await db.specDraft.findFirst({ where: { slug, orgId } });
   if (!row) throw new Error(`Draft "${slug}" was not found`);
   const bundle = bundleFromRow(row);
   if (bundle.gaps.length) throw new Error(`Resolve ${bundle.gaps.length} draft gap(s) before publishing`);
-  if (!row.orgId) throw new Error("Save the draft's agent settings before publishing");
-  const orgId = row.orgId;
   const requestedKnowledge = [...new Set([
     ...bundle.domain.knowledge_bases,
     ...(bundle.agent.knowledgeBase ? [bundle.agent.knowledgeBase] : []),
@@ -145,12 +149,13 @@ export async function publishSpecDraft(slug: string) {
     const currentAgent = await tx.agent.findUnique({ where: { slug: bundle.agent.id } });
     if (currentAgent && currentAgent.orgId !== orgId) throw new Error("Agent belongs to another organization");
     let agentVersion = currentAgent?.version ?? 1;
+    if (!persona) throw new Error("A published agent requires a persona");
     if (!currentAgent) {
-      await tx.agent.create({ data: { slug: bundle.agent.id, name: bundle.agent.name, version: 1, domainSlug: bundle.domain.id, data: json(agentData), orgId } });
-    } else if (JSON.stringify(currentAgent.data) !== JSON.stringify(agentData)) {
+      await tx.agent.create({ data: { slug: bundle.agent.id, name: bundle.agent.name, version: 1, domainSlug: bundle.domain.id, personaId: persona.id, data: json(agentData), orgId } });
+    } else if (JSON.stringify(currentAgent.data) !== JSON.stringify(agentData) || currentAgent.personaId !== persona.id) {
       agentVersion += 1;
       await tx.specVersion.create({ data: { entityType: "agents", entitySlug: currentAgent.slug, version: currentAgent.version, data: json(currentAgent.data), orgId } });
-      await tx.agent.update({ where: { id: currentAgent.id }, data: { name: bundle.agent.name, version: agentVersion, domainSlug: bundle.domain.id, data: json(agentData), orgId } });
+      await tx.agent.update({ where: { id: currentAgent.id }, data: { name: bundle.agent.name, version: agentVersion, domainSlug: bundle.domain.id, personaId: persona.id, data: json(agentData), orgId } });
     }
 
     await tx.specDraft.update({ where: { id: row.id }, data: { status: "published", publishedAt: new Date() } });

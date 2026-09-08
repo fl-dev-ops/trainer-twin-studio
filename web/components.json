@@ -24,6 +24,7 @@
   "registries": {
     "@agents-ui": "https://livekit.com/ui/r/{name}.json",
     "@ai-elements": "https://registry.ai-sdk.dev/{name}.json",
-    "@extend": "https://ui.extend.ai/r/{name}.json"
+    "@extend": "https://ui.extend.ai/r/{name}.json",
+    "@plate": "https://platejs.org/r/{name}.json"
   }
 }

@@ -1,17 +1,19 @@
 import yaml from "js-yaml";
 import { db } from "@/lib/db";
-import { getSessionOrg } from "@/lib/org";
+import { getTrainerOrg } from "@/lib/org";
 import { readSpecDraft, saveSpecDraft } from "@/lib/spec-drafts";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ slug: string; type: string }> },
 ) {
+  const org = await getTrainerOrg();
+  if (!org) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const { slug, type } = await params;
-  if (type !== "agent" && type !== "domain") {
-    return Response.json({ error: "Type must be agent or domain" }, { status: 400 });
+  if (type !== "agent") {
+    return Response.json({ error: "Not found" }, { status: 404 });
   }
-  const draft = await readSpecDraft(slug);
+  const draft = await readSpecDraft(slug, org.id);
   if (!draft) return Response.json({ error: `Draft "${slug}" was not found` }, { status: 404 });
   const document = { schema_version: 1, kind: type, [type]: draft[type] };
   return new Response(yaml.dump(document, { noRefs: true, lineWidth: 100 }), {
@@ -27,12 +29,12 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ slug: string; type: string }> },
 ) {
-  const org = await getSessionOrg();
+  const org = await getTrainerOrg();
   if (!org) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const { slug, type } = await params;
   if (type !== "agent") return Response.json({ error: "Only agent settings can be updated" }, { status: 400 });
-  const draft = await readSpecDraft(slug);
+  const draft = await readSpecDraft(slug, org.id);
   if (!draft) return Response.json({ error: `Draft "${slug}" was not found` }, { status: 404 });
 
   const input = await request.json().catch(() => null) as {
@@ -78,7 +80,6 @@ export async function PATCH(
     grounding: draft.grounding,
     assumptions: draft.assumptions,
     gaps: draft.gaps,
-  });
-  await db.specDraft.update({ where: { slug }, data: { orgId: org.id } });
+  }, org.id);
   return Response.json({ revision: saved.revision, changed: saved.changed });
 }

@@ -116,6 +116,8 @@ export const agentSpecSchema = z.object({
   domain: slug,
   objective: nonEmpty,
   opening: nonEmpty,
+  // The trainer's instruction/requirements this spec was generated from.
+  instruction: z.string().optional(),
   config: z.object({
     claim_handling: claimHandling,
     context: z.object({
@@ -150,7 +152,7 @@ export const domainSpecSchema = z.object({
   id: slug,
   name: nonEmpty,
   version: z.number().int().positive(),
-  knowledge_bases: z.array(slug).min(1),
+  knowledge_bases: z.array(slug),
   principles: z.array(nonEmpty).min(1),
   classifications: z.record(slug, nonEmpty),
 }).strict();
@@ -171,7 +173,7 @@ export const specDraftBundleSchema = z.object({
   personaSlug: slug.optional(),
   agent: agentSpecSchema,
   domain: domainSpecSchema,
-  grounding: z.array(groundingSchema).min(1),
+  grounding: z.array(groundingSchema),
   assumptions: z.array(nonEmpty).default([]),
   gaps: z.array(nonEmpty).default([]),
 }).strict().superRefine((bundle, ctx) => {

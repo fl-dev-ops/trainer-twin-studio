@@ -24,3 +24,6 @@ chroma-data/
 agent/.local/
 .vercel
 .env*
+storybook/
+web/storybook/
+.storybook/

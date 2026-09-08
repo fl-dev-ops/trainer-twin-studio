@@ -20,8 +20,9 @@ export default async function RolePlayPreviewPage({
   const org = await getTrainerOrg();
   if (!org) redirect("/auth/no-org");
 
-  const [current, members, assignments] = await Promise.all([
+  const [current, draft, members, assignments] = await Promise.all([
     readSpec("agents", slug, org.id).catch(() => null),
+    readSpecDraft(slug, org.id).catch(() => null),
     db.member.findMany({
       where: { organizationId: org.id, role: "member" },
       orderBy: { createdAt: "asc" },
@@ -53,8 +54,8 @@ export default async function RolePlayPreviewPage({
 
     let voiceName: string | undefined;
     if (typeof doc.voiceId === "string" && doc.voiceId) {
-      const voice = await db.voice.findUnique({
-        where: { id: doc.voiceId },
+      const voice = await db.voice.findFirst({
+        where: { id: doc.voiceId, OR: [{ orgId: org.id }, { orgId: null }] },
         select: { name: true },
       });
       voiceName = voice?.name;
@@ -62,8 +63,8 @@ export default async function RolePlayPreviewPage({
 
     let knowledgeBaseName: string | undefined;
     if (typeof doc.knowledgeBase === "string" && doc.knowledgeBase) {
-      const kb = await db.knowledgeBase.findUnique({
-        where: { slug: doc.knowledgeBase },
+      const kb = await db.knowledgeBase.findFirst({
+        where: { slug: doc.knowledgeBase, orgId: org.id },
         select: { name: true },
       });
       knowledgeBaseName = kb?.name;
@@ -72,8 +73,8 @@ export default async function RolePlayPreviewPage({
     rolePlay = {
       slug,
       name: typeof doc.name === "string" ? doc.name : slug,
-      domainSlug: typeof doc.domain === "string" ? doc.domain : undefined,
       objective: typeof doc.objective === "string" ? doc.objective : undefined,
+      instruction: typeof doc.instruction === "string" ? doc.instruction : undefined,
       opening: typeof doc.opening === "string" ? doc.opening : undefined,
       voiceId: typeof doc.voiceId === "string" ? doc.voiceId : undefined,
       voiceName,
@@ -82,11 +83,11 @@ export default async function RolePlayPreviewPage({
       knowledgeBaseName,
       status: "published",
       version: current.version,
+      draftRevision: draft?.status === "draft" ? draft.revision : undefined,
       stages: rawStages as RolePlayData["stages"],
       config,
     };
   } else {
-    const draft = await readSpecDraft(slug).catch(() => null);
     if (!draft) notFound();
 
     const agent = draft.agent as Record<string, unknown>;
@@ -95,9 +96,8 @@ export default async function RolePlayPreviewPage({
     rolePlay = {
       slug: draft.slug,
       name: draft.name,
-      domainSlug:
-        typeof draft.domain?.name === "string" ? draft.domain.name : undefined,
       objective: typeof agent?.objective === "string" ? agent.objective : undefined,
+      instruction: typeof agent?.instruction === "string" ? agent.instruction : undefined,
       opening: typeof agent?.opening === "string" ? agent.opening : undefined,
       status: "draft",
       version: draft.revision,
@@ -113,7 +113,6 @@ export default async function RolePlayPreviewPage({
       rolePlay={rolePlay}
       availableUsers={availableUsers}
       assignedUserIds={assignments.map(({ memberId }) => memberId)}
-      trainerName={org.user.name}
     />
   );
 }

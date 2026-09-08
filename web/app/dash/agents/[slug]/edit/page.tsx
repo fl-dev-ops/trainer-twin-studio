@@ -5,8 +5,8 @@ export default async function AgentEditPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ version?: string }>;
+  searchParams: Promise<{ version?: string; new?: string }>;
 }) {
-  const [{ slug }, { version }] = await Promise.all([params, searchParams]);
-  return <SpecResourcePage type="agents" slug={slug} requestedVersion={version} />;
+  const [{ slug }, query] = await Promise.all([params, searchParams]);
+  return <SpecResourcePage type="agents" slug={slug} requestedVersion={query.version} isNew={query.new === "1"} />;
 }
