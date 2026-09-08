@@ -28,7 +28,11 @@ def config_for(agent="full-mock-interview", persona="vasanth"):
     a = yaml.safe_load((DATA / "agents" / f"{agent}.yaml").read_text())["agent"]
     p = yaml.safe_load((DATA / "personas" / f"{persona}.yaml").read_text())["persona"]
     d = yaml.safe_load((DATA / "domains" / f"{a['domain']}.yaml").read_text())["domain"]
-    return {**{k: {"version": v["version"], "data": v} for k, v in (("persona", p), ("agent", a), ("domain", d))}, "knowledgeBases": []}
+    return {
+        **{k: {"version": v["version"], "data": v} for k, v in (("persona", p), ("agent", a), ("domain", d))},
+        "knowledgeBases": [],
+        "session": {"id": "session-test", "orgId": "org-test", "userId": "user-test"},
+    }
 
 
 class CompilerTests(unittest.TestCase):
@@ -81,7 +85,7 @@ class LiveSessionTests(unittest.IsolatedAsyncioTestCase):
         self.db_patch.start()
         self.addCleanup(self.db_patch.stop)
         self.config = config_for()
-        self.config["context"] = {"name": "resume.txt", "content": "SECRET_RESUME: a learner project."}
+        self.config["context"] = {"id": "context-test", "name": "resume.txt", "content": "SECRET_RESUME: a learner project."}
         self.prompts = []
         self.intent, self.classification, self.status = "answer", "strong", "sufficient"
         self.latest = "My example explains the underlying reasoning."
@@ -129,7 +133,7 @@ class LiveSessionTests(unittest.IsolatedAsyncioTestCase):
         self.session = InterviewSession()
 
     async def start(self):
-        return await self.session.start(self.config["persona"]["data"]["id"], self.config["agent"]["data"]["id"])
+        return await self.session.start("session-test", "runtime-token")
 
     def rows(self):
         with sqlite3.connect(self.db_path) as con:
@@ -171,6 +175,17 @@ class LiveSessionTests(unittest.IsolatedAsyncioTestCase):
         await self.session.step(self.latest)
         self.assertNotIn("SECRET_RESUME", self.prompts[-2])
         self.assertIn("Briefly acknowledge valid evidence", self.prompts[-1])
+
+    async def test_live_render_uses_retrieved_persona_source_moments(self):
+        self.config["personaVoiceAvailable"] = True
+        await self.start()
+        self.session._persona_voice.query = AsyncMock(return_value=[{
+            "text": "Candidate: We improved conversion.\nAction: request_justification\nInterviewer: How did you measure that?",
+            "source": "interview.yaml",
+        }])
+        await self.session.step(self.latest)
+        self.assertIn("How did you measure that?", self.prompts[-1])
+        self.session._persona_voice.query.assert_awaited_once()
 
     async def test_transition_clears_previous_stage_focus_before_rendering(self):
         stage = self.config["agent"]["data"]["stages"][0]["config"]["turns"]

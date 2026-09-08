@@ -51,6 +51,8 @@ type Props = {
   personas: string[];
   agents: string[];
   contexts: { id: string; name: string; size?: number }[];
+  agentPersonas?: Record<string, string>;
+  sessionCode?: string;
 };
 
 const AGENT_URL = process.env.NEXT_PUBLIC_AGENT_URL ?? "http://localhost:7860";
@@ -61,9 +63,9 @@ function formatBytes(n: number) {
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
-export function SessionView({ personas, agents, contexts }: Props) {
-  const [persona, setPersona] = useState(personas[0] ?? "");
+export function SessionView({ personas, agents, contexts, agentPersonas = {}, sessionCode }: Props) {
   const [agent, setAgent] = useState(agents[0] ?? "");
+  const persona = agentPersonas[agent] ?? personas[0] ?? "";
   const [contextId, setContextId] = useState("");
   const [contextList, setContextList] = useState<{ id: string; name: string; size?: number }[]>(contexts);
   const [uploadingContext, setUploadingContext] = useState(false);
@@ -145,6 +147,21 @@ export function SessionView({ personas, agents, contexts }: Props) {
     sessionRef.current = null;
     setElapsed(0);
     setTranscriptOpen(true);
+
+    const launchResponse = await fetch("/api/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(sessionCode
+        ? { shareCode: sessionCode, contextId: contextId || undefined }
+        : { agentSlug: agent, contextId: contextId || undefined }),
+    });
+    const launch = await launchResponse.json().catch(() => ({}));
+    if (!launchResponse.ok || !launch.session?.id || !launch.session?.runtimeToken) {
+      setError(launch.error ?? "Could not create session");
+      return;
+    }
+    sessionRef.current = launch.session.id;
+
     const transport = new SmallWebRTCTransport({
       webrtcRequestParams: { endpoint: `${AGENT_URL}/api/offer` },
     });
@@ -224,16 +241,17 @@ export function SessionView({ personas, agents, contexts }: Props) {
     client.on(RTVIEvent.RemoteAudioLevel, (level: number) =>
       setRemoteLevel(Math.min(1, Math.max(0, level))));
 
-    client.on(RTVIEvent.ServerMessage, (msg: {
-      data?: {
+    client.on(RTVIEvent.ServerMessage, (msg: unknown) => {
+      const record = typeof msg === "object" && msg !== null ? (msg as Record<string, unknown>) : null;
+      const payload = (typeof record?.data === "object" && record.data !== null
+        ? (record.data as Record<string, unknown>)
+        : record) as {
         type?: string;
         error?: string;
         sessionId?: string;
         status?: string;
         state?: { coverage?: Coverage; phase_name?: string };
-      };
-    }) => {
-      const payload = msg?.data;
+      } | null;
       if (payload?.type === "session-started" && typeof payload.sessionId === "string") {
         sessionRef.current = payload.sessionId;
       } else if (payload?.type === "interview-state" && payload.state) {
@@ -254,9 +272,8 @@ export function SessionView({ personas, agents, contexts }: Props) {
     try {
       await client.connect();
       client.sendClientMessage("start-interview", {
-        personaId: persona,
-        agentId: agent,
-        contextId: contextId || undefined,
+        sessionId: launch.session.id,
+        runtimeToken: launch.session.runtimeToken,
       });
     } catch (e) {
       disconnectReasonRef.current = "error";
@@ -374,26 +391,10 @@ export function SessionView({ personas, agents, contexts }: Props) {
               <CardHeader>
                 <CardTitle>Configure the session</CardTitle>
                 <CardDescription>
-                  Pick a persona and scenario. The agent server must be running ({AGENT_URL}).
+                  Choose a scenario. Its trainer persona is already configured ({AGENT_URL}).
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
-                <label className="flex flex-col gap-1.5 text-sm">
-                  <span className="font-medium">Persona</span>
-                  <Select value={persona} onValueChange={(v) => v !== null && setPersona(v)}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Persona" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        <SelectLabel>Personas</SelectLabel>
-                        {personas.map((p) => (
-                          <SelectItem key={p} value={p}>{p}</SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </label>
                 <label className="flex flex-col gap-1.5 text-sm">
                   <span className="font-medium">Scenario</span>
                   <Select value={agent} onValueChange={(v) => v !== null && setAgent(v)}>

@@ -3,6 +3,7 @@ import { BASE_DOMAIN } from "@/lib/base-domain";
 import { assignmentChanges } from "@/lib/assignments";
 import { db } from "@/lib/db";
 import { sendRolePlayAssignmentEmail } from "@/lib/email";
+import { attachAssignmentSession, revokeAssignedSession } from "@/lib/interview-sessions";
 import { getTrainerOrg } from "@/lib/org";
 
 const bodySchema = z.object({
@@ -28,11 +29,11 @@ export async function PUT(
     }),
     db.member.findMany({
       where: { id: { in: requestedIds }, organizationId: trainer.id, role: "member" },
-      select: { id: true, user: { select: { name: true, email: true } } },
+      select: { id: true, user: { select: { id: true, name: true, email: true } } },
     }),
     db.rolePlayAssignment.findMany({
       where: { orgId: trainer.id, agent: { slug } },
-      select: { memberId: true },
+      select: { id: true, memberId: true, sessionId: true },
     }),
   ]);
 
@@ -42,37 +43,40 @@ export async function PUT(
   }
 
   const changes = assignmentChanges(existing.map(({ memberId }) => memberId), requestedIds);
-  await db.$transaction(async (tx) => {
-    if (changes.removed.length) {
-      await tx.rolePlayAssignment.deleteMany({
-        where: { agentId: agent.id, memberId: { in: changes.removed } },
+  const removed = existing.filter(({ memberId }) => changes.removed.includes(memberId));
+  await Promise.all(removed.map(({ sessionId }) => revokeAssignedSession(sessionId)));
+  if (changes.removed.length) {
+    await db.rolePlayAssignment.deleteMany({ where: { agentId: agent.id, memberId: { in: changes.removed } } });
+  }
+
+  const added = new Set(changes.added);
+  const recipients = members.filter(({ id }) => added.has(id));
+  const launches = new Map<string, string>();
+  for (const member of recipients) {
+    const assignment = await db.rolePlayAssignment.create({
+      data: { orgId: trainer.id, agentId: agent.id, memberId: member.id, assignedByUserId: trainer.user.id },
+      select: { id: true },
+    });
+    try {
+      const session = await attachAssignmentSession(assignment.id, {
+        orgId: trainer.id, userId: member.user.id, agentId: agent.id,
       });
+      launches.set(member.id, `https://${trainer.slug}.${BASE_DOMAIN}/s/${session.shareCode}`);
+    } catch (error) {
+      await db.rolePlayAssignment.delete({ where: { id: assignment.id } });
+      throw error;
     }
-    if (changes.added.length) {
-      await tx.rolePlayAssignment.createMany({
-        data: changes.added.map((memberId) => ({
-          orgId: trainer.id,
-          agentId: agent.id,
-          memberId,
-          assignedByUserId: trainer.user.id,
-        })),
-        skipDuplicates: true,
-      });
-    }
-  });
+  }
 
   const data = agent.data as { objective?: unknown } | null;
   const objective = typeof data?.objective === "string" ? data.objective : undefined;
-  const added = new Set(changes.added);
-  const recipients = members.filter(({ id }) => added.has(id));
-  const practiceUrl = `https://${trainer.slug}.${BASE_DOMAIN}/session/${encodeURIComponent(slug)}`;
   const emailResults = await Promise.all(
-    recipients.map(({ user }) => sendRolePlayAssignmentEmail({
+    recipients.map(({ id, user }) => sendRolePlayAssignmentEmail({
       to: user.email,
       userName: user.name,
       rolePlayName: agent.name,
       rolePlayObjective: objective,
-      practiceUrl,
+      practiceUrl: launches.get(id)!,
       trainerName: trainer.user.name,
     })),
   );

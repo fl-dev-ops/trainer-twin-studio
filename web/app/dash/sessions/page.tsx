@@ -97,7 +97,7 @@ export default async function SessionsPage() {
                       <Badge variant="outline">v{session.agentVersion}</Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {session.startedAt.toISOString().replace("T", " ").slice(0, 16)}
+                      {(session.startedAt ?? session.createdAt).toISOString().replace("T", " ").slice(0, 16)}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {session.personaSlug} <Badge variant="outline">v{session.personaVersion}</Badge>

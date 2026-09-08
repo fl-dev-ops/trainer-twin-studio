@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { isApiError, requireExternalApi } from "@/lib/external-api";
 
 const querySchema = z.object({
-  status: z.enum(["active", "completed", "abandoned"]).optional(),
+  status: z.enum(["assigned", "active", "completed", "abandoned", "revoked"]).optional(),
   userId: z.string().min(1).optional(),
   scenario: z.string().min(1).optional(),
   from: z.iso.datetime({ offset: true }).optional(),
@@ -39,7 +39,7 @@ export async function GET(request: Request) {
   const [sessions, total] = await Promise.all([
     db.interviewSession.findMany({
       where,
-      orderBy: { startedAt: "desc" },
+      orderBy: { createdAt: "desc" },
       skip: offset,
       take: limit,
       select: {
@@ -53,6 +53,7 @@ export async function GET(request: Request) {
         domainVersion: true,
         status: true,
         contextName: true,
+        createdAt: true,
         startedAt: true,
         endedAt: true,
       },

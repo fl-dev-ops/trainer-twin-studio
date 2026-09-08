@@ -21,6 +21,7 @@ export async function GET(request: Request, { params }: Params) {
       domainVersion: true,
       status: true,
       contextName: true,
+      createdAt: true,
       transcript: true,
       evidence: true,
       s3AudioKey: true,

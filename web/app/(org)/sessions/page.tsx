@@ -101,7 +101,7 @@ export default async function LearnerSessionsPage() {
                         {session.agentSlug.replaceAll("-", " ")}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {formatDate(session.startedAt)}
+                        {formatDate(session.startedAt ?? session.createdAt)}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {session.contextName ?? "—"}

@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import { activateSession, authorizeRuntimeSession } from "@/lib/interview-sessions";
 import { getSessionOrg } from "@/lib/org";
-import { createSessionRecord, endSessionRecord, listSessions } from "@/lib/specs";
+import { resolveSessionUser } from "@/lib/session-user";
 import { db } from "@/lib/db";
+import { listSessions } from "@/lib/specs";
 
 export async function GET() {
   const org = await getSessionOrg();
@@ -9,46 +11,56 @@ export async function GET() {
   return NextResponse.json({ sessions: await listSessions(org.id) });
 }
 
+/** Authenticated learner activation. The DB record always exists before WebRTC starts. */
 export async function POST(req: Request) {
+  const { org, user } = await resolveSessionUser();
+  if (!org || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await req.json().catch(() => null);
-  const required = ["personaSlug", "personaVersion", "agentSlug", "agentVersion", "domainSlug", "domainVersion"] as const;
-  for (const key of required) {
-    if (!body || typeof body[key] !== "string" && typeof body[key] !== "number") {
-      return NextResponse.json({ error: `Missing ${key}` }, { status: 400 });
-    }
+  if (!body || (!body.shareCode && !body.agentSlug)) {
+    return NextResponse.json({ error: "shareCode or agentSlug is required" }, { status: 400 });
   }
-  // Called by the Pipecat agent (no user session): the persona pins the org.
-  const persona = await db.persona.findUnique({
-    where: { slug: String(body.personaSlug) },
-    select: { orgId: true },
+  const member = await db.member.findFirst({
+    where: { organizationId: org.id, userId: user.id },
+    select: { id: true },
   });
-  if (!persona?.orgId) {
-    return NextResponse.json({ error: "Persona not found" }, { status: 404 });
-  }
+  if (!member) return NextResponse.json({ error: "Invalid session URL" }, { status: 403 });
 
-  // ponytail: learnerId stays null until the learner portal passes identity explicitly.
-  const session = await createSessionRecord({
-    orgId: persona.orgId,
-    personaSlug: body.personaSlug,
-    personaVersion: Number(body.personaVersion),
-    agentSlug: body.agentSlug,
-    agentVersion: Number(body.agentVersion),
-    domainSlug: body.domainSlug,
-    domainVersion: Number(body.domainVersion),
-    contextName: body.contextName,
-  });
-  return NextResponse.json({ session });
+  try {
+    const session = await activateSession({
+      orgId: org.id,
+      userId: user.id,
+      shareCode: typeof body.shareCode === "string" ? body.shareCode : undefined,
+      agentSlug: typeof body.agentSlug === "string" ? body.agentSlug : undefined,
+      contextId: typeof body.contextId === "string" ? body.contextId : undefined,
+    });
+    if (!session) return NextResponse.json({ error: "Invalid session URL" }, { status: 403 });
+    return NextResponse.json({ session });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Session creation failed" }, { status: 400 });
+  }
 }
 
+/** Agent-only lifecycle update authorized by the session-scoped runtime token. */
 export async function PATCH(req: Request) {
   const body = await req.json().catch(() => null);
   if (!body?.id || !["completed", "abandoned"].includes(body.status)) {
     return NextResponse.json({ error: "id and status are required" }, { status: 400 });
   }
-  try {
-    await endSessionRecord(body.id, body.status);
-    return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
+  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  const session = await authorizeRuntimeSession(String(body.id), token);
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  await db.$transaction([
+    db.interviewSession.update({
+      where: { id: session.id },
+      data: {
+        status: body.status,
+        endedAt: new Date(),
+        runtimeTokenHash: null,
+        ...(Array.isArray(body.transcript) ? { transcript: body.transcript } : {}),
+        ...(body.evidence && typeof body.evidence === "object" ? { evidence: body.evidence } : {}),
+      },
+    }),
+    db.rolePlayAssignment.deleteMany({ where: { sessionId: session.id } }),
+  ]);
+  return NextResponse.json({ ok: true });
 }

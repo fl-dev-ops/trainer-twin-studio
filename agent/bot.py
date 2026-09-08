@@ -327,7 +327,7 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     session = InterviewSession()
     workspace = WorkspaceBridge()
     surface_state: dict = {"current": None}
-    web: dict = {"session_id": None}
+    web: dict = {"session_id": None, "runtime_token": None}
     starting = False
     prepare_task = None
     end_lock = asyncio.Lock()
@@ -389,13 +389,27 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
             # Serialize completion/disconnect, keeping the ID until successful.
             try:
                 await recorder.stop_recording()
+                transcript = [
+                    {"role": "user" if m.get("role") == "learner" else m.get("role"), "text": m.get("text", "")}
+                    for m in getattr(session, "messages", [])
+                ]
                 async with httpx.AsyncClient(timeout=10) as client:
-                    response = await client.patch(f"{WEB_URL}/api/sessions", json={"id": web["session_id"], "status": status})
+                    response = await client.patch(
+                        f"{WEB_URL}/api/sessions",
+                        headers={"Authorization": f"Bearer {web['runtime_token']}"},
+                        json={
+                            "id": web["session_id"],
+                            "status": status,
+                            "transcript": transcript,
+                            "evidence": session.state.get("coverage", {}),
+                        },
+                    )
                     response.raise_for_status()
             except Exception:
                 logger.exception("Failed to finalize web session; local transcript retained")
                 return
             web["session_id"] = None
+            web["runtime_token"] = None
 
     stt = await make_stt()
     speech_monitor = SpeechInputMonitor()
@@ -426,7 +440,10 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         if not web["session_id"]:
             return
         try:
-            await upload_recording(WEB_URL, web["session_id"], pcm_to_wav(audio, sample_rate, num_channels))
+            await upload_recording(
+                WEB_URL, web["session_id"], web["runtime_token"],
+                pcm_to_wav(audio, sample_rate, num_channels),
+            )
         except Exception:
             logger.exception("Failed to upload session recording")
 
@@ -484,44 +501,26 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         data = msg.data if isinstance(msg.data, dict) else {}
         if msg.type != "start-interview" or starting or session.started or session.closed:
             return
-        persona_id = str(data.get("personaId") or "").strip()
-        agent_id = str(data.get("agentId") or "").strip()
-        context_id = data.get("contextId") or data.get("contextFile")
-        if not persona_id or not agent_id:
-            await rtvi.send_server_message({"type": "interview-error", "error": "personaId and agentId are required"})
+        session_id = str(data.get("sessionId") or "").strip()
+        runtime_token = str(data.get("runtimeToken") or "").strip()
+        if not session_id or not runtime_token:
+            await rtvi.send_server_message({"type": "interview-error", "error": "sessionId and runtimeToken are required"})
             return
-        logger.info("Starting interview: persona={}, agent={}", persona_id, agent_id)
+        logger.info("Starting bound interview session {}", session_id)
 
         starting = True
 
         async def prepare():
             nonlocal starting
             try:
-                opening = await session.start(persona_id, agent_id, context_id)
+                opening = await session.start(session_id, runtime_token)
+                web["session_id"] = session_id
+                web["runtime_token"] = runtime_token
                 # Remote cloned-voice TTS (restore for production):
                 # tts.voice = await resolve_voice()
                 # if not tts.voice:
                 #     logger.warning("No TTS voice available — trainer will be silent")
-                versions = session.snapshot().get("versions", {})
-                try:
-                    async with httpx.AsyncClient(timeout=10) as client:
-                        response = await client.post(f"{WEB_URL}/api/sessions", json={
-                            "personaSlug": persona_id,
-                            "personaVersion": versions.get("persona", 1),
-                            "agentSlug": agent_id,
-                            "agentVersion": versions.get("agent", 1),
-                            "domainSlug": session._domain.id if session._domain else "",
-                            "domainVersion": versions.get("domain", 1),
-                        })
-                        response.raise_for_status()
-                        web["session_id"] = response.json().get("session", {}).get("id")
-                        if not web["session_id"]:
-                            raise RuntimeError("Studio did not return a session id")
-                except Exception:
-                    await session.abandon("registration_failed")
-                    raise
-                if web["session_id"]:
-                    await rtvi.send_server_message({"type": "session-started", "sessionId": web["session_id"]})
+                await rtvi.send_server_message({"type": "session-started", "sessionId": session_id})
                 await rtvi.send_server_message({"type": "interview-state", "state": session.snapshot()})
                 await apply_surface(0)
                 logger.info("Trainer opening: {}", opening)

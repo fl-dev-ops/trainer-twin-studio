@@ -2,6 +2,7 @@ import { z } from "zod";
 import { BASE_DOMAIN } from "@/lib/base-domain";
 import { db } from "@/lib/db";
 import { sendRolePlayAssignmentEmail } from "@/lib/email";
+import { attachAssignmentSession } from "@/lib/interview-sessions";
 import { isApiError, requireExternalApi } from "@/lib/external-api";
 
 const createSchema = z.object({
@@ -33,15 +34,17 @@ export async function GET(request: Request) {
         assignedAt: true,
         member: { select: { user: { select: { id: true, name: true, email: true } } } },
         agent: { select: { slug: true, name: true, version: true, visibility: true } },
+        session: { select: { shareCode: true } },
       },
     }),
     db.rolePlayAssignment.count({ where }),
   ]);
   return Response.json({
-    assignments: assignments.map(({ member, agent, ...assignment }) => ({
+    assignments: assignments.map(({ member, agent, session, ...assignment }) => ({
       ...assignment,
       user: member.user,
       scenario: agent,
+      practiceUrl: session ? `https://${api.org.slug}.${BASE_DOMAIN}/s/${session.shareCode}` : null,
     })),
     pagination: { limit, offset, total },
   });
@@ -77,9 +80,13 @@ export async function POST(request: Request) {
 
   const existing = await db.rolePlayAssignment.findUnique({
     where: { agentId_memberId: { agentId: agent.id, memberId: member.id } },
-    select: { id: true, assignedAt: true },
+    select: { id: true, assignedAt: true, session: { select: { shareCode: true } } },
   });
-  if (existing) return Response.json({ assignment: { ...existing, userId: parsed.data.userId, scenario: agent.slug }, created: false });
+  if (existing) return Response.json({
+    assignment: { ...existing, userId: parsed.data.userId, scenario: agent.slug },
+    practiceUrl: existing.session ? `https://${api.org.slug}.${BASE_DOMAIN}/s/${existing.session.shareCode}` : null,
+    created: false,
+  });
 
   const assignment = await db.rolePlayAssignment.create({
     data: {
@@ -90,18 +97,29 @@ export async function POST(request: Request) {
     },
     select: { id: true, assignedAt: true },
   });
+  let session;
+  try {
+    session = await attachAssignmentSession(assignment.id, {
+      orgId: api.org.id, userId: parsed.data.userId, agentId: agent.id,
+    });
+  } catch (error) {
+    await db.rolePlayAssignment.delete({ where: { id: assignment.id } });
+    throw error;
+  }
+  const practiceUrl = `https://${api.org.slug}.${BASE_DOMAIN}/s/${session.shareCode}`;
   const data = agent.data as { objective?: unknown } | null;
   const delivery = await sendRolePlayAssignmentEmail({
     to: member.user.email,
     userName: member.user.name,
     rolePlayName: agent.name,
     rolePlayObjective: typeof data?.objective === "string" ? data.objective : undefined,
-    practiceUrl: `https://${api.org.slug}.${BASE_DOMAIN}/session/${encodeURIComponent(agent.slug)}`,
+    practiceUrl,
     trainerName: trainer.user.name,
   });
   return Response.json({
     assignment: { ...assignment, userId: parsed.data.userId, scenario: agent.slug },
     created: true,
+    practiceUrl,
     emailSent: delivery.success,
   }, { status: 201 });
 }

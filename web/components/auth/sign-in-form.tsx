@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
+import { BASE_DOMAIN } from "@/lib/base-domain";
 
 export function SignInForm() {
   const router = useRouter();
@@ -34,9 +35,12 @@ export function SignInForm() {
       return;
     }
     const requested = new URLSearchParams(window.location.search).get("redirect");
-    if (requested?.startsWith("/")) {
-      router.push(requested);
-      return;
+    if (requested) {
+      const target = new URL(requested, window.location.origin);
+      if (target.hostname === BASE_DOMAIN || target.hostname.endsWith(`.${BASE_DOMAIN}`)) {
+        window.location.assign(target.toString());
+        return;
+      }
     }
     const res = await fetch("/api/me/home", { cache: "no-store" });
     const { redirect } = await res.json();

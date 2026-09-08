@@ -1,27 +1,29 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import {
   ArrowLeft,
-  Clock,
-  FileText,
-  MessageSquare,
   Pencil,
   Play,
   Search,
-  Target,
   UserCheck,
   UserPlus,
   Users,
-  Volume2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageContainer } from "@/components/page-container";
+import { PageHeader } from "@/components/page-header";
+import { MessageResponse } from "@/components/ai-elements/message";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -44,8 +46,8 @@ export type OrganizationUser = {
 export type RolePlayData = {
   slug: string;
   name: string;
-  domainSlug?: string;
   objective?: string;
+  instruction?: string;
   opening?: string;
   voiceId?: string;
   voiceName?: string;
@@ -53,6 +55,7 @@ export type RolePlayData = {
   knowledgeBaseName?: string;
   status?: "draft" | "published";
   version?: number;
+  draftRevision?: number;
   stages?: Array<{
     id: string;
     name: string;
@@ -226,14 +229,11 @@ export function RolePlayPreview({
   rolePlay,
   availableUsers = [],
   assignedUserIds = [],
-  trainerName = "Trainer",
 }: {
   rolePlay: RolePlayData;
   availableUsers?: OrganizationUser[];
   assignedUserIds?: string[];
-  trainerName?: string;
 }) {
-  const stages = rolePlay.stages ?? [];
   const [assignedIds, setAssignedIds] = useState<string[]>(assignedUserIds);
   const [savingAssignments, setSavingAssignments] = useState(false);
 
@@ -281,234 +281,94 @@ export function RolePlayPreview({
   const assignedUsers = usersList.filter((u) => assignedIds.includes(u.id));
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6 sm:p-8 lg:p-10">
-      <PageContainer size="wide" className="flex flex-col gap-8">
-        {/* Top Navigation & Actions Bar */}
-        <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3.5">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              nativeButton={false}
-              render={<Link href="/agents" />}
-              aria-label="Back to scenarios"
-            >
-              <ArrowLeft />
-            </Button>
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-5 sm:p-8">
+      <PageContainer size="wide">
+        <Link
+          href="/agents"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground hover:underline"
+        >
+          <ArrowLeft className="size-4" /> All scenarios
+        </Link>
+
+        <PageHeader
+          className="mt-4 border-b pb-6"
+          title={
+            <span className="flex flex-wrap items-center gap-2.5 break-words">
+              {rolePlay.name}
+              {rolePlay.status === "draft" ? (
+                <Badge variant="outline">Draft</Badge>
+              ) : (
+                <Badge variant="success">Published</Badge>
+              )}
+            </span>
+          }
+          description={`${rolePlay.slug} · ${rolePlay.status === "draft" ? `draft revision ${rolePlay.version}` : `published version ${rolePlay.version}`}`}
+          actions={
+            <>
+              <Button variant="outline" nativeButton={false} render={<Link href={`/agents/${encodeURIComponent(rolePlay.slug)}/edit`} />}>
+                <Pencil data-icon="inline-start" /> Edit scenario
+              </Button>
+              {rolePlay.status === "published" ? (
+                <Button nativeButton={false} render={<Link href={`/talk?agent=${encodeURIComponent(rolePlay.slug)}`} />}>
+                  <Play data-icon="inline-start" /> Test scenario
+                </Button>
+              ) : (
+                <Button disabled>
+                  <Play data-icon="inline-start" /> Publish to test
+                </Button>
+              )}
+            </>
+          }
+        />
+
+        {rolePlay.draftRevision && (
+          <div className="mt-6 flex flex-col gap-3 rounded-xl border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <div className="flex items-center gap-2.5">
-                <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-                  {rolePlay.name}
-                </h1>
-                {rolePlay.status === "draft" ? (
-                  <Badge variant="outline">Draft</Badge>
-                ) : (
-                  <Badge variant="success">Published</Badge>
-                )}
-              </div>
-              <p className="font-mono text-xs text-muted-foreground mt-1">
-                {rolePlay.slug}
+              <p className="text-sm font-medium">Unpublished changes</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Draft revision {rolePlay.draftRevision} is newer than the published scenario shown here.
               </p>
             </div>
-          </div>
-
-          <div className="flex shrink-0 items-center gap-3">
-            <Button
-              variant="outline"
-              nativeButton={false}
-              render={<Link href={`/agents/${encodeURIComponent(rolePlay.slug)}/edit`} />}
-            >
-              <Pencil data-icon="inline-start" /> Edit Spec
-            </Button>
-            <Button
-              nativeButton={false}
-              render={<Link href={`/talk?agent=${encodeURIComponent(rolePlay.slug)}`} />}
-            >
-              <Play data-icon="inline-start" /> Test Scenario
+            <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/agents/${encodeURIComponent(rolePlay.slug)}/edit`} />}>
+              Continue editing
             </Button>
           </div>
-        </header>
+        )}
 
-        {/* 2-Column Layout with generous spacing */}
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-          {/* Main Column */}
-          <div className="space-y-8 lg:col-span-2">
-            {/* Primary Overview Card */}
-            <Card className="p-6 sm:p-7">
-              <div>
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  <Target className="size-4 text-primary" />
-                  <span>Objective</span>
-                </div>
-                <h2 className="mt-2 text-lg font-semibold leading-snug">
-                  {rolePlay.objective || "Practice interview with guided feedback."}
-                </h2>
-              </div>
-            </Card>
+        <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_18rem]">
+          <div className="min-w-0 space-y-8">
+            <section>
+              <h2 className="text-lg font-semibold">Instructions</h2>
+              <MessageResponse className="mt-3 max-h-[35rem] overflow-y-auto rounded-xl border bg-muted/50 p-4 text-base leading-relaxed">
+                {rolePlay.instruction || rolePlay.objective || "No instructions captured for this scenario yet."}
+              </MessageResponse>
+            </section>
 
-            {/* Stages / Interview Rounds Breakdown */}
-            {stages.length > 0 && (
-              <section className="space-y-4">
-                {/*<div className="px-4">
-                  <h2 className="text-lg font-semibold tracking-tight">
-                    Stages & Interview Rounds
-                  </h2>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Step-by-step interview phases and evidence criteria
-                  </p>
-                </div>*/}
-
-                <div className="space-y-6">
-                  {stages.map((stage, idx) => {
-                    const evidenceDefs = stage.config?.evidence?.definitions ?? {};
-                    const evidenceKeys =
-                      stage.config?.evidence?.keys ?? Object.keys(evidenceDefs);
-
-                    return (
-                      <div
-                        key={stage.id || idx}
-                        className="rounded-2xl bg-muted/30 p-6 space-y-4 transition-colors border"
-                      >
-                        <div className="space-y-1">
-                          <h3 className="text-base font-semibold text-foreground">
-                            {stage.name || `Stage ${idx + 1}`}
-                          </h3>
-                          <p className="text-sm text-muted-foreground leading-relaxed">
-                            {stage.objective}
-                          </p>
-                        </div>
-
-                        {evidenceKeys.length > 0 && (
-                          <div className="space-y-3 pt-2">
-                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                              Required Evidence & Assessment
-                            </p>
-                            <div className="grid gap-3 sm:grid-cols-2">
-                              {evidenceKeys.map((key) => {
-                                const desc = evidenceDefs[key];
-                                return (
-                                  <div
-                                    key={key}
-                                    className="rounded-xl bg-background/90 p-4 shadow-xs"
-                                  >
-                                    <p className="text-sm font-semibold capitalize text-foreground">
-                                      {key.replaceAll("_", " ")}
-                                    </p>
-                                    {desc && (
-                                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                                        {desc}
-                                      </p>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+            {rolePlay.opening && (
+              <section>
+                <h2 className="text-lg font-semibold">First message</h2>
+                <p className="mt-3 text-base leading-relaxed text-muted-foreground">{rolePlay.opening}</p>
               </section>
             )}
           </div>
 
-          {/* Right Sidebar Column */}
-          <div className="space-y-8">
-            {/* Trainer Twin Card with Integrated Stats */}
-            <Card className="overflow-hidden p-0! gap-0! space-y-0!">
-              <div className="bg-linear-to-br from-primary/15 via-primary/5 to-transparent p-5 text-center">
-                <div className="relative mx-auto size-20 overflow-hidden rounded-full border-2 border-background shadow-sm">
-                  <Image
-                    src="/vasanth.png"
-                    alt={trainerName}
-                    width={80}
-                    height={80}
-                    className="size-full object-cover"
-                    priority
-                  />
+          <div className="min-w-0">
+            <Card>
+              <CardHeader className="flex-row items-start justify-between gap-3">
+                <div>
+                  <CardTitle>Assigned learners</CardTitle>
+                  <CardDescription>
+                    {rolePlay.status === "published"
+                      ? "Choose who can run this scenario."
+                      : "Publish this scenario before assigning it."}
+                  </CardDescription>
                 </div>
-                <h2 className="mt-3 text-base font-bold">{trainerName}</h2>
-                <p className="text-xs text-muted-foreground mt-0.5">AI Trainer Twin</p>
-                <div className="mt-2.5 flex justify-center">
-                  <Badge variant="secondary" className="gap-1 px-2 py-0.5 text-[11px]">
-                    <Volume2 className="size-3" /> Voice Cloned
-                  </Badge>
-                </div>
-              </div>
-
-              <CardContent className="p-5 space-y-4 border-t">
-                {/* Stats Rows */}
-                <div className="space-y-2.5">
-                  {/* Hours of interviews */}
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5">
-                      <div className="grid size-7 place-items-center rounded-lg bg-indigo-100 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
-                        <Clock className="size-3.5" />
-                      </div>
-                      <span className="text-xs text-muted-foreground">
-                        of interviews
-                      </span>
-                    </div>
-                    <span className="text-sm font-semibold text-foreground">
-                      10.5 hrs
-                    </span>
-                  </div>
-
-                  {/* Turns */}
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5">
-                      <div className="grid size-7 place-items-center rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400">
-                        <MessageSquare className="size-3.5" />
-                      </div>
-                      <span className="text-xs text-muted-foreground">
-                        Turns
-                      </span>
-                    </div>
-                    <span className="text-sm font-semibold text-foreground">
-                      3,143
-                    </span>
-                  </div>
-
-                  {/* Words */}
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5">
-                      <div className="grid size-7 place-items-center rounded-lg bg-teal-100 text-teal-700 dark:bg-teal-950/60 dark:text-teal-400">
-                        <FileText className="size-3.5" />
-                      </div>
-                      <span className="text-xs text-muted-foreground">
-                        words
-                      </span>
-                    </div>
-                    <span className="text-sm font-semibold text-foreground">
-                      109,790
-                    </span>
-                  </div>
-                </div>
-
-                <p className="text-xs leading-relaxed text-muted-foreground border-t pt-3.5">
-                  Runs realistic, multi-turn scenarios using the configured behavior and evaluation criteria.
-                </p>
-              </CardContent>
-            </Card>
-
-            {/* Assign to Users Card */}
-            <Card className="p-6">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-semibold">Assign to Users</h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {rolePlay.status === "published"
-                        ? "Assign this role play to learners"
-                        : "Publish this role play before assigning it"}
-                    </p>
-                  </div>
-                  <Badge variant="secondary" className="gap-1 text-[11px]">
-                    <Users className="size-3" />
-                    {assignedIds.length}
-                  </Badge>
-                </div>
+                <Badge variant="secondary" className="gap-1 text-[11px]">
+                  <Users className="size-3" />
+                  {assignedIds.length}
+                </Badge>
+              </CardHeader>
+              <CardContent className="space-y-4">
 
                 {assignedUsers.length > 0 ? (
                   <div className="space-y-2 rounded-xl bg-muted/40 p-3">
@@ -540,7 +400,7 @@ export function RolePlayPreview({
                   saving={savingAssignments}
                   onSave={saveAssignments}
                 />
-              </div>
+              </CardContent>
             </Card>
           </div>
         </div>

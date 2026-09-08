@@ -19,14 +19,14 @@ def pcm_to_wav(pcm: bytes, sample_rate: int, num_channels: int) -> bytes:
     return header + pcm
 
 
-async def upload_recording(web_url: str, session_id: str, wav: bytes) -> None:
+async def upload_recording(web_url: str, session_id: str, runtime_token: str, wav: bytes) -> None:
     """Upload the finished recording; raises so callers can log and continue."""
     async with httpx.AsyncClient(timeout=300) as client:
         response = await client.post(
             f"{web_url}/api/sessions/recording",
             params={"sessionId": session_id},
             content=wav,
-            headers={"Content-Type": "audio/wav"},
+            headers={"Content-Type": "audio/wav", "Authorization": f"Bearer {runtime_token}"},
         )
         response.raise_for_status()
     logger.info("Uploaded recording for session {} ({} KB)", session_id, len(wav) // 1024)

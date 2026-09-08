@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowUpRight, BookOpen, MessagesSquare, Shapes, UserRound } from "lucide-react";
+import { ArrowUpRight, BookOpen, MessagesSquare, UserRound } from "lucide-react";
+import { redirect } from "next/navigation";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { db } from "@/lib/db";
+import { getSessionOrg } from "@/lib/org";
 
 export const dynamic = "force-dynamic";
 
@@ -30,25 +32,26 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
 };
 
 export default async function DashboardPage() {
-  const [personas, agents, domains, kbs, sessions] = await Promise.all([
-    db.persona.count(),
-    db.agent.count(),
-    db.domain.count(),
-    db.knowledgeBase.count(),
-    db.interviewSession.findMany({ where: { deletedAt: null }, orderBy: { startedAt: "desc" }, take: 8 }),
+  const org = await getSessionOrg();
+  if (!org) redirect("/auth/no-org");
+  const [personas, agents, kbs, sessions] = await Promise.all([
+    db.persona.count({ where: { orgId: org.id } }),
+    db.agent.count({ where: { orgId: org.id } }),
+    db.knowledgeBase.count({ where: { orgId: org.id } }),
+    db.interviewSession.findMany({ where: { orgId: org.id, deletedAt: null }, orderBy: { startedAt: "desc" }, take: 8 }),
   ]);
 
   const stats = [
     { label: "Personas", value: personas, href: "/personas", icon: UserRound },
     { label: "Scenarios", value: agents, href: "/agents", icon: MessagesSquare },
-    { label: "Domains", value: domains, href: "/domains", icon: Shapes },
     { label: "Knowledge bases", value: kbs, href: "/knowledge", icon: BookOpen },
   ];
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
+    <main className="flex min-h-0 flex-1 flex-col overflow-y-auto p-5 sm:p-8">
       <PageContainer size="narrow" className="flex flex-col gap-6">
       <PageHeader
+        className="border-b pb-6"
         title="Dashboard"
         description="Build and version personas and scenarios, then review their sessions."
         actions={
@@ -58,7 +61,7 @@ export default async function DashboardPage() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {stats.map((stat) => (
           <Link key={stat.label} href={stat.href}>
             <Card className="transition-colors hover:bg-accent/60">
@@ -94,8 +97,7 @@ export default async function DashboardPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Persona</TableHead>
-                  <TableHead>Agent</TableHead>
-                  <TableHead>Domain</TableHead>
+                  <TableHead>Scenario</TableHead>
                   <TableHead>Context</TableHead>
                   <TableHead>Started</TableHead>
                   <TableHead>Status</TableHead>
@@ -110,10 +112,9 @@ export default async function DashboardPage() {
                     <TableCell>
                       {session.agentSlug} <Badge variant="outline">v{session.agentVersion}</Badge>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{session.domainSlug}</TableCell>
                     <TableCell className="text-muted-foreground">{session.contextName ?? "—"}</TableCell>
                     <TableCell className="text-muted-foreground">
-                      {session.startedAt.toISOString().replace("T", " ").slice(0, 16)}
+                      {(session.startedAt ?? session.createdAt).toISOString().replace("T", " ").slice(0, 16)}
                     </TableCell>
                     <TableCell>
                       <Badge variant={STATUS_VARIANT[session.status] ?? "outline"}>{session.status}</Badge>
@@ -126,6 +127,6 @@ export default async function DashboardPage() {
         </CardContent>
       </Card>
       </PageContainer>
-    </div>
+    </main>
   );
 }

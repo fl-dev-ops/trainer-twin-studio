@@ -232,6 +232,8 @@ async function main() {
       data: {
         orgId: ORG_ID,
         userId: learnerIds[learnerIndex],
+        agentId: agent.id,
+        shareCode: randomUUID().replaceAll("-", "").slice(0, 12),
         personaSlug: PERSONA.slug,
         personaVersion: PERSONA.version,
         agentSlug: agent.slug,

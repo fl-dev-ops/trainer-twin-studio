@@ -59,7 +59,8 @@ export default async function LearnerSessionDetailPage({
   const evidence = row.evidence && typeof row.evidence === "object" && !Array.isArray(row.evidence)
     ? Object.entries(row.evidence as Record<string, unknown>)
     : [];
-  const duration = row.endedAt
+  const sessionDate = row.startedAt ?? row.createdAt;
+  const duration = row.endedAt && row.startedAt
     ? Math.max(1, Math.round((row.endedAt.getTime() - row.startedAt.getTime()) / 60_000))
     : null;
 
@@ -82,7 +83,7 @@ export default async function LearnerSessionDetailPage({
               {row.agentSlug.replaceAll("-", " ")}
             </h2>
             <p className="text-sm text-muted-foreground">
-              {formatDate(row.startedAt)} · {row.personaSlug.replaceAll("-", " ")}
+              {formatDate(sessionDate)} · {row.personaSlug.replaceAll("-", " ")}
             </p>
           </div>
           <Badge variant={row.status === "completed" ? "secondary" : "outline"}>

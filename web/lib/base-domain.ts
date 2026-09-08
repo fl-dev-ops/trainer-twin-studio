@@ -4,7 +4,9 @@ export function portalSlug(hostHeader: string) {
   return hostHeader.split(":")[0].split(".")[0];
 }
 
-export function signInUrl(hostHeader: string) {
+export function signInUrl(hostHeader: string, returnPath?: string) {
   const port = hostHeader.includes(":") ? `:${hostHeader.split(":")[1]}` : "";
-  return `https://auth.${BASE_DOMAIN}${port}/sign-in`;
+  const url = new URL(`https://auth.${BASE_DOMAIN}${port}/sign-in`);
+  if (returnPath?.startsWith("/")) url.searchParams.set("redirect", `https://${hostHeader}${returnPath}`);
+  return url.toString();
 }

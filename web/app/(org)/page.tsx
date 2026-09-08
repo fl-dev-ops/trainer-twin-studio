@@ -59,12 +59,14 @@ export default async function LearnerHome() {
       ? db.rolePlayAssignment.findMany({
           where: { orgId: org.id, memberId: member.id },
           orderBy: { assignedAt: "desc" },
-          select: { agent: { select: agentSelect } },
+          select: { agent: { select: agentSelect }, session: { select: { shareCode: true, status: true } } },
         })
       : Promise.resolve([]),
   ]);
 
-  const assignedAgents = assignmentRows.map(({ agent }) => agent);
+  const assignedAgents = assignmentRows
+    .filter((row) => row.session?.status === "assigned")
+    .map(({ agent, session }) => ({ ...agent, sessionCode: session!.shareCode }));
   const assignedIds = new Set(assignedAgents.map(({ id }) => id));
   const libraryAgents = agents.filter(({ id }) => !assignedIds.has(id));
   const sections = [
@@ -134,7 +136,11 @@ export default async function LearnerHome() {
                         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                           <Clock3 className="size-3.5" aria-hidden="true" /> Guided session
                         </span>
-                        <Button size="sm" nativeButton={false} render={<Link href={`/session/${agent.slug}`} />}>
+                        <Button
+                          size="sm"
+                          nativeButton={false}
+                          render={<Link href={"sessionCode" in agent ? `/s/${agent.sessionCode}` : `/session/${agent.slug}`} />}
+                        >
                           Start practice <ArrowUpRight data-icon="inline-end" />
                         </Button>
                       </CardFooter>

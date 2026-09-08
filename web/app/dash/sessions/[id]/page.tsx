@@ -65,8 +65,8 @@ export default async function SessionDetailPage({
               {row.agentSlug} <Badge variant="outline">v{row.agentVersion}</Badge>
             </h1>
             <p className="text-muted-foreground mt-1 text-sm">
-              {row.startedAt.toISOString().replace("T", " ").slice(0, 16)} · persona{" "}
-              {row.personaSlug} v{row.personaVersion} · domain {row.domainSlug} v{row.domainVersion}
+              {(row.startedAt ?? row.createdAt).toISOString().replace("T", " ").slice(0, 16)} · persona{" "}
+              {row.personaSlug} v{row.personaVersion}
               {runner ? ` · ${runner.name} (${runner.email})` : ""}
             </p>
           </div>
@@ -80,7 +80,6 @@ export default async function SessionDetailPage({
               <CardDescription>Full session recording (mixed audio).</CardDescription>
             </CardHeader>
             <CardContent>
-              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
               <audio controls preload="none" src={`/api/sessions/${row.id}/audio`} className="w-full">
                 Your browser does not support audio playback.
               </audio>

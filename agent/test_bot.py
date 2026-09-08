@@ -121,5 +121,21 @@ class WebTtsServiceTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any(isinstance(frame, ErrorFrame) for frame in frames))
 
 
+class TranscriptRoleMappingTest(unittest.TestCase):
+    def test_learner_role_mapped_to_user(self):
+        messages = [
+            {"role": "trainer", "text": "What is hoisting?"},
+            {"role": "learner", "text": "Variables declared with var are moved to top."},
+        ]
+        mapped = [
+            {"role": "user" if m.get("role") == "learner" else m.get("role"), "text": m.get("text", "")}
+            for m in messages
+        ]
+        self.assertEqual(mapped, [
+            {"role": "trainer", "text": "What is hoisting?"},
+            {"role": "user", "text": "Variables declared with var are moved to top."},
+        ])
+
+
 if __name__ == "__main__":
     unittest.main()

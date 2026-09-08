@@ -10,7 +10,6 @@ import json
 import os
 import re
 import sqlite3
-import uuid
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
@@ -60,11 +59,12 @@ def deep_merge(base: dict, override: dict) -> dict:
     return result
 
 
-def fetch_config(persona_id: str, agent_id: str, context_id: str | None = None) -> dict:
-    params = {"persona": persona_id, "agent": agent_id}
-    if context_id:
-        params["context"] = context_id
-    response = httpx.get(f"{WEB_URL}/api/agent-config", params=params, timeout=30)
+def fetch_config(session_id: str, runtime_token: str) -> dict:
+    response = httpx.get(
+        f"{WEB_URL}/api/agent-sessions/{session_id}/config",
+        headers={"Authorization": f"Bearer {runtime_token}"},
+        timeout=30,
+    )
     response.raise_for_status()
     return response.json()
 
@@ -166,30 +166,50 @@ class ApiKnowledge:
     def __init__(self, web_url: str):
         self.web_url = web_url.rstrip("/")
 
-    async def query(self, knowledge_bases: list[str], query: str, limit: int = 3) -> list[dict]:
+    async def query(self, session_id: str, runtime_token: str, knowledge_bases: list[str], query: str, limit: int = 3) -> list[dict]:
         if not knowledge_bases or not query.strip():
             return []
-        async with httpx.AsyncClient(timeout=15) as client:
-            async def search(kb):
-                # ponytail: the Chroma cloud TLS drops roughly every other request
-                # from this machine; bounded retries turn that from a hard session
-                # failure into latency. Route through a self-hosted Chroma if it worsens.
-                last: Exception | None = None
-                for delay in (0, 0.5, 1.5):
-                    await asyncio.sleep(delay)
-                    try:
-                        response = await client.get(f"{self.web_url}/api/knowledge/{kb}/search", params={"q": query[:500], "k": limit})
-                        response.raise_for_status()
-                        body = response.json()
-                        # The existing web search reports provider errors inside a 200 body.
-                        if body.get("error"):
-                            raise RuntimeError(body["error"])
-                        return [{**hit, "knowledgeBase": kb} for hit in body.get("hits", [])]
-                    except Exception as error:
-                        last = error
-                raise RuntimeError(f"Knowledge retrieval unavailable ({last}); answer not graded")
-            results = await asyncio.gather(*(search(kb) for kb in knowledge_bases))
-        return sorted((hit for result in results for hit in result), key=lambda h: float(h.get("score", 0)), reverse=True)[:limit]
+        async with httpx.AsyncClient(timeout=20) as client:
+            last: Exception | None = None
+            for delay in (0, 0.5, 1.5):
+                await asyncio.sleep(delay)
+                try:
+                    response = await client.post(
+                        f"{self.web_url}/api/agent-sessions/{session_id}/search",
+                        headers={"Authorization": f"Bearer {runtime_token}"},
+                        json={"kind": "knowledge", "query": query[:2000], "knowledgeBases": knowledge_bases, "limit": limit},
+                    )
+                    response.raise_for_status()
+                    body = response.json()
+                    if body.get("error"):
+                        raise RuntimeError(body["error"])
+                    return body.get("hits", [])
+                except Exception as error:
+                    last = error
+            raise RuntimeError(f"Knowledge retrieval unavailable ({last}); answer not graded")
+
+
+class ApiPersonaVoice:
+    """Retrieves real speaking moments; failure degrades to the YAML fallback."""
+
+    def __init__(self, web_url: str):
+        self.web_url = web_url.rstrip("/")
+
+    async def query(self, session_id: str, runtime_token: str, action: str, query: str, limit: int = 4) -> list[dict]:
+        if not query.strip():
+            return []
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                response = await client.post(
+                    f"{self.web_url}/api/agent-sessions/{session_id}/search",
+                    headers={"Authorization": f"Bearer {runtime_token}"},
+                    json={"kind": "persona", "query": query[:2000], "action": action, "limit": limit},
+                )
+                response.raise_for_status()
+                return response.json().get("hits", [])
+        except Exception as error:
+            logger.warning("Persona voice retrieval unavailable: {}", error)
+            return []
 
 
 def extract_context_text(context_info: dict | None) -> str:
@@ -209,6 +229,9 @@ class InterviewSession:
         self._lock = asyncio.Lock()
         self._versions = {}
         self._knowledge = ApiKnowledge(WEB_URL)
+        self._persona_voice = ApiPersonaVoice(WEB_URL)
+        self._persona_voice_available = False
+        self._runtime_token = ""
         self._runtime = None
         self._context_id = None
 
@@ -216,15 +239,15 @@ class InterviewSession:
     def started(self):
         return self._started
 
-    async def start(self, persona_id: str, agent_id: str, context_id: str | None = None) -> str:
+    async def start(self, session_id: str, runtime_token: str) -> str:
         async with self._lock:
             if self.closed:
                 raise RuntimeError("Session already closed")
             if self.started:
-                if (persona_id, agent_id, context_id) != (self._persona.id, self._agent.id, self._context_id):
-                    raise RuntimeError("Cannot change specs during a session")
+                if session_id != self.session_id:
+                    raise RuntimeError("Cannot change identity during a session")
                 return self.messages[0]["text"]
-            config = await asyncio.to_thread(fetch_config, persona_id, agent_id, context_id)
+            config = await asyncio.to_thread(fetch_config, session_id, runtime_token)
             persona, agent, domain, kbs = build_specs(config)
             context_text = extract_context_text(config.get("context"))
             if any(p.context_required for p in agent.phases) and not context_text.strip():
@@ -238,19 +261,21 @@ class InterviewSession:
                 "pending_evidence_key": agent.phases[0].evidence_keys[0],
                 "focus": {"question": agent.opening},
             }
-            session_id, now = uuid.uuid4().hex, datetime.now(timezone.utc).isoformat()
+            now = datetime.now(timezone.utc).isoformat()
             with sqlite3.connect(DB_PATH) as con:
-                con.execute("INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (
-                    session_id, "studio-user", persona.id, persona.version, agent.id, agent.version,
+                con.execute("INSERT OR REPLACE INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (
+                    session_id, config["session"]["userId"], persona.id, persona.version, agent.id, agent.version,
                     domain.id, "active", json.dumps(state), now, None,
                 ))
                 con.execute("INSERT INTO turns(session_id,turn_index,role,text,created_at) VALUES(?,0,'trainer',?,?)",
                             (session_id, agent.opening, now))
             self._persona, self._agent, self._domain = persona, agent, domain
             self._runtime, self._knowledge_bases = runtime, kbs
+            self._persona_voice_available = bool(config.get("personaVoiceAvailable"))
+            self._runtime_token = runtime_token
             self._versions = {"persona": persona.version, "agent": agent.version, "domain": domain.version}
             self.voice_id = config["agent"]["data"].get("voiceId", "")
-            self._context_id = context_id
+            self._context_id = config.get("context", {}).get("id") if config.get("context") else None
             self.session_id, self.state = session_id, state
             self.messages = [{"role": "trainer", "text": agent.opening}]
             self._started = True
@@ -266,7 +291,7 @@ class InterviewSession:
         query = " ".join([phase.objective, *phase.knowledge_tags,
                           *(r.get("queryGuidance", "") for r in refs),
                           state.get("focus", {}).get("question", ""), learner_text])
-        return await self._knowledge.query(kbs, query, limit=3)
+        return await self._knowledge.query(self.session_id, self._runtime_token, kbs, query, limit=3)
 
     async def step(self, learner_text: str) -> str:
         if not isinstance(learner_text, str) or not learner_text.strip() or len(learner_text) > 16000:
@@ -310,8 +335,20 @@ class InterviewSession:
                     "valid_evidence": [] if phase_changed else analysis.valid_evidence if analysis else [],
                     "unresolved_point": "" if phase_changed else analysis.unresolved_point if analysis else "",
                 }
+                persona_voice = []
+                if self._persona_voice_available and not action.close:
+                    phase = active_phase(self._agent, state)
+                    voice_query = " ".join(filter(None, [
+                        phase.objective if phase else "", action.intent,
+                        analysis.classification if analysis else "",
+                        analysis.important_term if analysis else "",
+                        analysis.unresolved_point if analysis else "", learner_text,
+                    ]))
+                    persona_voice = await self._persona_voice.query(
+                        self.session_id, self._runtime_token, action.name, voice_query, limit=4)
                 reply, render_events = await self._runtime.render(
-                    action, transcript, self._persona, self._agent, self._domain, knowledge, state)
+                    action, transcript, self._persona, self._agent, self._domain,
+                    knowledge, state, persona_voice=persona_voice)
                 if action.evidence_key and action.expects_answer and active_claim_handling(self._agent, state) != "session_feedback":
                     counts = state["evidence_probe_counts"]
                     counts[action.evidence_key] = counts.get(action.evidence_key, 0) + 1
@@ -330,7 +367,8 @@ class InterviewSession:
                     con.execute("INSERT INTO decisions(session_id,source_turn_index,analysis_json,action_json,knowledge_json,rendered_text,created_at) VALUES(?,?,?,?,?,?,?)", (
                         self.session_id, index, json.dumps({"raw": raw.model_dump() if raw else None,
                             "applied": analysis.model_dump() if analysis else None, "corrections": corrections,
-                            "render_validation": render_events}), action.model_dump_json(), json.dumps(knowledge), reply, now,
+                            "persona_voice": persona_voice, "render_validation": render_events}),
+                        action.model_dump_json(), json.dumps(knowledge), reply, now,
                     ))
                     con.execute("UPDATE sessions SET state_json=?,status=?,completed_at=? WHERE id=?", (
                         json.dumps(state), "completed" if action.close else "active", now if action.close else None, self.session_id,
