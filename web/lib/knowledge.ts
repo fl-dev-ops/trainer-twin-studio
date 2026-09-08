@@ -8,7 +8,7 @@
 import { ChromaClient, CloudClient, type Collection, type EmbeddingFunction } from "chromadb";
 import { z } from "zod";
 import { ChunkingService } from "./chunking-service";
-import { createOpenRouter, generateEmbeddings } from "../../ingestion-pipeline/src/openrouter";
+import { createOpenRouter, generateEmbeddings } from "../../shared/openrouter/client";
 import { segmentsFromMarkdown } from "../../shared/youtube/captions";
 
 const CHROMA_URL = process.env.CHROMA_URL ?? "http://localhost:8000";

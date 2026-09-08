@@ -1,1 +1,1 @@
-export * from "../../ingestion-pipeline/src/chunking/service";
+export * from "../../shared/chunking/service";

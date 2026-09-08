@@ -1,6 +1,6 @@
 // Topic discovery is best effort; assignment uses approved topics only.
 import { db } from "@/lib/db";
-import { createOpenRouter, generateTopicJson } from "../../ingestion-pipeline/src/openrouter";
+import { createOpenRouter, generateTopicJson } from "../../shared/openrouter/client";
 import type { PreparedChunk, PreparedDocument } from "./chunking";
 import { applySectionTopics, buildClassificationUnits, parseUnitTopicResults } from "./section-topics";
 import { createTopicResolver, normalizeTopicSlug, normalizeTopicToken, parseTopicProposals, type TopicInfo } from "./topic-normalization";
