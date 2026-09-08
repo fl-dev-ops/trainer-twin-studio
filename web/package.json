@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "portless trainertwin next dev --webpack",
-    "build": "next build --webpack",
+    "build": "prisma generate && next build --webpack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1116.0",
@@ -45,6 +46,7 @@
     "@glideapps/glide-data-grid": "6.0.4-alpha24",
     "@hugeicons/core-free-icons": "^4.2.0",
     "@hugeicons/react": "^1.1.6",
+    "@openrouter/sdk": "^1.2.75",
     "@pipecat-ai/client-js": "^1",
     "@pipecat-ai/small-webrtc-transport": "^1",
     "@prisma/adapter-pg": "^7.9.1",
