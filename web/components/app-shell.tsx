@@ -5,6 +5,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   SidebarInset,
   SidebarProvider,
@@ -33,6 +34,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <SidebarProvider
+      className="h-svh min-h-0 overflow-hidden"
       rightOpen={copilotOpen}
       onRightOpenChange={(open) => {
         if (open) setCopilotMounted(true);
@@ -41,7 +43,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       style={{ "--sidebar-width-right": "26rem" } as CSSProperties}
     >
       <AppSidebar />
-      <SidebarInset className="max-h-svh! overflow-hidden">
+      <SidebarInset className="min-h-0 overflow-hidden bg-card">
         {!copilotPage && (
           <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3 sm:px-4">
             <SidebarTrigger />
@@ -53,6 +55,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             >
               Copilot
             </SidebarTrigger>
+            <ThemeToggle />
           </header>
         )}
         <div className="flex min-h-0 flex-1">{children}</div>

@@ -2,11 +2,9 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { KeyRound, LogOut, Moon, Palette, Sun, UserRound } from "lucide-react";
-import { useTheme } from "next-themes";
+import { KeyRound, LogOut, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,7 +24,6 @@ export function SidebarAccountMenu({
   isActive?: boolean;
 }) {
   const { data: session } = authClient.useSession();
-  const { resolvedTheme, setTheme } = useTheme();
   const [signingOut, setSigningOut] = useState(false);
   const user = session?.user;
 
@@ -71,20 +68,6 @@ export function SidebarAccountMenu({
             Developer API
           </DropdownMenuItem>
         </DropdownMenuGroup>
-        <div className="flex items-center justify-between gap-4 px-1.5 py-1.5">
-          <span className="flex items-center gap-1.5 text-sm">
-            <Palette className="size-4" />
-            Theme
-          </span>
-          <Button
-            variant="outline"
-            size="icon-sm"
-            aria-label={resolvedTheme === "dark" ? "Use light theme" : "Use dark theme"}
-            onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-          >
-            {resolvedTheme === "dark" ? <Sun /> : <Moon />}
-          </Button>
-        </div>
         <DropdownMenuGroup>
           <DropdownMenuItem onClick={signOut} disabled={signingOut}>
             <LogOut />
