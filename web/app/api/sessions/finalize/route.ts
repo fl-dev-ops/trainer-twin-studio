@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { resolveSessionUser } from "@/lib/session-user";
+import { LearnerMemoryService } from "@/lib/learner-memory";
 
 /**
  * Finalizes a session: persists the transcript and evidence coverage captured
@@ -33,5 +34,33 @@ export async function POST(request: Request) {
     },
   });
   if (updated.count === 0) return NextResponse.json({ error: "Session not found" }, { status: 404 });
+
+  // Hook for learner collection creation & session turn memory
+  try {
+    // Lazily creates the org's learner_<userId> collection if not already present
+    await LearnerMemoryService.getCollection(org.id, user.id);
+
+    if (transcript && transcript.length > 0) {
+      const learnerLines = (transcript as Array<{ speaker?: string; role?: string; text?: string }>)
+        .filter((entry) => (entry.speaker === "learner" || entry.role === "learner") && typeof entry.text === "string")
+        .map((entry) => entry.text!.trim())
+        .filter(Boolean);
+
+      if (learnerLines.length > 0) {
+        LearnerMemoryService.addMemory(
+          org.id,
+          user.id,
+          `session_${body.sessionId}`,
+          learnerLines.join("\n"),
+          { sessionId: body.sessionId, timestamp: new Date().toISOString() },
+        ).catch((err) => {
+          console.warn("Learner memory hook notice:", err);
+        });
+      }
+    }
+  } catch (err) {
+    console.warn("Learner collection hook notice:", err);
+  }
+
   return NextResponse.json({ ok: true });
 }

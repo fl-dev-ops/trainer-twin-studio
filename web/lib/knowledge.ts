@@ -6,6 +6,8 @@
 // 3. HNSW tuned at collection creation: cosine space, higher ef_search
 // 4. optional cross-encoder reranking via Cohere when COHERE_API_KEY is set
 import { ChromaClient, CloudClient, type Collection, type EmbeddingFunction } from "chromadb";
+import { db } from "@/lib/db";
+import { MainCollectionService } from "@/lib/main-collection";
 
 const CHROMA_URL = process.env.CHROMA_URL ?? "http://localhost:8000";
 const CHROMA_API_KEY = process.env.CHROMA_API_KEY ?? "";
@@ -110,8 +112,35 @@ export async function ingestDoc(
   docId: string,
   source: string,
   markdown: string,
+  orgId?: string,
+  title?: string,
 ): Promise<number> {
-  return replaceChunks(knowledgeCollectionName(knowledgeBaseId), docId, source, chunkMarkdown(markdown));
+  const chunks = chunkMarkdown(markdown);
+  let targetOrgId = orgId;
+  if (!targetOrgId) {
+    const kb = await db.knowledgeBase.findUnique({ where: { id: knowledgeBaseId }, select: { orgId: true } });
+    targetOrgId = kb?.orgId ?? undefined;
+  }
+
+  if (targetOrgId) {
+    await MainCollectionService.ingestKnowledgeDoc(
+      targetOrgId,
+      knowledgeBaseId,
+      docId,
+      source,
+      title ?? source,
+      chunks,
+    );
+  }
+
+  // Dual-write to legacy kb_<kbId> collection for backward compatibility during migration
+  try {
+    await replaceChunks(knowledgeCollectionName(knowledgeBaseId), docId, source, chunks);
+  } catch (error) {
+    console.warn(`Legacy collection update notice (${knowledgeCollectionName(knowledgeBaseId)}):`, error);
+  }
+
+  return chunks.length;
 }
 
 /** Replace all chunks of one doc in any collection. Idempotent per docId. */
@@ -140,7 +169,15 @@ export async function replaceChunks(
   return chunks.length;
 }
 
-export async function removeDoc(knowledgeBaseId: string, docId: string): Promise<void> {
+export async function removeDoc(knowledgeBaseId: string, docId: string, orgId?: string): Promise<void> {
+  let targetOrgId = orgId;
+  if (!targetOrgId) {
+    const kb = await db.knowledgeBase.findUnique({ where: { id: knowledgeBaseId }, select: { orgId: true } });
+    targetOrgId = kb?.orgId ?? undefined;
+  }
+  if (targetOrgId) {
+    await MainCollectionService.removeKnowledgeDoc(targetOrgId, docId);
+  }
   await removeChunks(knowledgeCollectionName(knowledgeBaseId), docId);
 }
 
@@ -153,7 +190,11 @@ export async function removeChunks(collectionName: string, docId: string): Promi
   }
 }
 
-export async function removeCollection(collectionName: string): Promise<void> {
+export async function removeCollection(collectionName: string, orgId?: string): Promise<void> {
+  if (orgId && collectionName.startsWith("kb_")) {
+    const kbId = collectionName.replace(/^kb_/, "");
+    await MainCollectionService.removeKnowledgeBase(orgId, kbId);
+  }
   try {
     await chromaClient().deleteCollection({ name: collectionName });
   } catch (error) {
@@ -201,7 +242,32 @@ export function rrf(a: string[], b: string[], k = 60): Map<string, number> {
 type Hit = { id: string; docId: string; source: string; text: string; score: number };
 
 /** Hybrid retrieval: vector top-50 + BM25 top-50 -> RRF -> optional reranker. */
-export async function searchKnowledge(knowledgeBaseId: string, query: string, topK = 5): Promise<Hit[]> {
+export async function searchKnowledge(
+  knowledgeBaseId: string,
+  query: string,
+  topK = 5,
+  orgId?: string,
+): Promise<Hit[]> {
+  let targetOrgId = orgId;
+  if (!targetOrgId) {
+    const kb = await db.knowledgeBase.findUnique({ where: { id: knowledgeBaseId }, select: { orgId: true } });
+    targetOrgId = kb?.orgId ?? undefined;
+  }
+  if (targetOrgId) {
+    const mainHits = await MainCollectionService.searchKnowledge(targetOrgId, query, {
+      kbIds: [knowledgeBaseId],
+      limit: topK,
+    });
+    if (mainHits.length > 0) {
+      return mainHits.map((h) => ({
+        id: h.id,
+        docId: h.docId,
+        source: h.source,
+        text: h.text,
+        score: h.score,
+      }));
+    }
+  }
   return searchCollection(knowledgeCollectionName(knowledgeBaseId), query, topK);
 }
 

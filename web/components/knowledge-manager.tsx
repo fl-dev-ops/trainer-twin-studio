@@ -106,7 +106,7 @@ export function KnowledgeIndex({ bases }: { bases: Kb[] }) {
       <PageContainer size="narrow">
         <PageHeader
           title="Knowledge"
-          description="Grounding documents stored in S3 and indexed into ChromaDB, one collection per base."
+          description="Grounding documents stored in S3 and indexed into your organization's vector collection."
           actions={
             <Button onClick={handleCreate} disabled={creating}>
               {creating ? <Spinner data-icon="inline-start" /> : <Plus data-icon="inline-start" />}
@@ -263,7 +263,7 @@ export function KnowledgeDetail({ slug }: { slug: string }) {
             <h1 className="truncate text-sm font-semibold">{slug}</h1>
             {docs && <Badge variant="secondary">{docs.length} document{docs.length === 1 ? "" : "s"}</Badge>}
           </div>
-          <p className="truncate text-xs text-muted-foreground">Upload → preview → index. One ChromaDB collection per base.</p>
+          <p className="truncate text-xs text-muted-foreground">Upload → preview → index into your organization's vector collection.</p>
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">

@@ -353,6 +353,8 @@ model Organization {
   name              String
   slug              String
   logo              String?
+  chromaTenantId    String?
+  chromaDatabase    String               @default("default")
   createdAt         DateTime
   metadata          String?
   members           Member[]

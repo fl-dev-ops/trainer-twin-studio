@@ -98,7 +98,7 @@ export async function POST(request: Request) {
       select: { id: true },
     });
     if (!knowledgeBase) return Response.json({ error: `No indexed knowledge base named "${input.knowledgeBase}"` });
-    const results = await searchKnowledge(knowledgeBase.id, input.query, input.limit);
+    const results = await searchKnowledge(knowledgeBase.id, input.query, input.limit, orgId);
     return Response.json({
       query: input.query,
       knowledgeBase: input.knowledgeBase,

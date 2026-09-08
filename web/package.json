@@ -8,7 +8,12 @@
     "postinstall": "prisma generate",
     "reindex:knowledge-storage": "bun scripts/reindex-knowledge-storage.ts",
     "check:session-isolation": "bun scripts/session-isolation-check.ts",
-    "build": "prisma migrate deploy && prisma generate && next build --webpack",
+    "migrate:chroma-tenants": "bun scripts/migrate-create-tenants.ts",
+    "migrate:knowledge": "bun scripts/migrate-knowledge.ts",
+    "migrate:persona-voice": "bun scripts/migrate-persona-voice.ts",
+    "migrate:verify": "bun scripts/migrate-verify.ts",
+    "migrate:cleanup": "bun scripts/migrate-cleanup.ts",
+    "build": "prisma generate && next build --webpack",
     "start": "next start",
     "lint": "eslint"
   },

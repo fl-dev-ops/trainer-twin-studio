@@ -166,7 +166,7 @@ class ApiKnowledge:
     def __init__(self, web_url: str):
         self.web_url = web_url.rstrip("/")
 
-    async def query(self, session_id: str, runtime_token: str, knowledge_bases: list[str], query: str, limit: int = 3) -> list[dict]:
+    async def query(self, session_id: str, runtime_token: str, knowledge_bases: list[str], query: str, limit: int = 3, org_id: str = "") -> list[dict]:
         if not knowledge_bases or not query.strip():
             return []
         async with httpx.AsyncClient(timeout=20) as client:
@@ -174,10 +174,13 @@ class ApiKnowledge:
             for delay in (0, 0.5, 1.5):
                 await asyncio.sleep(delay)
                 try:
+                    payload = {"kind": "knowledge", "query": query[:2000], "knowledgeBases": knowledge_bases, "limit": limit}
+                    if org_id:
+                        payload["orgId"] = org_id
                     response = await client.post(
                         f"{self.web_url}/api/agent-sessions/{session_id}/search",
                         headers={"Authorization": f"Bearer {runtime_token}"},
-                        json={"kind": "knowledge", "query": query[:2000], "knowledgeBases": knowledge_bases, "limit": limit},
+                        json=payload,
                     )
                     response.raise_for_status()
                     body = response.json()
@@ -195,15 +198,18 @@ class ApiPersonaVoice:
     def __init__(self, web_url: str):
         self.web_url = web_url.rstrip("/")
 
-    async def query(self, session_id: str, runtime_token: str, action: str, query: str, limit: int = 4) -> list[dict]:
+    async def query(self, session_id: str, runtime_token: str, action: str, query: str, limit: int = 4, org_id: str = "") -> list[dict]:
         if not query.strip():
             return []
         try:
             async with httpx.AsyncClient(timeout=10) as client:
+                payload = {"kind": "persona", "query": query[:2000], "action": action, "limit": limit}
+                if org_id:
+                    payload["orgId"] = org_id
                 response = await client.post(
                     f"{self.web_url}/api/agent-sessions/{session_id}/search",
                     headers={"Authorization": f"Bearer {runtime_token}"},
-                    json={"kind": "persona", "query": query[:2000], "action": action, "limit": limit},
+                    json=payload,
                 )
                 response.raise_for_status()
                 return response.json().get("hits", [])
@@ -231,6 +237,7 @@ class InterviewSession:
         self._knowledge = ApiKnowledge(WEB_URL)
         self._persona_voice = ApiPersonaVoice(WEB_URL)
         self._persona_voice_available = False
+        self._org_id = ""
         self._runtime_token = ""
         self._runtime = None
         self._context_id = None
@@ -271,6 +278,7 @@ class InterviewSession:
                             (session_id, agent.opening, now))
             self._persona, self._agent, self._domain = persona, agent, domain
             self._runtime, self._knowledge_bases = runtime, kbs
+            self._org_id = (config.get("session") or {}).get("orgId") or config.get("orgId") or ""
             self._persona_voice_available = bool(config.get("personaVoiceAvailable"))
             self._runtime_token = runtime_token
             self._versions = {"persona": persona.version, "agent": agent.version, "domain": domain.version}
@@ -291,7 +299,7 @@ class InterviewSession:
         query = " ".join([phase.objective, *phase.knowledge_tags,
                           *(r.get("queryGuidance", "") for r in refs),
                           state.get("focus", {}).get("question", ""), learner_text])
-        return await self._knowledge.query(self.session_id, self._runtime_token, kbs, query, limit=3)
+        return await self._knowledge.query(self.session_id, self._runtime_token, kbs, query, limit=3, org_id=self._org_id)
 
     async def step(self, learner_text: str) -> str:
         if not isinstance(learner_text, str) or not learner_text.strip() or len(learner_text) > 16000:
@@ -345,7 +353,7 @@ class InterviewSession:
                         analysis.unresolved_point if analysis else "", learner_text,
                     ]))
                     persona_voice = await self._persona_voice.query(
-                        self.session_id, self._runtime_token, action.name, voice_query, limit=4)
+                        self.session_id, self._runtime_token, action.name, voice_query, limit=4, org_id=self._org_id)
                 reply, render_events = await self._runtime.render(
                     action, transcript, self._persona, self._agent, self._domain,
                     knowledge, state, persona_voice=persona_voice)

@@ -3,6 +3,7 @@ import { authorizeRuntimeSession } from "@/lib/interview-sessions";
 import { db } from "@/lib/db";
 import { knowledgeCollectionName, searchCollection } from "@/lib/knowledge";
 import { personaCollectionName } from "@/lib/persona-voice";
+import { MainCollectionService } from "@/lib/main-collection";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -28,6 +29,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     if (body.kind === "persona") {
       const action = typeof body.action === "string" ? body.action.slice(0, 100) : "";
+      // 1. Try per-org tenant main collection
+      const mainHits = await MainCollectionService.searchPersonaVoice(session.orgId, query, {
+        personaId: agent.persona.id,
+        action,
+        limit,
+      });
+      if (mainHits.length > 0) {
+        return NextResponse.json({ hits: mainHits });
+      }
+
+      // Fallback to legacy collection if not yet migrated
       const hits = await searchCollection(personaCollectionName(agent.persona.id), `${query}\nAction: ${action}`, limit);
       return NextResponse.json({ hits });
     }
@@ -51,6 +63,26 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       },
       select: { id: true, slug: true },
     });
+
+    const baseIds = bases.map((base) => base.id);
+    const slugByBaseId = new Map(bases.map((base) => [base.id, base.slug]));
+
+    // 1. Try per-org tenant main collection
+    if (baseIds.length > 0) {
+      const mainHits = await MainCollectionService.searchKnowledge(session.orgId, query, {
+        kbIds: baseIds,
+        limit,
+      });
+      if (mainHits.length > 0) {
+        const hits = mainHits.map((hit) => ({
+          ...hit,
+          knowledgeBase: slugByBaseId.get(hit.kbId) ?? "",
+        }));
+        return NextResponse.json({ hits });
+      }
+    }
+
+    // Fallback to legacy collections if not yet migrated
     const results = await Promise.all(bases.map(async (base) =>
       (await searchCollection(knowledgeCollectionName(base.id), query, limit))
         .map((hit) => ({ ...hit, knowledgeBase: base.slug }))));

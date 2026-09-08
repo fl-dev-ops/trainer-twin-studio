@@ -18,7 +18,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ kb: stri
   if (!query?.trim()) return NextResponse.json({ error: "Missing q" }, { status: 400 });
   const limit = Math.min(Number(url.searchParams.get("k") ?? 3) || 3, 20);
   try {
-    const hits = await searchKnowledge(knowledgeBase.id, query, limit);
+    const hits = await searchKnowledge(knowledgeBase.id, query, limit, org.id);
     return NextResponse.json({
       hits: hits.map((hit) => ({
         text: hit.text,

@@ -9,6 +9,7 @@ import {
 } from "@/lib/documents";
 import { ingestDoc, knowledgeCollectionName, removeChunks, removeCollection, removeDoc } from "@/lib/knowledge";
 import { personaCollectionName } from "@/lib/persona-voice";
+import { MainCollectionService } from "@/lib/main-collection";
 
 export type SpecType = "personas" | "agents" | "domains";
 
@@ -231,6 +232,7 @@ export async function deleteSpec(type: SpecType, slug: string, orgId: string) {
     await Promise.all([
       ...sources.map((source) => deletePrefix(source.s3Key)),
       ...sources.map((source) => removeChunks(personaCollectionName(personaId), source.id)),
+      MainCollectionService.removePersona(orgId, personaId),
     ]);
     await db.persona.delete({ where: { orgId_slug: { orgId, slug } } });
   } else {
@@ -306,7 +308,7 @@ export async function deleteKnowledge(orgId: string, kbSlug: string, fileSlug?: 
     if (!kb) return;
     await Promise.all([
       deletePrefix(kbPrefix(kb.id)),
-      removeCollection(knowledgeCollectionName(kb.id)),
+      removeCollection(knowledgeCollectionName(kb.id), orgId),
     ]);
     await db.knowledgeBase.delete({ where: { id: kb.id } });
     return;
@@ -318,7 +320,7 @@ export async function deleteKnowledge(orgId: string, kbSlug: string, fileSlug?: 
   if (!doc) return;
   await Promise.all([
     deletePrefix(kbPrefix(kb.id, doc.id)),
-    removeDoc(kb.id, doc.id),
+    removeDoc(kb.id, doc.id, orgId),
   ]);
   await db.knowledgeDocument.delete({ where: { id: doc.id } });
 }
@@ -397,7 +399,7 @@ export async function digestKnowledge(orgId: string, kbSlug: string, fileSlug?: 
     for (const d of docs) {
       if (!d.s3MarkdownKey || d.s3MarkdownKey === "pending") continue;
       const markdown = await getObjectText(d.s3MarkdownKey);
-      const chunks = await ingestDoc(kb.id, d.id, d.slug, markdown);
+      const chunks = await ingestDoc(kb.id, d.id, d.slug, markdown, orgId, d.title);
       results.push({ id: d.id, chunks });
     }
     const byId = new Map(results.map((r) => [r.id, r.chunks]));
@@ -427,7 +429,7 @@ export async function digestKnowledge(orgId: string, kbSlug: string, fileSlug?: 
 export async function removeEmbeddings(orgId: string, kbSlug: string, docIds: string[]) {
   const kb = await db.knowledgeBase.findFirst({ where: { orgId, slug: kbSlug }, select: { id: true } });
   if (!kb) return;
-  for (const docId of docIds) await removeDoc(kb.id, docId);
+  for (const docId of docIds) await removeDoc(kb.id, docId, orgId);
 }
 // ---- Learner context documents ----
 
