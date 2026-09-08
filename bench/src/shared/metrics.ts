@@ -26,12 +26,14 @@ export type RetrievalMetrics = {
   hitAt3: number;
   hitAt5: number;
   hitAt10: number;
+  precisionAt10: number;
+  recallAt50: number;
   mrrAt10: number;
   ndcgAt10: number;
 };
 
 /** relevance[i] must be precomputed against this question's gold span. */
-export function scoreRanking(relevance: boolean[]): RetrievalMetrics {
+export function scoreRanking(relevance: boolean[], totalRelevantInCorpus?: number): RetrievalMetrics {
   const firstRelevantAt = (k: number): boolean => relevance.slice(0, k).some(Boolean);
   const rank = relevance.findIndex(Boolean);
   const mrr = rank >= 0 && rank < 10 ? 1 / (rank + 1) : 0;
@@ -39,11 +41,24 @@ export function scoreRanking(relevance: boolean[]): RetrievalMetrics {
   const dcg = relevance.slice(0, 10).reduce((acc, rel, i) => acc + (rel ? 1 / Math.log2(i + 2) : 0), 0);
   const relevantCount = Math.min(relevance.filter(Boolean).length, 10) || 1;
   const idcg = Array.from({ length: relevantCount }, (_, i) => 1 / Math.log2(i + 2)).reduce((a, b) => a + b, 0);
+
+  // Precision@10 = (Relevant items in top 10) / 10
+  const precisionAt10 = relevance.slice(0, 10).filter(Boolean).length / 10;
+
+  // Recall@50 = (Relevant items found in top 50) / (Total relevant items in dataset)
+  const relevantInTop50 = relevance.slice(0, 50).filter(Boolean).length;
+  const totalRelevant = totalRelevantInCorpus && totalRelevantInCorpus > 0
+    ? totalRelevantInCorpus
+    : (relevance.filter(Boolean).length || 1);
+  const recallAt50 = relevantInTop50 / totalRelevant;
+
   return {
     hitAt1: firstRelevantAt(1) ? 1 : 0,
     hitAt3: firstRelevantAt(3) ? 1 : 0,
     hitAt5: firstRelevantAt(5) ? 1 : 0,
     hitAt10: firstRelevantAt(10) ? 1 : 0,
+    precisionAt10,
+    recallAt50,
     mrrAt10: mrr,
     ndcgAt10: dcg / idcg,
   };

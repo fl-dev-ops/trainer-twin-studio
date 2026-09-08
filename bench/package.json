@@ -3,13 +3,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "fetch": "bun run src/notion-public-fetch.ts",
-    "fetch:authenticated": "bun run src/notion-fetch.ts",
-    "golden": "bun run src/golden.ts",
-    "bench": "bun run src/runner.ts"
+    "bench:live": "bun run src/live/runner.ts",
+    "bench:local": "bun run src/local/runner.ts",
+    "bench": "bun run src/local/runner.ts",
+    "local:fetch": "bun run src/local/notion-public-fetch.ts",
+    "local:fetch:authenticated": "bun run src/local/notion-fetch.ts",
+    "local:golden": "bun run src/local/golden.ts"
   },
   "dependencies": {
     "@chonkiejs/core": "^0.0.11",
+    "@chroma-core/default-embed": "^0.1.9",
     "chromadb": "^3.5.0"
   },
   "devDependencies": {

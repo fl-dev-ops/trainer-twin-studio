@@ -4,10 +4,16 @@
 // baseline column of the report is the real system, not a lookalike. Other
 // strategies are bench-local implementations of common alternatives.
 import { RecursiveChunker } from "@chonkiejs/core";
-import { chunkMarkdown as productionChunkMarkdown, embedTexts } from "../../web/lib/knowledge";
+import { chunkMarkdown as productionChunkMarkdown, embedTexts } from "\.\./\.\./\.\./web/lib/knowledge";
 import { chunkWithHeadingContext } from "./heading-context";
 
-export type BenchChunk = { text: string };
+export type BenchChunk = {
+  text: string;
+  topics?: string[];
+  sourceType?: "youtube" | "notion";
+  startSeconds?: number;
+  endSeconds?: number;
+};
 
 export type Strategy = {
   name: string;
@@ -213,4 +219,25 @@ export function selectStrategies(filter?: string): Strategy[] {
   const picked = STRATEGIES.filter((s) => wanted.has(s.name));
   if (picked.length === 0) throw new Error(`no strategies matched: ${filter}`);
   return picked;
+}
+
+export type MultiSourceInput = {
+  id: string;
+  title: string;
+  sourceType: "youtube" | "notion";
+  text?: string;
+  topics?: string[];
+  segments?: { text: string; startSeconds: number; endSeconds: number }[];
+};
+
+export async function chunkMultiSource(
+  doc: MultiSourceInput,
+  strategy: Strategy,
+): Promise<BenchChunk[]> {
+  const rawChunks = await strategy.run(doc.text ?? "");
+  return rawChunks.map((chunk) => ({
+    ...chunk,
+    topics: doc.topics ?? chunk.topics ?? [],
+    sourceType: doc.sourceType,
+  }));
 }

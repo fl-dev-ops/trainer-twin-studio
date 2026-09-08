@@ -41,10 +41,11 @@ finding it near the top matters too. `@K` means considering the first K results.
 | `chunks` | Total chunks created from the entire source corpus, not the number returned per question. |
 | `avg chars` | Average characters per chunk, not tokens. |
 | `Hit@1` | Fraction of questions whose first result is relevant. |
-| `Hit@5` | Fraction of questions with at least one relevant result among the first five. It does not mean all five results are relevant. |
-| `MRR@10` | Mean Reciprocal Rank: average of `1 / rank` for the first relevant result within ten results. Rank 1 earns 1, rank 2 earns 1/2, rank 3 earns 1/3; no relevant result earns 0. |
-| `NDCG@10` | Normalized Discounted Cumulative Gain: rewards all relevant results in the first ten, giving more weight to higher positions, then divides by an ideal ordering's score. See the implementation limitation below. |
-
+| `Hit@5` | Fraction of questions with at least one relevant result among the first five. |
+| `P@10` | **Precision@10**: $\frac{\text{Relevant items in top 10}}{10}$. Measures retrieval accuracy and noise level in the first 10 candidates. |
+| `R@50` | **Recall@50**: $\frac{\text{Relevant items in top 50}}{\text{Total relevant items in corpus}}$. Measures completeness across the entire dataset. |
+| `MRR@10` | Mean Reciprocal Rank: average of `1 / rank` for the first relevant result within ten results. |
+| `NDCG@10` | Normalized Discounted Cumulative Gain: rewards all relevant results in the first ten with logarithmic position discounting. |
 The report uses `NDCG@10`, not `NDCG@1`. All four quality metrics above range
 from 0 to 1, with higher values better. Reported values are averages across
 questions; chunk count and average size are descriptive, not quality scores.
@@ -74,6 +75,12 @@ NDCG rewards both relevant results, discounting lower positions.
   strong even when other useful chunks were missed; it is not a corpus-wide
   completeness measure.
 
+### LLM-Judged RAG Triad Metrics (1–5)
+
+- **Faithfulness (1–5)**: Evaluates whether every claim in the generated answer is directly supported by the retrieved context chunks (no hallucination).
+- **Answer Relevance (1–5)**: Evaluates how directly and completely the generated answer addresses the interview question.
+- **Context Precision (1–5)**: Measures the **signal-to-noise ratio** across the **top-5 retrieved chunks** (`ranking.slice(0, 5)`). Evaluates whether the context fed to the agent contains the exact information needed without distracting or irrelevant material. Determined independently by a blind LLM judge.
+
 ## Strategies
 
 | name | what it tests |
@@ -88,29 +95,37 @@ NDCG rewards both relevant results, discounting lower positions.
 
 ## Run
 
+### 1. Live Deployed Evaluation (`src/live/runner.ts`)
+Runs deterministic retrieval quality evaluation directly against the deployed Chroma Cloud database (e.g. `kb_engineering`) where real production-ingested Notion chunks (`structural-context-2000-v1`) and YouTube interview question chunks (`youtube-timestamped-1200-1800-v2`) are already indexed. Evaluates retrieval against the verified ground truth in `golden/live-chroma.json`.
+
 ```bash
 cd bench && bun install
 
-bun run fetch            # freeze fixtures/page.md (needs the Notion page shared
-                         # with the "trainer twin" integration)
+bun run bench:live --dry-run  # check connection to Chroma Cloud and preview questions
+bun run bench:live --confirm  # run full IR metrics against deployed Chroma
+```
 
-bun run golden           # generate golden/questions.json (~20 questions, LLM)
+### 2. Offline Local Benchmark (`src/local/runner.ts`)
+Chunks local Markdown fixtures (`fixtures/page.md`), spins up ephemeral collections in a local ChromaDB (`http://localhost:8000`), benchmarks against synthetic golden questions, and drops the collections afterwards.
 
-bun run bench --dry-run  # print the plan + estimated API calls, spend nothing
-bun run bench            # plan only, still spends nothing
-bun run bench --confirm  # execute the full matrix and write reports/
+```bash
+bun run local:fetch            # freeze fixtures/page.md (public Notion fetch)
+bun run local:fetch:authenticated # freeze fixtures via official Notion API token
+bun run local:golden           # generate local synthetic golden questions
+
+bun run bench:local --dry-run  # print plan + estimated API calls, spend nothing
+bun run bench:local            # plan only
+bun run bench:local --confirm  # execute full matrix on local Chroma and write reports/
 
 # Re-index every strategy for visual inspection without changing reports/latest.md
-bun run bench --index-only --keep-collections --confirm
+bun run bench:local --index-only --keep-collections --confirm
 ```
 
 Useful flags: `--questions 5` (cheap pilot), `--strategies structural-1200,semantic-0.55`,
 `--arms vector,hybrid`, `--judged-arm hybrid-rerank`, `--no-judge`,
 `--keep-collections`, `--index-only`.
 
-Reports land in `reports/report-<timestamp>.md`; `reports/latest.md` always holds
-the newest comparison table. `--index-only` writes no report.
-
+Reports land in `reports/live-<timestamp>.md` (live) or `reports/report-<timestamp>.md` (local); `reports/latest.md` always holds the newest comparison table.
 ## Chroma UI
 
 Start Chroma with `chroma-config.yaml`, then start the UI at

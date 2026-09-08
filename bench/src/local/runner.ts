@@ -1,8 +1,8 @@
-// Step 3: run the benchmark matrix.
+// Step 3: run the benchmark matrix on local ChromaDB.
 //
-//   bun run bench [--strategies all] [--arms vector,bm25,hybrid,hybrid-rerank]
-//                 [--judged-arm hybrid] [--questions N] [--no-judge]
-//                 [--keep-collections] [--index-only] [--dry-run] [--confirm]
+//   bun run bench:local [--strategies all] [--arms vector,bm25,hybrid,hybrid-rerank]
+//                       [--judged-arm hybrid] [--questions N] [--no-judge]
+//                       [--keep-collections] [--index-only] [--dry-run] [--confirm]
 //
 // Without --confirm the runner prints the plan and exits, so nothing is spent
 // until you've reviewed it.
@@ -10,22 +10,44 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ChromaClient, type Collection } from "chromadb";
-import "./env";
-import { bm25Scores, embedTexts, rrf } from "../../web/lib/knowledge";
+import "../shared/env";
+import { bm25Scores, embedTexts, rrf } from "../../../web/lib/knowledge";
 import { selectStrategies } from "./strategies";
-import { RELEVANCE_THRESHOLD, mean, scoreRanking, spanCoverage, type RetrievalMetrics } from "./metrics";
-import { llmJson, rerank } from "./llm";
+import { RELEVANCE_THRESHOLD, mean, scoreRanking, spanCoverage, type RetrievalMetrics } from "../shared/metrics";
+import { type GoldenItem } from "./golden";
+import { llmJson, rerank } from "../shared/llm";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const fixturePath = resolve(here, "../fixtures/page.md");
-const fixtureManifestPath = resolve(here, "../fixtures/manifest.json");
-const fixturePagesDir = resolve(here, "../fixtures/pages");
-const goldenPath = resolve(here, "../golden/questions.json");
-const reportsDir = resolve(here, "../reports");
+const benchDir = resolve(here, "../..");
+const fixturePath = resolve(benchDir, "fixtures/page.md");
+const fixtureManifestPath = resolve(benchDir, "fixtures/manifest.json");
+const fixturePagesDir = resolve(benchDir, "fixtures/pages");
+const defaultGoldenPath = resolve(benchDir, "golden/questions.json");
+const reportsDir = resolve(benchDir, "reports");
 
 const ARMS = ["vector", "bm25", "hybrid", "hybrid-rerank"] as const;
 type Arm = (typeof ARMS)[number];
-type Judged = { faithfulness: number; answerRelevance: number; contextPrecision: number };
+type Judged = {
+  generatedAnswer: string;
+  faithfulness: number;
+  answerRelevance: number;
+  contextPrecision: number;
+};
+
+type QuestionTrace = {
+  questionId: string;
+  question: string;
+  topics?: string[];
+  ranking: string[];
+  relevance: boolean[];
+  metrics: RetrievalMetrics;
+  generatedAnswer?: string;
+  llmJudge?: {
+    faithfulness: number;
+    answerRelevance: number;
+    contextPrecision: number;
+  };
+};
 
 function argValue(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -60,7 +82,14 @@ async function freshCollection(
   } catch {
     // first run: nothing to delete
   }
-  const collection = await client.createCollection({ name, configuration: { hnsw: { space: "cosine", ef_construction: 200, ef_search: 200, max_neighbors: 24 } } });
+  const embeddingFunction = {
+    generate: async (texts: string[]) => embedTexts(texts),
+  };
+  const collection = await client.createCollection({
+    name,
+    embeddingFunction,
+    configuration: { hnsw: { space: "cosine", ef_construction: 200, ef_search: 200, max_neighbors: 24 } },
+  });
   await collection.upsert({
     ids: chunks.map((chunk) => chunk.id),
     embeddings: vectors,
@@ -99,9 +128,8 @@ async function freshCollection(
 type GoldenFile = {
   createdAt: string;
   model: string;
-  items: { id: string; question: string; answer: string; goldSpan: string }[];
+  items: GoldenItem[];
 };
-
 type FixtureManifest = {
   sourceUrl: string;
   pages: { id: string; title: string }[];
@@ -123,6 +151,7 @@ async function retrieve(
   corpusDocs: string[],
   query: string,
   queryEmbedding: number[],
+  k = 50,
 ): Promise<ArmResult> {
   const startedAt = Date.now();
   if (arm === "bm25") {
@@ -130,12 +159,12 @@ async function retrieve(
     const ranking = [...corpusIds.keys()]
       .sort((a, b) => lex[b] - lex[a])
       .filter((i) => lex[i] > 0)
-      .slice(0, 10)
+      .slice(0, k)
       .map((i) => corpusIds[i]);
     return { ranking, latencyMs: Date.now() - startedAt };
   }
 
-  const vec = await collection.query({ queryEmbeddings: [queryEmbedding], nResults: 10, include: ["documents"] });
+  const vec = await collection.query({ queryEmbeddings: [queryEmbedding], nResults: Math.min(k, corpusIds.length), include: ["documents"] });
   const vecIds: string[] = (vec.ids[0] ?? []).filter(Boolean);
   if (arm === "vector") return { ranking: vecIds, latencyMs: Date.now() - startedAt };
 
@@ -143,16 +172,18 @@ async function retrieve(
   const lexTop = [...corpusIds.keys()]
     .sort((a, b) => lex[b] - lex[a])
     .filter((i) => lex[i] > 0)
-    .slice(0, 10)
+    .slice(0, k)
     .map((i) => corpusIds[i]);
   const fused = [...rrf(vecIds, lexTop).entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id);
-  if (arm === "hybrid") return { ranking: fused.slice(0, 10), latencyMs: Date.now() - startedAt };
+  if (arm === "hybrid") return { ranking: fused.slice(0, k), latencyMs: Date.now() - startedAt };
 
   // hybrid-rerank: cross-encoder over the fused candidates
   const textOf = new Map(corpusIds.map((id, i) => [id, corpusDocs[i]]));
-  const candidates = fused.slice(0, 10);
-  const order = await rerank(query, candidates.map((id) => textOf.get(id) ?? ""), 10);
-  return { ranking: order.map((i) => candidates[i]).filter(Boolean), latencyMs: Date.now() - startedAt };
+  const candidates = fused.slice(0, Math.min(20, k));
+  const order = await rerank(query, candidates.map((id) => textOf.get(id) ?? ""), candidates.length);
+  const reranked = order.map((i) => candidates[i]).filter(Boolean);
+  const remainder = fused.slice(candidates.length, k);
+  return { ranking: [...reranked, ...remainder], latencyMs: Date.now() - startedAt };
 }
 
 async function judgeAnswer(question: string, goldAnswer: string, contexts: string[]): Promise<Judged> {
@@ -174,6 +205,7 @@ async function judgeAnswer(question: string, goldAnswer: string, contexts: strin
   )) as Partial<Judged>;
   const clamp = (v: unknown) => Math.max(1, Math.min(5, Number(v) || 3));
   return {
+    generatedAnswer: answer,
     faithfulness: clamp(result.faithfulness),
     answerRelevance: clamp(result.answerRelevance),
     contextPrecision: clamp(result.contextPrecision),
@@ -186,10 +218,10 @@ type ConfigRow = {
   chunks: number;
   avgChunkChars: number;
   arm: Arm;
+  traces?: QuestionTrace[];
   metrics: RetrievalMetrics;
   meanLatencyMs: number;
 };
-
 async function main() {
   const dryRun = hasFlag("--dry-run");
   const confirmed = hasFlag("--confirm");
@@ -204,10 +236,10 @@ async function main() {
   const markdown = readFileSync(fixturePath, "utf8");
   const manifest = JSON.parse(readFileSync(fixtureManifestPath, "utf8")) as FixtureManifest;
   const documents = loadFixtureDocuments(manifest);
-  const golden = JSON.parse(readFileSync(goldenPath, "utf8")) as GoldenFile;
+  const targetGoldenPath = argValue("--golden") ? resolve(benchDir, argValue("--golden")!) : defaultGoldenPath;
+  const golden = JSON.parse(readFileSync(targetGoldenPath, "utf8")) as GoldenFile;
   const items = golden.items.slice(0, maxQuestions);
-
-  console.info("=== benchmark plan ===");
+  console.info("=== local benchmark plan ===");
   console.info(`fixture: ${markdown.length} chars across ${documents.length} pages | questions: ${items.length}`);
   for (const s of strategies) console.info(`  strategy ${s.name}: ${s.description}`);
   console.info(`arms: ${arms.join(", ")} | judged arm: ${useJudge ? judgedArm : "(none)"}`);
@@ -256,99 +288,138 @@ async function main() {
     const collectionName = `bench__${strategy.name.replace(/[^a-z0-9]/gi, "_")}`;
     const collection = await freshCollection(client, collectionName, chunks, vectors, manifest.sourceUrl, strategy.name);
     console.info(`[${strategy.name}] indexed ${chunks.length} chunks (${Date.now() - startedAt}ms incl. embeddings)`);
+
     if (indexOnly) continue;
 
-    // Corpus snapshot for BM25 + relevance matching.
-    const stored = await collection.get({ include: ["documents"] });
-    const corpusIds = stored.ids;
-    const corpusDocs = (stored.documents ?? []) as string[];
+    const corpusDocs = chunks.map((c) => c.text);
+    const corpusIds = chunks.map((c) => c.id);
 
     for (const arm of arms) {
-      const perQuestionMetrics: RetrievalMetrics[] = [];
       const latencies: number[] = [];
+      const perQuestionMetrics: RetrievalMetrics[] = [];
+      const traces: QuestionTrace[] = [];
       for (const item of items) {
-        const { ranking, latencyMs } = await retrieve(arm, collection, corpusIds, corpusDocs, item.question, queryEmbeddings.get(item.id)!);
+        const { ranking, latencyMs } = await retrieve(arm, collection, corpusIds, corpusDocs, item.question, queryEmbeddings.get(item.id)!, 50);
         latencies.push(latencyMs);
         const textById = new Map(corpusIds.map((id, i) => [id, corpusDocs[i] ?? ""]));
-        const relevance = ranking.map((id) => spanCoverage(item.goldSpan, textById.get(id) ?? "") >= RELEVANCE_THRESHOLD);
-        perQuestionMetrics.push(scoreRanking(relevance));
+        const spans = item.goldSpans && item.goldSpans.length > 0 ? item.goldSpans : [item.goldSpan];
+        const relevance = ranking.map((id) => {
+          const chunkText = textById.get(id) ?? "";
+          return spans.some((span) => spanCoverage(span, chunkText) >= RELEVANCE_THRESHOLD);
+        });
+        perQuestionMetrics.push(scoreRanking(relevance, item.totalRelevantCount));
 
+        let traceJudge: Judged | undefined;
         if (useJudge && arm === judgedArm) {
           const contexts = ranking.slice(0, 5).map((id) => textById.get(id) ?? "");
-          const judged = await judgeAnswer(item.question, item.answer, contexts);
+          traceJudge = await judgeAnswer(item.question, item.answer, contexts);
           const key = `${strategy.name}|${arm}`;
           if (!judgedScores.has(key)) judgedScores.set(key, []);
-          judgedScores.get(key)!.push(judged);
+          judgedScores.get(key)!.push(traceJudge);
         }
+
+        traces.push({
+          questionId: item.id,
+          question: item.question,
+          topics: item.topics,
+          ranking,
+          relevance,
+          metrics: scoreRanking(relevance, item.totalRelevantCount),
+          generatedAnswer: traceJudge?.generatedAnswer,
+          llmJudge: traceJudge ? {
+            faithfulness: traceJudge.faithfulness,
+            answerRelevance: traceJudge.answerRelevance,
+            contextPrecision: traceJudge.contextPrecision,
+          } : undefined,
+        });
       }
       rows.push({
         strategy: strategy.name,
         description: strategy.description,
         chunks: chunks.length,
-        avgChunkChars: Math.round(mean(chunks.map((c) => c.text.length))),
+        avgChunkChars: Math.round(chunks.reduce((a, b) => a + b.text.length, 0) / chunks.length),
         arm,
+        traces,
         metrics: {
           hitAt1: mean(perQuestionMetrics.map((m) => m.hitAt1)),
           hitAt3: mean(perQuestionMetrics.map((m) => m.hitAt3)),
           hitAt5: mean(perQuestionMetrics.map((m) => m.hitAt5)),
           hitAt10: mean(perQuestionMetrics.map((m) => m.hitAt10)),
+          precisionAt10: mean(perQuestionMetrics.map((m) => m.precisionAt10)),
+          recallAt50: mean(perQuestionMetrics.map((m) => m.recallAt50)),
           mrrAt10: mean(perQuestionMetrics.map((m) => m.mrrAt10)),
           ndcgAt10: mean(perQuestionMetrics.map((m) => m.ndcgAt10)),
         },
         meanLatencyMs: Math.round(mean(latencies)),
       });
-      const last = rows[rows.length - 1];
-      console.info(
-        `[${strategy.name}] ${arm}: hit@5=${last.metrics.hitAt5.toFixed(2)} mrr@10=${last.metrics.mrrAt10.toFixed(2)} ndcg@10=${last.metrics.ndcgAt10.toFixed(2)}`,
-      );
     }
 
     if (!keepCollections) {
-      await client.deleteCollection({ name: collectionName }).catch(() => {});
+      await client.deleteCollection({ name: collectionName });
     }
   }
 
   if (indexOnly) {
-    console.info(`index-only complete: kept ${strategies.length} collection(s); no report was written`);
+    console.info("\nindex-only run complete — no report generated.");
     return;
   }
 
-  mkdirSync(reportsDir, { recursive: true });
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-  writeFileSync(join(reportsDir, `results-${stamp}.json`), JSON.stringify({ rows, judged: Object.fromEntries(judgedScores) }, null, 2), "utf8");
-
-  const lines: string[] = [
+  // Generate markdown report
+  const now = new Date();
+  const stamp = now.toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const lines = [
     "# Chunking/retrieval benchmark",
     "",
     `- Fixture: fixtures/page.md (${markdown.length} chars)`,
-    `- Questions: ${items.length} (golden/questions.json from ${golden.createdAt})`,
+    `- Questions: ${items.length} (${targetGoldenPath ? targetGoldenPath.replace(/.*\/golden\//, "golden/") : "golden/questions.json"} from ${golden.createdAt})`,
     `- Arms: ${arms.join(", ")} | judged arm: ${useJudge ? judgedArm : "(none)"}`,
     `- Relevance rule: word-set coverage >= ${RELEVANCE_THRESHOLD} between retrieved chunk and gold span`,
     "",
-    "| strategy | arm | chunks | avg chars | Hit@1 | Hit@5 | MRR@10 | NDCG@10 | latency(ms) |",
-    "|---|---|---|---|---|---|---|---|---|",
+    "| strategy | arm | chunks | avg chars | Hit@1 | Hit@5 | P@10 | R@50 | MRR@10 | NDCG@10 | latency(ms) |",
+    "|---|---|---|---|---|---|---|---|---|---|---|",
   ];
   for (const row of rows) {
     lines.push(
-      `| ${row.strategy} | ${row.arm} | ${row.chunks} | ${row.avgChunkChars} | ${row.metrics.hitAt1.toFixed(2)} | ${row.metrics.hitAt5.toFixed(2)} | ${row.metrics.mrrAt10.toFixed(2)} | ${row.metrics.ndcgAt10.toFixed(2)} | ${row.meanLatencyMs} |`,
+      `| ${row.strategy} | ${row.arm} | ${row.chunks} | ${row.avgChunkChars} | ${row.metrics.hitAt1.toFixed(2)} | ${row.metrics.hitAt5.toFixed(2)} | ${row.metrics.precisionAt10.toFixed(2)} | ${row.metrics.recallAt50.toFixed(2)} | ${row.metrics.mrrAt10.toFixed(2)} | ${row.metrics.ndcgAt10.toFixed(2)} | ${row.meanLatencyMs} |`,
     );
   }
 
   if (judgedScores.size > 0) {
-    lines.push("", "## LLM-judged answer quality (1-5)", "", "| config | faithfulness | answerRelevance | contextPrecision |", "|---|---|---|---|");
+    lines.push(
+      "",
+      "## LLM-judged answer quality (1-5)",
+      "",
+      "| config | faithfulness | answerRelevance | contextPrecision |",
+      "|---|---|---|---|",
+    );
     for (const [key, scores] of judgedScores) {
       lines.push(
         `| ${key} | ${mean(scores.map((s) => s.faithfulness)).toFixed(2)} | ${mean(scores.map((s) => s.answerRelevance)).toFixed(2)} | ${mean(scores.map((s) => s.contextPrecision)).toFixed(2)} |`,
       );
     }
+    lines.push(
+      "",
+      "### Metric Definitions & Evaluation Scope",
+      "- **Faithfulness (1-5)**: Evaluates whether every claim in the generated answer is directly supported by the retrieved context chunks (no hallucination).",
+      "- **Answer Relevance (1-5)**: Evaluates how directly and completely the generated answer addresses the interview question.",
+      "- **Context Precision (1-5)**: Measures the **signal-to-noise ratio** across the **top-5 retrieved chunks** (`ranking.slice(0, 5)`). Evaluates whether the context fed to the agent contains the exact information needed without distracting or irrelevant material. Determined independently by a blind LLM judge.",
+    );
   }
+  const jsonReport = {
+    createdAt: new Date().toISOString(),
+    stamp,
+    goldenFile: targetGoldenPath,
+    rows,
+    judged: Object.fromEntries(judgedScores.entries()),
+  };
+  writeFileSync(join(reportsDir, `results-${stamp}.json`), JSON.stringify(jsonReport, null, 2), "utf8");
   writeFileSync(join(reportsDir, `report-${stamp}.md`), lines.join("\n"), "utf8");
   writeFileSync(join(reportsDir, "latest.md"), lines.join("\n"), "utf8");
   console.log(lines.join("\n"));
-  console.info(`\nreports written: reports/report-${stamp}.md (+ latest.md)`);
+  console.info(`\nreports written: reports/report-${stamp}.md (+ results-${stamp}.json, latest.md)`);
 }
 
 main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
+  console.error("benchmark failed:", error);
   process.exit(1);
 });

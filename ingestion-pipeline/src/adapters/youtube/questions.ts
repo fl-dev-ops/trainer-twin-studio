@@ -29,11 +29,13 @@ type RawQuestion = {
   topicSlugs?: unknown;
 };
 
-const EXTRACTION_SYSTEM_PROMPT = `Extract only explicit, substantive questions spoken in the supplied YouTube transcript chunks.
+const EXTRACTION_SYSTEM_PROMPT = `Extract only explicit, substantive technical questions spoken in the supplied YouTube transcript chunks.
 
 Rules:
 - Do not generate study questions from declarative statements.
-- Exclude rhetorical filler, greetings, confirmations, and logistical questions such as "Can you hear me?" or "Does that make sense?".
+- Extract ONLY domain-specific technical questions (e.g. concepts, runtime behavior, syntax, frameworks, architecture, debugging, or algorithms in React, JavaScript, TypeScript, Next.js, Node.js, Java, Python, databases, system design, etc.).
+- Exclude generic screening, introductory, or behavioral/HR questions such as "What are the skill sets you have?", "Tell me about yourself", "What is your current notice period?", or "Walk me through your background".
+- Exclude rhetorical filler, greetings, confirmations, and logistical questions such as "Can you hear me?", "Am I audible?", or "Does that make sense?".
 - Lightly repair casing, punctuation, and obvious caption fragmentation without changing meaning or adding facts.
 - Never answer a question.
 - A question may reference one or more contiguous source chunk IDs.
@@ -41,7 +43,7 @@ Rules:
 - Every question MUST have 1 to 4 concise, specific topic slugs assigned in topicSlugs (never return an empty array). Include both the general technology (e.g. "react", "javascript") and specific concepts (e.g. "reconciliation", "closures", "higher-order-components", "execution-context", "v8-engine", "virtual-dom", "machine-coding", "interview-preparation").
 - Strongly prefer matching from the supplied approvedTopics list where relevant. If a specific concept is not in approvedTopics, propose a new concise slug.
 - Return JSON only in this shape: {"topics":[{"slug":"topic-slug","description":"Short description"}],"questions":[{"text":"Question?","timestamp":"02:12","sourceChunkIds":["chunk-0"],"topicSlugs":["topic-slug"]}]}.
-- Return empty arrays when no substantive question is spoken.`;
+- Return empty arrays when no substantive technical question is spoken.`;
 function extractionPrompt(videoTitle: string, chunks: QuestionSourceChunk[], approvedTopics: string[]) {
   return JSON.stringify({ videoTitle, approvedTopics, chunks });
 }

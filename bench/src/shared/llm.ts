@@ -34,13 +34,23 @@ export async function rerank(query: string, documents: string[], topN: number): 
   if (!key) throw new Error("OPENROUTER_API_KEY is not set");
   const baseUrl = (process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1").replace(/\/$/, "");
   const model = process.env.RERANK_MODEL ?? "cohere/rerank-v3.5";
-  const res = await fetch(`${baseUrl}/rerank`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify({ model, query, documents, top_n: topN }),
-    signal: AbortSignal.timeout(60_000),
-  });
-  if (!res.ok) throw new Error(`rerank returned ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  const body = (await res.json()) as { results: { index: number }[] };
-  return body.results.map((r) => r.index);
+
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    const res = await fetch(`${baseUrl}/rerank`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      body: JSON.stringify({ model, query, documents, top_n: topN }),
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (res.status === 429 && attempt < 4) {
+      const waitMs = attempt * 5000;
+      console.warn(`[rerank:rate-limit] hit 429, retrying in ${waitMs}ms (attempt ${attempt}/4)...`);
+      await Bun.sleep(waitMs);
+      continue;
+    }
+    if (!res.ok) throw new Error(`rerank returned ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    const body = (await res.json()) as { results: { index: number }[] };
+    return body.results.map((r) => r.index);
+  }
+  throw new Error("rerank failed after retries");
 }

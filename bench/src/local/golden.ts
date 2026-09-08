@@ -10,13 +10,13 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import "./env";
-import { chunkMarkdown } from "../../web/lib/knowledge";
-import { llmJson } from "./llm";
+import "../shared/env";
+import { chunkMarkdown } from "../../../web/lib/knowledge";
+import { llmJson } from "../shared/llm";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const fixturePath = resolve(here, "../fixtures/page.md");
-const goldenDir = resolve(here, "../golden");
+const fixturePath = resolve(here, "../../fixtures/page.md");
+const goldenDir = resolve(here, "../../golden");
 
 const PASSAGE_TARGET = 400;
 
@@ -26,7 +26,16 @@ function argValue(flag: string): string | undefined {
   return i >= 0 ? argv[i + 1] : undefined;
 }
 
-type GoldenItem = { id: string; question: string; answer: string; goldSpan: string };
+export type GoldenItem = {
+  id: string;
+  question: string;
+  answer: string;
+  goldSpan: string;
+  goldSpans?: string[];
+  topics?: string[];
+  sourceType?: "youtube" | "notion" | "multi";
+  totalRelevantCount?: number;
+};
 
 async function main() {
   const count = Number(argValue("--count") ?? 20);
@@ -50,19 +59,24 @@ async function main() {
     const batch = picked.slice(start, start + BATCH);
     const listing = batch.map((passage, i) => `<passage index="${i}">\n${passage.slice(0, 1500)}\n</passage>`).join("\n");
     const result = (await llmJson(
-      "You create retrieval-evaluation questions. For each passage, write ONE specific question that a trainer studying this material would ask, such that the answer is fully contained in that passage and in no other obvious place. Questions must be self-contained (understandable without seeing the passage). Do not use pronouns referring to 'the document'.",
-      `${listing}\n\nRespond as JSON: {"items":[{"index":0,"question":"...","answer":"..."}]} with one item per passage index.`,
-    )) as { items?: { index?: number; question?: string; answer?: string }[] };
+      "You create retrieval-evaluation questions for technical training. For each passage, write ONE specific question that a candidate or interviewer would ask, such that the answer is fully contained in that passage. Also assign 1 to 3 relevant topic slugs (e.g. ['react', 'reconciliation'] or ['javascript', 'closures']). Questions must be self-contained (understandable without seeing the passage). Do not use pronouns referring to 'the document'.",
+      `${listing}\n\nRespond as JSON: {"items":[{"index":0,"question":"...","answer":"...","topics":["topic-1","topic-2"]}]} with one item per passage index.`,
+    )) as { items?: { index?: number; question?: string; answer?: string; topics?: string[] }[] };
 
     for (const entry of Array.isArray(result.items) ? result.items : []) {
       if (typeof entry.index !== "number" || !entry.question || !entry.answer) continue;
       const passage = batch[entry.index];
       if (!passage) continue;
+      const topics = Array.isArray(entry.topics)
+        ? entry.topics.filter((t): t is string => typeof t === "string" && t.trim().length > 0).map((t) => t.toLowerCase().trim())
+        : [];
       items.push({
         id: `q${items.length + 1}`,
         question: entry.question.trim(),
         answer: entry.answer.trim(),
         goldSpan: passage,
+        topics: topics.length ? topics : ["general"],
+        sourceType: "notion",
       });
     }
     console.info(`generated ${items.length}/${picked.length} questions`);
@@ -77,11 +91,12 @@ async function main() {
     passagesTotal: passages.length,
     items,
   };
-  writeFileSync(join(goldenDir, "questions.json"), JSON.stringify(out, null, 2), "utf8");
-  console.info(`wrote golden/questions.json with ${items.length} items`);
+  const target = join(goldenDir, "questions.json");
+  writeFileSync(target, JSON.stringify(out, null, 2), "utf8");
+  console.info(`wrote ${items.length} questions to ${target}`);
 }
 
 main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
+  console.error("golden dataset generation failed:", error);
   process.exit(1);
 });

@@ -1,0 +1,162 @@
+{
+  "createdAt": "2026-09-04T13:22:00.948Z",
+  "model": "openai/gpt-5.6-luna",
+  "benchmarkType": "multi-source-topic-filtered",
+  "items": [
+    {
+      "id": "ms-q1",
+      "topics": [
+        "react",
+        "reconciliation"
+      ],
+      "question": "What is Reconciliation in React and what are its high level phases?",
+      "answer": "Reconciliation in React is the process React uses to determine what changes to make in the real DOM by comparing the new Virtual DOM with the previous Virtual DOM snapshot. High-level phases include Render Phase (JSX to new Virtual DOM), Diffing Phase (compare old and new VDOM trees to find differences), and Commit Phase (apply minimal changes to real DOM).",
+      "sourceType": "multi",
+      "goldSpans": [
+        "[08:25] - Tell me what is reconciliation in React?\n[09:03] - Which algorithm is used for this tree comparison?",
+        "Reconciliation in React is the process React uses to determine what changes to make in the real DOM by comparing the new Virtual DOM with the previous Virtual DOM snapshot.\n\n#### How Reconciliation Works (High-Level)\n\nReact performs:\n\n1. Render Phase — JSX → new Virtual DOM is created.\n\n1. Diffing Phase — Compare old and new VDOM trees to find differences.\n\n1. Commit Phase — Apply only the minimal changes to real DOM."
+      ],
+      "goldSpan": "Reconciliation in React is the process React uses to determine what changes to make in the real DOM by comparing the new Virtual DOM with the previous Virtual DOM snapshot.",
+      "totalRelevantCount": 2
+    },
+    {
+      "id": "ms-q2",
+      "topics": [
+        "higher-order-components",
+        "react"
+      ],
+      "question": "What is asked about Higher Order Components in the mock interview and what problem do they solve?",
+      "answer": "The interview asks what higher order components are in React, requesting a practical example where an HOC was created and why it was needed instead of a simple utility function.",
+      "sourceType": "youtube",
+      "goldSpans": [
+        "[10:38] - What are higher-order components in React?\n[11:13] - Can you give me one practical example where you created a higher-order component?\n[11:47] - Why did you need a higher order component, and what problem or inefficiency would you have faced without it?"
+      ],
+      "goldSpan": "[10:38] - What are higher-order components in React?\n[11:13] - Can you give me one practical example where you created a higher-order component?\n[11:47] - Why did you need a higher order component, and what problem or inefficiency would you have faced without it?",
+      "totalRelevantCount": 1
+    },
+    {
+      "id": "ms-q3",
+      "topics": [
+        "closures",
+        "javascript"
+      ],
+      "question": "What is a Lexical Environment and how does it relate to Closures in JavaScript?",
+      "answer": "A Lexical Environment is an internal data structure used by JavaScript to store variable bindings and resolve identifiers. Every execution context is associated with a lexical environment, which enables inner functions to retain access to outer variables as closures.",
+      "sourceType": "multi",
+      "goldSpans": [
+        "[06:26] - What are closures in JavaScript?\n[07:17] - Can you give me a practical example of where closures can be used?",
+        "A Lexical Environment is an internal data structure used by JavaScript to store variable bindings and resolve identifiers.\n\nEvery execution context is associated with a lexical environment.\n\n- Stores variable, function, and parameter bindings"
+      ],
+      "goldSpan": "A Lexical Environment is an internal data structure used by JavaScript to store variable bindings and resolve identifiers.\n\nEvery execution context is associated with a lexical environment.",
+      "totalRelevantCount": 2
+    },
+    {
+      "id": "ms-q4",
+      "topics": [
+        "execution-context",
+        "javascript"
+      ],
+      "question": "How does the Call Stack manage Execution Contexts in JavaScript?",
+      "answer": "The Call Stack manages function execution order. Each function call creates a new Function Execution Context and pushes it onto the call stack. If the call stack is blocked, no other JavaScript code can execute.",
+      "sourceType": "multi",
+      "goldSpans": [
+        "[02:50] - How is JavaScript code executed, including the execution context and related mechanisms?\n[03:58] - How is an execution context created, and what operations take place when the browser runs a JavaScript file?",
+        "The call stack manages function execution order.\n\nIf the call stack is blocked, no other JavaScript code can execute.\n\n- Created every time a function is called\n- Each function call gets a new execution context\n- Pushed onto the call stack\n- Destroyed after function finishes execution"
+      ],
+      "goldSpan": "The call stack manages function execution order.\n\nIf the call stack is blocked, no other JavaScript code can execute.\n\n- Created every time a function is called\n- Each function call gets a new execution context\n- Pushed onto the call stack",
+      "totalRelevantCount": 2
+    },
+    {
+      "id": "ms-q5",
+      "topics": [
+        "hoisting",
+        "temporal-dead-zone"
+      ],
+      "question": "What is the Temporal Dead Zone in JavaScript scope resolution?",
+      "answer": "The Temporal Dead Zone (TDZ) is a state of a binding between hoisting and initialization during which let and const variables cannot be accessed.",
+      "sourceType": "multi",
+      "goldSpans": [
+        "[17:01] - Can you explain why the remaining two values are numbers?\n[19:32] - Why are you getting the type error?",
+        "- A state of a binding\n- Between hoisting and initialization\n\n- Function can be called before declaration\n📌 Key point:"
+      ],
+      "goldSpan": "- A state of a binding\n- Between hoisting and initialization",
+      "totalRelevantCount": 2
+    },
+    {
+      "id": "ms-q6",
+      "topics": [
+        "event-loop",
+        "web-apis"
+      ],
+      "question": "How does the Event Loop coordinate execution between Web APIs, queues, and the Call Stack?",
+      "answer": "When Web APIs complete their work, callbacks are placed into queues (microtasks or macrotasks). The event loop is a browser-side scheduler that continuously coordinates when the JavaScript engine can execute queued callbacks when the call stack is empty.",
+      "sourceType": "multi",
+      "goldSpans": [
+        "[26:19] - If a three-second delay is given to setTimeout, will it definitely execute after three seconds?\n[26:48] - Why is that delay not guaranteed?",
+        "When Web APIs complete their work, callbacks are placed into queues.\n\nThe event loop continuously checks the call stack and queues.\n\n“The event loop is a browser-side scheduler that coordinates when the JavaScript engine can execute queued callbacks.”"
+      ],
+      "goldSpan": "When Web APIs complete their work, callbacks are placed into queues.\n\nThe event loop continuously checks the call stack and queues.\n\n“The event loop is a browser-side scheduler that coordinates when the JavaScript engine can execute queued callbacks.”",
+      "totalRelevantCount": 2
+    },
+    {
+      "id": "ms-q7",
+      "topics": [
+        "diffing-algorithm",
+        "virtual-dom"
+      ],
+      "question": "What was the Stack Reconciler in React and how did it perform diffing?",
+      "answer": "Stack Reconciler was React's old rendering engine that used a synchronous diffing algorithm and the JavaScript call stack to perform reconciliation and DOM updates.",
+      "sourceType": "notion",
+      "goldSpans": [
+        "“Stack Reconciler was React’s old rendering engine that used a synchronous diffing algorithm and the JavaScript call stack to perform reconciliation and DOM updates.”\n\n- Algorithm = the logic for comparing trees"
+      ],
+      "goldSpan": "“Stack Reconciler was React’s old rendering engine that used a synchronous diffing algorithm and the JavaScript call stack to perform reconciliation and DOM updates.”",
+      "totalRelevantCount": 1
+    },
+    {
+      "id": "ms-q8",
+      "topics": [
+        "call-apply-bind",
+        "javascript"
+      ],
+      "question": "Why do call, apply, and bind exist in JavaScript and what is the core difference between them?",
+      "answer": "call, apply, and bind exist to explicitly control the 'this' value of a function. call and apply execute immediately (call takes comma-separated arguments, apply takes an array), while bind creates a new function to execute later.",
+      "sourceType": "notion",
+      "goldSpans": [
+        "👉 call, apply, and bind exist to explicitly control this.\n\n- call → execute now\n- apply → execute now\n- bind → execute later"
+      ],
+      "goldSpan": "👉 call, apply, and bind exist to explicitly control this.\n\n- call → execute now\n- apply → execute now\n- bind → execute later",
+      "totalRelevantCount": 1
+    },
+    {
+      "id": "ms-q9",
+      "topics": [
+        "machine-coding",
+        "interview-preparation"
+      ],
+      "question": "What are common Machine Coding problems asked by tech companies like Uber and Atlassian?",
+      "answer": "Common problems include implementing an asynchronous task runner with a concurrency limit (Uber) and implementing a robust deepClone utility that handles circular references (Atlassian).",
+      "sourceType": "notion",
+      "goldSpans": [
+        "#### Uber | Machine Coding: Asynchronous Task Runner (Concurrency Limit)\n\nQuestion: Imagine Uber is fetching data for 100 nearby drivers. To avoid hitting API rate limits or crashing the browser with too many simultaneous requests, you must implement a \"Batch Runner.\"\n\n#### Atlassian | Machine Coding: The Ultimate Deep Clone\n\nQuestion: Implement deepClone(obj). It must handle circular references."
+      ],
+      "goldSpan": "#### Uber | Machine Coding: Asynchronous Task Runner (Concurrency Limit)\n\nQuestion: Imagine Uber is fetching data for 100 nearby drivers.\n\n#### Atlassian | Machine Coding: The Ultimate Deep Clone\n\nQuestion: Implement deepClone(obj). It must handle circular references.",
+      "totalRelevantCount": 1
+    },
+    {
+      "id": "ms-q10",
+      "topics": [
+        "web-storage",
+        "cookies"
+      ],
+      "question": "How do HttpOnly cookies provide security for auth tokens compared to client-side storage?",
+      "answer": "With HttpOnly cookies, React never touches the token directly and the browser automatically attaches the cookie to API requests, preventing client-side JavaScript access and full account takeover.",
+      "sourceType": "notion",
+      "goldSpans": [
+        "→ React never touches the token\n→ API requests automatically include cookie\n\n[Browser]\n  └─ Automatically attaches accessToken cookie\n      ↓\n[Server]\n  └─ Access token valid → return data"
+      ],
+      "goldSpan": "→ React never touches the token\n→ API requests automatically include cookie",
+      "totalRelevantCount": 1
+    }
+  ]
+}
