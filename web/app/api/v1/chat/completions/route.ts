@@ -32,15 +32,6 @@ interface CachedTurn {
 const protocolCache = new Map<string, CachedTurn>();
 let globalExecutionCounter = 0;
 
-export function getExecutionStats() {
-  return { totalExecutions: globalExecutionCounter };
-}
-
-export function resetProtocolCache() {
-  protocolCache.clear();
-  globalExecutionCounter = 0;
-}
-
 function computeRequestHash(token: string, messages: ChatMessage[]): string {
   const norm = JSON.stringify(
     messages.map((m) => ({

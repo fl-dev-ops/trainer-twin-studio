@@ -148,7 +148,7 @@ export async function activateSession(input: {
       domainSlug: snapshot.domain.slug,
       domainVersion: snapshot.domain.version,
       compiledSnapshot: compiledConfig ? JSON.parse(JSON.stringify(compiledConfig)) : undefined,
-      runtimeState: initialRuntimeState,
+      runtimeState: JSON.parse(JSON.stringify(initialRuntimeState)),
       runtimeRevision: 0,
       lastCompletion: Prisma.DbNull,
     },
