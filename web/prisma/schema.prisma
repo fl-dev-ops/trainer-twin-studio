@@ -222,7 +222,7 @@ model InterviewSession {
   userId           String
   agentId          String
   shareCode        String    @unique
-  runtimeTokenHash String?
+  runtimeTokenHash String?   @unique
   personaSlug      String
   personaVersion   Int
   agentSlug        String
@@ -235,6 +235,10 @@ model InterviewSession {
   transcript       Json?
   evidence         Json?
   s3AudioKey       String?
+  compiledSnapshot Json?
+  runtimeState     Json?
+  runtimeRevision  Int       @default(0)
+  lastCompletion   Json?
   createdAt        DateTime  @default(now())
   startedAt        DateTime?
   endedAt          DateTime?

@@ -33,6 +33,7 @@ from pipecat.frames.frames import (
     LLMTextFrame,
     TranscriptionFrame,
     TTSAudioRawFrame,
+    TTSStoppedFrame,
     VADUserStartedSpeakingFrame,
     VADUserStoppedSpeakingFrame,
 )
@@ -48,20 +49,23 @@ from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.runner.types import RunnerArguments, SmallWebRTCRunnerArguments
 from pipecat.services.sarvam.stt import SarvamSTTService
 from pipecat.services.sarvam.tts import SarvamTTSService
+from pipecat.services.openai.llm import OpenAILLMService
 from pipecat.transports.base_transport import BaseTransport, TransportParams
 from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
 from pipecat.turns.user_stop import TurnAnalyzerUserTurnStopStrategy
 from pipecat.turns.user_turn_strategies import UserTurnStrategies
 from pipecat.workers.runner import WorkerRunner
 
-from interview import InterviewSession, WEB_URL
 from recording import pcm_to_wav, upload_recording
 # Remote cloned-voice TTS is kept for production; local testing uses Sarvam below.
 # from web_tts import WebTTSService
+from tools import register_interview_tools
 from workspace_bridge import WorkspaceBridge
 import httpx
 
 load_dotenv(override=True)
+
+WEB_URL = os.getenv("WEB_URL", "http://localhost:3000").rstrip("/")
 
 
 class Tee:
@@ -126,6 +130,7 @@ class ClosingGate(FrameProcessor):
         self.timer = None
 
     def arm(self):
+        self.active = True
         if self.timer is None:
             self.timer = asyncio.create_task(self._timeout())
 
@@ -156,6 +161,9 @@ class ClosingGate(FrameProcessor):
                     self.active, self.audio = True, False
                 else:
                     await self.complete(self.active and self.audio)
+                return
+            if isinstance(frame, (TTSStoppedFrame, LLMFullResponseEndFrame)) and self.active and self.audio:
+                await self.complete(True)
                 return
         await self.push_frame(frame, direction)
 
@@ -199,122 +207,6 @@ class SpeechInputMonitor(FrameProcessor):
         await self.push_frame(frame, direction)
 
 
-def _latest_user_text(context: LLMContext) -> str:
-    for message in reversed(context.get_messages()):
-        if not isinstance(message, dict) or message.get("role") != "user":
-            continue
-        content = message.get("content")
-        if isinstance(content, str):
-            return content.strip()
-        if isinstance(content, list):
-            parts = []
-            for part in content:
-                if isinstance(part, dict) and part.get("type") == "text" and isinstance(part.get("text"), str):
-                    parts.append(part["text"])
-                elif isinstance(part, str):
-                    parts.append(part)
-            return " ".join(parts).strip()
-    return ""
-
-
-class InterviewBrainProcessor(FrameProcessor):
-    """Consumes LLMContextFrame (user-turn complete) and runs InterviewSession.step.
-
-    Sits where an LLMService would in the stock Pipecat voice pipeline. Emits
-    LLMFullResponse* + LLMTextFrame so TTS and the assistant aggregator behave
-    as in the documented examples.
-    """
-
-    def __init__(
-        self,
-        session: InterviewSession,
-        *,
-        on_turn_complete: Callable[[], Awaitable[None]] | None = None,
-        on_closing: Callable[[], None] | None = None,
-        is_busy: Callable[[], bool] | None = None,
-    ):
-        super().__init__()
-        self.session = session
-        self.on_turn_complete = on_turn_complete
-        self.on_closing = on_closing
-        self.is_busy = is_busy or (lambda: False)
-        self.closing = False
-        self._task: asyncio.Task | None = None
-
-    async def process_frame(self, frame, direction: FrameDirection):
-        await super().process_frame(frame, direction)
-
-        if direction != FrameDirection.DOWNSTREAM:
-            await self.push_frame(frame, direction)
-            return
-
-        if isinstance(frame, InterruptionFrame):
-            await self.cancel_turn()
-            await self.push_frame(frame, direction)
-            return
-
-        if isinstance(frame, LLMContextFrame):
-            if self.closing or self.is_busy():
-                return
-            text = _latest_user_text(frame.context)
-            if not text:
-                logger.warning("User turn completed without transcript text")
-                return
-            if self._task and not self._task.done():
-                self._task.cancel()
-                await asyncio.gather(self._task, return_exceptions=True)
-            logger.info("Learner: {}", text)
-            self._task = asyncio.create_task(self._run_turn(text))
-            return
-
-        await self.push_frame(frame, direction)
-
-    async def say(self, text: str, *, closing: bool = False):
-        """Speak text through the LLM response frame path (opening / errors / turns)."""
-        if closing:
-            self.closing = True
-            if self.on_closing:
-                self.on_closing()
-            await self.push_frame(ClosingBoundary(beginning=True))
-        await self.push_frame(LLMFullResponseStartFrame())
-        await self.push_frame(LLMTextFrame(text=text))
-        await self.push_frame(LLMFullResponseEndFrame())
-        if closing:
-            await self.push_frame(ClosingBoundary(beginning=False))
-
-    async def _run_turn(self, text: str):
-        try:
-            if self.session.closed:
-                return
-            if not self.session.started:
-                await self.say(
-                    "No interview is running yet. Open the studio's talk page and connect from there, "
-                    "so I know which persona and agent to use."
-                )
-                return
-            response = await self.session.step(text)
-            await self.say(response, closing=self.session.closed)
-            if self.on_turn_complete:
-                try:
-                    await self.on_turn_complete()
-                except Exception:
-                    logger.exception("Could not update session UI")
-        except asyncio.CancelledError:
-            logger.info("Turn processing cancelled by interruption")
-        except Exception:
-            logger.exception("Turn failed")
-            await self.say("Sorry, something went wrong on my side. Could you repeat that?")
-
-    async def cancel_turn(self):
-        if self._task and not self._task.done():
-            self._task.cancel()
-            await asyncio.gather(self._task, return_exceptions=True)
-
-    async def cleanup(self):
-        await self.cancel_turn()
-        await super().cleanup()
-
-
 async def make_stt():
     if os.getenv("ASSEMBLYAI_API_KEY"):
         from pipecat.services.assemblyai.stt import AssemblyAISTTService
@@ -341,7 +233,6 @@ async def make_stt():
 
 
 async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
-    session = InterviewSession()
     workspace = WorkspaceBridge()
     surface_state: dict = {"current": None}
     web: dict = {"session_id": None, "runtime_token": None}
@@ -349,34 +240,10 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     prepare_task = None
     end_lock = asyncio.Lock()
 
-    async def apply_surface(phase_index: int):
-        """Open/close the client workspace when the phase's configured surface changes."""
-        desired = session.surface_for_phase(phase_index)
-        key = desired["action"] if desired else None
-        if key == surface_state["current"]:
-            return
-        try:
-            if desired:
-                await workspace.command(worker, "surface", {
-                    "action": desired["action"],
-                    "eventId": uuid.uuid4().hex,
-                    "payload": desired["payload"],
-                })
-                surface_state["current"] = key
-            elif surface_state["current"]:
-                await workspace.command(worker, "surface", {
-                    "action": "close_surface",
-                    "eventId": uuid.uuid4().hex,
-                    "payload": {},
-                })
-                surface_state["current"] = None
-        except Exception:
-            logger.warning("Failed to update session surface")
-
-    async def on_turn_complete():
-        # A UI error must not trigger an invitation to repeat an already graded answer.
-        await worker.rtvi.send_server_message({"type": "interview-state", "state": session.snapshot()})
-        await apply_surface(session.state.get("phase_index", 0))
+    body = getattr(runner_args, "body", None) if isinstance(getattr(runner_args, "body", None), dict) else {}
+    if body.get("sessionId") and body.get("runtimeToken"):
+        web["session_id"] = str(body["sessionId"]).strip()
+        web["runtime_token"] = str(body["runtimeToken"]).strip()
 
     async def closing_complete(delivered: bool):
         await _end_web_session("completed")
@@ -388,13 +255,8 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         async with end_lock:
             if not web["session_id"]:
                 return
-            # Serialize completion/disconnect, keeping the ID until successful.
             try:
                 await recorder.stop_recording()
-                transcript = [
-                    {"role": "user" if m.get("role") == "learner" else m.get("role"), "text": m.get("text", "")}
-                    for m in getattr(session, "messages", [])
-                ]
                 async with httpx.AsyncClient(timeout=10) as client:
                     response = await client.patch(
                         f"{WEB_URL}/api/sessions",
@@ -402,13 +264,11 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
                         json={
                             "id": web["session_id"],
                             "status": status,
-                            "transcript": transcript,
-                            "evidence": session.state.get("coverage", {}),
                         },
                     )
                     response.raise_for_status()
             except Exception:
-                logger.exception("Failed to finalize web session; local transcript retained")
+                logger.exception("Failed to finalize web session")
                 return
             web["session_id"] = None
             web["runtime_token"] = None
@@ -428,12 +288,13 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         ),
     )
     closing_gate = ClosingGate(closing_complete)
-    brain = InterviewBrainProcessor(
-        session,
-        on_turn_complete=on_turn_complete,
-        on_closing=closing_gate.arm,
-        is_busy=lambda: starting,
+
+    llm = OpenAILLMService(
+        api_key=web["runtime_token"] or "token-pending",
+        base_url=f"{WEB_URL}/api/v1",
+        settings=OpenAILLMService.Settings(model="trainertwin-runtime"),
     )
+
     tts = SarvamTTSService(
         api_key=os.environ["SARVAM_API_KEY"],
         settings=SarvamTTSService.Settings(
@@ -460,36 +321,13 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         except Exception:
             logger.exception("Failed to upload session recording")
 
-    # Remote cloned-voice resolution (restore with WebTTSService for production):
-    # fallback_voice: dict = {"id": None}
-    #
-    # async def resolve_voice() -> str:
-    #     if override := os.getenv("AGENT_VOICE_ID_OVERRIDE"):
-    #         return override
-    #     if session.voice_id:
-    #         return session.voice_id
-    #     if tts.voice:
-    #         return tts.voice
-    #     if fallback_voice["id"]:
-    #         return fallback_voice["id"]
-    #     try:
-    #         async with httpx.AsyncClient(timeout=10) as client:
-    #             response = await client.get(f"{WEB_URL}/api/tts/default-voice")
-    #             voice = response.json().get("voice")
-    #             if voice:
-    #                 fallback_voice["id"] = voice["id"]
-    #                 logger.info("No voice assigned; using fallback studio voice '{}'", voice["name"])
-    #     except Exception:
-    #         logger.warning("Could not look up a fallback voice")
-    #     return fallback_voice["id"] or ""
-
     pipeline = Pipeline([
         transport.input(),
         workspace,
         stt,
         speech_monitor,
         user_aggregator,
-        brain,
+        llm,
         tts,
         recorder,
         WebRTCAudioOutputFilter(),
@@ -503,19 +341,21 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         idle_timeout_secs=runner_args.pipeline_idle_timeout_secs,
     )
 
+    register_interview_tools(llm, worker, workspace, closing_gate, surface_state)
+
     @worker.event_handler("on_pipeline_error")
     async def on_pipeline_error(worker, frame):
-        if brain.closing:
+        if closing_gate.active:
             await closing_gate.complete(False)
 
     @worker.rtvi.event_handler("on_client_message")
     async def on_client_message(rtvi, msg):
         nonlocal starting, prepare_task
         data = msg.data if isinstance(msg.data, dict) else {}
-        if msg.type != "start-interview" or starting or session.started or session.closed:
+        if msg.type != "start-interview" or starting:
             return
-        session_id = str(data.get("sessionId") or "").strip()
-        runtime_token = str(data.get("runtimeToken") or "").strip()
+        session_id = str(data.get("sessionId") or web["session_id"] or "").strip()
+        runtime_token = str(data.get("runtimeToken") or web["runtime_token"] or "").strip()
         if not session_id or not runtime_token:
             await rtvi.send_server_message({"type": "interview-error", "error": "sessionId and runtimeToken are required"})
             return
@@ -526,23 +366,18 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         async def prepare():
             nonlocal starting
             try:
-                opening = await session.start(session_id, runtime_token)
                 web["session_id"] = session_id
                 web["runtime_token"] = runtime_token
-                # Remote cloned-voice TTS (restore for production):
-                # tts.voice = await resolve_voice()
-                # if not tts.voice:
-                #     logger.warning("No TTS voice available — trainer will be silent")
+
+                llm._client.api_key = runtime_token
                 await rtvi.send_server_message({"type": "session-started", "sessionId": session_id})
-                await rtvi.send_server_message({"type": "interview-state", "state": session.snapshot()})
-                await apply_surface(0)
-                logger.info("Trainer opening: {}", opening)
-                await brain.say(opening)
+                # First completions call produces opening line
+                context.add_message({"role": "developer", "content": "session-start"})
+                await worker.push_frame(LLMContextFrame(context=context))
             except Exception as error:
                 logger.exception("Failed to start interview")
                 await rtvi.send_server_message({"type": "interview-error", "error": str(error)})
                 await worker.cancel()
-
             finally:
                 starting = False
 
@@ -552,13 +387,11 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     async def on_client_disconnected(transport, client):
         logger.info("Client disconnected")
         workspace.cancel_pending()
-        await brain.cancel_turn()
         if prepare_task:
             prepare_task.cancel()
             await asyncio.gather(prepare_task, return_exceptions=True)
         surface_state["current"] = None
-        await session.abandon("client_disconnected")
-        await _end_web_session("completed" if session.state.get("end_reason") == "completed" else "abandoned")
+        await _end_web_session("completed" if closing_gate.done else "abandoned")
         await worker.cancel()
 
     runner = WorkerRunner(handle_sigint=runner_args.handle_sigint)

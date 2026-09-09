@@ -1,5 +1,8 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { db } from "@/lib/db";
+import { Prisma } from "@/lib/generated/prisma/client";
+import { initRuntimeState } from "@/lib/runtime/runtime";
+import { getAgentConfigForAgent } from "@/lib/specs";
 
 const shareCode = () => randomBytes(9).toString("base64url");
 const runtimeToken = () => randomBytes(24).toString("base64url");
@@ -130,8 +133,10 @@ export async function activateSession(input: {
     where: { id: sessionId },
     select: { agentId: true, contextId: true },
   });
-  const snapshot = await sessionSnapshot(input.orgId, current.agentId, input.contextId ?? current.contextId);
+  const snapshot = await sessionSnapshot(input.orgId, current.agentId, (input.contextId ?? current.contextId) ?? undefined);
+  const compiledConfig = await getAgentConfigForAgent(current.agentId, input.orgId, (input.contextId ?? current.contextId) ?? undefined);
   const token = runtimeToken();
+  const initialRuntimeState = initRuntimeState();
   const session = await db.interviewSession.update({
     where: { id: sessionId },
     data: {
@@ -142,16 +147,25 @@ export async function activateSession(input: {
       agentVersion: snapshot.agent.version,
       domainSlug: snapshot.domain.slug,
       domainVersion: snapshot.domain.version,
+      compiledSnapshot: compiledConfig ? JSON.parse(JSON.stringify(compiledConfig)) : undefined,
+      runtimeState: initialRuntimeState,
+      runtimeRevision: 0,
+      lastCompletion: Prisma.DbNull,
     },
     select: { id: true, shareCode: true, agentSlug: true, status: true },
   });
   return { ...session, runtimeToken: token, shareCode: code };
 }
 
-export async function authorizeRuntimeSession(id: string, token: string) {
-  if (!id || !token) return null;
-  const session = await db.interviewSession.findUnique({
-    where: { id },
+export async function authorizeRuntimeSession(idOrToken: string, tokenParam?: string) {
+  const token = tokenParam ? tokenParam : idOrToken;
+  if (!token) return null;
+  const hash = tokenHash(token);
+  const session = await db.interviewSession.findFirst({
+    where: {
+      runtimeTokenHash: hash,
+      ...(tokenParam && idOrToken ? { id: idOrToken } : {}),
+    },
     select: {
       id: true,
       orgId: true,
@@ -160,11 +174,14 @@ export async function authorizeRuntimeSession(id: string, token: string) {
       contextId: true,
       status: true,
       runtimeTokenHash: true,
+      compiledSnapshot: true,
+      runtimeState: true,
+      runtimeRevision: true,
+      lastCompletion: true,
+      evidence: true,
+      transcript: true,
     },
   });
   if (!session?.runtimeTokenHash || !["assigned", "active"].includes(session.status)) return null;
-  const supplied = Buffer.from(tokenHash(token));
-  const expected = Buffer.from(session.runtimeTokenHash);
-  if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) return null;
   return session;
 }

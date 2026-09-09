@@ -163,7 +163,13 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
     sessionRef.current = launch.session.id;
 
     const transport = new SmallWebRTCTransport({
-      webrtcRequestParams: { endpoint: `${AGENT_URL}/api/offer` },
+      webrtcRequestParams: {
+        endpoint: `${AGENT_URL}/api/offer`,
+        requestData: {
+          sessionId: launch.session.id,
+          runtimeToken: launch.session.runtimeToken,
+        },
+      },
     });
     const client = new PipecatClient({
       transport,
@@ -197,6 +203,23 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
             entriesRef.current = next;
             return next;
           });
+
+          // Fetch authoritative coverage & state snapshot from web runtime
+          if (sessionRef.current) {
+            void fetch(`/api/sessions/${sessionRef.current}`, {
+              headers: launch.session.runtimeToken
+                ? { Authorization: `Bearer ${launch.session.runtimeToken}` }
+                : {},
+            })
+              .then((res) => (res.ok ? res.json() : null))
+              .then((snap) => {
+                if (snap?.coverage) {
+                  setCoverage(snap.coverage);
+                  coverageRef.current = snap.coverage;
+                }
+              })
+              .catch(() => {});
+          }
         },
         onDisconnected: () => {
           const reason = disconnectReasonRef.current;
@@ -254,6 +277,20 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
       } | null;
       if (payload?.type === "session-started" && typeof payload.sessionId === "string") {
         sessionRef.current = payload.sessionId;
+        setInterviewReady(true);
+        void fetch(`/api/sessions/${payload.sessionId}`, {
+          headers: launch.session.runtimeToken
+            ? { Authorization: `Bearer ${launch.session.runtimeToken}` }
+            : {},
+        })
+          .then((res) => (res.ok ? res.json() : null))
+          .then((snap) => {
+            if (snap?.coverage) {
+              setCoverage(snap.coverage);
+              coverageRef.current = snap.coverage;
+            }
+          })
+          .catch(() => {});
       } else if (payload?.type === "interview-state" && payload.state) {
         disconnectReasonRef.current = "disconnected";
         setCoverage(payload.state.coverage ?? {});

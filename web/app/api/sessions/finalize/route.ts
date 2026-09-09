@@ -26,23 +26,36 @@ export async function POST(request: Request) {
       ? body.evidence
       : undefined;
 
-  const updated = await db.interviewSession.updateMany({
+  const existing = await db.interviewSession.findFirst({
     where: { id: String(body.sessionId), orgId: org.id, userId: user.id },
+    select: { transcript: true, evidence: true },
+  });
+  if (!existing) return NextResponse.json({ error: "Session not found" }, { status: 404 });
+
+  const hasCanonicalTranscript = Array.isArray(existing.transcript) && existing.transcript.length > 0;
+  const hasCanonicalEvidence =
+    existing.evidence && typeof existing.evidence === "object" && Object.keys(existing.evidence).length > 0;
+
+  await db.interviewSession.update({
+    where: { id: String(body.sessionId) },
     data: {
-      ...(transcript ? { transcript } : {}),
-      ...(evidence ? { evidence } : {}),
+      ...(!hasCanonicalTranscript && transcript ? { transcript } : {}),
+      ...(!hasCanonicalEvidence && evidence ? { evidence } : {}),
     },
   });
-  if (updated.count === 0) return NextResponse.json({ error: "Session not found" }, { status: 404 });
+
+  const effectiveTranscript = (hasCanonicalTranscript ? existing.transcript : transcript) as
+    | Array<{ speaker?: string; role?: string; text?: string }>
+    | undefined;
 
   // Hook for learner collection creation & session turn memory
   try {
     // Lazily creates the org's learner_<userId> collection if not already present
     await LearnerMemoryService.getCollection(org.id, user.id);
 
-    if (transcript && transcript.length > 0) {
-      const learnerLines = (transcript as Array<{ speaker?: string; role?: string; text?: string }>)
-        .filter((entry) => (entry.speaker === "learner" || entry.role === "learner") && typeof entry.text === "string")
+    if (effectiveTranscript && effectiveTranscript.length > 0) {
+      const learnerLines = effectiveTranscript
+        .filter((entry) => (entry.speaker === "learner" || entry.role === "learner" || entry.role === "user") && typeof entry.text === "string")
         .map((entry) => entry.text!.trim())
         .filter(Boolean);
 
