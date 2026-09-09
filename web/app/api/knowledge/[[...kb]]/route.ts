@@ -10,6 +10,7 @@ import {
   removeEmbeddings,
   uploadKnowledgeFile,
 } from "@/lib/specs";
+import { OrganizationKnowledgeService } from "@/lib/org-knowledge";
 
 type Params = { params: Promise<{ kb?: string[] }> };
 
@@ -18,9 +19,15 @@ export async function GET(_req: Request, { params }: Params) {
   if (!org) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { kb } = await params;
   if (!kb) {
-    const bases = await listKnowledgeBases(org.id);
+    const [bases, documents, stats] = await Promise.all([
+      listKnowledgeBases(org.id),
+      OrganizationKnowledgeService.getAllDocuments(org.id),
+      OrganizationKnowledgeService.getStats(org.id),
+    ]);
     return NextResponse.json({
       knowledgeBases: bases.map((b) => ({ slug: b.slug, name: b.name })),
+      documents,
+      stats,
     });
   }
 
