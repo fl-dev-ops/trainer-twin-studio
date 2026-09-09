@@ -3,7 +3,7 @@ import type { PipelineConfig } from "../../config";
 import { createOpenRouter, generateTopicJson } from "../../openrouter";
 import { createTopicResolver, normalizeTopicSlug, parseTopicProposals, type TopicInfo } from "../../topics/normalization";
 
-export const YOUTUBE_QUESTION_EXTRACTION_VERSION = "youtube-substantive-questions-v1";
+export const YOUTUBE_QUESTION_EXTRACTION_VERSION = "youtube-multimodal-questions-v2";
 
 export type QuestionSourceChunk = {
   id: string;
@@ -12,12 +12,21 @@ export type QuestionSourceChunk = {
   endSeconds: number;
 };
 
+export type QuestionType = "verbal" | "code-output" | "coding" | "machine-coding" | "system-design" | "mcq";
+
 export type ExtractedQuestion = {
   text: string;
   startSeconds: number;
   endSeconds: number;
   topics: string[];
   proposedTopics: string[];
+  questionType: QuestionType;
+  difficulty: "easy" | "medium" | "hard";
+  code?: {
+    language: string;
+    content: string;
+  };
+  context?: string;
 };
 
 type CatalogTopic = TopicInfo & { status: "approved" | "proposed" };
@@ -27,23 +36,47 @@ type RawQuestion = {
   startSeconds?: unknown;
   sourceChunkIds?: unknown;
   topicSlugs?: unknown;
+  questionType?: unknown;
+  difficulty?: unknown;
+  code?: unknown;
+  context?: unknown;
 };
 
-const EXTRACTION_SYSTEM_PROMPT = `Extract only explicit, substantive technical questions spoken in the supplied YouTube transcript chunks.
+const EXTRACTION_SYSTEM_PROMPT = `Extract explicit technical interview questions spoken or presented in the supplied YouTube transcript chunks, including verbal probes, coding challenges, code output prediction, machine coding, and system design.
 
 Rules:
-- Do not generate study questions from declarative statements.
-- Extract ONLY domain-specific technical questions (e.g. concepts, runtime behavior, syntax, frameworks, architecture, debugging, or algorithms in React, JavaScript, TypeScript, Next.js, Node.js, Java, Python, databases, system design, etc.).
-- Exclude generic screening, introductory, or behavioral/HR questions such as "What are the skill sets you have?", "Tell me about yourself", "What is your current notice period?", or "Walk me through your background".
-- Exclude rhetorical filler, greetings, confirmations, and logistical questions such as "Can you hear me?", "Am I audible?", or "Does that make sense?".
-- Lightly repair casing, punctuation, and obvious caption fragmentation without changing meaning or adding facts.
-- Never answer a question.
-- A question may reference one or more contiguous source chunk IDs.
-- Include the timestamp (e.g. "02:12" or seconds) from the transcript line where the question begins.
-- Every question MUST have 1 to 4 concise, specific topic slugs assigned in topicSlugs (never return an empty array). Include both the general technology (e.g. "react", "javascript") and specific concepts (e.g. "reconciliation", "closures", "higher-order-components", "execution-context", "v8-engine", "virtual-dom", "machine-coding", "interview-preparation").
-- Strongly prefer matching from the supplied approvedTopics list where relevant. If a specific concept is not in approvedTopics, propose a new concise slug.
-- Return JSON only in this shape: {"topics":[{"slug":"topic-slug","description":"Short description"}],"questions":[{"text":"Question?","timestamp":"02:12","sourceChunkIds":["chunk-0"],"topicSlugs":["topic-slug"]}]}.
-- Return empty arrays when no substantive technical question is spoken.`;
+1. Extract ONLY domain-specific technical questions (concepts, runtime behavior, syntax, frameworks, architecture, debugging, or algorithms in React, JavaScript, TypeScript, Next.js, Node.js, Java, Python, databases, system design, etc.).
+2. Categorize each question under questionType:
+   - "verbal": conceptual probes, explanations, mechanisms, trade-offs.
+   - "code-output": questions asking what a code snippet logs, evaluates to, or throws. Reconstruct the code snippet into code: {"language": "...", "content": "..."}. Ensure the question text is self-contained.
+   - "coding": questions requiring the candidate to implement a function, hook, utility, or algorithm. If starter code or template is provided, include it in code.
+   - "machine-coding": practical UI component builds or end-to-end frontend feature implementations (e.g. live chat UI, autocomplete, infinite scroll). Include requirements in context.
+   - "system-design": frontend architecture, scaling, caching, API protocols, or full-stack system design questions. Include requirements or scenario in context.
+   - "mcq": multiple-choice questions if spoken or presented with distinct options.
+3. If the transcript discusses or dictates a code snippet for the question, extract/reconstruct it into code: {"language": "javascript" | "jsx" | "typescript" | "python", "content": "..."}.
+4. Make question text self-contained. Never emit a bare "What is the output?" or "Can you write this?"; always provide the context of what is being tested.
+5. Assign difficulty: "easy" | "medium" | "hard".
+6. Exclude generic screening, HR, or behavioral questions ("Tell me about yourself", "Notice period", "What are your skills").
+7. Exclude rhetorical filler ("Can you hear me?", "Does that make sense?").
+8. Include the timestamp (e.g. "02:12" or seconds) where the question begins.
+9. Every question MUST have 1 to 4 concise topic slugs in topicSlugs matching general technology ("react", "javascript") and specific concepts ("reconciliation", "closures", "hooks", "event-loop"). Prefer matching supplied approvedTopics.
+10. Return JSON only in this shape:
+{
+  "topics": [{"slug": "topic-slug", "description": "Short description"}],
+  "questions": [
+    {
+      "text": "Self-contained technical question?",
+      "questionType": "verbal" | "code-output" | "coding" | "machine-coding" | "system-design" | "mcq",
+      "difficulty": "easy" | "medium" | "hard",
+      "code": {"language": "javascript", "content": "code snippet if applicable"},
+      "context": "Scenario or requirements if applicable",
+      "timestamp": "02:12",
+      "sourceChunkIds": ["chunk-0"],
+      "topicSlugs": ["react", "virtual-dom"]
+    }
+  ]
+}
+Return empty arrays when no substantive technical question is spoken.`;
 function extractionPrompt(videoTitle: string, chunks: QuestionSourceChunk[], approvedTopics: string[]) {
   return JSON.stringify({ videoTitle, approvedTopics, chunks });
 }
@@ -181,9 +214,34 @@ export async function extractYouTubeQuestions(
       continue;
     }
     seen.add(duplicateKey);
+    const rawType = String(candidate.questionType || "verbal").toLowerCase();
+    const questionType: QuestionType = ["verbal", "code-output", "coding", "machine-coding", "system-design", "mcq"].includes(rawType)
+      ? (rawType as QuestionType)
+      : "verbal";
+
+    const rawDiff = String(candidate.difficulty || "medium").toLowerCase();
+    const difficulty: "easy" | "medium" | "hard" = ["easy", "medium", "hard"].includes(rawDiff)
+      ? (rawDiff as "easy" | "medium" | "hard")
+      : "medium";
+
+    let code: { language: string; content: string } | undefined;
+    if (candidate.code && typeof candidate.code === "object") {
+      const c = candidate.code as { language?: unknown; content?: unknown };
+      if (typeof c.content === "string" && c.content.trim()) {
+        code = {
+          language: typeof c.language === "string" && c.language.trim() ? c.language.trim() : "javascript",
+          content: c.content.trim(),
+        };
+      }
+    }
+
+    const context = typeof candidate.context === "string" && candidate.context.trim()
+      ? candidate.context.trim()
+      : undefined;
+
     const topics = [...catalogTopics.values()].map((topic) => topic.slug).sort();
     const proposedTopics = [...catalogTopics.values()].filter((topic) => topic.status === "proposed").map((topic) => topic.slug).sort();
-    questions.push({ text, startSeconds, endSeconds, topics, proposedTopics });
+    questions.push({ text, startSeconds, endSeconds, topics, proposedTopics, questionType, difficulty, code, context });
   }
 
   console.info(`[LLM:youtube-questions] parsed chunks=${chunks.length} accepted=${questions.length} dropped=${invalidText + invalidSource + invalidTopics + duplicates} invalidText=${invalidText} invalidSource=${invalidSource} invalidTopics=${invalidTopics} duplicates=${duplicates} elapsedMs=${Date.now() - startedAt}`);

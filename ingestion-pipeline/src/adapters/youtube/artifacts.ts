@@ -57,12 +57,36 @@ function question(value: unknown): ExtractedQuestion {
     || Number(data.endSeconds) < Number(data.startSeconds)) {
     throw new Error("Invalid stored YouTube question");
   }
+  const rawType = String(data.questionType || "verbal").toLowerCase();
+  const questionType = (["verbal", "code-output", "coding", "machine-coding", "system-design", "mcq"].includes(rawType)
+    ? rawType
+    : "verbal") as ExtractedQuestion["questionType"];
+  const rawDiff = String(data.difficulty || "medium").toLowerCase();
+  const difficulty = (["easy", "medium", "hard"].includes(rawDiff)
+    ? rawDiff
+    : "medium") as "easy" | "medium" | "hard";
+  let code: { language: string; content: string } | undefined;
+  if (data.code && typeof data.code === "object") {
+    const c = data.code as { language?: unknown; content?: unknown };
+    if (typeof c.content === "string" && c.content.trim()) {
+      code = {
+        language: typeof c.language === "string" && c.language.trim() ? c.language.trim() : "javascript",
+        content: c.content.trim(),
+      };
+    }
+  }
+  const context = typeof data.context === "string" && data.context.trim() ? data.context.trim() : undefined;
+
   return {
     text: data.text,
     startSeconds: Number(data.startSeconds),
     endSeconds: Number(data.endSeconds),
     topics: stringArray(data.topics),
     proposedTopics: stringArray(data.proposedTopics),
+    questionType,
+    difficulty,
+    ...(code ? { code } : {}),
+    ...(context ? { context } : {}),
   };
 }
 

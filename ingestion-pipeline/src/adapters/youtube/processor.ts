@@ -4,7 +4,7 @@ import type { Pool } from "pg";
 import { ChunkingService } from "../../chunking";
 import type { PreparedChunk } from "../../chunking/markdown";
 import type { PipelineConfig } from "../../config";
-import { embedTexts, replaceDocumentVectors } from "../../knowledge";
+import { embedTexts, replaceQuestionVectors, type PreparedQuestionRecord } from "../../knowledge";
 import type { IngestionAdapter, JobContext, WorkItemContext } from "../types";
 import {
   parsePublishPayload,
@@ -24,8 +24,21 @@ import { createConnectionStore } from "../../../../shared/youtube/connection-sto
 import { youtubeConfig } from "../../../../shared/youtube/http.server";
 import { YouTubeError, type ConnectionScope } from "../../../../shared/youtube/types";
 
-const MAX_VIDEO_BATCH_SECONDS = 15 * 60;
+function buildQuestionDocumentText(q: { text: string; topics: string[]; code?: { language: string; content: string }; context?: string }): string {
+  const parts = [q.text];
+  if (q.topics.length > 0) {
+    parts.push(`Topics: ${q.topics.join(", ")}`);
+  }
+  if (q.code?.content?.trim()) {
+    parts.push(`\`\`\`${q.code.language || "javascript"}\n${q.code.content.trim()}\n\`\`\``);
+  }
+  if (q.context?.trim()) {
+    parts.push(`Context: ${q.context.trim()}`);
+  }
+  return parts.join("\n\n");
+}
 
+const MAX_VIDEO_BATCH_SECONDS = 15 * 60;
 /** pg adapter for the same connection/token implementation used by the web backend. */
 export function youtubeClient(pool: Pool) {
   return createYouTubeClient(createConnectionStore(async <T>(sql: string, values: unknown[]) => (await pool.query(sql, values)).rows as T[]), youtubeConfig());
@@ -143,7 +156,8 @@ async function processSegment(pool: Pool, config: PipelineConfig, job: JobContex
     return { id: `chunk-${index}`, text: chunk.text, startSeconds: chunk.startSeconds, endSeconds: chunk.endSeconds };
   });
   const questions = await extractYouTubeQuestions(pool, config, payload.title, sourceChunks);
-  const vectors = await embedTexts(config, questions.map((question) => question.text));
+  const documents = questions.map(buildQuestionDocumentText);
+  const vectors = await embedTexts(config, documents);
   const artifact: QuestionSegmentArtifact = { version: 2, batchIndex: payload.batchIndex, questions, vectors };
   const body = JSON.stringify(artifact);
   const hash = createHash("sha256").update(body).digest("hex");
@@ -198,22 +212,52 @@ async function publishVideo(pool: Pool, config: PipelineConfig, job: JobContext,
   };
   const questionsKey = `${config.s3BasePrefix}/${job.orgId}/${job.kbSlug}/${payload.documentId}/jobs/${job.jobId}/questions.json`;
   await s3.send(new PutObjectCommand({ Bucket: config.s3Bucket, Key: questionsKey, Body: JSON.stringify(artifact), ContentType: "application/json" }));
-  const chunks: PreparedChunk[] = questions.map((question) => ({
-    text: question.text,
-    sectionIds: [],
-    topics: question.topics,
-    proposedTopics: question.proposedTopics,
-    startSeconds: question.startSeconds,
-    endSeconds: question.endSeconds,
-  }));
-  await pool.query(`UPDATE "IngestionJob" SET stage = 'publishing' WHERE id = $1 AND status = 'running'`, [job.jobId]);
-  const count = await replaceDocumentVectors(config, job.kbSlug, payload.documentId, payload.slug, chunks, vectors, {
-    pageTitle: payload.title,
-    chunkingVersion: YOUTUBE_CHUNKING_VERSION,
-    kind: "youtube_question",
-    videoId: job.externalId,
-    extractionVersion: YOUTUBE_QUESTION_EXTRACTION_VERSION,
+  const preparedQuestions: PreparedQuestionRecord[] = questions.map((q, index) => {
+    const qid = `${payload.documentId}#question-${String(index).padStart(6, "0")}`;
+    const questionType = q.questionType || "verbal";
+    const difficulty = q.difficulty || "medium";
+    const hasCode = Boolean(q.code?.content);
+    const docText = buildQuestionDocumentText(q);
+
+    const recordJsonObj = {
+      id: qid,
+      question: q.text,
+      questionType,
+      difficulty,
+      topics: q.topics,
+      responseMode: questionType === "coding" || questionType === "machine-coding" ? "code" : "verbal",
+      ...(q.code ? { code: q.code } : {}),
+      ...(q.context ? { context: q.context } : {}),
+      source: {
+        platform: "youtube",
+        videoId: job.externalId,
+        title: payload.title,
+        url: sourceUrl,
+        startSeconds: q.startSeconds,
+        endSeconds: q.endSeconds,
+      },
+    };
+
+    return {
+      id: qid,
+      document: docText,
+      metadata: {
+        id: qid,
+        question: q.text,
+        question_type: questionType,
+        difficulty,
+        topics: q.topics,
+        has_code: hasCode,
+        has_options: false,
+        has_answer: false,
+        source_platform: "youtube",
+        source_url: sourceUrl,
+        record_json: JSON.stringify(recordJsonObj),
+      },
+    };
   });
+  await pool.query(`UPDATE "IngestionJob" SET stage = 'publishing' WHERE id = $1 AND status = 'running'`, [job.jobId]);
+  const count = await replaceQuestionVectors(config, job.kbSlug, payload.documentId, preparedQuestions, vectors);
   if (count !== questions.length) throw new Error("Published YouTube question count does not match the question artifact");
   await pool.query(`UPDATE "KnowledgeDocument" SET "s3QuestionsKey" = $2, "s3MarkdownKey" = NULL, status = 'indexed', "indexedAt" = NOW(), error = NULL, "updatedAt" = NOW() WHERE id = $1`,
     [payload.documentId, questionsKey]);

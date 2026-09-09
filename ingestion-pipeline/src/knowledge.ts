@@ -60,6 +60,23 @@ async function getCollection(config: PipelineConfig, kbSlug: string): Promise<Co
     configuration,
   });
 }
+export async function getQuestionsCollection(config: PipelineConfig, kbSlug: string): Promise<Collection> {
+  const embeddingFunction: EmbeddingFunction = {
+    generate: (texts) => embedTexts(config, texts),
+    generateForQueries: (texts) => embedTexts(config, texts),
+    defaultSpace: () => "cosine",
+    supportedSpaces: () => ["cosine"],
+  };
+  const configuration = config.chromaCloud
+    ? { spann: { space: "cosine" as const } }
+    : { hnsw: { space: "cosine" as const, ef_construction: 200, ef_search: 200, max_neighbors: 24 } };
+  return createChromaClient(config).getOrCreateCollection({
+    name: `kb_${kbSlug}_questions`,
+    embeddingFunction,
+    configuration,
+  });
+}
+
 
 /** Discover proposals independently; return only candidates already approved in the catalog. */
 async function discoverTopics(pool: Pool, config: PipelineConfig, markdown: string): Promise<TopicInfo[]> {
@@ -225,6 +242,53 @@ export async function replaceDocumentVectors(
   console.info(`[DB:knowledge-publish] complete docId=${docId} count=${chunks.length} elapsedMs=${Date.now() - startedAt}`);
   return chunks.length;
 }
+export type PreparedQuestionRecord = {
+  id: string;
+  document: string;
+  metadata: {
+    id: string;
+    question: string;
+    question_type: string;
+    difficulty: string;
+    topics: string[];
+    has_code: boolean;
+    has_options: boolean;
+    has_answer: boolean;
+    source_platform: string;
+    source_url?: string;
+    record_json: string;
+    docId?: string;
+  };
+};
+
+/** Replaces one document's question records in the dedicated questions collection. */
+export async function replaceQuestionVectors(
+  config: PipelineConfig,
+  kbSlug: string,
+  docId: string,
+  questions: PreparedQuestionRecord[],
+  vectors: number[][],
+): Promise<number> {
+  if (vectors.length !== questions.length) throw new Error("Incomplete question vectors");
+  const startedAt = Date.now();
+  console.info(`[DB:questions-publish] start kbSlug=${kbSlug} docId=${docId} count=${questions.length}`);
+  const collection = await getQuestionsCollection(config, kbSlug);
+  await collection.delete({ where: { docId } });
+  for (let start = 0; start < questions.length; start += 250) {
+    const end = Math.min(start + 250, questions.length);
+    const batchQuestions = questions.slice(start, end);
+    const batchVectors = vectors.slice(start, end);
+    await collection.upsert({
+      ids: batchQuestions.map((q) => q.id),
+      embeddings: batchVectors,
+      documents: batchQuestions.map((q) => q.document),
+      metadatas: batchQuestions.map((q) => ({ ...q.metadata, docId })),
+    });
+  }
+  console.info(`[DB:questions-publish] complete kbSlug=${kbSlug} docId=${docId} count=${questions.length} elapsedMs=${Date.now() - startedAt}`);
+  return questions.length;
+}
+
 
 /** Matches the prototype's best-effort vector removal for a deleted/empty page. */
 export async function removeDocument(config: PipelineConfig, kbSlug: string, docId: string): Promise<void> {
@@ -237,5 +301,8 @@ export async function removeDocument(config: PipelineConfig, kbSlug: string, doc
 
 /** Privacy cleanup must fail and retry if vector deletion is not confirmed. */
 export async function removeDocumentStrict(config: PipelineConfig, kbSlug: string, docId: string): Promise<void> {
-  await (await getCollection(config, kbSlug)).delete({ where: { docId } });
+  await Promise.allSettled([
+    (await getCollection(config, kbSlug)).delete({ where: { docId } }),
+    (await getQuestionsCollection(config, kbSlug)).delete({ where: { docId } }),
+  ]);
 }
