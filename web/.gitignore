@@ -4,6 +4,7 @@ logs/
 !.env.example
 .next
 tsconfig.tsbuildinfo
+package-lock.json
 
 /lib/generated/prisma
 .vercel
