@@ -47,3 +47,13 @@ def test_auth():
         _check_auth(None)  # open when unset
     finally:
         config.API_KEY = old
+
+
+def test_wav_header():
+    import struct
+    from app.main import _wav_header
+    from app import config
+    h = _wav_header(48000)
+    assert h[:4] == b"RIFF" and h[8:12] == b"WAVE" and h[36:40] == b"data"
+    assert struct.unpack("<I", h[40:44])[0] == 96000
+    assert struct.unpack("<I", h[24:28])[0] == config.SAMPLE_RATE

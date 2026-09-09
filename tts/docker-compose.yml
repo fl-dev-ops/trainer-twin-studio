@@ -28,7 +28,7 @@ services:
 
   # Voice resolution + auth proxy — the OpenAI-compatible endpoint clients use.
   tts-proxy:
-    image: devopsfl/tts-voxcpm2:0.2.0
+    image: devopsfl/tts-voxcpm2:0.2.2
     build: .  # local development; production pulls the image above
     ports:
       - "8000:8000"

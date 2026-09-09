@@ -12,11 +12,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 WORKDIR /srv/tts
-COPY pyproject.toml ./
-RUN uv sync --no-install-project --frozen || uv sync --no-install-project
+COPY pyproject.toml uv.lock ./
+RUN uv sync --no-dev --no-install-project --frozen
 
 COPY app ./app
-RUN uv sync --frozen || uv sync
 
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=5 \

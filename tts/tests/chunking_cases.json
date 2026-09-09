@@ -1,0 +1,71 @@
+{
+  "settings": {
+    "target_seconds": 11,
+    "max_seconds": 15,
+    "words_per_second": 2.5
+  },
+  "cases": [
+    {
+      "name": "real_intro_failure_case",
+      "text": "Hello!\n\nWelcome to the Practice with Vasanth's AI series on careerwithvasanth.com.\n\nI'm Vasanth's trainer assistant for your 1-on-1 mock practice. Vasanth has trained me directly on ten and half hours of his training material, notes and company tagged questions. He has curated this for his learners to reflect his probing style and judgement.\n\nIn this practice round, we will look at how well you are able to defend your claims on your resume, especially quantified claims.\n\nI'll turn off my video now so you can focus entirely on the workspace. Afterward, I'll send a detailed performance report to both you and Vasanth. Give it your best. Let's dive in!",
+      "expected_chunks": [
+        "Hello!",
+        "Welcome to the Practice with Vasanth's AI series on careerwithvasanth.com.",
+        "I'm Vasanth's trainer assistant for your 1-on-1 mock practice. Vasanth has trained me directly on ten and half hours of his training material, notes and company tagged questions.",
+        "He has curated this for his learners to reflect his probing style and judgement.",
+        "In this practice round, we will look at how well you are able to defend your claims on your resume, especially quantified claims.",
+        "I'll turn off my video now so you can focus entirely on the workspace. Afterward, I'll send a detailed performance report to both you and Vasanth. Give it your best. Let's dive in!"
+      ]
+    },
+    {
+      "name": "run_on_with_multiple_sentences",
+      "text": "Let's begin. The most important thing to understand is that the system must stay available during deploys because users are active at all hours and any downtime is immediately visible to customers, which is why we built the rolling-update pipeline you will see in the next diagram and why we never take the whole fleet offline at once.\n\nTell me how you would explain this trade-off to a non-technical stakeholder.",
+      "expected_chunks": [
+        "Let's begin. The most important thing to understand is that the system must stay available during deploys because users are active at all hours",
+        "and any downtime is immediately visible to customers, which is why we built the rolling-update pipeline you will see in the next diagram",
+        "and why we never take the whole fleet offline at once.",
+        "Tell me how you would explain this trade-off to a non-technical stakeholder."
+      ]
+    },
+    {
+      "name": "abbreviations_decimals_and_domain",
+      "text": "Visit careerwithvasanth.com. We measured p99 latency at 1.5s in the U.S. region and 2.3s in the E.U. The S.L.A. requires under 2s, so the U.K. node was the only one that failed. Dr. Lee reviewed the report.",
+      "expected_chunks": [
+        "Visit careerwithvasanth.com. We measured p99 latency at 1.5s in the U.S. region and 2.3s in the E.U. The S.L.A. requires under 2s, so the U.K. node was the only one that failed. Dr. Lee reviewed the report."
+      ]
+    },
+    {
+      "name": "unpunctuated_transcript",
+      "text": "yeah so basically we had this problem where the api was timing out under load and nobody could figure out why because the dashboards all looked fine but then we noticed that every time we deployed the p99 would spike for like ten minutes until the caches warmed up and that is when we realized the issue was cold start latency not the database like everyone assumed",
+      "expected_chunks": [
+        "yeah so basically we had this problem where the api was timing out under load and nobody could figure out why because the dashboards all looked fine",
+        "but then we noticed that every time we deployed the p99 would spike for like ten minutes until the caches warmed up",
+        "and that is when we realized the issue was cold start latency not the database like everyone assumed"
+      ]
+    },
+    {
+      "name": "long_grammatical_sentence",
+      "text": "The most important thing to understand is that the system must stay available during deploys because users are active at all hours and any downtime is immediately visible to customers, which is why we built the rolling-update pipeline you will see in the next diagram and why we never take the whole fleet offline at once.",
+      "expected_chunks": [
+        "The most important thing to understand is that the system must stay available during deploys because users are active at all hours and any downtime is immediately visible to customers,",
+        "which is why we built the rolling-update pipeline you will see in the next diagram and why we never take the whole fleet offline at once."
+      ]
+    },
+    {
+      "name": "many_normal_sentences",
+      "text": "Let's begin. Tell me about the most complex feature you shipped. I want to understand what you built and why the architecture looked the way it did. What alternatives did you consider? Explain how you justified those trade-offs to your team. Take your time.",
+      "expected_chunks": [
+        "Let's begin. Tell me about the most complex feature you shipped. I want to understand what you built and why the architecture looked the way it did. What alternatives did you consider?",
+        "Explain how you justified those trade-offs to your team. Take your time."
+      ]
+    },
+    {
+      "name": "mixed_short_and_long_sentences",
+      "text": "Let's begin. Tell me about the most complex feature you shipped. I want to understand not just what you built but why the architecture looked the way it did, what alternatives you considered, and how you justified the trade-offs to your team. Take your time.",
+      "expected_chunks": [
+        "Let's begin. Tell me about the most complex feature you shipped.",
+        "I want to understand not just what you built but why the architecture looked the way it did, what alternatives you considered, and how you justified the trade-offs to your team. Take your time."
+      ]
+    }
+  ]
+}

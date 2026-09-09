@@ -11,6 +11,7 @@ vLLM-Omni. This service only adds auth, voice identity, and request shaping.
 """
 
 import logging
+import struct
 from contextlib import asynccontextmanager
 
 import httpx
@@ -19,6 +20,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
 from . import config
+from .chunking import chunk_text
 from .voices import AppUnreachable, VoiceNotFound, VoiceStore, client
 
 logging.basicConfig(level=logging.INFO)
@@ -84,6 +86,27 @@ def build_payload(req: SpeechRequest, meta: dict) -> dict:
     return payload
 
 
+def _wav_header(num_samples: int) -> bytes:
+    data_bytes = num_samples * 2  # s16le mono
+    return struct.pack(
+        "<4sI4s4sIHHIIHH4sI",
+        b"RIFF", 36 + data_bytes, b"WAVE", b"fmt ", 16,
+        1, 1, config.SAMPLE_RATE, config.SAMPLE_RATE * 2, 2, 16, b"data", data_bytes,
+    )
+
+
+def _chunk_payload(req: SpeechRequest, meta: dict, chunk: str, stream: bool) -> dict:
+    payload = build_payload(req, meta)
+    payload["input"] = chunk
+    payload["response_format"] = "pcm"
+    payload["stream"] = stream
+    if stream:
+        payload["stream_format"] = "audio"
+    else:
+        payload.pop("stream_format", None)
+    return payload
+
+
 @app.post("/v1/audio/speech")
 async def speech(req: SpeechRequest, authorization: str | None = Header(None)):
     _check_auth(authorization)
@@ -101,28 +124,69 @@ async def speech(req: SpeechRequest, authorization: str | None = Header(None)):
     except AppUnreachable as cause:
         raise HTTPException(status_code=502, detail=str(cause)) from cause
 
-    try:
-        upstream = await backend.send(
-            backend.build_request("POST", "/v1/audio/speech", json=build_payload(req, meta)),
-            stream=True,
-        )
-    except httpx.HTTPError as cause:
-        raise HTTPException(status_code=502, detail=f"TTS backend unreachable: {cause}") from cause
-    if upstream.status_code != 200:
-        body = (await upstream.aread()).decode(errors="replace")[:500]
-        await upstream.aclose()
-        raise HTTPException(status_code=502, detail=f"TTS backend error {upstream.status_code}: {body}")
+    chunks = chunk_text(
+        req.input,
+        target_seconds=config.TTS_CHUNK_TARGET_SECONDS,
+        max_seconds=config.TTS_CHUNK_MAX_SECONDS,
+        words_per_second=config.TTS_WORDS_PER_SECOND,
+    )
 
     if req.stream:
+        async def pcm_stream():
+            for index, chunk in enumerate(chunks):
+                try:
+                    upstream = await backend.send(
+                        backend.build_request(
+                            "POST",
+                            "/v1/audio/speech",
+                            json=_chunk_payload(req, meta, chunk, stream=True),
+                        ),
+                        stream=True,
+                    )
+                except httpx.HTTPError:
+                    logger.exception("TTS backend unreachable on chunk %d/%d", index + 1, len(chunks))
+                    return
+                try:
+                    if upstream.status_code != 200:
+                        body = (await upstream.aread()).decode(errors="replace")[:500]
+                        logger.error("TTS backend error on chunk %d/%d: %s", index + 1, len(chunks), body)
+                        return
+                    async for piece in upstream.aiter_bytes():
+                        if piece:
+                            yield piece
+                finally:
+                    await upstream.aclose()
+
         return StreamingResponse(
-            upstream.aiter_bytes(),
+            pcm_stream(),
             media_type="audio/pcm",
             headers={"X-Sample-Rate": str(config.SAMPLE_RATE)},
-            background=upstream.aclose,  # close upstream when the response ends
         )
-    content = await upstream.aread()
-    await upstream.aclose()
-    return Response(content=content, media_type=upstream.headers.get("content-type", "audio/wav"))
+
+    pcm = bytearray()
+    for chunk in chunks:
+        try:
+            upstream = await backend.send(
+                backend.build_request(
+                    "POST",
+                    "/v1/audio/speech",
+                    json=_chunk_payload(req, meta, chunk, stream=False),
+                ),
+                stream=True,
+            )
+        except httpx.HTTPError as cause:
+            raise HTTPException(status_code=502, detail=f"TTS backend unreachable: {cause}") from cause
+        try:
+            if upstream.status_code != 200:
+                body = (await upstream.aread()).decode(errors="replace")[:500]
+                raise HTTPException(status_code=502, detail=f"TTS backend error {upstream.status_code}: {body}")
+            pcm.extend(await upstream.aread())
+        finally:
+            await upstream.aclose()
+
+    if req.response_format == "wav":
+        return Response(content=_wav_header(len(pcm) // 2) + bytes(pcm), media_type="audio/wav")
+    return Response(content=bytes(pcm), media_type="audio/pcm")
 
 
 @app.get("/v1/models")

@@ -9,6 +9,10 @@ def _int(name: str, default: int) -> int:
     return int(os.environ.get(name, default))
 
 
+def _float(name: str, default: float) -> float:
+    return float(os.environ.get(name, default))
+
+
 # The Next.js app server owns voice identity. We ask IT for reference URLs;
 # we never touch S3 or tenant naming ourselves.
 APP_BASE_URL = os.environ["APP_BASE_URL"].rstrip("/")     # e.g. http://localhost:3000
@@ -24,5 +28,11 @@ VOXCPM_MODEL = os.environ.get("VOXCPM_MODEL", "openbmb/VoxCPM2")  # name the bac
 SAMPLE_RATE = _int("TTS_SAMPLE_RATE", 48000)
 
 MAX_TEXT_CHARS = _int("TTS_MAX_TEXT_CHARS", 5000)
+
+# Sentence/clause chunks target ~11 seconds and never intentionally exceed
+# ~15 seconds. Speech rate varies by cloned voice, so keep it calibratable.
+TTS_CHUNK_TARGET_SECONDS = _float("TTS_CHUNK_TARGET_SECONDS", 11.0)
+TTS_CHUNK_MAX_SECONDS = _float("TTS_CHUNK_MAX_SECONDS", 15.0)
+TTS_WORDS_PER_SECOND = _float("TTS_WORDS_PER_SECOND", 2.5)
 
 API_KEY = os.environ.get("TTS_API_KEY")  # bearer check on OUR endpoints; unset = open
