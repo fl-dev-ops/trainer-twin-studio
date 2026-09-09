@@ -1,19 +1,22 @@
 import asyncio
 import unittest
+from unittest.mock import AsyncMock
 
-from pipecat.frames.frames import EndWorkerFrame, Frame, InputAudioRawFrame, TranscriptionFrame, TTSAudioRawFrame, UserStartedSpeakingFrame, UserStoppedSpeakingFrame, VADUserStoppedSpeakingFrame
+from pipecat.frames.frames import (
+    EndWorkerFrame,
+    InputAudioRawFrame,
+    InterruptionFrame,
+    LLMContextFrame,
+    LLMFullResponseEndFrame,
+    LLMFullResponseStartFrame,
+    LLMTextFrame,
+    TranscriptionFrame,
+    TTSAudioRawFrame,
+)
+from pipecat.processors.aggregators.llm_context import LLMContext
 from pipecat.processors.frame_processor import FrameDirection
 
-from bot import ClosingBoundary, ClosingGate, SpeechInputMonitor, UtteranceCollector
-
-
-class RecordingCollector(UtteranceCollector):
-    def __init__(self, on_utterance):
-        super().__init__(on_utterance)
-        self.forwarded = []
-
-    async def push_frame(self, frame, direction=FrameDirection.DOWNSTREAM):
-        self.forwarded.append(frame)
+from bot import ClosingBoundary, ClosingGate, InterviewBrainProcessor, SpeechInputMonitor, _latest_user_text
 
 
 class RecordingGate(ClosingGate):
@@ -66,49 +69,93 @@ class SpeechInputMonitorTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(monitor.forwarded, [audio, transcript])
 
 
-class UtteranceCollectorTest(unittest.IsolatedAsyncioTestCase):
-    async def test_raw_vad_pause_waits_for_smart_turn_stop(self):
-        utterances = []
+class RecordingBrain(InterviewBrainProcessor):
+    def __init__(self, session, **kwargs):
+        super().__init__(session, **kwargs)
+        self.forwarded = []
 
-        async def record(text):
-            utterances.append(text)
+    async def push_frame(self, frame, direction=FrameDirection.DOWNSTREAM):
+        self.forwarded.append(frame)
 
-        collector = RecordingCollector(record)
-        await collector.process_frame(UserStartedSpeakingFrame(), FrameDirection.DOWNSTREAM)
-        await collector.process_frame(TranscriptionFrame("still thinking", "user", ""), FrameDirection.DOWNSTREAM)
-        await collector.process_frame(VADUserStoppedSpeakingFrame(stop_secs=0.2), FrameDirection.DOWNSTREAM)
-        await asyncio.sleep(0.5)
-        self.assertEqual(utterances, [])
 
-        await collector.process_frame(UserStoppedSpeakingFrame(), FrameDirection.DOWNSTREAM)
-        await asyncio.sleep(0.5)
-        self.assertEqual(utterances, ["still thinking"])
+class FakeSession:
+    def __init__(self):
+        self.started = True
+        self.closed = False
+        self.state = {"phase_index": 0}
+        self.step = AsyncMock(return_value="Follow up?")
 
-    async def test_forwards_frames_and_handles_transcription_after_vad_stop(self):
-        utterances = []
+    def snapshot(self):
+        return {"phase_index": 0}
 
-        async def record(text):
-            utterances.append(text)
 
-        collector = RecordingCollector(record)
-        frame = Frame()
+class InterviewBrainProcessorTest(unittest.IsolatedAsyncioTestCase):
+    async def test_say_emits_llm_response_frames(self):
+        brain = RecordingBrain(FakeSession())
+        await brain.say("Welcome.")
+        types = [type(frame) for frame in brain.forwarded]
+        self.assertEqual(types, [LLMFullResponseStartFrame, LLMTextFrame, LLMFullResponseEndFrame])
+        self.assertEqual(brain.forwarded[1].text, "Welcome.")
 
-        await collector.process_frame(frame, FrameDirection.DOWNSTREAM)
-        await collector.process_frame(UserStartedSpeakingFrame(), FrameDirection.DOWNSTREAM)
-        await collector.process_frame(UserStoppedSpeakingFrame(), FrameDirection.DOWNSTREAM)
-        await collector.process_frame(
-            TranscriptionFrame("Hello", "user", "", finalized=True),
-            FrameDirection.DOWNSTREAM,
-        )
-        # user pauses again mid-utterance, then resumes before the flush grace elapses
-        await collector.process_frame(UserStartedSpeakingFrame(), FrameDirection.DOWNSTREAM)
-        await collector.process_frame(TranscriptionFrame(" world", "user", "", finalized=True), FrameDirection.DOWNSTREAM)
-        await collector.process_frame(UserStoppedSpeakingFrame(), FrameDirection.DOWNSTREAM)
-        await asyncio.sleep(1.0)
+    async def test_say_closing_wraps_boundaries_and_arms(self):
+        armed = []
+        brain = RecordingBrain(FakeSession(), on_closing=lambda: armed.append(True))
+        await brain.say("We’re done.", closing=True)
+        self.assertEqual(armed, [True])
+        self.assertTrue(brain.closing)
+        self.assertIsInstance(brain.forwarded[0], ClosingBoundary)
+        self.assertTrue(brain.forwarded[0].beginning)
+        self.assertIsInstance(brain.forwarded[-1], ClosingBoundary)
+        self.assertFalse(brain.forwarded[-1].beginning)
 
-        self.assertIn(frame, collector.forwarded)
-        # resume within the grace window must merge, not truncate
-        self.assertEqual(utterances, ["Hello world"])
+    async def test_context_frame_runs_session_step(self):
+        session = FakeSession()
+        completed = []
+
+        async def on_complete():
+            completed.append(True)
+
+        brain = RecordingBrain(session, on_turn_complete=on_complete)
+        context = LLMContext()
+        context.add_message({"role": "user", "content": "I owned the API gateway."})
+        await brain.process_frame(LLMContextFrame(context=context), FrameDirection.DOWNSTREAM)
+        await asyncio.wait_for(brain._task, timeout=2)
+
+        session.step.assert_awaited_once_with("I owned the API gateway.")
+        self.assertEqual(completed, [True])
+        self.assertTrue(any(isinstance(frame, LLMTextFrame) and frame.text == "Follow up?" for frame in brain.forwarded))
+
+    async def test_interruption_cancels_in_flight_turn(self):
+        session = FakeSession()
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        async def slow_step(text):
+            started.set()
+            await release.wait()
+            return "late"
+
+        session.step = slow_step
+        brain = RecordingBrain(session)
+        context = LLMContext()
+        context.add_message({"role": "user", "content": "hello"})
+        await brain.process_frame(LLMContextFrame(context=context), FrameDirection.DOWNSTREAM)
+        await started.wait()
+        await brain.process_frame(InterruptionFrame(), FrameDirection.DOWNSTREAM)
+        await asyncio.sleep(0.05)
+        release.set()
+        await asyncio.sleep(0.05)
+        self.assertFalse(any(isinstance(frame, LLMTextFrame) and frame.text == "late" for frame in brain.forwarded))
+        self.assertTrue(any(isinstance(frame, InterruptionFrame) for frame in brain.forwarded))
+
+
+class LatestUserTextTest(unittest.TestCase):
+    def test_reads_latest_user_string(self):
+        context = LLMContext()
+        context.add_message({"role": "assistant", "content": "Hi"})
+        context.add_message({"role": "user", "content": "first"})
+        context.add_message({"role": "user", "content": "second"})
+        self.assertEqual(_latest_user_text(context), "second")
 
 
 class WebTtsServiceTest(unittest.IsolatedAsyncioTestCase):

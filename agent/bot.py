@@ -1,8 +1,8 @@
 """TrainerTwin voice agent.
 
-Pipecat pipeline: VAD → STT → SmartTurn → utterance collector → TTS. The interview brain is the
-spec-driven Runtime (analyze → deterministic policy → persona render), using
-Studio Persona/Agent/Domain settings, spoken via Sarvam TTS.
+Pipecat pipeline: STT → LLMUserAggregator(+VAD/SmartTurn) → interview brain → TTS.
+The brain is the spec-driven Runtime (analyze → deterministic policy → persona render),
+using Studio Persona/Agent/Domain settings, spoken via Sarvam TTS.
 
 Run: uv run bot.py -t webrtc   (then connect from the studio's /talk page)
 """
@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 import sys
 import uuid
+from collections.abc import Awaitable, Callable
 
 from dotenv import load_dotenv
 from loguru import logger
@@ -21,25 +22,28 @@ from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnal
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams
 from pipecat.frames.frames import (
-    BotStartedSpeakingFrame,
-    BotStoppedSpeakingFrame,
     DataFrame,
     EndWorkerFrame,
     ErrorFrame,
-    TTSAudioRawFrame,
     InputAudioRawFrame,
     InterruptionFrame,
-    TTSSpeakFrame,
+    LLMContextFrame,
+    LLMFullResponseEndFrame,
+    LLMFullResponseStartFrame,
+    LLMTextFrame,
     TranscriptionFrame,
-    UserStartedSpeakingFrame,
-    UserStoppedSpeakingFrame,
+    TTSAudioRawFrame,
     VADUserStartedSpeakingFrame,
     VADUserStoppedSpeakingFrame,
 )
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.worker import PipelineParams, PipelineWorker
+from pipecat.processors.aggregators.llm_context import LLMContext
+from pipecat.processors.aggregators.llm_response_universal import (
+    LLMContextAggregatorPair,
+    LLMUserAggregatorParams,
+)
 from pipecat.processors.audio.audio_buffer_processor import AudioBufferProcessor
-from pipecat.processors.audio.vad_processor import VADProcessor
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.runner.types import RunnerArguments, SmallWebRTCRunnerArguments
 from pipecat.services.sarvam.stt import SarvamSTTService
@@ -47,7 +51,6 @@ from pipecat.services.sarvam.tts import SarvamTTSService
 from pipecat.transports.base_transport import BaseTransport, TransportParams
 from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
 from pipecat.turns.user_stop import TurnAnalyzerUserTurnStopStrategy
-from pipecat.turns.user_turn_processor import UserTurnProcessor
 from pipecat.turns.user_turn_strategies import UserTurnStrategies
 from pipecat.workers.runner import WorkerRunner
 
@@ -188,7 +191,7 @@ class SpeechInputMonitor(FrameProcessor):
                 logger.info("VAD pause: {} bytes of microphone audio", self._speech_bytes)
             elif isinstance(frame, TranscriptionFrame) and frame.text.strip():
                 # Sarvam's completed WebSocket response currently omits this flag.
-                # SmartTurn and the RTVI browser both use it as the final-text signal.
+                # SmartTurn and the user aggregator both use it as the final-text signal.
                 frame.finalized = True
                 logger.info("STT final: {}", frame.text.strip())
             elif isinstance(frame, ErrorFrame):
@@ -196,102 +199,116 @@ class SpeechInputMonitor(FrameProcessor):
         await self.push_frame(frame, direction)
 
 
-class UtteranceCollector(FrameProcessor):
-    """Buffers final STT text; when the user stops speaking, hands the utterance to a callback.
+def _latest_user_text(context: LLMContext) -> str:
+    for message in reversed(context.get_messages()):
+        if not isinstance(message, dict) or message.get("role") != "user":
+            continue
+        content = message.get("content")
+        if isinstance(content, str):
+            return content.strip()
+        if isinstance(content, list):
+            parts = []
+            for part in content:
+                if isinstance(part, dict) and part.get("type") == "text" and isinstance(part.get("text"), str):
+                    parts.append(part["text"])
+                elif isinstance(part, str):
+                    parts.append(part)
+            return " ".join(parts).strip()
+    return ""
 
-    Handles interruptions: when the user starts speaking while the bot is speaking,
-    it broadcasts an InterruptionFrame to stop TTS audio immediately and cancels any
-    in-flight turn processing.
+
+class InterviewBrainProcessor(FrameProcessor):
+    """Consumes LLMContextFrame (user-turn complete) and runs InterviewSession.step.
+
+    Sits where an LLMService would in the stock Pipecat voice pipeline. Emits
+    LLMFullResponse* + LLMTextFrame so TTS and the assistant aggregator behave
+    as in the documented examples.
     """
 
-    def __init__(self, on_utterance):
+    def __init__(
+        self,
+        session: InterviewSession,
+        *,
+        on_turn_complete: Callable[[], Awaitable[None]] | None = None,
+        on_closing: Callable[[], None] | None = None,
+        is_busy: Callable[[], bool] | None = None,
+    ):
         super().__init__()
-        self._buffer: list[str] = []
-        self._on_utterance = on_utterance
-        self._speaking = False
-        self._bot_speaking = False
-        self._flush_task: asyncio.Task | None = None
-        self._task: asyncio.Task | None = None
+        self.session = session
+        self.on_turn_complete = on_turn_complete
+        self.on_closing = on_closing
+        self.is_busy = is_busy or (lambda: False)
         self.closing = False
+        self._task: asyncio.Task | None = None
 
     async def process_frame(self, frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
 
-        if self.closing and isinstance(frame, (TranscriptionFrame, UserStartedSpeakingFrame, UserStoppedSpeakingFrame)):
+        if direction != FrameDirection.DOWNSTREAM:
+            await self.push_frame(frame, direction)
             return
-        if isinstance(frame, TranscriptionFrame) and frame.text.strip():
-            self._buffer.append(frame.text.strip())
-            if self._bot_speaking or (self._task and not self._task.done()):
-                logger.info("User speech confirmed during bot playback: '{}' — broadcasting InterruptionFrame", frame.text.strip())
-                if self._task and not self._task.done():
-                    self._task.cancel()
-                await self.broadcast_interruption()
-                self._bot_speaking = False
 
-            if not self._speaking:
-                self._schedule_flush(0.4)
+        if isinstance(frame, InterruptionFrame):
+            await self.cancel_turn()
+            await self.push_frame(frame, direction)
+            return
 
-        elif isinstance(frame, UserStartedSpeakingFrame):
-            self._speaking = True
-            if self._flush_task and not self._flush_task.done():
-                self._flush_task.cancel()
-            else:
-                self._buffer.clear()
-
-        elif isinstance(frame, UserStoppedSpeakingFrame):
-            self._speaking = False
-            self._schedule_flush(0.4)
-
-        elif isinstance(frame, BotStartedSpeakingFrame):
-            self._bot_speaking = True
-
-        elif isinstance(frame, BotStoppedSpeakingFrame):
-            self._bot_speaking = False
-
-        elif isinstance(frame, InterruptionFrame):
-            self._bot_speaking = False
+        if isinstance(frame, LLMContextFrame):
+            if self.closing or self.is_busy():
+                return
+            text = _latest_user_text(frame.context)
+            if not text:
+                logger.warning("User turn completed without transcript text")
+                return
             if self._task and not self._task.done():
                 self._task.cancel()
+                await asyncio.gather(self._task, return_exceptions=True)
+            logger.info("Learner: {}", text)
+            self._task = asyncio.create_task(self._run_turn(text))
+            return
 
         await self.push_frame(frame, direction)
 
-    def _schedule_flush(self, delay: float):
-        if self._flush_task:
-            self._flush_task.cancel()
-        self._flush_task = asyncio.create_task(self._flush_after(delay))
+    async def say(self, text: str, *, closing: bool = False):
+        """Speak text through the LLM response frame path (opening / errors / turns)."""
+        if closing:
+            self.closing = True
+            if self.on_closing:
+                self.on_closing()
+            await self.push_frame(ClosingBoundary(beginning=True))
+        await self.push_frame(LLMFullResponseStartFrame())
+        await self.push_frame(LLMTextFrame(text=text))
+        await self.push_frame(LLMFullResponseEndFrame())
+        if closing:
+            await self.push_frame(ClosingBoundary(beginning=False))
 
-    async def _flush_after(self, delay: float):
-        await asyncio.sleep(delay)
-        utterance = " ".join(self._buffer).strip()
-        self._buffer.clear()
-        if utterance and (self._task is None or self._task.done()):
-            logger.info("Learner: {}", utterance)
-            self._task = asyncio.create_task(self._run(utterance))
-        elif not utterance:
-            logger.warning("SmartTurn ended a user turn, but STT produced no text")
-
-    async def _run(self, utterance: str):
+    async def _run_turn(self, text: str):
         try:
-            await self._on_utterance(utterance)
+            if self.session.closed:
+                return
+            if not self.session.started:
+                await self.say(
+                    "No interview is running yet. Open the studio's talk page and connect from there, "
+                    "so I know which persona and agent to use."
+                )
+                return
+            response = await self.session.step(text)
+            await self.say(response, closing=self.session.closed)
+            if self.on_turn_complete:
+                try:
+                    await self.on_turn_complete()
+                except Exception:
+                    logger.exception("Could not update session UI")
         except asyncio.CancelledError:
             logger.info("Turn processing cancelled by interruption")
         except Exception:
             logger.exception("Turn failed")
-            await self.push_frame(TTSSpeakFrame("Sorry, something went wrong on my side. Could you repeat that?"))
-
-    async def speak(self, text: str, closing: bool = False):
-        if closing:
-            self.closing = True
-            await self.push_frame(ClosingBoundary(beginning=True))
-        await self.push_frame(TTSSpeakFrame(text))
-        if closing:
-            await self.push_frame(ClosingBoundary(beginning=False))
+            await self.say("Sorry, something went wrong on my side. Could you repeat that?")
 
     async def cancel_turn(self):
-        for task in (self._task, self._flush_task):
-            if task:
-                task.cancel()
-        await asyncio.gather(*(t for t in (self._task, self._flush_task) if t), return_exceptions=True)
+        if self._task and not self._task.done():
+            self._task.cancel()
+            await asyncio.gather(self._task, return_exceptions=True)
 
     async def cleanup(self):
         await self.cancel_turn()
@@ -356,25 +373,10 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         except Exception:
             logger.warning("Failed to update session surface")
 
-    async def on_utterance(text: str):
-        if session.closed or starting:
-            return
-        if not session.started:
-            await collector.speak(
-                "No interview is running yet. Open the studio's talk page and connect from there, "
-                "so I know which persona and agent to use."
-            )
-            return
-        response = await session.step(text)
-        if session.closed:
-            closing_gate.arm()
-        await collector.speak(response, closing=session.closed)
+    async def on_turn_complete():
         # A UI error must not trigger an invitation to repeat an already graded answer.
-        try:
-            await worker.rtvi.send_server_message({"type": "interview-state", "state": session.snapshot()})
-            await apply_surface(session.state.get("phase_index", 0))
-        except Exception:
-            logger.exception("Could not update session UI")
+        await worker.rtvi.send_server_message({"type": "interview-state", "state": session.snapshot()})
+        await apply_surface(session.state.get("phase_index", 0))
 
     async def closing_complete(delivered: bool):
         await _end_web_session("completed")
@@ -413,14 +415,25 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
 
     stt = await make_stt()
     speech_monitor = SpeechInputMonitor()
-    smart_turn = UserTurnProcessor(
-        user_turn_strategies=UserTurnStrategies(
-            stop=[TurnAnalyzerUserTurnStopStrategy(turn_analyzer=LocalSmartTurnAnalyzerV3())],
+    context = LLMContext()
+    user_aggregator, assistant_aggregator = LLMContextAggregatorPair(
+        context,
+        user_params=LLMUserAggregatorParams(
+            vad_analyzer=SileroVADAnalyzer(params=VADParams(stop_secs=0.2, start_secs=0.15)),
+            user_turn_strategies=UserTurnStrategies(
+                stop=[TurnAnalyzerUserTurnStopStrategy(turn_analyzer=LocalSmartTurnAnalyzerV3())],
+            ),
+            user_turn_stop_timeout=5.0,
+            filter_incomplete_user_turns=True,
         ),
-        user_turn_stop_timeout=5.0,
     )
-    collector = UtteranceCollector(on_utterance)
     closing_gate = ClosingGate(closing_complete)
+    brain = InterviewBrainProcessor(
+        session,
+        on_turn_complete=on_turn_complete,
+        on_closing=closing_gate.arm,
+        is_busy=lambda: starting,
+    )
     tts = SarvamTTSService(
         api_key=os.environ["SARVAM_API_KEY"],
         settings=SarvamTTSService.Settings(
@@ -472,16 +485,16 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
 
     pipeline = Pipeline([
         transport.input(),
-        VADProcessor(vad_analyzer=SileroVADAnalyzer(params=VADParams(stop_secs=0.2, start_secs=0.15))),
         workspace,
         stt,
         speech_monitor,
-        smart_turn,
-        collector,
+        user_aggregator,
+        brain,
         tts,
         recorder,
         WebRTCAudioOutputFilter(),
         transport.output(),
+        assistant_aggregator,
         closing_gate,
     ])
     worker = PipelineWorker(
@@ -492,7 +505,7 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
 
     @worker.event_handler("on_pipeline_error")
     async def on_pipeline_error(worker, frame):
-        if collector.closing:
+        if brain.closing:
             await closing_gate.complete(False)
 
     @worker.rtvi.event_handler("on_client_message")
@@ -524,7 +537,7 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
                 await rtvi.send_server_message({"type": "interview-state", "state": session.snapshot()})
                 await apply_surface(0)
                 logger.info("Trainer opening: {}", opening)
-                await collector.speak(opening)
+                await brain.say(opening)
             except Exception as error:
                 logger.exception("Failed to start interview")
                 await rtvi.send_server_message({"type": "interview-error", "error": str(error)})
@@ -539,7 +552,7 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     async def on_client_disconnected(transport, client):
         logger.info("Client disconnected")
         workspace.cancel_pending()
-        await collector.cancel_turn()
+        await brain.cancel_turn()
         if prepare_task:
             prepare_task.cancel()
             await asyncio.gather(prepare_task, return_exceptions=True)
