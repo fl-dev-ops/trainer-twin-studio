@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from interfaces.tts.voxcpm2 import VoxCPM2TTS, build_voxcpm2_tts
+from tts.voxcpm2 import VoxCPM2TTS, build_voxcpm2_tts
 
 
 class _Content:

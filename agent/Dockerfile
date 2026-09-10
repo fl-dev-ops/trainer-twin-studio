@@ -39,4 +39,4 @@ COPY --from=build --chown=appuser:appuser /app /app
 
 USER appuser
 
-CMD ["uv", "run", "python", "-m", "livekit.agents", "start", "src/app/server.py"]
+CMD ["uv", "run", "python", "-m", "livekit.agents", "start", "src/agent.py"]

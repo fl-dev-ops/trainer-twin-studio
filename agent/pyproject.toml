@@ -10,18 +10,15 @@ requires-python = ">=3.10"
 
 dependencies = [
     "aiohttp>=3.9",
+    "httpx>=0.27",
     "livekit-agents==1.6.6",
     "livekit-plugins-openai==1.6.6",
     "livekit-plugins-deepgram==1.6.6",
-    "livekit-plugins-assemblyai==1.6.6",
     "livekit-plugins-sarvam==1.6.4",
     "livekit-plugins-noise-cancellation~=0.2.6",
     "python-dotenv>=1.0",
     "boto3>=1.35.0",
     "av>=17.1.0",
-    "langfuse>=3.0",
-    "livekit-plugins-liveavatar==1.6.4",
-    "livekit-plugins-simli==1.6.4",
 ]
 
 [dependency-groups]
@@ -32,7 +29,8 @@ dev = [
 ]
 
 [project.scripts]
-intervoo = "app.server:main"
+trainertwin = "agent:main"
+intervoo = "agent:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

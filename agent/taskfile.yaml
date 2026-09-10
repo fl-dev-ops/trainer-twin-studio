@@ -18,12 +18,12 @@ tasks:
     env:
       PYTHONPATH: src
     cmds:
-      - uv run lk agent dev src/app/server.py
+      - uv run python src/agent.py dev
 
   start:
     desc: Run the unified agent in production mode
     cmds:
-      - uv run python -m livekit.agents start src/app/server.py
+      - uv run python -m livekit.agents start src/agent.py
 
   test:
     desc: Run the test suite
