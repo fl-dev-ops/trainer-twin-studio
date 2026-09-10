@@ -46,10 +46,24 @@ def build_runtime_tools(*, room: Any, participant_identity: str) -> list[Any]:
     )
     async def finish_session(context: RunContext) -> dict[str, object]:
         logger.info("finish_session tool invoked by web runtime")
-        await room.local_participant.publish_data(
-            json.dumps({"type": "session-ended", "status": "completed"}).encode("utf-8"),
-            reliable=True,
-        )
+
+        async def _notify_after_closing_speech():
+            try:
+                # Allow LLM closing remarks to be synthesized and spoken
+                await asyncio.sleep(1.5)
+                await context.session.wait_for_idle()
+            except Exception:
+                await asyncio.sleep(4.0)
+            try:
+                await room.local_participant.publish_data(
+                    json.dumps({"type": "session-ended", "status": "completed"}).encode("utf-8"),
+                    reliable=True,
+                )
+            except Exception:
+                pass
+
+        import asyncio
+        asyncio.create_task(_notify_after_closing_speech())
         return {"status": "completed"}
 
     @function_tool(

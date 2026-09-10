@@ -56,8 +56,6 @@ type Props = {
   sessionCode?: string;
 };
 
-const AGENT_URL = process.env.NEXT_PUBLIC_AGENT_URL ?? "http://localhost:7860";
-
 function formatBytes(n: number) {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
@@ -163,7 +161,6 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
     }
     sessionRef.current = launch.session.id;
 
-    const transport = null;
     if (!launch.livekit?.url || !launch.livekit?.token) {
       setError("LiveKit credentials not returned by server");
       return;
@@ -222,6 +219,12 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
         if (!seg.final) continue;
         const role = isUser ? ("user" as const) : ("trainer" as const);
         setEntries((prev) => {
+          const last = prev[prev.length - 1];
+          if (role === "trainer" && last?.role === "trainer" && (last.text === seg.text || seg.text.startsWith(last.text))) {
+            const next = [...prev.slice(0, -1), { role, text: seg.text }];
+            entriesRef.current = next;
+            return next;
+          }
           const next = [...prev, { role, text: seg.text }];
           entriesRef.current = next;
           return next;
@@ -261,6 +264,8 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
           if (metadata?.question?.spokenText) {
             const spoken = metadata.question.spokenText;
             setEntries((prev) => {
+              const last = prev[prev.length - 1];
+              if (last?.role === "trainer" && last.text === spoken) return prev;
               const next = [...prev, { role: "trainer" as const, text: spoken }];
               entriesRef.current = next;
               return next;
@@ -424,7 +429,7 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
               <CardHeader>
                 <CardTitle>Configure the session</CardTitle>
                 <CardDescription>
-                  Choose a scenario. Its trainer persona is already configured ({AGENT_URL}).
+                  Choose a scenario. Its trainer persona is already configured.
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
