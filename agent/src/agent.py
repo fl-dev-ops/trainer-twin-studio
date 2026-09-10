@@ -19,6 +19,11 @@ from tools import build_interview_tools
 
 load_dotenv(override=True)
 
+# Automatically trust local portless CA for https://*.localhost if present
+portless_ca = os.path.expanduser("~/.portless/ca.pem")
+if os.path.exists(portless_ca) and "SSL_CERT_FILE" not in os.environ:
+    os.environ["SSL_CERT_FILE"] = portless_ca
+
 logger = logging.getLogger("trainertwin_agent")
 logging.basicConfig(level=logging.INFO)
 

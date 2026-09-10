@@ -27,7 +27,15 @@ async def post_completion_webhook(
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with request.urlopen(req, timeout=15) as response:
+        ssl_ctx = None
+        if webhook_url.startswith("https://") and ".localhost" in webhook_url:
+            import ssl
+            ca_path = os.path.expanduser("~/.portless/ca.pem")
+            if os.path.exists(ca_path):
+                ssl_ctx = ssl.create_default_context(cafile=ca_path)
+            else:
+                ssl_ctx = ssl._create_unverified_context()
+        with request.urlopen(req, timeout=15, context=ssl_ctx) as response:
             status = getattr(response, "status", response.getcode())
             if status >= 400:
                 raise RuntimeError(f"Webhook returned HTTP {status}")

@@ -98,7 +98,18 @@ class VoxCPM2TTS(tts.TTS):
 
     def session(self) -> aiohttp.ClientSession:
         if self.http is None or self.http.closed:
-            self.http = aiohttp.ClientSession()
+            ssl_ctx = None
+            if self.endpoint.startswith("https://") and ".localhost" in self.endpoint:
+                import ssl
+                ca_path = os.path.expanduser("~/.portless/ca.pem")
+                if os.path.exists(ca_path):
+                    ssl_ctx = ssl.create_default_context(cafile=ca_path)
+                else:
+                    ssl_ctx = ssl.create_default_context()
+                    ssl_ctx.check_hostname = False
+                    ssl_ctx.verify_mode = ssl.CERT_NONE
+            connector = aiohttp.TCPConnector(ssl=ssl_ctx) if ssl_ctx else None
+            self.http = aiohttp.ClientSession(connector=connector)
         return self.http
 
     async def aclose(self) -> None:
