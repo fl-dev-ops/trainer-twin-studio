@@ -9,11 +9,9 @@ from livekit import agents, rtc
 from livekit.agents.beta.tools import EndCallTool
 
 from domains.screen import ScreenFeedbackRuntime, build_screen_inspection_tool
-from domains.interview.chroma.repository import chroma_configured, get_cached_collection
 from domains.interview.evidence.tracker import InterviewEvidenceTracker
 from domains.interview.questions.store import QuestionStore
 from domains.interview.evaluation import build_finish_interview_tool
-from tools.interview.build_plan import build_interview_plan_tool
 from tools.interview.code_highlight import build_code_highlight_tools
 from tools.interview.runtime_tools import build_runtime_tools
 from tools.interview.start_question import build_start_question_tool
@@ -72,19 +70,6 @@ def build_interview_tools(
                 participant_identity=participant_identity,
                 read_assessment=evidence_tracker.active_whiteboard_assessment,
             )
-        )
-
-    if chroma_configured():
-        tools.append(
-            build_interview_plan_tool(
-                get_collection=lambda: get_cached_collection(userdata),
-                question_store=question_store,
-                on_plan_loaded=on_plan_loaded,
-            )
-        )
-    else:
-        logger.warning(
-            "Chroma is not configured; build_interview_plan tool is unavailable"
         )
 
     if evidence_tracker is not None and evaluator_prompt is not None:

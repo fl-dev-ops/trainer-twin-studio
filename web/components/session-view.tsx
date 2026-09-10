@@ -309,7 +309,23 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
 
     try {
       await room.connect(launch.livekit.url, launch.livekit.token);
-      await room.localParticipant.setMicrophoneEnabled(true);
+      try {
+        await room.localParticipant.setMicrophoneEnabled(true);
+      } catch (micErr) {
+        console.warn("Could not enable microphone:", micErr);
+        setError("Microphone permission denied or unavailable");
+      }
+
+      // Attach any already published remote audio tracks
+      for (const p of room.remoteParticipants.values()) {
+        for (const pub of p.trackPublications.values()) {
+          if (pub.track && pub.track.kind === Track.Kind.Audio && audioRef.current) {
+            pub.track.attach(audioRef.current);
+            void playRemoteAudio();
+          }
+        }
+      }
+
       setInterviewReady(true);
     } catch (e) {
       disconnectReasonRef.current = "error";
@@ -523,7 +539,14 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
           </div>
         ) : (
           livekitRoom && (
-            <LiveKitWorkspaceProvider room={livekitRoom} onSurface={setSurface}>
+            <LiveKitWorkspaceProvider
+              room={livekitRoom}
+              onSurface={setSurface}
+              onEndSession={() => {
+                disconnectReasonRef.current = "completed";
+                void disconnect();
+              }}
+            >
               <div className="flex min-h-0 w-full gap-4">
                 <div className="min-h-0 min-w-0 flex-1">
                   <motion.div

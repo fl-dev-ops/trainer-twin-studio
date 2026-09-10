@@ -74,16 +74,10 @@ def build_agent_session(
                     "min_duration": 0.5,
                     "resume_false_interruption": True,
                 },
+                preemptive_generation={"enabled": False},
             ),
             use_tts_aligned_transcript=True,
-            preemptive_generation=False,
         )
-
-    preemptive_generation: PreemptiveGenerationOptions = (
-        {"enabled": False}
-        if disable_preemptive_generation
-        else {}
-    )
 
     return AgentSession(
         stt=stt,
@@ -91,19 +85,22 @@ def build_agent_session(
         tts=tts,
         max_tool_steps=5,
         turn_handling=TurnHandlingOptions(
-            turn_detection=turn_detector or TurnDetector(version="v1"),
+            turn_detection=turn_detector or TurnDetector(version="v1-mini"),
             endpointing={
                 "mode": "dynamic",
-                "min_delay": 0.5,
-                "max_delay": 1.5,
+                "min_delay": 0.6,
+                "max_delay": 2.0,
             },
             interruption={
+                "mode": "adaptive",
                 "min_duration": 0.5,
+                "min_words": 2,
                 "resume_false_interruption": True,
+                "false_interruption_timeout": 2.0,
             },
-            preemptive_generation=preemptive_generation,
+            preemptive_generation={"enabled": False},
             user_turn_limit={
-                "max_duration": 60.0,
+                "max_duration": 90.0,
             },
         ),
     )

@@ -105,6 +105,15 @@ async def on_session_end(ctx: agents.JobContext) -> None:
         log_summary()
     flush_langfuse()
 
+    try:
+        await ctx.api.room.delete_room(api.DeleteRoomRequest(room=ctx.room.name))
+        logger.info("Gracefully destroyed room %s after session end", ctx.room.name)
+    except api.TwirpError as error:
+        if error.code != api.TwirpErrorCode.NOT_FOUND:
+            logger.warning("Could not delete room %s: %s", ctx.room.name, error)
+    except Exception as e:
+        logger.warning("Could not delete room %s: %s", ctx.room.name, e)
+
 
 async def entrypoint(ctx: agents.JobContext) -> None:
     timer = StartupTimer(ctx.room.name)

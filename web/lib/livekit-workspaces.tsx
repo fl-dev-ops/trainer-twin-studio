@@ -48,10 +48,12 @@ export function LiveKitWorkspaceProvider({
   children,
   room,
   onSurface,
+  onEndSession,
 }: {
   children: ReactNode;
   room: Room | null;
   onSurface: (surface: AgentSurface) => void;
+  onEndSession?: () => void;
 }) {
   const handlers = useRef(new Map<WorkspaceMethod, WorkspaceHandler>());
   const waiters = useRef(
@@ -142,11 +144,43 @@ export function LiveKitWorkspaceProvider({
       });
     });
 
+    const handleSurfaceRpc = async (data: RpcInvocationData) => {
+      try {
+        const req = JSON.parse(data.payload) as Record<string, unknown>;
+        const action = String(req.action || req.type || "");
+        const payload = (req.payload as Record<string, unknown>) || req;
+        const event = parseAgentSurfaceMessage({
+          ...payload,
+          type: action,
+          eventId: req.eventId,
+        });
+        if (event) {
+          onSurface(event.surface);
+        }
+        return JSON.stringify({ ok: true, action });
+      } catch (error) {
+        return JSON.stringify({ ok: false, error: String(error) });
+      }
+    };
+
+    room.localParticipant.registerRpcMethod("workspace.surface", handleSurfaceRpc);
+    room.localParticipant.registerRpcMethod("surface", handleSurfaceRpc);
+
+    room.localParticipant.registerRpcMethod("session.end", async () => {
+      if (onEndSession) {
+        onEndSession();
+      }
+      return JSON.stringify({ ok: true });
+    });
+
     return () => {
       room.off(RoomEvent.DataReceived, handleDataReceived);
       rpcMethods.forEach((method) => {
         room.localParticipant.unregisterRpcMethod(method);
       });
+      room.localParticipant.unregisterRpcMethod("workspace.surface");
+      room.localParticipant.unregisterRpcMethod("surface");
+      room.localParticipant.unregisterRpcMethod("session.end");
     };
   }, [room, onSurface, waitForHandler]);
 

@@ -65,7 +65,7 @@ MODE_SCHEMAS: Mapping[
                     "question specified there."
                 )
             },
-            adapters=("mock_interview", "chroma", "question_store"),
+            adapters=("mock_interview", "web", "question_store"),
             surfaces=("verbal", "code", "whiteboard"),
             tools=(
                 "start_question",
@@ -73,7 +73,6 @@ MODE_SCHEMAS: Mapping[
                 "highlight_code",
                 "read_whiteboard_assessment",
                 "highlight_whiteboard",
-                "build_interview_plan",
                 "finish_interview",
             ),
             evaluation="mock_interview",

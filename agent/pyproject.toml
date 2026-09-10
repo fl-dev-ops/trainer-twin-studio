@@ -22,7 +22,6 @@ dependencies = [
     "langfuse>=3.0",
     "livekit-plugins-liveavatar==1.6.4",
     "livekit-plugins-simli==1.6.4",
-    "chromadb>=0.5.0",
 ]
 
 [dependency-groups]

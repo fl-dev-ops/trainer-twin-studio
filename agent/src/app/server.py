@@ -21,18 +21,13 @@ logger = logging.getLogger("intervoo_agent")
 
 
 def _prewarm(proc: agents.JobProcess) -> None:
-    from domains.interview.chroma.repository import (
-        chroma_runtime_identity,
-        prewarm_chroma,
-    )
     from domains.session.tts import validate_tts_provider_configuration
     from infrastructure.config.resources import prewarm_runtime_resources
 
     revision = (os.getenv("AGENT_BUILD_REVISION") or "unknown").strip() or "unknown"
     logger.info(
-        "worker_start revision=%r chroma=%s",
+        "worker_start revision=%r",
         revision[:128],
-        chroma_runtime_identity(),
     )
     validate_tts_provider_configuration()
     prewarm_runtime_resources(
@@ -40,7 +35,6 @@ def _prewarm(proc: agents.JobProcess) -> None:
         profile_config_path=resolve_profile_config_path(),
         interview_catalog_path=resolve_interview_catalog_path(),
     )
-    prewarm_chroma(proc.userdata)
 
 
 def _compute_worker_load(current_server: agents.AgentServer) -> float:
