@@ -123,7 +123,7 @@ export function buildSpecs(config: Record<string, any>): CompiledSpecs {
   const personaData = structuredClone(config.persona?.data ?? {});
   personaData.version = config.persona?.version ?? 1;
   const persona: PersonaSpec = {
-    id: personaData.id,
+    id: config.persona?.id ?? personaData.id,
     name: personaData.name,
     version: personaData.version,
     style: personaData.style ?? {},

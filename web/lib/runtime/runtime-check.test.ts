@@ -18,6 +18,7 @@ import {
   initRuntimeState,
   markProbeExhaustion,
   nextEvidence,
+  recordAskedQuestion,
   selectAction,
   validateAction,
   validateAnalysis,
@@ -91,6 +92,27 @@ describe("Interview Runtime Controller (selectAction parity)", () => {
     expect(action.close).toBe(true);
   });
 
+  it("records the pending question and probe count", () => {
+    const config = loadConfig();
+    const specs = buildSpecs(config);
+    const state = initRuntimeState();
+    const evidenceKey = specs.agent.phases[0].evidence_keys[0];
+    const action = {
+      name: "probe_required_evidence",
+      evidence_key: evidenceKey,
+      reason: "test",
+      intent: "ask one question",
+      close: false,
+      expects_answer: true,
+    };
+
+    recordAskedQuestion(state, action, "Which part did you implement?");
+
+    expect(state.pending_question).toBe("Which part did you implement?");
+    expect(state.pending_evidence_key).toBe(evidenceKey);
+    expect(state.evidence_probe_counts[evidenceKey]).toBe(1);
+  });
+
   it("handles clarification without grading or spending probe budget", () => {
     const config = loadConfig();
     const specs = buildSpecs(config);
@@ -109,6 +131,7 @@ describe("Interview Runtime Controller (selectAction parity)", () => {
     expect(action.expects_answer).toBe(false);
     expect(action.close).toBe(false);
     expect(state.phase_index).toBe(0);
+    expect(state.evidence_probe_counts).toEqual({});
   });
 
   it("applies evidence updates to coverage and detects hypothetical claims in incident lanes", () => {
