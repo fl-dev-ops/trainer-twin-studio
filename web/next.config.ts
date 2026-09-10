@@ -22,6 +22,7 @@ const nextConfig: NextConfig = {
     return config;
   },
   turbopack: {
+    root: path.resolve(__dirname, ".."),
     resolveAlias: {
       "@shared": path.resolve(__dirname, "../shared"),
     },
