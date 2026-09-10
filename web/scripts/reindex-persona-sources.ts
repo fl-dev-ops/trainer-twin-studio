@@ -2,7 +2,7 @@ import type { Prisma } from "../lib/generated/prisma/client";
 import { db } from "../lib/db";
 import { removeCollection, replaceChunks } from "../lib/knowledge";
 import { MainCollectionService } from "../lib/main-collection";
-import { extractPersonaVoiceChunks, personaCollectionName } from "../lib/persona-voice";
+import { extractPersonaVoiceMoments, personaCollectionName } from "../lib/persona-voice";
 
 const cleanupLegacy = process.argv.includes("--cleanup-legacy");
 const sources = await db.personaSource.findMany({
@@ -16,12 +16,12 @@ for (const source of sources) {
     ? (source.metadata as Record<string, unknown>).voiceMoments
     : 0;
   if (typeof existingMoments === "number" && existingMoments > 0) continue;
-  const chunks = extractPersonaVoiceChunks(source.analysis);
+  const chunks = extractPersonaVoiceMoments(source.analysis);
   if (!chunks.length) continue;
   try {
     await MainCollectionService.ingestPersonaVoice(source.orgId, source.personaId, source.id, source.name, chunks);
     try {
-      await replaceChunks(personaCollectionName(source.personaId), source.id, source.name, chunks);
+      await replaceChunks(personaCollectionName(source.personaId), source.id, source.name, chunks.map((moment) => moment.text));
     } catch {
       // legacy update optional
     }
@@ -32,7 +32,7 @@ for (const source of sources) {
       where: { id: source.id },
       data: {
         status: "analyzed",
-        metadata: { ...metadata, voiceMoments: chunks.length } as Prisma.InputJsonValue,
+        metadata: { ...metadata, voiceMoments: chunks.length, voiceActions: [...new Set(chunks.map((moment) => moment.action).filter(Boolean))] } as Prisma.InputJsonValue,
       },
     });
     indexed++;

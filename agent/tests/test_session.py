@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from session import build_agent_session
+from tts import build_tts
 
 
 def test_build_agent_session_configuration():
@@ -23,3 +24,13 @@ def test_build_agent_session_configuration():
     assert opts["interruption"]["mode"] == "adaptive"
     assert opts["interruption"]["min_words"] == 2
     assert opts["interruption"]["resume_false_interruption"] is True
+
+
+def test_sarvam_uses_its_own_speaker(monkeypatch):
+    monkeypatch.setenv("TTS_PROVIDER", "sarvam")
+    monkeypatch.setenv("SARVAM_API_KEY", "test-key")
+    monkeypatch.setenv("SARVAM_SPEAKER", "rohan")
+
+    tts = build_tts(voice="voxcpm-cloned-voice-id")
+
+    assert tts._opts.speaker == "rohan"

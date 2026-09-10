@@ -12,7 +12,7 @@ import { db } from "@/lib/db";
 import { deletePrefix, getObjectBytes, personaSourcePrefix, putObject } from "@/lib/s3";
 import { documentToMarkdown } from "@/lib/documents";
 import { removeChunks, replaceChunks } from "@/lib/knowledge";
-import { extractPersonaVoiceChunks, personaCollectionName, shouldRebuildPersona } from "@/lib/persona-voice";
+import { extractPersonaVoiceMoments, personaCollectionName, shouldRebuildPersona } from "@/lib/persona-voice";
 import { MainCollectionService } from "@/lib/main-collection";
 import { saveSpec } from "@/lib/specs";
 
@@ -301,17 +301,17 @@ export async function analyzePersonaSource(sourceId: string, orgId: string): Pro
   await db.personaSource.update({ where: { id: sourceId }, data: { status: "analyzing" } });
 
   try {
-    const existingChunks = extractPersonaVoiceChunks(source.analysis);
+    const existingChunks = extractPersonaVoiceMoments(source.analysis);
     if (existingChunks.length) {
       await MainCollectionService.ingestPersonaVoice(orgId, source.personaId, source.id, source.name, existingChunks);
       try {
-        await replaceChunks(personaCollectionName(source.personaId), source.id, source.name, existingChunks);
+        await replaceChunks(personaCollectionName(source.personaId), source.id, source.name, existingChunks.map((moment) => moment.text));
       } catch (err) {
         console.warn(`Legacy persona collection notice (${personaCollectionName(source.personaId)}):`, err);
       }
       await db.personaSource.update({
         where: { id: sourceId },
-        data: { status: "analyzed", metadata: { ...metadata, voiceMoments: existingChunks.length } as Prisma.InputJsonValue },
+        data: { status: "analyzed", metadata: { ...metadata, voiceMoments: existingChunks.length, voiceActions: [...new Set(existingChunks.map((moment) => moment.action).filter(Boolean))] } as Prisma.InputJsonValue },
       });
       await rebuildPersonaIfCorpusReady(source.persona, orgId, sourceId);
       return;
@@ -331,20 +331,20 @@ export async function analyzePersonaSource(sourceId: string, orgId: string): Pro
       const bytes = await getObjectBytes(source.s3Key);
       analysis = await analyzeWithText(new TextDecoder().decode(bytes), source.persona.name, source.kind as SourceKind, source.name);
     }
-    const chunks = extractPersonaVoiceChunks(analysis);
+    const chunks = extractPersonaVoiceMoments(analysis);
     await db.personaSource.update({
       where: { id: sourceId },
       data: { analysis: analysis as Prisma.InputJsonValue },
     });
     await MainCollectionService.ingestPersonaVoice(orgId, source.personaId, source.id, source.name, chunks);
     try {
-      await replaceChunks(personaCollectionName(source.personaId), source.id, source.name, chunks);
+      await replaceChunks(personaCollectionName(source.personaId), source.id, source.name, chunks.map((moment) => moment.text));
     } catch (err) {
       console.warn(`Legacy persona collection notice (${personaCollectionName(source.personaId)}):`, err);
     }
     await db.personaSource.update({
       where: { id: sourceId },
-      data: { status: "analyzed", metadata: { ...metadata, voiceMoments: chunks.length } as Prisma.InputJsonValue },
+      data: { status: "analyzed", metadata: { ...metadata, voiceMoments: chunks.length, voiceActions: [...new Set(chunks.map((moment) => moment.action).filter(Boolean))] } as Prisma.InputJsonValue },
     });
     await rebuildPersonaIfCorpusReady(source.persona, orgId, sourceId);
   } catch (error) {
@@ -392,6 +392,8 @@ Guidelines:
 - decision_preferences must map to canonical action names: ask_exact_example, narrow_hint, request_justification, isolate_missing_part, surface_contradiction, scaffold_missing_link, deepen_with_tradeoff, deepen_with_edge_case, ask_reflection, redirect_role
 - calibration values are floats 0.0-1.0
 - Be specific and concrete — abstract descriptions like "professional" are useless
+- language.acknowledgments.strong, language.acknowledgments.weak, and language.bridges must each contain at least one verbatim phrase from the sources
+- Do not copy projects, people, or facts from sources into the persona spec; style and habits only
 
 Return ONLY valid YAML (no markdown fences) with this EXACT structure:
 

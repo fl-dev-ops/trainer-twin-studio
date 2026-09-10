@@ -1,6 +1,7 @@
 import type { Collection, EmbeddingFunction, Where } from "chromadb";
 import { ChromaTenantService, isSharedScope } from "@/lib/chroma-tenant";
 import { embedTexts } from "@/lib/knowledge";
+import type { PersonaVoiceMoment } from "@/lib/persona-voice";
 
 export const openRouterEmbeddings: EmbeddingFunction = {
   generate: embedTexts,
@@ -27,6 +28,9 @@ export type PersonaVoiceMetadata = {
   sourceName: string;
   momentIndex: number;
   action?: string;
+  learnerState?: string;
+  move?: string;
+  candidateContext?: string;
 };
 
 export type MainCollectionMetadata = KnowledgeMetadata | PersonaVoiceMetadata;
@@ -153,7 +157,7 @@ export class MainCollectionService {
     personaId: string,
     sourceId: string,
     sourceName: string,
-    moments: string[],
+    moments: Array<string | PersonaVoiceMoment>,
   ): Promise<number> {
     const collection = await this.getCollection(orgId);
 
@@ -167,32 +171,39 @@ export class MainCollectionService {
       // Ignore if not present
     }
 
-    if (moments.length === 0) return 0;
+    const records: PersonaVoiceMoment[] = moments.map((moment) =>
+      typeof moment === "string" ? { text: moment } : moment,
+    );
+    if (records.length === 0) return 0;
 
-    const embeddings = await embedTexts(moments);
+    const embeddings = await embedTexts(records.map((moment) => moment.text));
 
-    for (let i = 0; i < moments.length; i += 5000) {
-      const batchDocs = moments.slice(i, i + 5000);
+    for (let i = 0; i < records.length; i += 5000) {
+      const batchDocs = records.slice(i, i + 5000);
       const batchEmbeddings = embeddings.slice(i, i + 5000);
       const batchIds = batchDocs.map((_, j) => `persona_${sourceId}#${i + j}`);
-      const batchMetadatas: PersonaVoiceMetadata[] = batchDocs.map((_, j) => ({
+      const batchMetadatas: PersonaVoiceMetadata[] = batchDocs.map((moment, j) => ({
         type: "persona_voice",
         orgId,
         personaId,
         sourceId,
         sourceName,
         momentIndex: i + j,
+        ...(moment.action ? { action: moment.action } : {}),
+        ...(moment.learnerState ? { learnerState: moment.learnerState } : {}),
+        ...(moment.move ? { move: moment.move } : {}),
+        ...(moment.candidateContext ? { candidateContext: moment.candidateContext } : {}),
       }));
 
       await collection.upsert({
         ids: batchIds,
         embeddings: batchEmbeddings,
-        documents: batchDocs,
+        documents: batchDocs.map((moment) => moment.text),
         metadatas: batchMetadatas,
       });
     }
 
-    return moments.length;
+    return records.length;
   }
 
   /**
@@ -281,43 +292,53 @@ export class MainCollectionService {
   static async searchPersonaVoice(
     orgId: string,
     query: string,
-    options: { personaId?: string; action?: string; limit?: number } = {},
-  ): Promise<{ id: string; personaId: string; sourceId: string; text: string; score: number }[]> {
+    options: { personaId?: string; action?: string; learnerState?: string; move?: string; limit?: number } = {},
+  ): Promise<{ id: string; personaId: string; sourceId: string; text: string; score: number; action?: string; learnerState?: string; move?: string }[]> {
     const collection = await this.getCollection(orgId);
     const limit = options.limit ?? 4;
-    const searchQuery = options.action ? `${query}\nAction: ${options.action}` : query;
-    const [queryEmbedding] = await embedTexts([searchQuery]);
+    const [queryEmbedding] = await embedTexts([query]);
 
-    const conditions: Where[] = [{ type: "persona_voice" }];
-    if (options.personaId) conditions.push({ personaId: options.personaId });
-
-    const whereClause: Where = conditions.length > 1 ? ({ $and: conditions } as Where) : conditions[0];
-
-    const res = await collection.query({
-      queryEmbeddings: [queryEmbedding],
-      nResults: limit,
-      where: whereClause,
-      include: ["documents", "metadatas", "distances"],
-    });
-
-    const hits: { id: string; personaId: string; sourceId: string; text: string; score: number }[] = [];
-    const ids = res.ids?.[0] ?? [];
-    const docs = res.documents?.[0] ?? [];
-    const metadatas = (res.metadatas?.[0] ?? []) as Record<string, unknown>[];
-    const distances = res.distances?.[0] ?? [];
-
-    for (let i = 0; i < ids.length; i++) {
-      const meta = metadatas[i] ?? {};
-      const dist = distances ? distances[i] : null;
-      hits.push({
-        id: ids[i],
-        personaId: String(meta.personaId ?? ""),
-        sourceId: String(meta.sourceId ?? ""),
-        text: docs[i] ?? "",
-        score: dist !== null && dist !== undefined ? 1 - dist : 0,
+    const run = async (filters: { action?: string; learnerState?: string; move?: string }) => {
+      const conditions: Where[] = [{ type: "persona_voice" }];
+      if (options.personaId) conditions.push({ personaId: options.personaId });
+      if (filters.action) conditions.push({ action: filters.action });
+      if (filters.learnerState) conditions.push({ learnerState: filters.learnerState });
+      if (filters.move) conditions.push({ move: filters.move });
+      const whereClause: Where = conditions.length > 1 ? ({ $and: conditions } as Where) : conditions[0];
+      const res = await collection.query({
+        queryEmbeddings: [queryEmbedding],
+        nResults: limit,
+        where: whereClause,
+        include: ["documents", "metadatas", "distances"],
       });
-    }
+      const hits: { id: string; personaId: string; sourceId: string; text: string; score: number; action?: string; learnerState?: string; move?: string }[] = [];
+      const ids = res.ids?.[0] ?? [];
+      const docs = res.documents?.[0] ?? [];
+      const metadatas = (res.metadatas?.[0] ?? []) as Record<string, unknown>[];
+      const distances = res.distances?.[0] ?? [];
+      for (let i = 0; i < ids.length; i++) {
+        const meta = metadatas[i] ?? {};
+        const dist = distances ? distances[i] : null;
+        hits.push({
+          id: ids[i],
+          personaId: String(meta.personaId ?? ""),
+          sourceId: String(meta.sourceId ?? ""),
+          text: docs[i] ?? "",
+          score: dist !== null && dist !== undefined ? 1 - dist : 0,
+          action: typeof meta.action === "string" ? meta.action : undefined,
+          learnerState: typeof meta.learnerState === "string" ? meta.learnerState : undefined,
+          move: typeof meta.move === "string" ? meta.move : undefined,
+        });
+      }
+      return hits;
+    };
 
-    return hits;
+    const filtered = await run({
+      action: options.action,
+      learnerState: options.learnerState,
+      move: options.move,
+    });
+    if (filtered.length > 0 || (!options.action && !options.learnerState && !options.move)) return filtered;
+    return run({});
   }
 }
