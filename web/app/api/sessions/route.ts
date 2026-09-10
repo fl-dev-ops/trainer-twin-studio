@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { activateSession, authorizeRuntimeSession } from "@/lib/interview-sessions";
+import { createLiveKitSessionToken } from "@/lib/livekit";
 import { getSessionOrg } from "@/lib/org";
 import { resolveSessionUser } from "@/lib/session-user";
 import { db } from "@/lib/db";
@@ -34,7 +35,22 @@ export async function POST(req: Request) {
       contextId: typeof body.contextId === "string" ? body.contextId : undefined,
     });
     if (!session) return NextResponse.json({ error: "Invalid session URL" }, { status: 403 });
-    return NextResponse.json({ session });
+
+    let livekit = null;
+    try {
+      livekit = await createLiveKitSessionToken({
+        sessionId: session.id,
+        userId: user.id,
+        userName: user.name,
+        runtimeToken: session.runtimeToken,
+        orgId: org.id,
+        agentSlug: session.agentSlug,
+      });
+    } catch (tokenErr) {
+      console.warn("Failed to create LiveKit token:", tokenErr);
+    }
+
+    return NextResponse.json({ session, livekit });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Session creation failed" }, { status: 400 });
   }

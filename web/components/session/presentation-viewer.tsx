@@ -28,7 +28,7 @@ import {
   handlePresentationRpc,
   PRESENTATION_RPC_METHOD,
 } from "@/lib/presentation-rpc";
-import { useWorkspaceHandlers } from "@/lib/pipecat-workspaces";
+import { useWorkspaceHandlers } from "@/lib/livekit-workspaces";
 import { cn } from "@/lib/utils";
 import "@extend-ai/react-pptx/styles.css";
 

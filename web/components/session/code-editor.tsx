@@ -27,7 +27,7 @@ import {
   codeHighlightExtension,
   handleCodeRpc,
 } from "@/lib/code-rpc";
-import { useWorkspaceHandlers } from "@/lib/pipecat-workspaces";
+import { useWorkspaceHandlers } from "@/lib/livekit-workspaces";
 
 const languages = {
   html,

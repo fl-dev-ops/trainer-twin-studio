@@ -4,7 +4,7 @@ import { createHash, randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import yaml from "js-yaml";
-import { handleCompletions } from "./openai";
+import { explicitCommunicationRecovery, handleCompletions } from "./openai";
 import { GET as getSessionSnapshot } from "@/app/api/sessions/[id]/route";
 
 const tokenHash = (t: string) => createHash("sha256").update(t).digest("hex");
@@ -23,8 +23,24 @@ function loadConfig(agentSlug = "resume-mastery", personaSlug = "vasanth") {
     agent: { version: agentData.version ?? 1, data: agentData },
     domain: { version: domainData.version ?? 1, data: domainData },
     knowledgeBases: [],
+    personaVoiceAvailable: false,
   };
 }
+
+describe("Interview Runtime Pipeline", () => {
+  it("recognizes communication recovery without grading", () => {
+    for (const text of [
+      "Sorry, can you repeat your question?",
+      "I couldn't hear you clearly. Can you speak slower?",
+      "Hello? Are you there?",
+    ]) {
+      const direction = explicitCommunicationRecovery(text);
+      expect(direction?.learner_intent).toBe("clarification");
+      expect(direction?.should_grade).toBe(false);
+    }
+    expect(explicitCommunicationRecovery("We finished the migration last week.")).toBeNull();
+  });
+});
 
 describe("Interview Runtime End-to-End Suite", () => {
   let orgId = "";
@@ -176,7 +192,8 @@ describe("Interview Runtime End-to-End Suite", () => {
     const json = (await res.json()) as any;
 
     expect(json.choices[0].finish_reason).toBe("stop");
-    expect(json.choices[0].message.content).toBeTruthy();
+    expect(json.choices[0].message.content).toBe(config.agent.data.opening);
+    expect(json.choices[0].message.content).not.toBe(config.agent.data.stages[0].opening);
 
     // Verify DB state
     const session = await db.interviewSession.findUniqueOrThrow({ where: { id: sessionId } });
@@ -184,6 +201,9 @@ describe("Interview Runtime End-to-End Suite", () => {
     const transcript = session.transcript as any[];
     expect(transcript.length).toBeGreaterThan(0);
     expect(transcript[transcript.length - 1].role).toBe("trainer");
+    const state = session.runtimeState as any;
+    expect(state.pending_question).toBe(config.agent.data.opening);
+    expect(state.pending_evidence_key).toBeTruthy();
   });
 
   it("4. Idempotency: replaying identical request returns cached body without re-execution", async () => {
@@ -229,7 +249,37 @@ describe("Interview Runtime End-to-End Suite", () => {
     expect(json1.choices[0].message.content).toBeTruthy();
   });
 
-  it("5. Snapshot route GET /api/sessions/[id]: returns authoritative state and coverage", async () => {
+  it("5. Repeat requests preserve the pending question without spending a learner turn", async () => {
+    const before = await db.interviewSession.findUniqueOrThrow({ where: { id: sessionId } });
+    const beforeState = before.runtimeState as any;
+    const req = new Request("http://localhost/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${runtimeToken}`,
+      },
+      body: JSON.stringify({
+        messages: [
+          { role: "developer", content: "session-start" },
+          { role: "assistant", content: config.agent.data.opening },
+          { role: "user", content: "Sorry, can you repeat your question?" },
+        ],
+        stream: false,
+      }),
+    });
+
+    const res = await handleCompletions(req);
+    const json = (await res.json()) as any;
+    expect(json.choices[0].message.content).toBe(config.agent.data.opening);
+
+    const after = await db.interviewSession.findUniqueOrThrow({ where: { id: sessionId } });
+    const afterState = after.runtimeState as any;
+    expect(afterState.learner_turns).toBe(beforeState.learner_turns);
+    expect(afterState.phase_turns).toBe(beforeState.phase_turns);
+    expect(afterState.pending_question).toBe(config.agent.data.opening);
+  });
+
+  it("6. Snapshot route GET /api/sessions/[id]: returns authoritative state and coverage", async () => {
     const req = new Request(`http://localhost/api/sessions/${sessionId}`, {
       method: "GET",
       headers: {

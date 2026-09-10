@@ -6,13 +6,14 @@ import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { LoaderCircle, Play, Upload as UploadIcon, X } from "lucide-react";
 import {
-  PipecatClient,
-  RTVIEvent,
-  type BotOutputData,
-  type TranscriptData,
-  type TransportState,
-} from "@pipecat-ai/client-js";
-import { SmallWebRTCTransport } from "@pipecat-ai/small-webrtc-transport";
+  Room,
+  RoomEvent,
+  Track,
+  ConnectionState,
+  type RemoteTrack,
+  type RemoteParticipant,
+  type TranscriptionSegment,
+} from "livekit-client";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -38,7 +39,7 @@ import { CodeEditor } from "@/components/session/code-editor";
 import { Whiteboard } from "@/components/session/whiteboard";
 import { PresentationViewer } from "@/components/session/presentation-viewer";
 import { PdfViewerSurface } from "@/components/session/pdf-viewer";
-import { PipecatWorkspaceProvider } from "@/lib/pipecat-workspaces";
+import { LiveKitWorkspaceProvider } from "@/lib/livekit-workspaces";
 import type { AgentSurface } from "@/lib/agent-surface-events";
 import type { Entry } from "@/lib/session-transcript";
 import type { VisualizerState } from "@/components/session/visualizer-bar";
@@ -55,8 +56,6 @@ type Props = {
   sessionCode?: string;
 };
 
-const AGENT_URL = process.env.NEXT_PUBLIC_AGENT_URL ?? "http://localhost:7860";
-
 function formatBytes(n: number) {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
@@ -70,7 +69,7 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
   const [contextList, setContextList] = useState<{ id: string; name: string; size?: number }[]>(contexts);
   const [uploadingContext, setUploadingContext] = useState(false);
   const contextInput = useRef<HTMLInputElement>(null);
-  const [state_, setState_] = useState<TransportState>("disconnected");
+  const [state_, setState_] = useState<"disconnected" | "connecting" | "connected" | "ready" | "error">("disconnected");
   const [entries, setEntries] = useState<Entry[]>([]);
   const [coverage, setCoverage] = useState<Coverage>({});
   const [micOn, setMicOn] = useState(true);
@@ -85,8 +84,8 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
   const [ended, setEnded] = useState(false);
   const [endReason, setEndReason] = useState<EndReason>("disconnected");
   const [transcriptOpen, setTranscriptOpen] = useState(true);
-  const clientRef = useRef<PipecatClient | null>(null);
-  const [rtviClient, setRtviClient] = useState<PipecatClient | null>(null);
+  const roomRef = useRef<Room | null>(null);
+  const [livekitRoom, setLiveKitRoom] = useState<Room | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   // Mirrors of entries/coverage for the finalize call on disconnect.
   const entriesRef = useRef<Entry[]>([]);
@@ -115,8 +114,8 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
   useEffect(() => {
     const audio = audioRef.current;
     return () => {
-      clientRef.current?.disconnect();
-      clientRef.current = null;
+      roomRef.current?.disconnect();
+      roomRef.current = null;
       audio?.pause();
     };
   }, []);
@@ -162,171 +161,189 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
     }
     sessionRef.current = launch.session.id;
 
-    const transport = new SmallWebRTCTransport({
-      webrtcRequestParams: {
-        endpoint: `${AGENT_URL}/api/offer`,
-        requestData: {
-          sessionId: launch.session.id,
-          runtimeToken: launch.session.runtimeToken,
-        },
+    if (!launch.livekit?.url || !launch.livekit?.token) {
+      setError("LiveKit credentials not returned by server");
+      return;
+    }
+
+    setState_("connecting");
+
+    const room = new Room({
+      audioCaptureDefaults: {
+        autoGainControl: true,
+        echoCancellation: true,
+        noiseSuppression: true,
       },
+      adaptiveStream: true,
+      dynacast: true,
     });
-    const client = new PipecatClient({
-      transport,
-      enableMic: true,
-      callbacks: {
-        onTransportStateChanged: (s) => setState_(s),
-        onTrackStarted: (track, participant) => {
-          if (participant?.local || track.kind !== "audio" || !audioRef.current) return;
-          audioRef.current.srcObject = new MediaStream([track]);
-          void playRemoteAudio();
-        },
-        onError: (msg) => {
-          disconnectReasonRef.current = "error";
-          setError((msg.data as { message?: string } | undefined)?.message ?? "Connection error");
-        },
-        onUserTranscript: (data: TranscriptData) => {
-          if (!data.final) return;
-          setEntries((prev) => {
-            entriesRef.current = [...prev, { role: "user" as const, text: data.text }];
-            return entriesRef.current;
-          });
-        },
-        onBotOutput: (data: BotOutputData) => {
-          if (data.will_be_spoken === false) return;
-          setEntries((prev) => {
-            const last = prev[prev.length - 1];
-            const next =
-              last?.role === "trainer"
-                ? [...prev.slice(0, -1), { role: "trainer" as const, text: data.text }]
-                : [...prev, { role: "trainer" as const, text: data.text }];
+    roomRef.current = room;
+    setLiveKitRoom(room);
+
+    room.on(RoomEvent.ConnectionStateChanged, (connectionState: ConnectionState) => {
+      if (connectionState === ConnectionState.Connecting) {
+        setState_("connecting");
+      } else if (connectionState === ConnectionState.Connected) {
+        setState_("ready");
+      } else if (connectionState === ConnectionState.Disconnected) {
+        setState_("disconnected");
+      }
+    });
+
+    room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => {
+      if (track.kind === Track.Kind.Audio && audioRef.current) {
+        track.attach(audioRef.current);
+        void playRemoteAudio();
+      }
+    });
+
+    room.on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack) => {
+      if (audioRef.current) {
+        track.detach(audioRef.current);
+      }
+    });
+
+    room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
+      const isAgentSpeaking = speakers.some((s) => s.identity !== room.localParticipant.identity);
+      setBotSpeaking(isAgentSpeaking);
+
+      const localSpeaker = speakers.find((s) => s.identity === room.localParticipant.identity);
+      const remoteSpeaker = speakers.find((s) => s.identity !== room.localParticipant.identity);
+      setLocalLevel(localSpeaker ? Math.min(1, Math.max(0, localSpeaker.audioLevel)) : 0);
+      setRemoteLevel(remoteSpeaker ? Math.min(1, Math.max(0, remoteSpeaker.audioLevel)) : 0);
+    });
+
+    room.on(RoomEvent.TranscriptionReceived, (segments: TranscriptionSegment[], participant) => {
+      const isUser = participant?.identity === room.localParticipant.identity;
+      for (const seg of segments) {
+        if (!seg.final) continue;
+        const role = isUser ? ("user" as const) : ("trainer" as const);
+        setEntries((prev) => {
+          const last = prev[prev.length - 1];
+          if (role === "trainer" && last?.role === "trainer" && (last.text === seg.text || seg.text.startsWith(last.text))) {
+            const next = [...prev.slice(0, -1), { role, text: seg.text }];
             entriesRef.current = next;
             return next;
-          });
+          }
+          const next = [...prev, { role, text: seg.text }];
+          entriesRef.current = next;
+          return next;
+        });
 
-          // Fetch authoritative coverage & state snapshot from web runtime
-          if (sessionRef.current) {
-            void fetch(`/api/sessions/${sessionRef.current}`, {
-              headers: launch.session.runtimeToken
-                ? { Authorization: `Bearer ${launch.session.runtimeToken}` }
-                : {},
-            })
-              .then((res) => (res.ok ? res.json() : null))
-              .then((snap) => {
-                if (snap?.coverage) {
-                  setCoverage(snap.coverage);
-                  coverageRef.current = snap.coverage;
-                }
-              })
-              .catch(() => {});
-          }
-        },
-        onDisconnected: () => {
-          const reason = disconnectReasonRef.current;
-          setInterviewReady(false);
-          setBotSpeaking(false);
-          setSurface(null);
-          setState_("disconnected");
-          setRtviClient(null);
-          clientRef.current = null;
-          if (audioRef.current) {
-            audioRef.current.pause();
-            audioRef.current.srcObject = null;
-          }
-          if (reason !== "error") {
-            setEndReason(reason);
-            setEnded(true);
-          }
-          // Persist what the browser captured before the socket died.
-          if (sessionRef.current) {
-            void fetch("/api/sessions/finalize", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                sessionId: sessionRef.current,
-                transcript: entriesRef.current,
-                evidence: coverageRef.current,
-              }),
-              keepalive: true,
-            }).catch(() => {});
-            sessionRef.current = null;
-          }
-        },
-      },
-    });
-    clientRef.current = client;
-    setRtviClient(client);
-
-    client.on(RTVIEvent.BotStartedSpeaking, () => setBotSpeaking(true));
-    client.on(RTVIEvent.BotStoppedSpeaking, () => setBotSpeaking(false));
-    client.on(RTVIEvent.LocalAudioLevel, (level: number) =>
-      setLocalLevel(Math.min(1, Math.max(0, level))));
-    client.on(RTVIEvent.RemoteAudioLevel, (level: number) =>
-      setRemoteLevel(Math.min(1, Math.max(0, level))));
-
-    client.on(RTVIEvent.ServerMessage, (msg: unknown) => {
-      const record = typeof msg === "object" && msg !== null ? (msg as Record<string, unknown>) : null;
-      const payload = (typeof record?.data === "object" && record.data !== null
-        ? (record.data as Record<string, unknown>)
-        : record) as {
-        type?: string;
-        error?: string;
-        sessionId?: string;
-        status?: string;
-        state?: { coverage?: Coverage; phase_name?: string };
-      } | null;
-      if (payload?.type === "session-started" && typeof payload.sessionId === "string") {
-        sessionRef.current = payload.sessionId;
-        setInterviewReady(true);
-        void fetch(`/api/sessions/${payload.sessionId}`, {
-          headers: launch.session.runtimeToken
-            ? { Authorization: `Bearer ${launch.session.runtimeToken}` }
-            : {},
-        })
-          .then((res) => (res.ok ? res.json() : null))
-          .then((snap) => {
-            if (snap?.coverage) {
-              setCoverage(snap.coverage);
-              coverageRef.current = snap.coverage;
-            }
+        // Fetch authoritative coverage & state snapshot from web runtime
+        if (!isUser && sessionRef.current) {
+          void fetch(`/api/sessions/${sessionRef.current}`, {
+            headers: launch.session.runtimeToken
+              ? { Authorization: `Bearer ${launch.session.runtimeToken}` }
+              : {},
           })
-          .catch(() => {});
-      } else if (payload?.type === "interview-state" && payload.state) {
-        disconnectReasonRef.current = "disconnected";
-        setCoverage(payload.state.coverage ?? {});
-        coverageRef.current = payload.state.coverage ?? {};
-        setInterviewReady(true);
-      } else if (payload?.type === "session-ended" && payload.status === "completed") {
-        disconnectReasonRef.current = "completed";
-        void client.disconnect();
-      } else if (payload?.type === "interview-error") {
-        disconnectReasonRef.current = "error";
-        setError(payload.error ?? "Failed to start session");
-        void client.disconnect();
+            .then((res) => (res.ok ? res.json() : null))
+            .then((snap) => {
+              if (snap?.coverage) {
+                setCoverage(snap.coverage);
+                coverageRef.current = snap.coverage;
+              }
+            })
+            .catch(() => {});
+        }
+      }
+    });
+
+    room.on(RoomEvent.DataReceived, (payload: Uint8Array) => {
+      try {
+        const text = new TextDecoder().decode(payload);
+        const data = JSON.parse(text) as Record<string, unknown>;
+        if (data.type === "session-started") {
+          setInterviewReady(true);
+        } else if (data.type === "session-ended" && data.status === "completed") {
+          disconnectReasonRef.current = "completed";
+          void room.disconnect();
+        } else if (data.type === "interview_question_started") {
+          setInterviewReady(true);
+          const metadata = data.metadata as { question?: { spokenText?: string } } | undefined;
+          if (metadata?.question?.spokenText) {
+            const spoken = metadata.question.spokenText;
+            setEntries((prev) => {
+              const last = prev[prev.length - 1];
+              if (last?.role === "trainer" && last.text === spoken) return prev;
+              const next = [...prev, { role: "trainer" as const, text: spoken }];
+              entriesRef.current = next;
+              return next;
+            });
+          }
+        }
+      } catch {}
+    });
+
+    room.on(RoomEvent.Disconnected, () => {
+      const reason = disconnectReasonRef.current;
+      setInterviewReady(false);
+      setBotSpeaking(false);
+      setSurface(null);
+      setState_("disconnected");
+      setLiveKitRoom(null);
+      roomRef.current = null;
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.srcObject = null;
+      }
+      if (reason !== "error") {
+        setEndReason(reason);
+        setEnded(true);
+      }
+      // Persist what the browser captured before the socket died.
+      if (sessionRef.current) {
+        void fetch("/api/sessions/finalize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: sessionRef.current,
+            transcript: entriesRef.current,
+            evidence: coverageRef.current,
+          }),
+          keepalive: true,
+        }).catch(() => {});
+        sessionRef.current = null;
       }
     });
 
     try {
-      await client.connect();
-      client.sendClientMessage("start-interview", {
-        sessionId: launch.session.id,
-        runtimeToken: launch.session.runtimeToken,
-      });
+      await room.connect(launch.livekit.url, launch.livekit.token);
+      try {
+        await room.localParticipant.setMicrophoneEnabled(true);
+      } catch (micErr) {
+        console.warn("Could not enable microphone:", micErr);
+        setError("Microphone permission denied or unavailable");
+      }
+
+      // Attach any already published remote audio tracks
+      for (const p of room.remoteParticipants.values()) {
+        for (const pub of p.trackPublications.values()) {
+          if (pub.track && pub.track.kind === Track.Kind.Audio && audioRef.current) {
+            pub.track.attach(audioRef.current);
+            void playRemoteAudio();
+          }
+        }
+      }
+
+      setInterviewReady(true);
     } catch (e) {
       disconnectReasonRef.current = "error";
-      setError(e instanceof Error ? e.message : "Failed to connect");
-      await client.disconnect().catch(() => {});
-      clientRef.current = null;
-      setRtviClient(null);
+      setError(e instanceof Error ? e.message : "Failed to connect to LiveKit");
+      await room.disconnect().catch(() => {});
+      roomRef.current = null;
+      setLiveKitRoom(null);
       setState_("disconnected");
     }
   }
 
   async function disconnect() {
     disconnectReasonRef.current = "manual";
-    await clientRef.current?.disconnect().catch(() => {});
-    clientRef.current = null;
-    setRtviClient(null);
+    if (roomRef.current) {
+      await roomRef.current.disconnect().catch(() => {});
+      roomRef.current = null;
+    }
+    setLiveKitRoom(null);
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.srcObject = null;
@@ -339,11 +356,11 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
     setEnded(true);
   }
 
-  function toggleMic() {
-    const client = clientRef.current;
-    if (!client) return;
+  async function toggleMic() {
+    const room = roomRef.current;
+    if (!room) return;
     const next = !micOn;
-    client.enableMic(next);
+    await room.localParticipant.setMicrophoneEnabled(next);
     setMicOn(next);
   }
 
@@ -428,7 +445,7 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
               <CardHeader>
                 <CardTitle>Configure the session</CardTitle>
                 <CardDescription>
-                  Choose a scenario. Its trainer persona is already configured ({AGENT_URL}).
+                  Choose a scenario. Its trainer persona is already configured.
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
@@ -521,8 +538,15 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
             </Card>
           </div>
         ) : (
-          rtviClient && (
-            <PipecatWorkspaceProvider client={rtviClient} onSurface={setSurface}>
+          livekitRoom && (
+            <LiveKitWorkspaceProvider
+              room={livekitRoom}
+              onSurface={setSurface}
+              onEndSession={() => {
+                disconnectReasonRef.current = "completed";
+                void disconnect();
+              }}
+            >
               <div className="flex min-h-0 w-full gap-4">
                 <div className="min-h-0 min-w-0 flex-1">
                   <motion.div
@@ -600,7 +624,7 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
                   )}
                 </AnimatePresence>
               </div>
-            </PipecatWorkspaceProvider>
+            </LiveKitWorkspaceProvider>
           )
         )}
       </main>

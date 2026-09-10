@@ -61,6 +61,9 @@ export interface RuntimeState {
   claims: Array<{ statement: string; provenance: string; evidence_key?: string | null; status?: string }>;
   evidence_probe_counts: Record<string, number>;
   pending_evidence_key: string | null;
+  pending_question: string | null;
+  current_topic: string | null;
+  latest_learner_intent: string | null;
   actions: string[];
   grounding_probes: string[];
   grounding_probe_counts: Record<string, number>;
@@ -77,6 +80,9 @@ export function initRuntimeState(): RuntimeState {
     claims: [],
     evidence_probe_counts: {},
     pending_evidence_key: null,
+    pending_question: null,
+    current_topic: null,
+    latest_learner_intent: null,
     actions: [],
     grounding_probes: [],
     grounding_probe_counts: {},
@@ -725,6 +731,21 @@ export function feedbackSummary(agent: AgentSpec, state: RuntimeState): string {
   return parts.join(" ");
 }
 
+export function recordAskedQuestion(
+  state: RuntimeState,
+  action: InterviewAction,
+  question: string,
+  countProbe = true
+): void {
+  if (action.close || !question.trim()) return;
+  state.pending_question = question.trim();
+  state.pending_evidence_key = action.evidence_key;
+  if (countProbe && action.expects_answer && action.evidence_key) {
+    state.evidence_probe_counts[action.evidence_key] =
+      (state.evidence_probe_counts[action.evidence_key] ?? 0) + 1;
+  }
+}
+
 export function deterministicFallback(
   action: InterviewAction,
   agent: AgentSpec,
@@ -733,6 +754,8 @@ export function deterministicFallback(
   if (action.close) {
     return action.fallback_text || "We’ll stop here.";
   }
+  if (action.fallback_text?.trim()) return action.fallback_text;
+  if (state.pending_question?.trim()) return state.pending_question;
   const label = evidenceLabel(action.evidence_key);
   const rules = renderRules(agent, state);
   const hasQuestion = rules.maximum_question_marks > 0;

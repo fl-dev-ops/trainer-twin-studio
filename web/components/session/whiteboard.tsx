@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useRef } from "react";
 import { useTheme } from "next-themes";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
-import { useWorkspaceHandlers } from "@/lib/pipecat-workspaces";
+import { useWorkspaceHandlers } from "@/lib/livekit-workspaces";
 import "@excalidraw/excalidraw/index.css";
 
 const CANVAS_RPC_METHOD = "workspace.canvas";
