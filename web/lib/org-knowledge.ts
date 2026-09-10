@@ -1,9 +1,11 @@
 import type { Where } from "chromadb";
 import { db } from "@/lib/db";
+import { ChromaTenantService } from "@/lib/chroma-tenant";
 import { MainCollectionService } from "@/lib/main-collection";
 import { chunkMarkdown } from "@/lib/knowledge";
 import { deletePrefix, getObjectText, kbPrefix, presignedGetUrl, putObject } from "@/lib/s3";
 import { documentToMarkdown } from "@/lib/documents";
+import { enqueueIngestionWork } from "@/lib/ingestion-queue";
 
 export type OrgKnowledgeDoc = {
   id: string;
@@ -16,6 +18,9 @@ export type OrgKnowledgeDoc = {
   status: string;
   error: string | null;
   chunkCount?: number;
+  sourceId?: string | null;
+  connector?: string;
+  sourceStatus?: string | null;
   indexedAt: string | null;
   createdAt: string;
 };
@@ -186,7 +191,10 @@ export class OrganizationKnowledgeService {
   static async getAllDocuments(orgId: string): Promise<OrgKnowledgeDoc[]> {
     const docs = await db.knowledgeDocument.findMany({
       where: { kb: { orgId } },
-      include: { kb: { select: { slug: true } } },
+      include: {
+        kb: { select: { slug: true } },
+        source: { select: { id: true, connector: true, status: true } },
+      },
       orderBy: { createdAt: "desc" },
     });
 
@@ -200,6 +208,9 @@ export class OrganizationKnowledgeService {
       size: d.size,
       status: d.status,
       error: d.error,
+      sourceId: d.sourceId,
+      connector: d.source?.connector ?? (d.ext === "json" ? "youtube" : "upload"),
+      sourceStatus: d.source?.status ?? null,
       indexedAt: d.indexedAt ? d.indexedAt.toISOString() : null,
       createdAt: d.createdAt.toISOString(),
     }));
@@ -265,9 +276,10 @@ export class OrganizationKnowledgeService {
   }
 
   /**
-   * Uploads and indexes a new document into the organization's knowledge base.
+   * Uploads a document to S3 and queues background ingestion through SQS.
+   * Returns immediately with 202 Accepted and queued status.
    */
-  static async uploadDocument(orgId: string, file: File): Promise<OrgKnowledgeDoc & { chunkCount: number }> {
+  static async uploadDocument(orgId: string, file: File): Promise<OrgKnowledgeDoc & { jobId: string }> {
     const kb = await getOrCreateOrgKnowledgeBase(orgId);
     const { ext, bytes, markdown } = await documentToMarkdown(file);
 
@@ -290,7 +302,7 @@ export class OrganizationKnowledgeService {
         size: file.size,
         s3SourceKey: "pending",
         s3MarkdownKey: "pending",
-        status: "digesting",
+        status: "uploaded",
       },
     });
 
@@ -307,31 +319,29 @@ export class OrganizationKnowledgeService {
       data: { s3SourceKey: sourceKey, s3MarkdownKey: markdownKey },
     });
 
-    // Chunk and index into Chroma main collection
-    const chunks = chunkMarkdown(markdown);
-    let chunkCount = 0;
-    try {
-      chunkCount = await MainCollectionService.ingestKnowledgeDoc(
-        orgId,
-        kb.id,
-        doc.id,
-        slug,
-        doc.title || slug,
-        chunks,
-      );
+    // Ensure org tenant exists before enqueuing work
+    await ChromaTenantService.createTenant(orgId);
 
-      await db.knowledgeDocument.update({
-        where: { id: doc.id },
-        data: { status: "indexed", error: null, indexedAt: new Date() },
-      });
-      invalidateOrgKnowledgeCache(orgId);
-    } catch (indexError) {
-      await db.knowledgeDocument.update({
-        where: { id: doc.id },
-        data: { status: "failed", error: indexError instanceof Error ? indexError.message : "Indexing failed" },
-      });
-      throw indexError;
-    }
+    // Enqueue background ingestion through SQS
+    const queueResult = await enqueueIngestionWork({
+      orgId,
+      kbId: kb.id,
+      connector: "upload",
+      externalId: doc.id,
+      sourceUrl: `upload://${slug}`,
+      rootWorkItem: {
+        workKey: doc.id,
+        kind: "resource",
+        payload: { docId: doc.id, title: doc.title, slug: doc.slug },
+      },
+    });
+
+    await db.knowledgeDocument.update({
+      where: { id: doc.id },
+      data: { sourceId: queueResult.sourceId, status: "queued" },
+    });
+
+    invalidateOrgKnowledgeCache(orgId);
 
     return {
       id: doc.id,
@@ -341,16 +351,20 @@ export class OrganizationKnowledgeService {
       title: doc.title,
       ext: doc.ext,
       size: doc.size,
-      status: "indexed",
+      status: "queued",
       error: null,
-      chunkCount,
-      indexedAt: new Date().toISOString(),
+      chunkCount: 0,
+      sourceId: queueResult.sourceId,
+      connector: "upload",
+      sourceStatus: "syncing",
+      jobId: queueResult.jobId,
+      indexedAt: null,
       createdAt: doc.createdAt.toISOString(),
     };
   }
 
   /**
-   * Deletes a document from Postgres, S3, and ChromaDB.
+   * Deletes a document from Postgres, S3, and ChromaDB, canceling any pending jobs.
    */
   static async deleteDocument(orgId: string, docId: string): Promise<void> {
     const doc = await db.knowledgeDocument.findFirst({
@@ -358,6 +372,23 @@ export class OrganizationKnowledgeService {
       include: { kb: { select: { id: true } } },
     });
     if (!doc) throw new Error("Document not found");
+
+    if (doc.sourceId) {
+      await db.ingestionWorkItem.updateMany({
+        where: {
+          job: { sourceId: doc.sourceId },
+          status: { in: ["queued", "running"] },
+        },
+        data: { status: "failed", error: "Document deleted" },
+      });
+      await db.ingestionJob.updateMany({
+        where: {
+          sourceId: doc.sourceId,
+          status: { in: ["queued", "running"] },
+        },
+        data: { status: "failed", error: "Document deleted", activeKey: null },
+      });
+    }
 
     await Promise.all([
       MainCollectionService.removeKnowledgeDoc(orgId, doc.id),
@@ -369,9 +400,14 @@ export class OrganizationKnowledgeService {
   }
 
   /**
-   * Re-indexes an existing document from S3 into Chroma.
+   * Re-indexes an existing document asynchronously by dispatching an SQS job.
    */
-  static async reindexDocument(orgId: string, docId: string): Promise<number> {
+  static async reindexDocument(orgId: string, docId: string): Promise<{
+    ok: true;
+    jobId: string;
+    documentId: string;
+    status: "queued";
+  }> {
     const doc = await db.knowledgeDocument.findFirst({
       where: { id: docId, kb: { orgId } },
       include: { kb: { select: { id: true, slug: true } } },
@@ -381,37 +417,37 @@ export class OrganizationKnowledgeService {
       throw new Error("Document has no markdown stored in S3");
     }
 
-    await db.knowledgeDocument.update({
-      where: { id: doc.id },
-      data: { status: "digesting", error: null },
+    await ChromaTenantService.createTenant(orgId);
+
+    const queueResult = await enqueueIngestionWork({
+      orgId,
+      kbId: doc.kbId,
+      connector: "upload",
+      externalId: doc.id,
+      sourceUrl: `upload://${doc.slug}`,
+      rootWorkItem: {
+        workKey: doc.id,
+        kind: "resource",
+        payload: { docId: doc.id, title: doc.title, slug: doc.slug },
+      },
     });
 
-    try {
-      const markdown = await getObjectText(doc.s3MarkdownKey);
-      const chunks = chunkMarkdown(markdown);
-      const chunkCount = await MainCollectionService.ingestKnowledgeDoc(
-        orgId,
-        doc.kbId,
-        doc.id,
-        doc.slug,
-        doc.title || doc.slug,
-        chunks,
-      );
+    await db.knowledgeDocument.update({
+      where: { id: doc.id },
+      data: {
+        sourceId: queueResult.sourceId,
+        status: "queued",
+        error: null,
+      },
+    });
+    invalidateOrgKnowledgeCache(orgId);
 
-      await db.knowledgeDocument.update({
-        where: { id: doc.id },
-        data: { status: "indexed", error: null, indexedAt: new Date() },
-      });
-      invalidateOrgKnowledgeCache(orgId);
-
-      return chunkCount;
-    } catch (error) {
-      await db.knowledgeDocument.update({
-        where: { id: doc.id },
-        data: { status: "failed", error: error instanceof Error ? error.message : "Reindexing failed" },
-      });
-      throw error;
-    }
+    return {
+      ok: true,
+      jobId: queueResult.jobId,
+      documentId: doc.id,
+      status: "queued",
+    };
   }
 
   /**

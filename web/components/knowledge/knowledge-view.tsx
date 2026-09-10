@@ -1,16 +1,16 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { PageContainer } from "@/components/page-container";
 import { KnowledgeHeader } from "./knowledge-header";
 import { KnowledgeActionBar } from "./knowledge-action-bar";
 import { DocumentList } from "./document-list";
-import { KnowledgeUploadModal } from "./knowledge-upload-modal";
+import { KnowledgeAddSourceDialog } from "./knowledge-add-source-dialog";
 import { DocumentDetailDrawer } from "./document-detail-drawer";
 import { Knowledge3DView } from "./knowledge-3d-view";
-import { fetchDocuments, fetchStats, searchKnowledge } from "@/lib/knowledge/api";
+import { fetchConnectors, fetchDocuments, fetchStats, searchKnowledge } from "@/lib/knowledge/api";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
 import type {
   KnowledgeDoc,
@@ -29,6 +29,25 @@ export function KnowledgeView({
   const queryClient = useQueryClient();
 
   // Queries backed by TanStack Query cache (0ms instant switches, shared cache)
+  const { data: connectors } = useQuery({
+    queryKey: knowledgeKeys.connectors(),
+    queryFn: fetchConnectors,
+  });
+
+  // Calculate if background sync/ingestion work is in-flight
+  const hasActiveWork = useMemo(() => {
+    const hasActiveDocs = initialDocs.some((d) =>
+      ["queued", "running", "digesting", "syncing", "deleting", "disconnecting"].includes(d.status) ||
+      ["queued", "running", "syncing", "deleting", "disconnecting"].includes(d.sourceStatus ?? "")
+    );
+    const hasActiveSources = (connectors?.sources ?? []).some((s) =>
+      ["queued", "running", "syncing", "deleting", "disconnecting"].includes(s.status) ||
+      ["queued", "running"].includes(s.activeJob?.status ?? "")
+    );
+    const hasDisconnecting = (connectors?.youtube.connections ?? []).some((c) => c.status === "disconnecting");
+    return hasActiveDocs || hasActiveSources || hasDisconnecting;
+  }, [initialDocs, connectors]);
+
   const {
     data: documents = initialDocs,
     isFetching: isFetchingDocs,
@@ -36,6 +55,7 @@ export function KnowledgeView({
     queryKey: knowledgeKeys.documents(),
     queryFn: fetchDocuments,
     initialData: initialDocs.length > 0 ? initialDocs : undefined,
+    refetchInterval: hasActiveWork ? 2500 : false,
   });
 
   const {
@@ -47,6 +67,37 @@ export function KnowledgeView({
     initialData: initialStats ?? undefined,
   });
 
+  // When active jobs finish, invalidate all queries including stats and 3D points
+  const wasActiveRef = useRef(false);
+  useEffect(() => {
+    if (wasActiveRef.current && !hasActiveWork) {
+      void queryClient.invalidateQueries({ queryKey: knowledgeKeys.all });
+    }
+    wasActiveRef.current = hasActiveWork;
+  }, [hasActiveWork, queryClient]);
+
+  // Handle OAuth callback search params toast and cleanup
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const connector = params.get("connector");
+    const connected = params.get("connected");
+    const error = params.get("error");
+
+    if (connector && connected === "true") {
+      toast.success(`Successfully connected ${connector === "notion" ? "Notion" : "YouTube"}`);
+    } else if (error) {
+      toast.error(`Connection failed: ${error}`);
+    }
+
+    if (connector || connected || error) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("connector");
+      url.searchParams.delete("connected");
+      url.searchParams.delete("error");
+      window.history.replaceState({}, "", url.pathname);
+    }
+  }, []);
+
   const refreshing = isFetchingDocs || isFetchingStats;
 
   const [searchInput, setSearchInput] = useState("");
@@ -56,10 +107,11 @@ export function KnowledgeView({
   const [viewMode, setViewMode] = useState<ViewMode>("list");
 
   // Modals & Drawers
-  const [uploadOpen, setUploadOpen] = useState(false);
+  const [addSourceOpen, setAddSourceOpen] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<KnowledgeDoc | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [reindexingId, setReindexingId] = useState<string | null>(null);
+  const [refreshingSourceId, setRefreshingSourceId] = useState<string | null>(null);
 
   // 3D View lazy mount state
   const [hasOpened3D, setHasOpened3D] = useState(false);
@@ -89,12 +141,32 @@ export function KnowledgeView({
       if (!res.ok) {
         throw new Error(data?.error || "Reindex failed");
       }
-      toast.success(`Successfully re-indexed into ${data.chunkCount} chunks`);
+      toast.success("Re-index queued. Document is being chunked and indexed.");
       await refreshData();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Reindex failed");
     } finally {
       setReindexingId(null);
+    }
+  }
+
+  async function handleRefreshSource(doc: KnowledgeDoc) {
+    if (!doc.sourceId) return;
+    setRefreshingSourceId(doc.sourceId);
+    try {
+      const res = await fetch(`/api/knowledge/sources/${doc.sourceId}/refresh`, {
+        method: "POST",
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.error || "Refresh failed");
+      }
+      toast.success(`Refresh queued for ${doc.title || doc.slug}`);
+      await refreshData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Refresh failed");
+    } finally {
+      setRefreshingSourceId(null);
     }
   }
 
@@ -182,7 +254,7 @@ export function KnowledgeView({
       <PageContainer size="narrow" className="flex flex-col gap-6">
         <KnowledgeHeader
           stats={stats}
-          onOpenUpload={() => setUploadOpen(true)}
+          onOpenUpload={() => setAddSourceOpen(true)}
         />
 
         <KnowledgeActionBar
@@ -202,9 +274,11 @@ export function KnowledgeView({
             documents={visibleDocuments}
             onSelectDoc={handleSelectDoc}
             onReindexDoc={handleReindex}
+            onRefreshSource={handleRefreshSource}
             onDeleteDoc={handleDelete}
             reindexingId={reindexingId}
-            onOpenUpload={() => setUploadOpen(true)}
+            refreshingSourceId={refreshingSourceId}
+            onOpenUpload={() => setAddSourceOpen(true)}
             onClearSearch={clearSearch}
             hasSearch={Boolean(searchedQuery)}
           />
@@ -219,10 +293,11 @@ export function KnowledgeView({
           </div>
         )}
 
-        {/* Upload Modal */}
-        <KnowledgeUploadModal
-          open={uploadOpen}
-          onOpenChange={setUploadOpen}
+        {/* Add Knowledge Source Dialog (Upload, Notion, YouTube, Connections) */}
+        <KnowledgeAddSourceDialog
+          open={addSourceOpen}
+          onOpenChange={setAddSourceOpen}
+          connectors={connectors}
           onSuccess={refreshData}
         />
 
@@ -232,8 +307,10 @@ export function KnowledgeView({
           open={drawerOpen}
           onOpenChange={setDrawerOpen}
           onReindexDoc={handleReindex}
+          onRefreshSource={handleRefreshSource}
           onDeleteDoc={handleDelete}
           reindexing={reindexingId === selectedDoc?.id}
+          refreshingSource={Boolean(selectedDoc?.sourceId && refreshingSourceId === selectedDoc.sourceId)}
         />
       </PageContainer>
     </main>

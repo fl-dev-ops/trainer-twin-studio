@@ -31,8 +31,8 @@ export async function POST(_req: Request, { params }: Params) {
   if (!id) return NextResponse.json({ error: "Document ID required" }, { status: 400 });
 
   try {
-    const chunkCount = await OrganizationKnowledgeService.reindexDocument(org.id, id);
-    return NextResponse.json({ ok: true, chunkCount });
+    const result = await OrganizationKnowledgeService.reindexDocument(org.id, id);
+    return NextResponse.json(result);
   } catch (error) {
     console.error("Failed to reindex document:", error);
     return NextResponse.json(

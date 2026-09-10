@@ -133,30 +133,42 @@ model KnowledgeBase {
   name      String
   createdAt DateTime @default(now())
 
-  documents KnowledgeDocument[]
+  organization       Organization?        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  documents          KnowledgeDocument[]
+  sources            KnowledgeSource[]
+  notionOAuthStates  NotionOAuthState[]
+  youtubeOAuthStates YouTubeOAuthState[]
 
   @@unique([orgId, slug])
   @@index([orgId])
 }
 
 model KnowledgeDocument {
-  id            String    @id @default(cuid())
-  kbId          String
-  slug          String
-  title         String
-  ext           String
-  size          Int
-  s3SourceKey   String
-  s3MarkdownKey String
-  status        String    @default("uploaded") // uploaded | digesting | indexed | failed
-  error         String?
-  indexedAt     DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                String           @id @default(cuid())
+  kbId              String
+  sourceId          String?
+  externalId        String?
+  externalUpdatedAt DateTime?
+  parentExternalId  String?
+  slug              String
+  title             String
+  ext               String
+  size              Int
+  s3SourceKey       String
+  s3MarkdownKey     String?
+  s3QuestionsKey    String?
+  status            String           @default("uploaded") // uploaded | queued | digesting | indexed | failed
+  error             String?
+  indexedAt         DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
-  kb KnowledgeBase @relation(fields: [kbId], references: [id], onDelete: Cascade)
+  kb     KnowledgeBase    @relation(fields: [kbId], references: [id], onDelete: Cascade)
+  source KnowledgeSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
 
   @@unique([kbId, slug])
+  @@unique([sourceId, externalId])
+  @@index([sourceId])
 }
 
 // ---- Learner context (resumes etc.) ----
@@ -255,18 +267,22 @@ model InterviewSession {
 }
 
 model User {
-  id                String             @id
-  name              String
-  email             String
-  emailVerified     Boolean            @default(false)
-  image             String?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  sessions          Session[]
-  accounts          Account[]
-  members           Member[]
-  invitations       Invitation[]
-  interviewSessions InterviewSession[]
+  id                 String               @id
+  name               String
+  email              String
+  emailVerified      Boolean              @default(false)
+  image              String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  sessions           Session[]
+  accounts           Account[]
+  members            Member[]
+  invitations        Invitation[]
+  interviewSessions  InterviewSession[]
+  notionConnections  NotionConnection[]
+  notionOAuthStates  NotionOAuthState[]
+  youtubeConnections YouTubeConnection[]
+  youtubeOAuthStates YouTubeOAuthState[]
 
   @@unique([email])
   @@map("user")
@@ -353,18 +369,24 @@ model Apikey {
 }
 
 model Organization {
-  id                String               @id
-  name              String
-  slug              String
-  logo              String?
-  chromaTenantId    String?
-  chromaDatabase    String               @default("default")
-  createdAt         DateTime
-  metadata          String?
-  members           Member[]
-  invitations       Invitation[]
-  assignments       RolePlayAssignment[]
-  interviewSessions InterviewSession[]
+  id                 String               @id
+  name               String
+  slug               String
+  logo               String?
+  chromaTenantId     String?
+  chromaDatabase     String               @default("default")
+  createdAt          DateTime
+  metadata           String?
+  members            Member[]
+  invitations        Invitation[]
+  assignments        RolePlayAssignment[]
+  interviewSessions  InterviewSession[]
+  knowledgeBases     KnowledgeBase[]
+  knowledgeSources   KnowledgeSource[]
+  notionConnections  NotionConnection[]
+  notionOAuthStates  NotionOAuthState[]
+  youtubeConnections YouTubeConnection[]
+  youtubeOAuthStates YouTubeOAuthState[]
 
   @@unique([slug])
   @@map("organization")
@@ -419,3 +441,200 @@ model Invitation {
   @@index([email])
   @@map("invitation")
 }
+
+// ---- Connectors and Ingestion Models ----
+
+model KnowledgeSource {
+  id           String    @id @default(cuid())
+  orgId        String
+  kbId         String
+  connector    String    // upload | notion | notion_public | youtube
+  externalId   String
+  identityKey  String    @unique
+  sourceUrl    String
+  status       String    @default("active") // active | syncing | failed | unavailable | expiring
+  lastSyncedAt DateTime?
+  error        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  organization Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  kb           KnowledgeBase        @relation(fields: [kbId], references: [id], onDelete: Cascade)
+  notion       NotionSourceConfig?
+  youtube      YouTubeSourceConfig?
+  documents    KnowledgeDocument[]
+  jobs         IngestionJob[]
+
+  @@index([orgId])
+  @@index([kbId])
+  @@index([connector, status])
+}
+
+model NotionSourceConfig {
+  sourceId     String  @id
+  connectionId String?
+  accessMode   String  // owned | public
+
+  source     KnowledgeSource   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  connection NotionConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+
+  @@index([connectionId])
+}
+
+model YouTubeSourceConfig {
+  sourceId         String    @id
+  connectionId     String
+  captionId        String?
+  captionUpdatedAt DateTime?
+  fetchedAt        DateTime?
+
+  source     KnowledgeSource   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  connection YouTubeConnection @relation(fields: [connectionId], references: [id], onDelete: Restrict)
+
+  @@index([connectionId])
+  @@index([fetchedAt])
+}
+
+model IngestionJob {
+  id              String    @id @default(cuid())
+  sourceId        String
+  activeKey       String?   @unique
+  status          String    @default("queued") // queued | running | succeeded | failed
+  stage           String?
+  itemsDiscovered Int       @default(0)
+  itemsProcessed  Int       @default(0)
+  error           String?
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  source    KnowledgeSource     @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  workItems IngestionWorkItem[]
+
+  @@index([status, createdAt])
+  @@index([sourceId])
+}
+
+model IngestionWorkItem {
+  id               String    @id @default(cuid())
+  jobId            String
+  workKey          String
+  parentWorkItemId String?
+  kind             String    @default("resource") // resource | segment | publish
+  payload          Json?
+  status           String    @default("queued") // pending | queued | running | succeeded | failed
+  artifactKey      String?
+  artifactHash     String?
+  chunkCount       Int       @default(0)
+  attemptCount     Int       @default(0)
+  leaseExpiresAt   DateTime?
+  enqueuedAt       DateTime?
+  processedAt      DateTime?
+  error            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  job      IngestionJob        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  parent   IngestionWorkItem?  @relation("IngestionWorkTree", fields: [parentWorkItemId], references: [id], onDelete: SetNull)
+  children IngestionWorkItem[] @relation("IngestionWorkTree")
+
+  @@unique([jobId, workKey])
+  @@index([jobId, status])
+  @@index([status, leaseExpiresAt])
+  @@index([parentWorkItemId])
+}
+
+model YouTubeConnection {
+  id                     String    @id @default(cuid())
+  orgId                  String
+  userId                 String
+  channelId              String
+  channelTitle           String
+  status                 String    @default("active")
+  accessTokenCiphertext  String?
+  refreshTokenCiphertext String?
+  tokenExpiresAt         DateTime?
+  refreshLeaseId         String?
+  refreshLeaseExpiresAt  DateTime?
+  lastVerifiedAt         DateTime  @default(now())
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  organization  Organization          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceConfigs YouTubeSourceConfig[]
+
+  @@unique([orgId, channelId])
+  @@index([orgId, userId])
+  @@index([status, lastVerifiedAt])
+}
+
+model YouTubeOAuthState {
+  id           String    @id
+  orgId        String
+  userId       String
+  kbId         String
+  codeVerifier String
+  expiresAt    DateTime
+  consumedAt   DateTime?
+
+  organization Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kb           KnowledgeBase @relation(fields: [kbId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+}
+
+model NotionConnection {
+  id                     String    @id @default(cuid())
+  orgId                  String
+  userId                 String
+  workspaceId            String
+  workspaceName          String?
+  workspaceIcon          String?
+  botId                  String?
+  accessTokenCiphertext  String
+  refreshTokenCiphertext String?
+  tokenExpiresAt         DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  organization  Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceConfigs NotionSourceConfig[]
+
+  @@unique([orgId, workspaceId])
+  @@index([orgId, userId])
+}
+
+model NotionOAuthState {
+  id         String    @id
+  orgId      String
+  userId     String
+  kbId       String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  organization Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kb           KnowledgeBase @relation(fields: [kbId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, userId])
+  @@index([expiresAt])
+}
+
+enum TopicStatus {
+  proposed
+  approved
+}
+
+model Topic {
+  id          String      @id @default(cuid())
+  slug        String      @unique
+  description String
+  status      TopicStatus @default(approved)
+  createdAt   DateTime    @default(now())
+}
+

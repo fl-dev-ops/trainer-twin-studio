@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   AlertCircle,
+  BookOpen,
   CheckCircle2,
   Copy,
   Database,
@@ -16,6 +17,8 @@ import {
   RefreshCw,
   Search,
   Trash2,
+  Upload,
+  Video,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -61,7 +64,13 @@ function formatDate(iso: string | null): string {
   return `${dateStr} ${hours}:${minutes} UTC`;
 }
 
-function getFileIcon(ext: string) {
+function getFileIcon(ext: string, connector?: string) {
+  if (connector === "youtube") {
+    return <Video className="size-5 text-red-500" />;
+  }
+  if (connector === "notion" || connector === "notion_public") {
+    return <BookOpen className="size-5 text-stone-600 dark:text-stone-300" />;
+  }
   switch (ext.toLowerCase()) {
     case "pdf":
       return <FileText className="size-5 text-red-500" />;
@@ -83,15 +92,19 @@ export function DocumentDetailDrawer({
   open,
   onOpenChange,
   onReindexDoc,
+  onRefreshSource,
   onDeleteDoc,
   reindexing = false,
+  refreshingSource = false,
 }: {
   doc: KnowledgeDoc | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onReindexDoc: (doc: KnowledgeDoc) => Promise<void>;
+  onRefreshSource?: (doc: KnowledgeDoc) => Promise<void>;
   onDeleteDoc: (doc: KnowledgeDoc) => Promise<void>;
   reindexing?: boolean;
+  refreshingSource?: boolean;
 }) {
   const [activeTab, setActiveTab] = useState<string>("chunks");
   const [chunks, setChunks] = useState<ChunkItem[] | null>(null);
@@ -182,7 +195,7 @@ export function DocumentDetailDrawer({
         <div className="flex shrink-0 items-center justify-between border-b px-5 py-4">
           <div className="flex items-center gap-3 min-w-0 pr-4">
             <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-muted border">
-              {getFileIcon(doc.ext)}
+              {getFileIcon(doc.ext, doc.connector)}
             </span>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
@@ -193,14 +206,14 @@ export function DocumentDetailDrawer({
                   variant={
                     doc.status === "indexed"
                       ? "outline"
-                      : doc.status === "digesting"
+                      : doc.status === "digesting" || doc.status === "syncing"
                       ? "outline"
                       : "secondary"
                   }
                   className={`text-[10px] uppercase font-bold shrink-0 ${
                     doc.status === "indexed"
                       ? "border-emerald-500/30 text-emerald-600 bg-emerald-500/10"
-                      : doc.status === "digesting"
+                      : doc.status === "digesting" || doc.status === "syncing"
                       ? "border-amber-500/30 text-amber-600 bg-amber-500/10"
                       : ""
                   }`}
@@ -215,16 +228,31 @@ export function DocumentDetailDrawer({
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onReindexDoc(doc)}
-              disabled={reindexing}
-              className="h-8 gap-1.5 text-xs"
-            >
-              <RefreshCw className={`size-3.5 ${reindexing ? "animate-spin" : ""}`} />
-              <span>Re-index</span>
-            </Button>
+            {doc.connector === "notion" ||
+            doc.connector === "notion_public" ||
+            doc.connector === "youtube" ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onRefreshSource && onRefreshSource(doc)}
+                disabled={refreshingSource}
+                className="h-8 gap-1.5 text-xs"
+              >
+                <RefreshCw className={`size-3.5 ${refreshingSource ? "animate-spin text-primary" : ""}`} />
+                <span>Refresh source</span>
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onReindexDoc(doc)}
+                disabled={reindexing}
+                className="h-8 gap-1.5 text-xs"
+              >
+                <RefreshCw className={`size-3.5 ${reindexing ? "animate-spin text-primary" : ""}`} />
+                <span>Re-index</span>
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -435,9 +463,19 @@ export function DocumentDetailDrawer({
                     <span className="text-foreground font-medium capitalize">{doc.status}</span>
                   </div>
                   <div>
+                    <span className="text-muted-foreground block">Connector</span>
+                    <span className="text-foreground font-medium capitalize">{doc.connector || "upload"}</span>
+                  </div>
+                  <div>
                     <span className="text-muted-foreground block">Total Chunks</span>
                     <span className="text-foreground font-medium">{chunks?.length ?? "Calculating..."}</span>
                   </div>
+                  {doc.sourceId && (
+                    <div>
+                      <span className="text-muted-foreground block">Source ID</span>
+                      <span className="text-foreground font-mono text-[11px] truncate block">{doc.sourceId}</span>
+                    </div>
+                  )}
                 </div>
 
                 {doc.error && (

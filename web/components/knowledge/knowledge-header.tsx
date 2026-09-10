@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, Upload } from "lucide-react";
+import { Clock, Plus, Upload } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import type { KnowledgeStats } from "./types";
@@ -45,7 +45,7 @@ export function KnowledgeHeader({
             </div>
           )}
           <Button onClick={onOpenUpload}>
-            <Upload data-icon="inline-start" /> Upload document
+            <Plus data-icon="inline-start" /> Add source
           </Button>
         </>
       }

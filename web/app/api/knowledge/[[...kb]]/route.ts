@@ -57,7 +57,7 @@ export async function POST(req: Request, { params }: Params) {
   try {
     if (action === "digest") {
       const result = await digestKnowledge(org.id, base, file);
-      return NextResponse.json({ ok: true, ...result });
+      return NextResponse.json(result, { status: 202 });
     }
     if (action) {
       return NextResponse.json({ error: "Unknown action" }, { status: 400 });
@@ -70,18 +70,7 @@ export async function POST(req: Request, { params }: Params) {
         return NextResponse.json({ error: "Missing file" }, { status: 400 });
       }
       const result = await uploadKnowledgeFile(org.id, base, file);
-      try {
-        const digestion = await digestKnowledge(org.id, base, result.slug);
-        return NextResponse.json({ ok: true, ...result, indexed: digestion.indexed });
-      } catch (error) {
-        // The source is safely uploaded and the document is marked failed for retry.
-        return NextResponse.json({
-          ok: true,
-          ...result,
-          indexed: 0,
-          indexError: error instanceof Error ? error.message : "Indexing failed",
-        });
-      }
+      return NextResponse.json(result, { status: 202 });
     }
     const body = await req.json().catch(() => null);
     await createKnowledgeBase(org.id, typeof body?.slug === "string" ? body.slug : base);

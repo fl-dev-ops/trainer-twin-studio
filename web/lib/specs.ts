@@ -10,6 +10,8 @@ import {
 import { ingestDoc, knowledgeCollectionName, removeChunks, removeCollection, removeDoc } from "@/lib/knowledge";
 import { personaCollectionName } from "@/lib/persona-voice";
 import { MainCollectionService } from "@/lib/main-collection";
+import { ChromaTenantService } from "@/lib/chroma-tenant";
+import { enqueueIngestionWork } from "@/lib/ingestion-queue";
 
 export type SpecType = "personas" | "agents" | "domains";
 
@@ -329,6 +331,9 @@ export type UploadResult = {
   id: string;
   slug: string;
   markdownChars: number;
+  jobId?: string;
+  status?: string;
+  ok?: boolean;
 };
 
 /** Converts anydoc-supported files to markdown, stores source + markdown in S3, records the doc. */
@@ -365,9 +370,29 @@ export async function uploadKnowledgeFile(orgId: string, kbSlug: string, file: F
   ]);
   await db.knowledgeDocument.update({
     where: { id: doc.id },
-    data: { s3SourceKey: sourceKey, s3MarkdownKey: markdownKey },
+    data: { s3SourceKey: sourceKey, s3MarkdownKey: markdownKey, status: "uploaded" },
   });
-  return { id: doc.id, slug, markdownChars: markdown.length };
+
+  await ChromaTenantService.createTenant(orgId);
+  const queueResult = await enqueueIngestionWork({
+    orgId,
+    kbId: kb.id,
+    connector: "upload",
+    externalId: doc.id,
+    sourceUrl: `upload://${slug}`,
+    rootWorkItem: {
+      workKey: doc.id,
+      kind: "resource",
+      payload: { docId: doc.id, title: doc.title, slug: doc.slug },
+    },
+  });
+
+  await db.knowledgeDocument.update({
+    where: { id: doc.id },
+    data: { sourceId: queueResult.sourceId, status: "queued" },
+  });
+
+  return { id: doc.id, slug, markdownChars: markdown.length, jobId: queueResult.jobId, status: "queued" };
 }
 
 /** Presigned URL for the original file, for the in-browser preview. */
@@ -377,7 +402,7 @@ export async function getKnowledgePreviewUrl(orgId: string, kbSlug: string, file
   return presignedGetUrl(doc.s3SourceKey);
 }
 
-/** Indexes (or re-indexes) documents into ChromaDB. */
+/** Indexes (or re-indexes) documents asynchronously through SQS. */
 export async function digestKnowledge(orgId: string, kbSlug: string, fileSlug?: string) {
   const kb = await db.knowledgeBase.findFirst({
     where: { slug: kbSlug, orgId },
@@ -389,40 +414,33 @@ export async function digestKnowledge(orgId: string, kbSlug: string, fileSlug?: 
   );
   if (docs.length === 0) throw new Error("No documents to index");
 
-  await db.knowledgeDocument.updateMany({
-    where: { id: { in: docs.map((d) => d.id) } },
-    data: { status: "digesting", error: null },
-  });
+  await ChromaTenantService.createTenant(orgId);
 
-  try {
-    const results: { id: string; chunks: number }[] = [];
-    for (const d of docs) {
-      if (!d.s3MarkdownKey || d.s3MarkdownKey === "pending") continue;
-      const markdown = await getObjectText(d.s3MarkdownKey);
-      const chunks = await ingestDoc(kb.id, d.id, d.slug, markdown, orgId, d.title);
-      results.push({ id: d.id, chunks });
-    }
-    const byId = new Map(results.map((r) => [r.id, r.chunks]));
-    await db.$transaction(
-      docs.map((d) =>
-        db.knowledgeDocument.update({
-          where: { id: d.id },
-          data: {
-            status: byId.has(d.id) ? "indexed" : "failed",
-            error: byId.has(d.id) ? null : "No content indexed",
-            indexedAt: byId.has(d.id) ? new Date() : null,
-          },
-        }),
-      ),
-    );
-    return { indexed: results.length };
-  } catch (error) {
-    await db.knowledgeDocument.updateMany({
-      where: { id: { in: docs.map((d) => d.id) } },
-      data: { status: "failed", error: error instanceof Error ? error.message : "Digestion failed" },
+  const queuedJobs = [];
+  for (const d of docs) {
+    if (!d.s3MarkdownKey || d.s3MarkdownKey === "pending") continue;
+    const queueResult = await enqueueIngestionWork({
+      orgId,
+      kbId: kb.id,
+      connector: "upload",
+      externalId: d.id,
+      sourceUrl: `upload://${d.slug}`,
+      rootWorkItem: {
+        workKey: d.id,
+        kind: "resource",
+        payload: { docId: d.id, title: d.title, slug: d.slug },
+      },
     });
-    throw error;
+
+    await db.knowledgeDocument.update({
+      where: { id: d.id },
+      data: { sourceId: queueResult.sourceId, status: "queued", error: null },
+    });
+
+    queuedJobs.push({ id: d.id, jobId: queueResult.jobId });
   }
+
+  return { ok: true, indexed: queuedJobs.length, queued: queuedJobs.length, jobs: queuedJobs };
 }
 
 /** Removes a document's embeddings from its ChromaDB collection. */

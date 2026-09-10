@@ -10,6 +10,7 @@ for (const base of bases) {
   if (replaceCollections) await removeCollection(knowledgeCollectionName(base.id));
   const legacyPrefixes = new Set<string>();
   for (const document of base.documents) {
+    if (!document.s3MarkdownKey) continue;
     if (!replaceCollections && document.status === "indexed" && document.s3SourceKey.startsWith(kbPrefix(base.id))) continue;
     const markdown = await getObjectText(document.s3MarkdownKey);
     const source = await getObjectBytes(document.s3SourceKey);

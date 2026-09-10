@@ -1,4 +1,5 @@
 import type {
+  ConnectorInfo,
   EmbeddingPoint3D,
   KnowledgeDoc,
   KnowledgeSearchHit,
@@ -15,6 +16,12 @@ export async function fetchDocuments(): Promise<KnowledgeDoc[]> {
 export async function fetchStats(): Promise<KnowledgeStats> {
   const res = await fetch("/api/knowledge/stats");
   if (!res.ok) throw new Error("Failed to fetch stats");
+  return res.json();
+}
+
+export async function fetchConnectors(): Promise<ConnectorInfo> {
+  const res = await fetch("/api/knowledge/connectors");
+  if (!res.ok) throw new Error("Failed to fetch connectors");
   return res.json();
 }
 

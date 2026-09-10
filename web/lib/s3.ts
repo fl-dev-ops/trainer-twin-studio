@@ -1,4 +1,11 @@
-import { DeleteObjectsCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  DeleteObjectsCommand,
+  GetObjectCommand,
+  ListObjectsV2Command,
+  type ListObjectsV2CommandOutput,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const bucket = process.env.S3_BUCKET?.trim() ?? "";
@@ -66,12 +73,24 @@ export async function presignedGetUrl(key: string, expiresIn = 3600) {
   return getSignedUrl(client(), new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn });
 }
 
-/** Deletes every object under the given prefix (up to 1000 keys per call). */
+/** Deletes every object under the given prefix with full pagination beyond 1,000 keys. */
 export async function deletePrefix(prefix: string) {
   const client_ = client();
-  const listed = await client_.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix }));
-  const keys = (listed.Contents ?? []).map((o) => ({ Key: o.Key! }));
-  if (keys.length === 0) return;
-  await client_.send(new DeleteObjectsCommand({ Bucket: bucket, Delete: { Objects: keys } }));
+  let continuationToken: string | undefined = undefined;
+
+  do {
+    const listed: ListObjectsV2CommandOutput = await client_.send(
+      new ListObjectsV2Command({
+        Bucket: bucket,
+        Prefix: prefix,
+        ContinuationToken: continuationToken,
+      })
+    );
+    const keys = (listed.Contents ?? []).map((o) => ({ Key: o.Key! }));
+    if (keys.length > 0) {
+      await client_.send(new DeleteObjectsCommand({ Bucket: bucket, Delete: { Objects: keys } }));
+    }
+    continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;
+  } while (continuationToken);
 }
 
