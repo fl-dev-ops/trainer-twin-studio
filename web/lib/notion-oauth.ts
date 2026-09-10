@@ -57,28 +57,36 @@ export async function createNotionOAuthState(orgId: string, userId: string, kbId
   return id;
 }
 
-/** Marks a valid state used exactly once and returns its bound ownership fields. */
+/** Atomically verifies user role, knowledge base ownership, consumes the state, and returns bound metadata in a single query. */
 export async function consumeNotionOAuthState(id: string, orgId: string, userId: string) {
-  // Re-verify that user has trainer (owner/admin) role in orgId at consumption time
-  const membership = await db.member.findFirst({
-    where: { organizationId: orgId, userId },
-    select: { role: true },
-  });
-  if (!membership || !membership.role.split(",").some((role) => ["owner", "admin"].includes(role.trim()))) {
-    return null;
-  }
+  const result = await db.$queryRaw<
+    { id: string; orgId: string; userId: string; kbId: string; kbSlug: string }[]
+  >`
+    UPDATE "NotionOAuthState" s
+    SET "consumedAt" = NOW()
+    FROM "member" m, "KnowledgeBase" kb
+    WHERE s.id = ${id}
+      AND s."orgId" = ${orgId}
+      AND s."userId" = ${userId}
+      AND s."consumedAt" IS NULL
+      AND s."expiresAt" > NOW()
+      AND kb.id = s."kbId"
+      AND kb."orgId" = ${orgId}
+      AND m."organizationId" = ${orgId}
+      AND m."userId" = ${userId}
+      AND m.role ~* '(^|,)\s*(owner|admin)\s*(,|$)'
+    RETURNING s.id, s."orgId", s."userId", s."kbId", kb.slug AS "kbSlug"
+  `;
 
-  const state = await db.notionOAuthState.findFirst({
-    where: { id, orgId, userId },
-    include: { kb: { select: { id: true, slug: true, orgId: true } } },
-  });
-  if (!state || state.kb.orgId !== orgId || state.consumedAt || state.expiresAt <= new Date()) return null;
-
-  const consumed = await db.notionOAuthState.updateMany({
-    where: { id, orgId, userId, consumedAt: null, expiresAt: { gt: new Date() } },
-    data: { consumedAt: new Date() },
-  });
-  return consumed.count === 1 ? state : null;
+  if (result.length !== 1) return null;
+  const row = result[0];
+  return {
+    id: row.id,
+    orgId: row.orgId,
+    userId: row.userId,
+    kbId: row.kbId,
+    kb: { id: row.kbId, slug: row.kbSlug },
+  };
 }
 
 /** Builds Notion's public-connection authorization URL. */

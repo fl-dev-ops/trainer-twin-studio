@@ -182,10 +182,9 @@ CREATE UNIQUE INDEX "KnowledgeDocument_sourceId_externalId_key" ON "KnowledgeDoc
 CREATE INDEX "KnowledgeDocument_sourceId_idx" ON "KnowledgeDocument"("sourceId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "idx_ingestion_job_active_source" ON "IngestionJob"("sourceId") WHERE status IN ('queued', 'running');
+CREATE UNIQUE INDEX "IngestionJob_activeKey_key" ON "IngestionJob"("activeKey");
 CREATE INDEX "IngestionJob_status_createdAt_idx" ON "IngestionJob"("status", "createdAt");
-CREATE INDEX "IngestionJob_sourceId_status_idx" ON "IngestionJob"("sourceId", "status");
-CREATE INDEX "IngestionJob_activeKey_idx" ON "IngestionJob"("activeKey");
+CREATE INDEX "IngestionJob_sourceId_idx" ON "IngestionJob"("sourceId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "IngestionWorkItem_jobId_workKey_key" ON "IngestionWorkItem"("jobId", "workKey");

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getTrainerOrg } from "@/lib/org";
 import {
-  listYouTubeImports,
   previewYouTubeImport,
   queueYouTubeSync,
   refreshYouTubeDocument,
@@ -12,23 +11,6 @@ import { YouTubeError } from "../../../../../../shared/youtube/types";
 export const dynamic = "force-dynamic";
 
 type Params = { params: Promise<{ kb: string }> };
-
-export async function GET(_request: Request, { params }: Params) {
-  const trainer = await getTrainerOrg();
-  if (!trainer) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { kb } = await params;
-  try {
-    const data = await listYouTubeImports(trainer.id, kb);
-    return NextResponse.json(data);
-  } catch (error) {
-    console.error(`[API:knowledge:${kb}:youtube:get] failed:`, error);
-    return NextResponse.json(
-      { error: error instanceof YouTubeError ? error.message : "Could not list YouTube imports" },
-      { status: 500 },
-    );
-  }
-}
 
 export async function POST(request: Request, { params }: Params) {
   const trainer = await getTrainerOrg();

@@ -66,4 +66,30 @@ else
   aws lambda update-event-source-mapping --region "$REGION" --uuid "$MAPPING_UUID" --batch-size 1 --maximum-batching-window-in-seconds 0 --function-response-types ReportBatchItemFailures --scaling-config "$SCALING_CONFIG" >/dev/null
 fi
 
-echo "Deployed $FUNCTION_NAME: batch=1 timeout=${TIMEOUT_SECONDS}s visibility=${VISIBILITY_SECONDS}s concurrency=$MAX_CONCURRENCY dlq=$DLQ_NAME maxReceives=$MAX_RECEIVES"
+PUMP_RULE_NAME="${PUMP_RULE_NAME:-${FUNCTION_NAME}-outbox-pump}"
+PUMP_SCHEDULE="${OUTBOX_PUMP_SCHEDULE:-rate(2 minutes)}"
+
+aws events put-rule \
+  --region "$REGION" \
+  --name "$PUMP_RULE_NAME" \
+  --schedule-expression "$PUMP_SCHEDULE" \
+  --state ENABLED \
+  --description "Guaranteed scheduled outbox pump for $FUNCTION_NAME" >/dev/null
+
+FUNCTION_ARN="$(aws lambda get-function --region "$REGION" --function-name "$FUNCTION_NAME" --query 'Configuration.FunctionArn' --output text)"
+
+aws lambda add-permission \
+  --region "$REGION" \
+  --function-name "$FUNCTION_NAME" \
+  --statement-id "${PUMP_RULE_NAME}-invoke" \
+  --action lambda:InvokeFunction \
+  --principal events.amazonaws.com \
+  --source-arn "$(aws events describe-rule --region "$REGION" --name "$PUMP_RULE_NAME" --query 'Arn' --output text)" 2>/dev/null || true
+
+aws events put-targets \
+  --region "$REGION" \
+  --rule "$PUMP_RULE_NAME" \
+  --targets "Id"="1","Arn"="$FUNCTION_ARN","Input"='{"action":"outbox-pump"}' >/dev/null
+
+echo "Deployed $FUNCTION_NAME: batch=1 timeout=${TIMEOUT_SECONDS}s visibility=${VISIBILITY_SECONDS}s concurrency=$MAX_CONCURRENCY dlq=$DLQ_NAME maxReceives=$MAX_RECEIVES outboxSchedule=$PUMP_SCHEDULE"
+

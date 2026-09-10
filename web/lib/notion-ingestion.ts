@@ -1,20 +1,24 @@
 import { db } from "@/lib/db";
 import { parseNotionPageId, type NotionImportInput } from "@/lib/notion";
-import { defaultIdentityKey, enqueueIngestionWork } from "@/lib/ingestion-queue";
+import { enqueueIngestionWork } from "@/lib/ingestion-queue";
 import { getOrCreateOrgKnowledgeBase } from "@/lib/org-knowledge";
 
 /** Lists the organization's Notion connections and recent jobs for one knowledge base. */
 export async function listNotionImports(orgId: string, kbIdOrSlug?: string) {
-  let kbId: string;
+  let kbId: string | undefined;
   if (kbIdOrSlug) {
     const kb = await db.knowledgeBase.findFirst({
       where: { OR: [{ id: kbIdOrSlug }, { slug: kbIdOrSlug }], orgId },
       select: { id: true },
     });
-    kbId = kb?.id ?? kbIdOrSlug;
+    kbId = kb?.id;
   } else {
-    const defaultKb = await getOrCreateOrgKnowledgeBase(orgId);
-    kbId = defaultKb.id;
+    const defaultKb = await db.knowledgeBase.findFirst({
+      where: { orgId },
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
+    });
+    kbId = defaultKb?.id;
   }
 
   const [connections, jobs] = await Promise.all([
@@ -23,36 +27,38 @@ export async function listNotionImports(orgId: string, kbIdOrSlug?: string) {
       orderBy: { updatedAt: "desc" },
       select: { id: true, workspaceId: true, workspaceName: true, workspaceIcon: true, createdAt: true },
     }),
-    db.ingestionJob.findMany({
-      where: {
-        source: {
-          orgId,
-          kbId,
-          connector: { in: ["notion", "notion_public"] },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 20,
-      select: {
-        id: true,
-        status: true,
-        stage: true,
-        itemsDiscovered: true,
-        itemsProcessed: true,
-        error: true,
-        createdAt: true,
-        finishedAt: true,
-        source: {
+    kbId
+      ? db.ingestionJob.findMany({
+          where: {
+            source: {
+              orgId,
+              kbId,
+              connector: { in: ["notion", "notion_public"] },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 20,
           select: {
             id: true,
-            connector: true,
-            externalId: true,
-            sourceUrl: true,
-            notion: { select: { connectionId: true, accessMode: true } },
+            status: true,
+            stage: true,
+            itemsDiscovered: true,
+            itemsProcessed: true,
+            error: true,
+            createdAt: true,
+            finishedAt: true,
+            source: {
+              select: {
+                id: true,
+                connector: true,
+                externalId: true,
+                sourceUrl: true,
+                notion: { select: { connectionId: true, accessMode: true } },
+              },
+            },
           },
-        },
-      },
-    }),
+        })
+      : Promise.resolve([]),
   ]);
 
   return {
@@ -108,7 +114,6 @@ export async function queueNotionSync(input: QueueNotionSyncInput) {
   }
 
   const connector = isPublic ? "notion_public" : "notion";
-  const identityKey = defaultIdentityKey(kbId, connector, rootPageId);
 
   const result = await enqueueIngestionWork({
     orgId: input.orgId,
@@ -116,7 +121,6 @@ export async function queueNotionSync(input: QueueNotionSyncInput) {
     connector,
     externalId: rootPageId,
     sourceUrl: input.url,
-    identityKey,
     notionConfig: {
       connectionId: connectionId ?? null,
       accessMode: isPublic ? "public" : "owned",

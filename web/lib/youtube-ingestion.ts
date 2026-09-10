@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { parseYouTubeVideoId, type YouTubeImportInput } from "@/lib/youtube";
-import { defaultIdentityKey, enqueueIngestionWork } from "@/lib/ingestion-queue";
+import { enqueueIngestionWork } from "@/lib/ingestion-queue";
 import { youtubeClient } from "@/lib/youtube-server";
 import { YouTubeError } from "../../shared/youtube/types";
 import { getOrCreateOrgKnowledgeBase } from "@/lib/org-knowledge";
@@ -32,8 +32,22 @@ async function verifyActiveConnection(orgId: string, connectionId: string) {
 
 /** Returns connection metadata and import jobs for the knowledge base. */
 export async function listYouTubeImports(orgId: string, kbIdOrSlug?: string) {
-  const kb = await resolveKnowledgeBase(orgId, kbIdOrSlug, kbIdOrSlug);
-  const kbId = kb.id;
+  let kbId: string | undefined;
+  if (kbIdOrSlug) {
+    const kb = await db.knowledgeBase.findFirst({
+      where: { OR: [{ id: kbIdOrSlug }, { slug: kbIdOrSlug }], orgId },
+      select: { id: true },
+    });
+    kbId = kb?.id;
+  } else {
+    const defaultKb = await db.knowledgeBase.findFirst({
+      where: { orgId },
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
+    });
+    kbId = defaultKb?.id;
+  }
+
   const [connections, jobs] = await Promise.all([
     db.youTubeConnection.findMany({
       where: { orgId, status: { not: "disconnected" } },
@@ -46,36 +60,38 @@ export async function listYouTubeImports(orgId: string, kbIdOrSlug?: string) {
         createdAt: true,
       },
     }),
-    db.ingestionJob.findMany({
-      where: {
-        source: {
-          orgId,
-          kbId,
-          connector: "youtube",
-        },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 20,
-      select: {
-        id: true,
-        status: true,
-        stage: true,
-        error: true,
-        createdAt: true,
-        finishedAt: true,
-        source: {
+    kbId
+      ? db.ingestionJob.findMany({
+          where: {
+            source: {
+              orgId,
+              kbId,
+              connector: "youtube",
+            },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 20,
           select: {
             id: true,
-            externalId: true,
-            youtube: { select: { connectionId: true } },
+            status: true,
+            stage: true,
+            error: true,
+            createdAt: true,
+            finishedAt: true,
+            source: {
+              select: {
+                id: true,
+                externalId: true,
+                youtube: { select: { connectionId: true } },
+              },
+            },
+            workItems: {
+              where: { kind: "segment" },
+              select: { status: true },
+            },
           },
-        },
-        workItems: {
-          where: { kind: "segment" },
-          select: { status: true },
-        },
-      },
-    }),
+        })
+      : Promise.resolve([]),
   ]);
 
   const configured = [
@@ -133,8 +149,6 @@ export async function queueYouTubeSync(input: ImportContext & YouTubeImportInput
     const kb = await resolveKnowledgeBase(input.orgId, input.kbId, input.kbSlug);
     await verifyActiveConnection(input.orgId, input.connectionId);
 
-    const identityKey = defaultIdentityKey(kb.id, "youtube", videoId);
-
     // If not a force refresh, check if already indexed
     if (!input.refresh) {
       const indexed = await db.knowledgeDocument.findFirst({
@@ -157,7 +171,6 @@ export async function queueYouTubeSync(input: ImportContext & YouTubeImportInput
       connector: "youtube",
       externalId: videoId,
       sourceUrl: `https://www.youtube.com/watch?v=${videoId}`,
-      identityKey,
       youtubeConfig: {
         connectionId: input.connectionId,
       },
