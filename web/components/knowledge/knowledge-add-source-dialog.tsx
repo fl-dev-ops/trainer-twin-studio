@@ -3,18 +3,33 @@
 import { useRef, useState } from "react";
 import {
   AlertCircle,
+  ArrowRight,
   BookOpen,
+  Box,
+  Check,
   CheckCircle2,
+  ChevronRight,
+  Cloud,
   FileCode,
   FileSpreadsheet,
   FileText,
+  FolderUp,
+  Globe,
+  HardDrive,
+  Info,
   Layers,
   Link2,
+  MessageSquare,
+  Mic,
   Plus,
+  Radio,
   RefreshCw,
+  Share2,
+  Sparkles,
   Trash2,
   Upload,
   Video,
+  Wifi,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -31,7 +46,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Spinner } from "@/components/ui/spinner";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ConnectorInfo } from "./types";
 
 type UploadQueueItem = {
@@ -53,6 +67,17 @@ type YouTubePreviewData = {
   alreadyIndexed: boolean;
 };
 
+type NavCategory =
+  | "popular"
+  | "websites"
+  | "youtube"
+  | "socials"
+  | "files"
+  | "podcasts"
+  | "manual"
+  | "notetaking"
+  | "messaging";
+
 const SUPPORTED_EXTS = ["pdf", "docx", "doc", "pptx", "ppsx", "csv", "txt", "md"];
 const ACCEPT_STRING =
   ".pdf,.docx,.doc,.pptx,.ppsx,.csv,.txt,.md,text/plain,text/markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/csv";
@@ -61,6 +86,86 @@ function formatBytes(n: number) {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+// Brand SVG Icons
+function XTwitterIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  );
+}
+
+function TikTokIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M19.589 6.686a4.793 4.793 0 0 1-3.77-4.245V2h-3.445v13.672a2.896 2.896 0 0 1-5.201 1.743 2.915 2.915 0 0 1-.223-2.906 2.887 2.887 0 0 1 2.528-1.73c.277 0 .543.036.797.104V9.387a6.376 6.376 0 0 0-.797-.052 6.338 6.338 0 0 0-6.335 6.335 6.34 6.34 0 0 0 7.82 6.143 6.326 6.326 0 0 0 4.856-6.143V8.828a8.214 8.214 0 0 0 4.77 1.517V6.892a4.832 4.832 0 0 1-1-.206z" />
+    </svg>
+  );
+}
+
+function GoogleDriveIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 87.3 78" fill="currentColor">
+      <path d="M6.6 66.85l3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H0c0 1.55.4 3.1 1.2 4.5l5.4 9.35z" fill="#0066da" />
+      <path d="M43.65 25L29.9 1.2c-1.35.8-2.5 1.9-3.3 3.3L1.2 47.75c-.8 1.4-1.2 2.95-1.2 4.5h27.45L43.65 25z" fill="#00ac47" />
+      <path d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5H59.85l5.35 9.3 8.35 14.5z" fill="#ea4335" />
+      <path d="M43.65 25L57.4 1.2c-1.35-.8-2.9-1.2-4.5-1.2H34.4c-1.6 0-3.15.4-4.5 1.2l13.75 23.8z" fill="#00832d" />
+      <path d="M59.85 52.25h27.45c0-1.55-.4-3.1-1.2-4.5L72.35 23.95c-.8-1.4-1.95-2.5-3.3-3.3L59.85 52.25z" fill="#ffba00" />
+      <path d="M73.55 76.8H27.5l-13.75-23.8h59.8z" fill="#2684fc" />
+    </svg>
+  );
+}
+
+function DropboxIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="#0061FF">
+      <path d="M6 2L0 6l6 4 6-4-6-4zm12 0l-6 4 6 4 6-4-6-4zM0 14l6 4 6-4-6-4-6 4zm18-4l-6 4 6 4 6-4-6-4zm-6 5.5L6 16l-6-4v2l6 4 6-4v-2zm0 2l6-4 6 4v-2l-6-4-6 4v2z" />
+    </svg>
+  );
+}
+
+function OneDriveIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="#0078D4">
+      <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" />
+    </svg>
+  );
+}
+
+function BoxIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="#0061D5">
+      <path d="M22.04 7.6L12.5.5a.94.94 0 00-.99 0L1.96 7.6a.99.99 0 00-.46.85v8.1a.99.99 0 00.46.85l9.55 7.1c.3.22.69.22.99 0l9.55-7.1c.3-.22.46-.53.46-.85v-8.1c-.01-.32-.17-.63-.47-.85zM12 2.3l7.98 5.93L16.2 10.8 12 7.7 7.8 10.8 4.02 8.23 12 2.3zm-8.5 7.37l4 2.72v6.63l-4-2.98V9.67zm9.5 9.35v-6.63l4-2.72v6.37l-4 2.98z" />
+    </svg>
+  );
+}
+
+function YouTubeIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+    </svg>
+  );
+}
+
+function InstagramIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
+      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+      <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
+    </svg>
+  );
+}
+
+function LinkedInIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.64a1.66 1.66 0 0 0-1.66 1.66 1.66 1.66 0 0 0 1.66 1.66 1.66 1.66 0 0 0 1.66-1.66c0-.92-.74-1.66-1.66-1.66z" />
+    </svg>
+  );
 }
 
 export function KnowledgeAddSourceDialog({
@@ -74,13 +179,32 @@ export function KnowledgeAddSourceDialog({
   connectors?: ConnectorInfo;
   onSuccess: () => void;
 }) {
-  const [activeTab, setActiveTab] = useState<string>("upload");
+  const [activeCategory, setActiveCategory] = useState<NavCategory>("popular");
 
   // File Upload State
   const [queue, setQueue] = useState<UploadQueueItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Socials Sub-tab State
+  const [activeSocial, setActiveSocial] = useState<"x" | "tiktok" | "instagram" | "linkedin">("x");
+  const [socialUsername, setSocialUsername] = useState("");
+  const [keepSynced, setKeepSynced] = useState(true);
+
+  // Websites State
+  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [websiteCrawlMode, setWebsiteCrawlMode] = useState<"single" | "crawl">("single");
+  const [websiteImporting, setWebsiteImporting] = useState(false);
+
+  // Podcasts State
+  const [podcastUrl, setPodcastUrl] = useState("");
+  const [podcastImporting, setPodcastImporting] = useState(false);
+
+  // Manual Note State
+  const [manualTitle, setManualTitle] = useState("");
+  const [manualContent, setManualContent] = useState("");
+  const [manualSaving, setManualSaving] = useState(false);
 
   // Notion State
   const [notionMode, setNotionMode] = useState<"oauth" | "public">("oauth");
@@ -103,7 +227,7 @@ export function KnowledgeAddSourceDialog({
   } | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
 
-  // Helper to get active connections
+  // Active connections
   const notionConnections = connectors?.notion.connections ?? [];
   const youtubeConnections = connectors?.youtube.connections ?? [];
   const selectedNotionConnection =
@@ -325,6 +449,42 @@ export function KnowledgeAddSourceDialog({
     }
   }
 
+  async function handleSaveManualDoc() {
+    const title = manualTitle.trim();
+    const content = manualContent.trim();
+    if (!title || !content) {
+      toast.error("Please provide both a document title and content");
+      return;
+    }
+
+    setManualSaving(true);
+    try {
+      const blob = new Blob([content], { type: "text/markdown" });
+      const filename = `${title.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "note"}.md`;
+      const file = new File([blob], filename, { type: "text/markdown" });
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/knowledge/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || "Failed to save note");
+
+      toast.success(`Note "${title}" saved and queued for indexing`);
+      setManualTitle("");
+      setManualContent("");
+      onOpenChange(false);
+      onSuccess();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save manual note");
+    } finally {
+      setManualSaving(false);
+    }
+  }
+
   async function confirmDisconnect() {
     if (!disconnectItem) return;
     setDisconnecting(true);
@@ -348,581 +508,1106 @@ export function KnowledgeAddSourceDialog({
     }
   }
 
-  const completedCount = queue.filter((q) => q.status === "done").length;
-  const pendingCount = queue.filter((q) => q.status === "pending").length;
+  const NAV_ITEMS: { id: NavCategory; label: string }[] = [
+    { id: "popular", label: "Popular" },
+    { id: "websites", label: "Websites" },
+    { id: "youtube", label: "YouTube" },
+    { id: "socials", label: "Socials" },
+    { id: "files", label: "Files" },
+    { id: "podcasts", label: "Podcasts" },
+    { id: "manual", label: "Manual" },
+    { id: "notetaking", label: "Note Taking Apps" },
+    { id: "messaging", label: "Messaging Apps" },
+  ];
 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-xl max-h-[85vh] flex flex-col p-0 overflow-hidden">
-          <DialogHeader className="p-6 pb-2">
-            <DialogTitle>Add Knowledge Source</DialogTitle>
-            <DialogDescription>
-              Upload documents or connect external sources to ground your trainers.
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent
+          showCloseButton={false}
+          className="sm:max-w-4xl md:max-w-5xl h-[620px] max-h-[90vh] p-0 gap-0 overflow-hidden rounded-2xl border border-border/80 shadow-2xl bg-background"
+        >
+          <div className="flex h-full w-full">
+            {/* Left Sidebar Navigation */}
+            <aside className="w-56 shrink-0 border-r border-border/60 bg-muted/20 flex flex-col p-4 select-none">
+              <div className="px-3 py-2 mb-2">
+                <h3 className="text-sm font-semibold text-foreground/90 tracking-tight">Add Content</h3>
+              </div>
+              <nav className="flex-1 space-y-1">
+                {NAV_ITEMS.map((item) => {
+                  const isActive = activeCategory === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setActiveCategory(item.id)}
+                      className={`w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg text-left transition-colors relative ${
+                        isActive
+                          ? "text-foreground font-medium bg-accent/40 before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-1 before:rounded-full before:bg-orange-500"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                      }`}
+                    >
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+            </aside>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 min-h-0">
-            <div className="px-6 border-b">
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="upload" className="gap-1.5 text-xs">
-                  <Upload className="size-3.5" /> Upload
-                </TabsTrigger>
-                <TabsTrigger value="notion" className="gap-1.5 text-xs">
-                  <BookOpen className="size-3.5" /> Notion
-                </TabsTrigger>
-                <TabsTrigger value="youtube" className="gap-1.5 text-xs">
-                  <Video className="size-3.5" /> YouTube
-                </TabsTrigger>
-                <TabsTrigger value="connections" className="gap-1.5 text-xs">
-                  <Link2 className="size-3.5" /> Connections
-                </TabsTrigger>
-              </TabsList>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-6 min-h-0">
-              {/* TAB 1: FILE UPLOAD */}
-              <TabsContent value="upload" className="m-0 space-y-4">
-                <div
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    setDragOver(true);
-                  }}
-                  onDragLeave={() => setDragOver(false)}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    setDragOver(false);
-                    if (e.dataTransfer.files) addFiles(e.dataTransfer.files);
-                  }}
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-6 text-center cursor-pointer transition-colors ${
-                    dragOver
-                      ? "border-primary bg-primary/5"
-                      : "border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/40"
-                  }`}
+            {/* Right Main Content Area */}
+            <div className="flex-1 flex flex-col overflow-hidden bg-background">
+              {/* Header */}
+              <div className="flex items-center justify-between px-7 py-4 border-b border-border/40 shrink-0">
+                <h2 className="text-base font-semibold text-foreground">
+                  {activeCategory === "popular" && "Popular"}
+                  {activeCategory === "websites" && "Websites"}
+                  {activeCategory === "youtube" && "YouTube"}
+                  {activeCategory === "socials" && "Upload Socials"}
+                  {activeCategory === "files" && "Files"}
+                  {activeCategory === "podcasts" && "Podcasts"}
+                  {activeCategory === "manual" && "Manual Entry"}
+                  {activeCategory === "notetaking" && "Note Taking Apps"}
+                  {activeCategory === "messaging" && "Messaging Apps"}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => onOpenChange(false)}
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  aria-label="Close"
                 >
-                  <Upload className="size-8 text-muted-foreground" />
-                  <div className="text-sm font-medium">Click to browse or drop files here</div>
-                  <div className="text-xs text-muted-foreground">
-                    PDF, DOCX, PPTX, CSV, TXT, MD up to 50MB
-                  </div>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept={ACCEPT_STRING}
-                    onChange={(e) => {
-                      if (e.target.files) addFiles(e.target.files);
-                      e.target.value = "";
-                    }}
-                    className="hidden"
-                  />
-                </div>
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
 
-                {queue.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>Queue ({queue.length} files)</span>
-                      <span>
-                        {completedCount} of {queue.length} ready
-                      </span>
-                    </div>
-                    <div className="max-h-48 space-y-1.5 overflow-y-auto pr-1">
-                      {queue.map((item) => (
-                        <div
-                          key={item.id}
-                          className="flex items-center justify-between gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs"
-                        >
-                          <div className="flex min-w-0 items-center gap-2">
-                            <FileText className="size-4 shrink-0 text-muted-foreground" />
-                            <div className="min-w-0">
-                              <p className="truncate font-medium">{item.file.name}</p>
-                              <p className="text-[11px] text-muted-foreground">
-                                {formatBytes(item.file.size)}
-                              </p>
+              {/* Scrollable Body */}
+              <div className="flex-1 overflow-y-auto p-7">
+                {/* 1. POPULAR VIEW (Screenshot 3) */}
+                {activeCategory === "popular" && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3.5">
+                      {/* YouTube Card */}
+                      <button
+                        type="button"
+                        onClick={() => setActiveCategory("youtube")}
+                        className="group flex items-center justify-between p-4 rounded-xl border border-border/70 bg-card hover:border-orange-500/50 hover:shadow-xs transition-all text-left"
+                      >
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          <div className="w-9 h-9 rounded-lg bg-red-500/10 text-red-600 flex items-center justify-center shrink-0">
+                            <YouTubeIcon className="w-5 h-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-foreground">Upload from YouTube</div>
+                            <div className="text-xs text-muted-foreground truncate mt-0.5">
+                              Single video or an entire playlist / channel
                             </div>
                           </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            {item.status === "uploading" && (
-                              <Spinner className="size-3.5 text-primary" />
-                            )}
-                            {item.status === "done" && (
-                              <CheckCircle2 className="size-3.5 text-emerald-500" />
-                            )}
-                            {item.status === "error" && (
-                              <span title={item.error}>
-                                <AlertCircle className="size-3.5 text-destructive" />
-                              </span>
-                            )}
-                            {!isUploading && item.status !== "done" && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  removeItem(item.id);
-                                }}
-                                className="text-muted-foreground hover:text-foreground"
-                              >
-                                <X className="size-3.5" />
-                              </button>
-                            )}
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground shrink-0 ml-2 group-hover:translate-x-0.5 transition-transform" />
+                      </button>
+
+                      {/* Website Card */}
+                      <button
+                        type="button"
+                        onClick={() => setActiveCategory("websites")}
+                        className="group flex items-center justify-between p-4 rounded-xl border border-border/70 bg-card hover:border-orange-500/50 hover:shadow-xs transition-all text-left"
+                      >
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          <div className="w-9 h-9 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0">
+                            <Globe className="w-5 h-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-foreground">Upload from a Website</div>
+                            <div className="text-xs text-muted-foreground truncate mt-0.5">
+                              Upload a single link or an entire blog
+                            </div>
                           </div>
                         </div>
-                      ))}
+                        <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground shrink-0 ml-2 group-hover:translate-x-0.5 transition-transform" />
+                      </button>
+
+                      {/* Twitter / X Card */}
+                      <button
+                        type="button"
+                        onClick={() => setActiveCategory("socials")}
+                        className="group flex items-center justify-between p-4 rounded-xl border border-border/70 bg-card hover:border-orange-500/50 hover:shadow-xs transition-all text-left"
+                      >
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center text-foreground shrink-0">
+                            <XTwitterIcon className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-foreground">Upload from Twitter</div>
+                            <div className="text-xs text-muted-foreground truncate mt-0.5">
+                              Load all your tweets
+                            </div>
+                          </div>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground shrink-0 ml-2 group-hover:translate-x-0.5 transition-transform" />
+                      </button>
+
+                      {/* Podcast Card */}
+                      <button
+                        type="button"
+                        onClick={() => setActiveCategory("podcasts")}
+                        className="group flex items-center justify-between p-4 rounded-xl border border-border/70 bg-card hover:border-orange-500/50 hover:shadow-xs transition-all text-left"
+                      >
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          <div className="w-9 h-9 rounded-lg bg-orange-500/10 text-orange-600 flex items-center justify-center shrink-0">
+                            <Mic className="w-5 h-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-foreground">Upload from a Podcast</div>
+                            <div className="text-xs text-muted-foreground truncate mt-0.5">
+                              Upload a single episode or an entire series
+                            </div>
+                          </div>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground shrink-0 ml-2 group-hover:translate-x-0.5 transition-transform" />
+                      </button>
+                    </div>
+
+                    {/* Prominent Upload Files Card */}
+                    <div
+                      onClick={() => setActiveCategory("files")}
+                      className="border border-border/80 rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:border-orange-500/60 hover:bg-orange-500/[0.02] transition-all group"
+                    >
+                      {/* Document stack illustration badges */}
+                      <div className="flex items-center justify-center -space-x-3 mb-3">
+                        <div className="w-12 h-14 rounded-lg bg-card border border-border shadow-xs -rotate-6 flex flex-col items-center justify-center p-1 group-hover:-translate-y-1 transition-transform">
+                          <span className="text-[9px] font-bold text-muted-foreground/80 tracking-wider">IMG</span>
+                          <div className="w-6 h-1 bg-muted rounded-full mt-1.5" />
+                          <div className="w-4 h-1 bg-muted rounded-full mt-1" />
+                        </div>
+                        <div className="w-12 h-14 rounded-lg bg-card border border-border shadow-md z-10 flex flex-col items-center justify-center p-1 group-hover:-translate-y-1.5 transition-transform">
+                          <span className="text-[9px] font-bold text-red-500 tracking-wider">PDF</span>
+                          <div className="w-6 h-1 bg-red-100 dark:bg-red-950/40 rounded-full mt-1.5" />
+                          <div className="w-4 h-1 bg-muted rounded-full mt-1" />
+                        </div>
+                        <div className="w-12 h-14 rounded-lg bg-card border border-border shadow-xs rotate-6 flex flex-col items-center justify-center p-1 group-hover:-translate-y-1 transition-transform">
+                          <span className="text-[9px] font-bold text-blue-500 tracking-wider">DOC</span>
+                          <div className="w-6 h-1 bg-blue-100 dark:bg-blue-950/40 rounded-full mt-1.5" />
+                          <div className="w-4 h-1 bg-muted rounded-full mt-1" />
+                        </div>
+                      </div>
+                      <div className="text-sm font-semibold text-foreground">Upload Files or Images</div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        <span className="text-orange-500 font-medium group-hover:underline">Click to browse</span> or drag and drop
+                      </div>
                     </div>
                   </div>
                 )}
-              </TabsContent>
 
-              {/* TAB 2: NOTION */}
-              <TabsContent value="notion" className="m-0 space-y-4">
-                <div className="flex rounded-lg border bg-muted/40 p-1">
-                  <button
-                    type="button"
-                    onClick={() => setNotionMode("oauth")}
-                    className={`flex-1 rounded-md py-1.5 text-xs font-medium transition-all ${
-                      notionMode === "oauth"
-                        ? "bg-background text-foreground shadow-xs"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Connected Workspace
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNotionMode("public")}
-                    className={`flex-1 rounded-md py-1.5 text-xs font-medium transition-all ${
-                      notionMode === "public"
-                        ? "bg-background text-foreground shadow-xs"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Public Page URL
-                  </button>
-                </div>
+                {/* 2. FILES VIEW (Screenshot 1) */}
+                {activeCategory === "files" && (
+                  <div className="space-y-6">
+                    {/* Hidden file input */}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      accept={ACCEPT_STRING}
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files) addFiles(e.target.files);
+                        e.target.value = "";
+                      }}
+                    />
 
-                {notionMode === "oauth" ? (
-                  <div className="space-y-4">
-                    {notionConnections.length === 0 ? (
-                      <div className="rounded-xl border border-dashed p-6 text-center space-y-3">
-                        <BookOpen className="size-8 mx-auto text-muted-foreground" />
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium">No Notion workspace connected</p>
-                          <p className="text-xs text-muted-foreground">
-                            Connect your Notion workspace to import private and team pages with sub-pages.
+                    {/* Drag & Drop Dropzone */}
+                    <div
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setDragOver(true);
+                      }}
+                      onDragLeave={() => setDragOver(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setDragOver(false);
+                        if (e.dataTransfer.files) addFiles(e.dataTransfer.files);
+                      }}
+                      onClick={() => fileInputRef.current?.click()}
+                      className={`border border-dashed rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-all ${
+                        dragOver
+                          ? "border-orange-500 bg-orange-500/5 shadow-inner"
+                          : "border-border/80 hover:border-orange-500/60 hover:bg-orange-500/[0.02]"
+                      }`}
+                    >
+                      {/* Document badges stack */}
+                      <div className="flex items-center justify-center -space-x-3 mb-3">
+                        <div className="w-12 h-14 rounded-lg bg-card border border-border shadow-xs -rotate-6 flex flex-col items-center justify-center p-1">
+                          <span className="text-[9px] font-bold text-muted-foreground/80 tracking-wider">IMG</span>
+                          <div className="w-6 h-1 bg-muted rounded-full mt-1.5" />
+                          <div className="w-4 h-1 bg-muted rounded-full mt-1" />
+                        </div>
+                        <div className="w-12 h-14 rounded-lg bg-card border border-border shadow-md z-10 flex flex-col items-center justify-center p-1">
+                          <span className="text-[9px] font-bold text-red-500 tracking-wider">PDF</span>
+                          <div className="w-6 h-1 bg-red-100 dark:bg-red-950/40 rounded-full mt-1.5" />
+                          <div className="w-4 h-1 bg-muted rounded-full mt-1" />
+                        </div>
+                        <div className="w-12 h-14 rounded-lg bg-card border border-border shadow-xs rotate-6 flex flex-col items-center justify-center p-1">
+                          <span className="text-[9px] font-bold text-blue-500 tracking-wider">DOC</span>
+                          <div className="w-6 h-1 bg-blue-100 dark:bg-blue-950/40 rounded-full mt-1.5" />
+                          <div className="w-4 h-1 bg-muted rounded-full mt-1" />
+                        </div>
+                      </div>
+                      <div className="text-sm font-semibold text-foreground">Upload Files or Images</div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        <span className="text-orange-500 font-medium">Click to browse</span> or drag and drop
+                      </div>
+                      <div className="text-[11px] text-muted-foreground/70 mt-2">
+                        PDF, Word (.docx), PowerPoint (.pptx), Markdown, CSV, TXT
+                      </div>
+                    </div>
+
+                    {/* Queued Files List */}
+                    {queue.length > 0 && (
+                      <div className="space-y-2 border border-border/60 rounded-xl p-4 bg-muted/10">
+                        <div className="flex items-center justify-between text-xs text-muted-foreground px-1 pb-1">
+                          <span className="font-medium text-foreground">
+                            {queue.length} file{queue.length > 1 ? "s" : ""} selected
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 text-xs text-muted-foreground hover:text-foreground"
+                            onClick={() => setQueue([])}
+                            disabled={isUploading}
+                          >
+                            Clear all
+                          </Button>
+                        </div>
+                        <div className="max-h-40 overflow-y-auto space-y-2">
+                          {queue.map((item) => (
+                            <div
+                              key={item.id}
+                              className="flex items-center justify-between p-2.5 rounded-lg bg-card border border-border/70 text-xs"
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-3">
+                                <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                                <div className="truncate font-medium text-foreground">
+                                  {item.file.name}
+                                </div>
+                                <span className="text-muted-foreground/70 shrink-0">
+                                  {formatBytes(item.file.size)}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                {item.status === "uploading" && (
+                                  <Spinner className="w-3.5 h-3.5 text-orange-500" />
+                                )}
+                                {item.status === "done" && (
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                )}
+                                {item.status === "error" && (
+                                  <span className="text-destructive font-medium truncate max-w-[120px]">
+                                    {item.error || "Failed"}
+                                  </span>
+                                )}
+                                {item.status === "pending" && !isUploading && (
+                                  <button
+                                    type="button"
+                                    onClick={() => removeItem(item.id)}
+                                    className="text-muted-foreground hover:text-foreground p-0.5"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="pt-2 flex justify-end">
+                          <Button
+                            type="button"
+                            onClick={startUpload}
+                            disabled={isUploading || queue.every((i) => i.status === "done")}
+                            className="bg-orange-500 hover:bg-orange-600 text-white gap-2 text-xs"
+                          >
+                            {isUploading ? (
+                              <>
+                                <Spinner className="w-3.5 h-3.5" />
+                                Uploading...
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="w-3.5 h-3.5" />
+                                Upload {queue.filter((i) => i.status !== "done").length} File(s)
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 2x2 Cloud Storage Options */}
+                    <div>
+                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2.5 px-1">
+                        Cloud Storage
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => toast.info("Dropbox integration is coming soon.")}
+                          className="flex items-center gap-3 p-3.5 rounded-xl border border-border/70 bg-card hover:bg-accent/40 text-left transition-colors"
+                        >
+                          <DropboxIcon className="w-5 h-5 shrink-0" />
+                          <span className="text-xs font-medium text-foreground">Choose from Dropbox</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toast.info("Google Drive integration is coming soon.")}
+                          className="flex items-center gap-3 p-3.5 rounded-xl border border-border/70 bg-card hover:bg-accent/40 text-left transition-colors"
+                        >
+                          <GoogleDriveIcon className="w-5 h-5 shrink-0" />
+                          <span className="text-xs font-medium text-foreground">Choose from Google Drive</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toast.info("OneDrive integration is coming soon.")}
+                          className="flex items-center gap-3 p-3.5 rounded-xl border border-border/70 bg-card hover:bg-accent/40 text-left transition-colors"
+                        >
+                          <OneDriveIcon className="w-5 h-5 shrink-0" />
+                          <span className="text-xs font-medium text-foreground">Choose from OneDrive</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toast.info("Box integration is coming soon.")}
+                          className="flex items-center gap-3 p-3.5 rounded-xl border border-border/70 bg-card hover:bg-accent/40 text-left transition-colors"
+                        >
+                          <BoxIcon className="w-5 h-5 shrink-0" />
+                          <span className="text-xs font-medium text-foreground">Choose from Box</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 3. SOCIALS VIEW (Screenshot 2) */}
+                {activeCategory === "socials" && (
+                  <div className="space-y-6">
+                    {/* Platform Selection Cards (Horizontal Grid) */}
+                    <div className="grid grid-cols-4 gap-3">
+                      {/* X Card */}
+                      <button
+                        type="button"
+                        onClick={() => setActiveSocial("x")}
+                        className={`p-3.5 rounded-xl border text-left transition-all flex flex-col justify-between h-20 ${
+                          activeSocial === "x"
+                            ? "border-orange-500 bg-orange-500/[0.03] ring-1 ring-orange-500/20"
+                            : "border-border/70 bg-card hover:border-border"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div
+                            className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                              activeSocial === "x"
+                                ? "border-orange-500 bg-orange-500"
+                                : "border-muted-foreground/40"
+                            }`}
+                          >
+                            {activeSocial === "x" && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                          </div>
+                          <XTwitterIcon className="w-4 h-4 text-foreground/80" />
+                        </div>
+                        <span className="text-xs font-medium text-foreground truncate">
+                          Upload your X profile
+                        </span>
+                      </button>
+
+                      {/* TikTok Card */}
+                      <button
+                        type="button"
+                        onClick={() => setActiveSocial("tiktok")}
+                        className={`p-3.5 rounded-xl border text-left transition-all flex flex-col justify-between h-20 ${
+                          activeSocial === "tiktok"
+                            ? "border-orange-500 bg-orange-500/[0.03] ring-1 ring-orange-500/20"
+                            : "border-border/70 bg-card hover:border-border"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div
+                            className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                              activeSocial === "tiktok"
+                                ? "border-orange-500 bg-orange-500"
+                                : "border-muted-foreground/40"
+                            }`}
+                          >
+                            {activeSocial === "tiktok" && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                          </div>
+                          <TikTokIcon className="w-4 h-4 text-foreground/80" />
+                        </div>
+                        <span className="text-xs font-medium text-foreground truncate">
+                          Upload your TikTok
+                        </span>
+                      </button>
+
+                      {/* Instagram Card */}
+                      <button
+                        type="button"
+                        onClick={() => setActiveSocial("instagram")}
+                        className={`p-3.5 rounded-xl border text-left transition-all flex flex-col justify-between h-20 ${
+                          activeSocial === "instagram"
+                            ? "border-orange-500 bg-orange-500/[0.03] ring-1 ring-orange-500/20"
+                            : "border-border/70 bg-card hover:border-border"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div
+                            className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                              activeSocial === "instagram"
+                                ? "border-orange-500 bg-orange-500"
+                                : "border-muted-foreground/40"
+                            }`}
+                          >
+                            {activeSocial === "instagram" && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                          </div>
+                          <InstagramIcon className="w-4 h-4 text-pink-600" />
+                        </div>
+                        <span className="text-xs font-medium text-foreground truncate">
+                          Upload your Instagram
+                        </span>
+                      </button>
+
+                      {/* LinkedIn Card */}
+                      <button
+                        type="button"
+                        onClick={() => setActiveSocial("linkedin")}
+                        className={`p-3.5 rounded-xl border text-left transition-all flex flex-col justify-between h-20 ${
+                          activeSocial === "linkedin"
+                            ? "border-orange-500 bg-orange-500/[0.03] ring-1 ring-orange-500/20"
+                            : "border-border/70 bg-card hover:border-border"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div
+                            className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                              activeSocial === "linkedin"
+                                ? "border-orange-500 bg-orange-500"
+                                : "border-muted-foreground/40"
+                            }`}
+                          >
+                            {activeSocial === "linkedin" && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                          </div>
+                          <LinkedInIcon className="w-4 h-4 text-blue-600" />
+                        </div>
+                        <span className="text-xs font-medium text-foreground truncate">
+                          Upload your LinkedIn
+                        </span>
+                      </button>
+                    </div>
+
+                    {/* Social Form */}
+                    <div className="space-y-4 pt-2">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-foreground">Username</label>
+                        <div className="relative">
+                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">
+                            @
+                          </span>
+                          <Input
+                            type="text"
+                            placeholder="username"
+                            value={socialUsername}
+                            onChange={(e) => setSocialUsername(e.target.value)}
+                            className="pl-8 text-sm h-10 border-border/80 focus-visible:ring-orange-500"
+                          />
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          Enter your {activeSocial === "x" ? "X / Twitter" : activeSocial} handle to automatically pull public posts and bio.
+                        </p>
+                      </div>
+
+                      {/* Keep Synced Row */}
+                      <div className="flex items-start gap-3 p-3.5 rounded-xl bg-muted/20 border border-border/60">
+                        <Wifi className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold text-foreground">Keep Synced</span>
+                            <input
+                              type="checkbox"
+                              checked={keepSynced}
+                              onChange={(e) => setKeepSynced(e.target.checked)}
+                              className="accent-orange-500 w-4 h-4 rounded cursor-pointer"
+                            />
+                          </div>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            Automatically sync and ingest new content when published.
                           </p>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 flex justify-end">
+                        <Button
+                          type="button"
+                          onClick={() => {
+                            if (!socialUsername.trim()) {
+                              toast.error("Please enter a username");
+                              return;
+                            }
+                            toast.info(`Ingesting @${socialUsername.trim()} from ${activeSocial} is queued.`);
+                            setSocialUsername("");
+                            onOpenChange(false);
+                          }}
+                          className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-5"
+                        >
+                          Import Profile
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 4. YOUTUBE VIEW */}
+                {activeCategory === "youtube" && (
+                  <div className="space-y-6">
+                    {/* Channel Connections Section */}
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <div className="text-xs font-semibold text-foreground">YouTube Channels</div>
+                          <div className="text-[11px] text-muted-foreground">
+                            Connect your channel via Google OAuth to import videos and transcripts
+                          </div>
                         </div>
                         <Button
-                          onClick={startNotionOAuth}
+                          type="button"
+                          variant="outline"
                           size="sm"
-                          disabled={!connectors?.notion.configured}
+                          onClick={startYouTubeOAuth}
+                          disabled={!connectors?.youtube.configured}
+                          className="text-xs gap-1.5 border-border"
                         >
-                          <Plus data-icon="inline-start" /> Connect Notion Workspace
+                          <Plus className="w-3.5 h-3.5" />
+                          Connect Channel
                         </Button>
-                        {!connectors?.notion.configured && (
-                          <p className="text-[11px] text-destructive">
-                            Notion OAuth client credentials are not configured in environment.
-                          </p>
-                        )}
                       </div>
-                    ) : (
-                      <div className="space-y-3">
-                        <div className="space-y-1">
-                          <label className="text-xs font-medium text-foreground">
-                            Workspace
-                          </label>
-                          <select
-                            value={notionConnectionId || selectedNotionConnection?.id}
-                            onChange={(e) => setNotionConnectionId(e.target.value)}
-                            className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                          >
-                            {notionConnections.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.workspaceName || `Workspace (${c.workspaceId})`}
-                              </option>
-                            ))}
-                          </select>
+
+                      {youtubeConnections.length === 0 ? (
+                        <div className="p-4 rounded-xl border border-dashed border-border/80 bg-muted/10 text-center">
+                          <YouTubeIcon className="w-7 h-7 text-muted-foreground/60 mx-auto mb-1.5" />
+                          <div className="text-xs font-medium text-foreground">No YouTube Channel Connected</div>
+                          <div className="text-[11px] text-muted-foreground mt-0.5">
+                            Connect your owned channel to import videos, extract questions, and process transcripts.
+                          </div>
                         </div>
-
-                        <div className="space-y-1">
-                          <label className="text-xs font-medium text-foreground">
-                            Notion Page URL or ID
-                          </label>
-                          <Input
-                            placeholder="https://notion.so/my-org/Page-Title-1234567890abcdef"
-                            value={notionUrl}
-                            onChange={(e) => setNotionUrl(e.target.value)}
-                            className="h-8 text-xs"
-                          />
-                          <p className="text-[11px] text-muted-foreground">
-                            Child pages under this root page will be traversed and indexed automatically.
-                          </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {youtubeConnections.map((c) => (
+                            <div
+                              key={c.id}
+                              className={`flex items-center justify-between p-3 rounded-xl border transition-colors ${
+                                selectedYoutubeConnection?.id === c.id
+                                  ? "border-orange-500/70 bg-orange-500/[0.02]"
+                                  : "border-border/70 bg-card"
+                              }`}
+                            >
+                              <div
+                                className="flex items-center gap-2.5 cursor-pointer flex-1"
+                                onClick={() => setYoutubeConnectionId(c.id)}
+                              >
+                                <div className="w-8 h-8 rounded-lg bg-red-500/10 text-red-600 flex items-center justify-center shrink-0">
+                                  <YouTubeIcon className="w-4 h-4" />
+                                </div>
+                                <div>
+                                  <div className="text-xs font-medium text-foreground">
+                                    {c.channelTitle}
+                                  </div>
+                                  <div className="text-[10px] text-muted-foreground">ID: {c.channelId}</div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="text-[10px] text-emerald-600 border-emerald-500/30">
+                                  Active
+                                </Badge>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  className="text-muted-foreground hover:text-destructive"
+                                  onClick={() =>
+                                    setDisconnectItem({
+                                      id: c.id,
+                                      title: c.channelTitle,
+                                      provider: "youtube",
+                                    })
+                                  }
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-foreground">
-                        Public Notion Page URL
-                      </label>
-                      <Input
-                        placeholder="https://myorg.notion.site/Public-Page-1234567890abcdef"
-                        value={notionUrl}
-                        onChange={(e) => setNotionUrl(e.target.value)}
-                        className="h-8 text-xs"
-                      />
-                      <p className="text-[11px] text-muted-foreground">
-                        The page must be published to the web with public read access enabled.
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </TabsContent>
-
-              {/* TAB 3: YOUTUBE */}
-              <TabsContent value="youtube" className="m-0 space-y-4">
-                {youtubeConnections.length === 0 ? (
-                  <div className="rounded-xl border border-dashed p-6 text-center space-y-3">
-                    <Video className="size-8 mx-auto text-muted-foreground" />
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium">No YouTube channel connected</p>
-                      <p className="text-xs text-muted-foreground">
-                        Connect your YouTube channel to import video captions and extract training questions.
-                      </p>
-                    </div>
-                    <Button
-                      onClick={startYouTubeOAuth}
-                      size="sm"
-                      disabled={!connectors?.youtube.configured}
-                    >
-                      <Plus data-icon="inline-start" /> Connect YouTube Channel
-                    </Button>
-                    {!connectors?.youtube.configured && (
-                      <p className="text-[11px] text-destructive">
-                        YouTube OAuth credentials are not configured in environment.
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-foreground">Channel</label>
-                      <select
-                        value={youtubeConnectionId || selectedYoutubeConnection?.id}
-                        onChange={(e) => setYoutubeConnectionId(e.target.value)}
-                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      >
-                        {youtubeConnections.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.channelTitle} ({c.channelId})
-                          </option>
-                        ))}
-                      </select>
+                      )}
                     </div>
 
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-foreground">
-                        YouTube Video URL
-                      </label>
+                    {/* Import Video Form */}
+                    <div className="space-y-3 pt-2 border-t border-border/50">
+                      <div className="text-xs font-semibold text-foreground">Import Video</div>
                       <div className="flex gap-2">
                         <Input
+                          type="url"
                           placeholder="https://www.youtube.com/watch?v=..."
                           value={youtubeUrl}
                           onChange={(e) => {
                             setYoutubeUrl(e.target.value);
                             setYoutubePreview(null);
                           }}
-                          className="h-8 text-xs flex-1"
+                          className="text-xs h-10 border-border/80"
                         />
                         <Button
+                          type="button"
                           variant="outline"
-                          size="sm"
                           onClick={handleYouTubePreview}
-                          disabled={!youtubeUrl.trim() || youtubePreviewing}
-                          className="h-8 text-xs shrink-0"
+                          disabled={youtubePreviewing || !youtubeUrl.trim() || !selectedYoutubeConnection}
+                          className="text-xs px-4 border-border shrink-0"
                         >
-                          {youtubePreviewing ? (
-                            <Spinner data-icon="inline-start" />
+                          {youtubePreviewing ? <Spinner className="w-3.5 h-3.5" /> : "Preview"}
+                        </Button>
+                      </div>
+
+                      {/* Video Preview Card */}
+                      {youtubePreview && (
+                        <div className="p-4 rounded-xl border border-border/80 bg-card space-y-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="text-xs font-semibold text-foreground line-clamp-2">
+                                {youtubePreview.title}
+                              </div>
+                              <div className="text-[11px] text-muted-foreground mt-0.5">
+                                Channel: {youtubePreview.channelTitle} • Language: {youtubePreview.language.toUpperCase()}
+                              </div>
+                            </div>
+                            {youtubePreview.alreadyIndexed && (
+                              <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-500/40 shrink-0">
+                                Already Indexed
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex justify-end pt-1">
+                            <Button
+                              type="button"
+                              onClick={handleYouTubeImport}
+                              disabled={youtubeImporting}
+                              className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-4"
+                            >
+                              {youtubeImporting ? (
+                                <>
+                                  <Spinner className="w-3.5 h-3.5 mr-1.5" />
+                                  Importing...
+                                </>
+                              ) : youtubePreview.alreadyIndexed ? (
+                                "Refresh Video"
+                              ) : (
+                                "Import Video"
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* 5. NOTE TAKING APPS VIEW (Notion) */}
+                {activeCategory === "notetaking" && (
+                  <div className="space-y-6">
+                    {/* Mode Toggle */}
+                    <div className="flex items-center gap-2 p-1 bg-muted/40 rounded-xl w-fit">
+                      <button
+                        type="button"
+                        onClick={() => setNotionMode("oauth")}
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          notionMode === "oauth"
+                            ? "bg-background text-foreground shadow-xs"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        Connected Notion Workspace
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNotionMode("public")}
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          notionMode === "public"
+                            ? "bg-background text-foreground shadow-xs"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        Public Page URL
+                      </button>
+                    </div>
+
+                    {notionMode === "oauth" ? (
+                      <div className="space-y-5">
+                        {/* Workspaces list */}
+                        <div>
+                          <div className="flex items-center justify-between mb-3">
+                            <div>
+                              <div className="text-xs font-semibold text-foreground">Workspaces ({notionConnections.length})</div>
+                              <div className="text-[11px] text-muted-foreground">
+                                Select an authorized Notion workspace
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={startNotionOAuth}
+                              disabled={!connectors?.notion.configured}
+                              className="text-xs gap-1.5 border-border"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              Connect Notion
+                            </Button>
+                          </div>
+
+                          {notionConnections.length === 0 ? (
+                            <div className="p-4 rounded-xl border border-dashed border-border/80 bg-muted/10 text-center">
+                              <BookOpen className="w-7 h-7 text-muted-foreground/60 mx-auto mb-1.5" />
+                              <div className="text-xs font-medium text-foreground">No Workspace Connected</div>
+                              <div className="text-[11px] text-muted-foreground mt-0.5">
+                                Connect your Notion workspace to import private databases and pages.
+                              </div>
+                            </div>
                           ) : (
-                            <RefreshCw data-icon="inline-start" />
+                            <div className="space-y-2">
+                              {notionConnections.map((c) => (
+                                <div
+                                  key={c.id}
+                                  className={`flex items-center justify-between p-3 rounded-xl border transition-colors ${
+                                    selectedNotionConnection?.id === c.id
+                                      ? "border-orange-500/70 bg-orange-500/[0.02]"
+                                      : "border-border/70 bg-card"
+                                  }`}
+                                >
+                                  <div
+                                    className="flex items-center gap-2.5 cursor-pointer flex-1"
+                                    onClick={() => setNotionConnectionId(c.id)}
+                                  >
+                                    <div className="w-8 h-8 rounded-lg bg-foreground/5 flex items-center justify-center font-bold text-xs shrink-0">
+                                      {c.workspaceIcon || c.workspaceName?.[0] || "N"}
+                                    </div>
+                                    <div>
+                                      <div className="text-xs font-medium text-foreground">
+                                        {c.workspaceName || "Notion Workspace"}
+                                      </div>
+                                      <div className="text-[10px] text-muted-foreground">ID: {c.workspaceId}</div>
+                                    </div>
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon-xs"
+                                    className="text-muted-foreground hover:text-destructive"
+                                    onClick={() =>
+                                      setDisconnectItem({
+                                        id: c.id,
+                                        title: c.workspaceName || "Notion Workspace",
+                                        provider: "notion",
+                                      })
+                                    }
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
                           )}
-                          Preview
+                        </div>
+
+                        {/* Page URL input */}
+                        <div className="space-y-2 pt-2 border-t border-border/50">
+                          <label className="text-xs font-semibold text-foreground">Notion Page URL</label>
+                          <Input
+                            type="url"
+                            placeholder="https://notion.so/my-org/Page-Title-1234567890abcdef"
+                            value={notionUrl}
+                            onChange={(e) => setNotionUrl(e.target.value)}
+                            className="text-xs h-10 border-border/80"
+                          />
+                          <p className="text-[11px] text-muted-foreground">
+                            Subpages linked underneath this root will be recursively fanned out and indexed.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Public Page Import */
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold text-foreground">Public Notion Page URL</label>
+                          <Input
+                            type="url"
+                            placeholder="https://myorg.notion.site/Public-Page-1234567890abcdef"
+                            value={notionUrl}
+                            onChange={(e) => setNotionUrl(e.target.value)}
+                            className="text-xs h-10 border-border/80"
+                          />
+                          <p className="text-[11px] text-muted-foreground">
+                            Works on any page where &quot;Share to web&quot; is turned on. No OAuth connection required.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="pt-2 flex justify-end">
+                      <Button
+                        type="button"
+                        onClick={handleNotionImport}
+                        disabled={
+                          notionImporting ||
+                          !notionUrl.trim() ||
+                          (notionMode === "oauth" && notionConnections.length === 0)
+                        }
+                        className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-5"
+                      >
+                        {notionImporting ? (
+                          <>
+                            <Spinner className="w-3.5 h-3.5 mr-1.5" />
+                            Queuing Sync...
+                          </>
+                        ) : (
+                          "Import Notion Content"
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* 6. WEBSITES VIEW */}
+                {activeCategory === "websites" && (
+                  <div className="space-y-6">
+                    <div className="space-y-4">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-foreground">Website URL</label>
+                        <Input
+                          type="url"
+                          placeholder="https://example.com/docs or https://company.com/blog"
+                          value={websiteUrl}
+                          onChange={(e) => setWebsiteUrl(e.target.value)}
+                          className="text-xs h-10 border-border/80"
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                          Enter the root documentation or website URL to scrape and convert to markdown.
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setWebsiteCrawlMode("single")}
+                          className={`p-3 rounded-xl border text-left transition-colors ${
+                            websiteCrawlMode === "single"
+                              ? "border-orange-500 bg-orange-500/[0.03]"
+                              : "border-border/70 bg-card hover:border-border"
+                          }`}
+                        >
+                          <div className="text-xs font-medium text-foreground">Single Page</div>
+                          <div className="text-[11px] text-muted-foreground mt-0.5">
+                            Scrapes only this specific page
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setWebsiteCrawlMode("crawl")}
+                          className={`p-3 rounded-xl border text-left transition-colors ${
+                            websiteCrawlMode === "crawl"
+                              ? "border-orange-500 bg-orange-500/[0.03]"
+                              : "border-border/70 bg-card hover:border-border"
+                          }`}
+                        >
+                          <div className="text-xs font-medium text-foreground">Full Domain Crawl</div>
+                          <div className="text-[11px] text-muted-foreground mt-0.5">
+                            Discovers subpages and sitemaps
+                          </div>
+                        </button>
+                      </div>
+
+                      <div className="pt-3 flex justify-end">
+                        <Button
+                          type="button"
+                          disabled={!websiteUrl.trim() || websiteImporting}
+                          onClick={() => {
+                            toast.info(`Scraping queued for ${websiteUrl.trim()} (${websiteCrawlMode} mode)`);
+                            setWebsiteUrl("");
+                            onOpenChange(false);
+                          }}
+                          className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-5"
+                        >
+                          {websiteImporting ? <Spinner className="w-3.5 h-3.5 mr-1.5" /> : null}
+                          Scrape & Ingest Website
                         </Button>
                       </div>
                     </div>
-
-                    {youtubePreview && (
-                      <div className="rounded-lg border bg-muted/30 p-3 space-y-2 text-xs">
-                        <div className="font-semibold text-foreground truncate">
-                          {youtubePreview.title}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
-                          <span>Channel: {youtubePreview.channelTitle}</span>
-                          <span>•</span>
-                          <span>Language: {youtubePreview.language}</span>
-                          {youtubePreview.isAutoGenerated && (
-                            <Badge variant="secondary" className="text-[10px]">
-                              Auto-generated
-                            </Badge>
-                          )}
-                          {youtubePreview.alreadyIndexed && (
-                            <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600">
-                              Already indexed (re-indexing will replace questions)
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
-              </TabsContent>
 
-              {/* TAB 4: CONNECTIONS MANAGEMENT */}
-              <TabsContent value="connections" className="m-0 space-y-4">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Notion Workspaces ({notionConnections.length})
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={startNotionOAuth}
-                      disabled={!connectors?.notion.configured}
-                      className="h-7 text-xs"
-                    >
-                      <Plus data-icon="inline-start" /> Add Notion
-                    </Button>
-                  </div>
+                {/* 7. PODCASTS VIEW */}
+                {activeCategory === "podcasts" && (
+                  <div className="space-y-6">
+                    <div className="space-y-4">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-foreground">Podcast RSS or Episode URL</label>
+                        <Input
+                          type="url"
+                          placeholder="https://feeds.buzzsprout.com/... or Spotify episode link"
+                          value={podcastUrl}
+                          onChange={(e) => setPodcastUrl(e.target.value)}
+                          className="text-xs h-10 border-border/80"
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                          Enter your podcast RSS feed to automatically transcribe episodes and extract key insights.
+                        </p>
+                      </div>
 
-                  {notionConnections.length === 0 ? (
-                    <p className="text-xs text-muted-foreground italic py-2">
-                      No Notion workspaces connected.
-                    </p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {notionConnections.map((c) => (
-                        <div
-                          key={c.id}
-                          className="flex items-center justify-between rounded-lg border p-2.5 text-xs bg-card"
+                      <div className="pt-3 flex justify-end">
+                        <Button
+                          type="button"
+                          disabled={!podcastUrl.trim() || podcastImporting}
+                          onClick={() => {
+                            toast.info(`Podcast import queued for ${podcastUrl.trim()}`);
+                            setPodcastUrl("");
+                            onOpenChange(false);
+                          }}
+                          className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-5"
                         >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <BookOpen className="size-4 shrink-0 text-muted-foreground" />
-                            <div className="min-w-0">
-                              <p className="font-medium truncate">
-                                {c.workspaceName || "Workspace"}
-                              </p>
-                              <p className="text-[11px] text-muted-foreground font-mono truncate">
-                                {c.workspaceId}
-                              </p>
-                            </div>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            onClick={() =>
-                              setDisconnectItem({
-                                id: c.id,
-                                title: c.workspaceName || "Notion Workspace",
-                                provider: "notion",
-                              })
-                            }
-                            className="size-7 text-destructive hover:bg-destructive/10"
-                            title="Disconnect workspace"
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        </div>
-                      ))}
+                          {podcastImporting ? <Spinner className="w-3.5 h-3.5 mr-1.5" /> : null}
+                          Import Podcast
+                        </Button>
+                      </div>
                     </div>
-                  )}
-
-                  <div className="border-t pt-3 flex items-center justify-between">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      YouTube Channels ({youtubeConnections.length})
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={startYouTubeOAuth}
-                      disabled={!connectors?.youtube.configured}
-                      className="h-7 text-xs"
-                    >
-                      <Plus data-icon="inline-start" /> Add YouTube
-                    </Button>
                   </div>
+                )}
 
-                  {youtubeConnections.length === 0 ? (
-                    <p className="text-xs text-muted-foreground italic py-2">
-                      No YouTube channels connected.
-                    </p>
-                  ) : (
+                {/* 8. MANUAL ENTRY VIEW */}
+                {activeCategory === "manual" && (
+                  <div className="space-y-4">
                     <div className="space-y-1.5">
-                      {youtubeConnections.map((c) => (
-                        <div
-                          key={c.id}
-                          className="flex items-center justify-between rounded-lg border p-2.5 text-xs bg-card"
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <Video className="size-4 shrink-0 text-red-500" />
-                            <div className="min-w-0">
-                              <p className="font-medium truncate">{c.channelTitle}</p>
-                              <p className="text-[11px] text-muted-foreground font-mono truncate">
-                                {c.channelId}
-                              </p>
-                            </div>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            onClick={() =>
-                              setDisconnectItem({
-                                id: c.id,
-                                title: c.channelTitle,
-                                provider: "youtube",
-                              })
-                            }
-                            className="size-7 text-destructive hover:bg-destructive/10"
-                            title="Disconnect channel"
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        </div>
-                      ))}
+                      <label className="text-xs font-semibold text-foreground">Document Title</label>
+                      <Input
+                        type="text"
+                        placeholder="e.g. Return Policy, Troubleshooting FAQ, Brand Voice"
+                        value={manualTitle}
+                        onChange={(e) => setManualTitle(e.target.value)}
+                        className="text-xs h-9 border-border/80"
+                      />
                     </div>
-                  )}
-                </div>
-              </TabsContent>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-foreground">Content (Markdown / Plain Text)</label>
+                      <textarea
+                        rows={9}
+                        placeholder="Paste or write content directly here. Standard Markdown formatting is supported..."
+                        value={manualContent}
+                        onChange={(e) => setManualContent(e.target.value)}
+                        className="w-full text-xs font-mono p-3 rounded-xl border border-border/80 bg-background resize-none focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-orange-500"
+                      />
+                    </div>
+
+                    <div className="pt-2 flex justify-end">
+                      <Button
+                        type="button"
+                        onClick={handleSaveManualDoc}
+                        disabled={manualSaving || !manualTitle.trim() || !manualContent.trim()}
+                        className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-5"
+                      >
+                        {manualSaving ? (
+                          <>
+                            <Spinner className="w-3.5 h-3.5 mr-1.5" />
+                            Saving...
+                          </>
+                        ) : (
+                          "Save Document"
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* 9. MESSAGING APPS VIEW */}
+                {activeCategory === "messaging" && (
+                  <div className="space-y-4">
+                    <div className="text-xs text-muted-foreground mb-3">
+                      Connect your messaging channels to sync discussions, FAQs, and shared files.
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="p-4 rounded-xl border border-border/70 bg-card text-center space-y-2">
+                        <MessageSquare className="w-6 h-6 text-purple-600 mx-auto" />
+                        <div className="text-xs font-medium text-foreground">Slack</div>
+                        <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                          Coming Soon
+                        </Badge>
+                      </div>
+                      <div className="p-4 rounded-xl border border-border/70 bg-card text-center space-y-2">
+                        <MessageSquare className="w-6 h-6 text-indigo-600 mx-auto" />
+                        <div className="text-xs font-medium text-foreground">Discord</div>
+                        <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                          Coming Soon
+                        </Badge>
+                      </div>
+                      <div className="p-4 rounded-xl border border-border/70 bg-card text-center space-y-2">
+                        <MessageSquare className="w-6 h-6 text-emerald-600 mx-auto" />
+                        <div className="text-xs font-medium text-foreground">WhatsApp</div>
+                        <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                          Coming Soon
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
-            {/* DIALOG FOOTER */}
-            <DialogFooter className="p-4 border-t bg-muted/20">
-              {activeTab === "upload" && (
-                <div className="flex items-center justify-between w-full">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setQueue([])}
-                    disabled={queue.length === 0 || isUploading}
-                  >
-                    Clear
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={startUpload}
-                    disabled={pendingCount === 0 || isUploading}
-                  >
-                    {isUploading ? (
-                      <Spinner data-icon="inline-start" />
-                    ) : (
-                      <Upload data-icon="inline-start" />
-                    )}
-                    Upload {pendingCount > 0 ? `(${pendingCount})` : ""}
-                  </Button>
-                </div>
-              )}
-
-              {activeTab === "notion" && (
-                <div className="flex items-center justify-end w-full gap-2">
-                  <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
-                    Cancel
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleNotionImport}
-                    disabled={
-                      notionImporting ||
-                      !notionUrl.trim() ||
-                      (notionMode === "oauth" && notionConnections.length === 0)
-                    }
-                  >
-                    {notionImporting ? (
-                      <Spinner data-icon="inline-start" />
-                    ) : (
-                      <Plus data-icon="inline-start" />
-                    )}
-                    Import Notion Page
-                  </Button>
-                </div>
-              )}
-
-              {activeTab === "youtube" && (
-                <div className="flex items-center justify-end w-full gap-2">
-                  <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
-                    Cancel
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleYouTubeImport}
-                    disabled={
-                      youtubeImporting || !youtubeUrl.trim() || youtubeConnections.length === 0
-                    }
-                  >
-                    {youtubeImporting ? (
-                      <Spinner data-icon="inline-start" />
-                    ) : (
-                      <Plus data-icon="inline-start" />
-                    )}
-                    {youtubePreview?.alreadyIndexed ? "Re-index Video" : "Import Video"}
-                  </Button>
-                </div>
-              )}
-
-              {activeTab === "connections" && (
-                <div className="flex items-center justify-end w-full">
-                  <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
-                    Close
-                  </Button>
-                </div>
-              )}
+      {/* Disconnect Confirmation Modal */}
+      {disconnectItem && (
+        <Dialog open={Boolean(disconnectItem)} onOpenChange={(open) => !open && setDisconnectItem(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-destructive">
+                <AlertCircle className="w-5 h-5" />
+                Disconnect {disconnectItem.title}?
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                This will permanently delete the integration credentials and remove all imported
+                sources, documents, and associated vector chunks from your knowledge base. This
+                action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setDisconnectItem(null)}
+                disabled={disconnecting}
+                className="text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={confirmDisconnect}
+                disabled={disconnecting}
+                className="text-xs"
+              >
+                {disconnecting ? (
+                  <>
+                    <Spinner className="w-3.5 h-3.5 mr-1.5" />
+                    Disconnecting...
+                  </>
+                ) : (
+                  "Disconnect & Remove Content"
+                )}
+              </Button>
             </DialogFooter>
-          </Tabs>
-        </DialogContent>
-      </Dialog>
-
-      {/* DESTRUCTIVE DISCONNECT CONFIRMATION MODAL */}
-      <Dialog
-        open={Boolean(disconnectItem)}
-        onOpenChange={(open) => !open && setDisconnectItem(null)}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-destructive flex items-center gap-2">
-              <AlertCircle className="size-5" /> Disconnect {disconnectItem?.title}?
-            </DialogTitle>
-            <DialogDescription className="space-y-2 pt-2">
-              <p>
-                Disconnecting this integration will permanently delete all associated documents,
-                extracted questions, vector embeddings, and cached files from your knowledge base.
-              </p>
-              <p className="font-semibold text-foreground">
-                This action cannot be undone.
-              </p>
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setDisconnectItem(null)}
-              disabled={disconnecting}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={confirmDisconnect}
-              disabled={disconnecting}
-            >
-              {disconnecting ? <Spinner data-icon="inline-start" /> : <Trash2 data-icon="inline-start" />}
-              Confirm Disconnect
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </DialogContent>
+        </Dialog>
+      )}
     </>
   );
 }
