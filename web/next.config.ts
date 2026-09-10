@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+import path from "path";
+
 const nextConfig: NextConfig = {
   // Allow dev assets (HMR etc.) on the portless subdomains
   allowedDevOrigins: ["trainertwin.localhost", "*.trainertwin.localhost"],
@@ -12,6 +14,18 @@ const nextConfig: NextConfig = {
     "@chroma-core/default-embed",
     "@chroma-core/ai-embeddings-common",
   ],
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "@shared": path.resolve(__dirname, "../shared"),
+    };
+    return config;
+  },
+  turbopack: {
+    resolveAlias: {
+      "@shared": path.resolve(__dirname, "../shared"),
+    },
+  },
 };
 
 export default nextConfig;

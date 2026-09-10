@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { parseYouTubeVideoId } from "../../shared/youtube/url";
+import { parseYouTubeVideoId } from "@shared/youtube/url";
 
 export { parseYouTubeVideoId };
 

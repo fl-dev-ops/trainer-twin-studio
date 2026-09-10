@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { parseYouTubeVideoId, type YouTubeImportInput } from "@/lib/youtube";
 import { enqueueIngestionWork } from "@/lib/ingestion-queue";
 import { youtubeClient } from "@/lib/youtube-server";
-import { YouTubeError } from "../../shared/youtube/types";
+import { YouTubeError } from "@shared/youtube/types";
 import { getOrCreateOrgKnowledgeBase } from "@/lib/org-knowledge";
 
 type ImportContext = { orgId: string; userId: string; kbId?: string; kbSlug?: string };

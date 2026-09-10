@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
-import { createConnectionStore } from "../../shared/youtube/connection-store.server";
-import { createYouTubeClient } from "../../shared/youtube/client.server";
-import { youtubeConfig } from "../../shared/youtube/http.server";
+import { createConnectionStore } from "@shared/youtube/connection-store.server";
+import { createYouTubeClient } from "@shared/youtube/client.server";
+import { youtubeConfig } from "@shared/youtube/http.server";
 
 /** Prisma adapter for the shared token store; never imported by browser modules. */
 export function youtubeClient() {

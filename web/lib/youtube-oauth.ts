@@ -5,8 +5,8 @@ import {
   listOwnedChannels,
   youtubeConfig,
   YOUTUBE_SCOPE,
-} from "../../shared/youtube/http.server";
-import { encryptToken, tokenBinding } from "../../shared/youtube/tokens.server";
+} from "@shared/youtube/http.server";
+import { encryptToken, tokenBinding } from "@shared/youtube/tokens.server";
 import { YouTubeError } from "../../shared/youtube/types";
 import { getOrCreateOrgKnowledgeBase } from "@/lib/org-knowledge";
 
