@@ -21,11 +21,6 @@ from livekit.protocol.egress import (
 )
 
 from domains.recording.config import RecordingConfig
-from domains.recording.storage.db import (
-    insert_session,
-    update_session_completed,
-    update_session_finalizing,
-)
 from domains.recording.storage.store import (
     upload_metrics_json,
     upload_transcript_json,
@@ -168,31 +163,11 @@ async def start_recording(
         video_url = None
         video_s3_key = None
 
-    session_id: str | None = None
-    if config.database_url:
-        try:
-            session_id = await asyncio.wait_for(
-                insert_session(
-                    agent_type=agent_type,
-                    agent_name=agent_name,
-                    livekit_room_name=room_name,
-                    livekit_room_sid=room_sid,
-                    egress_id=audio_egress_id,
-                    resolved_user_id=resolved_user_id,
-                    participant_identity=participant_identity,
-                    phone_number=phone_number,
-                    started_at=now,
-                    audio_url=audio_url,
-                    audio_s3_key=audio_s3_key,
-                    video_url=video_url,
-                    video_s3_key=video_s3_key,
-                    video_egress_id=video_egress_id,
-                    metadata=metadata,
-                ),
-                timeout=10,
-            )
-        except Exception as e:
-            logger.error(f"Failed to insert session row: {e}")
+    session_id: str | None = (
+        str(metadata.get("sessionId") or metadata.get("session_id") or "").strip() or None
+        if isinstance(metadata, dict)
+        else None
+    )
 
     return (
         session_id,
@@ -360,12 +335,6 @@ async def finalize_recording(
     video_url: str | None = None,
     video_s3_key: str | None = None,
 ) -> dict[str, Any]:
-    if session_id is not None:
-        try:
-            await update_session_finalizing(session_id)
-        except Exception as e:
-            logger.error("Failed to mark session finalizing: %s", e)
-
     audio_error: str | None = None
     audio_ok = True
     if egress_id is not None:
@@ -451,26 +420,6 @@ async def finalize_recording(
             verbose_url = upload_verbose_json(config, verbose_s3_key, verbose_data)
         except Exception as e:
             logger.error("Failed to upload verbose report: %s", e)
-
-    if session_id is not None:
-        try:
-            await update_session_completed(
-                session_id,
-                ended_at=now,
-                duration_ms=duration_ms,
-                transcript_url=transcript_url,
-                transcript_s3_key=transcript_s3_key,
-                metrics_url=metrics_url,
-                metrics_s3_key=metrics_s3_key,
-                verbose_url=verbose_url,
-                verbose_s3_key=verbose_s3_key,
-                video_url=video_url,
-                video_s3_key=video_s3_key,
-                egress_status=egress_status,
-                egress_error=egress_error,
-            )
-        except Exception as e:
-            logger.error("Failed to update session completed: %s", e)
 
     if send_webhook and config.webhook_url:
         payload = _build_webhook_payload(

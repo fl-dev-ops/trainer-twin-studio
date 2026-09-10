@@ -8,7 +8,6 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class RecordingConfig:
-    database_url: str = ""
     s3_egress_enabled: bool = True
     s3_bucket: str = ""
     s3_region: str = "us-east-1"
@@ -37,8 +36,10 @@ def build_recording_config(env: dict[str, str] | None = None) -> RecordingConfig
             return default
         return parsed if parsed > 0 else default
 
+    web_base = values.get("WEB_URL", "http://localhost:3000").rstrip("/")
+    default_webhook = f"{web_base}/api/sessions/webhook"
+
     return RecordingConfig(
-        database_url=values.get("DATABASE_URL", ""),
         s3_egress_enabled=values.get("ENABLE_RECORDING", "true").lower()
         in ("1", "true", "yes"),
         s3_bucket=values.get("AWS_S3_BUCKET", ""),
@@ -50,7 +51,7 @@ def build_recording_config(env: dict[str, str] | None = None) -> RecordingConfig
         s3_force_path_style=values.get("AWS_S3_FORCE_PATH_STYLE", "").lower()
         in ("1", "true", "yes"),
         s3_base_prefix=values.get("S3_BASE_PREFIX", "agents"),
-        webhook_url=values.get("WEBHOOK_URL", ""),
+        webhook_url=values.get("WEBHOOK_URL", "") or default_webhook,
         egress_start_timeout_seconds=positive_int("EGRESS_START_TIMEOUT_SECONDS", 15),
         egress_poll_timeout_seconds=positive_int("EGRESS_POLL_TIMEOUT_SECONDS", 45),
         s3_upload_timeout_seconds=positive_int("S3_UPLOAD_TIMEOUT_SECONDS", 15),

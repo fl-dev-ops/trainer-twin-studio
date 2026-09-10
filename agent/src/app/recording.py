@@ -12,9 +12,8 @@ from livekit import agents
 from infrastructure.config.profiles import AgentProfile
 from domains.recording.config import RecordingConfig
 from domains.recording.egress.manager import finalize_recording, start_recording
-from domains.recording.storage.db import init_pool
 
-from .config import DATABASE_INIT_TIMEOUT_SECONDS, RecordingStartState
+from .config import RecordingStartState
 
 logger = logging.getLogger("intervoo_agent")
 
@@ -34,14 +33,6 @@ async def start_recording_for_session(
         return RecordingStartState()
 
     try:
-        if config.database_url:
-            try:
-                await asyncio.wait_for(
-                    init_pool(config.database_url),
-                    timeout=DATABASE_INIT_TIMEOUT_SECONDS,
-                )
-            except Exception as e:
-                logger.error("Failed to initialize recording DB: %s", e)
         (
             recording_session_id,
             audio_url,

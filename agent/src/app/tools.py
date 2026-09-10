@@ -15,6 +15,7 @@ from domains.interview.questions.store import QuestionStore
 from domains.interview.evaluation import build_finish_interview_tool
 from tools.interview.build_plan import build_interview_plan_tool
 from tools.interview.code_highlight import build_code_highlight_tools
+from tools.interview.runtime_tools import build_runtime_tools
 from tools.interview.start_question import build_start_question_tool
 from tools.interview.whiteboard_highlight import build_whiteboard_highlight_tools
 
@@ -45,6 +46,12 @@ def build_interview_tools(
 ) -> list[Any]:
     tools: list[Any] = []
 
+    tools.extend(
+        build_runtime_tools(
+            room=ctx.room,
+            participant_identity=participant_identity,
+        )
+    )
     tools.append(
         build_start_question_tool(
             room=ctx.room,

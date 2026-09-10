@@ -3,7 +3,7 @@
     "mock_interview": {
       "agent_type": "mock-interview-agent",
       "prompt_url": "prompts/interview/v1/mock_interview.md",
-      "initial_reply": "Follow the Introduction Flow in your system instructions now. Use the candidate's actual name, then ask the exact introduction question specified there.",
+      "initial_reply": "session-start",
       "default_interview": {
         "type": "mock_interview",
         "version": "v1",

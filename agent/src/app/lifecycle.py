@@ -260,7 +260,16 @@ async def entrypoint(ctx: agents.JobContext) -> None:
                 timer_enabled=timer_enabled, note_sink=_on_screen_nudge,
                 code_highlight_sink=_highlight_screen_feedback_code)
 
+        web_base = os.getenv("WEB_URL", "http://localhost:3000").rstrip("/")
+        runtime_token = (
+            metadata.get("runtimeToken")
+            or metadata.get("runtime_token")
+            or os.getenv("LLM_API_KEY", "token-pending")
+        )
+
         session = build_agent_session(
+            base_url=f"{web_base}/api/v1",
+            api_key=str(runtime_token),
             tts_speaker=profile.voice_speaker, tts_dict_id=profile.voice_dict_id,
             mode=mode, session_config=session_config,
             turn_detector=get_or_create_turn_detector(userdata) if mode is InteractionMode.AUTO else get_prewarmed_turn_detector(userdata),
@@ -345,7 +354,14 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         timer.mark("session_build")
 
         webhook_url_raw = metadata.get("webhook_url")
-        webhook_url = webhook_url_raw.strip() if isinstance(webhook_url_raw, str) and webhook_url_raw.strip() else None
+        if isinstance(webhook_url_raw, str) and webhook_url_raw.strip():
+            webhook_url = (
+                f"{web_base}{webhook_url_raw}"
+                if webhook_url_raw.startswith("/")
+                else webhook_url_raw.strip()
+            )
+        else:
+            webhook_url = f"{web_base}/api/sessions/webhook"
 
         recording_start = await recording_task if recording_task is not None else RecordingStartState()
         timer.mark("recording_start")

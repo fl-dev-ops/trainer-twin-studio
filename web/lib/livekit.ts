@@ -35,6 +35,7 @@ export async function createLiveKitSessionToken({
     sessionId,
     runtimeToken,
     orgId,
+    webhook_url: "/api/sessions/webhook",
     interview: {
       type: "mock_interview",
       version: "v1",

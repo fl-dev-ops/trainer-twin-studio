@@ -18,6 +18,7 @@ from domains.session.tts.provider import build_tts
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_LLM_MODEL = "trainertwin-runtime"
 DEFAULT_OPENROUTER_MODEL = "openai/gpt-5.5"
 DEFAULT_DEEPGRAM_STT_MODEL = "flux-general-en"
 DEFAULT_SARVAM_TTS_MODEL = "bulbul:v3"
@@ -25,7 +26,10 @@ DEFAULT_SARVAM_TTS_MODEL = "bulbul:v3"
 
 def build_agent_session(
     *,
-    openrouter_model: str = DEFAULT_OPENROUTER_MODEL,
+    base_url: str | None = None,
+    api_key: str | None = None,
+    model: str | None = None,
+    openrouter_model: str = DEFAULT_LLM_MODEL,
     tts_speaker: str,
     tts_dict_id: str | None,
     tts_model: str = DEFAULT_SARVAM_TTS_MODEL,
@@ -39,8 +43,15 @@ def build_agent_session(
         model=DEFAULT_DEEPGRAM_STT_MODEL,
     )
 
-    llm = openai.LLM.with_openrouter(
-        model=openrouter_model,
+    web_base = os.getenv("WEB_URL", "http://localhost:3000").rstrip("/")
+    resolved_base_url = base_url or os.getenv("LLM_BASE_URL", f"{web_base}/api/v1")
+    resolved_model = model or (openrouter_model if openrouter_model != DEFAULT_OPENROUTER_MODEL else None) or os.getenv("LLM_MODEL", DEFAULT_LLM_MODEL)
+    resolved_api_key = api_key or os.getenv("LLM_API_KEY", "token-pending")
+
+    llm = openai.LLM(
+        model=resolved_model,
+        base_url=resolved_base_url,
+        api_key=resolved_api_key,
         parallel_tool_calls=parallel_tool_calls,
     )
 
