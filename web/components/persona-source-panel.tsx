@@ -44,6 +44,23 @@ function voiceMomentCount(metadata: unknown) {
   return typeof value === "number" ? value : 0;
 }
 
+function voiceCoverage(sources: Source[]): "low" | "medium" | "high" {
+  let moments = 0;
+  const actions = new Set<string>();
+  for (const source of sources) {
+    const metadata = source.metadata;
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) continue;
+    const record = metadata as Record<string, unknown>;
+    if (typeof record.voiceMoments === "number") moments += record.voiceMoments;
+    if (Array.isArray(record.voiceActions)) {
+      for (const action of record.voiceActions) if (typeof action === "string" && action) actions.add(action);
+    }
+  }
+  if (moments >= 50 && actions.size >= 6) return "high";
+  if (moments >= 20 && actions.size >= 3) return "medium";
+  return "low";
+}
+
 function KindIcon({ kind }: { kind: string }) {
   const cls = "size-4 text-muted-foreground";
   if (kind === "video") return <Video className={cls} />;
@@ -147,6 +164,7 @@ export function PersonaSourcePanel({
   }
 
   const ready = sources.filter((s) => s.status === "analyzed" && voiceMomentCount(s.metadata) > 0).length;
+  const coverage = voiceCoverage(sources);
 
   return (
     <section className="order-1 flex min-h-[32rem] min-w-0 flex-col p-4 sm:p-6 lg:min-h-0 lg:overflow-hidden">
@@ -242,9 +260,12 @@ export function PersonaSourcePanel({
         <div className="flex items-center gap-2 text-sm font-medium">
           <span className={cn("size-2 rounded-full", ready ? "bg-emerald-500" : "bg-muted-foreground/30")} />
           {ready} source{ready === 1 ? "" : "s"} shaping this persona
+          <Badge variant={coverage === "high" ? "success" : coverage === "medium" ? "warning" : "secondary"}>
+            Voice coverage: {coverage}
+          </Badge>
         </div>
         <p className="mt-1 pl-4 text-xs leading-5 text-muted-foreground">
-          New analyzed material is searched automatically during future conversations.
+          New analyzed material is searched automatically during future conversations. Low coverage still runs; likeness improves as more interview sources are indexed.
         </p>
       </div>
     </section>

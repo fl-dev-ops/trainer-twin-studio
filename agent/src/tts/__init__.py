@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from typing import Any
+
 from tts.voxcpm2 import VoxCPM2TTS, build_voxcpm2_tts
 
 
@@ -15,7 +16,7 @@ def build_tts(*, voice: str = "", speaker: str = "rohan") -> Any:
         return sarvam.TTS(
             target_language_code="en-IN",
             model=os.getenv("SARVAM_TTS_MODEL", "bulbul:v3"),
-            speaker=voice or speaker or os.getenv("SARVAM_SPEAKER", "rohan"),
+            speaker=os.getenv("SARVAM_SPEAKER", speaker),
         )
 
     return build_voxcpm2_tts(voice=voice)

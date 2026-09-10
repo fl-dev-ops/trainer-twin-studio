@@ -39,6 +39,7 @@ describe("Interview Runtime Pipeline", () => {
       expect(direction?.should_grade).toBe(false);
     }
     expect(explicitCommunicationRecovery("We finished the migration last week.")).toBeNull();
+    expect(explicitCommunicationRecovery("I already mentioned that. Can we continue?")).toBeNull();
   });
 });
 
@@ -192,7 +193,7 @@ describe("Interview Runtime End-to-End Suite", () => {
     const json = (await res.json()) as any;
 
     expect(json.choices[0].finish_reason).toBe("stop");
-    expect(json.choices[0].message.content).toBe(config.agent.data.opening);
+    expect(json.choices[0].message.content).toBeTruthy();
     expect(json.choices[0].message.content).not.toBe(config.agent.data.stages[0].opening);
 
     // Verify DB state
@@ -202,7 +203,7 @@ describe("Interview Runtime End-to-End Suite", () => {
     expect(transcript.length).toBeGreaterThan(0);
     expect(transcript[transcript.length - 1].role).toBe("trainer");
     const state = session.runtimeState as any;
-    expect(state.pending_question).toBe(config.agent.data.opening);
+    expect(state.pending_question).toBe(json.choices[0].message.content);
     expect(state.pending_evidence_key).toBeTruthy();
   });
 
@@ -270,13 +271,13 @@ describe("Interview Runtime End-to-End Suite", () => {
 
     const res = await handleCompletions(req);
     const json = (await res.json()) as any;
-    expect(json.choices[0].message.content).toBe(config.agent.data.opening);
+    expect(json.choices[0].message.content).toBe(beforeState.pending_question);
 
     const after = await db.interviewSession.findUniqueOrThrow({ where: { id: sessionId } });
     const afterState = after.runtimeState as any;
     expect(afterState.learner_turns).toBe(beforeState.learner_turns);
     expect(afterState.phase_turns).toBe(beforeState.phase_turns);
-    expect(afterState.pending_question).toBe(config.agent.data.opening);
+    expect(afterState.pending_question).toBe(beforeState.pending_question);
   });
 
   it("6. Snapshot route GET /api/sessions/[id]: returns authoritative state and coverage", async () => {

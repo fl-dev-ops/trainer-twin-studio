@@ -32,7 +32,6 @@ export interface PersonaSpec {
   version: number;
   style: Record<string, unknown>;
   decision_preferences: Record<string, string>;
-  source_resources?: string[];
   examples?: Record<string, string[]>;
   language?: Record<string, unknown>;
   calibration?: Record<string, unknown>;
@@ -128,7 +127,6 @@ export function buildSpecs(config: Record<string, any>): CompiledSpecs {
     version: personaData.version,
     style: personaData.style ?? {},
     decision_preferences: personaData.decision_preferences ?? {},
-    source_resources: personaData.source_resources ?? [],
     examples: personaData.examples ?? {},
     language: personaData.language ?? {},
     calibration: personaData.calibration ?? {},
@@ -252,7 +250,7 @@ export function buildSpecs(config: Record<string, any>): CompiledSpecs {
       id: sid,
       name: stage.name,
       objective: stage.objective,
-      opening: stage.opening,
+      opening: (typeof stage.stage_brief === "string" && stage.stage_brief) || stage.opening,
       evidence_keys: keys.map(qualified),
       completion_keys: completion.map(qualified),
       min_learner_turns: minimum,
@@ -294,7 +292,7 @@ export function buildSpecs(config: Record<string, any>): CompiledSpecs {
     version: config.agent?.version ?? 1,
     domain: domain.id,
     objective: agentData.objective,
-    opening: agentData.opening,
+    opening: (typeof agentData.spoken_opening === "string" && agentData.spoken_opening) || agentData.opening,
     phases,
     claim_handling: defaults.claim_handling ?? "conceptual",
     context_mode: defaults.context?.mode ?? "none",

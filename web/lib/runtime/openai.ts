@@ -14,14 +14,19 @@ import {
   type AnswerAnalysis,
   type InterviewAction,
   type RuntimeState,
+  activeAllowedActions,
+  applyPersonaVote,
   closingAction,
   deterministicFallback,
+  evidenceLabel,
   initRuntimeState,
   recordAskedQuestion,
+  refreshCurrentTopic,
   renderRules,
   selectAction,
   surfaceForPhase,
   validateAnalysis,
+  validatePersonaRewrite,
   validateRendered,
 } from "./runtime";
 
@@ -51,7 +56,7 @@ export interface ChatCompletionRequest {
 
 type TranscriptTurn = { role: "user" | "trainer"; text: string };
 type KnowledgeHit = { id: string; docId: string; source: string; text: string; score: number };
-type PersonaMoment = { id: string; personaId: string; sourceId: string; text: string; score: number };
+type PersonaMoment = { id: string; personaId: string; sourceId: string; text: string; score: number; action?: string; learnerState?: string; move?: string };
 
 type DirectionCheck = {
   learner_intent: "answer" | "question" | "clarification" | "off_topic" | "stop";
@@ -125,6 +130,10 @@ async function callOpenRouter(
 
 const transcriptText = (transcript: TranscriptTurn[]) =>
   transcript.map((turn) => `${turn.role === "trainer" ? "Trainer" : "Learner"}: ${turn.text}`).join("\n");
+
+export function isRepeatRequest(direction: DirectionCheck): boolean {
+  return !direction.should_grade && /restate the pending question/i.test(direction.response_instruction);
+}
 
 export function explicitCommunicationRecovery(text: string): DirectionCheck | null {
   if (/^\s*(?:please\s+)?(?:stop|end|quit|finish)(?:\s+the\s+(?:interview|session))?[.!?\s]*$/i.test(text)) {
@@ -292,6 +301,12 @@ Respond with a JSON object with this exact structure:
 
     const parsed = JSON.parse(rawJson) as AnswerAnalysis;
     const { applied } = validateAnalysis(parsed, specs.agent, state, learnerText);
+    if (
+      (applied.classification === "strong" || applied.classification === "partial") &&
+      applied.evidence_updates.length === 0
+    ) {
+      applied.classification = "vague";
+    }
     return applied;
   } catch (error) {
     console.warn("[interview-runtime] answer analysis failed", error);
@@ -307,13 +322,39 @@ Respond with a JSON object with this exact structure:
   }
 }
 
+function clip(text: string, max = 300): string {
+  return text.trim().slice(0, max);
+}
+
+function learnerStateFrom(
+  direction: DirectionCheck,
+  analysis?: AnswerAnalysis | null
+): string {
+  if (direction.learner_intent === "stop") return "stop";
+  if (!direction.should_grade || direction.learner_intent === "clarification") return "confused";
+  switch (analysis?.classification) {
+    case "strong":
+      return "strong";
+    case "partial":
+      return "partial";
+    case "vague":
+    case "unsupported":
+      return "vague";
+    case "contradictory":
+      return "off_track";
+    default:
+      return "confused";
+  }
+}
+
 async function generateContentSpeech(
   action: InterviewAction,
   specs: CompiledSpecs,
   state: RuntimeState,
   transcript: TranscriptTurn[],
   direction: DirectionCheck,
-  knowledgeHits: KnowledgeHit[]
+  knowledgeHits: KnowledgeHit[],
+  priorErrors: string[] = []
 ): Promise<string> {
   const phase = specs.agent.phases[state.phase_index] ?? null;
   const rules = renderRules(specs.agent, state);
@@ -329,6 +370,7 @@ Pending trainer question: ${state.pending_question ?? "none"}
 Relevant knowledge: ${JSON.stringify(knowledgeHits)}
 Complete transcript:
 ${transcriptText(transcript)}
+${priorErrors.length ? `The prior draft failed validation: ${JSON.stringify(priorErrors)}. Fix only those issues.` : ""}
 
 Rules:
 - Use only claims and topics present in the transcript, specs, or retrieved knowledge.
@@ -336,7 +378,8 @@ Rules:
 - Stay on the pending topic unless the direction check explicitly requires a transition.
 - If asked to repeat or slow down, restate the pending question more clearly without changing its meaning.
 - Ask at most ${rules.maximum_question_marks} question and use at most ${rules.maximum_words} words.
-- Never expose internal evidence keys.`;
+- Never expose internal evidence keys.
+- Do not stack multiple asks in one utterance.`;
 
   try {
     const text = await callOpenRouter("response", [
@@ -347,6 +390,9 @@ Rules:
     const errors = validateRendered(cleaned, action, specs.agent, state);
     if (!errors.length) return cleaned;
     console.warn("[interview-runtime] response validation failed", { errors });
+    if (!priorErrors.length) {
+      return generateContentSpeech(action, specs, state, transcript, direction, knowledgeHits, errors);
+    }
   } catch (error) {
     console.warn("[interview-runtime] response generation failed", error);
   }
@@ -357,19 +403,31 @@ async function retrievePersonaMoments(
   orgId: string,
   personaId: string,
   action: InterviewAction,
-  baseText: string,
+  state: RuntimeState,
   transcript: TranscriptTurn[],
+  learnerState: string,
   enabled = true
 ): Promise<PersonaMoment[]> {
   if (!enabled) return [];
   try {
-    const query = `${transcriptText(transcript)}\nProposed response: ${baseText}`;
+    const lastLearner = [...transcript].reverse().find((turn) => turn.role === "user")?.text ?? "";
+    const query = [
+      `learner_state: ${learnerState}`,
+      `action: ${action.name}`,
+      "move: probe",
+      `pending_question: ${clip(state.pending_question ?? "")}`,
+      `last_learner: ${clip(lastLearner)}`,
+    ].join("\n");
     const hits = await MainCollectionService.searchPersonaVoice(orgId, query, {
       personaId,
       action: action.name,
-      limit: 4,
+      learnerState,
+      limit: 6,
     });
-    console.info("[interview-runtime] persona moments retrieved", { hits: hits.length });
+    console.info("[interview-runtime] persona moments retrieved", {
+      hits: hits.length,
+      ids: hits.map((hit) => hit.id),
+    });
     return hits;
   } catch (error) {
     console.warn("[interview-runtime] persona retrieval failed", error);
@@ -377,35 +435,50 @@ async function retrievePersonaMoments(
   }
 }
 
+function interviewerLine(text: string): string {
+  const match = text.match(/Interviewer:\s*([\s\S]+)/i);
+  return (match?.[1] ?? text).trim();
+}
+
 async function renderPersonaSpeech(
-  baseText: string,
+  contentContract: string,
   action: InterviewAction,
   specs: CompiledSpecs,
   state: RuntimeState,
   transcript: TranscriptTurn[],
-  personaMoments: PersonaMoment[]
+  personaMoments: PersonaMoment[],
+  priorErrors: string[] = []
 ): Promise<string> {
-  if (!personaMoments.length) return baseText;
-  const rules = renderRules(specs.agent, state);
   const persona = specs.persona;
   const examples = persona.examples?.[action.name] ?? persona.examples?.general ?? [];
-  const system = `Rewrite an interview utterance in ${persona.name}'s conversational style.
-Persona summary: ${JSON.stringify(persona.style)}
-Language patterns: ${JSON.stringify(persona.language ?? {})}
-Calibration: ${JSON.stringify(persona.calibration ?? {})}
-Fallback examples: ${JSON.stringify(examples.slice(0, 3))}
-Retrieved conversation moments: ${JSON.stringify(personaMoments)}
+  const shots = personaMoments.map((moment) => interviewerLine(moment.text)).filter(Boolean).slice(0, 6);
+  const exampleShots = examples.slice(0, 3);
+  const wordLimit = Math.max(renderRules(specs.agent, state).maximum_words, 90);
+  const system = `You are ${persona.name} running this interview out loud. Speak like the interviewer lines below, not like ChatGPT or a corporate coach.
 
-The retrieved moments are style evidence only. Never copy their people, projects, facts, or questions.
-Preserve the base utterance's meaning, factual content, current topic, and focal ask.
-Do not add claims about what the learner said. Never expose internal evidence keys.
-Use at most ${rules.maximum_words} words and ${rules.maximum_question_marks} question mark.`;
-  const prompt = `Base utterance: ${baseText}
-Action: ${JSON.stringify(action)}
-Complete transcript:
+HOW ${persona.name.toUpperCase()} TALKS (copy rhythm, fillers, length; do not copy names, companies, or facts):
+${(shots.length ? shots : exampleShots).map((line) => `Interviewer: ${line}`).join("\n\n") || "(no retrieved lines)"}
+
+BAD (do not sound like this): "That's helpful. Can you clarify the daily active user count?"
+GOOD: match the interviewer lines — short acknowledgements like "got it, got it" / "correct?" / "good, good", restate the learner's last point, then one poke.
+
+Content contract — keep this topic and the one real ask, change the wording freely:
+${contentContract}
+
+Rules:
+- One real question. Extra "correct?" / "okay?" backchannels are fine.
+- About 30-80 words, never more than ${wordLimit}.
+- Do not copy people, projects, or metrics from the interviewer lines.
+- Do not say "you mentioned" unless those words are in the learner transcript.
+- Never expose internal evidence keys or phrases like "in your own words" for snake_case labels.
+${priorErrors.length ? `Fix these issues only: ${JSON.stringify(priorErrors)}` : ""}`;
+  const prompt = `Action: ${action.name}
+Intent: ${action.intent}
+Latest learner turn: ${[...transcript].reverse().find((turn) => turn.role === "user")?.text ?? "(none)"}
+Transcript:
 ${transcriptText(transcript)}
 
-Return only the rewritten utterance.`;
+Speak the next interviewer turn now. Return only the spoken text.`;
 
   try {
     const text = await callOpenRouter("persona", [
@@ -413,13 +486,38 @@ Return only the rewritten utterance.`;
       { role: "user", content: prompt },
     ]);
     const cleaned = text.trim().replace(/^["']|["']$/g, "");
-    const errors = validateRendered(cleaned, action, specs.agent, state);
+    const errors = validatePersonaRewrite(
+      cleaned,
+      contentContract,
+      action,
+      specs.agent,
+      state,
+      transcript,
+      personaMoments.map((moment) => moment.text),
+      specs.agent.scenario
+    );
     if (!errors.length) return cleaned;
     console.warn("[interview-runtime] persona validation failed", { errors });
+    if (!priorErrors.length) {
+      return renderPersonaSpeech(contentContract, action, specs, state, transcript, personaMoments, errors);
+    }
   } catch (error) {
     console.warn("[interview-runtime] persona rendering failed", error);
   }
-  return baseText;
+  return deterministicFallback(action, specs.agent, state);
+}
+
+function spokenContentContract(
+  action: InterviewAction,
+  state: RuntimeState,
+  transcript: TranscriptTurn[]
+): string {
+  const lastLearner = [...transcript].reverse().find((turn) => turn.role === "user")?.text ?? "";
+  return [
+    state.current_topic ? `Topic: ${state.current_topic}` : "",
+    lastLearner ? `Learner just said: ${clip(lastLearner, 220)}` : "",
+    `Ask one spoken question about ${evidenceLabel(action.evidence_key)}.`,
+  ].filter(Boolean).join("\n");
 }
 
 async function generatePipelineSpeech(
@@ -429,21 +527,13 @@ async function generatePipelineSpeech(
   transcript: TranscriptTurn[],
   direction: DirectionCheck,
   knowledgeHits: KnowledgeHit[],
-  orgId: string,
-  personaVoiceAvailable: boolean
+  moments: PersonaMoment[]
 ): Promise<string> {
-  const baseText = !direction.should_grade && action.fallback_text
-    ? action.fallback_text
+  if (isRepeatRequest(direction) && action.fallback_text) return action.fallback_text;
+  const contentContract = moments.length
+    ? spokenContentContract(action, state, transcript)
     : await generateContentSpeech(action, specs, state, transcript, direction, knowledgeHits);
-  const moments = await retrievePersonaMoments(
-    orgId,
-    specs.persona.id,
-    action,
-    baseText,
-    transcript,
-    personaVoiceAvailable
-  );
-  return renderPersonaSpeech(baseText, action, specs, state, transcript, moments);
+  return renderPersonaSpeech(contentContract, action, specs, state, transcript, moments);
 }
 
 export async function handleCompletions(request: Request): Promise<Response> {
@@ -625,8 +715,9 @@ export async function handleCompletions(request: Request): Promise<Response> {
         session.orgId,
         specs.persona.id,
         openingAction,
-        baseOpening,
+        state,
         currentTranscript,
+        "strong",
         personaVoiceAvailable
       );
       const openingText = await renderPersonaSpeech(
@@ -683,8 +774,9 @@ export async function handleCompletions(request: Request): Promise<Response> {
         session.orgId,
         specs.persona.id,
         openingAction,
-        baseOpening,
+        state,
         currentTranscript,
+        "strong",
         personaVoiceAvailable
       );
       replyText = await renderPersonaSpeech(
@@ -740,26 +832,29 @@ export async function handleCompletions(request: Request): Promise<Response> {
     );
     const direction = await runDirectionCheck(latestUserText, fullTranscript, specs, state, knowledgeHits);
     state.latest_learner_intent = direction.learner_intent;
-    if (direction.current_topic.trim()) state.current_topic = direction.current_topic.trim();
 
     let action: InterviewAction;
+    let analysis: AnswerAnalysis | null = null;
     if (direction.learner_intent === "stop") {
       action = closingAction(state, specs.agent);
     } else if (!direction.should_grade) {
       const pendingEvidence = state.pending_evidence_key ?? specs.agent.phases[state.phase_index]?.evidence_keys[0] ?? null;
+      const repeat = isRepeatRequest(direction);
       action = {
         name: specs.agent.phases[state.phase_index]?.default_action ?? specs.agent.default_action,
         evidence_key: pendingEvidence,
         reason: direction.response_instruction,
-        intent: direction.response_instruction,
-        fallback_text: state.pending_question ?? specs.agent.opening,
+        intent: repeat
+          ? direction.response_instruction
+          : `The learner already responded or wants to continue. Do not repeat the previous question. Ask exactly one new question to establish ${pendingEvidence}. ${specs.agent.phases[state.phase_index]?.opening ?? ""}`,
+        fallback_text: repeat ? (state.pending_question ?? specs.agent.opening) : undefined,
         close: false,
         expects_answer: true,
       };
     } else {
       state.learner_turns += 1;
       state.phase_turns += 1;
-      const analysis = await runAnalyzerLLM(
+      analysis = await runAnalyzerLLM(
         latestUserText,
         fullTranscript,
         direction,
@@ -769,6 +864,28 @@ export async function handleCompletions(request: Request): Promise<Response> {
       );
       action = selectAction(analysis, state, specs.persona, specs.agent);
     }
+    const learnerState = learnerStateFrom(direction, analysis);
+    const personaMoments = await retrievePersonaMoments(
+      session.orgId,
+      specs.persona.id,
+      action,
+      state,
+      fullTranscript,
+      learnerState,
+      personaVoiceAvailable
+    );
+    const controllerAction = action.name;
+    action = applyPersonaVote(
+      action,
+      activeAllowedActions(specs.agent, state),
+      personaMoments.map((moment) => moment.action ?? ""),
+      state.actions
+    );
+    console.info("[interview-runtime] persona vote", {
+      controllerAction,
+      votedAction: action.name,
+      momentIds: personaMoments.map((moment) => moment.id),
+    });
     state.actions.push(action.name);
 
     if (action.close && advertisedToolNames.has("finish_session")) {
@@ -905,10 +1022,10 @@ export async function handleCompletions(request: Request): Promise<Response> {
           fullTranscript,
           direction,
           knowledgeHits,
-          session.orgId,
-          personaVoiceAvailable
+          personaMoments
         );
         recordAskedQuestion(state, action, spokenText, direction.should_grade);
+        if (direction.should_grade) refreshCurrentTopic(state, spokenText, latestUserText);
         turnSpokenText = spokenText;
 
         sseChunks = [
@@ -945,10 +1062,10 @@ export async function handleCompletions(request: Request): Promise<Response> {
         fullTranscript,
         direction,
         knowledgeHits,
-        session.orgId,
-        personaVoiceAvailable
+        personaMoments
       );
       recordAskedQuestion(state, action, spokenText, direction.should_grade);
+      if (direction.should_grade) refreshCurrentTopic(state, spokenText, latestUserText);
       turnSpokenText = spokenText;
 
       sseChunks = [

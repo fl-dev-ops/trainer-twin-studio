@@ -269,7 +269,8 @@ export function applyEvidenceUpdates(
   analysis: AnswerAnalysis,
   state: RuntimeState,
   required: Record<string, string>,
-  resumeGrounding: boolean
+  resumeGrounding: boolean,
+  learnerText?: string | null
 ): ClaimAssessment[] {
   const groundingCandidates: ClaimAssessment[] = [];
 
@@ -286,6 +287,9 @@ export function applyEvidenceUpdates(
   }
 
   for (const update of analysis.evidence_updates ?? []) {
+    if (learnerText != null && (!update.quote?.trim() || !learnerText.includes(update.quote))) {
+      continue;
+    }
     if (update.key in required) {
       const lane = update.key.split(".").pop() ?? "";
       const hypothetical = update.provenance === "hypothetical" || isHypothetical(update.evidence);
@@ -331,6 +335,7 @@ export function markProbeExhaustion(
   for (const key of Object.keys(required)) {
     const status = state.coverage[key] ?? "untested";
     const count = state.evidence_probe_counts[key] ?? 0;
+    if (status === "sufficient") continue;
     if (count >= maximum && (status === "untested" || status === "partial")) {
       state.coverage[key] = "weak";
     }
@@ -497,6 +502,9 @@ export function selectAction(
   );
 
   let evidenceKey = unresolvedIsActionable && unresolvedKey ? unresolvedKey : nextKey;
+  if (evidenceKey && (state.evidence_probe_counts[evidenceKey] ?? 0) >= maxProbes) {
+    evidenceKey = nextEvidence(state, required, completionKeys);
+  }
   const groundingClaim = pickGroundingTarget(state, groundingCandidates);
   if (groundingClaim && groundingClaim.evidence_key && groundingClaim.evidence_key in required) {
     evidenceKey = groundingClaim.evidence_key;
@@ -655,19 +663,48 @@ export function validateAction(
   return [];
 }
 
+export function foldInterviewText(text: string): string {
+  return text.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"');
+}
+
+const BACKCHANNEL_ASK = /\b(?:correct|right|okay|ok|got it|no(?:\s+problem)?|shall we)\s*\?/gi;
+
+export function focalAskCount(text: string): number {
+  return (foldInterviewText(text).replace(BACKCHANNEL_ASK, " ").match(/\?/g) || []).length;
+}
+
+export function spokenWordLimit(agent: AgentSpec, state: RuntimeState): number {
+  return Math.max(renderRules(agent, state).maximum_words, 90);
+}
+
+export function hasStackedAsks(text: string, spoken = false): boolean {
+  const normalized = foldInterviewText(text);
+  if (spoken) return focalAskCount(normalized) > 1;
+  const questions = (normalized.match(/\?/g) || []).length;
+  if (questions > 1) return true;
+  if (questions !== 1) return false;
+  return (
+    /\b(?:and|including)\b[^?]{0,80}\b(?:how|what|why|which|when|where)\b/i.test(normalized) ||
+    (/;/.test(normalized) && /\b(?:how|what|why|which)\b/i.test(normalized))
+  );
+}
+
 export function validateRendered(
   text: string,
   action: InterviewAction,
   agent: AgentSpec,
-  state: RuntimeState
+  state: RuntimeState,
+  options: { spoken?: boolean } = {}
 ): string[] {
   const errors: string[] = [];
   const rules = renderRules(agent, state);
+  const normalized = foldInterviewText(text);
+  const spoken = options.spoken === true;
 
   if (!text.trim()) {
     errors.push("empty response");
   }
-  const questions = (text.match(/\?/g) || []).length;
+  const questions = spoken ? focalAskCount(normalized) : (normalized.match(/\?/g) || []).length;
   if (action.close && questions > 0) {
     errors.push("closing contains a question");
   } else if (questions > rules.maximum_question_marks) {
@@ -682,15 +719,21 @@ export function validateRendered(
   }
 
   const words = text.trim().split(/\s+/).length;
-  if (words > rules.maximum_words) {
-    errors.push(`response exceeds ${rules.maximum_words} words`);
+  const wordLimit = spoken ? spokenWordLimit(agent, state) : rules.maximum_words;
+  if (words > wordLimit) {
+    errors.push(`response exceeds ${wordLimit} words`);
   }
 
-  if (/\bI (built|implemented|designed|architected|deployed|chose|fixed|led)\b/i.test(text)) {
+  if (action.expects_answer && hasStackedAsks(normalized, spoken)) {
+    errors.push("stacked questions");
+  }
+  if (/\bI (built|implemented|designed|architected|deployed|chose|fixed|led)\b/i.test(normalized)) {
     errors.push("role reversal");
   }
   if (
-    /\b(that(?:'s| is) solid|you(?:'ve| have) clearly|well reasoned|that makes sense)\b/i.test(text)
+    /\b(that(?:'s| is)(?: a)? solid|you(?:'ve| have) clearly|well reasoned|that makes sense)\b/i.test(
+      normalized
+    )
   ) {
     errors.push("generic praise");
   }
@@ -699,6 +742,9 @@ export function validateRendered(
       errors.push("internal evidence key leaked");
       break;
     }
+  }
+  if (/ask exactly one|the learner already responded|establish [a-z0-9-]+\.[a-z0-9_]+/i.test(normalized)) {
+    errors.push("internal evidence key leaked");
   }
 
   const forbidden: string[] = rules.forbidden_terms ?? [];
@@ -746,6 +792,88 @@ export function recordAskedQuestion(
   }
 }
 
+export function refreshCurrentTopic(
+  state: RuntimeState,
+  question: string | null | undefined,
+  learnerText: string | null | undefined
+): void {
+  const ask = (question ?? "").trim();
+  const answer = (learnerText ?? "").trim().split(/(?<=[.!?])\s+/)[0] ?? "";
+  const snippet = [ask, answer].filter(Boolean).join(" — ").slice(0, 180);
+  if (snippet) state.current_topic = snippet;
+}
+
+const LOCKED_PERSONA_ACTIONS = new Set([
+  "close_session",
+  "transition_phase",
+  "surface_contradiction",
+  "finish_session",
+  "opening",
+  "present_feedback",
+]);
+
+export function applyPersonaVote(
+  action: InterviewAction,
+  allowed: string[],
+  momentActions: string[],
+  recentActions: string[]
+): InterviewAction {
+  if (action.close || LOCKED_PERSONA_ACTIONS.has(action.name)) return action;
+  const tagged = momentActions.filter(Boolean);
+  if (tagged.length < 3) return action;
+  const counts = new Map<string, number>();
+  for (const name of tagged) counts.set(name, (counts.get(name) ?? 0) + 1);
+  const winner = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+  if (!winner || winner[1] <= tagged.length / 2) return action;
+  if (winner[0] === action.name || !allowed.includes(winner[0]) || LOCKED_PERSONA_ACTIONS.has(winner[0])) {
+    return action;
+  }
+  if (recentActions.slice(-2).includes(winner[0])) return action;
+  return { ...action, name: winner[0] };
+}
+
+const PROPER_TOKEN_STOP = new Set([
+  "The", "This", "That", "What", "How", "When", "Could", "Can", "Would",
+  "Please", "Your", "You", "For", "Given", "After", "Before", "Which",
+  "Could", "Trainer", "Learner", "Node",
+]);
+
+function properTokens(text: string): Set<string> {
+  return new Set(
+    (foldInterviewText(text).match(/\b[A-Z][A-Za-z0-9+]{2,}\b/g) ?? []).filter(
+      (token) => !PROPER_TOKEN_STOP.has(token)
+    )
+  );
+}
+
+export function validatePersonaRewrite(
+  rewrite: string,
+  baseText: string,
+  action: InterviewAction,
+  agent: AgentSpec,
+  state: RuntimeState,
+  transcript: Array<{ role: string; text: string }>,
+  momentTexts: string[],
+  scenario: Record<string, unknown> = {}
+): string[] {
+  const errors = validateRendered(rewrite, action, agent, state, { spoken: true });
+  const learnerText = transcript.filter((turn) => turn.role === "user").map((turn) => turn.text).join("\n");
+  const allowedText = `${learnerText}\n${transcript.map((turn) => turn.text).join("\n")}\n${baseText}\n${JSON.stringify(scenario)}`;
+  for (const match of foldInterviewText(rewrite).matchAll(/you mentioned ([^?.!]{3,80})/gi)) {
+    const claimed = match[1].trim().toLowerCase();
+    if (claimed && !foldInterviewText(learnerText).toLowerCase().includes(claimed)) {
+      errors.push("invented mention");
+    }
+  }
+  const rewriteTokens = properTokens(rewrite);
+  const momentTokens = new Set(momentTexts.flatMap((text) => [...properTokens(text)]));
+  const allowedTokens = properTokens(allowedText);
+  for (const token of rewriteTokens) {
+    if (momentTokens.has(token) && !allowedTokens.has(token)) errors.push("persona fact leak");
+  }
+  return [...new Set(errors)];
+}
+
 export function deterministicFallback(
   action: InterviewAction,
   agent: AgentSpec,
@@ -755,7 +883,6 @@ export function deterministicFallback(
     return action.fallback_text || "We’ll stop here.";
   }
   if (action.fallback_text?.trim()) return action.fallback_text;
-  if (state.pending_question?.trim()) return state.pending_question;
   const label = evidenceLabel(action.evidence_key);
   const rules = renderRules(agent, state);
   const hasQuestion = rules.maximum_question_marks > 0;

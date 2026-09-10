@@ -8,7 +8,7 @@ import {
   SUPPORTED_DOCUMENT_EXTENSIONS,
 } from "@/lib/documents";
 import { ingestDoc, knowledgeCollectionName, removeChunks, removeCollection, removeDoc } from "@/lib/knowledge";
-import { personaCollectionName } from "@/lib/persona-voice";
+import { personaCollectionName, personaCoverageLevel } from "@/lib/persona-voice";
 import { MainCollectionService } from "@/lib/main-collection";
 import { ChromaTenantService } from "@/lib/chroma-tenant";
 import { enqueueIngestionWork } from "@/lib/ingestion-queue";
@@ -516,6 +516,7 @@ export async function getAgentConfigForAgent(agentId: string, orgId: string, con
   const personaVoiceAvailable = personaVoiceSources.some((source) =>
     isRecord(source.metadata) && typeof source.metadata.voiceMoments === "number" && source.metadata.voiceMoments > 0,
   );
+  const personaVoiceCoverage = personaCoverageLevel(personaVoiceSources);
 
   let context: { id: string; name: string; content: string } | null = null;
   if (contextDoc) {
@@ -532,6 +533,7 @@ export async function getAgentConfigForAgent(agentId: string, orgId: string, con
     domain: { slug: domain.slug, version: domain.version, data: domain.data },
     knowledgeBases,
     personaVoiceAvailable,
+    personaVoiceCoverage,
     context,
   };
 }

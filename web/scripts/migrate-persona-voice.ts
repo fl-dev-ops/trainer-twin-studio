@@ -1,7 +1,7 @@
 import type { Prisma } from "../lib/generated/prisma/client";
 import { db } from "../lib/db";
 import { MainCollectionService } from "../lib/main-collection";
-import { extractPersonaVoiceChunks } from "../lib/persona-voice";
+import { extractPersonaVoiceMoments } from "../lib/persona-voice";
 
 const dryRun = process.argv.includes("--dry-run");
 const targetOrg = process.argv.find((arg, i, arr) => arr[i - 1] === "--org");
@@ -39,7 +39,7 @@ for (const source of sources) {
   const prefix = `[${sourceNum}/${sources.length}] (${progressPct}%)`;
 
   try {
-    const chunks = extractPersonaVoiceChunks(source.analysis);
+    const chunks = extractPersonaVoiceMoments(source.analysis);
     if (!chunks.length) {
       console.warn(`  ${prefix} [SKIP] "${source.name}" (${source.id}): No conversation moments extracted from analysis.`);
       skippedSources++;
@@ -69,7 +69,7 @@ for (const source of sources) {
     await db.personaSource.update({
       where: { id: source.id },
       data: {
-        metadata: { ...metadata, voiceMoments: count } as Prisma.InputJsonValue,
+        metadata: { ...metadata, voiceMoments: count, voiceActions: [...new Set(chunks.map((moment) => moment.action).filter(Boolean))] } as Prisma.InputJsonValue,
       },
     });
 

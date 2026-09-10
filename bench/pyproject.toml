@@ -1,0 +1,14 @@
+[project]
+name = "trainertwin-bench"
+version = "0.1.0"
+description = "DeepEval conversation simulations against the live interview runtime"
+requires-python = ">=3.10"
+dependencies = [
+    "deepeval",
+    "httpx",
+    "psycopg[binary]",
+    "python-dotenv",
+]
+
+[tool.uv]
+package = false

@@ -19,8 +19,7 @@ const OPENROUTER_BASE_URL = (process.env.OPENROUTER_BASE_URL ?? "https://openrou
 
 // ---- chunking -----------------------------------------------------------
 
-/** Split markdown into retrieval chunks: heading boundaries respected,
- * paragraphs packed up to targetChars, oversized paragraphs sentence-split. */
+/** Knowledge-only chunker. Do not use for persona voice; those are move-level extracts. */
 export function chunkMarkdown(text: string, targetChars = 1200, maxChars = 2000): string[] {
   const paras = text.split(/\n{2,}/).map((s) => s.trim()).filter(Boolean);
   const chunks: string[] = [];
