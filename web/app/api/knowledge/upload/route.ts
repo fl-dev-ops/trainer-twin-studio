@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { getSessionOrg } from "@/lib/org";
+import { getTrainerOrg } from "@/lib/org";
 import { OrganizationKnowledgeService } from "@/lib/org-knowledge";
 
 export async function POST(req: Request) {
-  const org = await getSessionOrg();
-  if (!org) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const trainer = await getTrainerOrg();
+  if (!trainer) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
     const formData = await req.formData();
@@ -13,7 +13,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    const doc = await OrganizationKnowledgeService.uploadDocument(org.id, file);
+    const doc = await OrganizationKnowledgeService.uploadDocument(trainer.id, file);
     return NextResponse.json(
       { ok: true, status: "queued", document: doc, jobId: doc.jobId },
       { status: 202 },

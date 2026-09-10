@@ -19,18 +19,20 @@ function database(config: PipelineConfig) {
 }
 
 
-async function loadContext(context: Pool, message: IngestionMessage): Promise<{ job: JobContext; workItem: WorkItemContext }> {
-  const result = await context.query<JobContext & WorkItemContext>(`
+async function loadContext(context: Pool, message: IngestionMessage): Promise<{ job: JobContext; workItem: WorkItemContext } | null> {
+  const result = await context.query<JobContext & WorkItemContext & { orgExists: boolean }>(`
     SELECT job.id AS "jobId", source.id AS "sourceId", source."orgId", source."kbId", kb.slug AS "kbSlug",
+      (org.id IS NOT NULL) AS "orgExists",
       org."chromaTenantId", org."chromaDatabase",
       job.status, source.connector AS "sourceConnector", notion_connection."accessTokenCiphertext",
+      notion_connection.id AS "notionConnectionId", notion_connection."userId" AS "notionUserId",
       youtube_config."connectionId" AS "youtubeConnectionId", youtube_connection."userId" AS "connectionUserId",
       source."externalId", item.id, item."workKey", item."parentWorkItemId", parent."workKey" AS "parentWorkKey",
       item.kind, item.payload
     FROM "IngestionWorkItem" item
     JOIN "IngestionJob" job ON job.id = item."jobId"
     JOIN "KnowledgeSource" source ON source.id = job."sourceId"
-    JOIN "organization" org ON org.id = source."orgId"
+    LEFT JOIN "organization" org ON org.id = source."orgId"
     JOIN "KnowledgeBase" kb ON kb.id = source."kbId" AND kb."orgId" = source."orgId"
     LEFT JOIN "IngestionWorkItem" parent ON parent.id = item."parentWorkItemId"
     LEFT JOIN "NotionSourceConfig" notion_config ON notion_config."sourceId" = source.id
@@ -41,11 +43,29 @@ async function loadContext(context: Pool, message: IngestionMessage): Promise<{ 
   `, [message.jobId, message.workItemId]);
   if (result.rowCount !== 1) throw new Error("Ingestion job/work item was not found");
   const row = result.rows[0];
+
+  if (!row.orgExists) {
+    await context.query(
+      `UPDATE "KnowledgeSource" SET status = 'unavailable', error = 'Organization was deleted', "updatedAt" = NOW() WHERE id = $1`,
+      [row.sourceId],
+    );
+    await context.query(
+      `UPDATE "IngestionJob" SET status = 'failed', error = 'Organization was deleted', "finishedAt" = NOW(), "activeKey" = NULL, "updatedAt" = NOW() WHERE id = $1`,
+      [row.jobId],
+    );
+    await context.query(
+      `UPDATE "IngestionWorkItem" SET status = 'failed', error = 'Organization was deleted', "processedAt" = NOW(), "leaseExpiresAt" = NULL, "updatedAt" = NOW() WHERE id = $1`,
+      [row.id],
+    );
+    return null;
+  }
+
   return {
     job: {
       jobId: row.jobId, sourceId: row.sourceId, orgId: row.orgId, kbId: row.kbId, kbSlug: row.kbSlug,
       chromaTenantId: row.chromaTenantId, chromaDatabase: row.chromaDatabase,
       status: row.status, sourceConnector: row.sourceConnector, accessTokenCiphertext: row.accessTokenCiphertext,
+      notionConnectionId: row.notionConnectionId, notionUserId: row.notionUserId,
       youtubeConnectionId: row.youtubeConnectionId, connectionUserId: row.connectionUserId, externalId: row.externalId,
     },
     workItem: {
@@ -152,11 +172,41 @@ async function recordFailure(context: Pool, job: JobContext, workItemId: string,
   }
 }
 
+/** Recovers un-enqueued work items across all active jobs. */
+async function pumpGlobalOutbox(context: Pool, config: PipelineConfig, limit = 50): Promise<number> {
+  const pending = await context.query<{ id: string; jobId: string }>(`
+    SELECT item.id, item."jobId"
+    FROM "IngestionWorkItem" item
+    JOIN "IngestionJob" job ON job.id = item."jobId"
+    WHERE item.status = 'queued' AND item."enqueuedAt" IS NULL AND job.status IN ('queued', 'running')
+    ORDER BY item."createdAt" ASC
+    LIMIT $1
+  `, [limit]);
+
+  const sqs = new SQSClient({ region: config.awsRegion });
+  let count = 0;
+  for (const item of pending.rows) {
+    try {
+      await sendWorkItem(sqs, config, item.jobId, item.id);
+      await context.query(`UPDATE "IngestionWorkItem" SET "enqueuedAt" = NOW(), "updatedAt" = NOW() WHERE id = $1 AND "enqueuedAt" IS NULL`, [item.id]);
+      count++;
+    } catch (error) {
+      console.error(`[JOB:outbox-pump] failed to enqueue work item ${item.id}:`, error);
+    }
+  }
+  return count;
+}
+
 async function processRecord(record: SqsRecord, config: PipelineConfig) {
   const startedAt = Date.now();
   const message = parseQueueMessage(record.body);
   const context = database(config);
-  const { job, workItem } = await loadContext(context, message);
+  const contextData = await loadContext(context, message);
+  if (!contextData) {
+    console.warn(`[JOB:loadContext] organization deleted mid-flight; source marked unavailable for message ${message.jobId}/${message.workItemId}`);
+    return;
+  }
+  const { job, workItem } = contextData;
   if (["failed", "succeeded"].includes(job.status)) return;
   if (!(await claimWorkItem(context, job.jobId, workItem.id))) {
     await enqueueQueuedWorkItems(context, config, job.jobId);
@@ -186,15 +236,22 @@ async function processRecord(record: SqsRecord, config: PipelineConfig) {
 }
 
 /** Processes identifier-only work items; maintenance events remain disabled by default. */
-export async function handler(event: SqsEvent | { action: "youtube-maintenance" }): Promise<SqsResult> {
+export async function handler(event: SqsEvent | { action: "youtube-maintenance" } | { action: "outbox-pump" }): Promise<SqsResult> {
   const config = loadConfig();
-  if ("action" in event && event.action === "youtube-maintenance") {
-    if (!config.youtubeMaintenanceEnabled) {
-      console.info("[JOB:youtube-maintenance] skipped reason=disabled");
+  if ("action" in event) {
+    if (event.action === "outbox-pump") {
+      const count = await pumpGlobalOutbox(database(config), config);
+      console.info(`[JOB:outbox-pump] dispatched=${count}`);
       return { batchItemFailures: [] };
     }
-    await maintainYouTubeImports(database(config), config);
-    return { batchItemFailures: [] };
+    if (event.action === "youtube-maintenance") {
+      if (!config.youtubeMaintenanceEnabled) {
+        console.info("[JOB:youtube-maintenance] skipped reason=disabled");
+        return { batchItemFailures: [] };
+      }
+      await maintainYouTubeImports(database(config), config);
+      return { batchItemFailures: [] };
+    }
   }
   if (!("Records" in event)) throw new Error("Unsupported ingestion event");
   const failures: { itemIdentifier: string }[] = [];

@@ -30,7 +30,7 @@ export async function GET(request: Request) {
 
   try {
     const state = await consumeNotionOAuthState(stateParam, trainer.id, trainer.user.id);
-    if (!state) {
+    if (!state || state.orgId !== trainer.id) {
       redirectBase.searchParams.set("error", "invalid_or_expired_state");
       return NextResponse.redirect(redirectBase);
     }

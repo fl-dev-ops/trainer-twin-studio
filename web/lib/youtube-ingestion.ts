@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { parseYouTubeVideoId, type YouTubeImportInput } from "@/lib/youtube";
-import { enqueueIngestionWork } from "@/lib/ingestion-queue";
+import { defaultIdentityKey, enqueueIngestionWork } from "@/lib/ingestion-queue";
 import { youtubeClient } from "@/lib/youtube-server";
 import { YouTubeError } from "../../shared/youtube/types";
 import { getOrCreateOrgKnowledgeBase } from "@/lib/org-knowledge";
@@ -31,7 +31,9 @@ async function verifyActiveConnection(orgId: string, connectionId: string) {
 }
 
 /** Returns connection metadata and import jobs for the knowledge base. */
-export async function listYouTubeImports(orgId: string, kbId: string) {
+export async function listYouTubeImports(orgId: string, kbIdOrSlug?: string) {
+  const kb = await resolveKnowledgeBase(orgId, kbIdOrSlug, kbIdOrSlug);
+  const kbId = kb.id;
   const [connections, jobs] = await Promise.all([
     db.youTubeConnection.findMany({
       where: { orgId, status: { not: "disconnected" } },
@@ -131,7 +133,7 @@ export async function queueYouTubeSync(input: ImportContext & YouTubeImportInput
     const kb = await resolveKnowledgeBase(input.orgId, input.kbId, input.kbSlug);
     await verifyActiveConnection(input.orgId, input.connectionId);
 
-    const identityKey = `${kb.id}:youtube-owned:${videoId}`;
+    const identityKey = defaultIdentityKey(kb.id, "youtube", videoId);
 
     // If not a force refresh, check if already indexed
     if (!input.refresh) {
@@ -183,6 +185,7 @@ export async function refreshYouTubeDocument(input: {
   orgId: string;
   userId: string;
   documentId: string;
+  kbSlug?: string;
 }) {
   const doc = await db.knowledgeDocument.findFirst({
     where: {

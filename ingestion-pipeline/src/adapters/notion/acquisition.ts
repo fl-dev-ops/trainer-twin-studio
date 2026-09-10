@@ -26,13 +26,14 @@ function logPath(path: string) {
     .replace(/start_cursor=[^&]+/i, "start_cursor=:cursor");
 }
 
-export function decryptNotionToken(payload: string, encodedKey: string): string {
+export function decryptNotionToken(payload: string, encodedKey: string, binding: string): string {
   const key = Buffer.from(encodedKey, "base64");
   if (key.length !== 32) throw new Error("NOTION_TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte key");
   const parts = payload.split(".");
   if (parts.length !== 3) throw new Error("Invalid encrypted Notion token");
   const [iv, authTag, ciphertext] = parts.map((part) => Buffer.from(part, "base64url"));
   const decipher = createDecipheriv("aes-256-gcm", key, iv);
+  decipher.setAAD(Buffer.from(binding));
   decipher.setAuthTag(authTag);
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8");
 }

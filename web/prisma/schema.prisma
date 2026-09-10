@@ -498,7 +498,7 @@ model YouTubeSourceConfig {
 model IngestionJob {
   id              String    @id @default(cuid())
   sourceId        String
-  activeKey       String?   @unique
+  activeKey       String?
   status          String    @default("queued") // queued | running | succeeded | failed
   stage           String?
   itemsDiscovered Int       @default(0)
@@ -512,8 +512,9 @@ model IngestionJob {
   source    KnowledgeSource     @relation(fields: [sourceId], references: [id], onDelete: Cascade)
   workItems IngestionWorkItem[]
 
+  @@index([sourceId, status])
   @@index([status, createdAt])
-  @@index([sourceId])
+  @@index([activeKey])
 }
 
 model IngestionWorkItem {
@@ -637,4 +638,3 @@ model Topic {
   status      TopicStatus @default(approved)
   createdAt   DateTime    @default(now())
 }
-

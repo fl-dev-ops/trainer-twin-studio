@@ -179,7 +179,7 @@ export async function maintainYouTubeImports(pool: Pool, config: PipelineConfig)
           continue;
         }
         const job = await client.query<{ id: string }>(`INSERT INTO "IngestionJob" (id,"sourceId","activeKey",status,stage,"itemsDiscovered","itemsProcessed","createdAt","updatedAt")
-          VALUES ($1,$2,$3,'queued','queued',1,0,NOW(),NOW()) ON CONFLICT ("activeKey") DO NOTHING RETURNING id`, [crypto.randomUUID(), source.id, `${source.id}:${source.externalId}`]);
+          VALUES ($1,$2,$3,'queued','queued',1,0,NOW(),NOW()) ON CONFLICT ("sourceId") WHERE status IN ('queued', 'running') DO NOTHING RETURNING id`, [crypto.randomUUID(), source.id, `${source.id}:active`]);
         if (job.rows[0]) await client.query(`INSERT INTO "IngestionWorkItem" (id,"jobId","workKey",kind,status,"createdAt","updatedAt")
           VALUES ($1,$2,$3,'resource','queued',NOW(),NOW())`, [crypto.randomUUID(), job.rows[0].id, source.externalId]);
         await client.query("COMMIT");

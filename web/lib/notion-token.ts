@@ -10,20 +10,36 @@ function encryptionKey() {
   return key;
 }
 
-/** Encrypts a Notion credential with AES-256-GCM before it is persisted. */
-export function encryptNotionToken(token: string): string {
+export type NotionTokenScope = {
+  orgId: string;
+  userId: string;
+  connectionId: string;
+};
+
+export function notionTokenBinding(scope: NotionTokenScope): string {
+  return `${scope.orgId}:${scope.userId}:${scope.connectionId}`;
+}
+
+/** Encrypts a Notion credential with AES-256-GCM and AAD binding before it is persisted. */
+export function encryptNotionToken(token: string, binding: string): string {
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", encryptionKey(), iv);
+  cipher.setAAD(Buffer.from(binding));
   const ciphertext = Buffer.concat([cipher.update(token, "utf8"), cipher.final()]);
   return [iv, cipher.getAuthTag(), ciphertext].map((part) => part.toString("base64url")).join(".");
 }
 
-/** Decrypts a Notion credential only while a server-side job needs it. */
-export function decryptNotionToken(payload: string): string {
+/** Decrypts a Notion credential only while a server-side job needs it with AAD verification. */
+export function decryptNotionToken(payload: string, binding: string): string {
   const parts = payload.split(".");
   if (parts.length !== 3) throw new Error("Invalid encrypted Notion token");
-  const [iv, authTag, ciphertext] = parts.map((part) => Buffer.from(part, "base64url"));
-  const decipher = createDecipheriv("aes-256-gcm", encryptionKey(), iv);
-  decipher.setAuthTag(authTag);
-  return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8");
+  try {
+    const [iv, authTag, ciphertext] = parts.map((part) => Buffer.from(part, "base64url"));
+    const decipher = createDecipheriv("aes-256-gcm", encryptionKey(), iv);
+    decipher.setAAD(Buffer.from(binding));
+    decipher.setAuthTag(authTag);
+    return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8");
+  } catch {
+    throw new Error("Stored Notion credentials cannot be decrypted");
+  }
 }

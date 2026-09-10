@@ -1,6 +1,11 @@
+import { randomUUID } from "node:crypto";
 import { SendMessageCommand, SQSClient } from "@aws-sdk/client-sqs";
 import { db } from "@/lib/db";
 import { ingestionMessageSchema, type IngestionMessage } from "@/lib/ingestion-message";
+
+export function defaultIdentityKey(kbId: string, connector: string, externalId: string): string {
+  return `${kbId}:${connector}:${externalId}`;
+}
 
 function queueUrl(): string | undefined {
   return process.env.INGESTION_QUEUE_URL?.trim();
@@ -76,7 +81,7 @@ export async function enqueueIngestionWork(params: EnqueueIngestionParams): Prom
   status: string;
 }> {
   const { orgId, kbId, connector, externalId, sourceUrl, notionConfig, youtubeConfig, rootWorkItem } = params;
-  const identityKey = params.identityKey ?? `${orgId}:${connector}:${externalId}`;
+  const identityKey = params.identityKey ?? defaultIdentityKey(kbId, connector, externalId);
 
   // 1 & 2 & 3 & 4. Transactionally upsert source, coalesce/create job and root work item
   const result = await db.$transaction(async (tx) => {
@@ -141,49 +146,78 @@ export async function enqueueIngestionWork(params: EnqueueIngestionParams): Prom
       },
     });
 
-    if (existingJob) {
-      const activeWorkItem = existingJob.workItems[0];
-      if (activeWorkItem) {
-        return {
-          sourceId: source.id,
-          jobId: existingJob.id,
-          workItemId: activeWorkItem.id,
-          status: existingJob.status,
-          alreadyActive: true,
-        };
-      }
+    if (existingJob && existingJob.workItems[0]) {
+      return {
+        sourceId: source.id,
+        jobId: existingJob.id,
+        workItemId: existingJob.workItems[0].id,
+        status: existingJob.status,
+        alreadyActive: true,
+      };
     }
 
-    // Create a new job
-    const job = await tx.ingestionJob.create({
-      data: {
-        sourceId: source.id,
-        activeKey,
-        status: "queued",
-      },
-    });
+    // Insert new active job with conflict handling
+    const newJobId = randomUUID();
+    const insertedJobs = await tx.$queryRaw<{ id: string; status: string }[]>`
+      INSERT INTO "IngestionJob" ("id", "sourceId", "activeKey", "status", "stage", "itemsDiscovered", "itemsProcessed", "createdAt", "updatedAt")
+      VALUES (${newJobId}, ${source.id}, ${activeKey}, 'queued', 'queued', 1, 0, NOW(), NOW())
+      ON CONFLICT ("sourceId") WHERE status IN ('queued', 'running') DO NOTHING
+      RETURNING id, status
+    `;
 
-    // Create the root work item
-    const workKey = rootWorkItem?.workKey ?? externalId ?? "root";
-    const kind = rootWorkItem?.kind ?? "resource";
-    const payload = rootWorkItem?.payload ?? null;
+    let jobId: string = newJobId;
+    let jobStatus: string = "queued";
+    let workItemId: string;
+    let alreadyActive = false;
 
-    const workItem = await tx.ingestionWorkItem.create({
-      data: {
-        jobId: job.id,
-        workKey,
-        kind,
-        payload: payload ? JSON.parse(JSON.stringify(payload)) : undefined,
-        status: "queued",
-      },
-    });
+    if (insertedJobs.length > 0) {
+      jobId = insertedJobs[0].id;
+      jobStatus = insertedJobs[0].status;
+
+      // Create the root work item
+      const workKey = rootWorkItem?.workKey ?? externalId ?? "root";
+      const kind = rootWorkItem?.kind ?? "resource";
+      const payload = rootWorkItem?.payload ?? null;
+
+      const workItem = await tx.ingestionWorkItem.create({
+        data: {
+          jobId,
+          workKey,
+          kind,
+          payload: payload ? JSON.parse(JSON.stringify(payload)) : undefined,
+          status: "queued",
+        },
+      });
+      workItemId = workItem.id;
+    } else {
+      // Conflict occurred: concurrent request created active job
+      alreadyActive = true;
+      const activeJob = await tx.ingestionJob.findFirst({
+        where: {
+          sourceId: source.id,
+          status: { in: ["queued", "running"] },
+        },
+        include: {
+          workItems: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+          },
+        },
+      });
+      if (!activeJob || !activeJob.workItems[0]) {
+        throw new Error("Failed to coalesce active ingestion job");
+      }
+      jobId = activeJob.id;
+      jobStatus = activeJob.status;
+      workItemId = activeJob.workItems[0].id;
+    }
 
     return {
       sourceId: source.id,
-      jobId: job.id,
-      workItemId: workItem.id,
-      status: job.status,
-      alreadyActive: false,
+      jobId,
+      workItemId,
+      status: jobStatus,
+      alreadyActive,
     };
   });
 
@@ -209,6 +243,9 @@ export async function enqueueIngestionWork(params: EnqueueIngestionParams): Prom
     console.error(`[IngestionQueue] Failed to send SQS message for job ${result.jobId}:`, error);
     // Work item remains status='queued' and enqueuedAt=null for outbox recovery
   }
+
+  // Opportunistically pump any pending outbox items
+  void pumpIngestionOutbox(5).catch(() => {});
 
   return result;
 }

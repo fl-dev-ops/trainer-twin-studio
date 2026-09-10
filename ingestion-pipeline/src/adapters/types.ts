@@ -12,6 +12,8 @@ export type JobContext = {
   status: string;
   sourceConnector: "upload" | "notion" | "notion_public" | "youtube";
   accessTokenCiphertext: string | null;
+  notionConnectionId: string | null;
+  notionUserId: string | null;
   youtubeConnectionId: string | null;
   connectionUserId: string | null;
   externalId: string;

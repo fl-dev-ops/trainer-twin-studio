@@ -78,8 +78,11 @@ export const notionAdapter: IngestionAdapter = {
       children = result.children;
       rawMarkdown = result.markdown;
     } else {
-      if (!job.accessTokenCiphertext) throw new Error("Notion connection has no access token");
-      const token = decryptNotionToken(job.accessTokenCiphertext, config.notionTokenEncryptionKey);
+      if (!job.accessTokenCiphertext || !job.notionConnectionId || !job.notionUserId) {
+        throw new Error("Notion connection has no access token or credentials");
+      }
+      const binding = `${job.orgId}:${job.notionUserId}:${job.notionConnectionId}`;
+      const token = decryptNotionToken(job.accessTokenCiphertext, config.notionTokenEncryptionKey, binding);
       page = await getNotionPage(config, workItem.workKey, token);
       children = await listNotionChildPageIds(config, page.id, token);
       rawMarkdown = await getNotionMarkdown(config, page.id, token);

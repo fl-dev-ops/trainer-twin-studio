@@ -96,3 +96,34 @@ test("Ingestion message schema strictly enforces identifier-only payload", () =>
   });
   assert.equal(extraFields.success, false);
 });
+
+test("Notion token encryption binds to connection scope via AAD", async () => {
+  process.env.NOTION_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64");
+  const { encryptNotionToken, decryptNotionToken, notionTokenBinding } = await import("./notion-token");
+
+  const scope1 = { orgId: "org-1", userId: "user-1", connectionId: "conn-1" };
+  const scope2 = { orgId: "org-2", userId: "user-2", connectionId: "conn-2" };
+
+  const binding1 = notionTokenBinding(scope1);
+  const binding2 = notionTokenBinding(scope2);
+
+  const rawToken = "secret_notion_token_value_abc123";
+  const encrypted = encryptNotionToken(rawToken, binding1);
+
+  // Valid decryption with identical binding
+  const decrypted = decryptNotionToken(encrypted, binding1);
+  assert.equal(decrypted, rawToken);
+
+  // Rejection when decrypted with different tenant binding
+  assert.throws(() => {
+    decryptNotionToken(encrypted, binding2);
+  }, /cannot be decrypted/);
+});
+
+test("defaultIdentityKey produces consistent derivation across connectors", async () => {
+  const { defaultIdentityKey } = await import("./ingestion-queue");
+  assert.equal(defaultIdentityKey("kb-1", "youtube", "video-123"), "kb-1:youtube:video-123");
+  assert.equal(defaultIdentityKey("kb-1", "notion", "page-456"), "kb-1:notion:page-456");
+  assert.equal(defaultIdentityKey("kb-1", "notion_public", "page-456"), "kb-1:notion_public:page-456");
+  assert.equal(defaultIdentityKey("kb-1", "upload", "doc-789"), "kb-1:upload:doc-789");
+});

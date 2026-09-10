@@ -12,10 +12,11 @@ export const uploadAdapter: IngestionAdapter = {
       id: string;
       title: string;
       slug: string;
+      ext: string;
       s3MarkdownKey: string | null;
       s3SourceKey: string;
     }>(
-      `SELECT id, title, slug, "s3MarkdownKey", "s3SourceKey" FROM "KnowledgeDocument" WHERE id = $1 AND "kbId" = $2`,
+      `SELECT id, title, slug, ext, "s3MarkdownKey", "s3SourceKey" FROM "KnowledgeDocument" WHERE id = $1 AND "kbId" = $2`,
       [docId, job.kbId],
     );
 
@@ -24,9 +25,18 @@ export const uploadAdapter: IngestionAdapter = {
     }
 
     const document = docResult.rows[0];
-    const markdownKey = document.s3MarkdownKey || document.s3SourceKey;
+    let markdownKey: string | null = document.s3MarkdownKey;
+
     if (!markdownKey) {
-      throw new Error(`KnowledgeDocument ${docId} has no S3 markdown or source key`);
+      const normalizedExt = document.ext ? document.ext.toLowerCase().replace(/^\./, "") : "";
+      const TEXT_EXTENSIONS = new Set(["md", "txt", "markdown"]);
+      if (TEXT_EXTENSIONS.has(normalizedExt)) {
+        markdownKey = document.s3SourceKey;
+      } else {
+        throw new Error(
+          `KnowledgeDocument ${docId} has no markdown representation (s3MarkdownKey is null) and binary extension "${document.ext}" cannot be processed as raw text`,
+        );
+      }
     }
 
     // Read markdown from S3

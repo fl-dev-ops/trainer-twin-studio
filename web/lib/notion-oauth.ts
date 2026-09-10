@@ -1,6 +1,6 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
-import { encryptNotionToken } from "@/lib/notion-token";
+import { encryptNotionToken, notionTokenBinding } from "@/lib/notion-token";
 
 const NOTION_API_URL = "https://api.notion.com/v1";
 const NOTION_API_VERSION = process.env.NOTION_API_VERSION ?? "2022-06-28";
@@ -59,11 +59,20 @@ export async function createNotionOAuthState(orgId: string, userId: string, kbId
 
 /** Marks a valid state used exactly once and returns its bound ownership fields. */
 export async function consumeNotionOAuthState(id: string, orgId: string, userId: string) {
+  // Re-verify that user has trainer (owner/admin) role in orgId at consumption time
+  const membership = await db.member.findFirst({
+    where: { organizationId: orgId, userId },
+    select: { role: true },
+  });
+  if (!membership || !membership.role.split(",").some((role) => ["owner", "admin"].includes(role.trim()))) {
+    return null;
+  }
+
   const state = await db.notionOAuthState.findFirst({
     where: { id, orgId, userId },
-    include: { kb: { select: { id: true, slug: true } } },
+    include: { kb: { select: { id: true, slug: true, orgId: true } } },
   });
-  if (!state || state.consumedAt || state.expiresAt <= new Date()) return null;
+  if (!state || state.kb.orgId !== orgId || state.consumedAt || state.expiresAt <= new Date()) return null;
 
   const consumed = await db.notionOAuthState.updateMany({
     where: { id, orgId, userId, consumedAt: null, expiresAt: { gt: new Date() } },
@@ -120,32 +129,44 @@ export async function exchangeNotionCode(code: string): Promise<NotionOAuthToken
   }
 }
 
-/** Upserts organization-owned Notion connection credentials with authorizing user audit. */
+/** Upserts organization-owned Notion connection credentials with authorizing user audit and AAD binding. */
 export async function saveNotionConnection(orgId: string, userId: string, token: NotionOAuthToken) {
   if (!token.access_token || !token.workspace_id) {
     throw new Error("Notion OAuth response is missing workspace credentials");
   }
   const tokenExpiresAt = token.expires_in ? new Date(Date.now() + token.expires_in * 1000) : null;
-  return db.notionConnection.upsert({
-    where: { orgId_workspaceId: { orgId, workspaceId: token.workspace_id } },
-    update: {
-      userId,
-      workspaceName: token.workspace_name ?? null,
-      workspaceIcon: token.workspace_icon ?? null,
-      botId: token.bot_id ?? null,
-      accessTokenCiphertext: encryptNotionToken(token.access_token),
-      refreshTokenCiphertext: token.refresh_token ? encryptNotionToken(token.refresh_token) : null,
-      tokenExpiresAt,
-    },
+  const where = { orgId_workspaceId: { orgId, workspaceId: token.workspace_id } };
+
+  const existing = await db.notionConnection.upsert({
+    where,
+    update: {},
     create: {
+      id: randomUUID(),
       orgId,
       userId,
       workspaceId: token.workspace_id,
       workspaceName: token.workspace_name ?? null,
       workspaceIcon: token.workspace_icon ?? null,
       botId: token.bot_id ?? null,
-      accessTokenCiphertext: encryptNotionToken(token.access_token),
-      refreshTokenCiphertext: token.refresh_token ? encryptNotionToken(token.refresh_token) : null,
+      accessTokenCiphertext: "",
+    },
+  });
+
+  const connectionId = existing.id;
+  const boundUserId = existing.userId || userId;
+  const binding = notionTokenBinding({ orgId, userId: boundUserId, connectionId });
+
+  return db.notionConnection.update({
+    where: { id: connectionId },
+    data: {
+      userId,
+      workspaceName: token.workspace_name ?? null,
+      workspaceIcon: token.workspace_icon ?? null,
+      botId: token.bot_id ?? null,
+      accessTokenCiphertext: encryptNotionToken(token.access_token, binding),
+      refreshTokenCiphertext: token.refresh_token
+        ? encryptNotionToken(token.refresh_token, binding)
+        : existing.refreshTokenCiphertext,
       tokenExpiresAt,
     },
   });

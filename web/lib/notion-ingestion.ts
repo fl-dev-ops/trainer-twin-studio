@@ -1,10 +1,22 @@
 import { db } from "@/lib/db";
 import { parseNotionPageId, type NotionImportInput } from "@/lib/notion";
-import { enqueueIngestionWork } from "@/lib/ingestion-queue";
+import { defaultIdentityKey, enqueueIngestionWork } from "@/lib/ingestion-queue";
 import { getOrCreateOrgKnowledgeBase } from "@/lib/org-knowledge";
 
 /** Lists the organization's Notion connections and recent jobs for one knowledge base. */
-export async function listNotionImports(orgId: string, kbId: string) {
+export async function listNotionImports(orgId: string, kbIdOrSlug?: string) {
+  let kbId: string;
+  if (kbIdOrSlug) {
+    const kb = await db.knowledgeBase.findFirst({
+      where: { OR: [{ id: kbIdOrSlug }, { slug: kbIdOrSlug }], orgId },
+      select: { id: true },
+    });
+    kbId = kb?.id ?? kbIdOrSlug;
+  } else {
+    const defaultKb = await getOrCreateOrgKnowledgeBase(orgId);
+    kbId = defaultKb.id;
+  }
+
   const [connections, jobs] = await Promise.all([
     db.notionConnection.findMany({
       where: { orgId },
@@ -57,30 +69,37 @@ export async function listNotionImports(orgId: string, kbId: string) {
   };
 }
 
-/** Creates a durable job/root-page record and publishes its identifier-only SQS message. */
-export async function queueNotionSync(input: {
+export type QueueNotionSyncInput = NotionImportInput & {
   orgId: string;
   userId: string;
   kbId?: string;
   kbSlug?: string;
-} & NotionImportInput) {
-  const isPublic = input.mode === "public";
-  const rootPageId = parseNotionPageId(isPublic ? new URL(input.url).pathname : input.url);
-  const sourceUrl = isPublic ? `https://www.notion.so/${rootPageId.replaceAll("-", "")}` : input.url;
+};
 
+/** Creates a durable job/root-page record and publishes its identifier-only SQS message. */
+export async function queueNotionSync(input: QueueNotionSyncInput) {
+  const rootPageId = parseNotionPageId(input.url);
+  if (!rootPageId) throw new Error("Invalid Notion page URL");
+
+  const isPublic = input.mode === "public" || (!input.connectionId && !input.mode);
   let kbId = input.kbId;
+
   if (!kbId && input.kbSlug) {
-    const kb = await db.knowledgeBase.findFirst({ where: { slug: input.kbSlug, orgId: input.orgId } });
+    const kb = await db.knowledgeBase.findFirst({
+      where: { slug: input.kbSlug, orgId: input.orgId },
+      select: { id: true },
+    });
     if (kb) kbId = kb.id;
   }
+
   if (!kbId) {
     const defaultKb = await getOrCreateOrgKnowledgeBase(input.orgId);
     kbId = defaultKb.id;
   }
 
-  let connectionId: string | undefined = undefined;
+  let connectionId: string | null = null;
   if (!isPublic) {
-    if (!input.connectionId) throw new Error("connectionId is required for owned Notion imports");
+    if (!input.connectionId) throw new Error("Connection ID is required for owned Notion imports");
     const connection = await db.notionConnection.findFirst({
       where: { id: input.connectionId, orgId: input.orgId },
     });
@@ -88,16 +107,15 @@ export async function queueNotionSync(input: {
     connectionId = connection.id;
   }
 
-  const identityKey = isPublic
-    ? `${kbId}:notion-public:${rootPageId}`
-    : `${kbId}:notion-owned:${connectionId}:${rootPageId}`;
+  const connector = isPublic ? "notion_public" : "notion";
+  const identityKey = defaultIdentityKey(kbId, connector, rootPageId);
 
   const result = await enqueueIngestionWork({
     orgId: input.orgId,
     kbId,
-    connector: isPublic ? "notion_public" : "notion",
+    connector,
     externalId: rootPageId,
-    sourceUrl,
+    sourceUrl: input.url,
     identityKey,
     notionConfig: {
       connectionId: connectionId ?? null,
