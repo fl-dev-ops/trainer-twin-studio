@@ -68,7 +68,7 @@ async def entrypoint(ctx: agents.JobContext) -> None:
     runtime_token = str(metadata.get("runtimeToken") or metadata.get("runtime_token") or "token-pending").strip()
     voice = str(metadata.get("voice") or "").strip()
 
-    webhook_raw = str(metadata.get("webhook_url") or "").strip()
+    webhook_raw = str(metadata.get("webhook_url") or os.getenv("WEBHOOK_URL") or "").strip()
     if webhook_raw.startswith("/"):
         webhook_url = f"{WEB_URL}{webhook_raw}"
     elif webhook_raw:
