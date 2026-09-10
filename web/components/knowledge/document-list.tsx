@@ -1,30 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   AlertCircle,
   BookOpen,
-  CheckCircle2,
-  Eye,
+  ChevronDown,
+  ChevronRight,
   FileCode,
   FileSpreadsheet,
   FileText,
   Layers,
-  RefreshCw,
-  Trash2,
   Upload,
   Video,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Empty,
   EmptyDescription,
@@ -32,116 +22,99 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Spinner } from "@/components/ui/spinner";
+import { FileThumbnail } from "@/components/extend/file-thumbnail";
 import type { KnowledgeDoc } from "./types";
-
-function formatBytes(n: number) {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
-}
-
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-function formatDate(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return "—";
-  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
-}
 
 function getFileIcon(ext: string, connector?: string) {
   if (connector === "youtube") {
-    return <Video className="size-4 text-red-500" />;
+    return <Video className="size-3.5 text-muted-foreground shrink-0" />;
   }
   if (connector === "notion" || connector === "notion_public") {
-    return <BookOpen className="size-4 text-stone-600 dark:text-stone-300" />;
+    return <BookOpen className="size-3.5 text-muted-foreground shrink-0" />;
   }
   switch (ext.toLowerCase()) {
     case "pdf":
-      return <FileText className="size-4 text-red-500" />;
+      return <FileText className="size-3.5 text-muted-foreground shrink-0" />;
     case "docx":
     case "doc":
-      return <FileText className="size-4 text-blue-500" />;
+      return <FileText className="size-3.5 text-muted-foreground shrink-0" />;
     case "pptx":
     case "ppsx":
-      return <Layers className="size-4 text-amber-500" />;
+      return <Layers className="size-3.5 text-muted-foreground shrink-0" />;
     case "csv":
-      return <FileSpreadsheet className="size-4 text-emerald-500" />;
+      return <FileSpreadsheet className="size-3.5 text-muted-foreground shrink-0" />;
+    case "md":
+      return <FileCode className="size-3.5 text-muted-foreground shrink-0" />;
     default:
-      return <FileCode className="size-4 text-muted-foreground" />;
+      return <FileCode className="size-3.5 text-muted-foreground shrink-0" />;
   }
 }
 
-function getConnectorBadge(connector?: string) {
-  if (connector === "youtube") {
-    return (
-      <Badge variant="outline" className="gap-1 border-red-500/30 text-red-600 dark:text-red-400 bg-red-500/10 text-[10px] font-normal">
-        <Video className="size-2.5" />
-        YouTube
-      </Badge>
-    );
-  }
-  if (connector === "notion" || connector === "notion_public") {
-    return (
-      <Badge variant="outline" className="gap-1 border-stone-500/30 text-stone-600 dark:text-stone-400 bg-stone-500/10 text-[10px] font-normal">
-        <BookOpen className="size-2.5" />
-        {connector === "notion_public" ? "Notion (Public)" : "Notion"}
-      </Badge>
-    );
-  }
-  return (
-    <Badge variant="secondary" className="gap-1 text-[10px] font-normal text-muted-foreground">
-      <Upload className="size-2.5" />
-      Upload
-    </Badge>
-  );
-}
+const PAGE_SIZE = 8;
 
 export function DocumentList({
   documents,
   onSelectDoc,
-  onReindexDoc,
-  onRefreshSource,
-  onDeleteDoc,
-  reindexingId,
-  refreshingSourceId,
   onOpenUpload,
   onClearSearch,
   hasSearch,
 }: {
   documents: KnowledgeDoc[];
   onSelectDoc: (doc: KnowledgeDoc) => void;
-  onReindexDoc: (doc: KnowledgeDoc) => Promise<void>;
+  onReindexDoc?: (doc: KnowledgeDoc) => Promise<void>;
   onRefreshSource?: (doc: KnowledgeDoc) => Promise<void>;
-  onDeleteDoc: (doc: KnowledgeDoc) => Promise<void>;
-  reindexingId: string | null;
+  onDeleteDoc?: (doc: KnowledgeDoc) => Promise<void>;
+  reindexingId?: string | null;
   refreshingSourceId?: string | null;
   onOpenUpload: () => void;
   onClearSearch: () => void;
   hasSearch: boolean;
 }) {
-  const [docToDelete, setDocToDelete] = useState<KnowledgeDoc | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
+    uploaded: false,
+    youtube: false,
+    notion: false,
+  });
 
-  async function confirmDelete() {
-    if (!docToDelete) return;
-    setDeleting(true);
-    try {
-      await onDeleteDoc(docToDelete);
-      setDocToDelete(null);
-    } finally {
-      setDeleting(false);
-    }
+  // Number of items visible per section (paginated in chunks of PAGE_SIZE)
+  const [visibleCounts, setVisibleCounts] = useState<Record<string, number>>({
+    uploaded: PAGE_SIZE,
+    youtube: PAGE_SIZE,
+    notion: PAGE_SIZE,
+  });
+
+  function showMore(key: "uploaded" | "youtube" | "notion") {
+    setVisibleCounts((prev) => ({
+      ...prev,
+      [key]: (prev[key] || PAGE_SIZE) + PAGE_SIZE,
+    }));
   }
+
+  function toggleSection(key: "uploaded" | "youtube" | "notion") {
+    setCollapsedSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
+  const { uploadedDocs, youtubeDocs, notionDocs } = useMemo(() => {
+    const uploaded: KnowledgeDoc[] = [];
+    const yt: KnowledgeDoc[] = [];
+    const notion: KnowledgeDoc[] = [];
+
+    for (const doc of documents) {
+      if (doc.connector === "youtube") {
+        yt.push(doc);
+      } else if (doc.connector === "notion" || doc.connector === "notion_public") {
+        notion.push(doc);
+      } else {
+        uploaded.push(doc);
+      }
+    }
+
+    return {
+      uploadedDocs: uploaded,
+      youtubeDocs: yt,
+      notionDocs: notion,
+    };
+  }, [documents]);
 
   if (documents.length === 0) {
     if (hasSearch) {
@@ -152,9 +125,7 @@ export function DocumentList({
               <AlertCircle className="size-6 text-muted-foreground" />
             </EmptyMedia>
             <EmptyTitle>No matching documents</EmptyTitle>
-            <EmptyDescription>
-              No indexed content matched your search.
-            </EmptyDescription>
+            <EmptyDescription>No indexed content matched your search.</EmptyDescription>
           </EmptyHeader>
           <Button variant="outline" size="sm" onClick={onClearSearch}>
             Clear search
@@ -181,170 +152,232 @@ export function DocumentList({
     );
   }
 
-  return (
-    <>
-      <div className="rounded-xl border bg-card shadow-xs overflow-hidden">
-        <Table>
-          <TableHeader className="bg-muted/40">
-            <TableRow>
-              <TableHead className="w-[42%]">Document / Source</TableHead>
-              <TableHead className="w-[15%]">Connector</TableHead>
-              <TableHead className="w-[15%]">Format / Size</TableHead>
-              <TableHead className="w-[13%]">Status</TableHead>
-              <TableHead className="w-[15%] text-right pr-4">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {documents.map((doc) => {
-              const isConnectorDoc =
-                doc.connector === "notion" ||
-                doc.connector === "notion_public" ||
-                doc.connector === "youtube";
-              const isReindexing = reindexingId === doc.id;
-              const isRefreshing =
-                Boolean(doc.sourceId && refreshingSourceId === doc.sourceId) ||
-                doc.status === "syncing" ||
-                doc.sourceStatus === "syncing";
+  const renderCard = (doc: KnowledgeDoc) => {
+    const isFailed = doc.status === "failed";
+    const isIndexing = doc.status === "digesting" || doc.status === "syncing" || doc.status === "queued";
 
-              return (
-                <TableRow
-                  key={doc.id}
-                  className="cursor-pointer hover:bg-muted/30 transition-colors"
-                  onClick={() => onSelectDoc(doc)}
-                >
-                  {/* Title & Slug */}
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-3">
-                      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted border">
-                        {getFileIcon(doc.ext, doc.connector)}
-                      </span>
-                      <div className="min-w-0">
-                        <div className="truncate font-medium text-foreground hover:underline">
-                          {doc.title || doc.slug}
-                        </div>
-                        <div className="truncate text-xs text-muted-foreground font-mono">
-                          {doc.slug}
-                        </div>
-                      </div>
-                    </div>
-                  </TableCell>
+    // Dynamic border & shadow based on status
+    const statusClasses = isFailed
+      ? "border-destructive/70 shadow-sm shadow-destructive/10 ring-1 ring-destructive/30"
+      : isIndexing
+      ? "border-amber-500/70 shadow-sm shadow-amber-500/10 ring-1 ring-amber-500/30 animate-pulse"
+      : "border-border/70 hover:border-orange-500/50 hover:shadow-md";
 
-                  {/* Connector Badge */}
-                  <TableCell>
-                    {getConnectorBadge(doc.connector)}
-                  </TableCell>
+    const youtubeVideoId =
+      doc.connector === "youtube"
+        ? doc.externalId ||
+          doc.sourceUrl?.match(/(?:v=|\/embed\/|\.be\/)([^?&]+)/)?.[1] ||
+          doc.slug.replace(/^youtube_|\.json$/g, "")
+        : null;
 
-                  {/* Format & Size */}
-                  <TableCell>
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <span className="font-semibold uppercase tracking-wider text-foreground/80">
-                        {doc.ext}
-                      </span>
-                      <span>•</span>
-                      <span>{formatBytes(doc.size)}</span>
-                    </div>
-                  </TableCell>
+    return (
+      <div
+        key={doc.id}
+        onClick={() => onSelectDoc(doc)}
+        title={doc.error || doc.title || doc.slug}
+        className={`group relative flex flex-col justify-between rounded-xl bg-card transition-all duration-200 cursor-pointer overflow-hidden select-none border ${statusClasses}`}
+      >
+        {/* Card Header: Icon + Title only */}
+        <div className="px-3.5 py-2.5 flex items-center justify-between gap-2 border-b border-border/40 bg-muted/10">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            {getFileIcon(doc.ext, doc.connector)}
+            <span
+              className="text-xs font-medium text-foreground truncate group-hover:text-orange-600 transition-colors"
+              title={doc.title || doc.slug}
+            >
+              {doc.title || doc.slug}
+            </span>
+          </div>
 
-                  {/* Status Badge */}
-                  <TableCell>
-                    {doc.status === "indexed" ? (
-                      <Badge variant="outline" className="gap-1 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 text-[11px]">
-                        <CheckCircle2 className="size-3" />
-                        <span>Indexed</span>
-                      </Badge>
-                    ) : doc.status === "digesting" || doc.status === "syncing" || doc.status === "queued" ? (
-                      <Badge variant="outline" className="gap-1 border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10 text-[11px]">
-                        <Spinner className="size-3" />
-                        <span className="capitalize">{doc.status}</span>
-                      </Badge>
-                    ) : doc.status === "failed" ? (
-                      <Badge variant="outline" className="gap-1 border-destructive/40 text-destructive bg-destructive/10 text-[11px]" title={doc.error || "Failed"}>
-                        <AlertCircle className="size-3" />
-                        <span>Failed</span>
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary" className="text-[11px]">
-                        {doc.status}
-                      </Badge>
-                    )}
-                  </TableCell>
+          {/* Discreet status badge only when indexing or failed */}
+          {isIndexing && (
+            <span className="flex items-center gap-1 text-[10px] font-medium text-amber-600 dark:text-amber-400 shrink-0">
+              <Spinner className="size-2.5" />
+              <span className="capitalize">{doc.status}</span>
+            </span>
+          )}
+          {isFailed && (
+            <span className="flex items-center gap-1 text-[10px] font-medium text-destructive shrink-0">
+              <AlertCircle className="size-2.5" />
+              <span>Failed</span>
+            </span>
+          )}
+        </div>
 
-                  {/* Actions */}
-                  <TableCell className="text-right pr-4" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => onSelectDoc(doc)}
-                        title="View chunks and preview"
-                        className="size-8"
-                      >
-                        <Eye className="size-3.5 text-muted-foreground" />
-                      </Button>
-
-                      {isConnectorDoc ? (
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => onRefreshSource && onRefreshSource(doc)}
-                          disabled={isRefreshing}
-                          title="Refresh source"
-                          className="size-8"
-                        >
-                          <RefreshCw className={`size-3.5 text-muted-foreground ${isRefreshing ? "animate-spin text-primary" : ""}`} />
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => onReindexDoc(doc)}
-                          disabled={isReindexing}
-                          title="Re-index document"
-                          className="size-8"
-                        >
-                          <RefreshCw className={`size-3.5 text-muted-foreground ${isReindexing ? "animate-spin text-primary" : ""}`} />
-                        </Button>
-                      )}
-
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => setDocToDelete(doc)}
-                        title="Delete document"
-                        className="size-8 text-destructive/80 hover:text-destructive hover:bg-destructive/10"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+        {/* Card Canvas Preview using Extend FileThumbnail */}
+        <div className="relative w-full h-32 bg-gradient-to-b from-muted/20 to-muted/5 flex items-center justify-center p-3 overflow-hidden">
+          {doc.connector === "youtube" && youtubeVideoId ? (
+            <FileThumbnail
+              file={{ name: doc.title || doc.slug, type: "video/youtube" }}
+              previewImageUrl={`https://img.youtube.com/vi/${youtubeVideoId}/mqdefault.jpg`}
+              className="w-full h-full rounded-lg shadow-inner overflow-hidden border border-border/50"
+              previewContent={
+                <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                  <div className="size-8 rounded-full bg-red-600 text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                    <Video className="size-4 fill-white" />
+                  </div>
+                </div>
+              }
+            />
+          ) : doc.connector === "notion" || doc.connector === "notion_public" ? (
+            <FileThumbnail
+              file={{ name: doc.title || doc.slug, type: "text/markdown" }}
+              className="w-4/5 h-full rounded-t-lg bg-background border border-border/80 shadow-xs group-hover:-translate-y-1 transition-transform"
+              previewContent={
+                <div className="p-3 flex flex-col gap-2 w-full h-full">
+                  <div className="flex items-center gap-1.5">
+                    <BookOpen className="size-3.5 text-stone-600 dark:text-stone-300" />
+                    <div className="h-2 w-16 bg-muted-foreground/30 rounded-full" />
+                  </div>
+                  <div className="h-1.5 w-full bg-muted rounded-full mt-1" />
+                  <div className="h-1.5 w-5/6 bg-muted rounded-full" />
+                  <div className="h-1.5 w-2/3 bg-muted rounded-full" />
+                </div>
+              }
+            />
+          ) : (
+            <FileThumbnail
+              file={{ name: doc.slug, type: `application/${doc.ext}` }}
+              className="w-4/5 h-full rounded-t-lg bg-background border border-border/80 shadow-xs group-hover:-translate-y-1 transition-transform"
+              previewContent={
+                <div className="p-3 flex flex-col gap-2 w-full h-full">
+                  <div className="flex items-center justify-between">
+                    <div className="h-2.5 w-14 bg-muted-foreground/30 rounded-full" />
+                  </div>
+                  <div className="h-1.5 w-full bg-muted rounded-full mt-1.5" />
+                  <div className="h-1.5 w-4/5 bg-muted rounded-full" />
+                  <div className="h-1.5 w-full bg-muted rounded-full" />
+                  <div className="h-1.5 w-3/5 bg-muted rounded-full" />
+                </div>
+              }
+            />
+          )}
+        </div>
       </div>
+    );
+  };
 
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={docToDelete !== null} onOpenChange={(open) => !open && setDocToDelete(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete document?</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete <span className="font-semibold text-foreground">{docToDelete?.slug}</span>?
-              This will remove the file from storage and erase all indexed chunks from the organization&apos;s vector collection.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-4 gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setDocToDelete(null)} disabled={deleting}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={confirmDelete} disabled={deleting}>
-              {deleting ? <Spinner data-icon="inline-start" /> : <Trash2 data-icon="inline-start" />}
-              Delete document
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+  return (
+    <div className="space-y-8">
+      {/* SECTION 1: UPLOADED FILES */}
+      {uploadedDocs.length > 0 && (
+        <section className="space-y-3.5">
+          <button
+            type="button"
+            onClick={() => toggleSection("uploaded")}
+            className="flex items-center justify-between w-full py-1 text-left group select-none cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5">
+              <Upload className="size-4 text-muted-foreground" />
+              <h3 className="text-sm font-semibold text-foreground tracking-tight">Uploaded Files</h3>
+              <span className="text-xs text-muted-foreground font-medium">({uploadedDocs.length})</span>
+            </div>
+            <div className="size-6 rounded-md flex items-center justify-center text-muted-foreground group-hover:text-foreground transition-colors">
+              {collapsedSections.uploaded ? <ChevronRight className="size-4" /> : <ChevronDown className="size-4" />}
+            </div>
+          </button>
+
+          {!collapsedSections.uploaded && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {uploadedDocs.slice(0, visibleCounts.uploaded).map(renderCard)}
+              </div>
+              {uploadedDocs.length > visibleCounts.uploaded && (
+                <div className="flex justify-center pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => showMore("uploaded")}
+                    className="text-xs h-8 px-4"
+                  >
+                    Show more
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* SECTION 2: YOUTUBE */}
+      {youtubeDocs.length > 0 && (
+        <section className="space-y-3.5">
+          <button
+            type="button"
+            onClick={() => toggleSection("youtube")}
+            className="flex items-center justify-between w-full py-1 text-left group select-none cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5">
+              <Video className="size-4 text-muted-foreground" />
+              <h3 className="text-sm font-semibold text-foreground tracking-tight">YouTube</h3>
+              <span className="text-xs text-muted-foreground font-medium">({youtubeDocs.length})</span>
+            </div>
+            <div className="size-6 rounded-md flex items-center justify-center text-muted-foreground group-hover:text-foreground transition-colors">
+              {collapsedSections.youtube ? <ChevronRight className="size-4" /> : <ChevronDown className="size-4" />}
+            </div>
+          </button>
+
+          {!collapsedSections.youtube && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {youtubeDocs.slice(0, visibleCounts.youtube).map(renderCard)}
+              </div>
+              {youtubeDocs.length > visibleCounts.youtube && (
+                <div className="flex justify-center pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => showMore("youtube")}
+                    className="text-xs h-8 px-4"
+                  >
+                    Show more
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* SECTION 3: NOTION */}
+      {notionDocs.length > 0 && (
+        <section className="space-y-3.5">
+          <button
+            type="button"
+            onClick={() => toggleSection("notion")}
+            className="flex items-center justify-between w-full py-1 text-left group select-none cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5">
+              <BookOpen className="size-4 text-muted-foreground" />
+              <h3 className="text-sm font-semibold text-foreground tracking-tight">Notion</h3>
+              <span className="text-xs text-muted-foreground font-medium">({notionDocs.length})</span>
+            </div>
+            <div className="size-6 rounded-md flex items-center justify-center text-muted-foreground group-hover:text-foreground transition-colors">
+              {collapsedSections.notion ? <ChevronRight className="size-4" /> : <ChevronDown className="size-4" />}
+            </div>
+          </button>
+
+          {!collapsedSections.notion && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {notionDocs.slice(0, visibleCounts.notion).map(renderCard)}
+              </div>
+              {notionDocs.length > visibleCounts.notion && (
+                <div className="flex justify-center pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => showMore("notion")}
+                    className="text-xs h-8 px-4"
+                  >
+                    Show more
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+    </div>
   );
 }

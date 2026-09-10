@@ -10,6 +10,8 @@ export type KnowledgeDoc = {
   error: string | null;
   chunkCount?: number;
   sourceId?: string | null;
+  externalId?: string | null;
+  sourceUrl?: string | null;
   connector?: "upload" | "notion" | "notion_public" | "youtube" | string;
   sourceStatus?: string | null;
   indexedAt: string | null;

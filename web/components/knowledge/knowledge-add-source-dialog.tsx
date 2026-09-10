@@ -3,33 +3,13 @@
 import { useRef, useState } from "react";
 import {
   AlertCircle,
-  ArrowRight,
   BookOpen,
-  Box,
-  Check,
   CheckCircle2,
   ChevronRight,
-  Cloud,
-  FileCode,
-  FileSpreadsheet,
   FileText,
-  FolderUp,
-  Globe,
-  HardDrive,
-  Info,
-  Layers,
-  Link2,
-  MessageSquare,
-  Mic,
   Plus,
-  Radio,
-  RefreshCw,
-  Share2,
-  Sparkles,
   Trash2,
   Upload,
-  Video,
-  Wifi,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -44,7 +24,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Progress } from "@/components/ui/progress";
 import { Spinner } from "@/components/ui/spinner";
 import type { ConnectorInfo } from "./types";
 
@@ -67,16 +46,7 @@ type YouTubePreviewData = {
   alreadyIndexed: boolean;
 };
 
-type NavCategory =
-  | "popular"
-  | "websites"
-  | "youtube"
-  | "socials"
-  | "files"
-  | "podcasts"
-  | "manual"
-  | "notetaking"
-  | "messaging";
+type NavCategory = "popular" | "files" | "youtube" | "notion";
 
 const SUPPORTED_EXTS = ["pdf", "docx", "doc", "pptx", "ppsx", "csv", "txt", "md"];
 const ACCEPT_STRING =
@@ -88,60 +58,6 @@ function formatBytes(n: number) {
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
-// Brand SVG Icons
-function XTwitterIcon({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-    </svg>
-  );
-}
-
-function TikTokIcon({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M19.589 6.686a4.793 4.793 0 0 1-3.77-4.245V2h-3.445v13.672a2.896 2.896 0 0 1-5.201 1.743 2.915 2.915 0 0 1-.223-2.906 2.887 2.887 0 0 1 2.528-1.73c.277 0 .543.036.797.104V9.387a6.376 6.376 0 0 0-.797-.052 6.338 6.338 0 0 0-6.335 6.335 6.34 6.34 0 0 0 7.82 6.143 6.326 6.326 0 0 0 4.856-6.143V8.828a8.214 8.214 0 0 0 4.77 1.517V6.892a4.832 4.832 0 0 1-1-.206z" />
-    </svg>
-  );
-}
-
-function GoogleDriveIcon({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 87.3 78" fill="currentColor">
-      <path d="M6.6 66.85l3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H0c0 1.55.4 3.1 1.2 4.5l5.4 9.35z" fill="#0066da" />
-      <path d="M43.65 25L29.9 1.2c-1.35.8-2.5 1.9-3.3 3.3L1.2 47.75c-.8 1.4-1.2 2.95-1.2 4.5h27.45L43.65 25z" fill="#00ac47" />
-      <path d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5H59.85l5.35 9.3 8.35 14.5z" fill="#ea4335" />
-      <path d="M43.65 25L57.4 1.2c-1.35-.8-2.9-1.2-4.5-1.2H34.4c-1.6 0-3.15.4-4.5 1.2l13.75 23.8z" fill="#00832d" />
-      <path d="M59.85 52.25h27.45c0-1.55-.4-3.1-1.2-4.5L72.35 23.95c-.8-1.4-1.95-2.5-3.3-3.3L59.85 52.25z" fill="#ffba00" />
-      <path d="M73.55 76.8H27.5l-13.75-23.8h59.8z" fill="#2684fc" />
-    </svg>
-  );
-}
-
-function DropboxIcon({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="#0061FF">
-      <path d="M6 2L0 6l6 4 6-4-6-4zm12 0l-6 4 6 4 6-4-6-4zM0 14l6 4 6-4-6-4-6 4zm18-4l-6 4 6 4 6-4-6-4zm-6 5.5L6 16l-6-4v2l6 4 6-4v-2zm0 2l6-4 6 4v-2l-6-4-6 4v2z" />
-    </svg>
-  );
-}
-
-function OneDriveIcon({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="#0078D4">
-      <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" />
-    </svg>
-  );
-}
-
-function BoxIcon({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="#0061D5">
-      <path d="M22.04 7.6L12.5.5a.94.94 0 00-.99 0L1.96 7.6a.99.99 0 00-.46.85v8.1a.99.99 0 00.46.85l9.55 7.1c.3.22.69.22.99 0l9.55-7.1c.3-.22.46-.53.46-.85v-8.1c-.01-.32-.17-.63-.47-.85zM12 2.3l7.98 5.93L16.2 10.8 12 7.7 7.8 10.8 4.02 8.23 12 2.3zm-8.5 7.37l4 2.72v6.63l-4-2.98V9.67zm9.5 9.35v-6.63l4-2.72v6.37l-4 2.98z" />
-    </svg>
-  );
-}
-
 function YouTubeIcon({ className = "w-4 h-4" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor">
@@ -150,20 +66,10 @@ function YouTubeIcon({ className = "w-4 h-4" }: { className?: string }) {
   );
 }
 
-function InstagramIcon({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
-      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
-      <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
-    </svg>
-  );
-}
-
-function LinkedInIcon({ className = "w-4 h-4" }: { className?: string }) {
+function NotionIcon({ className = "w-4 h-4" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.64a1.66 1.66 0 0 0-1.66 1.66 1.66 1.66 0 0 0 1.66 1.66 1.66 1.66 0 0 0 1.66-1.66c0-.92-.74-1.66-1.66-1.66z" />
+      <path d="M4.459 4.208c.746.606 1.034.672 2.42.672h11.92c.26 0 .192-.032.434-.128.042-.032 0-.064-.13-.16l-1.47-1.184c-.52-.4-.86-.672-1.86-.672H6.536c-.78 0-.52.192.13.672l-2.207 1.8zm.78 2.016v12.704c0 .736.26 1.024 1.034 1.056l12.506.384c.78.032 1.034-.288 1.034-1.024V6.224c0-.736-.26-.992-.86-.96l-12.64.32c-.65.032-.994.288-.994.96zm11.726.8c.13.608 0 1.216-.608 1.28l-.52.064v9.152c-.434.224-.78.352-1.086.352-.52 0-.65-.16-1.034-.608l-3.172-4.992v4.832l1.002.224s0 1.216-1.69 1.216l-4.64-.288c-.13-.032-.26-.16-.26-.352.032-.224.26-.48.26-.48l1.212-.288V9.2l-1.69-.064C4.85 9.04 4.85 8.24 5.5 8.08l4.38-.288c.564 0 .65.16 1.086.608l3.042 4.8V8.8l-.78-.064c-.608-.064-.736-.672-.608-1.28l3.952.256.482.32z" />
     </svg>
   );
 }
@@ -181,45 +87,22 @@ export function KnowledgeAddSourceDialog({
 }) {
   const [activeCategory, setActiveCategory] = useState<NavCategory>("popular");
 
-  // File Upload State
   const [queue, setQueue] = useState<UploadQueueItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Socials Sub-tab State
-  const [activeSocial, setActiveSocial] = useState<"x" | "tiktok" | "instagram" | "linkedin">("x");
-  const [socialUsername, setSocialUsername] = useState("");
-  const [keepSynced, setKeepSynced] = useState(true);
-
-  // Websites State
-  const [websiteUrl, setWebsiteUrl] = useState("");
-  const [websiteCrawlMode, setWebsiteCrawlMode] = useState<"single" | "crawl">("single");
-  const [websiteImporting, setWebsiteImporting] = useState(false);
-
-  // Podcasts State
-  const [podcastUrl, setPodcastUrl] = useState("");
-  const [podcastImporting, setPodcastImporting] = useState(false);
-
-  // Manual Note State
-  const [manualTitle, setManualTitle] = useState("");
-  const [manualContent, setManualContent] = useState("");
-  const [manualSaving, setManualSaving] = useState(false);
-
-  // Notion State
   const [notionMode, setNotionMode] = useState<"oauth" | "public">("oauth");
-  const [notionConnectionId, setNotionConnectionId] = useState<string>("");
-  const [notionUrl, setNotionUrl] = useState<string>("");
+  const [notionConnectionId, setNotionConnectionId] = useState("");
+  const [notionUrl, setNotionUrl] = useState("");
   const [notionImporting, setNotionImporting] = useState(false);
 
-  // YouTube State
-  const [youtubeConnectionId, setYoutubeConnectionId] = useState<string>("");
-  const [youtubeUrl, setYoutubeUrl] = useState<string>("");
+  const [youtubeConnectionId, setYoutubeConnectionId] = useState("");
+  const [youtubeUrl, setYoutubeUrl] = useState("");
   const [youtubePreviewing, setYoutubePreviewing] = useState(false);
   const [youtubePreview, setYoutubePreview] = useState<YouTubePreviewData | null>(null);
   const [youtubeImporting, setYoutubeImporting] = useState(false);
 
-  // Disconnect Confirmation State
   const [disconnectItem, setDisconnectItem] = useState<{
     id: string;
     title: string;
@@ -227,7 +110,6 @@ export function KnowledgeAddSourceDialog({
   } | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
 
-  // Active connections
   const notionConnections = connectors?.notion.connections ?? [];
   const youtubeConnections = connectors?.youtube.connections ?? [];
   const selectedNotionConnection =
@@ -282,9 +164,7 @@ export function KnowledgeAddSourceDialog({
         });
         const data = await res.json().catch(() => null);
 
-        if (!res.ok) {
-          throw new Error(data?.error || "Upload failed");
-        }
+        if (!res.ok) throw new Error(data?.error || "Upload failed");
 
         setQueue((prev) =>
           prev.map((q, idx) => (idx === i ? { ...q, status: "done" } : q)),
@@ -323,9 +203,7 @@ export function KnowledgeAddSourceDialog({
       const res = await fetch("/api/connectors/notion/oauth/start", { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to start Notion authorization");
-      if (data.url) {
-        window.location.href = data.url;
-      }
+      if (data.url) window.location.href = data.url;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to connect Notion");
     }
@@ -336,9 +214,7 @@ export function KnowledgeAddSourceDialog({
       const res = await fetch("/api/connectors/youtube/oauth/start", { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to start YouTube authorization");
-      if (data.url) {
-        window.location.href = data.url;
-      }
+      if (data.url) window.location.href = data.url;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to connect YouTube");
     }
@@ -350,7 +226,6 @@ export function KnowledgeAddSourceDialog({
       toast.error("Please enter a Notion page URL");
       return;
     }
-
     if (notionMode === "oauth" && !selectedNotionConnection) {
       toast.error("Please connect a Notion workspace first");
       return;
@@ -369,7 +244,6 @@ export function KnowledgeAddSourceDialog({
         body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => null);
-
       if (!res.ok) throw new Error(data?.error || "Import failed");
 
       toast.success("Notion sync queued. Page and child pages are being indexed.");
@@ -389,7 +263,6 @@ export function KnowledgeAddSourceDialog({
       toast.error("Please enter a YouTube video URL");
       return;
     }
-
     if (!selectedYoutubeConnection) {
       toast.error("Please connect a YouTube channel first");
       return;
@@ -407,9 +280,7 @@ export function KnowledgeAddSourceDialog({
         }),
       });
       const data = await res.json().catch(() => null);
-
       if (!res.ok) throw new Error(data?.error || "Preview failed");
-
       setYoutubePreview(data);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "YouTube preview failed");
@@ -434,7 +305,6 @@ export function KnowledgeAddSourceDialog({
         }),
       });
       const data = await res.json().catch(() => null);
-
       if (!res.ok) throw new Error(data?.error || "Import failed");
 
       toast.success("YouTube video sync queued. Captions and questions are being processed.");
@@ -446,42 +316,6 @@ export function KnowledgeAddSourceDialog({
       toast.error(err instanceof Error ? err.message : "YouTube import failed");
     } finally {
       setYoutubeImporting(false);
-    }
-  }
-
-  async function handleSaveManualDoc() {
-    const title = manualTitle.trim();
-    const content = manualContent.trim();
-    if (!title || !content) {
-      toast.error("Please provide both a document title and content");
-      return;
-    }
-
-    setManualSaving(true);
-    try {
-      const blob = new Blob([content], { type: "text/markdown" });
-      const filename = `${title.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "note"}.md`;
-      const file = new File([blob], filename, { type: "text/markdown" });
-
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const res = await fetch("/api/knowledge/upload", {
-        method: "POST",
-        body: formData,
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error || "Failed to save note");
-
-      toast.success(`Note "${title}" saved and queued for indexing`);
-      setManualTitle("");
-      setManualContent("");
-      onOpenChange(false);
-      onSuccess();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save manual note");
-    } finally {
-      setManualSaving(false);
     }
   }
 
@@ -510,15 +344,17 @@ export function KnowledgeAddSourceDialog({
 
   const NAV_ITEMS: { id: NavCategory; label: string }[] = [
     { id: "popular", label: "Popular" },
-    { id: "websites", label: "Websites" },
-    { id: "youtube", label: "YouTube" },
-    { id: "socials", label: "Socials" },
     { id: "files", label: "Files" },
-    { id: "podcasts", label: "Podcasts" },
-    { id: "manual", label: "Manual" },
-    { id: "notetaking", label: "Note Taking Apps" },
-    { id: "messaging", label: "Messaging Apps" },
+    { id: "youtube", label: "YouTube" },
+    { id: "notion", label: "Notion" },
   ];
+
+  const titles: Record<NavCategory, string> = {
+    popular: "Popular",
+    files: "Upload Files",
+    youtube: "YouTube",
+    notion: "Notion",
+  };
 
   return (
     <>
@@ -528,7 +364,6 @@ export function KnowledgeAddSourceDialog({
           className="sm:max-w-4xl md:max-w-5xl h-[620px] max-h-[90vh] p-0 gap-0 overflow-hidden rounded-2xl border border-border/80 shadow-2xl bg-background"
         >
           <div className="flex h-full w-full">
-            {/* Left Sidebar Navigation */}
             <aside className="w-56 shrink-0 border-r border-border/60 bg-muted/20 flex flex-col p-4 select-none">
               <div className="px-3 py-2 mb-2">
                 <h3 className="text-sm font-semibold text-foreground/90 tracking-tight">Add Content</h3>
@@ -554,21 +389,9 @@ export function KnowledgeAddSourceDialog({
               </nav>
             </aside>
 
-            {/* Right Main Content Area */}
             <div className="flex-1 flex flex-col overflow-hidden bg-background">
-              {/* Header */}
               <div className="flex items-center justify-between px-7 py-4 border-b border-border/40 shrink-0">
-                <h2 className="text-base font-semibold text-foreground">
-                  {activeCategory === "popular" && "Popular"}
-                  {activeCategory === "websites" && "Websites"}
-                  {activeCategory === "youtube" && "YouTube"}
-                  {activeCategory === "socials" && "Upload Socials"}
-                  {activeCategory === "files" && "Files"}
-                  {activeCategory === "podcasts" && "Podcasts"}
-                  {activeCategory === "manual" && "Manual Entry"}
-                  {activeCategory === "notetaking" && "Note Taking Apps"}
-                  {activeCategory === "messaging" && "Messaging Apps"}
-                </h2>
+                <h2 className="text-base font-semibold text-foreground">{titles[activeCategory]}</h2>
                 <button
                   type="button"
                   onClick={() => onOpenChange(false)}
@@ -579,13 +402,29 @@ export function KnowledgeAddSourceDialog({
                 </button>
               </div>
 
-              {/* Scrollable Body */}
               <div className="flex-1 overflow-y-auto p-7">
-                {/* 1. POPULAR VIEW (Screenshot 3) */}
                 {activeCategory === "popular" && (
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-3.5">
-                      {/* YouTube Card */}
+                      <button
+                        type="button"
+                        onClick={() => setActiveCategory("files")}
+                        className="group flex items-center justify-between p-4 rounded-xl border border-border/70 bg-card hover:border-orange-500/50 hover:shadow-xs transition-all text-left"
+                      >
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          <div className="w-9 h-9 rounded-lg bg-orange-500/10 text-orange-600 flex items-center justify-center shrink-0">
+                            <Upload className="w-5 h-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-foreground">Upload files</div>
+                            <div className="text-xs text-muted-foreground truncate mt-0.5">
+                              PDF, Word, PowerPoint, Markdown, CSV, TXT
+                            </div>
+                          </div>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground shrink-0 ml-2 group-hover:translate-x-0.5 transition-transform" />
+                      </button>
+
                       <button
                         type="button"
                         onClick={() => setActiveCategory("youtube")}
@@ -596,111 +435,39 @@ export function KnowledgeAddSourceDialog({
                             <YouTubeIcon className="w-5 h-5" />
                           </div>
                           <div className="min-w-0">
-                            <div className="text-sm font-medium text-foreground">Upload from YouTube</div>
+                            <div className="text-sm font-medium text-foreground">YouTube</div>
                             <div className="text-xs text-muted-foreground truncate mt-0.5">
-                              Single video or an entire playlist / channel
+                              Connect a channel and import video transcripts
                             </div>
                           </div>
                         </div>
                         <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground shrink-0 ml-2 group-hover:translate-x-0.5 transition-transform" />
                       </button>
 
-                      {/* Website Card */}
                       <button
                         type="button"
-                        onClick={() => setActiveCategory("websites")}
-                        className="group flex items-center justify-between p-4 rounded-xl border border-border/70 bg-card hover:border-orange-500/50 hover:shadow-xs transition-all text-left"
+                        onClick={() => setActiveCategory("notion")}
+                        className="group flex items-center justify-between p-4 rounded-xl border border-border/70 bg-card hover:border-orange-500/50 hover:shadow-xs transition-all text-left col-span-2"
                       >
                         <div className="flex items-center gap-3.5 min-w-0">
-                          <div className="w-9 h-9 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0">
-                            <Globe className="w-5 h-5" />
+                          <div className="w-9 h-9 rounded-lg bg-foreground/5 text-foreground flex items-center justify-center shrink-0">
+                            <NotionIcon className="w-5 h-5" />
                           </div>
                           <div className="min-w-0">
-                            <div className="text-sm font-medium text-foreground">Upload from a Website</div>
+                            <div className="text-sm font-medium text-foreground">Notion</div>
                             <div className="text-xs text-muted-foreground truncate mt-0.5">
-                              Upload a single link or an entire blog
+                              Connect a workspace or import a public page
                             </div>
                           </div>
                         </div>
                         <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground shrink-0 ml-2 group-hover:translate-x-0.5 transition-transform" />
                       </button>
-
-                      {/* Twitter / X Card */}
-                      <button
-                        type="button"
-                        onClick={() => setActiveCategory("socials")}
-                        className="group flex items-center justify-between p-4 rounded-xl border border-border/70 bg-card hover:border-orange-500/50 hover:shadow-xs transition-all text-left"
-                      >
-                        <div className="flex items-center gap-3.5 min-w-0">
-                          <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center text-foreground shrink-0">
-                            <XTwitterIcon className="w-4 h-4" />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="text-sm font-medium text-foreground">Upload from Twitter</div>
-                            <div className="text-xs text-muted-foreground truncate mt-0.5">
-                              Load all your tweets
-                            </div>
-                          </div>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground shrink-0 ml-2 group-hover:translate-x-0.5 transition-transform" />
-                      </button>
-
-                      {/* Podcast Card */}
-                      <button
-                        type="button"
-                        onClick={() => setActiveCategory("podcasts")}
-                        className="group flex items-center justify-between p-4 rounded-xl border border-border/70 bg-card hover:border-orange-500/50 hover:shadow-xs transition-all text-left"
-                      >
-                        <div className="flex items-center gap-3.5 min-w-0">
-                          <div className="w-9 h-9 rounded-lg bg-orange-500/10 text-orange-600 flex items-center justify-center shrink-0">
-                            <Mic className="w-5 h-5" />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="text-sm font-medium text-foreground">Upload from a Podcast</div>
-                            <div className="text-xs text-muted-foreground truncate mt-0.5">
-                              Upload a single episode or an entire series
-                            </div>
-                          </div>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground shrink-0 ml-2 group-hover:translate-x-0.5 transition-transform" />
-                      </button>
-                    </div>
-
-                    {/* Prominent Upload Files Card */}
-                    <div
-                      onClick={() => setActiveCategory("files")}
-                      className="border border-border/80 rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:border-orange-500/60 hover:bg-orange-500/[0.02] transition-all group"
-                    >
-                      {/* Document stack illustration badges */}
-                      <div className="flex items-center justify-center -space-x-3 mb-3">
-                        <div className="w-12 h-14 rounded-lg bg-card border border-border shadow-xs -rotate-6 flex flex-col items-center justify-center p-1 group-hover:-translate-y-1 transition-transform">
-                          <span className="text-[9px] font-bold text-muted-foreground/80 tracking-wider">IMG</span>
-                          <div className="w-6 h-1 bg-muted rounded-full mt-1.5" />
-                          <div className="w-4 h-1 bg-muted rounded-full mt-1" />
-                        </div>
-                        <div className="w-12 h-14 rounded-lg bg-card border border-border shadow-md z-10 flex flex-col items-center justify-center p-1 group-hover:-translate-y-1.5 transition-transform">
-                          <span className="text-[9px] font-bold text-red-500 tracking-wider">PDF</span>
-                          <div className="w-6 h-1 bg-red-100 dark:bg-red-950/40 rounded-full mt-1.5" />
-                          <div className="w-4 h-1 bg-muted rounded-full mt-1" />
-                        </div>
-                        <div className="w-12 h-14 rounded-lg bg-card border border-border shadow-xs rotate-6 flex flex-col items-center justify-center p-1 group-hover:-translate-y-1 transition-transform">
-                          <span className="text-[9px] font-bold text-blue-500 tracking-wider">DOC</span>
-                          <div className="w-6 h-1 bg-blue-100 dark:bg-blue-950/40 rounded-full mt-1.5" />
-                          <div className="w-4 h-1 bg-muted rounded-full mt-1" />
-                        </div>
-                      </div>
-                      <div className="text-sm font-semibold text-foreground">Upload Files or Images</div>
-                      <div className="text-xs text-muted-foreground mt-1">
-                        <span className="text-orange-500 font-medium group-hover:underline">Click to browse</span> or drag and drop
-                      </div>
                     </div>
                   </div>
                 )}
 
-                {/* 2. FILES VIEW (Screenshot 1) */}
                 {activeCategory === "files" && (
                   <div className="space-y-6">
-                    {/* Hidden file input */}
                     <input
                       ref={fileInputRef}
                       type="file"
@@ -713,7 +480,6 @@ export function KnowledgeAddSourceDialog({
                       }}
                     />
 
-                    {/* Drag & Drop Dropzone */}
                     <div
                       onDragOver={(e) => {
                         e.preventDefault();
@@ -732,10 +498,9 @@ export function KnowledgeAddSourceDialog({
                           : "border-border/80 hover:border-orange-500/60 hover:bg-orange-500/[0.02]"
                       }`}
                     >
-                      {/* Document badges stack */}
                       <div className="flex items-center justify-center -space-x-3 mb-3">
                         <div className="w-12 h-14 rounded-lg bg-card border border-border shadow-xs -rotate-6 flex flex-col items-center justify-center p-1">
-                          <span className="text-[9px] font-bold text-muted-foreground/80 tracking-wider">IMG</span>
+                          <span className="text-[9px] font-bold text-muted-foreground/80 tracking-wider">MD</span>
                           <div className="w-6 h-1 bg-muted rounded-full mt-1.5" />
                           <div className="w-4 h-1 bg-muted rounded-full mt-1" />
                         </div>
@@ -750,7 +515,7 @@ export function KnowledgeAddSourceDialog({
                           <div className="w-4 h-1 bg-muted rounded-full mt-1" />
                         </div>
                       </div>
-                      <div className="text-sm font-semibold text-foreground">Upload Files or Images</div>
+                      <div className="text-sm font-semibold text-foreground">Upload files</div>
                       <div className="text-xs text-muted-foreground mt-1">
                         <span className="text-orange-500 font-medium">Click to browse</span> or drag and drop
                       </div>
@@ -759,7 +524,6 @@ export function KnowledgeAddSourceDialog({
                       </div>
                     </div>
 
-                    {/* Queued Files List */}
                     {queue.length > 0 && (
                       <div className="space-y-2 border border-border/60 rounded-xl p-4 bg-muted/10">
                         <div className="flex items-center justify-between text-xs text-muted-foreground px-1 pb-1">
@@ -785,9 +549,7 @@ export function KnowledgeAddSourceDialog({
                             >
                               <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-3">
                                 <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
-                                <div className="truncate font-medium text-foreground">
-                                  {item.file.name}
-                                </div>
+                                <div className="truncate font-medium text-foreground">{item.file.name}</div>
                                 <span className="text-muted-foreground/70 shrink-0">
                                   {formatBytes(item.file.size)}
                                 </span>
@@ -839,229 +601,11 @@ export function KnowledgeAddSourceDialog({
                         </div>
                       </div>
                     )}
-
-                    {/* 2x2 Cloud Storage Options */}
-                    <div>
-                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2.5 px-1">
-                        Cloud Storage
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <button
-                          type="button"
-                          onClick={() => toast.info("Dropbox integration is coming soon.")}
-                          className="flex items-center gap-3 p-3.5 rounded-xl border border-border/70 bg-card hover:bg-accent/40 text-left transition-colors"
-                        >
-                          <DropboxIcon className="w-5 h-5 shrink-0" />
-                          <span className="text-xs font-medium text-foreground">Choose from Dropbox</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => toast.info("Google Drive integration is coming soon.")}
-                          className="flex items-center gap-3 p-3.5 rounded-xl border border-border/70 bg-card hover:bg-accent/40 text-left transition-colors"
-                        >
-                          <GoogleDriveIcon className="w-5 h-5 shrink-0" />
-                          <span className="text-xs font-medium text-foreground">Choose from Google Drive</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => toast.info("OneDrive integration is coming soon.")}
-                          className="flex items-center gap-3 p-3.5 rounded-xl border border-border/70 bg-card hover:bg-accent/40 text-left transition-colors"
-                        >
-                          <OneDriveIcon className="w-5 h-5 shrink-0" />
-                          <span className="text-xs font-medium text-foreground">Choose from OneDrive</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => toast.info("Box integration is coming soon.")}
-                          className="flex items-center gap-3 p-3.5 rounded-xl border border-border/70 bg-card hover:bg-accent/40 text-left transition-colors"
-                        >
-                          <BoxIcon className="w-5 h-5 shrink-0" />
-                          <span className="text-xs font-medium text-foreground">Choose from Box</span>
-                        </button>
-                      </div>
-                    </div>
                   </div>
                 )}
 
-                {/* 3. SOCIALS VIEW (Screenshot 2) */}
-                {activeCategory === "socials" && (
-                  <div className="space-y-6">
-                    {/* Platform Selection Cards (Horizontal Grid) */}
-                    <div className="grid grid-cols-4 gap-3">
-                      {/* X Card */}
-                      <button
-                        type="button"
-                        onClick={() => setActiveSocial("x")}
-                        className={`p-3.5 rounded-xl border text-left transition-all flex flex-col justify-between h-20 ${
-                          activeSocial === "x"
-                            ? "border-orange-500 bg-orange-500/[0.03] ring-1 ring-orange-500/20"
-                            : "border-border/70 bg-card hover:border-border"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div
-                            className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
-                              activeSocial === "x"
-                                ? "border-orange-500 bg-orange-500"
-                                : "border-muted-foreground/40"
-                            }`}
-                          >
-                            {activeSocial === "x" && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                          </div>
-                          <XTwitterIcon className="w-4 h-4 text-foreground/80" />
-                        </div>
-                        <span className="text-xs font-medium text-foreground truncate">
-                          Upload your X profile
-                        </span>
-                      </button>
-
-                      {/* TikTok Card */}
-                      <button
-                        type="button"
-                        onClick={() => setActiveSocial("tiktok")}
-                        className={`p-3.5 rounded-xl border text-left transition-all flex flex-col justify-between h-20 ${
-                          activeSocial === "tiktok"
-                            ? "border-orange-500 bg-orange-500/[0.03] ring-1 ring-orange-500/20"
-                            : "border-border/70 bg-card hover:border-border"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div
-                            className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
-                              activeSocial === "tiktok"
-                                ? "border-orange-500 bg-orange-500"
-                                : "border-muted-foreground/40"
-                            }`}
-                          >
-                            {activeSocial === "tiktok" && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                          </div>
-                          <TikTokIcon className="w-4 h-4 text-foreground/80" />
-                        </div>
-                        <span className="text-xs font-medium text-foreground truncate">
-                          Upload your TikTok
-                        </span>
-                      </button>
-
-                      {/* Instagram Card */}
-                      <button
-                        type="button"
-                        onClick={() => setActiveSocial("instagram")}
-                        className={`p-3.5 rounded-xl border text-left transition-all flex flex-col justify-between h-20 ${
-                          activeSocial === "instagram"
-                            ? "border-orange-500 bg-orange-500/[0.03] ring-1 ring-orange-500/20"
-                            : "border-border/70 bg-card hover:border-border"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div
-                            className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
-                              activeSocial === "instagram"
-                                ? "border-orange-500 bg-orange-500"
-                                : "border-muted-foreground/40"
-                            }`}
-                          >
-                            {activeSocial === "instagram" && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                          </div>
-                          <InstagramIcon className="w-4 h-4 text-pink-600" />
-                        </div>
-                        <span className="text-xs font-medium text-foreground truncate">
-                          Upload your Instagram
-                        </span>
-                      </button>
-
-                      {/* LinkedIn Card */}
-                      <button
-                        type="button"
-                        onClick={() => setActiveSocial("linkedin")}
-                        className={`p-3.5 rounded-xl border text-left transition-all flex flex-col justify-between h-20 ${
-                          activeSocial === "linkedin"
-                            ? "border-orange-500 bg-orange-500/[0.03] ring-1 ring-orange-500/20"
-                            : "border-border/70 bg-card hover:border-border"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div
-                            className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
-                              activeSocial === "linkedin"
-                                ? "border-orange-500 bg-orange-500"
-                                : "border-muted-foreground/40"
-                            }`}
-                          >
-                            {activeSocial === "linkedin" && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                          </div>
-                          <LinkedInIcon className="w-4 h-4 text-blue-600" />
-                        </div>
-                        <span className="text-xs font-medium text-foreground truncate">
-                          Upload your LinkedIn
-                        </span>
-                      </button>
-                    </div>
-
-                    {/* Social Form */}
-                    <div className="space-y-4 pt-2">
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-foreground">Username</label>
-                        <div className="relative">
-                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">
-                            @
-                          </span>
-                          <Input
-                            type="text"
-                            placeholder="username"
-                            value={socialUsername}
-                            onChange={(e) => setSocialUsername(e.target.value)}
-                            className="pl-8 text-sm h-10 border-border/80 focus-visible:ring-orange-500"
-                          />
-                        </div>
-                        <p className="text-[11px] text-muted-foreground">
-                          Enter your {activeSocial === "x" ? "X / Twitter" : activeSocial} handle to automatically pull public posts and bio.
-                        </p>
-                      </div>
-
-                      {/* Keep Synced Row */}
-                      <div className="flex items-start gap-3 p-3.5 rounded-xl bg-muted/20 border border-border/60">
-                        <Wifi className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold text-foreground">Keep Synced</span>
-                            <input
-                              type="checkbox"
-                              checked={keepSynced}
-                              onChange={(e) => setKeepSynced(e.target.checked)}
-                              className="accent-orange-500 w-4 h-4 rounded cursor-pointer"
-                            />
-                          </div>
-                          <p className="text-[11px] text-muted-foreground mt-0.5">
-                            Automatically sync and ingest new content when published.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="pt-2 flex justify-end">
-                        <Button
-                          type="button"
-                          onClick={() => {
-                            if (!socialUsername.trim()) {
-                              toast.error("Please enter a username");
-                              return;
-                            }
-                            toast.info(`Ingesting @${socialUsername.trim()} from ${activeSocial} is queued.`);
-                            setSocialUsername("");
-                            onOpenChange(false);
-                          }}
-                          className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-5"
-                        >
-                          Import Profile
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 4. YOUTUBE VIEW */}
                 {activeCategory === "youtube" && (
                   <div className="space-y-6">
-                    {/* Channel Connections Section */}
                     <div>
                       <div className="flex items-center justify-between mb-3">
                         <div>
@@ -1110,9 +654,7 @@ export function KnowledgeAddSourceDialog({
                                   <YouTubeIcon className="w-4 h-4" />
                                 </div>
                                 <div>
-                                  <div className="text-xs font-medium text-foreground">
-                                    {c.channelTitle}
-                                  </div>
+                                  <div className="text-xs font-medium text-foreground">{c.channelTitle}</div>
                                   <div className="text-[10px] text-muted-foreground">ID: {c.channelId}</div>
                                 </div>
                               </div>
@@ -1142,78 +684,79 @@ export function KnowledgeAddSourceDialog({
                       )}
                     </div>
 
-                    {/* Import Video Form */}
-                    <div className="space-y-3 pt-2 border-t border-border/50">
-                      <div className="text-xs font-semibold text-foreground">Import Video</div>
-                      <div className="flex gap-2">
-                        <Input
-                          type="url"
-                          placeholder="https://www.youtube.com/watch?v=..."
-                          value={youtubeUrl}
-                          onChange={(e) => {
-                            setYoutubeUrl(e.target.value);
-                            setYoutubePreview(null);
-                          }}
-                          className="text-xs h-10 border-border/80"
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={handleYouTubePreview}
-                          disabled={youtubePreviewing || !youtubeUrl.trim() || !selectedYoutubeConnection}
-                          className="text-xs px-4 border-border shrink-0"
-                        >
-                          {youtubePreviewing ? <Spinner className="w-3.5 h-3.5" /> : "Preview"}
-                        </Button>
-                      </div>
-
-                      {/* Video Preview Card */}
-                      {youtubePreview && (
-                        <div className="p-4 rounded-xl border border-border/80 bg-card space-y-3">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <div className="text-xs font-semibold text-foreground line-clamp-2">
-                                {youtubePreview.title}
-                              </div>
-                              <div className="text-[11px] text-muted-foreground mt-0.5">
-                                Channel: {youtubePreview.channelTitle} • Language: {youtubePreview.language.toUpperCase()}
-                              </div>
-                            </div>
-                            {youtubePreview.alreadyIndexed && (
-                              <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-500/40 shrink-0">
-                                Already Indexed
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="flex justify-end pt-1">
-                            <Button
-                              type="button"
-                              onClick={handleYouTubeImport}
-                              disabled={youtubeImporting}
-                              className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-4"
-                            >
-                              {youtubeImporting ? (
-                                <>
-                                  <Spinner className="w-3.5 h-3.5 mr-1.5" />
-                                  Importing...
-                                </>
-                              ) : youtubePreview.alreadyIndexed ? (
-                                "Refresh Video"
-                              ) : (
-                                "Import Video"
-                              )}
-                            </Button>
-                          </div>
+                    {/* Import Video Form - only show after connecting at least one channel */}
+                    {youtubeConnections.length > 0 && (
+                      <div className="space-y-3 pt-2 border-t border-border/50">
+                        <div className="text-xs font-semibold text-foreground">Import Video</div>
+                        <div className="flex gap-2">
+                          <Input
+                            type="url"
+                            placeholder="https://www.youtube.com/watch?v=..."
+                            value={youtubeUrl}
+                            onChange={(e) => {
+                              setYoutubeUrl(e.target.value);
+                              setYoutubePreview(null);
+                            }}
+                            className="text-xs h-10 border-border/80"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={handleYouTubePreview}
+                            disabled={youtubePreviewing || !youtubeUrl.trim() || !selectedYoutubeConnection}
+                            className="text-xs px-4 border-border shrink-0"
+                          >
+                            {youtubePreviewing ? <Spinner className="w-3.5 h-3.5" /> : "Preview"}
+                          </Button>
                         </div>
-                      )}
-                    </div>
+
+                        {/* Video Preview Card */}
+                        {youtubePreview && (
+                          <div className="p-4 rounded-xl border border-border/80 bg-card space-y-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <div className="text-xs font-semibold text-foreground line-clamp-2">
+                                  {youtubePreview.title}
+                                </div>
+                                <div className="text-[11px] text-muted-foreground mt-0.5">
+                                  Channel: {youtubePreview.channelTitle} • Language:{" "}
+                                  {youtubePreview.language.toUpperCase()}
+                                </div>
+                              </div>
+                              {youtubePreview.alreadyIndexed && (
+                                <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-500/40 shrink-0">
+                                  Already Indexed
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="flex justify-end pt-1">
+                              <Button
+                                type="button"
+                                onClick={handleYouTubeImport}
+                                disabled={youtubeImporting}
+                                className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-4"
+                              >
+                                {youtubeImporting ? (
+                                  <>
+                                    <Spinner className="w-3.5 h-3.5 mr-1.5" />
+                                    Importing...
+                                  </>
+                                ) : youtubePreview.alreadyIndexed ? (
+                                  "Refresh Video"
+                                ) : (
+                                  "Import Video"
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 
-                {/* 5. NOTE TAKING APPS VIEW (Notion) */}
-                {activeCategory === "notetaking" && (
+                {activeCategory === "notion" && (
                   <div className="space-y-6">
-                    {/* Mode Toggle */}
                     <div className="flex items-center gap-2 p-1 bg-muted/40 rounded-xl w-fit">
                       <button
                         type="button"
@@ -1224,7 +767,7 @@ export function KnowledgeAddSourceDialog({
                             : "text-muted-foreground hover:text-foreground"
                         }`}
                       >
-                        Connected Notion Workspace
+                        Connected Workspace
                       </button>
                       <button
                         type="button"
@@ -1241,11 +784,12 @@ export function KnowledgeAddSourceDialog({
 
                     {notionMode === "oauth" ? (
                       <div className="space-y-5">
-                        {/* Workspaces list */}
                         <div>
                           <div className="flex items-center justify-between mb-3">
                             <div>
-                              <div className="text-xs font-semibold text-foreground">Workspaces ({notionConnections.length})</div>
+                              <div className="text-xs font-semibold text-foreground">
+                                Workspaces ({notionConnections.length})
+                              </div>
                               <div className="text-[11px] text-muted-foreground">
                                 Select an authorized Notion workspace
                               </div>
@@ -1317,23 +861,44 @@ export function KnowledgeAddSourceDialog({
                           )}
                         </div>
 
-                        {/* Page URL input */}
-                        <div className="space-y-2 pt-2 border-t border-border/50">
-                          <label className="text-xs font-semibold text-foreground">Notion Page URL</label>
-                          <Input
-                            type="url"
-                            placeholder="https://notion.so/my-org/Page-Title-1234567890abcdef"
-                            value={notionUrl}
-                            onChange={(e) => setNotionUrl(e.target.value)}
-                            className="text-xs h-10 border-border/80"
-                          />
-                          <p className="text-[11px] text-muted-foreground">
-                            Subpages linked underneath this root will be recursively fanned out and indexed.
-                          </p>
-                        </div>
+                        {/* Page URL input and import button - only show after connecting at least one workspace */}
+                        {notionConnections.length > 0 && (
+                          <>
+                            <div className="space-y-2 pt-2 border-t border-border/50">
+                              <label className="text-xs font-semibold text-foreground">Notion Page URL</label>
+                              <Input
+                                type="url"
+                                placeholder="https://notion.so/my-org/Page-Title-1234567890abcdef"
+                                value={notionUrl}
+                                onChange={(e) => setNotionUrl(e.target.value)}
+                                className="text-xs h-10 border-border/80"
+                              />
+                              <p className="text-[11px] text-muted-foreground">
+                                Subpages linked underneath this root will be recursively fanned out and indexed.
+                              </p>
+                            </div>
+
+                            <div className="pt-2 flex justify-end">
+                              <Button
+                                type="button"
+                                onClick={handleNotionImport}
+                                disabled={notionImporting || !notionUrl.trim()}
+                                className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-5"
+                              >
+                                {notionImporting ? (
+                                  <>
+                                    <Spinner className="w-3.5 h-3.5 mr-1.5" />
+                                    Queuing Sync...
+                                  </>
+                                ) : (
+                                  "Import Notion Content"
+                                )}
+                              </Button>
+                            </div>
+                          </>
+                        )}
                       </div>
                     ) : (
-                      /* Public Page Import */
                       <div className="space-y-4">
                         <div className="space-y-2">
                           <label className="text-xs font-semibold text-foreground">Public Notion Page URL</label>
@@ -1348,213 +913,26 @@ export function KnowledgeAddSourceDialog({
                             Works on any page where &quot;Share to web&quot; is turned on. No OAuth connection required.
                           </p>
                         </div>
+
+                        <div className="pt-2 flex justify-end">
+                          <Button
+                            type="button"
+                            onClick={handleNotionImport}
+                            disabled={notionImporting || !notionUrl.trim()}
+                            className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-5"
+                          >
+                            {notionImporting ? (
+                              <>
+                                <Spinner className="w-3.5 h-3.5 mr-1.5" />
+                                Queuing Sync...
+                              </>
+                            ) : (
+                              "Import Notion Content"
+                            )}
+                          </Button>
+                        </div>
                       </div>
                     )}
-
-                    <div className="pt-2 flex justify-end">
-                      <Button
-                        type="button"
-                        onClick={handleNotionImport}
-                        disabled={
-                          notionImporting ||
-                          !notionUrl.trim() ||
-                          (notionMode === "oauth" && notionConnections.length === 0)
-                        }
-                        className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-5"
-                      >
-                        {notionImporting ? (
-                          <>
-                            <Spinner className="w-3.5 h-3.5 mr-1.5" />
-                            Queuing Sync...
-                          </>
-                        ) : (
-                          "Import Notion Content"
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {/* 6. WEBSITES VIEW */}
-                {activeCategory === "websites" && (
-                  <div className="space-y-6">
-                    <div className="space-y-4">
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-foreground">Website URL</label>
-                        <Input
-                          type="url"
-                          placeholder="https://example.com/docs or https://company.com/blog"
-                          value={websiteUrl}
-                          onChange={(e) => setWebsiteUrl(e.target.value)}
-                          className="text-xs h-10 border-border/80"
-                        />
-                        <p className="text-[11px] text-muted-foreground">
-                          Enter the root documentation or website URL to scrape and convert to markdown.
-                        </p>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => setWebsiteCrawlMode("single")}
-                          className={`p-3 rounded-xl border text-left transition-colors ${
-                            websiteCrawlMode === "single"
-                              ? "border-orange-500 bg-orange-500/[0.03]"
-                              : "border-border/70 bg-card hover:border-border"
-                          }`}
-                        >
-                          <div className="text-xs font-medium text-foreground">Single Page</div>
-                          <div className="text-[11px] text-muted-foreground mt-0.5">
-                            Scrapes only this specific page
-                          </div>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setWebsiteCrawlMode("crawl")}
-                          className={`p-3 rounded-xl border text-left transition-colors ${
-                            websiteCrawlMode === "crawl"
-                              ? "border-orange-500 bg-orange-500/[0.03]"
-                              : "border-border/70 bg-card hover:border-border"
-                          }`}
-                        >
-                          <div className="text-xs font-medium text-foreground">Full Domain Crawl</div>
-                          <div className="text-[11px] text-muted-foreground mt-0.5">
-                            Discovers subpages and sitemaps
-                          </div>
-                        </button>
-                      </div>
-
-                      <div className="pt-3 flex justify-end">
-                        <Button
-                          type="button"
-                          disabled={!websiteUrl.trim() || websiteImporting}
-                          onClick={() => {
-                            toast.info(`Scraping queued for ${websiteUrl.trim()} (${websiteCrawlMode} mode)`);
-                            setWebsiteUrl("");
-                            onOpenChange(false);
-                          }}
-                          className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-5"
-                        >
-                          {websiteImporting ? <Spinner className="w-3.5 h-3.5 mr-1.5" /> : null}
-                          Scrape & Ingest Website
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 7. PODCASTS VIEW */}
-                {activeCategory === "podcasts" && (
-                  <div className="space-y-6">
-                    <div className="space-y-4">
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-foreground">Podcast RSS or Episode URL</label>
-                        <Input
-                          type="url"
-                          placeholder="https://feeds.buzzsprout.com/... or Spotify episode link"
-                          value={podcastUrl}
-                          onChange={(e) => setPodcastUrl(e.target.value)}
-                          className="text-xs h-10 border-border/80"
-                        />
-                        <p className="text-[11px] text-muted-foreground">
-                          Enter your podcast RSS feed to automatically transcribe episodes and extract key insights.
-                        </p>
-                      </div>
-
-                      <div className="pt-3 flex justify-end">
-                        <Button
-                          type="button"
-                          disabled={!podcastUrl.trim() || podcastImporting}
-                          onClick={() => {
-                            toast.info(`Podcast import queued for ${podcastUrl.trim()}`);
-                            setPodcastUrl("");
-                            onOpenChange(false);
-                          }}
-                          className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-5"
-                        >
-                          {podcastImporting ? <Spinner className="w-3.5 h-3.5 mr-1.5" /> : null}
-                          Import Podcast
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 8. MANUAL ENTRY VIEW */}
-                {activeCategory === "manual" && (
-                  <div className="space-y-4">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-foreground">Document Title</label>
-                      <Input
-                        type="text"
-                        placeholder="e.g. Return Policy, Troubleshooting FAQ, Brand Voice"
-                        value={manualTitle}
-                        onChange={(e) => setManualTitle(e.target.value)}
-                        className="text-xs h-9 border-border/80"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-foreground">Content (Markdown / Plain Text)</label>
-                      <textarea
-                        rows={9}
-                        placeholder="Paste or write content directly here. Standard Markdown formatting is supported..."
-                        value={manualContent}
-                        onChange={(e) => setManualContent(e.target.value)}
-                        className="w-full text-xs font-mono p-3 rounded-xl border border-border/80 bg-background resize-none focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-orange-500"
-                      />
-                    </div>
-
-                    <div className="pt-2 flex justify-end">
-                      <Button
-                        type="button"
-                        onClick={handleSaveManualDoc}
-                        disabled={manualSaving || !manualTitle.trim() || !manualContent.trim()}
-                        className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-5"
-                      >
-                        {manualSaving ? (
-                          <>
-                            <Spinner className="w-3.5 h-3.5 mr-1.5" />
-                            Saving...
-                          </>
-                        ) : (
-                          "Save Document"
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {/* 9. MESSAGING APPS VIEW */}
-                {activeCategory === "messaging" && (
-                  <div className="space-y-4">
-                    <div className="text-xs text-muted-foreground mb-3">
-                      Connect your messaging channels to sync discussions, FAQs, and shared files.
-                    </div>
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="p-4 rounded-xl border border-border/70 bg-card text-center space-y-2">
-                        <MessageSquare className="w-6 h-6 text-purple-600 mx-auto" />
-                        <div className="text-xs font-medium text-foreground">Slack</div>
-                        <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                          Coming Soon
-                        </Badge>
-                      </div>
-                      <div className="p-4 rounded-xl border border-border/70 bg-card text-center space-y-2">
-                        <MessageSquare className="w-6 h-6 text-indigo-600 mx-auto" />
-                        <div className="text-xs font-medium text-foreground">Discord</div>
-                        <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                          Coming Soon
-                        </Badge>
-                      </div>
-                      <div className="p-4 rounded-xl border border-border/70 bg-card text-center space-y-2">
-                        <MessageSquare className="w-6 h-6 text-emerald-600 mx-auto" />
-                        <div className="text-xs font-medium text-foreground">WhatsApp</div>
-                        <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                          Coming Soon
-                        </Badge>
-                      </div>
-                    </div>
                   </div>
                 )}
               </div>
@@ -1563,7 +941,6 @@ export function KnowledgeAddSourceDialog({
         </DialogContent>
       </Dialog>
 
-      {/* Disconnect Confirmation Modal */}
       {disconnectItem && (
         <Dialog open={Boolean(disconnectItem)} onOpenChange={(open) => !open && setDisconnectItem(null)}>
           <DialogContent className="sm:max-w-md">

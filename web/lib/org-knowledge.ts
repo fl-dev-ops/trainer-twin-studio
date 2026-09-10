@@ -19,6 +19,8 @@ export type OrgKnowledgeDoc = {
   error: string | null;
   chunkCount?: number;
   sourceId?: string | null;
+  externalId?: string | null;
+  sourceUrl?: string | null;
   connector?: string;
   sourceStatus?: string | null;
   indexedAt: string | null;
@@ -193,7 +195,7 @@ export class OrganizationKnowledgeService {
       where: { kb: { orgId } },
       include: {
         kb: { select: { slug: true } },
-        source: { select: { id: true, connector: true, status: true } },
+        source: { select: { id: true, connector: true, status: true, sourceUrl: true } },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -209,6 +211,8 @@ export class OrganizationKnowledgeService {
       status: d.status,
       error: d.error,
       sourceId: d.sourceId,
+      externalId: d.externalId,
+      sourceUrl: d.source?.sourceUrl ?? null,
       connector: d.source?.connector ?? (d.ext === "json" ? "youtube" : "upload"),
       sourceStatus: d.source?.status ?? null,
       indexedAt: d.indexedAt ? d.indexedAt.toISOString() : null,
