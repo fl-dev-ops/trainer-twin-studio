@@ -1,4 +1,4 @@
-import { AccessToken } from "livekit-server-sdk";
+import { AccessToken, AgentDispatchClient } from "livekit-server-sdk";
 
 export function getLiveKitUrl(): string {
   return (
@@ -57,5 +57,18 @@ export async function createLiveKitSessionToken({
   });
 
   const token = await at.toJwt();
+
+  // Explicitly dispatch the LiveKit agent worker to the session room
+  const agentName = process.env.LIVEKIT_AGENT_NAME || process.env.AGENT_NAME || "intervoo-agent";
+  try {
+    const dispatchClient = new AgentDispatchClient(url, apiKey, apiSecret);
+    await dispatchClient.createDispatch(room, agentName, {
+      metadata: JSON.stringify(metadata),
+    });
+    console.log(`[LiveKit] Dispatched agent '${agentName}' to room '${room}'`);
+  } catch (dispatchErr) {
+    console.warn(`[LiveKit] Could not dispatch agent '${agentName}' to room '${room}':`, dispatchErr);
+  }
+
   return { url, token, room };
 }
