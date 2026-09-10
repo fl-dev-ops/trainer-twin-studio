@@ -1,0 +1,1 @@
+"""Screen-inspection tool adapters."""

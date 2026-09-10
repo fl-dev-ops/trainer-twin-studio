@@ -1,0 +1,5 @@
+[project]
+  subdomain = "diagnosticpre-call-agent-tngt0emv"
+
+[agent]
+  id = "CA_eUz3VV3fy4fn"

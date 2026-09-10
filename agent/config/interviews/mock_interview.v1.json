@@ -1,0 +1,30 @@
+{
+  "type": "mock_interview",
+  "version": "v1",
+  "prompt_url": "prompts/interview/v1/mock_interview.md",
+  "scripts": {
+    "initial_reply": "Follow the Introduction Flow in your system instructions now. Use the candidate's actual name, then ask the exact introduction question specified there."
+  },
+  "adapters": {
+    "runtime": "mock_interview",
+    "question_source": "chroma",
+    "progress": "question_store"
+  },
+  "surfaces": ["verbal", "code", "whiteboard"],
+  "tools": [
+    "start_question",
+    "read_code_range",
+    "highlight_code",
+    "read_whiteboard_assessment",
+    "highlight_whiteboard",
+    "build_interview_plan",
+    "finish_interview"
+  ],
+  "evaluation": "mock_interview",
+  "config": {
+    "max_follow_ups_per_main": 1,
+    "min_whiteboard_follow_ups": 2
+  },
+  "rounds": [],
+  "defaults": {}
+}

@@ -1,0 +1,9 @@
+services:
+  intervoo-ai-agents:
+    image: devopsfl/intervoo-ai-agents:latest
+    container_name: intervoo-ai-agents
+    env_file:
+      - .env
+    expose:
+      - "8081"
+    restart: unless-stopped
