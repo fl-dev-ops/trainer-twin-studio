@@ -65,6 +65,7 @@ export async function createLiveKitSessionToken({
   at.addGrant({
     roomJoin: true,
     room,
+    roomCreate: true,
     canPublish: true,
     canSubscribe: true,
     canPublishData: true,
