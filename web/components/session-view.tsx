@@ -446,20 +446,21 @@ function ActiveSession({
       } catch {}
     }
 
+    function handleRoomDisconnected() {
+      finalizeSession("abandoned");
+      onEndSession("disconnected");
+    }
+
     room.on(RoomEvent.TranscriptionReceived, handleTranscription);
     room.on(RoomEvent.DataReceived, handleData);
+    room.on(RoomEvent.Disconnected, handleRoomDisconnected);
 
     return () => {
       room.off(RoomEvent.TranscriptionReceived, handleTranscription);
       room.off(RoomEvent.DataReceived, handleData);
+      room.off(RoomEvent.Disconnected, handleRoomDisconnected);
     };
-  }, [room, connection]);
-
-  useEffect(() => {
-    return () => {
-      finalizeSession("abandoned");
-    };
-  }, []);
+  }, [room, connection, onEndSession]);
 
   const mm = String(Math.floor(elapsed / 60)).padStart(2, "0");
   const ss = String(elapsed % 60).padStart(2, "0");
