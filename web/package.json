@@ -3,8 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "devp": "mkdir -p logs && PORTLESS_WILDCARD=1 portless trainertwin next dev 2>&1 | tee \"logs/web-$(date +%Y%m%d-%H%M%S)-$$.log\"",
-    "dev": "mkdir -p logs && next dev 2>&1 | tee \"logs/web-$(date +%Y%m%d-%H%M%S)-$$.log\"",
+    "dev": "next dev",
     "postinstall": "prisma generate",
     "reindex:knowledge-storage": "bun scripts/reindex-knowledge-storage.ts",
     "check:session-isolation": "bun scripts/session-isolation-check.ts",
@@ -63,6 +62,7 @@
     "@prisma/client": "^7.9.1",
     "@radix-ui/react-toolbar": "^1.1.19",
     "@radix-ui/react-tooltip": "^1.2.16",
+    "@t3-oss/env-nextjs": "^0.13.11",
     "@tanstack/react-query": "^5.102.8",
     "@tanstack/react-virtual": "^3.13.12",
     "@types/three": "^0.185.4",
