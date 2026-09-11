@@ -62,4 +62,10 @@ While `@vercel/queue` solved the immediate concurrency issue on Vercel productio
 - [x] Deleted proprietary `/api/queues/persona-analysis` route and cleaned `vercel.json`.
 - [x] No `[QueueClient] Region not detected` warnings in terminal or build logs.
 - [x] Unit test suite (`web/lib/persona-analysis-queue.test.ts`) verifies FIFO order, retry tracking, stale row recovery, and sequential drain (7 pass).
-- [x] Single-flight concurrency verified: PostgreSQL transaction advisory lock ensures strictly one analysis executes at a time.
+- [x] Single-flight concurrency verified: `FOR UPDATE SKIP LOCKED` claim + TTL check ensures strictly one analysis executes at a time.
+- [x] `drainPersonaAnalysisQueue()` survives individual source failures; per-source attempts (max 3) tracked in metadata with `failed` status.
+- [x] Gemini file-upload fetches given explicit timeouts (start 30s, PUT 300s) — last unbounded call eliminated.
+- [x] Prod hardening: `maxDuration: 300` on upload/analyze routes (after() drains not cut short); analysis TTL 15min > worst-case media pipeline.
+- [x] Bulk upload validated locally: 22/22 sources `uploaded → analyzing → analyzed`, zero 429s.
+- [x] Production verified (2026-09-11): pushed to `main`, prod deploy ready. `CRON_SECRET` set via Vercel CLI (production + preview); pump endpoint on prod — no auth → 401, wrong secret → 401, correct `Authorization: Bearer <CRON_SECRET>` → 200 `{ok:true}`. Vercel cron sends that header automatically.
+- [x] Stale `analyzing` sources (>15m) are automatically recovered back to `uploaded`.
