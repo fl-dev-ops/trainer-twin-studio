@@ -192,13 +192,32 @@ PostgreSQL Neon            Web API (@web)           LiveKit Cloud           Clie
      {
        "session_id": "cmtx...",
        "room_name": "session-cmtx...",
-       "audio_s3_key": "org-xxx/recordings/cmtx...-audio.ogg",
-       "video_s3_key": "org-xxx/recordings/cmtx...-video.mp4",
-       "status": "COMPLETED"
+       "audio_url": "https://trainer-twin-prod.s3.ap-south-1.amazonaws.com/trainertwin-dev/kb/{orgId}/recordings/{room}_{ts}/audio.mp4",
+       "audio_s3_key": "trainertwin-dev/kb/{orgId}/recordings/{room}_{ts}/audio.mp4",
+       "video_url": "...same dir.../video.mp4",
+       "video_s3_key": "...same dir.../video.mp4",
+       "status": "COMPLETED" | "ABANDONED",
+       "participant_identity": "user-...",
+       "transcript": [{"role": "user" | "trainer", "text": "..."}]
      }
      ```
-  3. Webhook handler attaches `s3AudioKey` and `s3VideoKey` to the database record.
+     Actual S3 layout: `{S3_BASE_PREFIX}/{orgId}/recordings/{room_name}_{yyyymmdd_hhmmss}/audio.mp4` and `video.mp4` (two separate egresses). DB persists `s3AudioKey` (column) and `videoS3Key`/URLs inside the `evidence` JSON.
+  3. Webhook handler merges recording keys + transcript into the session record and resolves status via `resolveSessionEndStatus` (never downgrades `completed` → `abandoned`). `ABANDONED` marks the session abandoned unless already completed.
   4. Agent calls `ctx.api.room.delete_room()` to gracefully destroy the LiveKit room.
+
+### Zombie-Session Teardown (browser death without finalize)
+
+With `close_on_disconnect=False` a killed tab leaves the job running forever:
+no finalize, no webhook, and the session row stays `active` with a valid token.
+A `watch_empty_room()` task in the agent entrypoint (started after `session.start`):
+
+- Polls every 5s; if the room has no human participants for a continuous 30s
+  (grace covers page refreshes/reconnects), sets `end_status = "ABANDONED"`
+  in session state and calls `delete_room`.
+- Deleting the room ends the job → `on_session_end` fires → egress stopped,
+  webhook posted with status `ABANDONED` → DB marks `abandoned`.
+- Intentional End Session is unaffected: finalize already marked `completed`,
+  and the later `ABANDONED` webhook cannot downgrade it.
 
 ---
 
@@ -215,18 +234,21 @@ To eliminate race conditions, the following operations have strict synchronizati
 | **5** | **Token Invalidation on Finalize** | **SYNCHRONOUS (DB Transaction)** | `runtimeTokenHash` is set to `NULL` inside `POST /api/sessions/finalize`. Immediately rejects any subsequent LLM inference calls if the agent process lags behind. |
 | **6** | **Browser Finalize vs Egress Webhook Order** | **ASYNCHRONOUS / SAFE MERGE** | Either the browser beacon or the agent egress webhook can arrive first. `resolveSessionEndStatus()` guarantees that a later webhook or beacon never downgrades a `"completed"` session back to `"abandoned"`, and `COALESCE` protects canonical transcripts. |
 | **7** | **Room Destruction** | **DEFERRED (Agent Teardown)** | `delete_room` must only execute *after* egress recording has stopped and the completion webhook has returned HTTP 200. Prevents cut-off recordings. |
+| **8** | **Empty-Room Teardown** | **DEBOUNCED (30s grace)** | A room with zero human participants for 30 continuous seconds is torn down by the agent (`watch_empty_room`), covering tab death/refresh. Prevents zombie rooms, forever-`active` session rows, and runaway egress billing. |
 
 ---
 
 ## 6. Verification Checklist
 
 Before certifying the LiveKit backend flow:
-- [ ] Starting `/talk` abandons preexisting active sessions in the database synchronously.
-- [ ] Database record contains valid `runtimeTokenHash` before client connects to LiveKit.
-- [ ] Client connect automatically summons `intervoo-agent` without manual API dispatch calls.
-- [ ] Agent successfully authenticates against `/api/v1/chat/completions` using dynamic bearer token.
-- [ ] Clicking "End Session" confirms via dialog and triggers `/api/sessions/finalize`.
-- [ ] Finalize beacon sets `runtimeTokenHash = NULL` and stamps `endedAt`.
-- [ ] Subsequent calls to `/api/v1/chat/completions` with the old token strictly return HTTP 401.
-- [ ] Agent egress finishes and posts audio/video keys to `/api/sessions/webhook`.
-- [ ] Database reflects updated S3 keys and completed status.
+- [x] Starting `/talk` abandons preexisting active sessions in the database synchronously. (`ensureActiveSession` → `updateMany`)
+- [x] Database record contains valid `runtimeTokenHash` before client connects to LiveKit. (token returned only after the update commits)
+- [x] Client connect automatically summons `intervoo-agent` without manual API dispatch calls. (verified live 2026-09-11)
+- [x] Agent successfully authenticates against `/api/v1/chat/completions` using dynamic bearer token. (fixed 2026-09-11: `InterviewSession.report`/`reportStatus`/`attempt` columns were missing from Neon — migration applied manually)
+- [x] Clicking "End Session" confirms via dialog and triggers `/api/sessions/finalize`. (verified live)
+- [x] Finalize beacon sets `runtimeTokenHash = NULL` and stamps `endedAt`. (verified in DB)
+- [x] Subsequent calls to `/api/v1/chat/completions` with the old token strictly return HTTP 401. (mechanism verified; invalid-token probe returns structured 401)
+- [x] Agent egress finishes and posts audio/video keys to `/api/sessions/webhook`. (verified live, webhook 200)
+- [x] Database reflects updated S3 keys and completed status. (both 2026-09-11 sessions: `s3AudioKey` + `evidence.videoS3Key` set, status `completed`)
+- [ ] Tab death without finalize marks the session `abandoned` within ~40s (watch_empty_room, deployed — needs one live verification).
+- [ ] Persona speech validation loop latency (tracked separately in `plans/issues_persona-validation-loop.md`).
