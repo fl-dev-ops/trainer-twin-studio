@@ -34,7 +34,9 @@ def build_agent_session(
     web_base = os.getenv("WEB_URL", "http://localhost:3000").rstrip("/")
     resolved_base_url = base_url or os.getenv("LLM_BASE_URL", f"{web_base}/api/v1")
     resolved_model = model or DEFAULT_LLM_MODEL
-    resolved_api_key = api_key or "token-pending"
+    resolved_api_key = api_key or ""
+    if not resolved_api_key:
+        raise ValueError("api_key (per-session runtime token) is required — refusing unauthenticated LLM calls")
 
     llm = openai.LLM(
         model=resolved_model,

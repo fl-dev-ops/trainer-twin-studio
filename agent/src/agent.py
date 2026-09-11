@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import os
+import sys
 from typing import Any
 
 from dotenv import load_dotenv
@@ -38,6 +39,30 @@ logging.basicConfig(level=logging.INFO)
 AGENT_NAME = os.getenv("AGENT_NAME", "intervoo-agent")
 WEB_URL = os.getenv("WEB_URL", "http://localhost:3000").rstrip("/")
 _sessions: dict[str, dict[str, Any]] = {}
+
+REQUIRED_ENV_VARS = (
+    "LIVEKIT_URL",
+    "LIVEKIT_API_KEY",
+    "LIVEKIT_API_SECRET",
+    "AGENT_NAME",
+    "WEB_URL",
+    "LLM_BASE_URL",
+    "DEEPGRAM_API_KEY",
+    "TTS_PROVIDER",
+    "SARVAM_API_KEY",
+    "AWS_REGION",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+)
+
+
+def validate_environment() -> None:
+    missing = [k for k in REQUIRED_ENV_VARS if not os.getenv(k, "").strip()]
+    if not (os.getenv("AWS_S3_BUCKET", "").strip() or os.getenv("S3_BUCKET", "").strip()):
+        missing.append("AWS_S3_BUCKET/S3_BUCKET")
+    if missing:
+        print(f"Missing required environment variables: {', '.join(missing)}", file=sys.stderr)
+        sys.exit(1)
 
 
 def parse_metadata(raw: str | None) -> dict[str, Any]:
@@ -73,7 +98,10 @@ async def entrypoint(ctx: agents.JobContext) -> None:
     metadata = parse_metadata(raw_meta)
 
     session_id = str(metadata.get("sessionId") or metadata.get("session_id") or ctx.room.name).strip()
-    runtime_token = str(metadata.get("runtimeToken") or metadata.get("runtime_token") or "token-pending").strip()
+    runtime_token = str(metadata.get("runtimeToken") or metadata.get("runtime_token") or "").strip()
+    if not runtime_token:
+        logger.error("Runtime token missing from job metadata for session %s", session_id)
+        return
     voice = str(metadata.get("voice") or "").strip()
     org_id = str(metadata.get("orgId") or metadata.get("org_id") or "shared").strip()
 
@@ -117,7 +145,6 @@ async def entrypoint(ctx: agents.JobContext) -> None:
 
     tools = build_interview_tools(room=ctx.room, participant_identity=participant_identity)
     session = build_agent_session(
-        base_url=f"{WEB_URL}/api/v1",
         api_key=runtime_token,
         voice=voice,
     )
@@ -174,6 +201,7 @@ server.rtc_session(agent_name=AGENT_NAME, on_session_end=on_session_end)(entrypo
 
 
 def main() -> None:
+    validate_environment()
     agents.cli.run_app(server)
 
 
