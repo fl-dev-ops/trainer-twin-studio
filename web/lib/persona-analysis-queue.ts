@@ -77,7 +77,7 @@ export async function enqueuePersonaAnalysis(sourceId: string, orgId?: string) {
 export async function claimPersonaSource(sourceId: string): Promise<{ orgId: string } | null> {
   return db.$transaction(async (tx) => {
     // ponytail: one global slot protects the rate-limited model; shard by org when throughput demands it.
-    await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(76110401) AS "locked"');
+    await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(76110401)");
 
     const source = await tx.personaSource.findUnique({
       where: { id: sourceId },
@@ -116,7 +116,7 @@ export async function claimPersonaSource(sourceId: string): Promise<{ orgId: str
 
 export async function claimNextPersonaSource(): Promise<{ sourceId: string; orgId: string } | null> {
   return db.$transaction(async (tx) => {
-    await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(76110401) AS "locked"');
+    await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(76110401)");
 
     const active = await tx.personaSource.findFirst({
       where: {
