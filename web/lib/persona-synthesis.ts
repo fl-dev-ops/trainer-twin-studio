@@ -102,6 +102,7 @@ async function uploadToGeminiFiles(bytes: Uint8Array, mimeType: string, displayN
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ file: { displayName } }),
+      signal: AbortSignal.timeout(30_000),
     },
   );
   const uploadUrl = startRes.headers.get("X-Goog-Upload-URL");
@@ -116,6 +117,7 @@ async function uploadToGeminiFiles(bytes: Uint8Array, mimeType: string, displayN
       "X-Goog-Upload-Command": "upload, finalize",
     },
     body: Buffer.from(bytes),
+    signal: AbortSignal.timeout(300_000),
   });
   if (!uploadRes.ok) throw new Error(`Gemini file upload failed: ${uploadRes.status} ${await uploadRes.text()}`);
   const fileData = await uploadRes.json() as { file: { uri: string; state: string } };
