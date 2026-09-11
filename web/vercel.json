@@ -1,17 +1,4 @@
 {
-  "functions": {
-    "app/api/queues/persona-analysis/route.ts": {
-      "maxDuration": 300,
-      "experimentalTriggers": [
-        {
-          "type": "queue/v2beta",
-          "topic": "persona-analysis",
-          "retryAfterSeconds": 10,
-          "initialDelaySeconds": 0
-        }
-      ]
-    }
-  },
   "crons": [
     {
       "path": "/api/internal/ingestion/pump",

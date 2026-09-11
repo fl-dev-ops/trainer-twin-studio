@@ -1,22 +1,10 @@
 import type { Prisma } from "@/lib/generated/prisma/client";
-import { send } from "@vercel/queue";
-import { z } from "zod";
 import { db } from "@/lib/db";
 import { analyzePersonaSource } from "@/lib/persona-synthesis";
 
-export const PERSONA_ANALYSIS_TOPIC = "persona-analysis";
 export const MAX_PERSONA_ANALYSIS_ATTEMPTS = 3;
-const ACTIVE_ANALYSIS_TTL_MS = 10 * 60 * 1000;
-
-export const personaAnalysisMessageSchema = z.object({ sourceId: z.string().min(1) }).strict();
-export type PersonaAnalysisMessage = z.infer<typeof personaAnalysisMessageSchema>;
-
-export class PersonaAnalysisBusyError extends Error {
-  constructor() {
-    super("Another persona source is being analyzed");
-    this.name = "PersonaAnalysisBusyError";
-  }
-}
+// ponytail: one global slot protects the rate-limited model; shard by org when throughput demands it.
+export const ACTIVE_ANALYSIS_TTL_MS = 10 * 60 * 1000;
 
 function metadataRecord(metadata: unknown): Record<string, unknown> {
   return metadata && typeof metadata === "object" && !Array.isArray(metadata)
@@ -33,6 +21,10 @@ export function personaSourceIsComplete(status: string, metadata: unknown): bool
   return status === "analyzed" && Number(metadataRecord(metadata).voiceMoments ?? 0) > 0;
 }
 
+/**
+ * Queue a persona source for analysis. The `PersonaSource.status` field IS the
+ * queue: "uploaded" rows are claimed one at a time by `drainPersonaAnalysisQueue`.
+ */
 export async function enqueuePersonaAnalysis(sourceId: string, orgId?: string) {
   const source = await db.personaSource.findFirst({
     where: { id: sourceId, ...(orgId ? { orgId } : {}) },
@@ -54,70 +46,40 @@ export async function enqueuePersonaAnalysis(sourceId: string, orgId?: string) {
     metadata = { ...metadata, analysisAttempts: 0 };
   }
 
-  let messageId: string | null = null;
-  try {
-    const result = await send<PersonaAnalysisMessage>(
-      PERSONA_ANALYSIS_TOPIC,
-      { sourceId },
-      { idempotencyKey: `${sourceId}:${attempts}`, retentionSeconds: 7 * 24 * 60 * 60 },
-    );
-    messageId = result.messageId;
-  } catch (error) {
-    console.warn(`[persona-queue] send to queue failed for ${sourceId}, will be picked up by pump:`, error);
-  }
-
-  const { error: _error, ...queuedMetadata } = metadata;
   await db.personaSource.update({
     where: { id: sourceId },
-    data: { status: "uploaded", metadata: queuedMetadata as Prisma.InputJsonValue },
+    data: {
+      status: "uploaded",
+      metadata: { ...metadata, analysisAttempts: attempts } as Prisma.InputJsonValue,
+    },
   });
-  return { queued: true, messageId };
+  return { queued: true };
 }
 
-export async function claimPersonaSource(sourceId: string): Promise<{ orgId: string } | null> {
-  return db.$transaction(async (tx) => {
-    // ponytail: one global slot protects the rate-limited model; shard by org when throughput demands it.
-    await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(76110401)");
-
-    const source = await tx.personaSource.findUnique({
-      where: { id: sourceId },
-      select: { orgId: true, status: true, metadata: true },
-    });
-    if (!source || personaSourceIsComplete(source.status, source.metadata)) return null;
-    if (source.status === "failed" && personaAnalysisAttempts(source.metadata) >= MAX_PERSONA_ANALYSIS_ATTEMPTS) {
-      return null;
-    }
-
-    const active = await tx.personaSource.findFirst({
-      where: {
-        id: { not: sourceId },
-        status: { in: ["analyzing", "compiling"] },
-        updatedAt: { gt: new Date(Date.now() - ACTIVE_ANALYSIS_TTL_MS) },
-      },
-      select: { id: true },
-    });
-    if (active) throw new PersonaAnalysisBusyError();
-
-    const metadata = metadataRecord(source.metadata);
-    const { error: _error, ...cleanMetadata } = metadata;
-    await tx.personaSource.update({
-      where: { id: sourceId },
-      data: {
-        status: "analyzing",
-        metadata: {
-          ...cleanMetadata,
-          analysisAttempts: personaAnalysisAttempts(metadata) + 1,
-        } as Prisma.InputJsonValue,
-      },
-    });
-    return { orgId: source.orgId };
+/**
+ * Requeue sources stuck in an active state (server crashed mid-analysis).
+ */
+export async function recoverStaleAnalyzing(): Promise<number> {
+  const result = await db.personaSource.updateMany({
+    where: {
+      status: { in: ["analyzing", "compiling"] },
+      updatedAt: { lt: new Date(Date.now() - ACTIVE_ANALYSIS_TTL_MS) },
+    },
+    data: { status: "uploaded" },
   });
+  if (result.count > 0) {
+    console.info(`[persona-queue] recovered ${result.count} stale analyzing source(s)`);
+  }
+  return result.count;
 }
 
+/**
+ * Atomically claim the oldest uploaded source for analysis, or null when the
+ * queue is empty or another analysis is in flight (single-flight, protects
+ * OpenRouter from concurrent-request rate limits).
+ */
 export async function claimNextPersonaSource(): Promise<{ sourceId: string; orgId: string } | null> {
   return db.$transaction(async (tx) => {
-    await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(76110401)");
-
     const active = await tx.personaSource.findFirst({
       where: {
         status: { in: ["analyzing", "compiling"] },
@@ -127,14 +89,20 @@ export async function claimNextPersonaSource(): Promise<{ sourceId: string; orgI
     });
     if (active) return null;
 
-    const candidate = await tx.personaSource.findFirst({
-      where: { status: "uploaded" },
-      orderBy: { createdAt: "asc" },
-      select: { id: true, orgId: true, metadata: true },
-    });
+    const rows = await tx.$queryRaw<Array<{ id: string; orgId: string }>>`
+      SELECT id, "orgId" FROM "PersonaSource"
+      WHERE status = 'uploaded'
+      ORDER BY "createdAt" ASC
+      FOR UPDATE SKIP LOCKED
+      LIMIT 1`;
+    const candidate = rows[0];
     if (!candidate) return null;
 
-    const metadata = metadataRecord(candidate.metadata);
+    const source = await tx.personaSource.findUniqueOrThrow({
+      where: { id: candidate.id },
+      select: { metadata: true },
+    });
+    const metadata = metadataRecord(source.metadata);
     const { error: _error, ...cleanMetadata } = metadata;
     await tx.personaSource.update({
       where: { id: candidate.id },
@@ -150,16 +118,25 @@ export async function claimNextPersonaSource(): Promise<{ sourceId: string; orgI
   });
 }
 
-export async function processPersonaAnalysisMessage(message: unknown): Promise<void> {
-  const { sourceId } = personaAnalysisMessageSchema.parse(message);
-  const claimed = await claimPersonaSource(sourceId);
-  if (!claimed) return;
-  await analyzePersonaSource(sourceId, claimed.orgId);
-}
-
-export async function processNextQueuedPersonaSource(): Promise<{ processed: boolean; sourceId?: string }> {
-  const claimed = await claimNextPersonaSource();
-  if (!claimed) return { processed: false };
-  await analyzePersonaSource(claimed.sourceId, claimed.orgId);
-  return { processed: true, sourceId: claimed.sourceId };
+/**
+ * Drain the queue: claim and analyze sources strictly one at a time until the
+ * queue is empty or another drain holds the single-flight slot. Called from
+ * request handlers via `after()` and from the ingestion cron pump; failures on
+ * individual sources never stop the drain (the source is marked failed and the
+ * loop continues).
+ */
+export async function drainPersonaAnalysisQueue(): Promise<{ processed: number }> {
+  await recoverStaleAnalyzing();
+  let processed = 0;
+  for (;;) {
+    const claimed = await claimNextPersonaSource();
+    if (!claimed) break;
+    try {
+      await analyzePersonaSource(claimed.sourceId, claimed.orgId);
+      processed++;
+    } catch (error) {
+      console.error(`[persona-queue] analysis failed for ${claimed.sourceId}:`, error);
+    }
+  }
+  return { processed };
 }

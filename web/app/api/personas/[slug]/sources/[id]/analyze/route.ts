@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { getTrainerOrg } from "@/lib/org";
-import { enqueuePersonaAnalysis } from "@/lib/persona-analysis-queue";
+import { drainPersonaAnalysisQueue, enqueuePersonaAnalysis } from "@/lib/persona-analysis-queue";
 
 type Params = { params: Promise<{ slug: string; id: string }> };
 
@@ -10,6 +10,7 @@ export async function POST(_req: Request, { params }: Params) {
   const { id } = await params;
   try {
     const result = await enqueuePersonaAnalysis(id, org.id);
+    after(() => drainPersonaAnalysisQueue().catch((e) => console.error("[persona-queue] drain failed:", e)));
     return NextResponse.json({ ok: true, status: "uploaded", ...result });
   } catch (error) {
     return NextResponse.json(

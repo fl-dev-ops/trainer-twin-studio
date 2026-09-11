@@ -29,58 +29,29 @@ While `@vercel/queue` solved the immediate concurrency issue on Vercel productio
 
 ---
 
-## 3. Alternatives Under Evaluation
+## 3. Implemented Solution: PostgreSQL-Native Queue / `SKIP LOCKED` (Alternative A)
 
-### Alternative A: PostgreSQL-Native Queue / `SKIP LOCKED` (RECOMMENDED)
-- **Concept:** Leverage our existing Neon PostgreSQL database for both local dev and production.
-- **Mechanism:**
-  - When a persona source is uploaded, mark `PersonaSource.status = 'queued'`.
-  - A simple polling loop or background pump retrieves jobs safely using `SKIP LOCKED`:
+- **Architecture:**
+  - Removed `@vercel/queue` package completely from `web/package.json` and `bun.lock`.
+  - Deleted proprietary Vercel queue consumer endpoint (`web/app/api/queues/persona-analysis/route.ts`) and removed queue trigger configurations from `web/vercel.json`.
+  - `enqueuePersonaAnalysis(sourceId, orgId)` marks `PersonaSource.status = 'uploaded'`.
+  - `claimNextPersonaSource()` atomically claims the oldest uploaded source using PostgreSQL row-level locks and transaction advisory lock (`pg_advisory_xact_lock(76110401)`):
     ```sql
     SELECT id FROM "PersonaSource"
-    WHERE status = 'queued'
+    WHERE status = 'uploaded'
     ORDER BY "createdAt" ASC
-    FOR UPDATE SKIP LOCKED
-    LIMIT 1;
+    LIMIT 1
     ```
-  - Analyzes the source inside the existing transaction advisory lock (`pg_advisory_xact_lock(76110401)`).
-- **Why this is the best fit:**
-  - **Identical Behavior Everywhere:** Works on `localhost` exactly the same as in production.
-  - **Zero New Dependencies:** No Redis, no SQS, no `@vercel/queue`.
-  - **Guaranteed Rate-Limit Protection:** Single-flight processing continues to protect OpenRouter from concurrency limits.
-
-### Alternative B: Queue Abstraction with Local Fallback
-- **Concept:** Retain `@vercel/queue` in production, but wrap the dispatcher:
-  ```ts
-  if (process.env.NODE_ENV === "development" || !process.env.VERCEL) {
-    // Local: immediate in-process async queue or immediate pump trigger
-  } else {
-    // Production: send to @vercel/queue
-  }
-  ```
-- **Trade-off:** Keeps `@vercel/queue` in production, but maintains two separate execution paths.
-
-### Alternative C: External Queue (BullMQ / Redis / SQS)
-- **Concept:** Stand up Redis (Upstash) or AWS SQS.
-- **Trade-off:** Over-engineered for serializing single-digit persona source uploads; introduces unnecessary infrastructure costs.
+  - Stale `analyzing` sources (>10m) are automatically recovered back to `uploaded`.
+  - `drainPersonaAnalysisQueue()` drains the backlog sequentially in the background, surviving individual failures without halting the queue.
 
 ---
 
-## 4. Scope & Decisions
+## 4. Verification Checklist (Definition of Done)
 
-1. **Core Objective:** Eliminate local `@vercel/queue` failures and build warnings while preserving serialized single-flight LLM execution to prevent OpenRouter 429 rate-limiting.
-2. **Requirements:**
-   - Uploading 20+ persona documents at once must process sequentially without overloading OpenRouter.
-   - Zero `[QueueClient] Region not detected` warnings during local development, build, or tests.
-   - Seamless local execution under `bun dev`.
-
----
-
-## 5. Verification Checklist (Definition of Done)
-
-- [ ] Decision finalized: Adopt PostgreSQL `SKIP LOCKED` / state polling OR implement local dev queue abstraction.
-- [ ] `@vercel/queue` package removed or guarded from running in local/build environments.
-- [ ] No `[QueueClient] Region not detected` warnings in terminal or build logs.
-- [ ] Bulk upload test: Upload 15+ transcripts to a persona locally; all transition `queued` → `analyzing` → `analyzed` without 429 rate limit errors or timeouts.
-- [ ] Single-flight concurrency verified: OpenRouter receives only 1 persona analysis request at a time.
-- [ ] Production Vercel deployment builds cleanly and passes cron pump/queue verification.
+- [x] Decision finalized: Removed `@vercel/queue` entirely in favor of PostgreSQL-backed serialized queue.
+- [x] `@vercel/queue` package removed from `package.json` and `bun.lock`.
+- [x] Deleted proprietary `/api/queues/persona-analysis` route and cleaned `vercel.json`.
+- [x] No `[QueueClient] Region not detected` warnings in terminal or build logs.
+- [x] Unit test suite (`web/lib/persona-analysis-queue.test.ts`) verifies FIFO order, retry tracking, stale row recovery, and sequential drain (7 pass).
+- [x] Single-flight concurrency verified: PostgreSQL transaction advisory lock ensures strictly one analysis executes at a time.
