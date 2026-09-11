@@ -1,67 +1,86 @@
 # Issue 7: `@vercel/queue` Local Development Alternative or Removal
 
-## 1. Context & Problem Statement
-`@vercel/queue` is currently used in `web/lib/persona-analysis-queue.ts` and `web/app/api/queues/persona-analysis/route.ts` to enqueue and serialize background persona transcript analysis.
+## 1. Context & Origin (Why `@vercel/queue` Was Introduced)
 
-However, `@vercel/queue` has critical limitations for developer workflows:
-- **No Local Emulation:** Vercel Queues are proprietary to Vercel's cloud runtime. When running locally via `bun dev` or `next dev`, `@vercel/queue` emits `[QueueClient] Region not detected — defaulting to "iad1"` warnings and calls to `send()` fail or throw network errors.
-- **Dual Processing Overhead:** Because queues fail locally and push delivery can be delayed, the codebase already had to implement a dual-runner fallback via the periodic cron pump (`/api/internal/ingestion/pump`).
-- **Vendor Lock-in:** The background job contract relies on proprietary Vercel HTTP callback headers (`handleCallback`) and `queue/v2beta` triggers in `vercel.json`.
+During bulk document ingestion on `/personas/Vasanth`, uploading 22 persona content files concurrently triggered 22 unmetered background calls to OpenRouter (`google/gemini-2.5-flash`). This triggered severe rate-limiting (HTTP 429) and concurrent request throttling, causing 20 requests to time out after 120s and failing the persona source analysis.
+
+To solve this quickly, two mechanisms were combined:
+1. **Serialization Lock:** Added a PostgreSQL transaction advisory lock (`pg_advisory_xact_lock(76110401)`) to ensure strictly **one** persona analysis runs at any given time.
+2. **Buffering Queue:** Integrated `@vercel/queue@0.5.1` to accept the 20+ upload requests immediately, return HTTP 200 to the browser, and queue the jobs to be drained sequentially by a Vercel Queue consumer (`/api/queues/persona-analysis`).
 
 ---
 
-## 2. Alternatives Under Evaluation
+## 2. The Problem with `@vercel/queue`
+
+While `@vercel/queue` solved the immediate concurrency issue on Vercel production, it created severe developer experience friction:
+
+1. **No Local Offline Emulation:**
+   - Vercel Queues are proprietary to Vercel Cloud infrastructure.
+   - Running locally (`bun dev` or `next dev`), the client emits continuous warnings:
+     ```text
+     [QueueClient] Region not detected — defaulting to "iad1". On Vercel this is set automatically via VERCEL_REGION.
+     ```
+   - Calls to `send()` fail or throw network errors on `localhost`.
+2. **Dual-Runner Complexity:**
+   - Because `@vercel/queue` does not work locally (and push delivery can lag in production), a secondary polling worker had to be embedded into the 2-minute cron pump (`/api/internal/ingestion/pump` calling `processPersonaAnalysisQueue()`).
+   - Having both push queue triggers and pull cron pumps adds architectural clutter.
+3. **Vendor Lock-in:**
+   - Involves `queue/v2beta` definitions in `vercel.json` and proprietary callback headers (`handleCallback`).
+
+---
+
+## 3. Alternatives Under Evaluation
 
 ### Alternative A: PostgreSQL-Native Queue / `SKIP LOCKED` (RECOMMENDED)
-- **Concept:** Leverage the existing Neon PostgreSQL database.
+- **Concept:** Leverage our existing Neon PostgreSQL database for both local dev and production.
 - **Mechanism:**
-  - When a persona source is uploaded, set `PersonaSource.status = 'queued'`.
-  - A worker or endpoint queries:
+  - When a persona source is uploaded, mark `PersonaSource.status = 'queued'`.
+  - A simple polling loop or background pump retrieves jobs safely using `SKIP LOCKED`:
     ```sql
-    SELECT * FROM "PersonaSource"
+    SELECT id FROM "PersonaSource"
     WHERE status = 'queued'
     ORDER BY "createdAt" ASC
     FOR UPDATE SKIP LOCKED
     LIMIT 1;
     ```
-  - Processes the analysis within the advisory lock (`pg_advisory_xact_lock(76110401)`).
-- **Pros:**
-  - Zero new infrastructure or dependencies.
-  - Runs identically on `localhost` and Vercel production.
-  - Complete elimination of `@vercel/queue` package and Vercel queue triggers.
+  - Analyzes the source inside the existing transaction advisory lock (`pg_advisory_xact_lock(76110401)`).
+- **Why this is the best fit:**
+  - **Identical Behavior Everywhere:** Works on `localhost` exactly the same as in production.
+  - **Zero New Dependencies:** No Redis, no SQS, no `@vercel/queue`.
+  - **Guaranteed Rate-Limit Protection:** Single-flight processing continues to protect OpenRouter from concurrency limits.
 
-### Alternative B: Queue Abstraction with Local Development Fallback
-- **Concept:** Keep `@vercel/queue` for Vercel production, but wrap the queue dispatcher:
+### Alternative B: Queue Abstraction with Local Fallback
+- **Concept:** Retain `@vercel/queue` in production, but wrap the dispatcher:
   ```ts
   if (process.env.NODE_ENV === "development" || !process.env.VERCEL) {
-    // Local: immediate async execution or internal pump
+    // Local: immediate in-process async queue or immediate pump trigger
   } else {
     // Production: send to @vercel/queue
   }
   ```
-- **Pros:** Preserves existing Vercel queue triggers in production.
-- **Cons:** Keeps vendor-specific dual code paths and maintenance overhead.
+- **Trade-off:** Keeps `@vercel/queue` in production, but maintains two separate execution paths.
 
 ### Alternative C: External Queue (BullMQ / Redis / SQS)
-- **Concept:** Use Redis (Upstash) or AWS SQS.
-- **Cons:** Over-engineered for serializing single-digit persona source uploads; introduces unnecessary dependencies and costs.
+- **Concept:** Stand up Redis (Upstash) or AWS SQS.
+- **Trade-off:** Over-engineered for serializing single-digit persona source uploads; introduces unnecessary infrastructure costs.
 
 ---
 
-## 3. Scope & Decisions
+## 4. Scope & Decisions
 
-1. **Primary Goal:** Either find a clean way to run queue processing locally without errors, or remove `@vercel/queue` entirely in favor of a universal PostgreSQL-based state machine.
-2. **Key Requirements:**
-   - Background persona analysis must work seamlessly when running `bun dev` locally.
-   - Analysis must remain serialized via PostgreSQL transaction advisory locking (`pg_advisory_xact_lock(76110401)`) to avoid LLM concurrency rate limits.
-   - Remove noisy `[QueueClient] Region not detected` warnings during local development and builds.
+1. **Core Objective:** Eliminate local `@vercel/queue` failures and build warnings while preserving serialized single-flight LLM execution to prevent OpenRouter 429 rate-limiting.
+2. **Requirements:**
+   - Uploading 20+ persona documents at once must process sequentially without overloading OpenRouter.
+   - Zero `[QueueClient] Region not detected` warnings during local development, build, or tests.
+   - Seamless local execution under `bun dev`.
 
 ---
 
-## 4. Verification Checklist (Definition of Done)
+## 5. Verification Checklist (Definition of Done)
 
-- [ ] Decision finalized: Remove `@vercel/queue` entirely OR implement local runner abstraction.
-- [ ] No `[QueueClient] Region not detected` warnings during `bun dev` or `bun run build`.
-- [ ] Uploading a persona source locally transitions status from `queued` → `analyzing` → `analyzed` without manual trigger.
-- [ ] Multiple concurrent persona source uploads execute in serialized order without 429 rate limit errors from OpenRouter.
-- [ ] Production build and deployment passes without proprietary queue dependencies or with verified triggers.
+- [ ] Decision finalized: Adopt PostgreSQL `SKIP LOCKED` / state polling OR implement local dev queue abstraction.
+- [ ] `@vercel/queue` package removed or guarded from running in local/build environments.
+- [ ] No `[QueueClient] Region not detected` warnings in terminal or build logs.
+- [ ] Bulk upload test: Upload 15+ transcripts to a persona locally; all transition `queued` → `analyzing` → `analyzed` without 429 rate limit errors or timeouts.
+- [ ] Single-flight concurrency verified: OpenRouter receives only 1 persona analysis request at a time.
+- [ ] Production Vercel deployment builds cleanly and passes cron pump/queue verification.
