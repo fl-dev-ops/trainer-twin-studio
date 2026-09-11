@@ -65,7 +65,7 @@ class TrainerAgent(Agent):
 
 
 async def entrypoint(ctx: agents.JobContext) -> None:
-    raw_meta = ctx.job.room.metadata or ctx.room.metadata or ctx.job.metadata
+    raw_meta = ctx.job.metadata or ctx.job.room.metadata or ctx.room.metadata
     metadata = parse_metadata(raw_meta)
 
     session_id = str(metadata.get("sessionId") or metadata.get("session_id") or ctx.room.name).strip()

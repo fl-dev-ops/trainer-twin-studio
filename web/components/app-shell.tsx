@@ -19,7 +19,7 @@ const CopilotChat = dynamic(
 );
 
 /** Dash pages that render without the studio chrome. */
-const FULLSCREEN = ["/voice/cloning", "/talk"];
+const FULLSCREEN = ["/voice/cloning", "/dash/voice/cloning", "/talk", "/dash/talk"];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();

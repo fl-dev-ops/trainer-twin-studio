@@ -31,7 +31,7 @@ export function AgentTile({ persona, compact = false }: { persona: string; compa
         transition={{ type: "spring", stiffness: 300, damping: 32, mass: 0.8 }}
         className="relative shrink-0 overflow-hidden rounded-full bg-accent shadow-[0_0_0_1px_var(--border),0_0_44px_color-mix(in_oklab,var(--primary)_14%,transparent)]"
       >
-        {persona === "vasanth" ? (
+        {persona.toLowerCase() === "vasanth" ? (
           <Image src="/vasanth.png" alt="" fill sizes={compact ? "48px" : "128px"} className="object-cover" />
         ) : (
           <UserRound aria-hidden="true" className="absolute inset-1/4 size-1/2 text-muted-foreground" strokeWidth={1.5} />

@@ -1,4 +1,4 @@
-import { AccessToken, AgentDispatchClient } from "livekit-server-sdk";
+import { AccessToken, RoomAgentDispatch, RoomConfiguration } from "livekit-server-sdk";
 
 type LiveKitConfig = {
   url: string;
@@ -70,13 +70,17 @@ export async function createLiveKitSessionToken({
     canPublishData: true,
   });
 
-  const token = await at.toJwt();
-
-  // UNVERIFIED (no LiveKit Docs MCP): checked against the current docs and installed v2.19.0 types.
-  const dispatchClient = new AgentDispatchClient(url, apiKey, apiSecret);
-  await dispatchClient.createDispatch(room, agentName, {
-    metadata: JSON.stringify(metadata),
+  const dispatchMeta = JSON.stringify(metadata);
+  at.roomConfig = new RoomConfiguration({
+    name: room,
+    metadata: dispatchMeta,
+    agents: [
+      new RoomAgentDispatch({
+        agentName,
+        metadata: dispatchMeta,
+      }),
+    ],
   });
 
-  return { url, token, room };
+  return { url, token: await at.toJwt(), room };
 }
