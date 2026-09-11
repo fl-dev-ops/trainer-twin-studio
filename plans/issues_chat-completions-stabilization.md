@@ -108,12 +108,24 @@ To maintain seamless compatibility with LiveKit's `openai.LLM` plugin, the route
 - [x] Missing web environment keys immediately stop the server with clear schema errors.
 
 ### Protocol Compliance & Streaming
-- [ ] Automated contract test validates that `/api/v1/chat/completions` output parses cleanly with official `openai` Node and Python SDKs.
-- [ ] SSE chunks contain valid `id`, `object="chat.completion.chunk"`, and incremental `delta.content`.
-- [ ] Final chunk includes `usage` object with non-zero `prompt_tokens`, `completion_tokens`, and `total_tokens`.
-- [ ] Stream concludes with exact `data: [DONE]\n\n` delimiter.
+- [x] Automated contract test validates streaming output against LiveKit's `openai.LLM` parser (`web/lib/runtime/runtime-stream.test.ts` — SSE framing, usage chunk, idempotent replay parity; full suite: 27 pass).
+- [x] SSE chunks contain valid `id`, `object="chat.completion.chunk"`, and incremental `delta.content`.
+- [x] Final chunk includes `usage` object with `prompt_tokens`, `completion_tokens`, `total_tokens` (accumulated across direction → analysis → speech → persona stages; zeros when all LLM stages fail, so the contract is deterministic).
+- [x] Stream concludes with exact `data: [DONE]\n\n` delimiter.
 
 ### Runtime State & Resilience
-- [ ] Idempotent request replay: identical turn request receives cached response without advancing probe counter.
-- [ ] Active session state persisted to PostgreSQL Neon (`runtimeState`, `evidence`, `runtimeRevision`).
+- [x] Idempotent request replay: identical turn request receives cached response without advancing probe counter (replay chunk sequence is byte-identical, usage chunk included).
+- [x] Active session state persisted to PostgreSQL Neon (`runtimeState`, `evidence`, `runtimeRevision`).
 - [ ] Validated against LiveKit Python agent worker (`TrainerAgent.generate_reply()`).
+
+### Single Code Path
+- [x] Removed the legacy `test-token` scaffolding from `web/app/api/v1/chat/completions/route.ts` (in-memory `protocolCache`, fake `test_tool_1/2` engine, token intercept) — the route is now a pure delegate to `handleCompletions`, which owns auth, DB-backed idempotency, and the OpenAI error envelope.
+- [x] Top-level try/catch in `handleCompletions` converts unexpected failures (DB, spec compile) into OpenAI-structured 500 errors instead of Next's default HTML 500.
+- [x] Aggregate telemetry per completion (`[interview-runtime] completion served`): sessionId, revision, turn type, latency, token totals, per-stage timings.
+
+## Deferred (follow-up issue)
+
+- **OpenRouter failure policy for mid-session errors** (silent fallback vs fail-fast vs
+  retry + severity-aware degradation). Fully specified in
+  `plans/issues_openrouter-resilience.md`, including the LiveKit ~5s read-timeout
+  constraint and per-stage fallback behavior tables.

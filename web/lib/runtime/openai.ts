@@ -34,6 +34,40 @@ import {
 const OPENROUTER_BASE_URL = env.OPENROUTER_BASE_URL.replace(/\/$/, "");
 const RUNTIME_MODEL = env.INTERVIEW_LLM_MODEL;
 
+export interface CompletionUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+}
+
+/**
+ * Per-request usage accumulator. OpenRouter reports usage per non-stream call;
+ * the runtime sums it across pipeline stages (direction, analysis, speech,
+ * persona) and emits one usage chunk in the final SSE frame (LiveKit's
+ * inference LLMStream parses any chunk with `usage` as the usage event).
+ */
+export interface UsageSink {
+  stages: Array<{ stage: string; ms: number; promptTokens?: number; completionTokens?: number }>;
+  add(stage: string, ms: number, usage: Partial<CompletionUsage> | null | undefined): void;
+  totals(): CompletionUsage;
+}
+
+function createUsageSink(): UsageSink {
+  const totals: CompletionUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+  return {
+    stages: [],
+    add(stage, ms, usage) {
+      const prompt = usage?.prompt_tokens ?? 0;
+      const completion = usage?.completion_tokens ?? 0;
+      totals.prompt_tokens += prompt;
+      totals.completion_tokens += completion;
+      totals.total_tokens += usage?.total_tokens ?? prompt + completion;
+      this.stages.push({ stage, ms, promptTokens: prompt || undefined, completionTokens: completion || undefined });
+    },
+    totals: () => ({ ...totals }),
+  };
+}
+
 export interface ChatMessage {
   role: "system" | "user" | "assistant" | "tool" | "developer";
   content?: string | null;
@@ -95,7 +129,8 @@ function buildSseStream(chunks: unknown[]): ReadableStream<Uint8Array> {
 async function callOpenRouter(
   stage: string,
   messages: { role: string; content: string }[],
-  responseFormatJson = false
+  responseFormatJson = false,
+  usage?: UsageSink
 ): Promise<string> {
   const key = env.OPENROUTER_API_KEY; // validated at startup, never missing here
 
@@ -114,16 +149,19 @@ async function callOpenRouter(
       ...(responseFormatJson ? { response_format: { type: "json_object" } } : {}),
     }),
   });
+  const durationMs = Math.round(performance.now() - startedAt);
 
   if (!res.ok) {
+    usage?.add(stage, durationMs, null);
     const errText = await res.text().catch(() => "");
     throw new Error(`OpenRouter request failed (${res.status}): ${errText.slice(0, 300)}`);
   }
 
   const data = await res.json();
+  usage?.add(stage, durationMs, data?.usage);
   console.info(`[interview-runtime] ${stage} completed`, {
     model: RUNTIME_MODEL,
-    durationMs: Math.round(performance.now() - startedAt),
+    durationMs,
   });
   return data?.choices?.[0]?.message?.content ?? "";
 }
@@ -183,7 +221,8 @@ async function runDirectionCheck(
   transcript: TranscriptTurn[],
   specs: CompiledSpecs,
   state: RuntimeState,
-  knowledgeHits: KnowledgeHit[]
+  knowledgeHits: KnowledgeHit[],
+  usage?: UsageSink
 ): Promise<DirectionCheck> {
   const explicit = explicitCommunicationRecovery(learnerText);
   if (explicit) return { ...explicit, current_topic: state.current_topic ?? "" };
@@ -214,7 +253,7 @@ A relevant requirements question may be gradeable when the active phase assesses
     const parsed = JSON.parse(await callOpenRouter("direction", [
       { role: "system", content: "You are a strict interview conversation controller. Output valid JSON only." },
       { role: "user", content: prompt },
-    ], true)) as DirectionCheck;
+    ], true, usage)) as DirectionCheck;
     const validIntents = new Set(["answer", "question", "clarification", "off_topic", "stop"]);
     if (
       !validIntents.has(parsed.learner_intent) ||
@@ -244,7 +283,8 @@ async function runAnalyzerLLM(
   direction: DirectionCheck,
   specs: CompiledSpecs,
   state: RuntimeState,
-  knowledgeHits: KnowledgeHit[]
+  knowledgeHits: KnowledgeHit[],
+  usage?: UsageSink
 ): Promise<AnswerAnalysis> {
   const phase = specs.agent.phases[state.phase_index ?? 0] ?? null;
   const required = phase
@@ -296,7 +336,8 @@ Respond with a JSON object with this exact structure:
         { role: "system", content: "You are an expert technical interviewer evaluator. Output strictly valid JSON." },
         { role: "user", content: prompt },
       ],
-      true
+      true,
+      usage
     );
 
     const parsed = JSON.parse(rawJson) as AnswerAnalysis;
@@ -354,7 +395,8 @@ async function generateContentSpeech(
   transcript: TranscriptTurn[],
   direction: DirectionCheck,
   knowledgeHits: KnowledgeHit[],
-  priorErrors: string[] = []
+  priorErrors: string[] = [],
+  usage?: UsageSink
 ): Promise<string> {
   const phase = specs.agent.phases[state.phase_index] ?? null;
   const rules = renderRules(specs.agent, state);
@@ -385,13 +427,13 @@ Rules:
     const text = await callOpenRouter("response", [
       { role: "system", content: "You generate precise, context-grounded interview responses." },
       { role: "user", content: prompt },
-    ]);
+    ], false, usage);
     const cleaned = text.trim().replace(/^["']|["']$/g, "");
     const errors = validateRendered(cleaned, action, specs.agent, state);
     if (!errors.length) return cleaned;
     console.warn("[interview-runtime] response validation failed", { errors });
     if (!priorErrors.length) {
-      return generateContentSpeech(action, specs, state, transcript, direction, knowledgeHits, errors);
+      return generateContentSpeech(action, specs, state, transcript, direction, knowledgeHits, errors, usage);
     }
   } catch (error) {
     console.warn("[interview-runtime] response generation failed", error);
@@ -447,7 +489,8 @@ async function renderPersonaSpeech(
   state: RuntimeState,
   transcript: TranscriptTurn[],
   personaMoments: PersonaMoment[],
-  priorErrors: string[] = []
+  priorErrors: string[] = [],
+  usage?: UsageSink
 ): Promise<string> {
   const persona = specs.persona;
   const examples = persona.examples?.[action.name] ?? persona.examples?.general ?? [];
@@ -484,7 +527,7 @@ Speak the next interviewer turn now. Return only the spoken text.`;
     const text = await callOpenRouter("persona", [
       { role: "system", content: system },
       { role: "user", content: prompt },
-    ]);
+    ], false, usage);
     const cleaned = text.trim().replace(/^["']|["']$/g, "");
     const errors = validatePersonaRewrite(
       cleaned,
@@ -499,7 +542,7 @@ Speak the next interviewer turn now. Return only the spoken text.`;
     if (!errors.length) return cleaned;
     console.warn("[interview-runtime] persona validation failed", { errors });
     if (!priorErrors.length) {
-      return renderPersonaSpeech(contentContract, action, specs, state, transcript, personaMoments, errors);
+      return renderPersonaSpeech(contentContract, action, specs, state, transcript, personaMoments, errors, usage);
     }
   } catch (error) {
     console.warn("[interview-runtime] persona rendering failed", error);
@@ -527,7 +570,8 @@ async function generatePipelineSpeech(
   transcript: TranscriptTurn[],
   direction: DirectionCheck,
   knowledgeHits: KnowledgeHit[],
-  moments: PersonaMoment[]
+  moments: PersonaMoment[],
+  usage?: UsageSink
 ): Promise<string> {
   if (isRepeatRequest(direction) && action.fallback_text) return action.fallback_text;
   const contentContract = moments.length
@@ -565,9 +609,32 @@ export async function handleCompletions(request: Request): Promise<Response> {
     );
   }
 
+  // Top-level guard: any unexpected failure (DB, spec compile, …) must surface
+  // as an OpenAI-structured error, never Next's default HTML 500.
+  try {
+    return await runCompletionPipeline(session, body);
+  } catch (error) {
+    console.error("[interview-runtime] completion failed", error);
+    return Response.json(
+      {
+        error: {
+          message: "The interview runtime failed to process this completion.",
+          type: "server_error",
+          code: "internal_error",
+        },
+      },
+      { status: 500 }
+    );
+  }
+}
+
+async function runCompletionPipeline(
+  session: NonNullable<Awaited<ReturnType<typeof authorizeRuntimeSession>>>,
+  body: ChatCompletionRequest
+): Promise<Response> {
   const { messages = [], stream = true, tools = [] } = body;
   const model = "trainertwin-runtime";
-  const requestHash = computeRequestHash(token, messages);
+  const requestHash = computeRequestHash(session.runtimeTokenHash + session.id, messages);
 
   // Idempotency check: return cached completion without grading twice
   const lastComp = session.lastCompletion as { hash?: string; body?: unknown; sseChunks?: unknown[] } | null;
@@ -619,6 +686,8 @@ export async function handleCompletions(request: Request): Promise<Response> {
   let fullResponse: unknown;
 
   // Determine turn type
+  const startedAt = performance.now();
+  const usageSink = createUsageSink();
   const userMessages = messages.filter((m) => m.role === "user");
   const lastMessage = messages[messages.length - 1];
   const isToolResponseTurn = lastMessage?.role === "tool";
@@ -726,7 +795,9 @@ export async function handleCompletions(request: Request): Promise<Response> {
         specs,
         state,
         currentTranscript,
-        personaMoments
+        personaMoments,
+        [],
+        usageSink
       );
       state.actions.push("opening");
       recordAskedQuestion(state, openingAction, openingText);
@@ -785,7 +856,9 @@ export async function handleCompletions(request: Request): Promise<Response> {
         specs,
         state,
         currentTranscript,
-        personaMoments
+        personaMoments,
+        [],
+        usageSink
       );
       state.actions.push("opening");
       recordAskedQuestion(state, openingAction, replyText);
@@ -830,7 +903,7 @@ export async function handleCompletions(request: Request): Promise<Response> {
       `${transcriptText(fullTranscript)}\nActive objective: ${specs.agent.phases[state.phase_index]?.objective ?? specs.agent.objective}`,
       session.orgId
     );
-    const direction = await runDirectionCheck(latestUserText, fullTranscript, specs, state, knowledgeHits);
+    const direction = await runDirectionCheck(latestUserText, fullTranscript, specs, state, knowledgeHits, usageSink);
     state.latest_learner_intent = direction.learner_intent;
 
     let action: InterviewAction;
@@ -860,7 +933,8 @@ export async function handleCompletions(request: Request): Promise<Response> {
         direction,
         specs,
         state,
-        knowledgeHits
+        knowledgeHits,
+        usageSink
       );
       action = selectAction(analysis, state, specs.persona, specs.agent);
     }
@@ -1022,7 +1096,8 @@ export async function handleCompletions(request: Request): Promise<Response> {
           fullTranscript,
           direction,
           knowledgeHits,
-          personaMoments
+          personaMoments,
+          usageSink
         );
         recordAskedQuestion(state, action, spokenText, direction.should_grade);
         if (direction.should_grade) refreshCurrentTopic(state, spokenText, latestUserText);
@@ -1062,7 +1137,8 @@ export async function handleCompletions(request: Request): Promise<Response> {
         fullTranscript,
         direction,
         knowledgeHits,
-        personaMoments
+        personaMoments,
+        usageSink
       );
       recordAskedQuestion(state, action, spokenText, direction.should_grade);
       if (direction.should_grade) refreshCurrentTopic(state, spokenText, latestUserText);
@@ -1102,6 +1178,32 @@ export async function handleCompletions(request: Request): Promise<Response> {
   if (turnSpokenText) {
     currentTranscript.push({ role: "trainer", text: turnSpokenText });
   }
+
+  // Final usage chunk: LiveKit's inference LLMStream treats any chunk with a
+  // `usage` field as the usage event. Always emitted (zeros when all LLM
+  // stages failed), so the contract is deterministic for clients.
+  const usageTotals = usageSink.totals();
+  sseChunks.push({
+    id: completionId,
+    object: "chat.completion.chunk",
+    created: timestamp,
+    model,
+    choices: [],
+    usage: usageTotals,
+  });
+  (fullResponse as Record<string, unknown>).usage = usageTotals;
+
+  // Aggregate telemetry for the whole completion
+  console.info("[interview-runtime] completion served", {
+    sessionId: session.id,
+    revision: (session.runtimeRevision ?? 0) + 1,
+    turn: isOpeningTurn ? "opening" : isToolResponseTurn ? "tool_result" : "learner",
+    latencyMs: Math.round(performance.now() - startedAt),
+    promptTokens: usageTotals.prompt_tokens,
+    completionTokens: usageTotals.completion_tokens,
+    totalTokens: usageTotals.total_tokens,
+    stages: usageSink.stages.map((s) => `${s.stage}:${s.ms}ms`),
+  });
 
   // Persist updated state, revision, evidence, transcript, and lastCompletion
   const newRevision = (session.runtimeRevision ?? 0) + 1;
