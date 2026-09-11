@@ -130,6 +130,12 @@ async def entrypoint(ctx: agents.JobContext) -> None:
     # Start optional S3 recording egress
     egress_data = await start_session_egress(lk_api=ctx.api, org_id=org_id, room_name=ctx.room.name)
 
+    tools = build_interview_tools(room=ctx.room, participant_identity=participant_identity)
+    session = build_agent_session(
+        api_key=runtime_token,
+        voice=voice,
+    )
+
     _sessions[ctx.room.name] = {
         "session_id": session_id,
         "runtime_token": runtime_token,
@@ -143,12 +149,6 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         "video_s3_key": egress_data.get("video_s3_key"),
         "session": session,  # kept in-memory so on_session_end can dump the transcript
     }
-
-    tools = build_interview_tools(room=ctx.room, participant_identity=participant_identity)
-    session = build_agent_session(
-        api_key=runtime_token,
-        voice=voice,
-    )
 
     agent = TrainerAgent(tools=tools, room_name=ctx.room.name)
 

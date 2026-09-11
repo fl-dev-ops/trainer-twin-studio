@@ -42,8 +42,16 @@ async def post_completion_webhook(
                 raise RuntimeError(f"Webhook returned HTTP {status}")
 
     try:
-        await asyncio.to_thread(_send)
-        logger.info("Webhook successfully delivered to %s", webhook_url)
+        # one retry on transient server errors — a missed delivery loses the recording keys permanently
+        for attempt in range(2):
+            try:
+                await asyncio.to_thread(_send)
+                logger.info("Webhook successfully delivered to %s", webhook_url)
+                return
+            except error.HTTPError as err:
+                if err.code < 500 or attempt == 1:
+                    raise
+                await asyncio.sleep(2)
     except error.HTTPError as err:
         logger.error("Webhook failed for %s with HTTP %s: %s", webhook_url, err.code, err.reason)
     except Exception as exc:
