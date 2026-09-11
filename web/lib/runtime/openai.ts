@@ -9,6 +9,7 @@ import { authorizeRuntimeSession } from "@/lib/interview-sessions";
 import { getAgentConfigForAgent } from "@/lib/specs";
 import { searchKnowledge } from "@/lib/knowledge";
 import { MainCollectionService } from "@/lib/main-collection";
+import { env } from "@/env";
 import { buildSpecs, type CompiledSpecs } from "./compiler";
 import {
   type AnswerAnalysis,
@@ -30,8 +31,8 @@ import {
   validateRendered,
 } from "./runtime";
 
-const OPENROUTER_BASE_URL = (process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1").replace(/\/$/, "");
-const RUNTIME_MODEL = process.env.INTERVIEW_LLM_MODEL ?? process.env.LLM_MODEL ?? "openai/gpt-4.1-mini";
+const OPENROUTER_BASE_URL = env.OPENROUTER_BASE_URL.replace(/\/$/, "");
+const RUNTIME_MODEL = env.INTERVIEW_LLM_MODEL;
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant" | "tool" | "developer";
@@ -96,8 +97,7 @@ async function callOpenRouter(
   messages: { role: string; content: string }[],
   responseFormatJson = false
 ): Promise<string> {
-  const key = process.env.OPENROUTER_API_KEY ?? process.env.LLM_API_KEY;
-  if (!key) throw new Error("Missing OPENROUTER_API_KEY / LLM_API_KEY");
+  const key = env.OPENROUTER_API_KEY; // validated at startup, never missing here
 
   const startedAt = performance.now();
   const res = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {

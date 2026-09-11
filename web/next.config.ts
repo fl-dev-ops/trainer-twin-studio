@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+import "./env"; // Fail fast at build/dev startup if required env keys are missing
+
 import path from "path";
 
 const nextConfig: NextConfig = {
