@@ -21,7 +21,7 @@ async function main() {
     const audio = new Uint8Array(await fs.readFile(path.join(VOICES_DIR, file)));
 
     const existing = await prisma.voice.findFirst({ where: { name, kind: "sample" } });
-    const prefix = voicePrefix(existing?.id ?? `${name}-sample`);
+    const prefix = voicePrefix("shared", existing?.id ?? `${name}-sample`);
     await putObject(`${prefix}/reference.wav`, audio, "audio/wav");
     await putObject(`${prefix}/transcript.txt`, transcript, "text/plain");
 

@@ -28,7 +28,7 @@ for (const org of orgs) {
   }
 
   try {
-    const result = await ChromaTenantService.createTenant(org.id);
+    const result = await ChromaTenantService.createOrgDatabase(org.id);
     console.log(`[PROVISIONED] "${org.name}" (${org.id}) -> tenant: ${result.tenantId}, db: ${result.database}`);
     provisioned++;
   } catch (error) {

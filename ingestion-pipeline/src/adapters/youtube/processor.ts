@@ -91,7 +91,7 @@ async function prepareVideo(pool: Pool, config: PipelineConfig, job: JobContext,
     RETURNING id, slug`, [crypto.randomUUID(), job.kbId, job.sourceId, job.externalId,
       `youtube_${job.externalId}.json`, transcript.title, "json", Buffer.byteLength(transcriptBody), new Date(transcript.captionUpdatedAt)]);
   const stored = document.rows[0];
-  const prefix = `${config.s3BasePrefix}/knowledge/${job.kbId}/${stored.id}`;
+  const prefix = `${config.s3BasePrefix}/${job.orgId}/knowledge/${job.kbId}/${stored.id}`;
   const transcriptKey = `${prefix}/transcript.json`;
   const s3 = new S3Client({ region: config.awsRegion });
   const storedAt = Date.now();
@@ -161,7 +161,7 @@ async function processSegment(pool: Pool, config: PipelineConfig, job: JobContex
   const artifact: QuestionSegmentArtifact = { version: 2, batchIndex: payload.batchIndex, questions, vectors };
   const body = JSON.stringify(artifact);
   const hash = createHash("sha256").update(body).digest("hex");
-  const key = `${config.s3BasePrefix}/knowledge/${job.kbId}/${payload.documentId}/jobs/${job.jobId}/segment-${String(payload.batchIndex).padStart(4, "0")}.json`;
+  const key = `${config.s3BasePrefix}/${job.orgId}/knowledge/${job.kbId}/${payload.documentId}/jobs/${job.jobId}/segment-${String(payload.batchIndex).padStart(4, "0")}.json`;
   const startedAt = Date.now();
   console.info(`[JOB:youtube-segment] store-start jobId=${job.jobId} batch=${payload.batchIndex} questions=${questions.length}`);
   await s3.send(new PutObjectCommand({ Bucket: config.s3Bucket, Key: key, Body: body, ContentType: "application/json" }));
@@ -210,7 +210,7 @@ async function publishVideo(pool: Pool, config: PipelineConfig, job: JobContext,
     chunkingVersion: YOUTUBE_CHUNKING_VERSION,
     questions,
   };
-  const questionsKey = `${config.s3BasePrefix}/knowledge/${job.kbId}/${payload.documentId}/questions.json`;
+  const questionsKey = `${config.s3BasePrefix}/${job.orgId}/knowledge/${job.kbId}/${payload.documentId}/questions.json`;
   await s3.send(new PutObjectCommand({ Bucket: config.s3Bucket, Key: questionsKey, Body: JSON.stringify(artifact), ContentType: "application/json" }));
   const preparedQuestions: PreparedQuestionRecord[] = questions.map((q, index) => {
     const qid = `${payload.documentId}#question-${String(index).padStart(6, "0")}`;

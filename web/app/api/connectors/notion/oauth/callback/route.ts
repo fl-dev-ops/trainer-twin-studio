@@ -1,20 +1,38 @@
 import { NextResponse } from "next/server";
+import { BASE_DOMAIN } from "@/lib/base-domain";
 import { getTrainerOrg } from "@/lib/org";
-import { consumeNotionOAuthState, exchangeNotionCode, saveNotionConnection } from "@/lib/notion-oauth";
+import {
+  consumeNotionOAuthState,
+  exchangeNotionCode,
+  saveNotionConnection,
+} from "@/lib/notion-oauth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const trainer = await getTrainerOrg();
   const url = new URL(request.url);
-  const redirectBase = new URL("/knowledge", url.origin);
+  const stateParam = url.searchParams.get("state") ?? "";
+  const isOnboarding = stateParam.startsWith("onb_");
+  const hostHeader =
+    request.headers.get("x-forwarded-host") ||
+    request.headers.get("host") ||
+    "";
+  const port = hostHeader.includes(":") ? `:${hostHeader.split(":")[1]}` : "";
+
+  const redirectBase = isOnboarding
+    ? new URL(`https://auth.${BASE_DOMAIN}${port}/onboarding`)
+    : new URL("/knowledge", url.origin);
+
+  if (isOnboarding) {
+    redirectBase.searchParams.set("step", "3");
+  }
 
   if (!trainer) {
     redirectBase.searchParams.set("error", "unauthorized");
     return NextResponse.redirect(redirectBase);
   }
 
-  const stateParam = url.searchParams.get("state");
   const code = url.searchParams.get("code");
   const oauthError = url.searchParams.get("error");
 
@@ -29,7 +47,11 @@ export async function GET(request: Request) {
   }
 
   try {
-    const state = await consumeNotionOAuthState(stateParam, trainer.id, trainer.user.id);
+    const state = await consumeNotionOAuthState(
+      stateParam,
+      trainer.id,
+      trainer.user.id,
+    );
     if (!state || state.orgId !== trainer.id) {
       redirectBase.searchParams.set("error", "invalid_or_expired_state");
       return NextResponse.redirect(redirectBase);

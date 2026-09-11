@@ -10,7 +10,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const bucket = process.env.S3_BUCKET?.trim() ?? "";
 const region = process.env.AWS_REGION?.trim() ?? "us-east-1";
-const basePrefix = (process.env.S3_BASE_PREFIX?.trim() ?? "trainertwin/kb").replace(/^\/+|\/+$/g, "");
+const basePrefix = (process.env.S3_BASE_PREFIX?.trim() || "trainertwin-dev").replace(/^\/+|\/+$/g, "");
 
 export const s3Configured = Boolean(bucket && process.env.AWS_ACCESS_KEY_ID);
 
@@ -26,24 +26,28 @@ function client() {
   });
 }
 
-export function kbPrefix(knowledgeBaseId: string, docId?: string) {
+export function orgPrefix(orgId: string) {
+  return `${basePrefix}/${orgId}`;
+}
+
+export function kbPrefix(orgId: string, knowledgeBaseId: string, docId?: string) {
   return docId
-    ? `${basePrefix}/knowledge/${knowledgeBaseId}/${docId}`
-    : `${basePrefix}/knowledge/${knowledgeBaseId}`;
+    ? `${orgPrefix(orgId)}/knowledge/${knowledgeBaseId}/${docId}`
+    : `${orgPrefix(orgId)}/knowledge/${knowledgeBaseId}`;
 }
 
-export function voicePrefix(voiceId: string) {
-  return `${basePrefix}/tts-voices/${voiceId}`;
+export function voicePrefix(orgId: string, voiceId: string) {
+  return `${orgPrefix(orgId)}/tts-voices/${voiceId}`;
 }
 
-export function recordingKey(sessionId: string) {
-  return `${basePrefix}/recordings/${sessionId}.wav`;
+export function recordingKey(orgId: string, sessionId: string) {
+  return `${orgPrefix(orgId)}/recordings/${sessionId}.wav`;
 }
 
-export function personaSourcePrefix(personaId: string, sourceId?: string) {
+export function personaSourcePrefix(orgId: string, personaId: string, sourceId?: string) {
   return sourceId
-    ? `${basePrefix}/personas/${personaId}/sources/${sourceId}`
-    : `${basePrefix}/personas/${personaId}/sources`;
+    ? `${orgPrefix(orgId)}/personas/${personaId}/sources/${sourceId}`
+    : `${orgPrefix(orgId)}/personas/${personaId}/sources`;
 }
 
 export async function getObjectBytes(key: string): Promise<Uint8Array> {

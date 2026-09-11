@@ -26,6 +26,7 @@ from deepeval.test_case import Turn
 from dotenv import load_dotenv
 
 from checks import conversation_likeness, conversation_quality_issues
+from learner_persona import all_learners, build_synthetic_golden
 from metrics import conversation_metrics
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -42,8 +43,14 @@ MAX_TURNS = int(os.getenv("BENCH_MAX_TURNS", "12"))
 MAX_REFERENCE_SOURCES = int(os.getenv("BENCH_MAX_REFERENCE_SOURCES", "5"))
 FIDELITY_THRESHOLD = float(os.getenv("BENCH_FIDELITY_THRESHOLD", "0.7"))
 KEEP_SESSIONS = os.getenv("BENCH_KEEP_SESSIONS", "").lower() in {"1", "true", "yes"}
-REPORT_PATH = Path(os.getenv("BENCH_REPORT", ROOT / "bench" / "results" / "latest.json"))
 CA_FILE = os.path.expanduser("~/.portless/ca.pem")
+
+
+def report_path() -> Path:
+    if os.getenv("BENCH_REPORT"):
+        return Path(os.environ["BENCH_REPORT"])
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    return ROOT / "bench" / "results" / f"{stamp}.json"
 
 
 def _ssl() -> ssl.SSLContext | bool:
@@ -186,34 +193,8 @@ def load_scenarios() -> list[dict]:
         return scenarios
 
 
-def build_golden(scenario: dict) -> ConversationalGolden:
-    agent = scenario["agent"] if isinstance(scenario["agent"], dict) else {}
-    stages = agent.get("stages") if isinstance(agent.get("stages"), list) else []
-    objectives = [stage.get("objective") for stage in stages if isinstance(stage, dict) and stage.get("objective")]
-    scenario_config = agent.get("config", {}).get("scenario", {})
-    return ConversationalGolden(
-        name=scenario["slug"],
-        scenario=(
-            f'Participate as a realistic learner in the published scenario "{scenario["name"]}". '
-            "Answer the trainer's current question directly, sometimes with incomplete detail so follow-up behavior is exercised. "
-            f"Scenario details: {json.dumps(scenario_config, ensure_ascii=False)}"
-        ),
-        expected_outcome=(
-            f'The trainer pursues the scenario objective: {agent.get("objective", scenario["name"])}. '
-            f"Stage objectives: {'; '.join(objectives) or 'complete the configured interview flow'}."
-        ),
-        persona=Persona(
-            characteristics=(
-                "A cooperative learner who answers from plausible experience, admits uncertainty, and stays on the current question. "
-                "Answers vary between strong, partial, vague, and uncertain so the trainer's reactions can be evaluated."
-            )
-        ),
-        additional_metadata={
-            "scenario": scenario["slug"],
-            "reference_persona": scenario["reference_persona_slug"],
-            "reference_sources": [source["name"] for source in scenario["sources"]],
-        },
-    )
+def build_golden(scenario: dict, learner: dict | None = None) -> ConversationalGolden:
+    return build_synthetic_golden(scenario, learner)
 
 
 def create_session(scenario: dict) -> dict:
@@ -356,13 +337,14 @@ def stopping_controller(last_assistant_turn: Turn | None):
     return proceed()
 
 
-def simulate_one(scenario: dict, llm: OpenRouterLLM):
+def simulate_one(scenario: dict, llm: OpenRouterLLM, learner: dict | None = None):
     runtime = Runtime(scenario)
     try:
         opening = runtime.open()
         session_id = runtime.session["sessionId"]
-        print(f"\n[{scenario['slug']}] session {session_id}\nTRAINER: {opening}\n")
-        golden = build_golden(scenario)
+        golden = build_golden(scenario, learner)
+        label = golden.name
+        print(f"\n[{label}] session {session_id}\nTRAINER: {opening}\n")
         golden.turns = [Turn(role="assistant", content=opening)]
 
         def model_callback(input: str, turns: list[Turn]) -> Turn:
@@ -387,7 +369,7 @@ def simulate_one(scenario: dict, llm: OpenRouterLLM):
         for turn in case.turns:
             if turn.role == "assistant":
                 turn.retrieval_context = reference_context
-        case.name = scenario["slug"]
+        case.name = label
         case.chatbot_role = f'{scenario["persona_name"]}, the trainer running {scenario["name"]}'
         turns = [{"role": turn.role, "content": turn.content} for turn in case.turns]
         likeness = conversation_likeness(turns)
@@ -398,6 +380,8 @@ def simulate_one(scenario: dict, llm: OpenRouterLLM):
         case.metadata = {
             "session_id": session_id,
             "scenario": scenario["slug"],
+            "learner": golden.additional_metadata.get("learner") if golden.additional_metadata else None,
+            "learner_source": golden.additional_metadata.get("learner_source") if golden.additional_metadata else None,
             "reference_persona": scenario["reference_persona_slug"],
             "reference_sources": [source["name"] for source in scenario["sources"]],
             "likeness": likeness,
@@ -408,7 +392,7 @@ def simulate_one(scenario: dict, llm: OpenRouterLLM):
         runtime.close()
 
 
-def save_report(result, cases: list, llm: OpenRouterLLM) -> None:
+def save_report(result, cases: list, llm: OpenRouterLLM, path: Path) -> None:
     report = result.model_dump(mode="json", by_alias=True)
     report["benchmark"] = {
         "created_at": datetime.now(UTC).isoformat(),
@@ -426,21 +410,27 @@ def save_report(result, cases: list, llm: OpenRouterLLM) -> None:
             for case in cases
         ],
     }
-    REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    REPORT_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
 
 
 def main() -> None:
     scenarios = load_scenarios()
     llm = OpenRouterLLM()
-    cases = [simulate_one(scenario, llm) for scenario in scenarios]
+    learners = all_learners()
+    cases = [
+        simulate_one(scenario, llm, learner)
+        for scenario in scenarios
+        for learner in learners
+    ]
     result = evaluate(
         test_cases=cases,
         metrics=conversation_metrics(llm, FIDELITY_THRESHOLD),
         identifier="trainer-fidelity",
     )
-    save_report(result, cases, llm)
-    print(f"\nReport: {REPORT_PATH}")
+    path = report_path()
+    save_report(result, cases, llm, path)
+    print(f"\nReport: {path}")
 
 
 if __name__ == "__main__":

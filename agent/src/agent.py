@@ -9,11 +9,15 @@ import os
 from typing import Any
 
 from dotenv import load_dotenv
-from livekit import agents, api, rtc
+from livekit import agents, api
 from livekit.agents import Agent, room_io
 from livekit.plugins import noise_cancellation
 
-from recording import post_completion_webhook, start_session_egress, stop_and_poll_egress
+from recording import (
+    post_completion_webhook,
+    start_session_egress,
+    stop_and_poll_egress,
+)
 from session import build_agent_session
 from tools import build_interview_tools
 
@@ -67,6 +71,7 @@ async def entrypoint(ctx: agents.JobContext) -> None:
     session_id = str(metadata.get("sessionId") or metadata.get("session_id") or ctx.room.name).strip()
     runtime_token = str(metadata.get("runtimeToken") or metadata.get("runtime_token") or "token-pending").strip()
     voice = str(metadata.get("voice") or "").strip()
+    org_id = str(metadata.get("orgId") or metadata.get("org_id") or "shared").strip()
 
     webhook_raw = str(metadata.get("webhook_url") or os.getenv("WEBHOOK_URL") or "").strip()
     if webhook_raw.startswith("/"):
@@ -92,7 +97,7 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         participant_identity = f"candidate-{session_id}"
 
     # Start optional S3 recording egress
-    egress_data = await start_session_egress(lk_api=ctx.api, room_name=ctx.room.name)
+    egress_data = await start_session_egress(lk_api=ctx.api, org_id=org_id, room_name=ctx.room.name)
 
     _sessions[ctx.room.name] = {
         "session_id": session_id,

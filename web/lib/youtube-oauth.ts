@@ -16,13 +16,17 @@ export function youtubeRedirectUri() {
     const url = new URL(value);
     if (
       url.protocol !== "https:" &&
-      !(url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname))
+      !(
+        url.protocol === "http:" &&
+        ["localhost", "127.0.0.1"].includes(url.hostname)
+      )
     ) {
       throw new Error("YouTube redirect URI must use HTTPS");
     }
     return url.toString();
   }
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "http://localhost:3000";
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL?.trim() || "http://localhost:3000";
   return new URL("/api/connectors/youtube/oauth/callback", appUrl).toString();
 }
 
@@ -31,6 +35,7 @@ export async function startYouTubeOAuth(
   orgId: string,
   userId: string,
   kbIdOrSlug?: string,
+  prefix = "",
 ) {
   const config = youtubeConfig();
   const redirectUri = youtubeRedirectUri();
@@ -48,7 +53,7 @@ export async function startYouTubeOAuth(
     kbId = defaultKb.id;
   }
 
-  const state = randomBytes(32).toString("base64url");
+  const state = `${prefix}${randomBytes(32).toString("base64url")}`;
   const verifier = randomBytes(32).toString("base64url");
 
   await db.youTubeOAuthState.create({
@@ -89,12 +94,23 @@ export async function finishYouTubeOAuth(
     include: { kb: { select: { id: true, slug: true, orgId: true } } },
   });
 
-  if (!state || state.kb.orgId !== orgId || state.consumedAt || state.expiresAt <= new Date()) {
+  if (
+    !state ||
+    state.kb.orgId !== orgId ||
+    state.consumedAt ||
+    state.expiresAt <= new Date()
+  ) {
     throw new Error("YouTube authorization expired. Please connect again.");
   }
 
   const consumed = await db.youTubeOAuthState.updateMany({
-    where: { id: state.id, orgId, userId, consumedAt: null, expiresAt: { gt: new Date() } },
+    where: {
+      id: state.id,
+      orgId,
+      userId,
+      consumedAt: null,
+      expiresAt: { gt: new Date() },
+    },
     data: { consumedAt: new Date() },
   });
 
@@ -121,7 +137,10 @@ export async function finishYouTubeOAuth(
 
   const channels = await listOwnedChannels(token.access_token);
   if (!channels.length) {
-    throw new YouTubeError("NO_CHANNEL", "This Google account has no accessible owned YouTube channel");
+    throw new YouTubeError(
+      "NO_CHANNEL",
+      "This Google account has no accessible owned YouTube channel",
+    );
   }
 
   for (const channel of channels) {
@@ -141,21 +160,34 @@ export async function finishYouTubeOAuth(
     });
 
     if (existing.status === "disconnecting") {
-      throw new Error("Channel removal is still in progress. Retry after cleanup completes.");
+      throw new Error(
+        "Channel removal is still in progress. Retry after cleanup completes.",
+      );
     }
     if (!token.refresh_token && !existing.refreshTokenCiphertext) {
-      throw new YouTubeError("RECONNECT_REQUIRED", "Google did not grant background access. Revoke the old grant and connect again.");
+      throw new YouTubeError(
+        "RECONNECT_REQUIRED",
+        "Google did not grant background access. Revoke the old grant and connect again.",
+      );
     }
 
     const id = existing.id;
     const boundUserId = existing.userId || userId;
-    const binding = tokenBinding({ connectionId: id, orgId, userId: boundUserId });
+    const binding = tokenBinding({
+      connectionId: id,
+      orgId,
+      userId: boundUserId,
+    });
 
     const credentials = {
       userId,
       channelTitle: channel.title,
       status: "active",
-      accessTokenCiphertext: encryptToken(token.access_token, config.encryptionKey, binding),
+      accessTokenCiphertext: encryptToken(
+        token.access_token,
+        config.encryptionKey,
+        binding,
+      ),
       refreshTokenCiphertext: token.refresh_token
         ? encryptToken(token.refresh_token, config.encryptionKey, binding)
         : existing.refreshTokenCiphertext,
@@ -171,7 +203,9 @@ export async function finishYouTubeOAuth(
     });
 
     if (!saved.count) {
-      throw new Error("Channel removal started during authorization. Connect again after cleanup completes.");
+      throw new Error(
+        "Channel removal started during authorization. Connect again after cleanup completes.",
+      );
     }
   }
 

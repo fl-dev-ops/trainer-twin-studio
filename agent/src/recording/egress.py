@@ -28,10 +28,10 @@ def s3_egress_enabled() -> bool:
     )
 
 
-def build_s3_key(room_name: str, filename: str) -> str:
-    prefix = os.getenv("S3_BASE_PREFIX", "agents").strip("/")
+def build_s3_key(org_id: str, room_name: str, filename: str) -> str:
+    prefix = os.getenv("S3_BASE_PREFIX", "trainertwin-dev").strip("/")
     now = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    return f"{prefix}/{room_name}_{now}/{filename}"
+    return f"{prefix}/{org_id}/recordings/{room_name}_{now}/{filename}"
 
 
 def build_s3_url(bucket: str, key: str, region: str) -> str:
@@ -41,6 +41,7 @@ def build_s3_url(bucket: str, key: str, region: str) -> str:
 async def start_session_egress(
     *,
     lk_api: Any,
+    org_id: str,
     room_name: str,
 ) -> dict[str, str | None]:
     if not s3_egress_enabled():
@@ -51,8 +52,8 @@ async def start_session_egress(
     access_key = os.getenv("AWS_ACCESS_KEY_ID", "")
     secret_key = os.getenv("AWS_SECRET_ACCESS_KEY", "")
 
-    audio_s3_key = build_s3_key(room_name, "audio.mp4")
-    video_s3_key = build_s3_key(room_name, "video.mp4")
+    audio_s3_key = build_s3_key(org_id, room_name, "audio.mp4")
+    video_s3_key = build_s3_key(org_id, room_name, "video.mp4")
     audio_url = build_s3_url(bucket, audio_s3_key, region)
     video_url = build_s3_url(bucket, video_s3_key, region)
 

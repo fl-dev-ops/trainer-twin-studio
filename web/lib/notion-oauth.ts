@@ -38,13 +38,19 @@ export function notionOAuthRedirectUri() {
       throw new Error("NOTION_OAUTH_REDIRECT_URI must be an absolute URL");
     }
   }
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "http://localhost:3000";
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL?.trim() || "http://localhost:3000";
   return new URL("/api/connectors/notion/oauth/callback", appUrl).toString();
 }
 
 /** Persists a one-time OAuth state bound to the initiating org, trainer, and knowledge base. */
-export async function createNotionOAuthState(orgId: string, userId: string, kbId: string) {
-  const id = randomBytes(32).toString("base64url");
+export async function createNotionOAuthState(
+  orgId: string,
+  userId: string,
+  kbId: string,
+  prefix = "",
+) {
+  const id = `${prefix}${randomBytes(32).toString("base64url")}`;
   await db.notionOAuthState.create({
     data: {
       id,
@@ -58,18 +64,29 @@ export async function createNotionOAuthState(orgId: string, userId: string, kbId
 }
 
 /** Atomically verifies user role, knowledge base ownership, consumes the state, and returns bound metadata in a single query. */
-export async function consumeNotionOAuthState(id: string, orgId: string, userId: string) {
+export async function consumeNotionOAuthState(
+  id: string,
+  orgId: string,
+  userId: string,
+) {
+  const now = new Date();
   const result = await db.$queryRaw<
-    { id: string; orgId: string; userId: string; kbId: string; kbSlug: string }[]
+    {
+      id: string;
+      orgId: string;
+      userId: string;
+      kbId: string;
+      kbSlug: string;
+    }[]
   >`
     UPDATE "NotionOAuthState" s
-    SET "consumedAt" = NOW()
+    SET "consumedAt" = ${now}
     FROM "member" m, "KnowledgeBase" kb
     WHERE s.id = ${id}
       AND s."orgId" = ${orgId}
       AND s."userId" = ${userId}
       AND s."consumedAt" IS NULL
-      AND s."expiresAt" > NOW()
+      AND s."expiresAt" > ${now}
       AND kb.id = s."kbId"
       AND kb."orgId" = ${orgId}
       AND m."organizationId" = ${orgId}
@@ -101,11 +118,15 @@ export function notionAuthorizationUrl(state: string) {
 }
 
 /** Exchanges the short-lived OAuth code for a workspace-scoped Notion token. */
-export async function exchangeNotionCode(code: string): Promise<NotionOAuthToken> {
+export async function exchangeNotionCode(
+  code: string,
+): Promise<NotionOAuthToken> {
   const startedAt = Date.now();
   console.info("[EXT-API:notion-oauth] start action=token-exchange");
   try {
-    const credentials = Buffer.from(`${clientId()}:${clientSecret()}`).toString("base64");
+    const credentials = Buffer.from(`${clientId()}:${clientSecret()}`).toString(
+      "base64",
+    );
     const response = await fetch(`${NOTION_API_URL}/oauth/token`, {
       method: "POST",
       headers: {
@@ -129,21 +150,33 @@ export async function exchangeNotionCode(code: string): Promise<NotionOAuthToken
     if (!token.access_token || !token.workspace_id) {
       throw new Error("Notion OAuth response is missing workspace credentials");
     }
-    console.info(`[EXT-API:notion-oauth] complete action=token-exchange status=${response.status} elapsedMs=${Date.now() - startedAt}`);
+    console.info(
+      `[EXT-API:notion-oauth] complete action=token-exchange status=${response.status} elapsedMs=${Date.now() - startedAt}`,
+    );
     return token;
   } catch (error) {
-    console.error(`[EXT-API:notion-oauth] failed action=token-exchange elapsedMs=${Date.now() - startedAt} error=${error instanceof Error ? error.message : String(error)}`);
+    console.error(
+      `[EXT-API:notion-oauth] failed action=token-exchange elapsedMs=${Date.now() - startedAt} error=${error instanceof Error ? error.message : String(error)}`,
+    );
     throw error;
   }
 }
 
 /** Upserts organization-owned Notion connection credentials with authorizing user audit and AAD binding. */
-export async function saveNotionConnection(orgId: string, userId: string, token: NotionOAuthToken) {
+export async function saveNotionConnection(
+  orgId: string,
+  userId: string,
+  token: NotionOAuthToken,
+) {
   if (!token.access_token || !token.workspace_id) {
     throw new Error("Notion OAuth response is missing workspace credentials");
   }
-  const tokenExpiresAt = token.expires_in ? new Date(Date.now() + token.expires_in * 1000) : null;
-  const where = { orgId_workspaceId: { orgId, workspaceId: token.workspace_id } };
+  const tokenExpiresAt = token.expires_in
+    ? new Date(Date.now() + token.expires_in * 1000)
+    : null;
+  const where = {
+    orgId_workspaceId: { orgId, workspaceId: token.workspace_id },
+  };
 
   const existing = await db.notionConnection.upsert({
     where,
@@ -162,7 +195,11 @@ export async function saveNotionConnection(orgId: string, userId: string, token:
 
   const connectionId = existing.id;
   const boundUserId = existing.userId || userId;
-  const binding = notionTokenBinding({ orgId, userId: boundUserId, connectionId });
+  const binding = notionTokenBinding({
+    orgId,
+    userId: boundUserId,
+    connectionId,
+  });
 
   return db.notionConnection.update({
     where: { id: connectionId },

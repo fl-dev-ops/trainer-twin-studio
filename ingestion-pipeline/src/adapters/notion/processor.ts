@@ -50,7 +50,7 @@ async function upsertDocument(pool: Pool, job: JobContext, workItem: WorkItemCon
 }
 
 async function writeMarkdown(pool: Pool, config: PipelineConfig, job: JobContext, document: StoredDocument, markdown: string) {
-  const key = `${config.s3BasePrefix}/knowledge/${job.kbId}/${document.id}/content.md`;
+  const key = `${config.s3BasePrefix}/${job.orgId}/knowledge/${job.kbId}/${document.id}/content.md`;
   await new S3Client({ region: config.awsRegion }).send(new PutObjectCommand({
     Bucket: config.s3Bucket,
     Key: key,

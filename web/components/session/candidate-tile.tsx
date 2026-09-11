@@ -1,18 +1,15 @@
 "use client";
 
+import { useLocalParticipant, useTrackVolume } from "@livekit/components-react";
 import { MicOff, UserRound } from "lucide-react";
+import type { LocalAudioTrack } from "livekit-client";
 import { motion } from "motion/react";
 import { VisualizerBar } from "./visualizer-bar";
 
-export function CandidateTile({
-  level,
-  micOn,
-  compact = false,
-}: {
-  level?: number;
-  micOn: boolean;
-  compact?: boolean;
-}) {
+export function CandidateTile({ compact = false }: { compact?: boolean }) {
+  // UNVERIFIED (no LiveKit Docs MCP): checked against current docs and installed v2.9.24 types.
+  const { isMicrophoneEnabled: micOn, microphoneTrack } = useLocalParticipant();
+  const level = useTrackVolume(microphoneTrack?.track as LocalAudioTrack | undefined);
   return (
     <div className="session-tile relative flex h-full flex-col items-center justify-center overflow-hidden">
       <motion.div

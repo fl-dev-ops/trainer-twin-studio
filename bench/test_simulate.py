@@ -1,6 +1,7 @@
 import unittest
 
 from checks import conversation_likeness, conversation_quality_issues
+from learner_persona import all_learners, create_synthetic_learner_persona
 from simulate import build_golden, build_reference_context
 
 
@@ -66,6 +67,21 @@ class BenchmarkDataTest(unittest.TestCase):
         self.assertGreater(vasanth["filler_rate"], 0.3)
         self.assertGreater(vasanth["restate_rate"], 0.3)
         self.assertEqual(vasanth["label_leaks"], 0)
+
+    def test_synthetic_learner_persona_avoids_static_overfitting(self):
+        learners = all_learners()
+        self.assertEqual([item["name"] for item in learners], ["Anubhav", "Deepak", "Saurabh", "Nikita", "Sushil"])
+        persona = create_synthetic_learner_persona("Anubhav")
+        self.assertEqual(persona.name, "Anubhav")
+        self.assertIn("Do not copy any real transcript wording", persona.characteristics)
+        golden = build_golden({
+            "slug": "fundamentals",
+            "name": "Fundamentals",
+            "agent": {"objective": "Test depth", "config": {"scenario": {}}, "stages": []},
+            "reference_persona_slug": "trainer",
+            "sources": [],
+        }, learners[1])
+        self.assertEqual(golden.name, "fundamentals--deepak")
 
 
 if __name__ == "__main__":

@@ -835,7 +835,13 @@ export function applyPersonaVote(
 const PROPER_TOKEN_STOP = new Set([
   "The", "This", "That", "What", "How", "When", "Could", "Can", "Would",
   "Please", "Your", "You", "For", "Given", "After", "Before", "Which",
-  "Could", "Trainer", "Learner", "Node",
+  "Trainer", "Learner", "Node",
+  "Got", "Good", "Tell", "Now", "Okay", "Right", "See", "Sure", "Well",
+  "Let", "Why", "Are", "Did", "Does", "Do", "Have", "Has", "Had", "Is",
+  "Was", "Were", "So", "And", "But", "If", "Just", "Then", "There", "Here",
+  "We", "They", "He", "She", "It", "Not", "All", "Some", "One", "Two",
+  "Yes", "No", "Thanks", "Thank", "True", "False", "Correct", "First",
+  "Next", "Also", "Because", "Since", "While", "Though", "Although", "Still",
 ]);
 
 function properTokens(text: string): Set<string> {

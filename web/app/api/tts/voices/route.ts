@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     data: { orgId: org.id, name, s3AudioKey: "" },
   });
 
-  const prefix = voicePrefix(voice.id);
+  const prefix = voicePrefix(org.id, voice.id);
   const bytes = new Uint8Array(await audio.arrayBuffer());
   await putObject(`${prefix}/reference.wav`, bytes, audio.type || "audio/wav");
 

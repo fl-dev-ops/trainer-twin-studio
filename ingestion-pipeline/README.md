@@ -28,12 +28,11 @@ and either `OPENROUTER_API_KEY` or `LLM_API_KEY` are required. Optional settings
 
 - `NOTION_TOKEN_ENCRYPTION_KEY` is required for OAuth sources only, not public imports.
 - `AWS_REGION` (default `us-east-1`)
-- `S3_BASE_PREFIX` (default `trainertwin/kb`)
+- `S3_BASE_PREFIX` (default `trainertwin-dev`; objects are stored under `{prefix}/{orgId}/…`)
 - `NOTION_API_VERSION` (default `2026-03-11`)
 - `CHROMA_URL` (default `http://localhost:8000`), `EMBEDDING_MODEL`
-- `CHROMA_API_KEY`, `CHROMA_TENANT`, `CHROMA_DATABASE` for Chroma Cloud. When
-  `CHROMA_API_KEY` is set, the tenant and database are required and the worker
-  uses Chroma Cloud instead of `CHROMA_URL`.
+- `CHROMA_API_KEY` and `CHROMA_TENANT` for Chroma Cloud. The worker uses each
+  job's organization database; `CHROMA_DATABASE` is only an optional maintenance-script default.
 - `TOPIC_MODEL`, `TOPIC_CHUNK_BATCH_SIZE`
 - `INGESTION_MAX_RECEIVE_COUNT` (default `5`)
 

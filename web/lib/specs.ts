@@ -309,7 +309,7 @@ export async function deleteKnowledge(orgId: string, kbSlug: string, fileSlug?: 
   if (fileSlug === undefined) {
     if (!kb) return;
     await Promise.all([
-      deletePrefix(kbPrefix(kb.id)),
+      deletePrefix(kbPrefix(orgId, kb.id)),
       removeCollection(knowledgeCollectionName(kb.id), orgId),
     ]);
     await db.knowledgeBase.delete({ where: { id: kb.id } });
@@ -321,7 +321,7 @@ export async function deleteKnowledge(orgId: string, kbSlug: string, fileSlug?: 
   });
   if (!doc) return;
   await Promise.all([
-    deletePrefix(kbPrefix(kb.id, doc.id)),
+    deletePrefix(kbPrefix(orgId, kb.id, doc.id)),
     removeDoc(kb.id, doc.id, orgId),
   ]);
   await db.knowledgeDocument.delete({ where: { id: doc.id } });
@@ -362,8 +362,8 @@ export async function uploadKnowledgeFile(orgId: string, kbSlug: string, file: F
     },
   });
 
-  const sourceKey = kbPrefix(kb.id, doc.id) + `/source-${slug}`;
-  const markdownKey = kbPrefix(kb.id, doc.id) + "/content.md";
+  const sourceKey = kbPrefix(orgId, kb.id, doc.id) + `/source-${slug}`;
+  const markdownKey = kbPrefix(orgId, kb.id, doc.id) + "/content.md";
   await Promise.all([
     putObject(sourceKey, bytes, file.type || "application/octet-stream"),
     putObject(markdownKey, markdown, "text/markdown; charset=utf-8"),
@@ -373,7 +373,7 @@ export async function uploadKnowledgeFile(orgId: string, kbSlug: string, file: F
     data: { s3SourceKey: sourceKey, s3MarkdownKey: markdownKey, status: "uploaded" },
   });
 
-  await ChromaTenantService.createTenant(orgId);
+  await ChromaTenantService.createOrgDatabase(orgId);
   const queueResult = await enqueueIngestionWork({
     orgId,
     kbId: kb.id,
@@ -414,7 +414,7 @@ export async function digestKnowledge(orgId: string, kbSlug: string, fileSlug?: 
   );
   if (docs.length === 0) throw new Error("No documents to index");
 
-  await ChromaTenantService.createTenant(orgId);
+  await ChromaTenantService.createOrgDatabase(orgId);
 
   const queuedJobs = [];
   for (const d of docs) {

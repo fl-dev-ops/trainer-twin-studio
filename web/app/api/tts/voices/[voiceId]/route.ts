@@ -73,7 +73,7 @@ export async function DELETE(
   if (!voice) return NextResponse.json({ error: "voice not found" }, { status: 404 });
   if (voice.kind !== "cloned") return NextResponse.json({ error: "sample voices cannot be deleted" }, { status: 403 });
 
-  await deletePrefix(voicePrefix(voiceId));
+  await deletePrefix(voicePrefix(org.id, voiceId));
   await db.voice.delete({ where: { id: voiceId } });
   return new Response(null, { status: 204 });
 }

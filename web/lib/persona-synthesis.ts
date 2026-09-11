@@ -55,7 +55,7 @@ export async function uploadPersonaSource(orgId: string, personaSlug: string, fi
       metadata: { size: file.size, mimeType: file.type || "application/octet-stream" } as Prisma.InputJsonValue,
     },
   });
-  const s3Key = `${personaSourcePrefix(persona.id, source.id)}/${encodeURIComponent(file.name)}`;
+  const s3Key = `${personaSourcePrefix(orgId, persona.id, source.id)}/${encodeURIComponent(file.name)}`;
   await putObject(s3Key, new Uint8Array(await file.arrayBuffer()), file.type || "application/octet-stream");
   await db.personaSource.update({ where: { id: source.id }, data: { s3Key } });
   return { id: source.id, kind, name: file.name, status: "uploaded" as const };

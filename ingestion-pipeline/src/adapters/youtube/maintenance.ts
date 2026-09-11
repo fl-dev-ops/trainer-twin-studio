@@ -74,7 +74,7 @@ async function deleteStoredDocuments(pool: Pool, config: PipelineConfig, orgId: 
   for (const document of documents) {
     if (Date.now() > deadline) return false;
     await removeDocumentStrict(config, { orgId, chromaTenantId: document.chromaTenantId, chromaDatabase: document.chromaDatabase }, document.id);
-    const prefix = `${config.s3BasePrefix}/knowledge/${document.kbId}/${document.id}/`;
+    const prefix = `${config.s3BasePrefix}/${orgId}/knowledge/${document.kbId}/${document.id}/`;
     if (![document.s3SourceKey, document.s3MarkdownKey, document.s3QuestionsKey].every((key) => !key || key === "pending" || key.startsWith(prefix))) {
       throw new Error("YouTube cleanup refused a key outside the document prefix");
     }

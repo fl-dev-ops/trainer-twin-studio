@@ -26,7 +26,7 @@ let backupPath: string | undefined;
 let transaction = false;
 
 type Document = {
-  id: string; slug: string; sourceId: string | null; kb: string; orgId: string;
+  id: string; slug: string; sourceId: string | null; kbId: string; kb: string; orgId: string;
   s3SourceKey: string | null; s3MarkdownKey: string | null; s3QuestionsKey: string | null; status: string;
 };
 type VectorScope = { collection: Collection; ids: string[]; retainedIds: string[] };
@@ -92,7 +92,7 @@ try {
   console.info(`[DB:youtube-cleanup] scan-complete elapsedMs=${Date.now() - scanStartedAt}`);
   const keys = new Set<string>();
   for (const doc of documents.rows) {
-    const documentPrefix = `${config.s3BasePrefix}/${doc.orgId}/${doc.kb}/${doc.id}/`;
+    const documentPrefix = `${config.s3BasePrefix}/${doc.orgId}/knowledge/${doc.kbId}/${doc.id}/`;
     for (const key of [doc.s3SourceKey, doc.s3MarkdownKey, doc.s3QuestionsKey]) {
       if (!key || key === "pending") continue;
       if (!key.startsWith(documentPrefix)) {

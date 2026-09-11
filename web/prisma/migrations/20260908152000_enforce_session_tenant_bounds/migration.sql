@@ -4,7 +4,7 @@ CREATE OR REPLACE FUNCTION enforce_agent_persona_org() RETURNS TRIGGER AS $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM "Persona"
-    WHERE id = NEW."personaId" AND "orgId" = NEW."orgId"
+    WHERE id = NEW."personaId" AND "orgId" IS NOT DISTINCT FROM NEW."orgId"
   ) THEN
     RAISE EXCEPTION 'Agent persona must belong to the same organization';
   END IF;

@@ -1,11 +1,27 @@
 import { AccessToken, AgentDispatchClient } from "livekit-server-sdk";
 
-export function getLiveKitUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_LIVEKIT_URL ||
-    process.env.LIVEKIT_URL ||
-    "ws://localhost:7880"
+type LiveKitConfig = {
+  url: string;
+  apiKey: string;
+  apiSecret: string;
+  agentName: string;
+};
+
+export function getLiveKitConfig(env: NodeJS.ProcessEnv = process.env): LiveKitConfig {
+  const missing = ["LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET"].filter(
+    (key) => !env[key]?.trim(),
   );
+  if (missing.length) throw new Error(`LiveKit is not configured: missing ${missing.join(", ")}`);
+
+  const url = env.LIVEKIT_URL!.trim();
+  if (!/^wss?:\/\//.test(url)) throw new Error("LIVEKIT_URL must start with ws:// or wss://");
+
+  return {
+    url,
+    apiKey: env.LIVEKIT_API_KEY!.trim(),
+    apiSecret: env.LIVEKIT_API_SECRET!.trim(),
+    agentName: env.LIVEKIT_AGENT_NAME?.trim() || env.AGENT_NAME?.trim() || "intervoo-agent",
+  };
 }
 
 export async function createLiveKitSessionToken({
@@ -23,9 +39,7 @@ export async function createLiveKitSessionToken({
   orgId: string;
   agentSlug?: string;
 }): Promise<{ url: string; token: string; room: string }> {
-  const apiKey = process.env.LIVEKIT_API_KEY || "devkey";
-  const apiSecret = process.env.LIVEKIT_API_SECRET || "secret";
-  const url = getLiveKitUrl();
+  const { url, apiKey, apiSecret, agentName } = getLiveKitConfig();
   const room = `session-${sessionId}`;
   const identity = `user-${userId}`;
 
@@ -58,17 +72,11 @@ export async function createLiveKitSessionToken({
 
   const token = await at.toJwt();
 
-  // Explicitly dispatch the LiveKit agent worker to the session room
-  const agentName = process.env.LIVEKIT_AGENT_NAME || process.env.AGENT_NAME || "intervoo-agent";
-  try {
-    const dispatchClient = new AgentDispatchClient(url, apiKey, apiSecret);
-    await dispatchClient.createDispatch(room, agentName, {
-      metadata: JSON.stringify(metadata),
-    });
-    console.log(`[LiveKit] Dispatched agent '${agentName}' to room '${room}'`);
-  } catch (dispatchErr) {
-    console.warn(`[LiveKit] Could not dispatch agent '${agentName}' to room '${room}':`, dispatchErr);
-  }
+  // UNVERIFIED (no LiveKit Docs MCP): checked against the current docs and installed v2.19.0 types.
+  const dispatchClient = new AgentDispatchClient(url, apiKey, apiSecret);
+  await dispatchClient.createDispatch(room, agentName, {
+    metadata: JSON.stringify(metadata),
+  });
 
   return { url, token, room };
 }

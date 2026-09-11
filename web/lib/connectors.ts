@@ -238,7 +238,7 @@ export async function deleteSource(orgId: string, sourceId: string) {
         console.error(`Failed to remove document ${doc.id} from Chroma:`, err);
         throw err;
       }),
-      deletePrefix(kbPrefix(doc.kbId, doc.id)).catch((err) => {
+      deletePrefix(kbPrefix(orgId, doc.kbId, doc.id)).catch((err) => {
         console.error(`Failed to remove S3 prefix for doc ${doc.id}:`, err);
       }),
     ]);

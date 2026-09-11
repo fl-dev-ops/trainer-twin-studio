@@ -5,13 +5,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { LoaderCircle, Play, Upload as UploadIcon, X } from "lucide-react";
+import { RoomContext, RoomAudioRenderer } from "@livekit/components-react";
 import {
   Room,
   RoomEvent,
-  Track,
   ConnectionState,
-  type RemoteTrack,
-  type RemoteParticipant,
   type TranscriptionSegment,
 } from "livekit-client";
 import { Button } from "@/components/ui/button";
@@ -42,7 +40,6 @@ import { PdfViewerSurface } from "@/components/session/pdf-viewer";
 import { LiveKitWorkspaceProvider } from "@/lib/livekit-workspaces";
 import type { AgentSurface } from "@/lib/agent-surface-events";
 import type { Entry } from "@/lib/session-transcript";
-import type { VisualizerState } from "@/components/session/visualizer-bar";
 import { cn } from "@/lib/utils";
 
 type Coverage = Record<string, string>;
@@ -72,21 +69,15 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
   const [state_, setState_] = useState<"disconnected" | "connecting" | "connected" | "ready" | "error">("disconnected");
   const [entries, setEntries] = useState<Entry[]>([]);
   const [coverage, setCoverage] = useState<Coverage>({});
-  const [micOn, setMicOn] = useState(true);
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState("");
-  const [audioBlocked, setAudioBlocked] = useState(false);
   const [interviewReady, setInterviewReady] = useState(false);
-  const [botSpeaking, setBotSpeaking] = useState(false);
-  const [localLevel, setLocalLevel] = useState(0);
-  const [remoteLevel, setRemoteLevel] = useState(0);
   const [surface, setSurface] = useState<AgentSurface>(null);
   const [ended, setEnded] = useState(false);
   const [endReason, setEndReason] = useState<EndReason>("disconnected");
   const [transcriptOpen, setTranscriptOpen] = useState(true);
   const roomRef = useRef<Room | null>(null);
   const [livekitRoom, setLiveKitRoom] = useState<Room | null>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
   // Mirrors of entries/coverage for the finalize call on disconnect.
   const entriesRef = useRef<Entry[]>([]);
   const coverageRef = useRef<Coverage>({});
@@ -97,14 +88,6 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
   const preparing = connected && (state_ !== "ready" || !interviewReady);
   const reduceMotion = useReducedMotion();
 
-  const agentState: VisualizerState = !connected
-    ? "connecting"
-    : preparing
-      ? "thinking"
-      : botSpeaking
-        ? "speaking"
-        : "listening";
-
   useEffect(() => {
     if (!connected) return;
     const timer = setInterval(() => setElapsed((s) => s + 1), 1000);
@@ -112,31 +95,15 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
   }, [connected]);
 
   useEffect(() => {
-    const audio = audioRef.current;
     return () => {
       roomRef.current?.disconnect();
       roomRef.current = null;
-      audio?.pause();
     };
   }, []);
 
-  async function playRemoteAudio() {
-    try {
-      await audioRef.current?.play();
-      setAudioBlocked(false);
-    } catch {
-      setAudioBlocked(true);
-    }
-  }
-
   async function connect() {
     setError("");
-    setAudioBlocked(false);
     setInterviewReady(false);
-    setBotSpeaking(false);
-    setMicOn(true);
-    setLocalLevel(0);
-    setRemoteLevel(0);
     setEnded(false);
     disconnectReasonRef.current = "disconnected";
     setEntries([]);
@@ -162,7 +129,7 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
     sessionRef.current = launch.session.id;
 
     if (!launch.livekit?.url || !launch.livekit?.token) {
-      setError("LiveKit credentials not returned by server");
+      setError(launch.livekitError ?? "LiveKit credentials not returned by server");
       return;
     }
 
@@ -188,29 +155,6 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
       } else if (connectionState === ConnectionState.Disconnected) {
         setState_("disconnected");
       }
-    });
-
-    room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => {
-      if (track.kind === Track.Kind.Audio && audioRef.current) {
-        track.attach(audioRef.current);
-        void playRemoteAudio();
-      }
-    });
-
-    room.on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack) => {
-      if (audioRef.current) {
-        track.detach(audioRef.current);
-      }
-    });
-
-    room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
-      const isAgentSpeaking = speakers.some((s) => s.identity !== room.localParticipant.identity);
-      setBotSpeaking(isAgentSpeaking);
-
-      const localSpeaker = speakers.find((s) => s.identity === room.localParticipant.identity);
-      const remoteSpeaker = speakers.find((s) => s.identity !== room.localParticipant.identity);
-      setLocalLevel(localSpeaker ? Math.min(1, Math.max(0, localSpeaker.audioLevel)) : 0);
-      setRemoteLevel(remoteSpeaker ? Math.min(1, Math.max(0, remoteSpeaker.audioLevel)) : 0);
     });
 
     room.on(RoomEvent.TranscriptionReceived, (segments: TranscriptionSegment[], participant) => {
@@ -278,15 +222,10 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
     room.on(RoomEvent.Disconnected, () => {
       const reason = disconnectReasonRef.current;
       setInterviewReady(false);
-      setBotSpeaking(false);
       setSurface(null);
       setState_("disconnected");
       setLiveKitRoom(null);
       roomRef.current = null;
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.srcObject = null;
-      }
       if (reason !== "error") {
         setEndReason(reason);
         setEnded(true);
@@ -298,6 +237,7 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             sessionId: sessionRef.current,
+            status: reason === "completed" ? "completed" : "abandoned",
             transcript: entriesRef.current,
             evidence: coverageRef.current,
           }),
@@ -316,16 +256,6 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
         setError("Microphone permission denied or unavailable");
       }
 
-      // Attach any already published remote audio tracks
-      for (const p of room.remoteParticipants.values()) {
-        for (const pub of p.trackPublications.values()) {
-          if (pub.track && pub.track.kind === Track.Kind.Audio && audioRef.current) {
-            pub.track.attach(audioRef.current);
-            void playRemoteAudio();
-          }
-        }
-      }
-
       setInterviewReady(true);
     } catch (e) {
       disconnectReasonRef.current = "error";
@@ -337,31 +267,17 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
     }
   }
 
-  async function disconnect() {
-    disconnectReasonRef.current = "manual";
+  async function disconnect(reason: EndReason = "manual") {
+    disconnectReasonRef.current = reason;
     if (roomRef.current) {
       await roomRef.current.disconnect().catch(() => {});
       roomRef.current = null;
     }
     setLiveKitRoom(null);
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.srcObject = null;
-    }
-    setAudioBlocked(false);
     setInterviewReady(false);
-    setBotSpeaking(false);
     setState_("disconnected");
-    setEndReason("manual");
+    setEndReason(reason);
     setEnded(true);
-  }
-
-  async function toggleMic() {
-    const room = roomRef.current;
-    if (!room) return;
-    const next = !micOn;
-    await room.localParticipant.setMicrophoneEnabled(next);
-    setMicOn(next);
   }
 
   const mm = String(Math.floor(elapsed / 60)).padStart(2, "0");
@@ -397,8 +313,6 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
 
   return (
     <div className="dark flex h-dvh w-dvw flex-col overflow-hidden bg-background text-foreground">
-      <audio ref={audioRef} autoPlay playsInline className="hidden" />
-
       {/* header */}
       <header className="session-header flex shrink-0 items-center justify-between px-4 py-3 sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
@@ -539,15 +453,15 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
           </div>
         ) : (
           livekitRoom && (
-            <LiveKitWorkspaceProvider
-              room={livekitRoom}
-              onSurface={setSurface}
-              onEndSession={() => {
-                disconnectReasonRef.current = "completed";
-                void disconnect();
-              }}
-            >
-              <div className="flex min-h-0 w-full gap-4">
+            <RoomContext.Provider value={livekitRoom}>
+              {/* UNVERIFIED (no LiveKit Docs MCP): checked against current docs and installed v2.9.24 types. */}
+              <RoomAudioRenderer />
+              <LiveKitWorkspaceProvider
+                room={livekitRoom}
+                onSurface={setSurface}
+                onEndSession={() => void disconnect("completed")}
+              >
+                <div className="flex min-h-0 w-full gap-4">
                 <div className="min-h-0 min-w-0 flex-1">
                   <motion.div
                     layout
@@ -595,10 +509,10 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
                       className="interview-participants min-h-0 gap-4"
                     >
                       <motion.div layout transition={layoutTransition} className="min-h-0">
-                        <AgentTile persona={persona} state={agentState} level={remoteLevel} compact={surface !== null} />
+                        <AgentTile persona={persona} compact={surface !== null} />
                       </motion.div>
                       <motion.div layout transition={layoutTransition} className="min-h-0">
-                        <CandidateTile level={localLevel} micOn={micOn} compact={surface !== null} />
+                        <CandidateTile compact={surface !== null} />
                       </motion.div>
                     </motion.div>
                   </motion.div>
@@ -623,24 +537,24 @@ export function SessionView({ personas, agents, contexts, agentPersonas = {}, se
                     </motion.div>
                   )}
                 </AnimatePresence>
-              </div>
-            </LiveKitWorkspaceProvider>
+                </div>
+              </LiveKitWorkspaceProvider>
+            </RoomContext.Provider>
           )
         )}
       </main>
 
       {/* footer controls */}
       <footer className="session-footer flex shrink-0 items-center justify-center px-4 py-3">
-        <SessionControlBar
-          audioBlocked={audioBlocked}
-          isConnected={connected}
-          micOn={micOn}
-          transcriptOpen={transcriptOpen}
-          onEnableAudio={playRemoteAudio}
-          onMicToggle={toggleMic}
-          onTranscriptToggle={setTranscriptOpen}
-          onEnd={disconnect}
-        />
+        {livekitRoom && (
+          <SessionControlBar
+            room={livekitRoom}
+            isConnected={connected}
+            transcriptOpen={transcriptOpen}
+            onTranscriptToggle={setTranscriptOpen}
+            onEnd={disconnect}
+          />
+        )}
       </footer>
     </div>
   );

@@ -37,6 +37,7 @@ export async function POST(req: Request) {
     if (!session) return NextResponse.json({ error: "Invalid session URL" }, { status: 403 });
 
     let livekit = null;
+    let livekitError: string | undefined;
     try {
       livekit = await createLiveKitSessionToken({
         sessionId: session.id,
@@ -47,10 +48,11 @@ export async function POST(req: Request) {
         agentSlug: session.agentSlug,
       });
     } catch (tokenErr) {
-      console.warn("Failed to create LiveKit token:", tokenErr);
+      console.error("Failed to start LiveKit session:", tokenErr);
+      livekitError = "Voice service unavailable. Check the LiveKit configuration and agent deployment.";
     }
 
-    return NextResponse.json({ session, livekit });
+    return NextResponse.json({ session, livekit, livekitError });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Session creation failed" }, { status: 400 });
   }

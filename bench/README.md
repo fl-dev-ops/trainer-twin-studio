@@ -19,6 +19,6 @@ Useful settings:
 - `BENCH_FIDELITY_THRESHOLD=0.7`
 - `BENCH_EVALUATION_MODEL=openai/gpt-4.1-mini`
 - `BENCH_KEEP_SESSIONS=1` — keep benchmark sessions; otherwise they are deleted
-- `BENCH_REPORT=results/latest.json`
+- `BENCH_REPORT=results/custom.json` — omit to write `results/YYYYMMDD-HHMMSS.json`
 
 The report contains the simulated transcripts plus `Trainer Fidelity`, `Conversation Completeness`, and `Role Adherence` scores.

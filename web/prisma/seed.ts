@@ -49,7 +49,7 @@ async function seedSpec(dir: "personas" | "agents" | "domains", key: string) {
 async function seedKnowledge() {
   const kbRoot = path.join(DATA, "knowledge");
   const bucket = process.env.S3_BUCKET;
-  const basePrefix = (process.env.S3_BASE_PREFIX ?? "trainertwin/kb").replace(/^\/+|\/+$/g, "");
+  const basePrefix = (process.env.S3_BASE_PREFIX || "trainertwin-dev").replace(/^\/+|\/+$/g, "");
   const region = process.env.AWS_REGION ?? "us-east-1";
   const { S3Client, PutObjectCommand } = await import("@aws-sdk/client-s3");
   const s3 = new S3Client({
@@ -70,8 +70,8 @@ async function seedKnowledge() {
       });
       if (existing) continue;
       const docId = crypto.randomUUID();
-      const sourceKey = `${basePrefix}/knowledge/${kb.id}/${docId}/source-${file}`;
-      const markdownKey = `${basePrefix}/knowledge/${kb.id}/${docId}/content.md`;
+      const sourceKey = `${basePrefix}/shared/knowledge/${kb.id}/${docId}/source-${file}`;
+      const markdownKey = `${basePrefix}/shared/knowledge/${kb.id}/${docId}/content.md`;
       await s3.send(new PutObjectCommand({ Bucket: bucket, Key: sourceKey, Body: content, ContentType: "text/markdown" }));
       await s3.send(new PutObjectCommand({ Bucket: bucket, Key: markdownKey, Body: content, ContentType: "text/markdown" }));
       await prisma.knowledgeDocument.create({

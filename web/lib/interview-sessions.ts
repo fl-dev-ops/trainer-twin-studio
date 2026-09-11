@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { initRuntimeState } from "@/lib/runtime/runtime";
@@ -7,6 +7,12 @@ import { getAgentConfigForAgent } from "@/lib/specs";
 const shareCode = () => randomBytes(9).toString("base64url");
 const runtimeToken = () => randomBytes(24).toString("base64url");
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
+
+export type SessionEndStatus = "completed" | "abandoned";
+
+export function resolveSessionEndStatus(current: string, requested: SessionEndStatus): SessionEndStatus {
+  return current === "completed" ? "completed" : requested;
+}
 
 async function sessionSnapshot(orgId: string, agentId: string, contextId?: string | null) {
   const [agent, context] = await Promise.all([
@@ -115,10 +121,10 @@ export async function activateSession(input: {
       select: { id: true },
     });
     if (!agent) throw new Error("Agent not found");
-    if (await db.interviewSession.findFirst({
+    await db.interviewSession.updateMany({
       where: { orgId: input.orgId, userId: input.userId, agentId: agent.id, status: "active" },
-      select: { id: true },
-    })) throw new Error("This session is already active");
+      data: { status: "abandoned", endedAt: new Date(), runtimeTokenHash: null },
+    });
     const created = await createAssignedSession({
       orgId: input.orgId,
       userId: input.userId,
@@ -140,6 +146,8 @@ export async function activateSession(input: {
   const session = await db.interviewSession.update({
     where: { id: sessionId },
     data: {
+      status: "active",
+      startedAt: new Date(),
       runtimeTokenHash: tokenHash(token),
       personaSlug: snapshot.agent.persona.slug,
       personaVersion: snapshot.agent.persona.version,

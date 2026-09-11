@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ChromaTenantService, parseChromaUrl } from "./chroma-tenant";
+import { orgDatabaseName, parseChromaUrl } from "./chroma-tenant";
 import { MainCollectionService } from "./main-collection";
 import { LearnerMemoryService } from "./learner-memory";
+
+test("organization databases use immutable IDs", () => {
+  assert.equal(orgDatabaseName("8f5c-id"), "org_8f5c-id");
+  assert.equal(orgDatabaseName("unsafe/id"), "org_unsafe_id");
+});
 
 test("ChromaTenantService parses and resolves tenant metadata", async () => {
   const orgNameA = "test-org-123";

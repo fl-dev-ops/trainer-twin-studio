@@ -54,6 +54,7 @@
     "@glideapps/glide-data-grid": "6.0.4-alpha24",
     "@hugeicons/core-free-icons": "^4.2.0",
     "@hugeicons/react": "^1.1.6",
+    "@livekit/components-react": "^2.9.24",
     "@platejs/basic-nodes": "^53.0.0",
     "@platejs/footnote": "^53.0.0",
     "@platejs/markdown": "^53.3.12",

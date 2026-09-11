@@ -36,6 +36,7 @@ let backupPath: string | undefined;
 
 type StoredDocument = {
   id: string;
+  kbId: string;
   s3QuestionsKey: string;
   kbSlug: string;
   orgId: string;
@@ -57,7 +58,7 @@ console.info(`[JOB:youtube-topic-reconcile] start kb=${targetKb ?? "all"} mode=$
 try {
   const approved = await pool.query<{ slug: string }>('SELECT slug FROM "Topic" WHERE status = $1', ["approved"]);
   const approvedTopics = new Set(approved.rows.map((topic) => topic.slug));
-  const documents = (await pool.query<StoredDocument>(`SELECT d.id, d."s3QuestionsKey", k.slug AS "kbSlug", k."orgId"
+  const documents = (await pool.query<StoredDocument>(`SELECT d.id, d."kbId", d."s3QuestionsKey", k.slug AS "kbSlug", k."orgId"
     FROM "KnowledgeDocument" d
     JOIN "KnowledgeBase" k ON k.id = d."kbId"
     JOIN "KnowledgeSource" s ON s.id = d."sourceId" AND s."orgId" = k."orgId" AND s."kbId" = k.id
@@ -80,7 +81,7 @@ try {
   const collections = new Map<string, Collection>();
   const plans: Plan[] = [];
   for (const document of documents) {
-    const expectedPrefix = `${config.s3BasePrefix}/${document.orgId}/${document.kbSlug}/${document.id}/`;
+    const expectedPrefix = `${config.s3BasePrefix}/${document.orgId}/knowledge/${document.kbId}/${document.id}/`;
     if (!document.s3QuestionsKey.startsWith(expectedPrefix)) throw new Error(`S3 storage scope mismatch for docId=${document.id}`);
     const object = await s3.send(new GetObjectCommand({ Bucket: config.s3Bucket, Key: document.s3QuestionsKey }));
     const body = await object.Body?.transformToString("utf-8");

@@ -310,8 +310,8 @@ export class OrganizationKnowledgeService {
       },
     });
 
-    const sourceKey = `${kbPrefix(kb.id, doc.id)}/source-${slug}`;
-    const markdownKey = `${kbPrefix(kb.id, doc.id)}/content.md`;
+    const sourceKey = `${kbPrefix(orgId, kb.id, doc.id)}/source-${slug}`;
+    const markdownKey = `${kbPrefix(orgId, kb.id, doc.id)}/content.md`;
 
     await Promise.all([
       putObject(sourceKey, bytes, file.type || "application/octet-stream"),
@@ -324,7 +324,7 @@ export class OrganizationKnowledgeService {
     });
 
     // Ensure org tenant exists before enqueuing work
-    await ChromaTenantService.createTenant(orgId);
+    await ChromaTenantService.createOrgDatabase(orgId);
 
     // Enqueue background ingestion through SQS
     const queueResult = await enqueueIngestionWork({
@@ -396,7 +396,7 @@ export class OrganizationKnowledgeService {
 
     await Promise.all([
       MainCollectionService.removeKnowledgeDoc(orgId, doc.id),
-      deletePrefix(kbPrefix(doc.kbId, doc.id)),
+      deletePrefix(kbPrefix(orgId, doc.kbId, doc.id)),
     ]);
 
     await db.knowledgeDocument.delete({ where: { id: doc.id } });
@@ -421,7 +421,7 @@ export class OrganizationKnowledgeService {
       throw new Error("Document has no markdown stored in S3");
     }
 
-    await ChromaTenantService.createTenant(orgId);
+    await ChromaTenantService.createOrgDatabase(orgId);
 
     const queueResult = await enqueueIngestionWork({
       orgId,

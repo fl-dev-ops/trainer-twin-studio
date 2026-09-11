@@ -1,46 +1,54 @@
 "use client";
 
-import { MessageSquareText, Mic, MicOff, PhoneOff } from "lucide-react";
+import { useStartAudio, useTrackToggle } from "@livekit/components-react";
+import { LoaderCircle, MessageSquareText, Mic, MicOff, PhoneOff } from "lucide-react";
+import { Room, Track } from "livekit-client";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 import { cn } from "@/lib/utils";
 
 export function SessionControlBar({
-  audioBlocked,
+  room,
   isConnected,
-  micOn,
   transcriptOpen,
-  onEnableAudio,
-  onMicToggle,
   onTranscriptToggle,
   onEnd,
 }: {
-  audioBlocked: boolean;
+  room: Room;
   isConnected: boolean;
-  micOn: boolean;
   transcriptOpen: boolean;
-  onEnableAudio: () => void;
-  onMicToggle: () => void;
   onTranscriptToggle: (open: boolean) => void;
   onEnd: () => void;
 }) {
+  // UNVERIFIED (no LiveKit Docs MCP): checked against current docs and installed v2.9.24 types.
+  const { buttonProps: micProps, enabled: micOn, pending: micPending } = useTrackToggle({
+    room,
+    source: Track.Source.Microphone,
+  });
+  const { mergedProps: audioProps } = useStartAudio({
+    room,
+    props: { className: "rounded-full" },
+  });
+
   if (!isConnected) return null;
   return (
     <div className="session-controls flex items-center gap-1 p-1.5" aria-label="Session controls">
-      {audioBlocked && (
-        <Button variant="outline" size="sm" className="rounded-full" onClick={onEnableAudio}>
-          Enable audio
-        </Button>
-      )}
+      <Button {...audioProps} variant="outline" size="sm">
+        Enable audio
+      </Button>
       <div className="flex grow items-center gap-1">
         <Button
+          {...micProps}
           variant="ghost"
           size="icon"
           aria-label={micOn ? "Mute microphone" : "Unmute microphone"}
-          onClick={onMicToggle}
-          className={cn("rounded-full", !micOn && "bg-destructive/10 text-destructive hover:bg-destructive/20")}
+          className={cn(
+            "rounded-full",
+            micProps.className,
+            !micOn && "bg-destructive/10 text-destructive hover:bg-destructive/20",
+          )}
         >
-          {micOn ? <Mic /> : <MicOff />}
+          {micPending ? <LoaderCircle className="animate-spin" /> : micOn ? <Mic /> : <MicOff />}
         </Button>
         <Toggle
           variant="outline"

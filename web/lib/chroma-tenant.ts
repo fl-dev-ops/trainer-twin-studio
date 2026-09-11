@@ -45,104 +45,57 @@ export function getAdminClient(): AdminClient {
   return new AdminClient(parseChromaUrl("http://localhost:8000"));
 }
 
+export function orgDatabaseName(orgId: string): string {
+  return `org_${orgId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+}
+
 export class ChromaTenantService {
-  /**
-   * Automatically creates or provisions a Chroma tenant/database for an organization
-   * and records it in PostgreSQL.
-   */
-  static async createTenant(orgId: string): Promise<{ tenantId: string; database: string }> {
+  /** Provisions one database per immutable organization ID in the configured account/tenant. */
+  static async createOrgDatabase(orgId: string): Promise<{ tenantId: string; database: string }> {
     const org = await db.organization.findUnique({ where: { id: orgId } });
     if (!org) throw new Error(`Organization ${orgId} not found`);
 
-    if (org.chromaTenantId && org.chromaDatabase) {
-      return { tenantId: org.chromaTenantId, database: org.chromaDatabase };
+    const database = orgDatabaseName(orgId);
+    if (org.chromaTenantId === CHROMA_TENANT && org.chromaDatabase === database) {
+      return { tenantId: CHROMA_TENANT, database };
     }
 
     const admin = getAdminClient();
-    const candidateTenant = `org_${orgId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
-    const candidateDatabase = "default";
-    const orgDbName = `org_${orgId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
-
-    let assignedTenant = candidateTenant;
-    let assignedDatabase = candidateDatabase;
-
     try {
-      // 1. Try creating a dedicated Chroma tenant
-      await admin.createTenant({ name: candidateTenant });
+      await admin.getDatabase({ name: database, tenant: CHROMA_TENANT });
+    } catch {
       try {
-        await admin.createDatabase({ name: candidateDatabase, tenant: candidateTenant });
-      } catch (dbError) {
-        // Database may already exist or default database might be auto-created
-        const msg = String(dbError).toLowerCase();
-        if (!msg.includes("already exists") && !msg.includes("unique")) {
-          console.warn(`Database creation notice for ${candidateTenant}:`, dbError);
-        }
-      }
-    } catch (tenantError) {
-      // If tenant creation is restricted (e.g. Chroma Cloud fixed tenant),
-      // try creating a database inside the authorized cloud tenant.
-      const errorMsg = String(tenantError);
-      console.warn(`Dedicated tenant creation unavailable (${candidateTenant}): ${errorMsg}`);
-
-      const cloudTenant = CHROMA_TENANT;
-      try {
-        await admin.createDatabase({ name: orgDbName, tenant: cloudTenant });
-        assignedTenant = cloudTenant;
-        assignedDatabase = orgDbName;
-      } catch (dbError) {
-        // If creating arbitrary databases is also restricted by Cloud plan,
-        // use the configured tenant and database as the parent scope.
-        console.warn(`Dedicated database creation unavailable (${orgDbName}): ${dbError}`);
-        assignedTenant = cloudTenant;
-        assignedDatabase = CHROMA_DATABASE;
+        await admin.createDatabase({ name: database, tenant: CHROMA_TENANT });
+      } catch {
+        // A concurrent request may have created it after the lookup.
+        await admin.getDatabase({ name: database, tenant: CHROMA_TENANT });
       }
     }
 
     await db.organization.update({
       where: { id: orgId },
-      data: {
-        chromaTenantId: assignedTenant,
-        chromaDatabase: assignedDatabase,
-      },
+      data: { chromaTenantId: CHROMA_TENANT, chromaDatabase: database },
     });
 
-    const isolationMode = assignedTenant === candidateTenant
-      ? "dedicated-tenant"
-      : assignedDatabase === orgDbName
-        ? "dedicated-database"
-        : "shared-fallback";
-
-    console.info(`[ChromaTenantService] Finalized org ${orgId} ("${org.name}"): isolation=${isolationMode}, tenant=${assignedTenant}, database=${assignedDatabase}`);
-
-    return { tenantId: assignedTenant, database: assignedDatabase };
+    console.info(`[ChromaTenantService] Provisioned org ${orgId}: tenant=${CHROMA_TENANT}, database=${database}`);
+    return { tenantId: CHROMA_TENANT, database };
   }
 
-  /**
-   * Deletes an organization's Chroma tenant / database when the org is removed.
-   */
-  static async deleteTenant(orgId: string): Promise<void> {
+  /** Deletes only the database deterministically owned by this organization. */
+  static async deleteOrgDatabase(orgId: string): Promise<void> {
     const org = await db.organization.findUnique({ where: { id: orgId } });
-    if (!org || !org.chromaTenantId) return;
+    if (!org) return;
 
-    const admin = getAdminClient();
+    const database = orgDatabaseName(orgId);
     try {
-      if (org.chromaTenantId !== CHROMA_TENANT) {
-        // In self-hosted or full-admin mode, delete the database if applicable
-        if (org.chromaDatabase && org.chromaDatabase !== CHROMA_DATABASE) {
-          try {
-            await admin.deleteDatabase({ name: org.chromaDatabase, tenant: org.chromaTenantId });
-          } catch {
-            // best-effort cleanup
-          }
-        }
-      }
+      await getAdminClient().deleteDatabase({ name: database, tenant: CHROMA_TENANT });
     } catch (error) {
       console.warn(`Chroma cleanup error for org ${orgId}:`, error);
     }
 
     await db.organization.update({
       where: { id: orgId },
-      data: { chromaTenantId: null, chromaDatabase: "default" },
+      data: { chromaTenantId: null, chromaDatabase: CHROMA_DATABASE },
     });
   }
 
@@ -153,8 +106,9 @@ export class ChromaTenantService {
     let org = await db.organization.findUnique({ where: { id: orgId } });
     if (!org) throw new Error(`Organization ${orgId} not found`);
 
-    if (!org.chromaTenantId) {
-      const provisioned = await this.createTenant(orgId);
+    const expectedDatabase = orgDatabaseName(orgId);
+    if (org.chromaTenantId !== CHROMA_TENANT || org.chromaDatabase !== expectedDatabase) {
+      const provisioned = await this.createOrgDatabase(orgId);
       org = { ...org, chromaTenantId: provisioned.tenantId, chromaDatabase: provisioned.database };
     }
 

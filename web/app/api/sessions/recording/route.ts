@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   const wav = new Uint8Array(await request.arrayBuffer());
   if (wav.length === 0) return NextResponse.json({ error: "Empty recording" }, { status: 400 });
 
-  const key = recordingKey(sessionId);
+  const key = recordingKey(session.orgId, sessionId);
   await putObject(key, wav, "audio/wav");
   await db.interviewSession.update({
     where: { id: sessionId },

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { resolveSessionEndStatus, type SessionEndStatus } from "@/lib/interview-sessions";
 import { resolveSessionUser } from "@/lib/session-user";
 import { LearnerMemoryService } from "@/lib/learner-memory";
 
@@ -13,6 +14,10 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => null);
   if (!body?.sessionId) return NextResponse.json({ error: "Missing sessionId" }, { status: 400 });
+  if (!["completed", "abandoned"].includes(body.status)) {
+    return NextResponse.json({ error: "Invalid session status" }, { status: 400 });
+  }
+  const requestedStatus = body.status as SessionEndStatus;
 
   const transcript =
     Array.isArray(body.transcript) && body.transcript.length > 0
@@ -28,7 +33,7 @@ export async function POST(request: Request) {
 
   const existing = await db.interviewSession.findFirst({
     where: { id: String(body.sessionId), orgId: org.id, userId: user.id },
-    select: { transcript: true, evidence: true },
+    select: { status: true, transcript: true, evidence: true },
   });
   if (!existing) return NextResponse.json({ error: "Session not found" }, { status: 404 });
 
@@ -36,13 +41,19 @@ export async function POST(request: Request) {
   const hasCanonicalEvidence =
     existing.evidence && typeof existing.evidence === "object" && Object.keys(existing.evidence).length > 0;
 
-  await db.interviewSession.update({
-    where: { id: String(body.sessionId) },
-    data: {
-      ...(!hasCanonicalTranscript && transcript ? { transcript } : {}),
-      ...(!hasCanonicalEvidence && evidence ? { evidence } : {}),
-    },
-  });
+  await db.$transaction([
+    db.interviewSession.update({
+      where: { id: String(body.sessionId) },
+      data: {
+        status: resolveSessionEndStatus(existing.status, requestedStatus),
+        endedAt: new Date(),
+        runtimeTokenHash: null,
+        ...(!hasCanonicalTranscript && transcript ? { transcript } : {}),
+        ...(!hasCanonicalEvidence && evidence ? { evidence } : {}),
+      },
+    }),
+    db.rolePlayAssignment.deleteMany({ where: { sessionId: String(body.sessionId) } }),
+  ]);
 
   const effectiveTranscript = (hasCanonicalTranscript ? existing.transcript : transcript) as
     | Array<{ speaker?: string; role?: string; text?: string }>

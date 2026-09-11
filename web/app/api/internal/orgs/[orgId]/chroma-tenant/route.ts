@@ -13,7 +13,7 @@ export async function POST(
   }
 
   try {
-    const result = await ChromaTenantService.createTenant(orgId);
+    const result = await ChromaTenantService.createOrgDatabase(orgId);
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     return NextResponse.json(
@@ -34,7 +34,7 @@ export async function DELETE(
   }
 
   try {
-    await ChromaTenantService.deleteTenant(orgId);
+    await ChromaTenantService.deleteOrgDatabase(orgId);
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json(

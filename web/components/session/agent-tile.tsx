@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { UserRound } from "lucide-react";
+import { useTrackVolume, useVoiceAssistant } from "@livekit/components-react";
 import { motion } from "motion/react";
 import { VisualizerBar, type VisualizerState } from "./visualizer-bar";
 import { cn } from "@/lib/utils";
@@ -14,17 +15,13 @@ const STATE_LABELS: Record<VisualizerState, string> = {
   muted: "Ready",
 };
 
-export function AgentTile({
-  persona,
-  state,
-  level,
-  compact = false,
-}: {
-  persona: string;
-  state: VisualizerState;
-  level?: number;
-  compact?: boolean;
-}) {
+export function AgentTile({ persona, compact = false }: { persona: string; compact?: boolean }) {
+  // UNVERIFIED (no LiveKit Docs MCP): checked against current docs and installed v2.9.24 types.
+  const voiceAssistant = useVoiceAssistant();
+  const level = useTrackVolume(voiceAssistant.audioTrack);
+  const state: VisualizerState = ["listening", "thinking", "speaking"].includes(voiceAssistant.state)
+    ? voiceAssistant.state as VisualizerState
+    : "connecting";
   const name = persona.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
   return (
     <div className="session-tile relative flex h-full flex-col items-center justify-center overflow-hidden">

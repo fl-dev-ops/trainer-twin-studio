@@ -1,0 +1,44 @@
+version: "3.8"
+
+services:
+  agent:
+    image: trainertwin-agent:local
+    environment:
+      LIVEKIT_URL: ${LIVEKIT_URL}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
+      AGENT_NAME: ${AGENT_NAME:-intervoo-agent}
+      DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY}
+      WEB_URL: ${WEB_URL:-https://trainer-twin-studio.vercel.app}
+      WEBHOOK_URL: ${WEBHOOK_URL:-https://trainer-twin-studio.vercel.app/api/sessions/webhook}
+      TTS_PROVIDER: ${TTS_PROVIDER:-sarvam}
+      SARVAM_API_KEY: ${SARVAM_API_KEY:-}
+      SARVAM_SPEAKER: ${SARVAM_SPEAKER:-rohan}
+      AGENT_VOICE_ID_OVERRIDE: ${AGENT_VOICE_ID_OVERRIDE:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://openrouter.ai/api/v1}
+      LLM_MODEL: ${LLM_MODEL:-google/gemini-2.5-flash:nitro}
+      ENABLE_RECORDING: ${ENABLE_RECORDING:-false}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      S3_BASE_PREFIX: ${S3_BASE_PREFIX:-trainertwin-dev}
+    networks:
+      - hostnet
+    stop_grace_period: 30s
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 10
+        window: 120s
+
+networks:
+  hostnet:
+    external: true
+    name: host

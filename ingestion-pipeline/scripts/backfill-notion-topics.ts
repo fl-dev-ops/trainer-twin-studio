@@ -24,7 +24,7 @@ const s3 = new S3Client({ region: config.awsRegion });
 const startedAt = Date.now();
 let backupPath: string | undefined;
 
-type StoredDocument = { id: string; title: string; externalId: string; s3MarkdownKey: string; orgId: string };
+type StoredDocument = { id: string; kbId: string; title: string; externalId: string; s3MarkdownKey: string; orgId: string };
 type RecordSnapshot = { id: string; text: string; embedding: number[]; metadata: Metadata };
 
 /** Ignore metadata key order while checking every value, including vector coordinates. */
@@ -42,7 +42,7 @@ try {
     JOIN "KnowledgeSource" s ON s.id = j."sourceId" JOIN "KnowledgeBase" k ON k.id = s."kbId"
     WHERE k.slug = $1 AND j.status IN ('queued', 'running') LIMIT 1`, [kb]);
   if (active.rowCount) throw new Error("Wait for active ingestion jobs before backfilling");
-  const documents = await pool.query<StoredDocument>(`SELECT d.id, d.title, d."externalId", d."s3MarkdownKey", k."orgId"
+  const documents = await pool.query<StoredDocument>(`SELECT d.id, d."kbId", d.title, d."externalId", d."s3MarkdownKey", k."orgId"
     FROM "KnowledgeDocument" d JOIN "KnowledgeBase" k ON k.id = d."kbId"
     JOIN "KnowledgeSource" s ON s.id = d."sourceId" AND s."orgId" = k."orgId" AND s."kbId" = k.id
     WHERE k.slug = $1 AND s.type IN ('notion', 'notion_public') AND d.status = 'indexed' ORDER BY d.id`, [kb]);
@@ -75,7 +75,7 @@ try {
     const records = before.filter((record) => record.metadata.docId === document.id)
       .sort((a, b) => Number(a.metadata.chunkIndex) - Number(b.metadata.chunkIndex));
     if (!records.length || records.every((record) => Array.isArray(record.metadata.topics) && record.metadata.topics.length)) continue;
-    if (!document.s3MarkdownKey.startsWith(`${config.s3BasePrefix}/${document.orgId}/${kb}/${document.id}/`)) {
+    if (!document.s3MarkdownKey.startsWith(`${config.s3BasePrefix}/${document.orgId}/knowledge/${document.kbId}/${document.id}/`)) {
       throw new Error(`S3 storage scope mismatch for docId=${document.id}`);
     }
     const fetchStartedAt = Date.now();
