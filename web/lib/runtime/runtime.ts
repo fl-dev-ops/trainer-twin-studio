@@ -667,96 +667,64 @@ export function foldInterviewText(text: string): string {
   return text.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"');
 }
 
-const BACKCHANNEL_ASK = /\b(?:correct|right|okay|ok|got it|no(?:\s+problem)?|shall we)\s*\?/gi;
-
-export function focalAskCount(text: string): number {
-  return (foldInterviewText(text).replace(BACKCHANNEL_ASK, " ").match(/\?/g) || []).length;
-}
-
 export function spokenWordLimit(agent: AgentSpec, state: RuntimeState): number {
   return Math.max(renderRules(agent, state).maximum_words, 90);
 }
 
-export function hasStackedAsks(text: string, spoken = false): boolean {
-  const normalized = foldInterviewText(text);
-  if (spoken) return focalAskCount(normalized) > 1;
-  const questions = (normalized.match(/\?/g) || []).length;
-  if (questions > 1) return true;
-  if (questions !== 1) return false;
-  return (
-    /\b(?:and|including)\b[^?]{0,80}\b(?:how|what|why|which|when|where)\b/i.test(normalized) ||
-    (/;/.test(normalized) && /\b(?:how|what|why|which)\b/i.test(normalized))
-  );
+// Speech quality rules are now reasoned by the LLM inside the speech call
+// (see plans/issues_persona-validation-loop.md). Code below is mechanical only:
+// schema-level extraction of the model's own verdicts, no regex judges English.
+export const SPEECH_RULES = [
+  "one_real_question",
+  "no_copied_facts",
+  "no_invented_mention",
+  "word_budget",
+  "in_persona_voice",
+] as const;
+
+export function flagsFromCompliance(reasoning: unknown): string[] {
+  if (!reasoning || typeof reasoning !== "object") return ["missing_reasoning"];
+  const entries = Object.entries(reasoning as Record<string, { ok?: unknown }>);
+  if (!entries.length) return ["missing_reasoning"];
+  const flags = entries
+    .filter(([, verdict]) => verdict && verdict.ok === false)
+    .map(([rule]) => rule);
+  for (const rule of SPEECH_RULES) {
+    if (!entries.some(([name]) => name === rule)) flags.push(`${rule}:missing`);
+  }
+  return flags;
 }
 
-export function validateRendered(
+/**
+ * Zero-judgment checks: physical constraints and substring facts only.
+ * ponytail: word ceiling is a TTS/dead-air physical limit, not a quality call.
+ */
+export function mechanicalSpeechFlags(
   text: string,
-  action: InterviewAction,
-  agent: AgentSpec,
-  state: RuntimeState,
-  options: { spoken?: boolean } = {}
+  learnerText: string,
+  wordLimit: number
 ): string[] {
-  const errors: string[] = [];
-  const rules = renderRules(agent, state);
-  const normalized = foldInterviewText(text);
-  const spoken = options.spoken === true;
-
+  const flags: string[] = [];
   if (!text.trim()) {
-    errors.push("empty response");
+    flags.push("empty_response");
+    return flags;
   }
-  const questions = spoken ? focalAskCount(normalized) : (normalized.match(/\?/g) || []).length;
-  if (action.close && questions > 0) {
-    errors.push("closing contains a question");
-  } else if (questions > rules.maximum_question_marks) {
-    errors.push("too many questions");
-  } else if (
-    !action.close &&
-    action.expects_answer &&
-    rules.maximum_question_marks > 0 &&
-    questions !== 1
-  ) {
-    errors.push("response must invite one learner answer");
-  }
-
   const words = text.trim().split(/\s+/).length;
-  const wordLimit = spoken ? spokenWordLimit(agent, state) : rules.maximum_words;
-  if (words > wordLimit) {
-    errors.push(`response exceeds ${wordLimit} words`);
-  }
-
-  if (action.expects_answer && hasStackedAsks(normalized, spoken)) {
-    errors.push("stacked questions");
-  }
-  if (/\bI (built|implemented|designed|architected|deployed|chose|fixed|led)\b/i.test(normalized)) {
-    errors.push("role reversal");
-  }
-  if (
-    /\b(that(?:'s| is)(?: a)? solid|you(?:'ve| have) clearly|well reasoned|that makes sense)\b/i.test(
-      normalized
-    )
-  ) {
-    errors.push("generic praise");
-  }
-  for (const key of Object.keys(agent.required_evidence)) {
-    if (key.includes("_") && text.includes(key)) {
-      errors.push("internal evidence key leaked");
+  if (words > wordLimit) flags.push("word_budget");
+  for (const match of foldInterviewText(text).matchAll(/you mentioned ([^?.!]{3,80})/gi)) {
+    const claimed = match[1].trim().toLowerCase();
+    if (claimed && !foldInterviewText(learnerText).toLowerCase().includes(claimed)) {
+      flags.push("no_invented_mention");
       break;
     }
   }
-  if (/ask exactly one|the learner already responded|establish [a-z0-9-]+\.[a-z0-9_]+/i.test(normalized)) {
-    errors.push("internal evidence key leaked");
-  }
+  return flags;
+}
 
-  const forbidden: string[] = rules.forbidden_terms ?? [];
-  for (const term of forbidden) {
-    const re = new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
-    if (re.test(text)) {
-      errors.push("response uses a term forbidden by the stage");
-      break;
-    }
-  }
-
-  return errors;
+export function pickBestDraft<T extends { text: string; flags: string[] }>(drafts: T[]): T | null {
+  const usable = drafts.filter((draft) => draft.text.trim());
+  if (!usable.length) return null;
+  return usable.reduce((best, draft) => (draft.flags.length < best.flags.length ? draft : best));
 }
 
 export function feedbackSummary(agent: AgentSpec, state: RuntimeState): string {
@@ -830,54 +798,6 @@ export function applyPersonaVote(
   }
   if (recentActions.slice(-2).includes(winner[0])) return action;
   return { ...action, name: winner[0] };
-}
-
-const PROPER_TOKEN_STOP = new Set([
-  "The", "This", "That", "What", "How", "When", "Could", "Can", "Would",
-  "Please", "Your", "You", "For", "Given", "After", "Before", "Which",
-  "Trainer", "Learner", "Node",
-  "Got", "Good", "Tell", "Now", "Okay", "Right", "See", "Sure", "Well",
-  "Let", "Why", "Are", "Did", "Does", "Do", "Have", "Has", "Had", "Is",
-  "Was", "Were", "So", "And", "But", "If", "Just", "Then", "There", "Here",
-  "We", "They", "He", "She", "It", "Not", "All", "Some", "One", "Two",
-  "Yes", "No", "Thanks", "Thank", "True", "False", "Correct", "First",
-  "Next", "Also", "Because", "Since", "While", "Though", "Although", "Still",
-]);
-
-function properTokens(text: string): Set<string> {
-  return new Set(
-    (foldInterviewText(text).match(/\b[A-Z][A-Za-z0-9+]{2,}\b/g) ?? []).filter(
-      (token) => !PROPER_TOKEN_STOP.has(token)
-    )
-  );
-}
-
-export function validatePersonaRewrite(
-  rewrite: string,
-  baseText: string,
-  action: InterviewAction,
-  agent: AgentSpec,
-  state: RuntimeState,
-  transcript: Array<{ role: string; text: string }>,
-  momentTexts: string[],
-  scenario: Record<string, unknown> = {}
-): string[] {
-  const errors = validateRendered(rewrite, action, agent, state, { spoken: true });
-  const learnerText = transcript.filter((turn) => turn.role === "user").map((turn) => turn.text).join("\n");
-  const allowedText = `${learnerText}\n${transcript.map((turn) => turn.text).join("\n")}\n${baseText}\n${JSON.stringify(scenario)}`;
-  for (const match of foldInterviewText(rewrite).matchAll(/you mentioned ([^?.!]{3,80})/gi)) {
-    const claimed = match[1].trim().toLowerCase();
-    if (claimed && !foldInterviewText(learnerText).toLowerCase().includes(claimed)) {
-      errors.push("invented mention");
-    }
-  }
-  const rewriteTokens = properTokens(rewrite);
-  const momentTokens = new Set(momentTexts.flatMap((text) => [...properTokens(text)]));
-  const allowedTokens = properTokens(allowedText);
-  for (const token of rewriteTokens) {
-    if (momentTokens.has(token) && !allowedTokens.has(token)) errors.push("persona fact leak");
-  }
-  return [...new Set(errors)];
 }
 
 export function deterministicFallback(

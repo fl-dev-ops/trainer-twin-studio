@@ -15,18 +15,18 @@ import {
   closingAction,
   deterministicFallback,
   expirePhase,
+  flagsFromCompliance,
+  foldInterviewText,
   initRuntimeState,
   markProbeExhaustion,
+  mechanicalSpeechFlags,
   nextEvidence,
   applyPersonaVote,
-  foldInterviewText,
-  hasStackedAsks,
+  pickBestDraft,
   recordAskedQuestion,
   selectAction,
   validateAction,
   validateAnalysis,
-  validatePersonaRewrite,
-  validateRendered,
 } from "./runtime";
 
 const DATA_DIR = path.resolve(import.meta.dir, "../../data");
@@ -224,44 +224,41 @@ describe("Interview Runtime Controller (selectAction parity)", () => {
     expect(action.name).toBe("transition_phase");
   });
 
-  it("validates rendered output and catches role reversal or generic praise", () => {
-    const config = loadConfig();
-    const specs = buildSpecs(config);
-    const state: RuntimeState = initRuntimeState();
-    const action = {
-      name: "probe_required_evidence",
-      evidence_key: specs.agent.phases[0].evidence_keys[0],
-      reason: "test",
-      intent: "ask question",
-      close: false,
-      expects_answer: true,
+  it("speech flags come from the model's reasoning plus mechanical checks only", () => {
+    // All rules pass → no flags
+    const reasoning = {
+      one_real_question: { ok: true, why: "one ask" },
+      no_copied_facts: { ok: true, why: "clean" },
+      no_invented_mention: { ok: true, why: "clean" },
+      word_budget: { ok: true, why: "22 words" },
+      in_persona_voice: { ok: true, why: "matches" },
     };
+    expect(flagsFromCompliance(reasoning)).toEqual([]);
 
-    // Role reversal
-    const err1 = validateRendered("When I built the system, what happened?", action, specs.agent, state);
-    expect(err1).toContain("role reversal");
+    // Model flags a rule itself
+    const flagged = { ...reasoning, no_copied_facts: { ok: false, why: "said Rocket" } };
+    expect(flagsFromCompliance(flagged)).toEqual(["no_copied_facts"]);
 
-    // Generic praise
-    const err2 = validateRendered("That's solid! Can you explain more?", action, specs.agent, state);
-    expect(err2).toContain("generic praise");
-    expect(validateRendered("That’s a solid example. Can you explain more?", action, specs.agent, state)).toContain("generic praise");
+    // Missing rules are flagged mechanically (schema check)
+    expect(flagsFromCompliance({ one_real_question: { ok: true, why: "x" } })).toEqual(["no_copied_facts:missing", "no_invented_mention:missing", "word_budget:missing", "in_persona_voice:missing"]);
+    expect(flagsFromCompliance(null)).toEqual(["missing_reasoning"]);
 
-    // Clean question
-    const err3 = validateRendered("Can you explain how ownership was divided?", action, specs.agent, state);
-    expect(err3.length).toBe(0);
-    expect(hasStackedAsks("Can you walk me through X, including how Y works and what Z costs?")).toBe(true);
-    expect(foldInterviewText("That’s")).toBe("That's");
-    const spoken = "Got it, got it. Correct? So now tell me, how does the event loop schedule microtasks after the stack is empty?";
-    expect(validateRendered(spoken, action, specs.agent, state, { spoken: true })).toEqual([]);
-    expect(
-      validateRendered(
-        "Ask exactly one short question to establish project-deep-dive.specific_role.",
-        action,
-        specs.agent,
-        state,
-        { spoken: true },
-      ),
-    ).toContain("internal evidence key leaked");
+    // Mechanical: empty text, hard word ceiling, invented mention
+    expect(mechanicalSpeechFlags("", "", 90)).toEqual(["empty_response"]);
+    expect(mechanicalSpeechFlags("word ".repeat(91).trim(), "", 90)).toEqual(["word_budget"]);
+    expect(mechanicalSpeechFlags("You mentioned SQS queues. What happened?", "I used Redis.", 90)).toEqual(["no_invented_mention"]);
+    expect(mechanicalSpeechFlags("What happened there?", "I mentioned the event loop.", 90)).toEqual([]);
+  });
+
+  it("best-of-2 selection prefers fewer flags and never returns an empty draft", () => {
+    const a = { text: "draft one", flags: ["one_real_question", "no_copied_facts"] };
+    const b = { text: "draft two", flags: ["no_copied_facts"] };
+    expect(pickBestDraft([a, b])).toBe(b);
+    // tie → first draft wins
+    expect(pickBestDraft([b, { text: "draft three", flags: ["no_copied_facts"] }])).toBe(b);
+    // empty drafts are unusable
+    expect(pickBestDraft([a, { text: "   ", flags: [] }])).toBe(a);
+    expect(pickBestDraft([{ text: "  ", flags: [] }, { text: "", flags: [] }])).toBeNull();
   });
 
   it("quoted sufficient coverage survives probe exhaustion", () => {
@@ -367,25 +364,9 @@ describe("Interview Runtime Controller (selectAction parity)", () => {
       expects_answer: true,
     };
     const transcript = [{ role: "user", text: "The event loop drains microtasks before timers." }];
-    const leak = validatePersonaRewrite(
-      "You mentioned SQS at Acme. Can you explain the event loop?",
-      "Can you explain the event loop?",
-      action,
-      specs.agent,
-      state,
-      transcript,
-      ["Candidate: We used SQS FIFO at Acme\nInterviewer: How did you measure that?"],
-    );
-    expect(leak.some((error) => error === "invented mention" || error === "persona fact leak")).toBe(true);
-    const ok = validatePersonaRewrite(
-      "Can you walk through that microtask drain in your own words?",
-      "Can you explain the event loop?",
-      action,
-      specs.agent,
-      state,
-      transcript,
-      ["Candidate: We used SQS FIFO at Acme\nInterviewer: How did you measure that?"],
-    );
-    expect(ok.length).toBe(0);
+    // "invented mention" is now caught mechanically: claim not verbatim in learner text
+    expect(mechanicalSpeechFlags("You mentioned SQS at Acme. Can you explain the event loop?", "The event loop drains microtasks before timers.", 90)).toContain("no_invented_mention");
+    // clean line passes with no flags
+    expect(mechanicalSpeechFlags("Can you walk through that microtask drain?", "The event loop drains microtasks before timers.", 90)).toEqual([]);
   });
 });

@@ -20,15 +20,16 @@ import {
   closingAction,
   deterministicFallback,
   evidenceLabel,
+  flagsFromCompliance,
   initRuntimeState,
+  mechanicalSpeechFlags,
+  pickBestDraft,
   recordAskedQuestion,
   refreshCurrentTopic,
-  renderRules,
   selectAction,
+  spokenWordLimit,
   surfaceForPhase,
   validateAnalysis,
-  validatePersonaRewrite,
-  validateRendered,
 } from "./runtime";
 
 const OPENROUTER_BASE_URL = env.OPENROUTER_BASE_URL.replace(/\/$/, "");
@@ -388,59 +389,6 @@ function learnerStateFrom(
   }
 }
 
-async function generateContentSpeech(
-  action: InterviewAction,
-  specs: CompiledSpecs,
-  state: RuntimeState,
-  transcript: TranscriptTurn[],
-  direction: DirectionCheck,
-  knowledgeHits: KnowledgeHit[],
-  priorErrors: string[] = [],
-  usage?: UsageSink
-): Promise<string> {
-  const phase = specs.agent.phases[state.phase_index] ?? null;
-  const rules = renderRules(specs.agent, state);
-  const prompt = `Generate the next interviewer utterance for the selected action.
-Preserve the current conversation thread and do not apply any named persona style yet.
-Agent objective: ${specs.agent.objective}
-Active phase: ${JSON.stringify(phase)}
-Domain principles: ${JSON.stringify(specs.domain.principles ?? [])}
-Direction check: ${JSON.stringify(direction)}
-Action: ${JSON.stringify(action)}
-Current topic: ${state.current_topic ?? "not established"}
-Pending trainer question: ${state.pending_question ?? "none"}
-Relevant knowledge: ${JSON.stringify(knowledgeHits)}
-Complete transcript:
-${transcriptText(transcript)}
-${priorErrors.length ? `The prior draft failed validation: ${JSON.stringify(priorErrors)}. Fix only those issues.` : ""}
-
-Rules:
-- Use only claims and topics present in the transcript, specs, or retrieved knowledge.
-- Never say "you mentioned" unless the learner actually mentioned that point.
-- Stay on the pending topic unless the direction check explicitly requires a transition.
-- If asked to repeat or slow down, restate the pending question more clearly without changing its meaning.
-- Ask at most ${rules.maximum_question_marks} question and use at most ${rules.maximum_words} words.
-- Never expose internal evidence keys.
-- Do not stack multiple asks in one utterance.`;
-
-  try {
-    const text = await callOpenRouter("response", [
-      { role: "system", content: "You generate precise, context-grounded interview responses." },
-      { role: "user", content: prompt },
-    ], false, usage);
-    const cleaned = text.trim().replace(/^["']|["']$/g, "");
-    const errors = validateRendered(cleaned, action, specs.agent, state);
-    if (!errors.length) return cleaned;
-    console.warn("[interview-runtime] response validation failed", { errors });
-    if (!priorErrors.length) {
-      return generateContentSpeech(action, specs, state, transcript, direction, knowledgeHits, errors, usage);
-    }
-  } catch (error) {
-    console.warn("[interview-runtime] response generation failed", error);
-  }
-  return deterministicFallback(action, specs.agent, state);
-}
-
 async function retrievePersonaMoments(
   orgId: string,
   personaId: string,
@@ -482,21 +430,35 @@ function interviewerLine(text: string): string {
   return (match?.[1] ?? text).trim();
 }
 
-async function renderPersonaSpeech(
+export interface SpeechMeta {
+  attempts: number;
+  flags: string[];
+  fallback: boolean;
+}
+
+type SpeechDraft = { text: string; flags: string[] };
+
+/**
+ * One speech call that composes in persona voice AND reasons against the spec
+ * rules (see plans/issues_persona-validation-loop.md). Quality judgment lives
+ * in the model's per-rule reasoning; code only counts flags and bounds the loop.
+ */
+async function speechDraft(
   contentContract: string,
   action: InterviewAction,
   specs: CompiledSpecs,
   state: RuntimeState,
   transcript: TranscriptTurn[],
   personaMoments: PersonaMoment[],
-  priorErrors: string[] = [],
+  direction: DirectionCheck | null,
+  knowledgeHits: KnowledgeHit[],
+  priorFlags: string[],
   usage?: UsageSink
-): Promise<string> {
+): Promise<SpeechDraft | null> {
   const persona = specs.persona;
-  const examples = persona.examples?.[action.name] ?? persona.examples?.general ?? [];
   const shots = personaMoments.map((moment) => interviewerLine(moment.text)).filter(Boolean).slice(0, 6);
-  const exampleShots = examples.slice(0, 3);
-  const wordLimit = Math.max(renderRules(specs.agent, state).maximum_words, 90);
+  const exampleShots = (persona.examples?.[action.name] ?? persona.examples?.general ?? []).slice(0, 3);
+  const wordLimit = spokenWordLimit(specs.agent, state);
   const system = `You are ${persona.name} running this interview out loud. Speak like the interviewer lines below, not like ChatGPT or a corporate coach.
 
 HOW ${persona.name.toUpperCase()} TALKS (copy rhythm, fillers, length; do not copy names, companies, or facts):
@@ -507,47 +469,71 @@ GOOD: match the interviewer lines — short acknowledgements like "got it, got i
 
 Content contract — keep this topic and the one real ask, change the wording freely:
 ${contentContract}
+${direction ? `Direction check: ${JSON.stringify({ learner_intent: direction.learner_intent, response_instruction: direction.response_instruction })}` : ""}
+${knowledgeHits.length ? `Relevant knowledge: ${JSON.stringify(knowledgeHits.slice(0, 5))}` : ""}
 
-Rules:
-- One real question. Extra "correct?" / "okay?" backchannels are fine.
-- About 30-80 words, never more than ${wordLimit}.
-- Do not copy people, projects, or metrics from the interviewer lines.
-- Do not say "you mentioned" unless those words are in the learner transcript.
-- Never expose internal evidence keys or phrases like "in your own words" for snake_case labels.
-${priorErrors.length ? `Fix these issues only: ${JSON.stringify(priorErrors)}` : ""}`;
+Rules — reason against each one before speaking:
+- one_real_question: exactly one real ask. Backchannels ("correct?", "okay?", "yeah?", "alright?", "got it?") are not asks.
+- no_copied_facts: do not copy people, projects, metrics, or company names from the interviewer lines.
+- no_invented_mention: never say "you mentioned X" unless X appears verbatim in the learner transcript.
+- word_budget: about 30-80 words, never more than ${wordLimit}.
+- in_persona_voice: match the rhythm and fillers of the interviewer lines. No generic praise ("that's solid"), no role reversal ("I built..."), no internal snake_case labels.
+${priorFlags.length ? `The prior draft flagged these rules as failed: ${JSON.stringify(priorFlags)}. Fix only these.` : ""}
+
+Return JSON only:
+{"reasoning": {"one_real_question": {"ok": true, "why": "..."}, "no_copied_facts": {"ok": true, "why": "..."}, "no_invented_mention": {"ok": true, "why": "..."}, "word_budget": {"ok": true, "why": "..."}, "in_persona_voice": {"ok": true, "why": "..."}}, "spoken_text": "the next interviewer turn"}`;
   const prompt = `Action: ${action.name}
 Intent: ${action.intent}
 Latest learner turn: ${[...transcript].reverse().find((turn) => turn.role === "user")?.text ?? "(none)"}
 Transcript:
 ${transcriptText(transcript)}
 
-Speak the next interviewer turn now. Return only the spoken text.`;
+Speak the next interviewer turn now.`;
 
   try {
-    const text = await callOpenRouter("persona", [
+    const raw = await callOpenRouter("persona", [
       { role: "system", content: system },
       { role: "user", content: prompt },
-    ], false, usage);
-    const cleaned = text.trim().replace(/^["']|["']$/g, "");
-    const errors = validatePersonaRewrite(
-      cleaned,
-      contentContract,
-      action,
-      specs.agent,
-      state,
-      transcript,
-      personaMoments.map((moment) => moment.text),
-      specs.agent.scenario
-    );
-    if (!errors.length) return cleaned;
-    console.warn("[interview-runtime] persona validation failed", { errors });
-    if (!priorErrors.length) {
-      return renderPersonaSpeech(contentContract, action, specs, state, transcript, personaMoments, errors, usage);
-    }
+    ], true, usage);
+    const parsed = JSON.parse(raw) as { reasoning?: unknown; spoken_text?: string };
+    const text = String(parsed.spoken_text ?? "").trim().replace(/^["']|["']$/g, "");
+    const learnerText = transcript.filter((turn) => turn.role === "user").map((turn) => turn.text).join("\n");
+    const flags = [...flagsFromCompliance(parsed.reasoning), ...mechanicalSpeechFlags(text, learnerText, wordLimit)];
+    return { text, flags: [...new Set(flags)] };
   } catch (error) {
-    console.warn("[interview-runtime] persona rendering failed", error);
+    console.warn("[interview-runtime] speech generation failed", error);
+    return null;
   }
-  return deterministicFallback(action, specs.agent, state);
+}
+
+export async function generateSpeech(
+  contentContract: string,
+  action: InterviewAction,
+  specs: CompiledSpecs,
+  state: RuntimeState,
+  transcript: TranscriptTurn[],
+  personaMoments: PersonaMoment[],
+  direction: DirectionCheck | null,
+  knowledgeHits: KnowledgeHit[],
+  usage?: UsageSink
+): Promise<{ text: string; meta: SpeechMeta }> {
+  const attempt1 = await speechDraft(contentContract, action, specs, state, transcript, personaMoments, direction, knowledgeHits, [], usage);
+  if (attempt1 && !attempt1.flags.length) {
+    return { text: attempt1.text, meta: { attempts: 1, flags: [], fallback: false } };
+  }
+  const attempt2 = attempt1
+    ? await speechDraft(contentContract, action, specs, state, transcript, personaMoments, direction, knowledgeHits, attempt1.flags, usage)
+    : await speechDraft(contentContract, action, specs, state, transcript, personaMoments, direction, knowledgeHits, [], usage);
+  const drafts = [attempt1, attempt2].filter((draft): draft is SpeechDraft => draft !== null);
+  const best = pickBestDraft(drafts);
+  if (!best) {
+    console.warn("[interview-runtime] speech fallback engaged (no usable draft)");
+    return { text: deterministicFallback(action, specs.agent, state), meta: { attempts: drafts.length, flags: ["fallback"], fallback: true } };
+  }
+  if (best.flags.length) {
+    console.warn("[interview-runtime] speech accepted with flags (best-of-2)", { flags: best.flags });
+  }
+  return { text: best.text, meta: { attempts: drafts.length, flags: best.flags, fallback: false } };
 }
 
 function spokenContentContract(
@@ -572,12 +558,12 @@ async function generatePipelineSpeech(
   knowledgeHits: KnowledgeHit[],
   moments: PersonaMoment[],
   usage?: UsageSink
-): Promise<string> {
-  if (isRepeatRequest(direction) && action.fallback_text) return action.fallback_text;
-  const contentContract = moments.length
-    ? spokenContentContract(action, state, transcript)
-    : await generateContentSpeech(action, specs, state, transcript, direction, knowledgeHits);
-  return renderPersonaSpeech(contentContract, action, specs, state, transcript, moments);
+): Promise<{ text: string; meta: SpeechMeta }> {
+  if (isRepeatRequest(direction) && action.fallback_text) {
+    return { text: action.fallback_text, meta: { attempts: 0, flags: [], fallback: false } };
+  }
+  const contentContract = spokenContentContract(action, state, transcript);
+  return generateSpeech(contentContract, action, specs, state, transcript, moments, direction, knowledgeHits, usage);
 }
 
 export async function handleCompletions(request: Request): Promise<Response> {
@@ -699,6 +685,7 @@ async function runCompletionPipeline(
 
   let turnUserText: string | null = null;
   let turnSpokenText: string | null = null;
+  let turnSpeechMeta: SpeechMeta | null = null;
 
   if (isOpeningTurn) {
     // Check if phase 0 requires a surface and we haven't emitted it yet
@@ -789,16 +776,19 @@ async function runCompletionPipeline(
         "strong",
         personaVoiceAvailable
       );
-      const openingText = await renderPersonaSpeech(
+      const opening = await generateSpeech(
         baseOpening,
         openingAction,
         specs,
         state,
         currentTranscript,
         personaMoments,
+        null,
         [],
         usageSink
       );
+      const openingText = opening.text;
+      turnSpeechMeta = opening.meta;
       state.actions.push("opening");
       recordAskedQuestion(state, openingAction, openingText);
       turnSpokenText = openingText;
@@ -850,16 +840,19 @@ async function runCompletionPipeline(
         "strong",
         personaVoiceAvailable
       );
-      replyText = await renderPersonaSpeech(
+      const opening = await generateSpeech(
         baseOpening,
         openingAction,
         specs,
         state,
         currentTranscript,
         personaMoments,
+        null,
         [],
         usageSink
       );
+      replyText = opening.text;
+      turnSpeechMeta = opening.meta;
       state.actions.push("opening");
       recordAskedQuestion(state, openingAction, replyText);
     } else if (state.end_reason === "completed" || state.actions.includes("close_session")) {
@@ -1089,7 +1082,7 @@ async function runCompletionPipeline(
           ],
         };
       } else {
-        const spokenText = await generatePipelineSpeech(
+        const spoken = await generatePipelineSpeech(
           action,
           specs,
           state,
@@ -1099,6 +1092,8 @@ async function runCompletionPipeline(
           personaMoments,
           usageSink
         );
+        const spokenText = spoken.text;
+        turnSpeechMeta = spoken.meta;
         recordAskedQuestion(state, action, spokenText, direction.should_grade);
         if (direction.should_grade) refreshCurrentTopic(state, spokenText, latestUserText);
         turnSpokenText = spokenText;
@@ -1130,7 +1125,7 @@ async function runCompletionPipeline(
       }
     } else {
       // Render spoken trainer utterance
-      const spokenText = await generatePipelineSpeech(
+      const spoken = await generatePipelineSpeech(
         action,
         specs,
         state,
@@ -1140,6 +1135,8 @@ async function runCompletionPipeline(
         personaMoments,
         usageSink
       );
+      const spokenText = spoken.text;
+      turnSpeechMeta = spoken.meta;
       recordAskedQuestion(state, action, spokenText, direction.should_grade);
       if (direction.should_grade) refreshCurrentTopic(state, spokenText, latestUserText);
       turnSpokenText = spokenText;
@@ -1203,6 +1200,7 @@ async function runCompletionPipeline(
     completionTokens: usageTotals.completion_tokens,
     totalTokens: usageTotals.total_tokens,
     stages: usageSink.stages.map((s) => `${s.stage}:${s.ms}ms`),
+    speech: turnSpeechMeta ?? { attempts: 0, flags: [], fallback: false },
   });
 
   // Persist updated state, revision, evidence, transcript, and lastCompletion
