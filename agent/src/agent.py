@@ -141,6 +141,7 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         "video_url": egress_data.get("video_url"),
         "audio_s3_key": egress_data.get("audio_s3_key"),
         "video_s3_key": egress_data.get("video_s3_key"),
+        "session": session,  # kept in-memory so on_session_end can dump the transcript
     }
 
     tools = build_interview_tools(room=ctx.room, participant_identity=participant_identity)
@@ -175,6 +176,15 @@ async def on_session_end(ctx: agents.JobContext) -> None:
     if video_egress_id:
         await stop_and_poll_egress(ctx.api, video_egress_id)
 
+    transcript = []
+    session_obj = state.get("session")
+    if session_obj is not None:
+        for item in session_obj.history.items:
+            if item.type == "message" and item.role in ("user", "assistant"):
+                text = (item.text_content or "").strip()
+                if text:
+                    transcript.append({"role": "user" if item.role == "user" else "trainer", "text": text})
+
     webhook_url = state.get("webhook_url") or f"{WEB_URL}/api/sessions/webhook"
     payload = {
         "session_id": state.get("session_id") or ctx.room.name,
@@ -185,6 +195,7 @@ async def on_session_end(ctx: agents.JobContext) -> None:
         "video_s3_key": state.get("video_s3_key"),
         "status": "COMPLETED",
         "participant_identity": state.get("participant_identity"),
+        "transcript": transcript,
     }
 
     await post_completion_webhook(webhook_url, payload)
