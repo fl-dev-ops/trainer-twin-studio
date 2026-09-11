@@ -228,7 +228,7 @@ async function analyzeWithText(content: string, personaName: string, sourceKind:
       ],
       response_format: { type: "json_object" },
     }),
-    signal: AbortSignal.timeout(120_000),
+    signal: AbortSignal.timeout(180_000),
   });
   if (!res.ok) throw new Error(`Analysis API returned ${res.status}: ${await res.text()}`);
   const data = await res.json() as { choices: { message: { content: string } }[] };
@@ -472,7 +472,7 @@ persona:
         { role: "user", content: prompt },
       ],
     }),
-    signal: AbortSignal.timeout(120_000),
+    signal: AbortSignal.timeout(180_000),
   });
   if (!res.ok) throw new Error(`Synthesis API returned ${res.status}: ${await res.text()}`);
   const data = await res.json() as { choices: { message: { content: string } }[] };

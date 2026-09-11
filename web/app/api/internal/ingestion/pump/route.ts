@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { pumpIngestionOutbox } from "@/lib/ingestion-queue";
+import { processNextQueuedPersonaSource } from "@/lib/persona-analysis-queue";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,9 @@ export async function POST(request: Request) {
     const url = new URL(request.url);
     const limit = Math.min(Number(url.searchParams.get("limit") ?? "50"), 200);
     const recovered = await pumpIngestionOutbox(limit);
+    void processNextQueuedPersonaSource().catch((err) => {
+      console.warn("[API:internal:ingestion:pump] persona queue pump tick failed:", err);
+    });
     return NextResponse.json({ ok: true, recovered });
   } catch (error) {
     console.error("[API:internal:ingestion:pump] failed:", error);
