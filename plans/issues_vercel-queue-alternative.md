@@ -1,5 +1,13 @@
 # Issue 7: `@vercel/queue` Local Development Alternative or Removal
 
+> **Status: RESOLVED (2026-09-11).** `@vercel/queue` fully removed; replaced with a
+> PostgreSQL-backed drain (`status:"uploaded"` is the queue row, `SKIP LOCKED` claim,
+> TTL single-flight, TTL stale recovery), pushed by Next `after()` from the
+> upload/analyze routes with the 2-min cron pump as safety net. Validated locally:
+> 22/22 sources analyzed end-to-end, zero 429s. Remaining: prod deploy verification
+> (set `CRON_SECRET`, see checklist below).
+
+
 ## 1. Context & Origin (Why `@vercel/queue` Was Introduced)
 
 During bulk document ingestion on `/personas/Vasanth`, uploading 22 persona content files concurrently triggered 22 unmetered background calls to OpenRouter (`google/gemini-2.5-flash`). This triggered severe rate-limiting (HTTP 429) and concurrent request throttling, causing 20 requests to time out after 120s and failing the persona source analysis.
