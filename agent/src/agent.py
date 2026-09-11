@@ -152,6 +152,29 @@ async def entrypoint(ctx: agents.JobContext) -> None:
 
     agent = TrainerAgent(tools=tools, room_name=ctx.room.name)
 
+    async def watch_empty_room() -> None:
+        """Tab death skips finalize AND the job lingers (close_on_disconnect=False).
+        After a 30s grace (page refreshes reconnect), tear the room down so
+        on_session_end fires and the session row doesn't stay 'active' forever."""
+        while True:
+            await asyncio.sleep(5)
+            if ctx.room.remote_participants:
+                continue
+            for _ in range(6):
+                await asyncio.sleep(5)
+                if ctx.room.remote_participants:
+                    break
+            else:
+                state = _sessions.get(ctx.room.name)
+                if state is not None:
+                    state["end_status"] = "ABANDONED"
+                logger.info("Room %s empty for 30s; ending abandoned session", ctx.room.name)
+                try:
+                    await ctx.api.room.delete_room(api.DeleteRoomRequest(room=ctx.room.name))
+                except Exception as exc:
+                    logger.debug("Room teardown note: %s", exc)
+                return
+
     await session.start(
         room=ctx.room,
         agent=agent,
@@ -162,6 +185,7 @@ async def entrypoint(ctx: agents.JobContext) -> None:
             close_on_disconnect=False,
         ),
     )
+    asyncio.create_task(watch_empty_room())
 
 
 async def on_session_end(ctx: agents.JobContext) -> None:
@@ -193,7 +217,7 @@ async def on_session_end(ctx: agents.JobContext) -> None:
         "audio_s3_key": state.get("audio_s3_key"),
         "video_url": state.get("video_url"),
         "video_s3_key": state.get("video_s3_key"),
-        "status": "COMPLETED",
+        "status": state.get("end_status") or "COMPLETED",
         "participant_identity": state.get("participant_identity"),
         "transcript": transcript,
     }

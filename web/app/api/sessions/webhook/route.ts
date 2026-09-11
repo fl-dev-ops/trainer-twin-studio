@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { resolveSessionEndStatus } from "@/lib/interview-sessions";
 import { db } from "@/lib/db";
 
 /**
@@ -34,9 +35,9 @@ export async function POST(req: Request) {
 
   const status =
     body.status === "COMPLETED"
-      ? "completed"
-      : body.status === "FAILED"
-        ? "abandoned"
+      ? resolveSessionEndStatus(session.status, "completed")
+      : body.status === "FAILED" || body.status === "ABANDONED"
+        ? resolveSessionEndStatus(session.status, "abandoned")
         : session.status;
 
   const existingEvidence =
