@@ -86,5 +86,15 @@ export async function POST(request: Request) {
     console.warn("Learner collection hook notice:", err);
   }
 
+  // Trigger Gemini LLM evaluation report generation in the background
+  try {
+    const { generateSessionReport } = await import("@/lib/generate-session-report");
+    void generateSessionReport(String(body.sessionId)).catch((err) => {
+      console.warn("Session report generation notice:", err);
+    });
+  } catch (err) {
+    console.warn("Could not initiate session report generation:", err);
+  }
+
   return NextResponse.json({ ok: true });
 }

@@ -7,6 +7,7 @@ import {
   AudioLines,
   BookOpen,
   BookOpenText,
+  GraduationCap,
   History,
   MessagesSquare,
   UserRound,
@@ -35,7 +36,10 @@ const DOCS_URL =
 const NAV = [
   {
     label: "Activity",
-    items: [{ title: "Sessions", href: "/sessions", icon: History }],
+    items: [
+      { title: "Sessions", href: "/sessions", icon: History },
+      { title: "Learners", href: "/learners", icon: GraduationCap },
+    ],
   },
   {
     label: "Create",
