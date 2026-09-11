@@ -2,6 +2,8 @@ import { NextResponse, after } from "next/server";
 import { getTrainerOrg } from "@/lib/org";
 import { drainPersonaAnalysisQueue, enqueuePersonaAnalysis } from "@/lib/persona-analysis-queue";
 
+export const maxDuration = 300;
+
 type Params = { params: Promise<{ slug: string; id: string }> };
 
 export async function POST(_req: Request, { params }: Params) {

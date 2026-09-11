@@ -1,6 +1,8 @@
 import { NextResponse, after } from "next/server";
 import { getTrainerOrg } from "@/lib/org";
 import { listPersonaSources, uploadPersonaSource } from "@/lib/persona-synthesis";
+
+export const maxDuration = 300;
 import { drainPersonaAnalysisQueue } from "@/lib/persona-analysis-queue";
 
 type Params = { params: Promise<{ slug: string }> };

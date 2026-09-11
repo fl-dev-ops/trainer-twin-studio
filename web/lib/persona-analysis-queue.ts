@@ -4,7 +4,9 @@ import { analyzePersonaSource } from "@/lib/persona-synthesis";
 
 export const MAX_PERSONA_ANALYSIS_ATTEMPTS = 3;
 // ponytail: one global slot protects the rate-limited model; shard by org when throughput demands it.
-export const ACTIVE_ANALYSIS_TTL_MS = 10 * 60 * 1000;
+// Must exceed the worst-case analysis pipeline (~10min: 300s gemini + 120s embed + 180s compile)
+// so a legitimately slow analysis is never TTL-requeued while still running.
+export const ACTIVE_ANALYSIS_TTL_MS = 15 * 60 * 1000;
 
 function metadataRecord(metadata: unknown): Record<string, unknown> {
   return metadata && typeof metadata === "object" && !Array.isArray(metadata)
