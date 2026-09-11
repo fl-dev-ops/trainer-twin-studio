@@ -22,9 +22,10 @@ logger = logging.getLogger(__name__)
 
 
 def s3_egress_enabled() -> bool:
+    bucket = os.getenv("AWS_S3_BUCKET") or os.getenv("S3_BUCKET")
     return (
         os.getenv("ENABLE_RECORDING", "true").lower() in ("1", "true", "yes")
-        and bool(os.getenv("AWS_S3_BUCKET"))
+        and bool(bucket)
     )
 
 
@@ -47,7 +48,7 @@ async def start_session_egress(
     if not s3_egress_enabled():
         return {}
 
-    bucket = os.getenv("AWS_S3_BUCKET", "")
+    bucket = os.getenv("AWS_S3_BUCKET") or os.getenv("S3_BUCKET", "")
     region = os.getenv("AWS_REGION", "us-east-1")
     access_key = os.getenv("AWS_ACCESS_KEY_ID", "")
     secret_key = os.getenv("AWS_SECRET_ACCESS_KEY", "")

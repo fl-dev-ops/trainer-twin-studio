@@ -23,6 +23,7 @@ tsconfig.tsbuildinfo
 # local data / build caches
 chroma-data/
 bench/results/
+backups/
 agent/.local/
 .vercel
 .env*
