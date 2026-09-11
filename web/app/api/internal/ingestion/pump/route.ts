@@ -3,6 +3,7 @@ import { pumpIngestionOutbox } from "@/lib/ingestion-queue";
 import { processNextQueuedPersonaSource } from "@/lib/persona-analysis-queue";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 function isAuthorized(request: Request): boolean {
   const secret = process.env.CRON_SECRET || process.env.INTERNAL_API_SECRET;
@@ -26,10 +27,11 @@ export async function POST(request: Request) {
     const url = new URL(request.url);
     const limit = Math.min(Number(url.searchParams.get("limit") ?? "50"), 200);
     const recovered = await pumpIngestionOutbox(limit);
-    void processNextQueuedPersonaSource().catch((err) => {
+    const personaResult = await processNextQueuedPersonaSource().catch((err) => {
       console.warn("[API:internal:ingestion:pump] persona queue pump tick failed:", err);
+      return { processed: false, error: String(err) };
     });
-    return NextResponse.json({ ok: true, recovered });
+    return NextResponse.json({ ok: true, recovered, persona: personaResult });
   } catch (error) {
     console.error("[API:internal:ingestion:pump] failed:", error);
     return NextResponse.json(
