@@ -108,7 +108,14 @@ export function surfaceForPhase(
           ? (tool as { language?: string }).language!
           : "python";
       if (language === "candidate_choice") language = "python";
-      return { action: "open_code_editor", payload: { language } };
+      const starterCode =
+        typeof tool === "object" && tool !== null && typeof (tool as { starter_code?: unknown }).starter_code === "string"
+          ? ((tool as { starter_code: string }).starter_code as string)
+          : null;
+      return {
+        action: "open_code_editor",
+        payload: starterCode ? { language, starterCode } : { language },
+      };
     }
   }
   const scenario = (phase.scenario as Record<string, unknown>) || {};

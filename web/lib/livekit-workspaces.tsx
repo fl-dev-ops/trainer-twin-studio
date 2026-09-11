@@ -1,6 +1,12 @@
 "use client";
 
-import { Room, RoomEvent, type RpcInvocationData } from "livekit-client";
+import {
+  ParticipantKind,
+  Room,
+  RoomEvent,
+  type RemoteParticipant,
+  type RpcInvocationData,
+} from "livekit-client";
 import {
   createContext,
   type ReactNode,
@@ -92,13 +98,23 @@ export function LiveKitWorkspaceProvider({
     });
   }, []);
 
+  // Trust boundary: only the session agent may drive the browser workspace
+  // (code editor, canvas, presentation, surface, session.end).
+  function guardAgentCaller(callerIdentity: string): string | null {
+    if (room?.remoteParticipants.get(callerIdentity)?.kind === ParticipantKind.AGENT) {
+      return null;
+    }
+    return JSON.stringify({ ok: false, error: "Only the session agent may control the workspace" });
+  }
+
   useEffect(() => {
     if (!room) return;
 
-    // Handle surface changes from data packets
-    function handleDataReceived(payload: Uint8Array) {
+    // Handle surface changes from data packets (fallback when RPC is unavailable)
+    function handleDataReceived(payload: Uint8Array, participant?: RemoteParticipant) {
+      if (participant?.kind !== ParticipantKind.AGENT) return;
       try {
-        // 1. Try parseAgentSurfaceEvent (handles interview_question_started, open_code_editor, etc.)
+        // 1. Try parseAgentSurfaceEvent (handles open_code_editor, open_whiteboard, etc.)
         const parsed = parseAgentSurfaceEvent(payload);
         if (parsed) {
           onSurface(parsed.surface);
@@ -131,6 +147,8 @@ export function LiveKitWorkspaceProvider({
 
     rpcMethods.forEach((method) => {
       room.localParticipant.registerRpcMethod(method, async (data: RpcInvocationData) => {
+        const denied = guardAgentCaller(data.callerIdentity);
+        if (denied) return denied;
         try {
           const handler = await waitForHandler(method);
           const response = await handler(data.payload);
@@ -145,6 +163,8 @@ export function LiveKitWorkspaceProvider({
     });
 
     const handleSurfaceRpc = async (data: RpcInvocationData) => {
+      const denied = guardAgentCaller(data.callerIdentity);
+      if (denied) return denied;
       try {
         const req = JSON.parse(data.payload) as Record<string, unknown>;
         const action = String(req.action || req.type || "");
@@ -166,7 +186,9 @@ export function LiveKitWorkspaceProvider({
     room.localParticipant.registerRpcMethod("workspace.surface", handleSurfaceRpc);
     room.localParticipant.registerRpcMethod("surface", handleSurfaceRpc);
 
-    room.localParticipant.registerRpcMethod("session.end", async () => {
+    room.localParticipant.registerRpcMethod("session.end", async (data: RpcInvocationData) => {
+      const denied = guardAgentCaller(data.callerIdentity);
+      if (denied) return denied;
       if (onEndSession) {
         onEndSession();
       }

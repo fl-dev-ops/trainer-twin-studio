@@ -28,6 +28,12 @@ The following core client architecture updates were completed in commits `a52c21
    - Bound finalization strictly to `room.on(RoomEvent.Disconnected)` and explicit exit actions.
    - Fixed persona avatar matching in `AgentTile` to use case-insensitive slug (`persona.toLowerCase() === "vasanth"`).
 
+5. **Hardenings (2026-09-12, this issue)**
+   - Fixed "Preparing…" stuck indicator: `interviewReady` was gated on `session-started` / `interview_question_started` data packets that nothing in the runtime emits; it now derives from `useVoiceAssistant().state` (agent audio present = interview begun).
+   - Removed dead data-packet handlers (`session-started`, `interview_question_started`) from `session-view.tsx`; only the `session-ended` fallback (sent when `session.end` RPC fails) remains.
+   - Added `ParticipantKind.AGENT` caller guard to every workspace RPC (`workspace.code`, `workspace.canvas`, `workspace.whiteboard`, `workspace.presentation`, `workspace.surface`, `surface`, `session.end`) and to agent data packets — matching the demo reference's trust boundary. Non-agent callers receive `{ok:false}` / are ignored.
+   - `surfaceForPhase` now forwards `starter_code` from a phase's `coding_sandbox` tool object into the `open_code_editor` payload (unit tested).
+
 ---
 
 ## 3. Reference Implementation Comparison (`demo` & `agent-demo`)
@@ -69,9 +75,9 @@ The reference projects implement rich workspace surfaces wired to LiveKit agent 
 - [x] Vasanth portrait displays properly on Agent tile.
 
 ### Workspace Surfaces & RPC Tools
-- [ ] Agent can open Code Editor via `workspace.surface` or `open_code_editor` RPC/data packet.
-- [ ] Code Editor renders starter code and allows candidate code editing.
-- [ ] Code execution via `/api/code/run` returns output to console and agent.
-- [ ] Agent can open Whiteboard / Canvas via `workspace.canvas` RPC/data packet.
-- [ ] Agent can display PDF / Presentation documents when context is attached.
-- [ ] Split-stage smoothly animates between full stage (tiles only) and split stage (surface + compact tiles).
+- [ ] Agent can open Code Editor via `workspace.surface` or `open_code_editor` RPC/data packet. (mechanism wired: runtime synthesizes `surface` tool call from phase config → Python agent relays over RPC → browser opens component; needs live verification)
+- [ ] Code Editor renders starter code and allows candidate code editing. (starter code now flows from a phase's `coding_sandbox` tool config — `starter_code` field — through `surfaceForPhase`; editor shows generic boilerplate until an agent spec sets it)
+- [ ] Code execution via `/api/code/run` returns output to console and agent. (OneCompiler-backed; RPC `run`/`get_output` wired both sides; needs live verification)
+- [ ] Agent can open Whiteboard / Canvas via `workspace.canvas` RPC/data packet. (mechanism wired; needs live verification)
+- [ ] Agent can display PDF / Presentation documents when context is attached. (driven by phase `scenario.pdf_url` / `scenario.presentation_url`; needs live verification)
+- [ ] Split-stage smoothly animates between full stage (tiles only) and split stage (surface + compact tiles). (motion layout implemented; needs live verification)

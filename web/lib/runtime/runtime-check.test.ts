@@ -25,6 +25,7 @@ import {
   pickBestDraft,
   recordAskedQuestion,
   selectAction,
+  surfaceForPhase,
   validateAction,
   validateAnalysis,
 } from "./runtime";
@@ -48,6 +49,24 @@ function loadConfig(agentSlug = "full-mock-interview", personaSlug = "vasanth") 
 }
 
 describe("Interview Compiler", () => {
+  it("surfaceForPhase passes starter_code and language from a coding_sandbox tool", () => {
+    const agent = {
+      phases: [
+        {
+          tools: [
+            { id: "coding_sandbox", language: "python", starter_code: "print('hi')" },
+          ],
+          scenario: {},
+        },
+      ],
+    };
+    const surface = surfaceForPhase(agent as never, 0);
+    expect(surface).toEqual({
+      action: "open_code_editor",
+      payload: { language: "python", starterCode: "print('hi')" },
+    });
+  });
+
   it("compiles standard Studio configurations from YAML", () => {
     const config = loadConfig("resume-mastery", "vasanth");
     const compiled = buildSpecs(config);
