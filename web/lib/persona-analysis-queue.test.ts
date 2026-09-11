@@ -111,7 +111,7 @@ describe("persona analysis queue (DB)", () => {
     const a = await createSource("uploaded", { analysisAttempts: 0 });
     const b = await createSource("uploaded", {});
 
-    const first = await claimNextPersonaSource();
+    const first = await claimNextPersonaSource({ personaId });
     expect(first?.sourceId).toBe(a.id);
 
     const claimedA = await db.personaSource.findUniqueOrThrow({ where: { id: a.id } });
@@ -119,11 +119,11 @@ describe("persona analysis queue (DB)", () => {
     expect(personaAnalysisAttempts(claimedA.metadata)).toBe(1);
 
     // While A is fresh-analyzing, single-flight blocks the next claim
-    expect(await claimNextPersonaSource()).toBeNull();
+    expect(await claimNextPersonaSource({ personaId })).toBeNull();
 
     // Finish A; now B is claimable (single-flight no longer blocked)
     await db.personaSource.update({ where: { id: a.id }, data: { status: "analyzed" } });
-    const second = await claimNextPersonaSource();
+    const second = await claimNextPersonaSource({ personaId });
     expect(second?.sourceId).toBe(b.id);
     await db.personaSource.update({ where: { id: b.id }, data: { status: "analyzed" } });
   });
@@ -152,7 +152,7 @@ describe("persona analysis queue (DB)", () => {
     analyzed.length = 0;
     failNextId = s2.id; // stub marks it failed and throws, like the real analyzer
 
-    const result = await drainPersonaAnalysisQueue();
+    const result = await drainPersonaAnalysisQueue({ personaId });
     expect(result.processed).toBe(2);
     expect(analyzed).toEqual([s1.id, s3.id]); // s2 failed, s3 still processed
 

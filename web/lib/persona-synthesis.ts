@@ -11,8 +11,7 @@ import type { Prisma } from "@/lib/generated/prisma/client";
 import { db } from "@/lib/db";
 import { deletePrefix, getObjectBytes, personaSourcePrefix, putObject } from "@/lib/s3";
 import { documentToMarkdown } from "@/lib/documents";
-import { removeChunks, replaceChunks } from "@/lib/knowledge";
-import { extractPersonaVoiceMoments, personaCollectionName, shouldRebuildPersona } from "@/lib/persona-voice";
+import { extractPersonaVoiceMoments, shouldRebuildPersona } from "@/lib/persona-voice";
 import { MainCollectionService } from "@/lib/main-collection";
 import { saveSpec } from "@/lib/specs";
 
@@ -79,7 +78,6 @@ export async function deletePersonaSource(id: string, orgId: string) {
   if (!source) throw new Error("Source not found");
   await Promise.all([
     deletePrefix(source.s3Key),
-    removeChunks(personaCollectionName(source.personaId), source.id),
     MainCollectionService.removePersonaSource(orgId, source.id),
   ]);
   await db.personaSource.delete({ where: { id } });
@@ -304,11 +302,6 @@ export async function analyzePersonaSource(sourceId: string, orgId: string): Pro
     const existingChunks = extractPersonaVoiceMoments(source.analysis);
     if (existingChunks.length) {
       await MainCollectionService.ingestPersonaVoice(orgId, source.personaId, source.id, source.name, existingChunks);
-      try {
-        await replaceChunks(personaCollectionName(source.personaId), source.id, source.name, existingChunks.map((moment) => moment.text));
-      } catch (err) {
-        console.warn(`Legacy persona collection notice (${personaCollectionName(source.personaId)}):`, err);
-      }
       await db.personaSource.update({
         where: { id: sourceId },
         data: { status: "analyzed", metadata: { ...metadata, voiceMoments: existingChunks.length, voiceActions: [...new Set(existingChunks.map((moment) => moment.action).filter(Boolean))] } as Prisma.InputJsonValue },
@@ -337,11 +330,6 @@ export async function analyzePersonaSource(sourceId: string, orgId: string): Pro
       data: { analysis: analysis as Prisma.InputJsonValue },
     });
     await MainCollectionService.ingestPersonaVoice(orgId, source.personaId, source.id, source.name, chunks);
-    try {
-      await replaceChunks(personaCollectionName(source.personaId), source.id, source.name, chunks.map((moment) => moment.text));
-    } catch (err) {
-      console.warn(`Legacy persona collection notice (${personaCollectionName(source.personaId)}):`, err);
-    }
     await db.personaSource.update({
       where: { id: sourceId },
       data: { status: "analyzed", metadata: { ...metadata, voiceMoments: chunks.length, voiceActions: [...new Set(chunks.map((moment) => moment.action).filter(Boolean))] } as Prisma.InputJsonValue },

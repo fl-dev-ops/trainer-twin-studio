@@ -1,4 +1,4 @@
-import type { Prisma } from "@/lib/generated/prisma/client";
+import { Prisma } from "@/lib/generated/prisma/client";
 import { db } from "@/lib/db";
 import { analyzePersonaSource } from "@/lib/persona-synthesis";
 
@@ -56,14 +56,17 @@ export async function enqueuePersonaAnalysis(sourceId: string, orgId?: string) {
   return { queued: true };
 }
 
+type ClaimScope = { personaId?: string };
+
 /**
  * Requeue sources stuck in an active state (server crashed mid-analysis).
  */
-export async function recoverStaleAnalyzing(): Promise<number> {
+export async function recoverStaleAnalyzing(scope: ClaimScope = {}): Promise<number> {
   const result = await db.personaSource.updateMany({
     where: {
       status: { in: ["analyzing", "compiling"] },
       updatedAt: { lt: new Date(Date.now() - ACTIVE_ANALYSIS_TTL_MS) },
+      ...(scope.personaId ? { personaId: scope.personaId } : {}),
     },
     data: { status: "uploaded" },
   });
@@ -78,23 +81,27 @@ export async function recoverStaleAnalyzing(): Promise<number> {
  * queue is empty or another analysis is in flight (single-flight, protects
  * OpenRouter from concurrent-request rate limits).
  */
-export async function claimNextPersonaSource(): Promise<{ sourceId: string; orgId: string } | null> {
+export async function claimNextPersonaSource(scope: ClaimScope = {}): Promise<{ sourceId: string; orgId: string } | null> {
   return db.$transaction(async (tx) => {
     const active = await tx.personaSource.findFirst({
       where: {
         status: { in: ["analyzing", "compiling"] },
         updatedAt: { gt: new Date(Date.now() - ACTIVE_ANALYSIS_TTL_MS) },
+        ...(scope.personaId ? { personaId: scope.personaId } : {}),
       },
       select: { id: true },
     });
     if (active) return null;
 
-    const rows = await tx.$queryRaw<Array<{ id: string; orgId: string }>>`
-      SELECT id, "orgId" FROM "PersonaSource"
-      WHERE status = 'uploaded'
+    // ponytail: string-interpolated WHERE — parameterize if the scope grows.
+    const scopeFilter = scope.personaId ? Prisma.sql` AND "personaId" = ${scope.personaId}` : Prisma.empty;
+    const rows = await tx.$queryRaw<Array<{ id: string; orgId: string }>>(
+      Prisma.sql`SELECT id, "orgId" FROM "PersonaSource"
+      WHERE status = 'uploaded'${scopeFilter}
       ORDER BY "createdAt" ASC
       FOR UPDATE SKIP LOCKED
-      LIMIT 1`;
+      LIMIT 1`
+    );
     const candidate = rows[0];
     if (!candidate) return null;
 
@@ -125,11 +132,11 @@ export async function claimNextPersonaSource(): Promise<{ sourceId: string; orgI
  * individual sources never stop the drain (the source is marked failed and the
  * loop continues).
  */
-export async function drainPersonaAnalysisQueue(): Promise<{ processed: number }> {
-  await recoverStaleAnalyzing();
+export async function drainPersonaAnalysisQueue(scope: ClaimScope = {}): Promise<{ processed: number }> {
+  await recoverStaleAnalyzing(scope);
   let processed = 0;
   for (;;) {
-    const claimed = await claimNextPersonaSource();
+    const claimed = await claimNextPersonaSource(scope);
     if (!claimed) break;
     try {
       await analyzePersonaSource(claimed.sourceId, claimed.orgId);

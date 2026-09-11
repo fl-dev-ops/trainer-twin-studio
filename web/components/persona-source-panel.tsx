@@ -110,36 +110,47 @@ export function PersonaSourcePanel({
     }
   }
 
+  async function uploadOne(file: File) {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`/api/personas/${personaSlug}/sources`, { method: "POST", body: form });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error ?? "Upload failed");
+    if (typeof data?.id === "string") return data.id as string;
+    throw new Error("Upload failed");
+  }
+
   async function handleUpload(files: FileList | null) {
     if (!files?.length || disabled) return;
+    const list = Array.from(files);
+    const many = list.length > 1;
+    // Bulk: one toast with n/n progress; single: one toast for the file.
+    const tid = many
+      ? toast.loading(`Uploading 1/${list.length}…`)
+      : toast.loading(`Uploading ${list[0].name}…`);
     setUploading(true);
     const uploaded: string[] = [];
-    for (const file of Array.from(files)) {
-      const form = new FormData();
-      form.append("file", file);
+    const failed: string[] = [];
+    for (const [i, file] of list.entries()) {
+      if (many) toast.loading(`Uploading ${i + 1}/${list.length}: ${file.name}`, { id: tid });
       try {
-        const res = await fetch(`/api/personas/${personaSlug}/sources`, { method: "POST", body: form });
-        const data = await res.json().catch(() => null);
-        if (!res.ok) {
-          toast.error(`${file.name}: ${data?.error ?? "Upload failed"}`);
-          continue;
-        }
-        if (typeof data?.id === "string") uploaded.push(data.id);
-      } catch {
-        toast.error(`${file.name}: Upload failed`);
+        uploaded.push(await uploadOne(file));
+      } catch (error) {
+        if (many) failed.push(file.name);
+        else toast.error(`${file.name}: ${error instanceof Error ? error.message : "Upload failed"}`, { id: tid });
       }
     }
     setUploading(false);
+    // Analysis starts server-side via after(); the badge on each row tracks it.
     await fetchSources();
-    for (const id of uploaded) {
-      try {
-        await analyze(id);
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Analyze failed");
-      }
+    if (many) {
+      if (failed.length === list.length) toast.error("Upload failed", { id: tid });
+      else if (failed.length)
+        toast.warning(`Uploaded ${uploaded.length}/${list.length} — failed: ${failed.join(", ")}`, { id: tid });
+      else toast.success(`Analyzing ${uploaded.length} source${uploaded.length === 1 ? "" : "s"}`, { id: tid });
+    } else if (uploaded.length) {
+      toast.success("Analyzing 1 source", { id: tid });
     }
-    if (uploaded.length) toast.success(`Analyzing ${uploaded.length} source${uploaded.length === 1 ? "" : "s"}`);
-    await fetchSources();
   }
 
   async function retry(id: string) {
@@ -154,13 +165,19 @@ export function PersonaSourcePanel({
 
   async function remove(id: string) {
     if (!confirm("Remove this source?")) return;
-    try {
-      const res = await fetch(`/api/personas/${personaSlug}/sources/${id}`, { method: "DELETE" });
-      if (!res.ok) toast.error("Could not remove source");
-      await fetchSources();
-    } catch {
-      toast.error("Could not remove source");
-    }
+    toast.promise(
+      fetch(`/api/personas/${personaSlug}/sources/${id}`, { method: "DELETE" }).then(async (res) => {
+        const data = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(data?.error ?? "Could not remove source");
+        await fetchSources();
+        return data;
+      }),
+      {
+        loading: "Removing source…",
+        success: "Source removed",
+        error: (e) => (e instanceof Error ? e.message : "Could not remove source"),
+      },
+    );
   }
 
   const ready = sources.filter((s) => s.status === "analyzed" && voiceMomentCount(s.metadata) > 0).length;

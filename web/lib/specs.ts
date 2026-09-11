@@ -7,8 +7,8 @@ import {
   documentToMarkdown,
   SUPPORTED_DOCUMENT_EXTENSIONS,
 } from "@/lib/documents";
-import { ingestDoc, knowledgeCollectionName, removeChunks, removeCollection, removeDoc } from "@/lib/knowledge";
-import { personaCollectionName, personaCoverageLevel } from "@/lib/persona-voice";
+import { ingestDoc, knowledgeCollectionName, removeCollection, removeDoc } from "@/lib/knowledge";
+import { personaCoverageLevel } from "@/lib/persona-voice";
 import { MainCollectionService } from "@/lib/main-collection";
 import { ChromaTenantService } from "@/lib/chroma-tenant";
 import { enqueueIngestionWork } from "@/lib/ingestion-queue";
@@ -233,7 +233,6 @@ export async function deleteSpec(type: SpecType, slug: string, orgId: string) {
     });
     await Promise.all([
       ...sources.map((source) => deletePrefix(source.s3Key)),
-      ...sources.map((source) => removeChunks(personaCollectionName(personaId), source.id)),
       MainCollectionService.removePersona(orgId, personaId),
     ]);
     await db.persona.delete({ where: { orgId_slug: { orgId, slug } } });
