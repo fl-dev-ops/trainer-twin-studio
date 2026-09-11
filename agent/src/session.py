@@ -33,8 +33,8 @@ def build_agent_session(
 
     web_base = os.getenv("WEB_URL", "http://localhost:3000").rstrip("/")
     resolved_base_url = base_url or os.getenv("LLM_BASE_URL", f"{web_base}/api/v1")
-    resolved_model = model or os.getenv("LLM_MODEL", DEFAULT_LLM_MODEL)
-    resolved_api_key = api_key or os.getenv("LLM_API_KEY", "token-pending")
+    resolved_model = model or DEFAULT_LLM_MODEL
+    resolved_api_key = api_key or "token-pending"
 
     llm = openai.LLM(
         model=resolved_model,

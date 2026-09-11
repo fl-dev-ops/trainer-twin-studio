@@ -23,10 +23,14 @@ from tools import build_interview_tools
 
 load_dotenv(override=True)
 
-# Automatically trust local portless CA for https://*.localhost if present
-portless_ca = os.path.expanduser("~/.portless/ca.pem")
-if os.path.exists(portless_ca) and "SSL_CERT_FILE" not in os.environ:
-    os.environ["SSL_CERT_FILE"] = portless_ca
+# Trust the local portless CA for https://*.localhost if present. Use the
+# combined bundle (system roots + portless CA) — a CA-only file would break
+# TLS to LiveKit/Sarvam/AWS. setup.sh builds the bundle.
+_ca_bundle = os.path.expanduser("~/.portless/ca-bundle.pem")
+_ca_only = os.path.expanduser("~/.portless/ca.pem")
+_default_ca = _ca_bundle if os.path.exists(_ca_bundle) else _ca_only
+if os.path.exists(_default_ca) and "SSL_CERT_FILE" not in os.environ:
+    os.environ["SSL_CERT_FILE"] = _default_ca
 
 logger = logging.getLogger("trainertwin_agent")
 logging.basicConfig(level=logging.INFO)
@@ -73,13 +77,12 @@ async def entrypoint(ctx: agents.JobContext) -> None:
     voice = str(metadata.get("voice") or "").strip()
     org_id = str(metadata.get("orgId") or metadata.get("org_id") or "shared").strip()
 
-    webhook_raw = str(metadata.get("webhook_url") or os.getenv("WEBHOOK_URL") or "").strip()
+    # ponytail: webhook path hardcoded; if another endpoint is ever needed, pass it via room metadata
+    webhook_raw = str(metadata.get("webhook_url") or "").strip()
     if webhook_raw.startswith("/"):
         webhook_url = f"{WEB_URL}{webhook_raw}"
-    elif webhook_raw:
-        webhook_url = webhook_raw
     else:
-        webhook_url = f"{WEB_URL}/api/sessions/webhook"
+        webhook_url = webhook_raw or f"{WEB_URL}/api/sessions/webhook"
 
     await ctx.connect()
     logger.info("Agent connected to room %s for session %s", ctx.room.name, session_id)

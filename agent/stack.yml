@@ -9,19 +9,15 @@ services:
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
       AGENT_NAME: ${AGENT_NAME:-intervoo-agent}
       DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY}
-      WEB_URL: ${WEB_URL:-https://trainer-twin-studio.vercel.app}
-      WEBHOOK_URL: ${WEBHOOK_URL:-https://trainer-twin-studio.vercel.app/api/sessions/webhook}
+      WEB_URL: ${WEB_URL:-https://dash.trainertwin.com}
       TTS_PROVIDER: ${TTS_PROVIDER:-sarvam}
       SARVAM_API_KEY: ${SARVAM_API_KEY:-}
       SARVAM_SPEAKER: ${SARVAM_SPEAKER:-rohan}
       AGENT_VOICE_ID_OVERRIDE: ${AGENT_VOICE_ID_OVERRIDE:-}
-      LLM_API_KEY: ${LLM_API_KEY:-}
-      LLM_BASE_URL: ${LLM_BASE_URL:-https://openrouter.ai/api/v1}
-      LLM_MODEL: ${LLM_MODEL:-google/gemini-2.5-flash:nitro}
-      ENABLE_RECORDING: ${ENABLE_RECORDING:-false}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://dash.trainertwin.com/api/v1}
       S3_BUCKET: ${S3_BUCKET:-trainer-twin-prod}
       AWS_S3_BUCKET: ${AWS_S3_BUCKET:-trainer-twin-prod}
-      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_REGION: ${AWS_REGION:-ap-south-1}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       S3_BASE_PREFIX: ${S3_BASE_PREFIX:-trainertwin-dev}

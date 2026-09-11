@@ -59,8 +59,16 @@ Deploy and maintain the voice agent worker on the E2E Networks server (`216.48.1
 
 ## Action Items
 
-- [ ] Update `agent/stack.yml` to remove `ENABLE_RECORDING`, `LLM_API_KEY`, `LLM_MODEL`, and set `WEB_URL=https://dash.trainertwin.com`.
-- [ ] Update `agent/src/recording/egress.py` to always enable recording without checking `ENABLE_RECORDING`.
-- [ ] Update `/opt/trainertwin-agent/.env` and `stack.yml` on the E2E server (`216.48.181.196`).
-- [ ] Rebuild `trainertwin-agent:local` on E2E server and redeploy `trainertwin-agent_agent`.
-- [ ] Verify worker registration in Dozzle/logs: `agent_name=intervoo-agent`, connected to LiveKit Cloud.
+- [x] Update `agent/stack.yml` to remove `ENABLE_RECORDING`, `LLM_API_KEY`, `LLM_MODEL`, and set `WEB_URL=https://dash.trainertwin.com`.
+- [x] Update `agent/src/recording/egress.py` to always enable recording without checking `ENABLE_RECORDING`.
+- [x] Update `/opt/trainertwin-agent/.env` and `stack.yml` on the E2E server (`216.48.181.196`).
+- [x] Rebuild `trainertwin-agent:local` on E2E server and redeploy `trainertwin-agent_agent`.
+- [x] Verify worker registration in Dozzle/logs: `agent_name=intervoo-agent`, connected to LiveKit Cloud.
+
+---
+
+## Deployment Notes (2026-09-11)
+
+- `docker stack deploy` does **not** load `.env` — deploy with `set -a && . ./.env && set +a && docker stack deploy -c stack.yml trainertwin-agent`, otherwise every interpolated var resolves empty (worker then registers to a bogus temp LiveKit project and exits).
+- Server `.env` edits were surgical (kept its AWS creds + `S3_BASE_PREFIX=trainertwin-dev/kb`); a timestamped `.env.bak.*` was left in place.
+- Server-side `stack.yml`, `src/recording/egress.py`, `src/session.py` were pushed from local and image rebuilt on the server.
