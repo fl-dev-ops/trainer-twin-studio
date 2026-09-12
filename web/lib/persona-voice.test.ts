@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { extractPersonaVoiceChunks, extractPersonaVoiceMoments, personaCollectionName, personaCoverageLevel, shouldRebuildPersona } from "./persona-voice";
+import { createPersonaStyleMoment, createPersonaVoiceEpisode, extractPersonaVoiceChunks, extractPersonaVoiceMoments, personaCollectionName, personaCoverageLevel, shouldRebuildPersona } from "./persona-voice";
 
 test("storage identity uses immutable persona IDs", () => {
   assert.equal(personaCollectionName("persona-id-a"), "persona_persona-id-a");
@@ -58,6 +58,44 @@ test("interviewer embed text is capped and omits candidate speech", () => {
   assert.ok((moments[0]?.text.split("Interviewer: ")[1]?.length ?? 0) <= 401);
   assert.equal(moments[0]?.text.includes("Stripe"), false);
   assert.equal(moments[0]?.candidateContext?.includes("Stripe"), true);
+});
+
+test("conversation episodes embed the situation and return the complete exchange", () => {
+  const episode = createPersonaVoiceEpisode({
+    sessionPhase: "middle",
+    sessionContext: "Backend mock interview",
+    pastLearnerName: "Arun",
+    previousInterviewerContext: "How did you prevent duplicates?",
+    candidateContext: "TTL guarantees exactly-once delivery.",
+    interviewerResponse: "No, no. TTL alone cannot guarantee that.",
+    nextCandidateContext: "Right, I mixed up idempotency and exactly-once.",
+  });
+  assert.match(episode.embeddingText ?? "", /Learner situation: TTL guarantees exactly-once/);
+  assert.match(episode.text, /PAST CONVERSATION EXAMPLE/);
+  assert.match(episode.text, /Vasanth: No, no/);
+  assert.match(episode.text, /Past learner reaction: Right/);
+  assert.equal(episode.sessionPhase, "middle");
+  assert.equal(episode.pastLearnerName, "Arun");
+});
+
+test("style moments embed topic-neutral phrasing and retain exact wording", () => {
+  const style = createPersonaStyleMoment({
+    interviewerResponse: "Correct, correct, Arun. But that does not guarantee it, correct?",
+    pastLearnerName: "Arun",
+    sessionPhase: "middle",
+    learnerState: "confident incorrect claim",
+    speechFunction: "explicit correction",
+    sentenceShape: "doubled acknowledgement -> correction -> tag question",
+    phrasingFeatures: "repetition, direct address, tag question",
+    cadence: "short opening followed by one compact challenge",
+    delexicalizedPattern: "Correct, correct, <learner>. But <claim> does not guarantee <outcome>, correct?",
+  });
+  assert.match(style.embeddingText ?? "", /Sentence shape: doubled acknowledgement/);
+  assert.equal(style.embeddingText?.includes("Arun"), false);
+  assert.match(style.text, /Exact Vasanth wording: Correct, correct, Arun/);
+  assert.equal(style.usesLearnerName, true);
+  assert.equal(style.hasDoubledAcknowledgement, true);
+  assert.equal(style.questionCount, 1);
 });
 
 test("persona coverage uses moment and action counts", () => {

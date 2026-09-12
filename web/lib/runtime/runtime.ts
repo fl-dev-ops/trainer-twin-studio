@@ -69,6 +69,9 @@ export interface RuntimeState {
   grounding_probe_counts: Record<string, number>;
   end_reason?: string;
   current_surface?: string | null;
+  learner_name?: string | null;
+  primer?: { statistics: CorpusStyleStats } | null;
+  recent_style_docs?: string[];
 }
 
 export function initRuntimeState(): RuntimeState {
@@ -87,6 +90,9 @@ export function initRuntimeState(): RuntimeState {
     grounding_probes: [],
     grounding_probe_counts: {},
     current_surface: null,
+    learner_name: null,
+    primer: null,
+    recent_style_docs: [],
   };
 }
 
@@ -689,14 +695,14 @@ export const SPEECH_RULES = [
   "in_persona_voice",
 ] as const;
 
-export function flagsFromCompliance(reasoning: unknown): string[] {
+export function flagsFromCompliance(reasoning: unknown, rules: readonly string[] = SPEECH_RULES): string[] {
   if (!reasoning || typeof reasoning !== "object") return ["missing_reasoning"];
   const entries = Object.entries(reasoning as Record<string, { ok?: unknown }>);
   if (!entries.length) return ["missing_reasoning"];
   const flags = entries
     .filter(([, verdict]) => verdict && verdict.ok === false)
     .map(([rule]) => rule);
-  for (const rule of SPEECH_RULES) {
+  for (const rule of rules) {
     if (!entries.some(([name]) => name === rule)) flags.push(`${rule}:missing`);
   }
   return flags;
@@ -732,6 +738,155 @@ export function pickBestDraft<T extends { text: string; flags: string[] }>(draft
   const usable = drafts.filter((draft) => draft.text.trim());
   if (!usable.length) return null;
   return usable.reduce((best, draft) => (draft.flags.length < best.flags.length ? draft : best));
+}
+
+// ---- Post-style rendering helpers (plans/issues_persona-validation-loop.md §17) ----
+
+export const RENDERER_RULES = [
+  "meaning_preserved",
+  "question_preserved",
+  "no_example_fact_copy",
+  "in_vasanth_style",
+] as const;
+
+export type CorpusStyleStats = {
+  turns: number;
+  learner_name_use_rate: number;
+  doubled_acknowledgement_rate: number;
+  thanks_turn_start_rate: number;
+  average_spoken_words: number;
+  average_questions: number;
+};
+
+export function wordCount(text: string): number {
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
+export function questionCount(text: string): number {
+  return (text.match(/\?/g) ?? []).length;
+}
+
+/**
+ * Mechanical learner-name extraction from the learner's own words
+ * ("my name is X" / "I'm X"). Mechanical only — no judgment.
+ */
+export function extractLearnerName(learnerText: string): string | null {
+  // ponytail: single given name only; full-name matching comes with learner memory.
+  // "I am X" only counts when the name is capitalized, so adjectives ("I'm ready") don't match.
+  const text = foldInterviewText(learnerText);
+  const match = text.match(/\bmy name is\s+([A-Za-z][a-z]+)\b/i)
+    ?? text.match(/\b(?:i am|i'm)\s+([A-Z][a-z]+)\b/);
+  const name = match?.[1]?.trim();
+  return name ? name.replace(/\b\w/g, (c) => c.toUpperCase()) : null;
+}
+
+export type SessionStyleStats = CorpusStyleStats & {
+  trainer_turns: number;
+  learner_name_use_count: number;
+  doubled_acknowledgement_count: number;
+  thanks_turn_start_count: number;
+};
+
+const DOUBLED_ACK_RE = /\b(yes|yeah|correct|right|good|okay|sure|no)[,. ]+\1\b/i;
+
+export function currentSessionStyle(
+  trainerTurns: string[],
+  learnerName: string | null
+): SessionStyleStats {
+  const total = trainerTurns.length;
+  if (!total) {
+    return {
+      trainer_turns: 0,
+      turns: 0,
+      learner_name_use_rate: 0,
+      learner_name_use_count: 0,
+      doubled_acknowledgement_rate: 0,
+      doubled_acknowledgement_count: 0,
+      thanks_turn_start_rate: 0,
+      thanks_turn_start_count: 0,
+      average_spoken_words: 0,
+      average_questions: 0,
+    };
+  }
+  const nameRe = learnerName
+    ? new RegExp(`\\b${learnerName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i")
+    : null;
+  const named = trainerTurns.filter((text) => Boolean(nameRe?.test(text))).length;
+  const doubled = trainerTurns.filter((text) => DOUBLED_ACK_RE.test(text)).length;
+  const thanks = trainerTurns.filter((text) => /^(thanks|thank you)\b/i.test(text)).length;
+  return {
+    trainer_turns: total,
+    turns: total,
+    learner_name_use_rate: named / total,
+    learner_name_use_count: named,
+    doubled_acknowledgement_rate: doubled / total,
+    doubled_acknowledgement_count: doubled,
+    thanks_turn_start_rate: thanks / total,
+    thanks_turn_start_count: thanks,
+    average_spoken_words: trainerTurns.reduce((sum, text) => sum + wordCount(text), 0) / total,
+    average_questions: trainerTurns.reduce((sum, text) => sum + questionCount(text), 0) / total,
+  };
+}
+
+/** Factual current-vs-corpus drift; the LLM reasons over it, code only counts. */
+export function compareStyleRates(
+  current: Partial<SessionStyleStats>,
+  corpus: CorpusStyleStats | null | undefined
+): Record<string, { current_session: number; corpus: number; difference: number }> {
+  if (!corpus) return {};
+  const out: Record<string, { current_session: number; corpus: number; difference: number }> = {};
+  for (const key of [
+    "learner_name_use_rate",
+    "doubled_acknowledgement_rate",
+    "thanks_turn_start_rate",
+    "average_spoken_words",
+    "average_questions",
+  ] as const) {
+    const c = current[key];
+    const t = corpus[key];
+    if (typeof c === "number" && typeof t === "number") {
+      out[key] = { current_session: c, corpus: t, difference: Math.round((c - t) * 1000) / 1000 };
+    }
+  }
+  return out;
+}
+
+/**
+ * Frequency-aware style filtering decisions (Section 17.1): when the current
+ * session overuses a form, retrieval excludes examples carrying it; when
+ * doubled acknowledgements fall behind the corpus rate, only examples with
+ * them are retrieved. Needs at least 2 prior trainer turns to be meaningful.
+ */
+export function styleFilterDecisions(
+  current: SessionStyleStats,
+  corpus: CorpusStyleStats | null | undefined,
+  nextTurnIndex: number
+): { excludeLearnerName: boolean; excludeThanksStart: boolean; requireDoubledAcknowledgement: boolean } {
+  if (!corpus || current.trainer_turns < 2) {
+    return { excludeLearnerName: false, excludeThanksStart: false, requireDoubledAcknowledgement: false };
+  }
+  return {
+    excludeLearnerName: current.learner_name_use_rate > corpus.learner_name_use_rate,
+    excludeThanksStart: current.thanks_turn_start_rate > corpus.thanks_turn_start_rate,
+    requireDoubledAcknowledgement:
+      current.doubled_acknowledgement_count < Math.round(corpus.doubled_acknowledgement_rate * (nextTurnIndex + 1)),
+  };
+}
+
+/**
+ * Mechanical bounds on a style rewrite (Section 17.2). Physical limits only:
+ * length inflation and question-count drift. Failures mean "speak the draft".
+ */
+export function rendererBounds(draft: string, rewrite: string): string[] {
+  if (!rewrite.trim()) return ["empty_response"];
+  const flags: string[] = [];
+  if (wordCount(rewrite) > Math.ceil(wordCount(draft) * 1.25)) {
+    flags.push("length_expansion");
+  }
+  if (questionCount(rewrite) !== questionCount(draft)) {
+    flags.push("question_count");
+  }
+  return flags;
 }
 
 export function feedbackSummary(agent: AgentSpec, state: RuntimeState): string {

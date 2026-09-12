@@ -13,23 +13,28 @@ import { env } from "@/env";
 import { buildSpecs, type CompiledSpecs } from "./compiler";
 import {
   type AnswerAnalysis,
+  type CorpusStyleStats,
   type InterviewAction,
   type RuntimeState,
-  activeAllowedActions,
-  applyPersonaVote,
+  RENDERER_RULES,
   closingAction,
+  compareStyleRates,
+  currentSessionStyle,
   deterministicFallback,
   evidenceLabel,
+  extractLearnerName,
   flagsFromCompliance,
   initRuntimeState,
   mechanicalSpeechFlags,
-  pickBestDraft,
   recordAskedQuestion,
   refreshCurrentTopic,
+  rendererBounds,
   selectAction,
   spokenWordLimit,
+  styleFilterDecisions,
   surfaceForPhase,
   validateAnalysis,
+  wordCount,
 } from "./runtime";
 
 const OPENROUTER_BASE_URL = env.OPENROUTER_BASE_URL.replace(/\/$/, "");
@@ -92,7 +97,18 @@ export interface ChatCompletionRequest {
 
 type TranscriptTurn = { role: "user" | "trainer"; text: string };
 type KnowledgeHit = { id: string; docId: string; source: string; text: string; score: number };
-type PersonaMoment = { id: string; personaId: string; sourceId: string; text: string; score: number; action?: string; learnerState?: string; move?: string };
+type PersonaRecordHit = {
+  id: string;
+  sourceId: string;
+  text: string;
+  score: number;
+  sessionPhase?: string;
+  pastLearnerName?: string;
+  usesLearnerName?: boolean;
+  startsWithThanks?: boolean;
+  hasDoubledAcknowledgement?: boolean;
+};
+type PersonaPrimer = { statistics: CorpusStyleStats };
 
 type DirectionCheck = {
   learner_intent: "answer" | "question" | "clarification" | "off_topic" | "stop";
@@ -368,28 +384,18 @@ function clip(text: string, max = 300): string {
   return text.trim().slice(0, max);
 }
 
-function learnerStateFrom(
-  direction: DirectionCheck,
-  analysis?: AnswerAnalysis | null
-): string {
-  if (direction.learner_intent === "stop") return "stop";
-  if (!direction.should_grade || direction.learner_intent === "clarification") return "confused";
-  switch (analysis?.classification) {
-    case "strong":
-      return "strong";
-    case "partial":
-      return "partial";
-    case "vague":
-    case "unsupported":
-      return "vague";
-    case "contradictory":
-      return "off_track";
-    default:
-      return "confused";
-  }
+/**
+ * Mechanical session phase: opening before any learner turn, closing once the
+ * session is wrapping, middle otherwise. The observer LLM is not asked for this
+ * — it is a fact of the runtime state.
+ */
+function sessionPhaseOf(state: RuntimeState, action: InterviewAction): "opening" | "middle" | "closing" {
+  if (state.learner_turns === 0 && !state.actions.includes("opening")) return "opening";
+  if (action.close || state.end_reason === "completed") return "closing";
+  return "middle";
 }
 
-async function retrievePersonaMoments(
+async function retrieveAnalogousEpisodes(
   orgId: string,
   personaId: string,
   action: InterviewAction,
@@ -397,143 +403,321 @@ async function retrievePersonaMoments(
   transcript: TranscriptTurn[],
   learnerState: string,
   enabled = true
-): Promise<PersonaMoment[]> {
+): Promise<PersonaRecordHit[]> {
   if (!enabled) return [];
   try {
     const lastLearner = [...transcript].reverse().find((turn) => turn.role === "user")?.text ?? "";
     const query = [
-      `learner_state: ${learnerState}`,
-      `action: ${action.name}`,
-      "move: probe",
-      `pending_question: ${clip(state.pending_question ?? "")}`,
-      `last_learner: ${clip(lastLearner)}`,
-    ].join("\n");
-    const hits = await MainCollectionService.searchPersonaVoice(orgId, query, {
+      `Session phase: ${sessionPhaseOf(state, action)}`,
+      `Learner situation: ${clip(lastLearner, 600)}`,
+      state.pending_question ? `Pending trainer question: ${clip(state.pending_question, 200)}` : "",
+      `Learner state: ${learnerState}`,
+    ].filter(Boolean).join("\n");
+    const hits = (await MainCollectionService.searchPersonaEpisodes(orgId, query, {
       personaId,
-      action: action.name,
-      learnerState,
-      limit: 6,
-    });
-    console.info("[interview-runtime] persona moments retrieved", {
+      sessionPhase: sessionPhaseOf(state, action),
+      limit: 3,
+      diversify: true,
+    })) as PersonaRecordHit[];
+    console.info("[interview-runtime] analogous episodes retrieved", {
       hits: hits.length,
       ids: hits.map((hit) => hit.id),
     });
     return hits;
   } catch (error) {
-    console.warn("[interview-runtime] persona retrieval failed", error);
+    console.warn("[interview-runtime] episode retrieval failed", error);
     return [];
   }
-}
-
-function interviewerLine(text: string): string {
-  const match = text.match(/Interviewer:\s*([\s\S]+)/i);
-  return (match?.[1] ?? text).trim();
 }
 
 export interface SpeechMeta {
   attempts: number;
   flags: string[];
   fallback: boolean;
+  rendererFallback: boolean;
+  draftWords: number;
+  finalWords: number;
 }
 
-type SpeechDraft = { text: string; flags: string[] };
-
 /**
- * One speech call that composes in persona voice AND reasons against the spec
- * rules (see plans/issues_persona-validation-loop.md). Quality judgment lives
- * in the model's per-rule reasoning; code only counts flags and bounds the loop.
+ * Content stage: decides WHAT to say. It deliberately receives no persona
+ * style examples and no persona voice instructions — style is applied after
+ * the draft exists (plans/issues_persona-validation-loop.md §17).
  */
-async function speechDraft(
+async function contentDraft(
   contentContract: string,
   action: InterviewAction,
   specs: CompiledSpecs,
   state: RuntimeState,
   transcript: TranscriptTurn[],
-  personaMoments: PersonaMoment[],
   direction: DirectionCheck | null,
   knowledgeHits: KnowledgeHit[],
-  priorFlags: string[],
+  episodes: PersonaRecordHit[],
   usage?: UsageSink
-): Promise<SpeechDraft | null> {
+): Promise<string> {
   const persona = specs.persona;
-  const shots = personaMoments.map((moment) => interviewerLine(moment.text)).filter(Boolean).slice(0, 6);
-  const exampleShots = (persona.examples?.[action.name] ?? persona.examples?.general ?? []).slice(0, 3);
+  const phase = specs.agent.phases[state.phase_index] ?? null;
   const wordLimit = spokenWordLimit(specs.agent, state);
-  const system = `You are ${persona.name} running this interview out loud. Speak like the interviewer lines below, not like ChatGPT or a corporate coach.
+  const system = `You are ${persona.name} preparing the CONTENT of the next spoken trainer response in a live interview session.
+Decide the correct response using the session spec, the conversation observation, and retrieved knowledge. Be concise and conversational: about 30-80 words, never more than ${wordLimit}.
+Do not invent facts about the learner or documents. If the session spec refers to a document that is unavailable, adapt naturally and ask the learner to describe the relevant experience verbally.
+Keep exactly one clear response purpose and its intended question. A later stage renders the spoken wording, so write content, not style.
 
-HOW ${persona.name.toUpperCase()} TALKS (copy rhythm, fillers, length; do not copy names, companies, or facts):
-${(shots.length ? shots : exampleShots).map((line) => `Interviewer: ${line}`).join("\n\n") || "(no retrieved lines)"}
+SESSION SPEC
+Scenario: ${specs.agent.name ?? "interview session"}
+Objective: ${specs.agent.objective}
+Active phase: ${JSON.stringify(phase ? { name: phase.name, objective: phase.objective, opening: phase.opening } : null)}
+Domain principles: ${JSON.stringify(specs.domain.principles ?? [])}
+${state.primer ? `Corpus behavior statistics: ${JSON.stringify(state.primer.statistics)}` : ""}
+${episodes.length ? `\nPAST CONVERSATION EXAMPLES — different learners, behavior evidence only; never copy names, employers, projects or facts:\n${episodes.map((hit) => hit.text).join("\n---\n")}` : ""}
+${knowledgeHits.length ? `\nRelevant knowledge references: ${JSON.stringify(knowledgeHits.slice(0, 3))}` : ""}
+${direction ? `\nConversation direction: ${JSON.stringify({ learner_intent: direction.learner_intent, response_instruction: direction.response_instruction })}` : ""}`;
 
-BAD (do not sound like this): "That's helpful. Can you clarify the daily active user count?"
-GOOD: match the interviewer lines — short acknowledgements like "got it, got it" / "correct?" / "good, good", restate the learner's last point, then one poke.
-
-Content contract — keep this topic and the one real ask, change the wording freely:
-${contentContract}
-${direction ? `Direction check: ${JSON.stringify({ learner_intent: direction.learner_intent, response_instruction: direction.response_instruction })}` : ""}
-${knowledgeHits.length ? `Relevant knowledge: ${JSON.stringify(knowledgeHits.slice(0, 5))}` : ""}
-
-Rules — reason against each one before speaking:
-- one_real_question: exactly one real ask. Backchannels ("correct?", "okay?", "yeah?", "alright?", "got it?") are not asks.
-- no_copied_facts: do not copy people, projects, metrics, or company names from the interviewer lines.
-- no_invented_mention: never say "you mentioned X" unless X appears verbatim in the learner transcript.
-- word_budget: about 30-80 words, never more than ${wordLimit}.
-- in_persona_voice: match the rhythm and fillers of the interviewer lines. No generic praise ("that's solid"), no role reversal ("I built..."), no internal snake_case labels.
-${priorFlags.length ? `The prior draft flagged these rules as failed: ${JSON.stringify(priorFlags)}. Fix only these.` : ""}
-
-Return JSON only:
-{"reasoning": {"one_real_question": {"ok": true, "why": "..."}, "no_copied_facts": {"ok": true, "why": "..."}, "no_invented_mention": {"ok": true, "why": "..."}, "word_budget": {"ok": true, "why": "..."}, "in_persona_voice": {"ok": true, "why": "..."}}, "spoken_text": "the next interviewer turn"}`;
   const prompt = `Action: ${action.name}
 Intent: ${action.intent}
-Latest learner turn: ${[...transcript].reverse().find((turn) => turn.role === "user")?.text ?? "(none)"}
-Transcript:
+${state.pending_question ? `Pending question from earlier: ${state.pending_question}` : ""}
+Content contract — keep this topic and the one real ask:
+${contentContract}
+${direction ? `Direction check: ${JSON.stringify({ learner_intent: direction.learner_intent, response_instruction: direction.response_instruction })}` : ""}
+Complete transcript:
 ${transcriptText(transcript)}
 
-Speak the next interviewer turn now.`;
+Return only the content draft to speak.`;
+
+  const raw = await callOpenRouter("content", [
+    { role: "system", content: system },
+    { role: "user", content: prompt },
+  ], false, usage);
+  return raw.trim().replace(/^["']|["']$/g, "");
+}
+
+async function styleGate(
+  draft: string,
+  learnerText: string,
+  action: InterviewAction,
+  state: RuntimeState,
+  current: ReturnType<typeof currentSessionStyle>,
+  usage?: UsageSink
+): Promise<string> {
+  const prompt = `Latest learner speech: ${learnerText}
+Content draft: ${draft}
+Current-session style statistics: ${JSON.stringify(current)}
+
+Describe the completed draft's conversational function, learner state, and sentence shape for topic-neutral style retrieval of the trainer's past speech. Do not rewrite the draft. Do not propose phrasing. Return JSON only: {"style_query": "topic-neutral description of the situation, function and learner state for similarity search; no proposed response style"}`;
+
+  const raw = await callOpenRouter("style_gate", [
+    { role: "system", content: `You prepare a retrieval query for analogous speaking moments of the trainer. Describe only the current conversational situation, function, and learner state. Do not decide the response, propose phrasing, prescribe cadence, or say whether to use the learner's name or an acknowledgement.` },
+    { role: "user", content: prompt },
+  ], true, usage);
+  try {
+    const parsed = JSON.parse(raw) as { style_query?: string; query?: string };
+    return (parsed.style_query || parsed.query || "").trim() || `${action.name}; ${draft.slice(0, 200)}`;
+  } catch {
+    return `${action.name}; ${draft.slice(0, 200)}`;
+  }
+}
+
+function fingerprint(doc: string): string {
+  return doc.replace(/\s+/g, " ").trim().slice(0, 100);
+}
+
+async function retrieveStyleExamplesForTurn(
+  orgId: string,
+  personaId: string,
+  styleQuery: string,
+  phase: "opening" | "middle" | "closing",
+  current: ReturnType<typeof currentSessionStyle>,
+  trainerTurnCount: number,
+  state: RuntimeState
+): Promise<PersonaRecordHit[]> {
+  const corpus = state.primer?.statistics ?? null;
+  const decisions = styleFilterDecisions(current, corpus, trainerTurnCount);
+  const recent = new Set(state.recent_style_docs ?? []);
+  const pull = async (filters: { usesLearnerName?: boolean; startsWithThanks?: boolean; hasDoubledAcknowledgement?: boolean } | undefined) =>
+    (await MainCollectionService.searchStyleEpisodes(orgId, styleQuery, {
+      personaId,
+      sessionPhase: phase,
+      limit: 5,
+      diversify: true,
+      ...(filters ? { styleFilters: filters } : {}),
+    })) as PersonaRecordHit[];
+
+  let pool = await pull(
+    decisions.excludeLearnerName || decisions.excludeThanksStart || decisions.requireDoubledAcknowledgement
+      ? {
+          ...(decisions.excludeLearnerName ? { usesLearnerName: false } : {}),
+          ...(decisions.excludeThanksStart ? { startsWithThanks: false } : {}),
+          ...(decisions.requireDoubledAcknowledgement ? { hasDoubledAcknowledgement: true } : {}),
+        }
+      : undefined
+  );
+  if (!pool.length) pool = await pull(undefined);
+
+  // Rotation: prefer examples not used in recent turns so no top-k set dominates.
+  const fresh = pool.filter((hit) => !recent.has(fingerprint(hit.text)));
+  const ordered = [...fresh, ...pool.filter((hit) => recent.has(fingerprint(hit.text)))];
+  const chosen = ordered.slice(0, 5);
+  for (const hit of chosen) {
+    recent.add(fingerprint(hit.text));
+  }
+  state.recent_style_docs = [...recent].slice(-12);
+  return chosen;
+}
+
+/**
+ * Renderer: one bounded call. Rephrases the completed draft in the persona's
+ * wording/rhythm using retrieved style examples. Mechanical bounds (length,
+ * question count, invented mentions) plus the model's own reasoning decide
+ * between rewrite and draft — no retry loop (Section 17.2).
+ */
+async function renderStyledSpeech(
+  draft: string,
+  learnerText: string,
+  state: RuntimeState,
+  specs: CompiledSpecs,
+  styleExamples: PersonaRecordHit[],
+  current: ReturnType<typeof currentSessionStyle>,
+  usage?: UsageSink
+): Promise<{ text: string; flags: string[]; fallback: boolean }> {
+  const persona = specs.persona;
+  const system = `You are a bounded speech renderer. Rephrase the completed draft in ${persona.name}'s wording and rhythm using the retrieved style examples.
+Preserve the draft's meaning, technical facts, correction, uncertainty, response purpose, intended question, and number of focal questions. Do not add names, projects, employers, technologies, or claims from past examples. Do not answer a different question.
+Match or shorten the draft's length. Never add a question. Keep the draft's question count.
+${state.primer ? `Corpus behavior statistics: ${JSON.stringify(state.primer.statistics)}\nCurrent-session drift: ${JSON.stringify(compareStyleRates(current, state.primer.statistics))}\nCorpus rates describe a whole session, not every turn; vary wording when the current session overuses a form.` : ""}
+
+HOW ${persona.name.toUpperCase()} TALKS (copy rhythm, fillers, phrasing; do not copy names, companies, or facts):
+${styleExamples.map((hit) => hit.text).join("\n---\n") || "(no retrieved examples)"}
+
+Return JSON only:
+{"reasoning": {"meaning_preserved": {"ok": true, "why": "..."}, "question_preserved": {"ok": true, "why": "..."}, "no_example_fact_copy": {"ok": true, "why": "..."}, "in_vasanth_style": {"ok": true, "why": "..."}}, "spoken_text": "the rephrased response"}`;
+
+  const prompt = `Current learner speech: ${learnerText}
+Content draft: ${draft}
+
+Return the rephrased response now.`;
 
   try {
-    const raw = await callOpenRouter("persona", [
+    const raw = await callOpenRouter("renderer", [
       { role: "system", content: system },
       { role: "user", content: prompt },
     ], true, usage);
     const parsed = JSON.parse(raw) as { reasoning?: unknown; spoken_text?: string };
-    const text = String(parsed.spoken_text ?? "").trim().replace(/^["']|["']$/g, "");
-    const learnerText = transcript.filter((turn) => turn.role === "user").map((turn) => turn.text).join("\n");
-    const flags = [...flagsFromCompliance(parsed.reasoning), ...mechanicalSpeechFlags(text, learnerText, wordLimit)];
-    return { text, flags: [...new Set(flags)] };
+    const rewrite = String(parsed.spoken_text ?? "").trim().replace(/^["']|["']$/g, "");
+    const reasoningFlags = flagsFromCompliance(parsed.reasoning, RENDERER_RULES);
+    const boundsFlags = rendererBounds(draft, rewrite);
+    const learnerJoined = learnerText;
+    const mechanical = mechanicalSpeechFlags(rewrite, learnerJoined, spokenWordLimit(specs.agent, state)).filter(
+      (flag) => flag !== "word_budget"
+    );
+    const fatal = new Set(["empty_response", "length_expansion", "question_count", "no_invented_mention", "meaning_preserved", "question_preserved", "no_example_fact_copy"]);
+    const blocking = [...reasoningFlags, ...boundsFlags, ...mechanical].filter((flag) => fatal.has(flag) || flag.endsWith(":missing"));
+    if (rewrite && !blocking.length) {
+      return { text: rewrite, flags: [...reasoningFlags, ...boundsFlags, ...mechanical], fallback: false };
+    }
+    console.warn("[interview-runtime] renderer rejected; speaking draft", { flags: blocking });
+    return { text: draft, flags: blocking, fallback: true };
   } catch (error) {
-    console.warn("[interview-runtime] speech generation failed", error);
-    return null;
+    console.warn("[interview-runtime] renderer failed; speaking draft", error);
+    return { text: draft, flags: ["renderer_failed"], fallback: true };
   }
 }
 
+/**
+ * Full speech stage (Section 17): content draft (no style context) → style
+ * gate reads the draft → top-5 style retrieval → bounded renderer. When the
+ * persona has no episode/style records (not yet reindexed), the draft is
+ * spoken as-is — graceful degradation, never a hard failure.
+ */
 export async function generateSpeech(
   contentContract: string,
   action: InterviewAction,
   specs: CompiledSpecs,
   state: RuntimeState,
   transcript: TranscriptTurn[],
-  personaMoments: PersonaMoment[],
   direction: DirectionCheck | null,
   knowledgeHits: KnowledgeHit[],
+  orgId: string,
+  personaVoiceAvailable: boolean,
   usage?: UsageSink
 ): Promise<{ text: string; meta: SpeechMeta }> {
-  const attempt1 = await speechDraft(contentContract, action, specs, state, transcript, personaMoments, direction, knowledgeHits, [], usage);
-  if (attempt1 && !attempt1.flags.length) {
-    return { text: attempt1.text, meta: { attempts: 1, flags: [], fallback: false } };
+  const trainerTurnTexts = transcript.filter((turn) => turn.role === "trainer").map((turn) => turn.text);
+  const current = currentSessionStyle(trainerTurnTexts, state.learner_name ?? null);
+  // Learner name is mechanical context (from the learner's own words)
+  if (!state.learner_name) {
+    state.learner_name = extractLearnerName(transcript.filter((turn) => turn.role === "user").map((turn) => turn.text).join("\n"));
   }
-  const attempt2 = attempt1
-    ? await speechDraft(contentContract, action, specs, state, transcript, personaMoments, direction, knowledgeHits, attempt1.flags, usage)
-    : await speechDraft(contentContract, action, specs, state, transcript, personaMoments, direction, knowledgeHits, [], usage);
-  const drafts = [attempt1, attempt2].filter((draft): draft is SpeechDraft => draft !== null);
-  const best = pickBestDraft(drafts);
-  if (!best) {
-    console.warn("[interview-runtime] speech fallback engaged (no usable draft)");
-    return { text: deterministicFallback(action, specs.agent, state), meta: { attempts: drafts.length, flags: ["fallback"], fallback: true } };
+  // Session primer: corpus statistics over the trainer's episode index
+  if (personaVoiceAvailable && !state.primer) {
+    try {
+      const statistics = await MainCollectionService.getPersonaPrimerStats(
+        orgId,
+        specs.persona.id
+      );
+      if (statistics.turns > 0) state.primer = { statistics };
+    } catch (error) {
+      console.warn("[interview-runtime] primer stats unavailable", error);
+    }
   }
-  if (best.flags.length) {
-    console.warn("[interview-runtime] speech accepted with flags (best-of-2)", { flags: best.flags });
+
+  const phase = sessionPhaseOf(state, action);
+  const episodes = await retrieveAnalogousEpisodes(
+    orgId,
+    specs.persona.id,
+    action,
+    state,
+    transcript,
+    phase === "opening" ? "greeting" : "vague",
+    personaVoiceAvailable
+  );
+
+  let draft: string;
+  try {
+    draft = await contentDraft(contentContract, action, specs, state, transcript, direction, knowledgeHits, episodes, usage);
+  } catch (error) {
+    console.warn("[interview-runtime] content draft failed; deterministic fallback", error);
+    return {
+      text: deterministicFallback(action, specs.agent, state),
+      meta: { attempts: 0, flags: ["fallback"], fallback: true, rendererFallback: false, draftWords: 0, finalWords: 0 },
+    };
   }
-  return { text: best.text, meta: { attempts: drafts.length, flags: best.flags, fallback: false } };
+
+  let finalText = draft;
+  let flags: string[] = [];
+  let rendererFallback = false;
+  if (personaVoiceAvailable) {
+    try {
+      const styleQuery = await styleGate(draft, [...transcript].reverse().find((turn) => turn.role === "user")?.text ?? "", action, state, current, usage);
+      const examples = await retrieveStyleExamplesForTurn(
+        orgId,
+        specs.persona.id,
+        styleQuery,
+        phase,
+        current,
+        transcript.filter((turn) => turn.role === "trainer").length,
+        state
+      );
+      if (examples.length) {
+        const rendered = await renderStyledSpeech(draft, [...transcript].reverse().find((turn) => turn.role === "user")?.text ?? "", state, specs, examples, current, usage);
+        finalText = rendered.text;
+        flags = rendered.flags;
+        rendererFallback = rendered.fallback;
+      }
+    } catch (error) {
+      console.warn("[interview-runtime] style stage failed; speaking draft", error);
+    }
+  }
+
+  return {
+    text: finalText,
+    meta: {
+      attempts: flags.length ? 2 : 1,
+      flags,
+      fallback: false,
+      rendererFallback,
+      draftWords: wordCount(draft),
+      finalWords: wordCount(finalText),
+    },
+  };
 }
 
 function spokenContentContract(
@@ -556,14 +740,18 @@ async function generatePipelineSpeech(
   transcript: TranscriptTurn[],
   direction: DirectionCheck,
   knowledgeHits: KnowledgeHit[],
-  moments: PersonaMoment[],
+  orgId: string,
+  personaVoiceAvailable: boolean,
   usage?: UsageSink
 ): Promise<{ text: string; meta: SpeechMeta }> {
   if (isRepeatRequest(direction) && action.fallback_text) {
-    return { text: action.fallback_text, meta: { attempts: 0, flags: [], fallback: false } };
+    return {
+      text: action.fallback_text,
+      meta: { attempts: 0, flags: [], fallback: false, rendererFallback: false, draftWords: 0, finalWords: 0 },
+    };
   }
   const contentContract = spokenContentContract(action, state, transcript);
-  return generateSpeech(contentContract, action, specs, state, transcript, moments, direction, knowledgeHits, usage);
+  return generateSpeech(contentContract, action, specs, state, transcript, direction, knowledgeHits, orgId, personaVoiceAvailable, usage);
 }
 
 export async function handleCompletions(request: Request): Promise<Response> {
@@ -767,24 +955,16 @@ async function runCompletionPipeline(
         expects_answer: true,
       };
       const baseOpening = specs.agent.opening || "Welcome to the interview session. Let's begin.";
-      const personaMoments = await retrievePersonaMoments(
-        session.orgId,
-        specs.persona.id,
-        openingAction,
-        state,
-        currentTranscript,
-        "strong",
-        personaVoiceAvailable
-      );
       const opening = await generateSpeech(
         baseOpening,
         openingAction,
         specs,
         state,
         currentTranscript,
-        personaMoments,
         null,
         [],
+        session.orgId,
+        personaVoiceAvailable,
         usageSink
       );
       const openingText = opening.text;
@@ -831,24 +1011,16 @@ async function runCompletionPipeline(
         expects_answer: true,
       };
       const baseOpening = specs.agent.opening || "Welcome to the interview session. Let's begin.";
-      const personaMoments = await retrievePersonaMoments(
-        session.orgId,
-        specs.persona.id,
-        openingAction,
-        state,
-        currentTranscript,
-        "strong",
-        personaVoiceAvailable
-      );
       const opening = await generateSpeech(
         baseOpening,
         openingAction,
         specs,
         state,
         currentTranscript,
-        personaMoments,
         null,
         [],
+        session.orgId,
+        personaVoiceAvailable,
         usageSink
       );
       replyText = opening.text;
@@ -931,28 +1103,6 @@ async function runCompletionPipeline(
       );
       action = selectAction(analysis, state, specs.persona, specs.agent);
     }
-    const learnerState = learnerStateFrom(direction, analysis);
-    const personaMoments = await retrievePersonaMoments(
-      session.orgId,
-      specs.persona.id,
-      action,
-      state,
-      fullTranscript,
-      learnerState,
-      personaVoiceAvailable
-    );
-    const controllerAction = action.name;
-    action = applyPersonaVote(
-      action,
-      activeAllowedActions(specs.agent, state),
-      personaMoments.map((moment) => moment.action ?? ""),
-      state.actions
-    );
-    console.info("[interview-runtime] persona vote", {
-      controllerAction,
-      votedAction: action.name,
-      momentIds: personaMoments.map((moment) => moment.id),
-    });
     state.actions.push(action.name);
 
     if (action.close && advertisedToolNames.has("finish_session")) {
@@ -1089,7 +1239,8 @@ async function runCompletionPipeline(
           fullTranscript,
           direction,
           knowledgeHits,
-          personaMoments,
+          session.orgId,
+          personaVoiceAvailable,
           usageSink
         );
         const spokenText = spoken.text;
@@ -1132,7 +1283,8 @@ async function runCompletionPipeline(
         fullTranscript,
         direction,
         knowledgeHits,
-        personaMoments,
+        session.orgId,
+        personaVoiceAvailable,
         usageSink
       );
       const spokenText = spoken.text;

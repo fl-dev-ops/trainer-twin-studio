@@ -13,8 +13,11 @@ import {
   type RuntimeState,
   applyEvidenceUpdates,
   closingAction,
+  compareStyleRates,
+  currentSessionStyle,
   deterministicFallback,
   expirePhase,
+  extractLearnerName,
   flagsFromCompliance,
   foldInterviewText,
   initRuntimeState,
@@ -23,11 +26,16 @@ import {
   nextEvidence,
   applyPersonaVote,
   pickBestDraft,
+  questionCount,
   recordAskedQuestion,
+  rendererBounds,
   selectAction,
+  styleFilterDecisions,
   surfaceForPhase,
   validateAction,
   validateAnalysis,
+  wordCount,
+  RENDERER_RULES,
 } from "./runtime";
 
 const DATA_DIR = path.resolve(import.meta.dir, "../../data");
@@ -387,5 +395,73 @@ describe("Interview Runtime Controller (selectAction parity)", () => {
     expect(mechanicalSpeechFlags("You mentioned SQS at Acme. Can you explain the event loop?", "The event loop drains microtasks before timers.", 90)).toContain("no_invented_mention");
     // clean line passes with no flags
     expect(mechanicalSpeechFlags("Can you walk through that microtask drain?", "The event loop drains microtasks before timers.", 90)).toEqual([]);
+  });
+
+  it("post-style renderer bounds reject length inflation and question drift", () => {
+    const draft = "Correct. Can you explain the retry flow?";
+    expect(rendererBounds(draft, "Correct. Can you explain the retry flow?")).toEqual([]);
+    expect(rendererBounds(draft, `Okay, okay. ${"word ".repeat(40)}Can you explain the retry flow?`)).toContain("length_expansion");
+    expect(rendererBounds(draft, "Correct. Can you explain the retry flow? And the commit strategy?")).toContain("question_count");
+    expect(rendererBounds(draft, "   ")).toEqual(["empty_response"]);
+    expect(wordCount(draft)).toBe(7);
+    expect(questionCount(draft)).toBe(1);
+  });
+
+  it("renderer reasoning uses the renderer rule set, not the speech rule set", () => {
+    const reasoning = {
+      meaning_preserved: { ok: true, why: "same claims" },
+      question_preserved: { ok: true, why: "same ask" },
+      no_example_fact_copy: { ok: true, why: "clean" },
+      in_vasanth_style: { ok: true, why: "matches" },
+    };
+    expect(flagsFromCompliance(reasoning, RENDERER_RULES)).toEqual([]);
+    // empty reasoning is the mechanical missing_reasoning schema flag
+    expect(flagsFromCompliance({}, RENDERER_RULES)).toEqual(["missing_reasoning"]);
+  });
+
+  it("learner name extraction and session style counters are mechanical", () => {
+    expect(extractLearnerName("hi, my name is karthik and I'm ready")).toBe("Karthik");
+    expect(extractLearnerName("I'm ready whenever you are")).toBeNull();
+
+    const turns = [
+      "Thanks, Karthik. Can you explain the retry flow?",
+      "Correct, correct. What did you observe?",
+      "Okay. Walk me through the offsets.",
+    ];
+    const stats = currentSessionStyle(turns, "Karthik");
+    expect(stats.trainer_turns).toBe(3);
+    expect(stats.learner_name_use_count).toBe(1);
+    expect(stats.doubled_acknowledgement_count).toBe(1);
+    expect(stats.thanks_turn_start_count).toBe(1);
+    expect(stats.average_questions).toBeCloseTo(2 / 3);
+  });
+
+  it("style filter decisions exclude overused forms and require missing ones", () => {
+    const corpus = {
+      turns: 743,
+      learner_name_use_rate: 0.447,
+      doubled_acknowledgement_rate: 0.147,
+      thanks_turn_start_rate: 0.008,
+      average_spoken_words: 70,
+      average_questions: 2,
+    };
+    const overused: SessionStyleStats = {
+      ...currentSessionStyle(["Thanks, Karthik. Okay?", "Thanks, Karthik. Right?", "Thanks, Karthik. Correct?"], "Karthik"),
+      turns: 743,
+    };
+    const decisions = styleFilterDecisions(overused, corpus, 3);
+    expect(decisions.excludeLearnerName).toBe(true);
+    expect(decisions.excludeThanksStart).toBe(true);
+    expect(decisions.requireDoubledAcknowledgement).toBe(true);
+
+    const warmUp = styleFilterDecisions(
+      { ...overused, trainer_turns: 1 },
+      corpus,
+      2
+    );
+    expect(warmUp.excludeLearnerName).toBe(false);
+
+    expect(compareStyleRates(overused, corpus).learner_name_use_rate?.difference).toBeGreaterThan(0);
+    expect(compareStyleRates(overused, null)).toEqual({});
   });
 });
