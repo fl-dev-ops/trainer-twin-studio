@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { SessionView } from "@/components/session-view";
 import { signInUrl } from "@/lib/base-domain";
 import { getSessionOrg } from "@/lib/org";
-import { listAgentPersonas, listRunnableSpecs, listUploads } from "@/lib/specs";
+import { listAgentPersonas, listRunnableSpecs, listScenarioIntroVideos, listUploads } from "@/lib/specs";
 
 export const dynamic = "force-dynamic";
 
@@ -31,11 +31,15 @@ export default async function PortalSessionPage({
   ]);
   if (personas.length === 0) notFound();
 
+  const introVideos = await listScenarioIntroVideos(portalOrgId, [agent]);
+
   return (
     <SessionView
       personas={personas}
       agents={[agent]}
       agentPersonas={agentPersonas}
+      introVideos={introVideos}
+      autoStart
       contexts={contexts.map((c) => ({ id: c.id, name: c.name, size: c.size }))}
     />
   );

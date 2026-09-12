@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { SessionView } from "@/components/session-view";
 import { getSessionOrg } from "@/lib/org";
-import { listAgentPersonas, listRunnableSpecs, listUploads } from "@/lib/specs";
+import { listAgentPersonas, listRunnableSpecs, listScenarioIntroVideos, listUploads } from "@/lib/specs";
 
 export const dynamic = "force-dynamic";
 
@@ -22,11 +22,13 @@ export default async function TalkPage({
     ? [query.agent, ...agents.filter((slug) => slug !== query.agent)]
     : agents;
   const agentPersonas = await listAgentPersonas(org.id, orderedAgents);
+  const introVideos = await listScenarioIntroVideos(org.id, orderedAgents);
   return (
     <SessionView
       personas={personas}
       agents={orderedAgents}
       agentPersonas={agentPersonas}
+      introVideos={introVideos}
       contexts={contexts.map((c) => ({ id: c.id, name: c.name, size: c.size }))}
     />
   );

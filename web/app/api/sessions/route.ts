@@ -39,6 +39,17 @@ export async function POST(req: Request) {
     let livekit = null;
     let livekitError: string | undefined;
     try {
+      // The agent holds its greeting only when the scenario ships an intro clip; the
+      // flag rides in room metadata so the agent worker can honor it per-session.
+      const agentRow = session.agentSlug
+        ? await db.agent.findFirst({
+            where: { orgId: org.id, slug: session.agentSlug },
+            select: { data: true },
+          })
+        : null;
+      const holdOpening = Boolean(
+        (agentRow?.data as { introVideo?: unknown } | null)?.introVideo,
+      );
       livekit = await createLiveKitSessionToken({
         sessionId: session.id,
         userId: user.id,
@@ -46,6 +57,7 @@ export async function POST(req: Request) {
         runtimeToken: session.runtimeToken,
         orgId: org.id,
         agentSlug: session.agentSlug,
+        holdOpening,
       });
     } catch (tokenErr) {
       console.error("Failed to start LiveKit session:", tokenErr);

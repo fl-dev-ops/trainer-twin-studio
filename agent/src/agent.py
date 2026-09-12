@@ -10,7 +10,7 @@ import sys
 from typing import Any
 
 from dotenv import load_dotenv
-from livekit import agents, api
+from livekit import agents, api, rtc
 from livekit.agents import Agent, room_io
 from livekit.plugins import noise_cancellation
 
@@ -75,22 +75,54 @@ def parse_metadata(raw: str | None) -> dict[str, Any]:
         return {}
 
 
+OPENING_RELEASE_TIMEOUT = 60.0  # client gated on intro video; speak anyway if it never arrives
+
+
 class TrainerAgent(Agent):
     """Interviewer agent that delegates conversation flow to TrainerTwin's web runtime."""
 
-    def __init__(self, *, tools: list[Any], room_name: str) -> None:
+    def __init__(
+        self,
+        *,
+        tools: list[Any],
+        room_name: str,
+        opening_release: asyncio.Event,
+        hold_opening: bool = False,
+    ) -> None:
         super().__init__(
             instructions="You are an expert interviewer. Drive the interview according to runtime guidance.",
             tools=tools,
         )
         self.room_name = room_name
+        self.opening_release = opening_release
+        self.hold_opening = hold_opening
 
     async def on_enter(self) -> None:
-        logger.info("TrainerAgent entered room %s, requesting opening turn", self.room_name)
+        # When the scenario ships an intro clip (hold_opening room metadata), the client
+        # plays it inside the session and sends {"type": "begin-opening"} when it ends so
+        # the first speech picks up seamlessly instead of talking over the clip. Without
+        # the flag the greeting starts immediately (old-client / rollout-skew safe). A
+        # timeout keeps dead clients (refresh loops, broken video) from stalling sessions.
+        if not self.hold_opening:
+            await self._generate_opening()
+            return
+        logger.info("TrainerAgent entered room %s, waiting for opening release", self.room_name)
+        try:
+            await asyncio.wait_for(self.opening_release.wait(), timeout=OPENING_RELEASE_TIMEOUT)
+        except asyncio.TimeoutError:
+            logger.warning(
+                "No opening release after %.0fs for room %s; speaking anyway",
+                OPENING_RELEASE_TIMEOUT,
+                self.room_name,
+            )
+        await self._generate_opening()
+
+    async def _generate_opening(self) -> None:
         try:
             await self.session.generate_reply(instructions="session-start")
         except Exception as exc:
             logger.exception("Failed to generate initial reply: %s", exc)
+
 
 
 async def entrypoint(ctx: agents.JobContext) -> None:
@@ -114,6 +146,19 @@ async def entrypoint(ctx: agents.JobContext) -> None:
 
     await ctx.connect()
     logger.info("Agent connected to room %s for session %s", ctx.room.name, session_id)
+
+    # Client holds the greeting until its intro video finishes; released via data packet.
+    opening_release = asyncio.Event()
+
+    def on_opening_release(packet: rtc.DataPacket) -> None:
+        try:
+            msg = json.loads(packet.data)
+        except Exception:
+            return
+        if isinstance(msg, dict) and msg.get("type") == "begin-opening":
+            opening_release.set()
+
+    ctx.room.on("data_received", on_opening_release)
 
     participant_identity: str | None = None
     for _ in range(60):
@@ -150,7 +195,12 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         "session": session,  # kept in-memory so on_session_end can dump the transcript
     }
 
-    agent = TrainerAgent(tools=tools, room_name=ctx.room.name)
+    agent = TrainerAgent(
+        tools=tools,
+        room_name=ctx.room.name,
+        opening_release=opening_release,
+        hold_opening=bool(metadata.get("hold_opening")),
+    )
 
     async def watch_empty_room() -> None:
         """Tab death skips finalize AND the job lingers (close_on_disconnect=False).

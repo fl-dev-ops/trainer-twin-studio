@@ -124,6 +124,27 @@ export async function listAgentPersonas(orgId: string, slugs: string[]) {
   return Object.fromEntries(agents.map((agent) => [agent.slug, agent.persona.slug]));
 }
 
+/**
+ * Playable intro video per scenario, keyed by slug. The stored value is an S3 object key;
+ * an absolute URL is passed through so a CDN-fronted video needs no special casing.
+ */
+export async function listScenarioIntroVideos(orgId: string, slugs: string[]) {
+  if (slugs.length === 0) return {};
+  const agents = await db.agent.findMany({
+    where: { orgId, slug: { in: slugs } },
+    select: { slug: true, data: true },
+  });
+  const resolved = await Promise.all(
+    agents.map(async (agent) => {
+      const stored = (agent.data as { introVideo?: unknown } | null)?.introVideo;
+      if (typeof stored !== "string" || !stored.trim()) return [agent.slug, null] as const;
+      const value = stored.trim();
+      return [agent.slug, /^https?:\/\//i.test(value) ? value : await presignedGetUrl(value)] as const;
+    }),
+  );
+  return Object.fromEntries(resolved) as Record<string, string | null>;
+}
+
 export async function readSpec(type: SpecType, slug: string, orgId: string) {
   if (!validSlug(slug)) throw new Error(`Invalid id: ${slug}`);
   const row: SpecRow | null = type === "personas"
