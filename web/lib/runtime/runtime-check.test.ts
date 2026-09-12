@@ -26,15 +26,12 @@ import {
   nextEvidence,
   applyPersonaVote,
   pickBestDraft,
-  questionCount,
   recordAskedQuestion,
-  rendererBounds,
   selectAction,
   styleFilterDecisions,
   surfaceForPhase,
   validateAction,
   validateAnalysis,
-  wordCount,
   RENDERER_RULES,
 } from "./runtime";
 
@@ -395,16 +392,6 @@ describe("Interview Runtime Controller (selectAction parity)", () => {
     expect(mechanicalSpeechFlags("You mentioned SQS at Acme. Can you explain the event loop?", "The event loop drains microtasks before timers.", 90)).toContain("no_invented_mention");
     // clean line passes with no flags
     expect(mechanicalSpeechFlags("Can you walk through that microtask drain?", "The event loop drains microtasks before timers.", 90)).toEqual([]);
-  });
-
-  it("post-style renderer bounds reject length inflation and question drift", () => {
-    const draft = "Correct. Can you explain the retry flow?";
-    expect(rendererBounds(draft, "Correct. Can you explain the retry flow?")).toEqual([]);
-    expect(rendererBounds(draft, `Okay, okay. ${"word ".repeat(40)}Can you explain the retry flow?`)).toContain("length_expansion");
-    expect(rendererBounds(draft, "Correct. Can you explain the retry flow? And the commit strategy?")).toContain("question_count");
-    expect(rendererBounds(draft, "   ")).toEqual(["empty_response"]);
-    expect(wordCount(draft)).toBe(7);
-    expect(questionCount(draft)).toBe(1);
   });
 
   it("renderer reasoning uses the renderer rule set, not the speech rule set", () => {

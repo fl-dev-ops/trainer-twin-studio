@@ -25,12 +25,9 @@ import {
   extractLearnerName,
   flagsFromCompliance,
   initRuntimeState,
-  mechanicalSpeechFlags,
   recordAskedQuestion,
   refreshCurrentTopic,
-  rendererBounds,
   selectAction,
-  spokenWordLimit,
   styleFilterDecisions,
   surfaceForPhase,
   validateAnalysis,
@@ -457,9 +454,8 @@ async function contentDraft(
 ): Promise<string> {
   const persona = specs.persona;
   const phase = specs.agent.phases[state.phase_index] ?? null;
-  const wordLimit = spokenWordLimit(specs.agent, state);
   const system = `You are ${persona.name} preparing the CONTENT of the next spoken trainer response in a live interview session.
-Decide the correct response using the session spec, the conversation observation, and retrieved knowledge. Be concise and conversational: about 30-80 words, never more than ${wordLimit}.
+Decide the correct response using the session spec, the conversation observation, and retrieved knowledge. Be concise and conversational.
 Do not invent facts about the learner or documents. If the session spec refers to a document that is unavailable, adapt naturally and ask the learner to describe the relevant experience verbally.
 Keep exactly one clear response purpose and its intended question. A later stage renders the spoken wording, so write content, not style.
 
@@ -603,16 +599,17 @@ Return the rephrased response now.`;
     ], true, usage);
     const parsed = JSON.parse(raw) as { reasoning?: unknown; spoken_text?: string };
     const rewrite = String(parsed.spoken_text ?? "").trim().replace(/^["']|["']$/g, "");
+    // Acceptance mirrors the validated experiment exactly: the rewrite is used
+    // when it is non-empty and the model's own meaning/question/fact-copy
+    // verdicts all pass. No mechanical bounds — those were NOT part of the
+    // validated top-3/top-5 runs (Section 16) and are deliberately deferred.
     const reasoningFlags = flagsFromCompliance(parsed.reasoning, RENDERER_RULES);
-    const boundsFlags = rendererBounds(draft, rewrite);
-    const learnerJoined = learnerText;
-    const mechanical = mechanicalSpeechFlags(rewrite, learnerJoined, spokenWordLimit(specs.agent, state)).filter(
-      (flag) => flag !== "word_budget"
+    const blocking = reasoningFlags.filter((flag) =>
+      ["meaning_preserved", "question_preserved", "no_example_fact_copy"].includes(flag.replace(":missing", ""))
+        || flag === "missing_reasoning"
     );
-    const fatal = new Set(["empty_response", "length_expansion", "question_count", "no_invented_mention", "meaning_preserved", "question_preserved", "no_example_fact_copy"]);
-    const blocking = [...reasoningFlags, ...boundsFlags, ...mechanical].filter((flag) => fatal.has(flag) || flag.endsWith(":missing"));
     if (rewrite && !blocking.length) {
-      return { text: rewrite, flags: [...reasoningFlags, ...boundsFlags, ...mechanical], fallback: false };
+      return { text: rewrite, flags: reasoningFlags, fallback: false };
     }
     console.warn("[interview-runtime] renderer rejected; speaking draft", { flags: blocking });
     return { text: draft, flags: blocking, fallback: true };

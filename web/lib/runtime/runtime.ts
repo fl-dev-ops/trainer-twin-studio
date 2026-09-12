@@ -873,22 +873,6 @@ export function styleFilterDecisions(
   };
 }
 
-/**
- * Mechanical bounds on a style rewrite (Section 17.2). Physical limits only:
- * length inflation and question-count drift. Failures mean "speak the draft".
- */
-export function rendererBounds(draft: string, rewrite: string): string[] {
-  if (!rewrite.trim()) return ["empty_response"];
-  const flags: string[] = [];
-  if (wordCount(rewrite) > Math.ceil(wordCount(draft) * 1.25)) {
-    flags.push("length_expansion");
-  }
-  if (questionCount(rewrite) !== questionCount(draft)) {
-    flags.push("question_count");
-  }
-  return flags;
-}
-
 export function feedbackSummary(agent: AgentSpec, state: RuntimeState): string {
   const keys = agent.phases
     .filter((p) => p.claim_handling !== "session_feedback")

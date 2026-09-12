@@ -9,7 +9,8 @@ from tts.voxcpm2 import VoxCPM2TTS, build_voxcpm2_tts
 
 
 def build_tts(*, voice: str = "", speaker: str = "rohan") -> Any:
-    provider = os.getenv("TTS_PROVIDER", "voxcpm2").strip().lower()
+    # Sarvam is the active provider; the voxcpm2 voice-cloning path is kept for later use.
+    provider = os.getenv("TTS_PROVIDER", "sarvam").strip().lower()
     if provider == "sarvam":
         from livekit.plugins import sarvam
 
