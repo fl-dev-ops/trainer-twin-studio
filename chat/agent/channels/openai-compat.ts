@@ -141,9 +141,12 @@ export default defineChannel({
         principalType: "organization",
       };
 
+      const t_start = Date.now();
       const source = from(address);
       const existing = await resolveSession(address);
+      const t_resolved = Date.now();
       const tailIndex = existing ? await existing.getStreamTailIndex() : 0;
+      const t_tail = Date.now();
       let session: Session;
       try {
         session = await source.send(message, { auth, turnPolicy: "steer" });
@@ -151,6 +154,7 @@ export default defineChannel({
         console.error("[EVE SEND ERROR]", sendErr);
         return Response.json({ error: String(sendErr) }, { status: 400 });
       }
+      const t_sent = Date.now();
 
       // Hook up client abort to cooperative turn cancellation (barge-in support)
       request.signal.addEventListener("abort", () => {
@@ -160,9 +164,9 @@ export default defineChannel({
       const completionId = `chatcmpl-${crypto.randomUUID()}`;
       const created = Math.floor(Date.now() / 1000);
       const model = requestedModel ?? body?.model ?? "trainertwin-brain";
-      const turnStartMs = Date.now();
 
       const stream = await session.getEventStream(tailIndex === undefined ? {} : { startIndex: tailIndex });
+      const t_stream = Date.now();
       const reader = stream.getReader();
 
       const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
@@ -176,6 +180,7 @@ export default defineChannel({
         let sawTurnStarted = false;
         let toolIndex = 0;
         let ttftMs: number | null = null;
+        let tFirstEvent = 0;
         let usage: { inputTokens?: number; outputTokens?: number } | null = null;
         const allToolsCalled: { name: string; callId: string; input: unknown }[] = [];
         const finishReason = () => (sawToolCall ? "tool_calls" : "stop");
@@ -185,6 +190,7 @@ export default defineChannel({
             const { done, value: event } = await reader.read();
             if (done) break;
             const ev = event as StreamEvent;
+            if (!tFirstEvent) tFirstEvent = Date.now() - t_start;
 
             if (ev.type === "turn.started") {
               sawTurnStarted = true;
@@ -193,7 +199,7 @@ export default defineChannel({
             // Text deltas
             if (ev.type === "message.appended" && typeof ev.data.messageDelta === "string") {
               if (ttftMs === null) {
-                ttftMs = Date.now() - turnStartMs;
+                ttftMs = Date.now() - t_start;
               }
               sawActivity = true;
               await writeChunk({
@@ -252,7 +258,7 @@ export default defineChannel({
               ev.type === "session.completed";
 
             if (terminal && (sawActivity || sawTurnStarted)) {
-              const wallMs = Date.now() - turnStartMs;
+              const wallMs = Date.now() - t_start;
               await writeChunk({
                 id: completionId,
                 object: "chat.completion.chunk",
@@ -262,6 +268,15 @@ export default defineChannel({
                 tools_called: allToolsCalled,
                 ttft_ms: ttftMs ?? wallMs,
                 wall_ms: wallMs,
+                timing_breakdown: {
+                  resolve_session_ms: t_resolved - t_start,
+                  get_tail_ms: t_tail - t_resolved,
+                  session_send_ms: t_sent - t_tail,
+                  stream_attach_ms: t_stream - t_sent,
+                  first_event_ms: tFirstEvent,
+                  first_token_ms: ttftMs,
+                  total_turn_ms: wallMs,
+                },
                 ...(usage
                   ? {
                       usage: {
