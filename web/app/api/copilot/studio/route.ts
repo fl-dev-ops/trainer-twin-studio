@@ -34,6 +34,10 @@ const requestSchema = z.discriminatedUnion("action", [
     agentSlug: z.string().optional(),
     personaSlug: z.string().optional(),
   }).strict(),
+  z.object({
+    action: z.literal("getPersonaStyleMoments"),
+    personaSlug: slug,
+  }).strict(),
 ]);
 
 function authorized(request: Request) {
@@ -115,6 +119,16 @@ export async function POST(request: Request) {
       documents: Array.from(docMap.values()),
       learnerName: (session?.runtimeState as Record<string, unknown> | null)?.learner_name ?? null,
     });
+  }
+
+  if (input.action === "getPersonaStyleMoments") {
+    const persona = await db.persona.findFirst({
+      where: { slug: { equals: input.personaSlug, mode: "insensitive" }, orgId },
+      select: { id: true, name: true, slug: true },
+    });
+    if (!persona) return Response.json({ error: `No persona named "${input.personaSlug}"` });
+    const moments = await MainCollectionService.getRawStyleEpisodesForPersona(orgId, persona.id);
+    return Response.json({ personaSlug: persona.slug, personaName: persona.name, moments });
   }
 
   if (input.action === "searchStyleEpisodes") {

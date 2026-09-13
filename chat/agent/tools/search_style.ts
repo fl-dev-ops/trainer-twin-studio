@@ -1,6 +1,6 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
-import { callStudio } from "../lib/studio";
+import { searchPersonaStyleLocally } from "../lib/style-search";
 
 export default defineTool({
   description:
@@ -10,7 +10,11 @@ export default defineTool({
     query: z.string().trim().min(2).max(500).describe("Topic-neutral description of the conversational situation and move"),
     limit: z.number().int().min(1).max(8).default(5),
   }),
-  execute(input, ctx) {
-    return callStudio<Record<string, unknown>>({ action: "searchStyleEpisodes", ...input }, ctx);
+  async execute(input, ctx) {
+    const orgId = ctx.session.auth.initiator?.principalId ?? ctx.session.auth.current?.principalId;
+    if (!orgId) {
+      throw new Error("No organization principal attached to session");
+    }
+    return searchPersonaStyleLocally(orgId, input.personaSlug, input.query, input.limit);
   },
 });

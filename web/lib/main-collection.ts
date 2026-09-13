@@ -641,6 +641,16 @@ export class MainCollectionService {
   }
 
   /** Searches topic-neutral style records for the bounded speech renderer. */
+  static async getRawStyleEpisodesForPersona(orgId: string, personaId: string) {
+    const pages = await Promise.all([
+      getCachedStylePage(orgId, personaId, 0),
+      getCachedStylePage(orgId, personaId, 1),
+      getCachedStylePage(orgId, personaId, 2),
+      getCachedStylePage(orgId, personaId, 3),
+    ]);
+    return pages.flat();
+  }
+
   static async searchStyleEpisodes(
     orgId: string,
     query: string,
