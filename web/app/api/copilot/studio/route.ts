@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { searchKnowledge } from "@/lib/knowledge";
 import { specDraftBundleSchema } from "@/lib/spec-draft-schema";
 import { publishSpecDraft, readSpecDraft, saveSpecDraft } from "@/lib/spec-drafts";
+import { MainCollectionService } from "@/lib/main-collection";
+import { redactLearnerNames } from "@/lib/persona-voice";
 
 export const runtime = "nodejs";
 
@@ -19,6 +21,12 @@ const requestSchema = z.discriminatedUnion("action", [
     knowledgeBase: slug,
     query: z.string().trim().min(2).max(500),
     limit: z.number().int().min(1).max(8),
+  }).strict(),
+  z.object({
+    action: z.literal("searchStyleEpisodes"),
+    personaSlug: slug,
+    query: z.string().trim().min(2).max(500),
+    limit: z.number().int().min(1).max(10),
   }).strict(),
 ]);
 
@@ -37,9 +45,43 @@ export async function POST(request: Request) {
   if (!orgId) return Response.json({ error: "Organization is required" }, { status: 400 });
   const parsed = requestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Invalid Copilot request" }, { status: 400 });
+  const input = parsed.data;
+
+  if (input.action === "searchStyleEpisodes") {
+    const persona = await db.persona.findFirst({
+      where: { slug: input.personaSlug, orgId },
+      select: { id: true, name: true },
+    });
+    if (!persona) return Response.json({ error: `No persona named "${input.personaSlug}"` });
+    const hits = await MainCollectionService.searchStyleEpisodes(orgId, input.query, {
+      personaId: persona.id,
+      limit: input.limit,
+      diversify: true,
+    });
+    // Redact past learner names from every returned field so retrieved examples
+    // never carry another learner's identity.
+    return Response.json({
+      query: input.query,
+      persona: persona.name,
+      results: hits.map((hit) => {
+        const pastName = hit.pastLearnerName;
+        return {
+          text: redactLearnerNames(hit.text, [pastName]),
+          score: hit.score,
+          metadata: {
+            sessionPhase: hit.sessionPhase,
+            styleFunction: redactLearnerNames(hit.styleFunction ?? "", [pastName]),
+            styleShape: redactLearnerNames(hit.styleShape ?? "", [pastName]),
+            usesLearnerName: hit.usesLearnerName,
+            startsWithThanks: hit.startsWithThanks,
+            hasDoubledAcknowledgement: hit.hasDoubledAcknowledgement,
+          },
+        };
+      }),
+    });
+  }
 
   try {
-    const input = parsed.data;
     if (input.action === "inventory") {
       const [personas, agents, domains, knowledgeBases, drafts] = await Promise.all([
         db.persona.findMany({ where: { orgId }, orderBy: { slug: "asc" }, select: { slug: true, name: true, version: true } }),

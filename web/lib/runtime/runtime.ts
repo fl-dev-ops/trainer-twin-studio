@@ -781,7 +781,7 @@ export function extractLearnerName(learnerText: string): string | null {
   // "I am X" only counts when the name is capitalized, so adjectives ("I'm ready") don't match.
   const text = foldInterviewText(learnerText);
   const match = text.match(/\bmy name is\s+([A-Za-z][a-z]+)\b/i)
-    ?? text.match(/\b(?:i am|i'm)\s+([A-Z][a-z]+)\b/);
+    ?? text.match(/\b(?:[Ii] am|[Ii]'m)\s+([A-Z][a-z]+)\b/);
   const name = match?.[1]?.trim();
   return name ? name.replace(/\b\w/g, (c) => c.toUpperCase()) : null;
 }

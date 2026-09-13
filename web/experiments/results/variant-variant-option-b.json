@@ -1,0 +1,577 @@
+{
+  "variant": "variant-option-b",
+  "generatedAt": "2026-09-13T13:56:07.246Z",
+  "environment": {
+    "model": "openai/gpt-4.1-mini",
+    "agent": {
+      "id": "cmtx0b2db000204jo1hour2f1",
+      "slug": "project-experience-deep-dive"
+    },
+    "persona": {
+      "id": "cmtwyoa1s000004jshzfd5by4",
+      "slug": "Vasanth"
+    },
+    "context": {
+      "id": "cmtx1jwpr000004k111cst5y2",
+      "name": "Harini_Shekar_Senior_Software_Engineer_Resume.pdf"
+    },
+    "stream": false
+  },
+  "turns": [
+    {
+      "label": "opening",
+      "wallMs": 473,
+      "ttftMs": 473,
+      "status": 200,
+      "response": "Hi there. As you know, I'm Vasanth. Thanks for registering for the mock interview. Can I know something about you — whatever you wish to share? What are your skill sets, and what sort of roles are you aspiring for at the moment?",
+      "events": [
+        {
+          "stage": "db.auth",
+          "kind": "db",
+          "startMs": 3,
+          "endMs": 261,
+          "ms": 257
+        },
+        {
+          "stage": "db.persist",
+          "kind": "db",
+          "startMs": 264,
+          "endMs": 473,
+          "ms": 208
+        }
+      ],
+      "logs": []
+    },
+    {
+      "label": "ownership-answer",
+      "wallMs": 6517,
+      "ttftMs": 6517,
+      "status": 200,
+      "response": "Great, there. Can you walk me through how you decided on the event-driven architecture for the migration? What were the key factors that influenced your choice?",
+      "events": [
+        {
+          "stage": "db.auth",
+          "kind": "db",
+          "startMs": 0,
+          "endMs": 169,
+          "ms": 169
+        },
+        {
+          "stage": "direction",
+          "kind": "llm",
+          "startMs": 170,
+          "endMs": 2039,
+          "ms": 1869,
+          "meta": {
+            "status": 200,
+            "headersMs": 1350,
+            "model": "openai/gpt-4.1-mini",
+            "requestBytes": 2245,
+            "usage": {
+              "prompt_tokens": 424,
+              "completion_tokens": 47,
+              "total_tokens": 471,
+              "cost": 0.0002448,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0002448,
+                "upstream_inference_prompt_cost": 0.0001696,
+                "upstream_inference_completions_cost": 0.0000752
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "persona.style",
+          "kind": "retrieval",
+          "startMs": 2039,
+          "endMs": 5001,
+          "ms": 2962,
+          "meta": {
+            "hits": 8,
+            "records": [
+              {
+                "id": "persona_style_episode_cmtxgkopp000s2lse47nisylb#33",
+                "source": "02.yaml",
+                "score": 0.48427699999999996,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: closing\nSpeech function: acknowledge -> feedback -> explain -> probe\nSentence shape: acknowledgement -> feedback -> explanation -> question\nPhrasing features: direct address, repetition, encouragement, detailed feedback, polite, inclusive\nCadence: detailed, evaluative, encouraging\nTopic-neutral pattern: Yes. Good, good, <learner>. I'll just pass on my feedback, <learner>. I mean, it was a very clean, neat interview. Overall in my interview process, very few will have very in-depth knowl"
+              },
+              {
+                "id": "persona_style_episode_cmtxgkso600112lserhm6960w#27",
+                "source": "03.yaml",
+                "score": 0.4829717,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: closing\nLearner state: strong\nSpeech function: acknowledge -> explain -> advise -> clarify -> feedback -> probe\nSentence shape: Exactly. Sure, sure, <learner>. As we have almost five minutes left now, we'll spend some more time on the overall feedback that I want to pass on to you. I'll also tell you whether you are a select or a reject from my end. So <learner>, like I mentioned, I'll just tell you the mistakes that you made in the problem solving. This will help you. First thing, get a little more clarity "
+              },
+              {
+                "id": "persona_style_episode_cmtxgkp4z000t2lse6p1gvti2#26",
+                "source": "20.yaml",
+                "score": 0.4637342,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: closing\nLearner state: strong\nSpeech function: summarise -> explain -> feedback -> advise -> encourage -> invite questions\nSentence shape: acknowledge -> summarise -> explain details -> highlight issues -> advise improvements -> encourage reflection -> invite questions\nPhrasing features: direct address, repetition, reassurance, detailed explanation, encouragement, polite imperative, filler bridge\nCadence: detailed, reflective, supportive closing summary\nTopic-neutral pattern: Anyway, I think that is fine. Mo"
+              },
+              {
+                "id": "persona_style_episode_cmtxgkjii000j2lse40kiqms9#30",
+                "source": "05.yaml",
+                "score": 0.4490969,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: closing\nLearner state: meta_question\nSpeech function: answer_meta -> explain -> feedback -> probe\nSentence shape: Yeah, so to improve, I would suggest a little bit on the communication, <learner>. You can be quite more vocal — like, whenever you are talking, right, you can be very explicit, try to make a point very clear. But whatever the drawings that you are doing, I would say avoid it in the beginning. Okay? The reason being, articulation of the problem solving is very, very important. So a programmer is "
+              },
+              {
+                "id": "persona_style_episode_cmtxgkoc6000r2lsemvnmdb9u#27",
+                "source": "22.yaml",
+                "score": 0.4474869,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: strong\nSpeech function: explain -> feedback -> probe\nSentence shape: Sure, <learner> -> <learner>, let me give you what I feel about the overall interview process, right -> At three years of experience, you are somewhere in the mid-range category -> Whatever is expected from a senior is not expected from you, but whatever is expected from a junior is also not expected from you -> You are somewhere in the middle, correct? -> A full-fledged system design question will not be asked of you,"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 2040,
+          "endMs": 2976,
+          "ms": 936
+        },
+        {
+          "stage": "embedding",
+          "kind": "embedding",
+          "startMs": 2977,
+          "endMs": 3650,
+          "ms": 673,
+          "meta": {
+            "status": 200,
+            "headersMs": 669,
+            "model": "openai/text-embedding-3-small",
+            "requestBytes": 140
+          }
+        },
+        {
+          "stage": "chroma.query.persona_style_episode",
+          "kind": "chroma",
+          "startMs": 3650,
+          "endMs": 5001,
+          "ms": 1351,
+          "meta": {
+            "hits": 20,
+            "nResults": 24
+          }
+        },
+        {
+          "stage": "unknown_llm",
+          "kind": "llm",
+          "startMs": 5002,
+          "endMs": 6303,
+          "ms": 1301,
+          "meta": {
+            "status": 200,
+            "headersMs": 991,
+            "model": "openai/gpt-4.1-mini",
+            "requestBytes": 11670,
+            "usage": {
+              "prompt_tokens": 2432,
+              "completion_tokens": 32,
+              "total_tokens": 2464,
+              "cost": 0.001024,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.001024,
+                "upstream_inference_prompt_cost": 0.0009728,
+                "upstream_inference_completions_cost": 0.0000512
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "db.persist",
+          "kind": "db",
+          "startMs": 6303,
+          "endMs": 6517,
+          "ms": 213
+        }
+      ],
+      "logs": []
+    },
+    {
+      "label": "mechanism-answer",
+      "wallMs": 6205,
+      "ttftMs": 6205,
+      "status": 200,
+      "response": "Okay, there. That’s a solid approach with Kafka and the outbox pattern. Can you explain how you handled event schema evolution over time to ensure backward and forward compatibility for your consumers?",
+      "events": [
+        {
+          "stage": "db.auth",
+          "kind": "db",
+          "startMs": 0,
+          "endMs": 163,
+          "ms": 163
+        },
+        {
+          "stage": "direction",
+          "kind": "llm",
+          "startMs": 164,
+          "endMs": 1729,
+          "ms": 1565,
+          "meta": {
+            "status": 200,
+            "headersMs": 1186,
+            "model": "openai/gpt-4.1-mini",
+            "requestBytes": 2793,
+            "usage": {
+              "prompt_tokens": 528,
+              "completion_tokens": 42,
+              "total_tokens": 570,
+              "cost": 0.0002784,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0002784,
+                "upstream_inference_prompt_cost": 0.0002112,
+                "upstream_inference_completions_cost": 0.0000672
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 1729,
+          "endMs": 1729,
+          "ms": 0
+        },
+        {
+          "stage": "embedding",
+          "kind": "embedding",
+          "startMs": 1729,
+          "endMs": 2397,
+          "ms": 668,
+          "meta": {
+            "status": 200,
+            "headersMs": 664,
+            "model": "openai/text-embedding-3-small",
+            "requestBytes": 152
+          }
+        },
+        {
+          "stage": "persona.style",
+          "kind": "retrieval",
+          "startMs": 1729,
+          "endMs": 4042,
+          "ms": 2314,
+          "meta": {
+            "hits": 8,
+            "records": [
+              {
+                "id": "persona_style_episode_cmtxgkopp000s2lse47nisylb#33",
+                "source": "02.yaml",
+                "score": 0.51346755,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: closing\nSpeech function: acknowledge -> feedback -> explain -> probe\nSentence shape: acknowledgement -> feedback -> explanation -> question\nPhrasing features: direct address, repetition, encouragement, detailed feedback, polite, inclusive\nCadence: detailed, evaluative, encouraging\nTopic-neutral pattern: Yes. Good, good, <learner>. I'll just pass on my feedback, <learner>. I mean, it was a very clean, neat interview. Overall in my interview process, very few will have very in-depth knowl"
+              },
+              {
+                "id": "persona_style_episode_cmtxgkso600112lserhm6960w#27",
+                "source": "03.yaml",
+                "score": 0.50731915,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: closing\nLearner state: strong\nSpeech function: acknowledge -> explain -> advise -> clarify -> feedback -> probe\nSentence shape: Exactly. Sure, sure, <learner>. As we have almost five minutes left now, we'll spend some more time on the overall feedback that I want to pass on to you. I'll also tell you whether you are a select or a reject from my end. So <learner>, like I mentioned, I'll just tell you the mistakes that you made in the problem solving. This will help you. First thing, get a little more clarity "
+              },
+              {
+                "id": "persona_style_episode_cmtxgkk5x000k2lsejvfy7m5e#1",
+                "source": "12.yaml",
+                "score": 0.49221337,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: opening\nLearner state: strong\nSpeech function: acknowledge -> probe -> explain\nSentence shape: Wonderful. Wonderful, <learner>. <learner>, let me start by asking a very simple question, okay? So in a <topic> application, I'm very sure you might have built something for the <claim> flow, correct? I'll ask you only two flows — whether you built it or not, it's a very common interview question. A user logs in to your website, and after login, basically next time, let's say they close the tab and open it next ti"
+              },
+              {
+                "id": "persona_style_episode_cmtxgki22000h2lsevtw2sz9x#47",
+                "source": "01.yaml",
+                "score": 0.4892913,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: answer_meta\nSpeech function: answer_meta -> probe\nSentence shape: So my advice is this, <learner>. -> Let's say you are preparing for companies like <example>, <example>, <example> or <example>, what we call. -> If you're preparing for these companies, then the sky is the limit — whether you are a front end developer or a back end developer. -> They hire the generalist, not the specialist, correct? -> So all the topics you need to cover. -> This includes <example> as well. -> <example>,"
+              },
+              {
+                "id": "persona_style_episode_cmtxgkmsw000o2lsecvrzop1a#27",
+                "source": "04.yaml",
+                "score": 0.48079764999999997,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: closing\nLearner state: strong\nSpeech function: reassure -> explain -> explain -> explain -> explain -> explain -> explain -> probe\nSentence shape: Yeah, why it's not working — you'll be able to figure it out. It's not some big mistake. You'll be able to figure it out after the interview. Okay? So, <learner>, I'll just pass on my honest feedback towards the entire interview that has happened. Okay? So, a few things that I would suggest — and it's not just you, basically everyone who is just starting with the "
+              }
+            ]
+          }
+        },
+        {
+          "stage": "chroma.query.persona_style_episode",
+          "kind": "chroma",
+          "startMs": 2397,
+          "endMs": 4042,
+          "ms": 1645,
+          "meta": {
+            "hits": 24,
+            "nResults": 24
+          }
+        },
+        {
+          "stage": "unknown_llm",
+          "kind": "llm",
+          "startMs": 4043,
+          "endMs": 5574,
+          "ms": 1530,
+          "meta": {
+            "status": 200,
+            "headersMs": 1143,
+            "model": "openai/gpt-4.1-mini",
+            "requestBytes": 12668,
+            "usage": {
+              "prompt_tokens": 2711,
+              "completion_tokens": 39,
+              "total_tokens": 2750,
+              "cost": 0.0011468,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0011468,
+                "upstream_inference_prompt_cost": 0.0010844,
+                "upstream_inference_completions_cost": 0.0000624
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "db.persist",
+          "kind": "db",
+          "startMs": 5574,
+          "endMs": 6205,
+          "ms": 631
+        }
+      ],
+      "logs": []
+    },
+    {
+      "label": "impact-answer",
+      "wallMs": 4975,
+      "ttftMs": 4975,
+      "status": 200,
+      "response": "Impressive impact, there. When you updated event schemas, did you use versioning strategies, like adding optional fields or maintaining multiple schema versions? How did you coordinate schema changes with your consumers to avoid breaking them during rollout?",
+      "events": [
+        {
+          "stage": "db.auth",
+          "kind": "db",
+          "startMs": 0,
+          "endMs": 136,
+          "ms": 136
+        },
+        {
+          "stage": "direction",
+          "kind": "llm",
+          "startMs": 138,
+          "endMs": 1640,
+          "ms": 1502,
+          "meta": {
+            "status": 200,
+            "headersMs": 832,
+            "model": "openai/gpt-4.1-mini",
+            "requestBytes": 3240,
+            "usage": {
+              "prompt_tokens": 613,
+              "completion_tokens": 39,
+              "total_tokens": 652,
+              "cost": 0.0003076,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0003076,
+                "upstream_inference_prompt_cost": 0.0002452,
+                "upstream_inference_completions_cost": 0.0000624
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 1640,
+          "endMs": 1640,
+          "ms": 0
+        },
+        {
+          "stage": "embedding",
+          "kind": "embedding",
+          "startMs": 1640,
+          "endMs": 2330,
+          "ms": 690,
+          "meta": {
+            "status": 200,
+            "headersMs": 685,
+            "model": "openai/text-embedding-3-small",
+            "requestBytes": 136
+          }
+        },
+        {
+          "stage": "persona.style",
+          "kind": "retrieval",
+          "startMs": 1640,
+          "endMs": 3416,
+          "ms": 1777,
+          "meta": {
+            "hits": 8,
+            "records": [
+              {
+                "id": "persona_style_episode_cmtxgki22000h2lsevtw2sz9x#47",
+                "source": "01.yaml",
+                "score": 0.47670334999999997,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: answer_meta\nSpeech function: answer_meta -> probe\nSentence shape: So my advice is this, <learner>. -> Let's say you are preparing for companies like <example>, <example>, <example> or <example>, what we call. -> If you're preparing for these companies, then the sky is the limit — whether you are a front end developer or a back end developer. -> They hire the generalist, not the specialist, correct? -> So all the topics you need to cover. -> This includes <example> as well. -> <example>,"
+              },
+              {
+                "id": "persona_style_episode_cmtxgkrp9000z2lsekpr2h167#38",
+                "source": "13.yaml",
+                "score": 0.46853244000000005,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: partial\nSpeech function: reassure -> explain -> paraphrase -> probe -> explain\nSentence shape: No problem. No problem. -> Okay. Like I always say, an interview is just a game. -> There are things that you know, there are things that I know. -> If you are lucky, then you will know what I know. -> That's all, correct? -> Let's say you start taking my interview — I'll also not be able to answer some questions, correct? -> So from my understanding, and from what the commonly asked interview"
+              },
+              {
+                "id": "persona_style_episode_cmtxgkso600112lserhm6960w#27",
+                "source": "03.yaml",
+                "score": 0.45692974,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: closing\nLearner state: strong\nSpeech function: acknowledge -> explain -> advise -> clarify -> feedback -> probe\nSentence shape: Exactly. Sure, sure, <learner>. As we have almost five minutes left now, we'll spend some more time on the overall feedback that I want to pass on to you. I'll also tell you whether you are a select or a reject from my end. So <learner>, like I mentioned, I'll just tell you the mistakes that you made in the problem solving. This will help you. First thing, get a little more clarity "
+              },
+              {
+                "id": "persona_style_episode_cmtxgkpii000u2lseg6epsmuh#11",
+                "source": "16.yaml",
+                "score": 0.45376099999999997,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: reassure\nSpeech function: reassure -> probe\nSentence shape: reassure -> question\nPhrasing features: direct address, reassurance, inclusive pronouns\nCadence: supportive and encouraging\nTopic-neutral pattern: Anyway, see, the whole purpose of asking this question is not to catch you out. It's not like if you don't know the answer to this you cannot build a good app, correct? It's just that we all understand things to a level which is comfortable enough. Sometimes you don't dig deeper and "
+              },
+              {
+                "id": "persona_style_episode_cmtxgkopp000s2lse47nisylb#33",
+                "source": "02.yaml",
+                "score": 0.4437689,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: closing\nSpeech function: acknowledge -> feedback -> explain -> probe\nSentence shape: acknowledgement -> feedback -> explanation -> question\nPhrasing features: direct address, repetition, encouragement, detailed feedback, polite, inclusive\nCadence: detailed, evaluative, encouraging\nTopic-neutral pattern: Yes. Good, good, <learner>. I'll just pass on my feedback, <learner>. I mean, it was a very clean, neat interview. Overall in my interview process, very few will have very in-depth knowl"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "chroma.query.persona_style_episode",
+          "kind": "chroma",
+          "startMs": 2330,
+          "endMs": 3416,
+          "ms": 1087,
+          "meta": {
+            "hits": 24,
+            "nResults": 24
+          }
+        },
+        {
+          "stage": "unknown_llm",
+          "kind": "llm",
+          "startMs": 3417,
+          "endMs": 4805,
+          "ms": 1388,
+          "meta": {
+            "status": 200,
+            "headersMs": 863,
+            "model": "openai/gpt-4.1-mini",
+            "requestBytes": 10424,
+            "usage": {
+              "prompt_tokens": 2209,
+              "completion_tokens": 46,
+              "total_tokens": 2255,
+              "cost": 0.0009572,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0009572,
+                "upstream_inference_prompt_cost": 0.0008836,
+                "upstream_inference_completions_cost": 0.0000736
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "db.persist",
+          "kind": "db",
+          "startMs": 4805,
+          "endMs": 4975,
+          "ms": 170
+        }
+      ],
+      "logs": []
+    },
+    {
+      "label": "repeat-request",
+      "wallMs": 266,
+      "ttftMs": 266,
+      "status": 200,
+      "response": "Sure, no problem. I was asking: Impressive impact, there. When you updated event schemas, did you use versioning strategies, like adding optional fields or maintaining multiple schema versions? How did you coordinate schema changes with your consumers to avoid breaking them during rollout?",
+      "events": [
+        {
+          "stage": "db.auth",
+          "kind": "db",
+          "startMs": 0,
+          "endMs": 127,
+          "ms": 127
+        },
+        {
+          "stage": "db.persist",
+          "kind": "db",
+          "startMs": 128,
+          "endMs": 266,
+          "ms": 138
+        }
+      ],
+      "logs": []
+    }
+  ]
+}

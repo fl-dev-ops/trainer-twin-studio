@@ -92,7 +92,7 @@ test("style moments embed topic-neutral phrasing and retain exact wording", () =
   });
   assert.match(style.embeddingText ?? "", /Sentence shape: doubled acknowledgement/);
   assert.equal(style.embeddingText?.includes("Arun"), false);
-  assert.match(style.text, /Exact Vasanth wording: Correct, correct, Arun/);
+  assert.match(style.text, /Exact Vasanth wording: Correct, correct, <name>/);
   assert.equal(style.usesLearnerName, true);
   assert.equal(style.hasDoubledAcknowledgement, true);
   assert.equal(style.questionCount, 1);

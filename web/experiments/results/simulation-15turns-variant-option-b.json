@@ -1,0 +1,536 @@
+{
+  "conv-1-karthik": {
+    "candidate": "Karthik",
+    "role": "5 YOE Backend Engineer — Payments, Redis idempotency, Kafka pipelines",
+    "turns": [
+      {
+        "turnNumber": 0,
+        "speaker": "vasanth",
+        "text": "Hi. As you know, I'm Vasanth. Thanks for registering for the mock interview. Can I know something about you — whatever you wish to share? What are your skill sets, and what sort of roles are you aspiring for at the moment?",
+        "wallMs": 212
+      },
+      {
+        "turnNumber": 1,
+        "speaker": "candidate",
+        "text": "Hi Vasanth, I'm Karthik. Thanks for having me. I have about 5 years of experience in backend development, mostly with Go, Node, and distributed systems."
+      },
+      {
+        "turnNumber": 2,
+        "speaker": "vasanth",
+        "text": "Nice to meet you, Karthik. Since you have experience with distributed systems, can you explain how you would design a scalable service to handle millions of requests per second? What key components and strategies would you consider?",
+        "wallMs": 6648
+      },
+      {
+        "turnNumber": 3,
+        "speaker": "candidate",
+        "text": "Yes, I've worked primarily on high-throughput microservices for payments, specifically building a Redis idempotency layer and Kafka event notification pipelines."
+      },
+      {
+        "turnNumber": 4,
+        "speaker": "vasanth",
+        "text": "Okay, Karthik, that’s a good start. Can you walk me through how you ensure data consistency and fault tolerance in such a high-throughput microservice, especially when dealing with distributed events and retries?",
+        "wallMs": 6050
+      },
+      {
+        "turnNumber": 5,
+        "speaker": "candidate",
+        "text": "In our payment processing system, we had duplicate webhook events coming from payment gateways during network retries. I designed a deduplication layer using Redis."
+      },
+      {
+        "turnNumber": 6,
+        "speaker": "vasanth",
+        "text": "That’s a practical approach, Karthik. When you implemented the Redis deduplication layer, how did you handle scenarios where Redis itself might fail or become a bottleneck? What fallback or resilience mechanisms did you put in place to maintain consistency and availability?",
+        "wallMs": 5212
+      },
+      {
+        "turnNumber": 7,
+        "speaker": "candidate",
+        "text": "We used Redis SETNX with a 24-hour TTL. If the key already existed, we returned the cached result immediately, which guaranteed exactly-once processing."
+      },
+      {
+        "turnNumber": 8,
+        "speaker": "vasanth",
+        "text": "That’s a solid use of SETNX with TTL, Karthik. But suppose Redis becomes unavailable temporarily—did you implement any fallback strategies to avoid losing events or causing delays in processing? How did you ensure the system remained resilient in such cases?",
+        "wallMs": 9323
+      },
+      {
+        "turnNumber": 9,
+        "speaker": "candidate",
+        "text": "Well, because Redis is single-threaded and the key is set atomically with SETNX, no two requests can process the same transaction at the same time."
+      },
+      {
+        "turnNumber": 10,
+        "speaker": "vasanth",
+        "text": "I see what you mean about atomicity with SETNX, Karthik. But focusing on Redis availability—if Redis goes down briefly, how does your system handle incoming events during that window? Do you queue them, retry later, or use another store to avoid losing or delaying processing?",
+        "wallMs": 5324
+      },
+      {
+        "turnNumber": 11,
+        "speaker": "candidate",
+        "text": "Wait, actually, I guess if the downstream database commit fails after setting the Redis key, the request wouldn't have been processed, but Redis would still say it's done. So that's not truly exactly-once."
+      },
+      {
+        "turnNumber": 12,
+        "speaker": "vasanth",
+        "text": "Right, Karthik, you’ve spotted a classic challenge there. So in that case, how would you design your system to handle this partial failure scenario—where Redis shows the key as set but the database commit fails—so that you can still guarantee exactly-once processing without losing or duplicating events?",
+        "wallMs": 5468
+      },
+      {
+        "turnNumber": 13,
+        "speaker": "candidate",
+        "text": "Yeah, that's why we added a two-phase check with a state machine in Postgres, but honestly it was tricky to handle crashes in between."
+      },
+      {
+        "turnNumber": 14,
+        "speaker": "vasanth",
+        "text": "Okay, Karthik, that’s interesting. Can you explain how your two-phase check with the state machine in Postgres works in detail? Specifically, how do you handle the transitions and recovery if the system crashes right after updating one state but before completing the transaction?",
+        "wallMs": 5668
+      },
+      {
+        "turnNumber": 15,
+        "speaker": "candidate",
+        "text": "I personally designed the Redis key format and the state machine transition logic. A team of three other engineers implemented the gateway client handlers."
+      },
+      {
+        "turnNumber": 16,
+        "speaker": "vasanth",
+        "text": "Alright, Karthik. Since you designed the key format and transition logic, can you walk me through an example of a state transition in your Postgres state machine? Specifically, what states do you define, and how do you ensure atomicity and durability during those transitions?",
+        "wallMs": 5825
+      },
+      {
+        "turnNumber": 17,
+        "speaker": "candidate",
+        "text": "Sorry, could you repeat that question? I want to make sure I understand what you're asking."
+      },
+      {
+        "turnNumber": 18,
+        "speaker": "vasanth",
+        "text": "Sure, no problem. I was asking: Alright, Karthik. Since you designed the key format and transition logic, can you walk me through an example of a state transition in your Postgres state machine? Specifically, what states do you define, and how do you ensure atomicity and durability during those transitions?",
+        "wallMs": 316
+      },
+      {
+        "turnNumber": 19,
+        "speaker": "candidate",
+        "text": "For the Kafka notification pipeline, we had 12 partitions and consumer groups processing email and SMS alerts."
+      },
+      {
+        "turnNumber": 20,
+        "speaker": "vasanth",
+        "text": "Okay, Karthik, that’s good context on the Kafka side. Now, shifting back to your state machine in Postgres—can you describe the specific states you track for a payment event and how you move between them to handle success, failure, and retries?",
+        "wallMs": 5091
+      },
+      {
+        "turnNumber": 21,
+        "speaker": "candidate",
+        "text": "We assumed that as long as we were using consumer groups, messages would always be processed strictly in order across the system."
+      },
+      {
+        "turnNumber": 22,
+        "speaker": "vasanth",
+        "text": "Karthik, assuming strict ordering just because you use consumer groups is risky. Can you explain what happens if a consumer crashes mid-processing or if there’s a rebalance? How does your state machine handle out-of-order or duplicated events in those cases?",
+        "wallMs": 4726
+      },
+      {
+        "turnNumber": 23,
+        "speaker": "candidate",
+        "text": "Could you give me a small hint on how partition ordering actually interacts with consumer groups?"
+      },
+      {
+        "turnNumber": 24,
+        "speaker": "vasanth",
+        "text": "Sure, Karthik. Think of it this way: Kafka guarantees ordering only within a single partition, not across partitions. When a rebalance happens, partitions can move between consumers, and some messages might get reprocessed or delayed. So your state machine needs to be idempotent and handle events that might arrive out of order or be duplicated. How would you design your state transitions to be resilient to these scenarios?",
+        "wallMs": 5731
+      },
+      {
+        "turnNumber": 25,
+        "speaker": "candidate",
+        "text": "Ah, right! Ordering is only guaranteed within a single partition using the partition key, not globally across the topic. So if we used the user ID as the key, all events for that user stay in order."
+      },
+      {
+        "turnNumber": 26,
+        "speaker": "vasanth",
+        "text": "Exactly, Karthik. Now, let me ask you this: if a consumer crashes right after processing an event but before committing the offset, or during a rebalance, how does your state machine ensure that reprocessing that event won’t cause incorrect state or duplicate side effects?",
+        "wallMs": 5260
+      },
+      {
+        "turnNumber": 27,
+        "speaker": "candidate",
+        "text": "One major limitation was during deployment restarts, consumer rebalancing would cause thundering herd latency spikes of 15 to 20 seconds."
+      },
+      {
+        "turnNumber": 28,
+        "speaker": "vasanth",
+        "text": "That’s a real challenge, Karthik. Beyond the latency spikes, how does your state machine specifically prevent duplicate side effects or inconsistent states when the same event is processed multiple times due to crashes or rebalances?",
+        "wallMs": 4835
+      },
+      {
+        "turnNumber": 29,
+        "speaker": "candidate",
+        "text": "Looking back, we should have used cooperative sticky assignors in Kafka instead of the default eager assignor to avoid stopping all consumers during a rebalance."
+      },
+      {
+        "turnNumber": 30,
+        "speaker": "vasanth",
+        "text": "True, Karthik, cooperative sticky assignors do help reduce consumer downtime during rebalances. But focusing on your state machine logic itself—how do you design it to be idempotent? For example, if the same event is processed twice, what mechanisms do you have to avoid duplicate side effects or inconsistent states?",
+        "wallMs": 5751
+      }
+    ],
+    "totalWallMs": 81440
+  },
+  "conv-2-anubhav": {
+    "candidate": "Anubhav",
+    "role": "4 YOE Full Stack Engineer — React virtual DOM, Node.js event loop & worker threads",
+    "turns": [
+      {
+        "turnNumber": 0,
+        "speaker": "vasanth",
+        "text": "Hi. As you know, I'm Vasanth. Thanks for registering for the mock interview. Can I know something about you — whatever you wish to share? What are your skill sets, and what sort of roles are you aspiring for at the moment?",
+        "wallMs": 153
+      },
+      {
+        "turnNumber": 1,
+        "speaker": "candidate",
+        "text": "Hi Vasanth, thanks for having me. I'm Anubhav, 4 years of experience doing full stack with React and Node.js."
+      },
+      {
+        "turnNumber": 2,
+        "speaker": "vasanth",
+        "text": "Okay, Anubhav. You mentioned full stack with React and Node.js. Can you tell me about a challenging project you worked on using these technologies and how you handled the challenges?",
+        "wallMs": 4299
+      },
+      {
+        "turnNumber": 3,
+        "speaker": "candidate",
+        "text": "I've spent the last two years at an e-commerce company building customer-facing checkout flows and inventory dashboards in React."
+      },
+      {
+        "turnNumber": 4,
+        "speaker": "vasanth",
+        "text": "Nice, Anubhav. Can you describe a specific challenge you faced while building those checkout flows or dashboards? How did you approach solving that problem technically?",
+        "wallMs": 5015
+      },
+      {
+        "turnNumber": 5,
+        "speaker": "candidate",
+        "text": "I owned the checkout cart rewrite. We had severe lag when users updated item quantities because the entire component tree re-rendered."
+      },
+      {
+        "turnNumber": 6,
+        "speaker": "vasanth",
+        "text": "Okay, Anubhav. When you say the entire component tree re-rendered, can you explain what caused that technically? Also, what specific React techniques or patterns did you use to reduce or prevent unnecessary re-renders in that checkout cart?",
+        "wallMs": 5162
+      },
+      {
+        "turnNumber": 7,
+        "speaker": "candidate",
+        "text": "React uses the virtual DOM and reconciliation with diffing algorithm to update only changed nodes, but in our case, parent state changes were triggering child re-renders unnecessarily."
+      },
+      {
+        "turnNumber": 8,
+        "speaker": "vasanth",
+        "text": "Okay, Anubhav. Can you walk me through how you identified which components were re-rendering unnecessarily? Did you use any React developer tools or profiling techniques to pinpoint the performance bottleneck?",
+        "wallMs": 4748
+      },
+      {
+        "turnNumber": 9,
+        "speaker": "candidate",
+        "text": "We wrapped our cart items in React.memo and moved state down to leaf components using Zustand."
+      },
+      {
+        "turnNumber": 10,
+        "speaker": "vasanth",
+        "text": "Alright, Anubhav. When you moved the state down to the leaf components using Zustand, how did that help in reducing the re-renders? Can you explain the flow of state updates and how Zustand's approach differs from React's built-in state management in this context?",
+        "wallMs": 4973
+      },
+      {
+        "turnNumber": 11,
+        "speaker": "candidate",
+        "text": "Wait, isn't React always faster than vanilla JavaScript because of reconciliation?"
+      },
+      {
+        "turnNumber": 12,
+        "speaker": "vasanth",
+        "text": "Hmm, Anubhav, that’s a common assumption, but it’s not always true. Can you explain a scenario where vanilla JavaScript DOM manipulation might actually be faster than React’s reconciliation? What factors would influence that difference?",
+        "wallMs": 5856
+      },
+      {
+        "turnNumber": 13,
+        "speaker": "candidate",
+        "text": "Right, right, vanilla JS doing direct DOM manipulation is actually faster for simple DOM nodes because it doesn't have the overhead of creating virtual DOM objects and diffing trees."
+      },
+      {
+        "turnNumber": 14,
+        "speaker": "vasanth",
+        "text": "True, true, Anubhav. That’s a good point. Now, can you think of a situation in a real-world application where you might prefer vanilla JS DOM manipulation over React for performance reasons? What kind of UI or interaction would that be?",
+        "wallMs": 4753
+      },
+      {
+        "turnNumber": 15,
+        "speaker": "candidate",
+        "text": "On the backend with Node.js, we handled payment webhooks using an event loop with asynchronous I/O."
+      },
+      {
+        "turnNumber": 16,
+        "speaker": "vasanth",
+        "text": "Okay, Anubhav, that’s a good backend insight. Let’s bring it back to the frontend for a moment. Can you describe a specific UI interaction or component on the frontend where you might choose to bypass React and manipulate the DOM directly for better performance?",
+        "wallMs": 5138
+      },
+      {
+        "turnNumber": 17,
+        "speaker": "candidate",
+        "text": "Node.js runs on a single thread using libuv, with a pool of 4 worker threads for filesystem and crypto operations."
+      },
+      {
+        "turnNumber": 18,
+        "speaker": "vasanth",
+        "text": "Okay, Anubhav, that’s a solid understanding of Node.js internals. Let’s shift back to the frontend now. Can you give me an example of a React component or UI feature where you might deliberately avoid React’s rendering cycle and update the DOM directly? What’s the reasoning behind that choice?",
+        "wallMs": 5457
+      },
+      {
+        "turnNumber": 19,
+        "speaker": "candidate",
+        "text": "If someone runs CPU-heavy JSON parsing or encryption on the main thread, it blocks the event loop and delays incoming HTTP requests."
+      },
+      {
+        "turnNumber": 20,
+        "speaker": "vasanth",
+        "text": "Okay, Anubhav, that’s a good point about blocking the event loop on the backend. But let’s refocus on the frontend now. Can you give me a concrete example of a React UI component or feature where you’d bypass React’s rendering and manipulate the DOM directly? What’s the exact scenario and why?",
+        "wallMs": 4992
+      },
+      {
+        "turnNumber": 21,
+        "speaker": "candidate",
+        "text": "We solved that by offloading heavy cryptographic signature verification to Node worker threads using worker_threads module."
+      },
+      {
+        "turnNumber": 22,
+        "speaker": "vasanth",
+        "text": "Okay, Anubhav, that’s a great backend optimization. Now, coming back to the frontend, imagine you have a custom video player with complex animations or a drag-and-drop interface. Can you explain why and how you might manipulate the DOM directly instead of relying solely on React’s rendering?",
+        "wallMs": 4678
+      },
+      {
+        "turnNumber": 23,
+        "speaker": "candidate",
+        "text": "I was the sole engineer responsible for the worker thread architecture and performance benchmarking."
+      },
+      {
+        "turnNumber": 24,
+        "speaker": "vasanth",
+        "text": "Okay, Anubhav, I see you have strong backend experience with worker threads. Let’s bring the focus back to the frontend. For that custom video player or drag-and-drop UI, how would you technically implement direct DOM manipulation alongside React without causing conflicts or losing React’s state consistency?",
+        "wallMs": 5351
+      },
+      {
+        "turnNumber": 25,
+        "speaker": "candidate",
+        "text": "Can you clarify what you mean by backpressure in Node streams?"
+      },
+      {
+        "turnNumber": 26,
+        "speaker": "vasanth",
+        "text": "Okay, Anubhav, backpressure in Node streams is about controlling the flow of data so that the writable side isn’t overwhelmed by the readable side. When data is produced faster than it can be consumed, backpressure signals the producer to slow down. Now, thinking about your custom video player or drag-and-drop UI, how would you ensure React’s state stays in sync when you manipulate the DOM directly, especially if updates happen rapidly?",
+        "wallMs": 5704
+      },
+      {
+        "turnNumber": 27,
+        "speaker": "candidate",
+        "text": "Backpressure happens when the readable stream pushes data faster than the writable stream can consume it, filling up the internal buffer."
+      },
+      {
+        "turnNumber": 28,
+        "speaker": "vasanth",
+        "text": "Okay, Anubhav, that’s a good understanding of backpressure. Now, let’s switch gears a bit. In React, how do you manage state updates efficiently to avoid excessive re-renders, especially when dealing with frequent or rapid user interactions like dragging or video scrubbing?",
+        "wallMs": 5267
+      },
+      {
+        "turnNumber": 29,
+        "speaker": "candidate",
+        "text": "We used pipeline() from stream module which automatically handles backpressure and error cleanup between streams."
+      },
+      {
+        "turnNumber": 30,
+        "speaker": "vasanth",
+        "text": "Okay, Anubhav. That’s a good use of pipeline for streams. Now, coming back to React and frontend, can you explain how you would debounce or throttle state updates during rapid user interactions like dragging, to avoid flooding React with too many renders?",
+        "wallMs": 4922
+      }
+    ],
+    "totalWallMs": 76468
+  },
+  "conv-3-vinay": {
+    "candidate": "Vinay",
+    "role": "Fresher / Junior — Video player comments, WebSockets, useEffect cleanup & time complexity",
+    "turns": [
+      {
+        "turnNumber": 0,
+        "speaker": "vasanth",
+        "text": "Hi. As you know, I'm Vasanth. Thanks for registering for the mock interview. Can I know something about you — whatever you wish to share? What are your skill sets, and what sort of roles are you aspiring for at the moment?",
+        "wallMs": 95
+      },
+      {
+        "turnNumber": 1,
+        "speaker": "candidate",
+        "text": "Hello Vasanth sir. I am Vinay. I recently graduated in computer science and I'm looking for junior developer roles."
+      },
+      {
+        "turnNumber": 2,
+        "speaker": "vasanth",
+        "text": "Okay, Vinay. Since you are aiming for junior developer roles, can you tell me about a project you worked on recently? What technologies did you use, and what was your specific contribution to that project?",
+        "wallMs": 4561
+      },
+      {
+        "turnNumber": 3,
+        "speaker": "candidate",
+        "text": "I built a YouTube clone as my final year capstone project using React, Node.js, and MongoDB."
+      },
+      {
+        "turnNumber": 4,
+        "speaker": "vasanth",
+        "text": "Nice, Vinay. Can you walk me through how you managed the video data flow in your YouTube clone? Specifically, how did you handle uploading, storing, and streaming videos using those technologies?",
+        "wallMs": 4687
+      },
+      {
+        "turnNumber": 5,
+        "speaker": "candidate",
+        "text": "I built the video player page and the real-time comment section where users can post comments under videos."
+      },
+      {
+        "turnNumber": 6,
+        "speaker": "vasanth",
+        "text": "Okay, Vinay. That sounds interesting. For the real-time comment section, how did you implement the real-time updates? Did you use any specific technology or approach to make sure comments appear instantly for all users watching the video?",
+        "wallMs": 6268
+      },
+      {
+        "turnNumber": 7,
+        "speaker": "candidate",
+        "text": "For comments, we stored comments in MongoDB with a parent_id field referencing the master comment for replies."
+      },
+      {
+        "turnNumber": 8,
+        "speaker": "vasanth",
+        "text": "Okay, Vinay. That explains the data structure well for storing comments and replies. But for the real-time aspect, how did you ensure that when one user posts a comment, all other users watching the video see that comment immediately without refreshing? Did you use websockets, polling, or some other method?",
+        "wallMs": 4960
+      },
+      {
+        "turnNumber": 9,
+        "speaker": "candidate",
+        "text": "When a new comment is posted while someone is reading, we used WebSockets to broadcast the new comment to all connected viewers."
+      },
+      {
+        "turnNumber": 10,
+        "speaker": "vasanth",
+        "text": "Great, Vinay. Can you explain how you managed the WebSocket connections on the server side? For example, how did you handle multiple users connected to the same video, and how did you ensure the messages were sent only to those users?",
+        "wallMs": 5159
+      },
+      {
+        "turnNumber": 11,
+        "speaker": "candidate",
+        "text": "If 10,000 users are watching a viral video and commenting at the same time, broadcasting every single comment creates thousands of WebSocket messages per second."
+      },
+      {
+        "turnNumber": 12,
+        "speaker": "vasanth",
+        "text": "True, true, Vinay. Handling that many messages can definitely be a challenge. So, how did you optimize or scale your WebSocket implementation to efficiently manage broadcasting comments to thousands of users without overwhelming the server or network?",
+        "wallMs": 4921
+      },
+      {
+        "turnNumber": 13,
+        "speaker": "candidate",
+        "text": "Honestly sir, I'm not sure how big companies handle this. Could you give me a small hint?"
+      },
+      {
+        "turnNumber": 14,
+        "speaker": "vasanth",
+        "text": "Sure, Vinay. One common approach is to group users watching the same video into a logical channel or room so that messages are broadcast only to that group, not to every connected user globally. Also, techniques like message batching or throttling can help reduce the number of messages sent per second. Does that give you some direction? How would you design such a grouping mechanism?",
+        "wallMs": 5394
+      },
+      {
+        "turnNumber": 15,
+        "speaker": "candidate",
+        "text": "Ah! Polling in batches or throttling the comment stream so the UI updates every 3 to 5 seconds instead of real-time for every single comment!"
+      },
+      {
+        "turnNumber": 16,
+        "speaker": "vasanth",
+        "text": "Okay, Vinay. That’s a good start thinking about batching and throttling. Now, focusing on the grouping part — how would you implement the server-side logic to create and manage these groups or rooms for users watching the same video? What data structures or libraries might you use?",
+        "wallMs": 5998
+      },
+      {
+        "turnNumber": 17,
+        "speaker": "candidate",
+        "text": "In React, I used useEffect to establish the WebSocket connection on component mount."
+      },
+      {
+        "turnNumber": 18,
+        "speaker": "vasanth",
+        "text": "Okay, Vinay, that’s about the client side. But here I want you to focus on the server side. How exactly would you implement the grouping of users watching the same video? For example, would you use a map, a set, or some library feature? Please explain your approach.",
+        "wallMs": 5359
+      },
+      {
+        "turnNumber": 19,
+        "speaker": "candidate",
+        "text": "In the cleanup function of useEffect, I called socket.disconnect() to prevent memory leaks when the user navigates away."
+      },
+      {
+        "turnNumber": 20,
+        "speaker": "vasanth",
+        "text": "Vinay, that’s a good practice on the client side to clean up the socket connection. Now, coming back to the server side, can you describe how you would organize and store the groups of users watching the same video? For instance, would you use a JavaScript Map with video IDs as keys and sets of socket IDs as values, or something else?",
+        "wallMs": 4914
+      },
+      {
+        "turnNumber": 21,
+        "speaker": "candidate",
+        "text": "Wait, if the dependency array is empty, does useEffect run on every render or only on mount?"
+      },
+      {
+        "turnNumber": 22,
+        "speaker": "vasanth",
+        "text": "Vinay, good question! When the dependency array is empty, useEffect runs only once—right after the component mounts—and not on every render. But just to clarify, are you asking this because you want to understand how to manage the WebSocket connection lifecycle in React, or is it related to the server-side grouping we were discussing?",
+        "wallMs": 5253
+      },
+      {
+        "turnNumber": 23,
+        "speaker": "candidate",
+        "text": "It runs only once on mount, but if someone forgets the cleanup return function, every re-render creates a new socket connection."
+      },
+      {
+        "turnNumber": 24,
+        "speaker": "vasanth",
+        "text": "Exactly, Vinay. Forgetting the cleanup can cause multiple socket connections, which leads to resource leaks and unexpected behavior. Now, let’s bring the focus back to the server side. How would you implement the data structure or mechanism to keep track of users grouped by the video they’re watching, so you can broadcast comments efficiently?",
+        "wallMs": 4870
+      },
+      {
+        "turnNumber": 25,
+        "speaker": "candidate",
+        "text": "For time complexity, our comment sorting by timestamp in the client was taking O(N log N) using JavaScript array sort."
+      },
+      {
+        "turnNumber": 26,
+        "speaker": "vasanth",
+        "text": "Okay, Vinay. That’s a good observation about sorting comments on the client side. But coming back to the server side grouping — can you describe how you would store and manage the sets of users connected to each video? For example, what data structure would you use to map video IDs to user connections?",
+        "wallMs": 4808
+      },
+      {
+        "turnNumber": 27,
+        "speaker": "candidate",
+        "text": "On the database, we created a compound index on video_id and created_at so MongoDB returns sorted comments directly using the B-tree index."
+      },
+      {
+        "turnNumber": 28,
+        "speaker": "vasanth",
+        "text": "Okay, Vinay. That’s a solid optimization for fetching sorted comments from the database. Now, shifting back to the WebSocket server — imagine you have thousands of users connected to different videos simultaneously. How would you implement the in-memory data structure to efficiently map each video ID to the set of active user socket connections for broadcasting messages?",
+        "wallMs": 6332
+      },
+      {
+        "turnNumber": 29,
+        "speaker": "candidate",
+        "text": "Thank you Vasanth sir, this mock interview really gave me perspective on how to think like a developer instead of just a user."
+      },
+      {
+        "turnNumber": 30,
+        "speaker": "vasanth",
+        "text": "Vinay, that’s a great reflection—thinking like a developer is key. Before we wrap up, can you quickly outline how you would implement that in-memory mapping of video IDs to socket connections on the server? Just a brief overview of the data structure and how you’d add or remove users.",
+        "wallMs": 6449
+      }
+    ],
+    "totalWallMs": 80028
+  }
+}

@@ -133,6 +133,22 @@ function formatEmbedText(response: string, action?: string): string {
   ].filter(Boolean).join("\n");
 }
 
+/**
+ * Redacts learner names from persona text so style/episode indexes carry a
+ * `<name>` placeholder instead of a real learner's name. Prevents name bleed
+ * (e.g. a stored "Harini" appearing in a session with a different learner) while
+ * letting the runtime substitute the actual learner's name at generation time.
+ */
+export function redactLearnerNames(text: string, names: Array<string | null | undefined>): string {
+  let output = text;
+  for (const raw of names) {
+    const name = raw?.trim();
+    if (!name) continue;
+    output = output.replace(new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "gi"), "<name>");
+  }
+  return output;
+}
+
 export function createPersonaStyleMoment(input: {
   interviewerResponse: string;
   pastLearnerName?: string;
@@ -144,9 +160,9 @@ export function createPersonaStyleMoment(input: {
   cadence: string;
   delexicalizedPattern: string;
 }): PersonaVoiceMoment {
-  const response = clip(input.interviewerResponse, 1200);
+  const response = redactLearnerNames(clip(input.interviewerResponse, 1200), [input.pastLearnerName]);
   const learnerName = input.pastLearnerName?.trim();
-  const usesLearnerName = Boolean(learnerName && new RegExp(`\\b${learnerName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(response));
+  const usesLearnerName = Boolean(learnerName && new RegExp(`\\b${learnerName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(input.interviewerResponse));
   const startsWithThanks = /^(thanks|thank you)\b/i.test(response);
   const hasDoubledAcknowledgement = /\b(yes|yeah|correct|right|good|okay|sure|no)[,. ]+\1\b/i.test(response);
   const styleSignature = [

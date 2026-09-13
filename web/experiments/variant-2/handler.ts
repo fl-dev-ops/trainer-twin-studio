@@ -10,13 +10,12 @@ import { getAgentConfigForAgent } from "@/lib/specs";
 import { searchKnowledge } from "@/lib/knowledge";
 import { MainCollectionService } from "@/lib/main-collection";
 import { env } from "@/env";
-import { buildSpecs, type CompiledSpecs } from "./compiler";
+import { buildSpecs, type CompiledSpecs, type AgentSpec, type PersonaSpec, type ClaimProvenance } from "@/lib/runtime/compiler";
 import {
   chunkMarkdownText,
   formatSessionDocumentManifestText,
   searchDocumentChunks,
 } from "@/lib/context-document-service";
-import { redactLearnerNames } from "@/lib/persona-voice";
 import {
   type AnswerAnalysis,
   type CorpusStyleStats,
@@ -38,7 +37,15 @@ import {
   surfaceForPhase,
   validateAnalysis,
   wordCount,
-} from "./runtime";
+  activePhase,
+  activeEvidence,
+  activeDefaultAction,
+  activeAllowedActions,
+  activeClaimHandling,
+  isHypothetical,
+  markProbeExhaustion,
+  applyEvidenceUpdates,
+} from "@/lib/runtime/runtime";
 
 const OPENROUTER_BASE_URL = env.OPENROUTER_BASE_URL.replace(/\/$/, "");
 const RUNTIME_MODEL = env.INTERVIEW_LLM_MODEL;
@@ -175,8 +182,7 @@ async function callOpenRouter(
   stage: string,
   messages: { role: string; content: OpenRouterContent }[],
   responseFormatJson = false,
-  usage?: UsageSink,
-  maxTokens?: number
+  usage?: UsageSink
 ): Promise<string> {
   const key = env.OPENROUTER_API_KEY; // validated at startup, never missing here
 
@@ -191,7 +197,7 @@ async function callOpenRouter(
       model: RUNTIME_MODEL,
       messages,
       temperature: responseFormatJson ? 0 : 0.4,
-      max_tokens: maxTokens ?? (responseFormatJson ? 1400 : 500),
+      max_tokens: responseFormatJson ? 1400 : 500,
       ...(responseFormatJson ? { response_format: { type: "json_object" } } : {}),
     }),
   });
@@ -636,7 +642,7 @@ export interface SpeechMeta {
  * style examples and no persona voice instructions — style is applied after
  * the draft exists (plans/issues_persona-validation-loop.md §17).
  */
-export async function contentDraft(
+async function contentDraft(
   contentContract: string,
   action: InterviewAction,
   specs: CompiledSpecs,
@@ -654,21 +660,6 @@ export async function contentDraft(
 Decide the correct response using the session spec, the conversation observation, and retrieved knowledge. Be concise and conversational.
 Do not invent facts about the learner or documents. If the session spec refers to a document that is unavailable, adapt naturally and ask the learner to describe the relevant experience verbally.
 Keep exactly one clear response purpose and its intended question. A later stage renders the spoken wording, so write content, not style.
-
-AUDIO & SPOKEN OUTPUT RULES (MANDATORY):
-You are speaking aloud over a live voice connection directly to a Text-to-Speech (TTS) synthesizer:
-1. Write out all numbers, currencies, percentages, and multipliers phonetically as natural spoken words:
-   - "$100k" -> "a hundred thousand dollars"
-   - "$50,000" -> "fifty thousand dollars"
-   - "3.5x" -> "three point five times"
-   - "80%" -> "eighty percent"
-   - "2026" -> "twenty twenty-six"
-   - "v2" -> "version two"
-2. ABSOLUTE BAN on Markdown formatting: never output asterisks (**bold** or *italic*), backticks (\`code\`), bullet points, numbered lists, hashtags (#), or emojis.
-3. Spell out all abbreviations conversationally: use "for example" (never "e.g."), "versus" (never "vs."), "that is" (never "i.e."), "and so on" (never "etc."), "with" (never "w/"), "without" (never "w/o").
-4. Use commas and periods deliberately as prosody breath markers for natural human speech pauses.
-5. Keep spoken turns concise (under 60 words). Ask exactly one focal question per turn.
-${state.current_surface ? `\nACTIVE WORKSPACE SURFACE ON LEARNER'S SCREEN: ${state.current_surface}. When relevant, deictically anchor your question to what the learner sees (for example, "Looking at your code on the screen...", "In your diagram on the whiteboard...", "On your resume on the screen...").` : ""}
 
 SESSION SPEC
 Scenario: ${specs.agent.name ?? "interview session"}
@@ -785,7 +776,7 @@ async function retrieveStyleExamplesForTurn(
  * question count, invented mentions) plus the model's own reasoning decide
  * between rewrite and draft — no retry loop (Section 17.2).
  */
-export async function renderStyledSpeech(
+async function renderStyledSpeech(
   draft: string,
   learnerText: string,
   state: RuntimeState,
@@ -799,14 +790,6 @@ export async function renderStyledSpeech(
 Preserve the draft's meaning, technical facts, correction, uncertainty, response purpose, intended question, and number of focal questions. Do not add names, projects, employers, technologies, or claims from past examples. Do not answer a different question.
 Match or shorten the draft's length. Never add a question. Keep the draft's question count.
 ${state.primer ? `Corpus behavior statistics: ${JSON.stringify(state.primer.statistics)}\nCurrent-session drift: ${JSON.stringify(compareStyleRates(current, state.primer.statistics))}\nCorpus rates describe a whole session, not every turn; vary wording when the current session overuses a form.` : ""}
-
-AUDIO & SPOKEN OUTPUT RULES (MANDATORY FOR TTS):
-You are outputting text directly to a voice synthesizer:
-- Write out all numbers, currencies, percentages, and multipliers phonetically as spoken words (for example: "fifty thousand dollars", "eighty percent", "three point five times").
-- NEVER output Markdown formatting, asterisks (**bold**), backticks (\`code\`), bullet lists, or emojis.
-- Spell out abbreviations: "for example" instead of "e.g.", "versus" instead of "vs.", "that is" instead of "i.e.", "and so on" instead of "etc.".
-- Use commas and periods deliberately for natural prosody breath pauses.
-- Keep the response concise (under 60 words).
 
 HOW ${persona.name.toUpperCase()} TALKS (copy rhythm, fillers, phrasing; do not copy names, companies, or facts):
 ${styleExamples.map((hit) => hit.text).join("\n---\n") || "(no retrieved examples)"}
@@ -946,7 +929,9 @@ export async function generateSpeech(
   let rendererFallback = false;
   if (personaVoiceAvailable) {
     try {
-      const styleQuery = await styleGate(draft, [...transcript].reverse().find((turn) => turn.role === "user")?.text ?? "", action, state, current, usage);
+      // Option 1 & 2 optimization: Eliminate style_gate LLM round-trip (~1.7s saving)
+      // Derive topic-neutral style search query deterministically from action and draft
+      const styleQuery = `${action.name}: ${action.intent}; ${draft.slice(0, 200)}`;
       const examples = await retrieveStyleExamplesForTurn(
         orgId,
         specs.persona.id,
@@ -977,6 +962,75 @@ export async function generateSpeech(
       draftWords: wordCount(draft),
       finalWords: wordCount(finalText),
     },
+  };
+}
+
+function selectFastAction(
+  direction: DirectionCheck,
+  state: RuntimeState,
+  persona: PersonaSpec,
+  agent: AgentSpec
+): InterviewAction {
+  const phase = activePhase(agent, state);
+  const required = activeEvidence(agent, state);
+  const defaultAction = activeDefaultAction(agent, state);
+  const maxProbes = phase?.max_probes_per_lane ?? 2;
+
+  if (
+    direction.learner_intent === "stop" ||
+    (direction.learner_intent !== "answer" && state.learner_turns >= agent.max_learner_turns)
+  ) {
+    return closingAction(state, agent);
+  }
+
+  if (direction.learner_intent === "question" || direction.learner_intent === "clarification") {
+    const reqKeys = Object.keys(required);
+    const key =
+      state.pending_evidence_key && state.pending_evidence_key in required
+        ? state.pending_evidence_key
+        : reqKeys[0];
+    const allowed = activeAllowedActions(agent, state);
+    const reveal =
+      activeClaimHandling(agent, state) === "hypothetical_design" &&
+      allowed.includes("reveal_requirement");
+
+    return {
+      name: reveal ? "reveal_requirement" : defaultAction,
+      evidence_key: key,
+      reason: "Answer the learner's question without changing the assessment state.",
+      intent:
+        "Respond to the learner's actual question using the allowed context and references. " +
+        "Reveal only requested scenario facts. If unknown, say so. Clarify or give a narrow hint, " +
+        "not the full assessment answer. Return gently to the pending question without repeating it verbatim.",
+      close: false,
+      expects_answer: false,
+    };
+  }
+
+  const reqKeys = Object.keys(required);
+  const currentKey =
+    state.pending_evidence_key && state.pending_evidence_key in required
+      ? state.pending_evidence_key
+      : reqKeys[0];
+  const probeCount = currentKey ? state.evidence_probe_counts[currentKey] ?? 0 : 0;
+
+  // If current key reached max probes, advance to next untested key
+  let targetKey = currentKey;
+  if (probeCount >= maxProbes) {
+    const nextKey = reqKeys.find((k) => (state.coverage[k] ?? "untested") === "untested");
+    if (nextKey) {
+      targetKey = nextKey;
+    }
+  }
+
+  const specDesc = required[targetKey] ?? "";
+  return {
+    name: defaultAction,
+    evidence_key: targetKey,
+    reason: direction.response_instruction || `Probe ${targetKey}`,
+    intent: `Acknowledge the learner's previous answer briefly and naturally. Then probe or follow up on ${targetKey}: ${specDesc}. Ask exactly one focused question.`,
+    close: false,
+    expects_answer: true,
   };
 }
 
@@ -1014,218 +1068,6 @@ async function generatePipelineSpeech(
   }
   const contentContract = spokenContentContract(action, state, transcript);
   return generateSpeech(contentContract, action, specs, state, transcript, direction, knowledgeHits, orgId, personaVoiceAvailable, usage, documentEvidence, preloadedEpisodes);
-}
-
-/**
- * Option B move classifier: one small LLM call that decides the trainer's
- * conversational move for this turn AND the topic-neutral style-retrieval query
- * for it. Replaces the separate direction + analysis round trips on learner turns.
- */
-async function classifyMove(
-  specs: CompiledSpecs,
-  state: RuntimeState,
-  transcript: TranscriptTurn[],
-  latestUserText: string,
-  usage: UsageSink | undefined
-): Promise<{
-  move: string;
-  retrieval_query: string;
-  learner_intent: "answer" | "question" | "clarification" | "off_topic" | "stop";
-  current_topic: string;
-  document_lookup?: {
-    needed?: boolean;
-    file_id?: string | null;
-    query?: string;
-    present?: boolean;
-    page?: number | null;
-  };
-}> {
-  const phase = specs.agent.phases[state.phase_index] ?? null;
-  const prompt = `You are the conversation controller for a live voice interview conducted by ${specs.persona.name}.
-Agent objective: ${specs.agent.objective}
-Active phase: ${JSON.stringify(phase ? { name: phase.name, objective: phase.objective } : null)}
-Pending trainer question: ${state.pending_question ?? "none"}
-Current topic: ${state.current_topic ?? "not established"}
-${formatSessionFacts(specs)}
-Recent transcript:
-${transcriptText(transcript.slice(-6))}
-
-Candidate's latest message: "${latestUserText}"
-
-Decide the trainer's conversational MOVE for the next response:
-- "probe": the candidate answered; dig into the concrete mechanism, design decision, or their personal role.
-- "challenge": the candidate made a false, unsupported, or self-contradicting claim; test it.
-- "hint": the candidate is stuck, confused, or asked for help; prepare a genuine conceptual nudge.
-- "acknowledge_advance": the candidate shared results/metrics or completed a thought; acknowledge and move on.
-- "clarify": the candidate asked about the interview itself; answer briefly and return to the thread.
-- "redirect": the candidate went off track; bring them back kindly.
-- "close": the candidate signalled they are done.
-
-Return JSON only:
-{
-  "move": "probe" | "challenge" | "hint" | "acknowledge_advance" | "clarify" | "redirect" | "close",
-  "learner_intent": "answer" | "question" | "clarification" | "off_topic" | "stop",
-  "current_topic": "short description of the established topic",
-  "retrieval_query": "topic-neutral description of this conversational situation for searching how ${specs.persona.name} spoke in similar moments, e.g. 'interviewer challenging candidate who overclaims exactly-once delivery' or 'interviewer giving hint to a stuck junior candidate'",
-  "document_lookup": { "needed": true|false, "file_id": "one ID from the session document manifest or null", "query": "focused fact or section to retrieve, or empty string", "present": true|false, "page": 2 }
-}
-Set document_lookup.needed=true only when this turn requires facts from an attached file. Set present=true only when the learner asks to see the file or shared viewing materially helps. Never invent a file ID.`;
-
-  try {
-    const parsed = JSON.parse(
-      await callOpenRouter("move", [
-        { role: "system", content: "You are a strict interview conversation controller. Output valid JSON only." },
-        { role: "user", content: prompt },
-      ], true, usage)
-    ) as {
-      move?: string;
-      retrieval_query?: string;
-      learner_intent?: string;
-      current_topic?: string;
-      document_lookup?: { needed?: boolean; file_id?: string | null; query?: string; present?: boolean; page?: number | null };
-    };
-    const validMoves = new Set(["probe", "challenge", "hint", "acknowledge_advance", "clarify", "redirect", "close"]);
-    const validIntents = new Set(["answer", "question", "clarification", "off_topic", "stop"]);
-    return {
-      move: validMoves.has(parsed.move ?? "") ? parsed.move! : "probe",
-      retrieval_query: (parsed.retrieval_query ?? `probe ${latestUserText.slice(0, 120)}`).trim(),
-      learner_intent: validIntents.has(parsed.learner_intent ?? "")
-        ? (parsed.learner_intent as "answer" | "question" | "clarification" | "off_topic" | "stop")
-        : "answer",
-      current_topic: typeof parsed.current_topic === "string" ? parsed.current_topic : state.current_topic ?? "",
-      document_lookup: parsed.document_lookup,
-    };
-  } catch (error) {
-    console.warn("[interview-runtime] move classification failed; defaulting to probe", error);
-    return {
-      move: "probe",
-      retrieval_query: `probe ${latestUserText.slice(0, 120)}`,
-      learner_intent: "answer",
-      current_topic: state.current_topic ?? "",
-    };
-  }
-}
-
-/**
- * Option B styled speech: retrieves the trainer's real past speech for the decided
- * conversational move and generates the final spoken response in ONE call.
- * Learner names are redacted out of retrieved examples (<name>) and the agent
- * substitutes the current learner's actual name.
- */
-async function generateStyledSpeech(args: {
-  orgId: string;
-  persona: { id: string; name: string };
-  learnerName: string | null;
-  move: string;
-  retrievalQuery: string;
-  transcript: TranscriptTurn[];
-  latestUserText: string;
-  state: RuntimeState;
-  phase: { name?: string; objective?: string; opening?: string } | null;
-  usage?: UsageSink;
-}): Promise<{ text: string; meta: SpeechMeta }> {
-  const { orgId, persona, learnerName, move, retrievalQuery, transcript, latestUserText, state, phase, usage } = args;
-
-  let styleExamples: Awaited<ReturnType<typeof MainCollectionService.searchStyleEpisodes>> = [];
-  try {
-    styleExamples = await MainCollectionService.searchStyleEpisodes(orgId, retrievalQuery, {
-      personaId: persona.id,
-      limit: 8,
-      diversify: true,
-    });
-  } catch (error) {
-    console.warn("[interview-runtime] style retrieval failed; speaking without examples", error);
-  }
-
-  // Rotation: prefer examples not used in recent turns so no top-k set dominates.
-  const recent = new Set(state.recent_style_docs ?? []);
-  const fingerprint = (text: string) => text.replace(/\s+/g, " ").trim().slice(0, 100);
-  const fresh = styleExamples.filter((hit) => !recent.has(fingerprint(hit.text)));
-  const ordered = [...fresh, ...styleExamples.filter((hit) => recent.has(fingerprint(hit.text)))];
-  const chosen = ordered.slice(0, 5);
-  for (const hit of chosen) recent.add(fingerprint(hit.text));
-  state.recent_style_docs = [...recent].slice(-12);
-
-  // Redact past learner names out of every field that enters the prompt.
-  const examples = chosen.map((hit) => {
-    const text = redactLearnerNames(redactLearnerNames(hit.text, [hit.pastLearnerName]), [learnerName]);
-    const why = [
-      hit.sessionPhase ? `phase: ${hit.sessionPhase}` : "",
-      hit.styleFunction ? `speech function: ${redactLearnerNames(hit.styleFunction, [hit.pastLearnerName, learnerName])}` : "",
-      hit.styleShape ? `sentence shape: ${redactLearnerNames(hit.styleShape, [hit.pastLearnerName, learnerName])}` : "",
-    ].filter(Boolean).join(" | ");
-    return { why, text };
-  });
-
-  const identityBlock = learnerName
-    ? `The candidate is "${learnerName}". Address them by this name when natural. Never use any other name — names found in examples or documents are NOT this candidate.`
-    : `The candidate's name is unknown so far. Do NOT use any name for them; listen for their introduction and use it only once they have said it.`;
-
-  const system = `You are ${persona.name}, conducting a live voice interview.
-${identityBlock}
-
-YOUR DECIDED MOVE for this turn: ${move}
-${state.pending_question ? `Your previous pending question: "${state.pending_question}"` : ""}
-
-HOW YOU TALK — real examples of ${persona.name}'s speech in similar situations.
-Each example carries metadata explaining WHY ${persona.name} said it — reuse the intent and rhythm, not the exact scenario:
-${chosen.length ? examplesText(examples) : "(no style examples retrieved; speak naturally)"}
-
-${learnerName ? `NOTE: "<name>" inside examples is a redacted placeholder for the learner. When you speak, replace it with the candidate's real name: "${learnerName}".` : `NOTE: "<name>" inside examples is a redacted placeholder for the learner. Since you do not know their name yet, do not address them by name at all.`}
-
-ANTI-REPETITION:
-- Look at your last 2 spoken turns below. Do NOT open this turn with the same acknowledgement pattern you used in them (if you said "Good, good" last turn, open differently — "True, true", "Okay", "Sure, sure", a paraphrase, or no acknowledgement at all).
-- Vary sentence shape and rhythm across turns.
-
-RULES:
-1. Match the rhythm, phrasing habits, and tone of the examples above (they are ${persona.name}'s actual past speech).
-2. Execute the decided move: ${move}.
-3. Ask exactly ONE focused question. Keep it under 50 words, spoken-first (no markdown, no bullets).
-4. If the move is "hint", give a genuine conceptual nudge, not a repeat of the question.
-5. Do not answer for the candidate, and never claim their experience as yours.
-
-SPOKEN-FIRST RULES:
-1. Write out all numbers, currencies, percentages, and multipliers phonetically as natural spoken words:
-   - "$100k" -> "a hundred thousand dollars"
-   - "$50,000" -> "fifty thousand dollars"
-   - "3.5x" -> "three point five times"
-   - "80%" -> "eighty percent"
-   - "2026" -> "twenty twenty-six"
-   - "v2" -> "version two"
-2. ABSOLUTE BAN on Markdown formatting: never output asterisks (**bold** or *italic*), backticks, bullet points, numbered lists, hashtags (#), or emojis.
-3. Spell out all abbreviations conversationally: use "for example" (never "e.g."), "versus" (never "vs."), "that is" (never "i.e."), "and so on" (never "etc.").
-4. Use commas and periods deliberately as prosody breath markers for natural human speech pauses.
-${state.current_surface ? `\nACTIVE WORKSPACE SURFACE ON LEARNER'S SCREEN: ${state.current_surface}. When relevant, deictically anchor your question to what the learner sees (for example, "Looking at your code on the screen...", "In your diagram on the whiteboard...", "On your resume on the screen...").` : ""}`;
-
-  const userPrompt = `Conversation so far:
-${transcriptText(transcript)}
-
-Candidate just said: "${latestUserText}"
-
-Respond as ${persona.name}:`;
-
-  const text = (
-    await callOpenRouter("styled_generation", [
-      { role: "system", content: system },
-      { role: "user", content: userPrompt },
-    ], false, usage, 250)
-  ).trim();
-
-  return {
-    text,
-    meta: {
-      attempts: 1,
-      flags: [],
-      fallback: false,
-      rendererFallback: false,
-      draftWords: wordCount(text),
-      finalWords: wordCount(text),
-    },
-  };
-}
-
-function examplesText(chosen: Array<{ why: string; text: string }>): string {
-  return chosen.map(({ why, text }) => `- ${why ? `(${why}) ` : ""}${text.slice(0, 500)}`).join("\n");
 }
 
 export async function handleCompletions(request: Request): Promise<Response> {
@@ -1348,6 +1190,7 @@ async function runCompletionPipeline(
   let turnUserText: string | null = null;
   let turnSpokenText: string | null = null;
   let turnSpeechMeta: SpeechMeta | null = null;
+  let analysisPromise: Promise<AnswerAnalysis> | null = null;
 
   if (isOpeningTurn) {
     // Check if phase 0 requires a surface and we haven't emitted it yet
@@ -1572,14 +1415,15 @@ async function runCompletionPipeline(
       choices: [{ index: 0, message: { role: "assistant", content: replyText }, finish_reason: "stop" }],
     };
   } else {
-    // User response turn — Option B conversational pipeline (validated in
-    // web/experiments/variant-option-b): classify the conversational move →
-    // targeted style retrieval from the trainer's own index → single styled
-    // generation. Knowledge RAG, rubric analysis, and phase transitions are
-    // deferred to the background analyzer follow-up.
+    // User response turn
     const latestUserText = String(userMessages[userMessages.length - 1]?.content ?? "");
     turnUserText = latestUserText;
     const fullTranscript = [...currentTranscript, { role: "user" as const, text: latestUserText }];
+    const knowledgeHits = await retrieveKnowledge(
+      specs.knowledgeBases,
+      `${transcriptText(fullTranscript)}\nActive objective: ${specs.agent.phases[state.phase_index]?.objective ?? specs.agent.objective}`,
+      session.orgId
+    );
     for (const m of messages) {
       if (m.attachments !== undefined) {
         if (!Array.isArray(m.attachments) || m.attachments.some((a) => !a || typeof a.file_id !== "string" || !a.file_id.trim())) {
@@ -1598,53 +1442,131 @@ async function runCompletionPipeline(
         { status: 400 }
       );
     }
+    // Parallel episode preloading: needs only data known now (learner text, pending
+    // question, phase), so it runs concurrently with direction/analysis instead of
+    // blocking between analysis and content. Created AFTER knowledge retrieval is
+    // awaited so the chroma lane serves knowledge first (direction depends on it).
+    // BENCH_DISABLE_EPISODE_PRELOAD=1 restores sequential inline retrieval (A/B testing only).
+    const preloadedEpisodesPromise =
+      personaVoiceAvailable && process.env.BENCH_DISABLE_EPISODE_PRELOAD !== "1"
+        ? retrieveAnalogousEpisodes(
+            session.orgId,
+            specs.persona.id,
+            { name: "probe", close: false } as InterviewAction,
+            state,
+            fullTranscript,
+            "vague",
+            personaVoiceAvailable
+          )
+        : undefined;
+    const direction = await runDirectionCheck(latestUserText, fullTranscript, specs, state, knowledgeHits, latestAttachmentIds, usageSink);
 
-    // Mechanical identity lock: the learner's name comes only from their speech,
-    // never from documents or retrieved examples.
-    if (!state.learner_name && latestUserText.trim()) {
-      state.learner_name = extractLearnerName(latestUserText);
-    }
-    const learnerName = state.learner_name ?? null;
+    const documentEvidence = await retrieveDocumentEvidence(session.id, session.orgId, specs, direction.document_lookup);
+    const documentSurface = advertisedToolNames.has("surface")
+      ? documentSurfaceArguments(documentEvidence, direction.document_lookup)
+      : null;
+    state.latest_learner_intent = direction.learner_intent;
 
-    // Mechanical recovery for stop/repeat/clarify before spending an LLM call.
-    const explicit = explicitCommunicationRecovery(latestUserText);
-    let intent: "answer" | "question" | "clarification" | "off_topic" | "stop";
-    let move: string;
-    let retrievalQuery: string;
-    let classifiedDocumentLookup: DocumentLookup | null = null;
-    if (explicit) {
-      intent = explicit.learner_intent;
-      move = explicit.learner_intent === "clarification" ? "clarify" : explicit.learner_intent;
-      retrievalQuery = `${move}; ${latestUserText.slice(0, 140)}`;
+    let action: InterviewAction;
+    analysisPromise = null;
+    if (direction.learner_intent === "stop") {
+      action = closingAction(state, specs.agent);
+    } else if (!direction.should_grade) {
+      const pendingEvidence = state.pending_evidence_key ?? specs.agent.phases[state.phase_index]?.evidence_keys[0] ?? null;
+      const repeat = isRepeatRequest(direction);
+      action = {
+        name: specs.agent.phases[state.phase_index]?.default_action ?? specs.agent.default_action,
+        evidence_key: pendingEvidence,
+        reason: direction.response_instruction,
+        intent: repeat
+          ? direction.response_instruction
+          : `The learner already responded or wants to continue. Do not repeat the previous question. Ask exactly one new question to establish ${pendingEvidence}. ${specs.agent.phases[state.phase_index]?.opening ?? ""}`,
+        fallback_text: repeat ? (state.pending_question ?? specs.agent.opening) : undefined,
+        close: false,
+        expects_answer: true,
+      };
     } else {
-      const classified = await classifyMove(specs, state, fullTranscript, latestUserText, usageSink);
-      intent = classified.learner_intent;
-      move = classified.move;
-      retrievalQuery = classified.retrieval_query;
-      // Same validation rules as the previous direction stage: only manifest IDs,
-      // positive integer pages, and explicit "present" requests become surfaces.
-      const raw = classified.document_lookup;
-      if (
-        raw &&
-        typeof raw.needed === "boolean" &&
-        typeof raw.query === "string" &&
-        typeof raw.present === "boolean" &&
-        (raw.file_id === null || (typeof raw.file_id === "string" && allowedDocumentIds.has(raw.file_id)))
-      ) {
-        const page = typeof raw.page === "number" && Number.isInteger(raw.page) && raw.page > 0 ? raw.page : null;
-        classifiedDocumentLookup = { needed: raw.needed, file_id: raw.file_id ?? null, query: raw.query, present: raw.present, page };
-      }
+      state.learner_turns += 1;
+      state.phase_turns += 1;
+      // Start background rubric analysis concurrently with speech generation
+      analysisPromise = runAnalyzerLLM(
+        latestUserText,
+        fullTranscript,
+        direction,
+        specs,
+        state,
+        knowledgeHits,
+        documentEvidence,
+        usageSink
+      );
+      // Immediately select conversational action heuristically
+      action = selectFastAction(direction, state, specs.persona, specs.agent);
     }
-    state.latest_learner_intent = intent;
+    state.actions.push(action.name);
 
-    const repeatRequested = Boolean(explicit && isRepeatRequest(explicit));
-
-    if (intent === "stop" || move === "close") {
-      // Closing: finish_session tool call when the agent advertises it, else speak the wrap-up.
+    if (action.close && advertisedToolNames.has("finish_session")) {
+      // Emit finish_session tool call with null content
       state.end_reason = "completed";
-      const closeAction = closingAction(state, specs.agent);
-      state.actions.push(closeAction.name);
-      if (advertisedToolNames.has("finish_session")) {
+      sseChunks = [
+        {
+          id: completionId,
+          object: "chat.completion.chunk",
+          created: timestamp,
+          model,
+          choices: [
+            {
+              index: 0,
+              delta: {
+                role: "assistant",
+                content: null,
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: "call_finish_session",
+                    type: "function",
+                    function: { name: "finish_session", arguments: "{}" },
+                  },
+                ],
+              },
+              finish_reason: null,
+            },
+          ],
+        },
+        {
+          id: completionId,
+          object: "chat.completion.chunk",
+          created: timestamp,
+          model,
+          choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }],
+        },
+      ];
+
+      fullResponse = {
+        id: completionId,
+        object: "chat.completion",
+        created: timestamp,
+        model,
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: "assistant",
+              content: null,
+              tool_calls: [{ id: "call_finish_session", type: "function", function: { name: "finish_session", arguments: "{}" } }],
+            },
+            finish_reason: "tool_calls",
+          },
+        ],
+      };
+    } else if (
+      action.name === "transition_phase" &&
+      advertisedToolNames.has("surface")
+    ) {
+      const neededSurface = surfaceForPhase(specs.agent, state.phase_index);
+      if (neededSurface && state.current_surface !== neededSurface.action) {
+        state.current_surface = neededSurface.action;
+        state.actions.push("surface");
+
         sseChunks = [
           {
             id: completionId,
@@ -1660,9 +1582,12 @@ async function runCompletionPipeline(
                   tool_calls: [
                     {
                       index: 0,
-                      id: "call_finish_session",
+                      id: `call_surface_${state.phase_index}`,
                       type: "function",
-                      function: { name: "finish_session", arguments: "{}" },
+                      function: {
+                        name: "surface",
+                        arguments: JSON.stringify(neededSurface),
+                      },
                     },
                   ],
                 },
@@ -1678,6 +1603,7 @@ async function runCompletionPipeline(
             choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }],
           },
         ];
+
         fullResponse = {
           id: completionId,
           object: "chat.completion",
@@ -1689,167 +1615,39 @@ async function runCompletionPipeline(
               message: {
                 role: "assistant",
                 content: null,
-                tool_calls: [{ id: "call_finish_session", type: "function", function: { name: "finish_session", arguments: "{}" } }],
+                tool_calls: [
+                  {
+                    id: `call_surface_${state.phase_index}`,
+                    type: "function",
+                    function: {
+                      name: "surface",
+                      arguments: JSON.stringify(neededSurface),
+                    },
+                  },
+                ],
               },
               finish_reason: "tool_calls",
             },
           ],
         };
       } else {
-        const closingText = deterministicFallback(closeAction, specs.agent, state);
-        turnSpokenText = closingText;
-        sseChunks = [
-          {
-            id: completionId,
-            object: "chat.completion.chunk",
-            created: timestamp,
-            model,
-            choices: [{ index: 0, delta: { role: "assistant", content: closingText }, finish_reason: null }],
-          },
-          {
-            id: completionId,
-            object: "chat.completion.chunk",
-            created: timestamp,
-            model,
-            choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
-          },
-        ];
-        fullResponse = {
-          id: completionId,
-          object: "chat.completion",
-          created: timestamp,
-          model,
-          choices: [{ index: 0, message: { role: "assistant", content: closingText }, finish_reason: "stop" }],
-        };
-      }
-    } else if (repeatRequested) {
-      // Repeat requests replay the pending question without spending a learner turn.
-      const repeatText = state.pending_question ?? specs.agent.opening;
-      turnSpokenText = repeatText;
-      sseChunks = [
-        {
-          id: completionId,
-          object: "chat.completion.chunk",
-          created: timestamp,
-          model,
-          choices: [{ index: 0, delta: { role: "assistant", content: repeatText }, finish_reason: null }],
-        },
-        {
-          id: completionId,
-          object: "chat.completion.chunk",
-          created: timestamp,
-          model,
-          choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
-        },
-      ];
-      fullResponse = {
-        id: completionId,
-        object: "chat.completion",
-        created: timestamp,
-        model,
-        choices: [{ index: 0, message: { role: "assistant", content: repeatText }, finish_reason: "stop" }],
-      };
-    } else {
-      if (intent === "answer" || intent === "off_topic" || intent === "question") {
-        state.learner_turns += 1;
-        state.phase_turns += 1;
-      }
-
-      // Show-and-tell: surface tool call first when the learner wants to view a document;
-      // the follow-up tool-result turn generates the speech.
-      const documentEvidence = await retrieveDocumentEvidence(session.id, session.orgId, specs, classifiedDocumentLookup ?? undefined);
-      const documentSurface =
-        advertisedToolNames.has("surface")
-          ? documentSurfaceArguments(documentEvidence, classifiedDocumentLookup ?? undefined)
-          : null;
-      if (documentSurface && classifiedDocumentLookup?.present && classifiedDocumentLookup.file_id) {
-        state.pending_document_lookup = {
-          file_id: classifiedDocumentLookup.file_id,
-          query: classifiedDocumentLookup.query || state.current_topic || "",
-          page: classifiedDocumentLookup.page ?? null,
-        };
-        state.current_surface = documentSurface.action;
-        state.actions.push("surface");
-
-        const documentToolCall = {
-          id: `call_surface_${classifiedDocumentLookup.file_id}`,
-          type: "function" as const,
-          function: { name: "surface", arguments: JSON.stringify(documentSurface) },
-        };
-        sseChunks = [
-          {
-            id: completionId,
-            object: "chat.completion.chunk",
-            created: timestamp,
-            model,
-            choices: [
-              {
-                index: 0,
-                delta: { role: "assistant", content: null, tool_calls: [documentToolCall] },
-                finish_reason: null,
-              },
-            ],
-          },
-          {
-            id: completionId,
-            object: "chat.completion.chunk",
-            created: timestamp,
-            model,
-            choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }],
-          },
-        ];
-        fullResponse = {
-          id: completionId,
-          object: "chat.completion",
-          created: timestamp,
-          model,
-          choices: [
-            {
-              index: 0,
-              message: { role: "assistant", content: null, tool_calls: [documentToolCall] },
-              finish_reason: "tool_calls",
-            },
-          ],
-        };
-      } else {
-        // Single styled generation for the decided move.
-        state.actions.push(move);
-        let spoken: { text: string; meta: SpeechMeta };
-        const actionForSpeech: InterviewAction = {
-          name: move,
-          evidence_key: state.pending_evidence_key ?? null,
-          reason: `Executes the decided conversational move (${move}).`,
-          intent: `Execute the decided conversational move (${move}) addressing the learner's latest message.`,
-          close: false,
-          expects_answer: true,
-        };
-        try {
-          spoken = await generateStyledSpeech({
-            orgId: session.orgId,
-            persona: { id: specs.persona.id, name: specs.persona.name },
-            learnerName,
-            move,
-            retrievalQuery,
-            transcript: fullTranscript,
-            latestUserText,
-            state,
-            phase: specs.agent.phases[state.phase_index] ?? null,
-            usage: usageSink,
-          });
-        } catch (error) {
-          console.warn("[interview-runtime] styled speech failed; deterministic fallback", error);
-          spoken = {
-            text: deterministicFallback(actionForSpeech, specs.agent, state),
-            meta: { attempts: 0, flags: ["fallback"], fallback: true, rendererFallback: false, draftWords: 0, finalWords: 0 },
-          };
-        }
+        const spoken = await generatePipelineSpeech(
+          action,
+          specs,
+          state,
+          fullTranscript,
+          direction,
+          knowledgeHits,
+          session.orgId,
+          personaVoiceAvailable,
+          usageSink,
+          documentEvidence,
+          preloadedEpisodesPromise
+        );
         const spokenText = spoken.text;
         turnSpeechMeta = spoken.meta;
-        recordAskedQuestion(state, actionForSpeech, spokenText, intent === "answer");
-        refreshCurrentTopic(state, spokenText, latestUserText);
-        if (move !== "clarify" && move !== "hint") {
-          state.pending_question = spokenText;
-        }
+        recordAskedQuestion(state, action, spokenText, direction.should_grade);
+        if (direction.should_grade) refreshCurrentTopic(state, spokenText, latestUserText);
         turnSpokenText = spokenText;
 
         sseChunks = [
@@ -1868,6 +1666,7 @@ async function runCompletionPipeline(
             choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
           },
         ];
+
         fullResponse = {
           id: completionId,
           object: "chat.completion",
@@ -1876,6 +1675,103 @@ async function runCompletionPipeline(
           choices: [{ index: 0, message: { role: "assistant", content: spokenText }, finish_reason: "stop" }],
         };
       }
+    } else if (documentSurface && direction.document_lookup?.present && direction.document_lookup.file_id) {
+      // Emit surface tool call first; follow-up tool result turn generates the speech
+      state.pending_document_lookup = {
+        file_id: direction.document_lookup.file_id,
+        query: direction.document_lookup.query || direction.current_topic || "",
+        page: direction.document_lookup.page ?? null,
+      };
+      state.current_surface = documentSurface.action;
+      state.actions.push("surface");
+
+      const documentToolCall = {
+        id: `call_surface_${direction.document_lookup.file_id}`,
+        type: "function" as const,
+        function: { name: "surface", arguments: JSON.stringify(documentSurface) },
+      };
+
+      sseChunks = [
+        {
+          id: completionId,
+          object: "chat.completion.chunk",
+          created: timestamp,
+          model,
+          choices: [
+            {
+              index: 0,
+              delta: { role: "assistant", content: null, tool_calls: [documentToolCall] },
+              finish_reason: null,
+            },
+          ],
+        },
+        {
+          id: completionId,
+          object: "chat.completion.chunk",
+          created: timestamp,
+          model,
+          choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }],
+        },
+      ];
+
+      fullResponse = {
+        id: completionId,
+        object: "chat.completion",
+        created: timestamp,
+        model,
+        choices: [
+          {
+            index: 0,
+            message: { role: "assistant", content: null, tool_calls: [documentToolCall] },
+            finish_reason: "tool_calls",
+          },
+        ],
+      };
+    } else {
+      // Render spoken trainer utterance
+      const spoken = await generatePipelineSpeech(
+        action,
+        specs,
+        state,
+        fullTranscript,
+        direction,
+        knowledgeHits,
+        session.orgId,
+        personaVoiceAvailable,
+        usageSink,
+        documentEvidence,
+        preloadedEpisodesPromise
+      );
+      const spokenText = spoken.text;
+      turnSpeechMeta = spoken.meta;
+      recordAskedQuestion(state, action, spokenText, direction.should_grade);
+      if (direction.should_grade) refreshCurrentTopic(state, spokenText, latestUserText);
+      turnSpokenText = spokenText;
+
+      sseChunks = [
+        {
+          id: completionId,
+          object: "chat.completion.chunk",
+          created: timestamp,
+          model,
+          choices: [{ index: 0, delta: { role: "assistant", content: spokenText }, finish_reason: null }],
+        },
+        {
+          id: completionId,
+          object: "chat.completion.chunk",
+          created: timestamp,
+          model,
+          choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+        },
+      ];
+
+      fullResponse = {
+        id: completionId,
+        object: "chat.completion",
+        created: timestamp,
+        model,
+        choices: [{ index: 0, message: { role: "assistant", content: spokenText }, finish_reason: "stop" }],
+      };
     }
   }
 
@@ -1885,6 +1781,32 @@ async function runCompletionPipeline(
   }
   if (turnSpokenText) {
     currentTranscript.push({ role: "trainer", text: turnSpokenText });
+  }
+
+  // Await background rubric analysis if launched, and update state coverage & claims
+  if (analysisPromise) {
+    try {
+      const analysis = await analysisPromise;
+      const required = activeEvidence(specs.agent, state);
+      const resumeGrounding = activeClaimHandling(specs.agent, state) === "resume_evidence";
+      const normalizedClaims = (analysis.claim_assessments ?? []).map((claim) =>
+        resumeGrounding && isHypothetical(claim.statement)
+          ? { ...claim, provenance: "hypothetical" as ClaimProvenance }
+          : claim
+      );
+      const knownStatements = new Set(state.claims.map((c) => c.statement));
+      for (const claim of normalizedClaims) {
+        if (!knownStatements.has(claim.statement)) {
+          state.claims.push(claim);
+          knownStatements.add(claim.statement);
+        }
+      }
+      applyEvidenceUpdates(analysis, state, required, resumeGrounding, turnUserText);
+      const maxProbes = specs.agent.phases[state.phase_index]?.max_probes_per_lane ?? 2;
+      markProbeExhaustion(state, required, analysis.unresolved_evidence_key, maxProbes);
+    } catch (error) {
+      console.warn("[interview-runtime] background analysis failed", error);
+    }
   }
 
   // Final usage chunk: LiveKit's inference LLMStream treats any chunk with a

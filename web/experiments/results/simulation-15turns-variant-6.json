@@ -1,0 +1,536 @@
+{
+  "conv-1-karthik": {
+    "candidate": "Karthik",
+    "role": "5 YOE Backend Engineer — Payments, Redis idempotency, Kafka pipelines",
+    "turns": [
+      {
+        "turnNumber": 0,
+        "speaker": "vasanth",
+        "text": "Greet the learner by name and start the session",
+        "wallMs": 123
+      },
+      {
+        "turnNumber": 1,
+        "speaker": "candidate",
+        "text": "Hi Vasanth, I'm Karthik. Thanks for having me. I have about 5 years of experience in backend development, mostly with Go, Node, and distributed systems."
+      },
+      {
+        "turnNumber": 2,
+        "speaker": "vasanth",
+        "text": "Hi Karthik, great to meet you. You mentioned distributed systems—can you walk me through a specific project where you designed or contributed to a distributed system? What was your role and what technical challenges did you tackle?",
+        "wallMs": 2641
+      },
+      {
+        "turnNumber": 3,
+        "speaker": "candidate",
+        "text": "Yes, I've worked primarily on high-throughput microservices for payments, specifically building a Redis idempotency layer and Kafka event notification pipelines."
+      },
+      {
+        "turnNumber": 4,
+        "speaker": "vasanth",
+        "text": "Got it, you built a Redis idempotency layer for payments. How did you design that layer to handle duplicate requests reliably under high throughput?",
+        "wallMs": 1395
+      },
+      {
+        "turnNumber": 5,
+        "speaker": "candidate",
+        "text": "In our payment processing system, we had duplicate webhook events coming from payment gateways during network retries. I designed a deduplication layer using Redis."
+      },
+      {
+        "turnNumber": 6,
+        "speaker": "vasanth",
+        "text": "Right, Harini. How exactly did you structure the Redis keys and expiration strategy to ensure duplicates were detected quickly without causing memory bloat under high request volume?",
+        "wallMs": 1813
+      },
+      {
+        "turnNumber": 7,
+        "speaker": "candidate",
+        "text": "We used Redis SETNX with a 24-hour TTL. If the key already existed, we returned the cached result immediately, which guaranteed exactly-once processing."
+      },
+      {
+        "turnNumber": 8,
+        "speaker": "vasanth",
+        "text": "Okay, Harini. How did you handle race conditions where two requests for the same payment hit Redis SETNX at nearly the same time?",
+        "wallMs": 1971
+      },
+      {
+        "turnNumber": 9,
+        "speaker": "candidate",
+        "text": "Well, because Redis is single-threaded and the key is set atomically with SETNX, no two requests can process the same transaction at the same time."
+      },
+      {
+        "turnNumber": 10,
+        "speaker": "vasanth",
+        "text": "Right, Harini. Can you explain how you handled the scenario where the first request sets the key but the processing downstream fails—how did you ensure the system could recover or retry without losing idempotency?",
+        "wallMs": 1516
+      },
+      {
+        "turnNumber": 11,
+        "speaker": "candidate",
+        "text": "Wait, actually, I guess if the downstream database commit fails after setting the Redis key, the request wouldn't have been processed, but Redis would still say it's done. So that's not truly exactly-once."
+      },
+      {
+        "turnNumber": 12,
+        "speaker": "vasanth",
+        "text": "Yeah, Harini, that’s a common challenge. Did you implement any compensating mechanism or a way to rollback or clear the Redis key if the downstream commit failed? How did you handle that gap in exactly-once semantics?",
+        "wallMs": 2161
+      },
+      {
+        "turnNumber": 13,
+        "speaker": "candidate",
+        "text": "Yeah, that's why we added a two-phase check with a state machine in Postgres, but honestly it was tricky to handle crashes in between."
+      },
+      {
+        "turnNumber": 14,
+        "speaker": "vasanth",
+        "text": "Got it, Harini. Can you walk me through the state machine design in Postgres? Specifically, how did it coordinate with Redis to ensure consistency despite crashes?",
+        "wallMs": 1551
+      },
+      {
+        "turnNumber": 15,
+        "speaker": "candidate",
+        "text": "I personally designed the Redis key format and the state machine transition logic. A team of three other engineers implemented the gateway client handlers."
+      },
+      {
+        "turnNumber": 16,
+        "speaker": "vasanth",
+        "text": "Okay, Harini. Walk me through the state machine transition logic you designed—how does it track and manage the different processing states to handle retries and failures?",
+        "wallMs": 2287
+      },
+      {
+        "turnNumber": 17,
+        "speaker": "candidate",
+        "text": "Sorry, could you repeat that question? I want to make sure I understand what you're asking."
+      },
+      {
+        "turnNumber": 18,
+        "speaker": "vasanth",
+        "text": "No problem. I was asking: Got it, Harini. Can you walk me through the state machine design in Postgres? Specifically, how did it coordinate with Redis to ensure consistency despite crashes?",
+        "wallMs": 174
+      },
+      {
+        "turnNumber": 19,
+        "speaker": "candidate",
+        "text": "For the Kafka notification pipeline, we had 12 partitions and consumer groups processing email and SMS alerts."
+      },
+      {
+        "turnNumber": 20,
+        "speaker": "vasanth",
+        "text": "Right, Harini. Let’s finish the Postgres state machine part first. How exactly did the state transitions in Postgres get triggered or rolled back in sync with Redis key updates to avoid inconsistency during crashes?",
+        "wallMs": 2041
+      },
+      {
+        "turnNumber": 21,
+        "speaker": "candidate",
+        "text": "We assumed that as long as we were using consumer groups, messages would always be processed strictly in order across the system."
+      },
+      {
+        "turnNumber": 22,
+        "speaker": "vasanth",
+        "text": "Right, Harini. You mentioned relying on consumer groups for strict ordering. How did that assumption affect your state machine's ability to handle out-of-order or duplicate messages, especially during consumer crashes or rebalances?",
+        "wallMs": 1750
+      },
+      {
+        "turnNumber": 23,
+        "speaker": "candidate",
+        "text": "Could you give me a small hint on how partition ordering actually interacts with consumer groups?"
+      },
+      {
+        "turnNumber": 24,
+        "speaker": "vasanth",
+        "text": "Okay, Harini. Let’s pause the Kafka part for now. For the Postgres state machine, I’m asking how you ensured the Redis key and Postgres state stayed consistent in case of a crash—did you use transactions, retries, or some other mechanism?",
+        "wallMs": 2034
+      },
+      {
+        "turnNumber": 25,
+        "speaker": "candidate",
+        "text": "Ah, right! Ordering is only guaranteed within a single partition using the partition key, not globally across the topic. So if we used the user ID as the key, all events for that user stay in order."
+      },
+      {
+        "turnNumber": 26,
+        "speaker": "vasanth",
+        "text": "Yeah, Harini, using user ID as the partition key helps ordering per user. How did your state machine handle duplicates or missed messages if a consumer crashed mid-processing or during a rebalance?",
+        "wallMs": 1641
+      },
+      {
+        "turnNumber": 27,
+        "speaker": "candidate",
+        "text": "One major limitation was during deployment restarts, consumer rebalancing would cause thundering herd latency spikes of 15 to 20 seconds."
+      },
+      {
+        "turnNumber": 28,
+        "speaker": "vasanth",
+        "text": "Right, Harini. We’re still on the Postgres and Redis consistency question. How did you handle atomicity or rollback between updating Redis and changing Postgres state to avoid inconsistency during crashes?",
+        "wallMs": 1679
+      },
+      {
+        "turnNumber": 29,
+        "speaker": "candidate",
+        "text": "Looking back, we should have used cooperative sticky assignors in Kafka instead of the default eager assignor to avoid stopping all consumers during a rebalance."
+      },
+      {
+        "turnNumber": 30,
+        "speaker": "vasanth",
+        "text": "Right, Harini. Switching to cooperative sticky assignors helps reduce rebalance impact. But specifically, how did your state machine detect and recover from duplicates or missed messages caused by those rebalance interruptions?",
+        "wallMs": 2208
+      }
+    ],
+    "totalWallMs": 26985
+  },
+  "conv-2-anubhav": {
+    "candidate": "Anubhav",
+    "role": "4 YOE Full Stack Engineer — React virtual DOM, Node.js event loop & worker threads",
+    "turns": [
+      {
+        "turnNumber": 0,
+        "speaker": "vasanth",
+        "text": "Greet the learner by name and start the session",
+        "wallMs": 100
+      },
+      {
+        "turnNumber": 1,
+        "speaker": "candidate",
+        "text": "Hi Vasanth, thanks for having me. I'm Anubhav, 4 years of experience doing full stack with React and Node.js."
+      },
+      {
+        "turnNumber": 2,
+        "speaker": "vasanth",
+        "text": "Hi Anubhav, great to meet you. You mentioned full stack with React and Node.js. Can you pick one project where you had significant ownership and walk me through the core architecture and your specific contributions?",
+        "wallMs": 1555
+      },
+      {
+        "turnNumber": 3,
+        "speaker": "candidate",
+        "text": "I've spent the last two years at an e-commerce company building customer-facing checkout flows and inventory dashboards in React."
+      },
+      {
+        "turnNumber": 4,
+        "speaker": "vasanth",
+        "text": "Okay, got it. For the checkout flows you built in React, can you walk me through the architecture or design decisions you made to handle state management and ensure smooth user experience?",
+        "wallMs": 2047
+      },
+      {
+        "turnNumber": 5,
+        "speaker": "candidate",
+        "text": "I owned the checkout cart rewrite. We had severe lag when users updated item quantities because the entire component tree re-rendered."
+      },
+      {
+        "turnNumber": 6,
+        "speaker": "vasanth",
+        "text": "Right, Anubhav. How exactly did you redesign the checkout cart to reduce the lag? What specific React techniques or architectural changes did you apply to prevent the entire component tree from re-rendering?",
+        "wallMs": 2009
+      },
+      {
+        "turnNumber": 7,
+        "speaker": "candidate",
+        "text": "React uses the virtual DOM and reconciliation with diffing algorithm to update only changed nodes, but in our case, parent state changes were triggering child re-renders unnecessarily."
+      },
+      {
+        "turnNumber": 8,
+        "speaker": "vasanth",
+        "text": "Right, so you noticed unnecessary child re-renders due to parent state changes. What specific technique or pattern did you implement in your React components to prevent those redundant renders and optimize performance?",
+        "wallMs": 1424
+      },
+      {
+        "turnNumber": 9,
+        "speaker": "candidate",
+        "text": "We wrapped our cart items in React.memo and moved state down to leaf components using Zustand."
+      },
+      {
+        "turnNumber": 10,
+        "speaker": "vasanth",
+        "text": "Got it, Anubhav. How did you decide on Zustand for state management over other options like Redux or Context API in this scenario? What was the key benefit you observed from using Zustand in your checkout cart rewrite?",
+        "wallMs": 1486
+      },
+      {
+        "turnNumber": 11,
+        "speaker": "candidate",
+        "text": "Wait, isn't React always faster than vanilla JavaScript because of reconciliation?"
+      },
+      {
+        "turnNumber": 12,
+        "speaker": "vasanth",
+        "text": "Right, Anubhav. React’s reconciliation optimizes updates, but it still depends on how state changes propagate. Can you explain how Zustand’s approach to state updates specifically helped reduce unnecessary re-renders compared to React’s built-in state or Context API?",
+        "wallMs": 1573
+      },
+      {
+        "turnNumber": 13,
+        "speaker": "candidate",
+        "text": "Right, right, vanilla JS doing direct DOM manipulation is actually faster for simple DOM nodes because it doesn't have the overhead of creating virtual DOM objects and diffing trees."
+      },
+      {
+        "turnNumber": 14,
+        "speaker": "vasanth",
+        "text": "Yeah, Anubhav, that makes sense. Can you explain how you balanced using React.memo and Zustand with any direct DOM manipulation? Did you mix these approaches, or keep them separate? How did you ensure consistency and performance across these techniques?",
+        "wallMs": 1879
+      },
+      {
+        "turnNumber": 15,
+        "speaker": "candidate",
+        "text": "On the backend with Node.js, we handled payment webhooks using an event loop with asynchronous I/O."
+      },
+      {
+        "turnNumber": 16,
+        "speaker": "vasanth",
+        "text": "Okay, Anubhav. Let’s stay focused on the frontend for now. Can you explain specifically how Zustand’s state update mechanism differs from React’s built-in state or Context API in reducing re-renders in your cart?",
+        "wallMs": 1466
+      },
+      {
+        "turnNumber": 17,
+        "speaker": "candidate",
+        "text": "Node.js runs on a single thread using libuv, with a pool of 4 worker threads for filesystem and crypto operations."
+      },
+      {
+        "turnNumber": 18,
+        "speaker": "vasanth",
+        "text": "Okay, Anubhav. That Node.js detail is solid, but I was asking about your React and DOM manipulation balance in the checkout cart. Did you combine React.memo and Zustand with direct DOM manipulation in the same components, or keep those strategies isolated? How did you maintain consistency and performance?",
+        "wallMs": 1577
+      },
+      {
+        "turnNumber": 19,
+        "speaker": "candidate",
+        "text": "If someone runs CPU-heavy JSON parsing or encryption on the main thread, it blocks the event loop and delays incoming HTTP requests."
+      },
+      {
+        "turnNumber": 20,
+        "speaker": "vasanth",
+        "text": "Right, Anubhav. That’s about Node.js event loop blocking. Back to Zustand—can you explain how Zustand’s state updates avoid re-rendering components that don’t depend on changed state, unlike React’s Context which triggers wider updates?",
+        "wallMs": 1704
+      },
+      {
+        "turnNumber": 21,
+        "speaker": "candidate",
+        "text": "We solved that by offloading heavy cryptographic signature verification to Node worker threads using worker_threads module."
+      },
+      {
+        "turnNumber": 22,
+        "speaker": "vasanth",
+        "text": "Right, Anubhav, that offloading crypto to worker threads is a good Node optimization. But I’m still curious about the React side—did you mix React.memo and Zustand with direct DOM manipulation in the same cart components, or keep those approaches separate? How did you keep UI state consistent?",
+        "wallMs": 1967
+      },
+      {
+        "turnNumber": 23,
+        "speaker": "candidate",
+        "text": "I was the sole engineer responsible for the worker thread architecture and performance benchmarking."
+      },
+      {
+        "turnNumber": 24,
+        "speaker": "vasanth",
+        "text": "Okay, Anubhav. Since you owned the worker thread architecture, can you explain how you integrated worker threads to offload CPU-heavy tasks and how you measured their impact on overall system performance?",
+        "wallMs": 1359
+      },
+      {
+        "turnNumber": 25,
+        "speaker": "candidate",
+        "text": "Can you clarify what you mean by backpressure in Node streams?"
+      },
+      {
+        "turnNumber": 26,
+        "speaker": "vasanth",
+        "text": "Yeah, Anubhav, I meant backpressure as the mechanism in Node streams to prevent overwhelming the writable side when the readable side produces data too fast. But let's finish the React question first—did you mix React.memo and Zustand with direct DOM manipulation in the same components or keep them separate? How did you maintain UI state consistency?",
+        "wallMs": 1562
+      },
+      {
+        "turnNumber": 27,
+        "speaker": "candidate",
+        "text": "Backpressure happens when the readable stream pushes data faster than the writable stream can consume it, filling up the internal buffer."
+      },
+      {
+        "turnNumber": 28,
+        "speaker": "vasanth",
+        "text": "Right, Anubhav. That’s a good definition of backpressure. Can you walk me through the specific mechanism you implemented in your worker thread setup to handle backpressure and prevent the system from getting overwhelmed?",
+        "wallMs": 1586
+      },
+      {
+        "turnNumber": 29,
+        "speaker": "candidate",
+        "text": "We used pipeline() from stream module which automatically handles backpressure and error cleanup between streams."
+      },
+      {
+        "turnNumber": 30,
+        "speaker": "vasanth",
+        "text": "Okay, Anubhav. Thanks for explaining the stream pipeline for backpressure. Now back to React—did you combine React.memo and Zustand with direct DOM manipulation in the same cart components, or keep those approaches isolated? How did you ensure the UI state stayed consistent across these?",
+        "wallMs": 1608
+      }
+    ],
+    "totalWallMs": 24902
+  },
+  "conv-3-vinay": {
+    "candidate": "Vinay",
+    "role": "Fresher / Junior — Video player comments, WebSockets, useEffect cleanup & time complexity",
+    "turns": [
+      {
+        "turnNumber": 0,
+        "speaker": "vasanth",
+        "text": "Greet the learner by name and start the session",
+        "wallMs": 55
+      },
+      {
+        "turnNumber": 1,
+        "speaker": "candidate",
+        "text": "Hello Vasanth sir. I am Vinay. I recently graduated in computer science and I'm looking for junior developer roles."
+      },
+      {
+        "turnNumber": 2,
+        "speaker": "vasanth",
+        "text": "Hi Vinay, good to meet you. Tell me about a project you worked on during your studies that you are proud of. What was your role and what did you personally build or contribute?",
+        "wallMs": 1386
+      },
+      {
+        "turnNumber": 3,
+        "speaker": "candidate",
+        "text": "I built a YouTube clone as my final year capstone project using React, Node.js, and MongoDB."
+      },
+      {
+        "turnNumber": 4,
+        "speaker": "vasanth",
+        "text": "Got it. In your YouTube clone project, how did you handle video storage and streaming technically?",
+        "wallMs": 1344
+      },
+      {
+        "turnNumber": 5,
+        "speaker": "candidate",
+        "text": "I built the video player page and the real-time comment section where users can post comments under videos."
+      },
+      {
+        "turnNumber": 6,
+        "speaker": "vasanth",
+        "text": "Right, Vinay. For the real-time comment section, what technology or architecture did you use to enable live updates without users refreshing the page?",
+        "wallMs": 1507
+      },
+      {
+        "turnNumber": 7,
+        "speaker": "candidate",
+        "text": "For comments, we stored comments in MongoDB with a parent_id field referencing the master comment for replies."
+      },
+      {
+        "turnNumber": 8,
+        "speaker": "vasanth",
+        "text": "Got it, Vinay. How did you handle the real-time aspect? Did you use WebSockets, polling, or some other method to push new comments to users instantly?",
+        "wallMs": 1710
+      },
+      {
+        "turnNumber": 9,
+        "speaker": "candidate",
+        "text": "When a new comment is posted while someone is reading, we used WebSockets to broadcast the new comment to all connected viewers."
+      },
+      {
+        "turnNumber": 10,
+        "speaker": "vasanth",
+        "text": "Got it, Vinay. How did you handle cases where a user's connection dropped and then reconnected? Did your WebSocket setup include any mechanism to sync missed comments or ensure no data loss?",
+        "wallMs": 1816
+      },
+      {
+        "turnNumber": 11,
+        "speaker": "candidate",
+        "text": "If 10,000 users are watching a viral video and commenting at the same time, broadcasting every single comment creates thousands of WebSocket messages per second."
+      },
+      {
+        "turnNumber": 12,
+        "speaker": "vasanth",
+        "text": "Right, Vinay. How did you optimize or reduce the WebSocket message load to handle that scale efficiently without overwhelming your servers or clients?",
+        "wallMs": 1214
+      },
+      {
+        "turnNumber": 13,
+        "speaker": "candidate",
+        "text": "Honestly sir, I'm not sure how big companies handle this. Could you give me a small hint?"
+      },
+      {
+        "turnNumber": 14,
+        "speaker": "vasanth",
+        "text": "Okay, Vinay. In many systems, a common approach is to keep track of the last comment the user received and, upon reconnection, send only the comments posted after that point. How would you design a simple mechanism to track and sync missed comments in your setup?",
+        "wallMs": 1783
+      },
+      {
+        "turnNumber": 15,
+        "speaker": "candidate",
+        "text": "Ah! Polling in batches or throttling the comment stream so the UI updates every 3 to 5 seconds instead of real-time for every single comment!"
+      },
+      {
+        "turnNumber": 16,
+        "speaker": "vasanth",
+        "text": "Okay, Vinay. Can you explain the specific mechanism or code logic you used to implement that batching or throttling on the client or server side? How did you decide the 3 to 5 seconds interval?",
+        "wallMs": 1456
+      },
+      {
+        "turnNumber": 17,
+        "speaker": "candidate",
+        "text": "In React, I used useEffect to establish the WebSocket connection on component mount."
+      },
+      {
+        "turnNumber": 18,
+        "speaker": "vasanth",
+        "text": "Right, Vinay. Using useEffect to manage the connection is good. How would you track the last comment received on the client side and request only newer comments from the server after reconnecting?",
+        "wallMs": 1519
+      },
+      {
+        "turnNumber": 19,
+        "speaker": "candidate",
+        "text": "In the cleanup function of useEffect, I called socket.disconnect() to prevent memory leaks when the user navigates away."
+      },
+      {
+        "turnNumber": 20,
+        "speaker": "vasanth",
+        "text": "Right, Vinay. That cleanup prevents leaks, good. But back to throttling—how exactly did your batching logic work? Was it a timer on the client aggregating comments before UI update, or server-side buffering? And what led you to pick that 3 to 5 seconds window?",
+        "wallMs": 1423
+      },
+      {
+        "turnNumber": 21,
+        "speaker": "candidate",
+        "text": "Wait, if the dependency array is empty, does useEffect run on every render or only on mount?"
+      },
+      {
+        "turnNumber": 22,
+        "speaker": "vasanth",
+        "text": "Right, Vinay. If the dependency array is empty, useEffect runs only once on mount, not on every render. Now, how would you store the last comment ID in your React state or elsewhere to use it for syncing after reconnect?",
+        "wallMs": 1605
+      },
+      {
+        "turnNumber": 23,
+        "speaker": "candidate",
+        "text": "It runs only once on mount, but if someone forgets the cleanup return function, every re-render creates a new socket connection."
+      },
+      {
+        "turnNumber": 24,
+        "speaker": "vasanth",
+        "text": "Yeah, Vinay. That socket connection detail is important. Now, focusing on throttling—did you implement a client-side timer that collects incoming comments and updates the UI every 3 to 5 seconds? How did you technically code that timer and buffer?",
+        "wallMs": 2598
+      },
+      {
+        "turnNumber": 25,
+        "speaker": "candidate",
+        "text": "For time complexity, our comment sorting by timestamp in the client was taking O(N log N) using JavaScript array sort."
+      },
+      {
+        "turnNumber": 26,
+        "speaker": "vasanth",
+        "text": "Okay, Vinay. That sorting complexity makes sense. But focusing back on syncing missed comments, where exactly would you keep the last comment ID in your React app to use it for requesting only new comments after reconnect?",
+        "wallMs": 1434
+      },
+      {
+        "turnNumber": 27,
+        "speaker": "candidate",
+        "text": "On the database, we created a compound index on video_id and created_at so MongoDB returns sorted comments directly using the B-tree index."
+      },
+      {
+        "turnNumber": 28,
+        "speaker": "vasanth",
+        "text": "Right, Vinay. That compound index helps with query speed. But coming back to throttling—did you implement the timer and buffer logic on the client side? How exactly did you code that timer to batch comments before updating the UI every few seconds?",
+        "wallMs": 1795
+      },
+      {
+        "turnNumber": 29,
+        "speaker": "candidate",
+        "text": "Thank you Vasanth sir, this mock interview really gave me perspective on how to think like a developer instead of just a user."
+      },
+      {
+        "turnNumber": 30,
+        "speaker": "vasanth",
+        "text": "Yeah, Vinay, glad to hear that. Just to close the loop—where exactly in your React app state or lifecycle would you store that last comment ID to keep track for syncing after reconnect?",
+        "wallMs": 1546
+      }
+    ],
+    "totalWallMs": 24191
+  }
+}

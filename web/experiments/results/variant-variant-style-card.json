@@ -1,0 +1,187 @@
+{
+  "variant": "variant-style-card",
+  "generatedAt": "2026-09-13T13:00:38.793Z",
+  "environment": {
+    "model": "openai/gpt-4.1-mini",
+    "agent": {
+      "id": "cmtx0b2db000204jo1hour2f1",
+      "slug": "project-experience-deep-dive"
+    },
+    "persona": {
+      "id": "cmtwyoa1s000004jshzfd5by4",
+      "slug": "Vasanth"
+    },
+    "context": {
+      "id": "cmtx1jwpr000004k111cst5y2",
+      "name": "Harini_Shekar_Senior_Software_Engineer_Resume.pdf"
+    },
+    "stream": true
+  },
+  "turns": [
+    {
+      "label": "opening",
+      "wallMs": 56,
+      "ttftMs": 54,
+      "status": 200,
+      "response": "Hi there. As you know, I'm Vasanth. Thanks for joining the interview today. Can I know a bit about you and your recent experience—whatever you'd like to share? What are your skill sets and what sort of roles are you targeting?",
+      "events": [
+        {
+          "stage": "db.auth",
+          "kind": "db",
+          "startMs": 1,
+          "endMs": 51,
+          "ms": 51
+        }
+      ],
+      "logs": []
+    },
+    {
+      "label": "ownership-answer",
+      "wallMs": 1862,
+      "ttftMs": 1861,
+      "status": 200,
+      "response": "Good, good. Let’s say you have this monolith handling orders synchronously. When you moved to event-driven, how did you ensure data consistency across services, correct? Walk me through the mechanism you used.",
+      "events": [
+        {
+          "stage": "db.persist",
+          "kind": "db",
+          "startMs": -4,
+          "endMs": 54,
+          "ms": 57
+        },
+        {
+          "stage": "db.auth",
+          "kind": "db",
+          "startMs": 0,
+          "endMs": 109,
+          "ms": 109
+        },
+        {
+          "stage": "unknown_llm",
+          "kind": "llm",
+          "startMs": 111,
+          "endMs": 1861,
+          "ms": 1750,
+          "meta": {
+            "status": 200,
+            "headersMs": 1453,
+            "model": "openai/gpt-4.1-mini",
+            "requestBytes": 3237
+          }
+        }
+      ],
+      "logs": []
+    },
+    {
+      "label": "mechanism-answer",
+      "wallMs": 1348,
+      "ttftMs": 1347,
+      "status": 200,
+      "response": "True, true, true. Outbox pattern with Kafka is solid for consistency, correct? Now, let's say one of your consumers processes an event but crashes halfway—how does your system handle partial processing or side effects to maintain exactly-once semantics, am I right or wrong?",
+      "events": [
+        {
+          "stage": "db.persist",
+          "kind": "db",
+          "startMs": -1,
+          "endMs": 136,
+          "ms": 137
+        },
+        {
+          "stage": "db.auth",
+          "kind": "db",
+          "startMs": 0,
+          "endMs": 150,
+          "ms": 150
+        },
+        {
+          "stage": "unknown_llm",
+          "kind": "llm",
+          "startMs": 151,
+          "endMs": 1346,
+          "ms": 1196,
+          "meta": {
+            "status": 200,
+            "headersMs": 664,
+            "model": "openai/gpt-4.1-mini",
+            "requestBytes": 3669
+          }
+        }
+      ],
+      "logs": []
+    },
+    {
+      "label": "impact-answer",
+      "wallMs": 1783,
+      "ttftMs": 1782,
+      "status": 200,
+      "response": "Good, good. Impressive impact there, there. But tell me, during that migration, how did you handle eventual consistency? For example, if one service updated an order status but another failed, how did you keep data reliable across the event-driven system, correct?",
+      "events": [
+        {
+          "stage": "db.persist",
+          "kind": "db",
+          "startMs": -1,
+          "endMs": 437,
+          "ms": 438
+        },
+        {
+          "stage": "db.auth",
+          "kind": "db",
+          "startMs": 0,
+          "endMs": 434,
+          "ms": 434
+        },
+        {
+          "stage": "unknown_llm",
+          "kind": "llm",
+          "startMs": 434,
+          "endMs": 1781,
+          "ms": 1347,
+          "meta": {
+            "status": 200,
+            "headersMs": 866,
+            "model": "openai/gpt-4.1-mini",
+            "requestBytes": 3607
+          }
+        }
+      ],
+      "logs": []
+    },
+    {
+      "label": "repeat-request",
+      "wallMs": 1838,
+      "ttftMs": 1837,
+      "status": 200,
+      "response": "Sure, sure, there. Let me rephrase it for you. Imagine a consumer picks up an event and starts processing, but crashes halfway through—how do you prevent partial side effects or duplicated processing to keep exactly-once semantics, okay?",
+      "events": [
+        {
+          "stage": "db.persist",
+          "kind": "db",
+          "startMs": -1,
+          "endMs": 676,
+          "ms": 677
+        },
+        {
+          "stage": "db.auth",
+          "kind": "db",
+          "startMs": 0,
+          "endMs": 349,
+          "ms": 349
+        },
+        {
+          "stage": "unknown_llm",
+          "kind": "llm",
+          "startMs": 350,
+          "endMs": 1837,
+          "ms": 1487,
+          "meta": {
+            "status": 200,
+            "headersMs": 904,
+            "model": "openai/gpt-4.1-mini",
+            "requestBytes": 3839
+          }
+        }
+      ],
+      "logs": []
+    }
+  ]
+}
