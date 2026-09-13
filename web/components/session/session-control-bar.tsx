@@ -83,7 +83,7 @@ export function SessionControlBar({
           onClick={() => setCameraActive((v) => !v)}
           title="Toggle camera (Voice only)"
           className={cn(
-            "grid size-10.5 place-items-center rounded-full text-foreground/80 transition-colors hover:bg-white/10 hover:text-foreground",
+            "grid size-10 shrink-0 place-items-center rounded-full text-foreground/80 transition-colors hover:bg-white/10 hover:text-foreground",
             cameraActive && "bg-white/15 text-white",
           )}
         >
@@ -96,7 +96,7 @@ export function SessionControlBar({
           type="button"
           title={micOn ? "Mute microphone" : "Unmute microphone"}
           className={cn(
-            "grid size-10.5 place-items-center rounded-full text-foreground/80 transition-colors hover:bg-white/10 hover:text-foreground",
+            "grid size-10 shrink-0 place-items-center rounded-full text-foreground/80 transition-colors hover:bg-white/10 hover:text-foreground",
             !micOn && "bg-red-500/20 text-red-400 hover:bg-red-500/30",
           )}
         >
@@ -115,7 +115,7 @@ export function SessionControlBar({
           onClick={onScreenShareToggle}
           title="Toggle shared workspace surface"
           className={cn(
-            "grid size-10.5 place-items-center rounded-full text-foreground/80 transition-colors hover:bg-white/10 hover:text-foreground",
+            "grid size-10 shrink-0 place-items-center rounded-full text-foreground/80 transition-colors hover:bg-white/10 hover:text-foreground",
             screenShareActive && "bg-white/15 text-white",
           )}
         >
@@ -128,7 +128,7 @@ export function SessionControlBar({
           onClick={onSubtitlesToggle}
           title="Toggle live subtitles"
           className={cn(
-            "grid size-10.5 place-items-center rounded-full text-foreground/80 transition-colors hover:bg-white/10 hover:text-foreground",
+            "grid size-10 shrink-0 place-items-center rounded-full text-foreground/80 transition-colors hover:bg-white/10 hover:text-foreground",
             subtitlesActive && "bg-white/15 text-white",
           )}
         >
@@ -141,7 +141,7 @@ export function SessionControlBar({
           onClick={onChatToggle}
           title="Toggle chat panel"
           className={cn(
-            "grid size-10.5 place-items-center rounded-full text-foreground/80 transition-colors hover:bg-white/10 hover:text-foreground",
+            "grid size-10 shrink-0 place-items-center rounded-full text-foreground/80 transition-colors hover:bg-white/10 hover:text-foreground",
             chatOpen && "bg-white/15 text-white",
           )}
         >
@@ -153,9 +153,9 @@ export function SessionControlBar({
           type="button"
           onClick={() => setConfirmOpen(true)}
           title="End session"
-          className="ml-1 grid size-11 place-items-center rounded-full bg-[#e03b3b] text-white shadow-md transition-transform duration-100 hover:scale-105 hover:bg-[#c52b2b]"
+          className="ml-0.5 grid size-10 shrink-0 place-items-center rounded-full bg-[#e03b3b] text-white shadow-md transition-transform duration-100 hover:scale-105 hover:bg-[#c52b2b]"
         >
-          <PhoneOff className="size-5" strokeWidth={2.4} />
+          <PhoneOff className="size-5" />
         </button>
       </div>
 

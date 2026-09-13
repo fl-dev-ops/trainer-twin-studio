@@ -446,10 +446,6 @@ export function SessionView({
             <Image src="/trainertwin-mark.svg" alt="" width={22} height={17} priority />
             <span className="font-bold text-lg tracking-tight text-white">TrainerTwin</span>
           </Link>
-          <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-            <span className="inline-block size-1.5 rounded-full bg-muted-foreground/50" />
-            Disconnected
-          </span>
         </header>
 
         <main className="relative flex min-h-0 flex-1 overflow-hidden p-4 sm:p-6">
