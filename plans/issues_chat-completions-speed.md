@@ -349,3 +349,35 @@ Measured (same 5-turn conversation, `gpt-4.1-mini`, rerun `bench-results-cached-
 - Retrieval sub-costs (embedding, query) unchanged as expected — the cache only removes the handle overhead.
 - Learner-turn medians: baseline 15,558 ms → 14,991 ms (~4%). Smaller than expected at turn level because embedding/LLM variance (±1–3 s run to run) swamps a ~0.3–0.8 s saving; the saving is structural and compounds with the parallelization work below.
 - Checks: `knowledge.test.ts` + `org-knowledge.test.ts` + `runtime-check.test.ts` all pass.
+
+## Implementation & rollout plan
+
+### What ships (web only — no agent, DB, or env changes)
+
+1. `web/lib/main-collection.ts` — client + collection handle cache; single-lane serialized reads with one connection-error retry; `invalidateCollectionCache()` eviction hook.
+2. `web/lib/runtime/openai.ts` — learner turns start the episode-retrieval promise after knowledge retrieval is awaited; `generateSpeech` accepts preloaded episodes and falls back to inline retrieval when absent.
+3. `web/lib/knowledge.ts` — main-path reranker wired behind `RERANK_ENABLED` (stays off).
+
+### Impact surface — verified unaffected
+
+| Surface | Usage | Impact |
+|---|---|---|
+| Persona reindex / synthesis (`persona-synthesis.ts`) | `ingestPersonaVoice`, `removePersonaSource` | Untouched — writes are not lane-wrapped; shared handle cache is safe (`getOrCreateCollection` is idempotent) |
+| Knowledge ingest / connectors (`org-knowledge.ts`, `connectors.ts`) | `ingest`, `removeKnowledgeDoc`, `getCollection` | Same as above |
+| `GET /api/knowledge/search` (admin UI) | `MainCollectionService.searchKnowledge` | Now lane-serialized — correct, just queued behind in-flight interview reads |
+| Legacy per-KB collections (`knowledge.ts` fallback) | Only when main collection empty | Behavior unchanged |
+| Opening / tool-result turns | `generateSpeech` without preload | Falls back to inline retrieval — identical to before |
+| Closing / stop turns | `closingAction` before speech | Preload promise left un-awaited; harmless (completes in background) |
+| LiveKit agent | Same `/api/v1/chat/completions` route | No protocol change; SSE contract untouched |
+
+### Verification checklist
+
+- [x] `bun test` — knowledge, org-knowledge, runtime-check (26 pass)
+- [ ] `bun test lib/runtime/runtime-stream.test.ts` + vitest `interview-sessions`, `livekit` suites
+- [ ] Deploy web to Vercel; confirm startup env validation passes
+- [ ] One live E2E voice session on the deployed route: opening, two learner answers, one repeat request; confirm responses and timing in `completion served` logs
+- [ ] Watch Vercel logs for `[interview-runtime]` warnings (retrieval failed / renderer rejected) over the first few sessions
+
+### Rollback
+
+Single `git revert` of the perf commits restores exact prior behavior; no schema, env, or migration cleanup needed. The reranker is off by default, so no runtime flag changes on rollback.
