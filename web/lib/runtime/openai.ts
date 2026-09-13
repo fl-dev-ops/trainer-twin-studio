@@ -634,7 +634,7 @@ export interface SpeechMeta {
  * style examples and no persona voice instructions — style is applied after
  * the draft exists (plans/issues_persona-validation-loop.md §17).
  */
-async function contentDraft(
+export async function contentDraft(
   contentContract: string,
   action: InterviewAction,
   specs: CompiledSpecs,
@@ -783,7 +783,7 @@ async function retrieveStyleExamplesForTurn(
  * question count, invented mentions) plus the model's own reasoning decide
  * between rewrite and draft — no retry loop (Section 17.2).
  */
-async function renderStyledSpeech(
+export async function renderStyledSpeech(
   draft: string,
   learnerText: string,
   state: RuntimeState,
