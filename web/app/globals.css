@@ -312,4 +312,14 @@
   .playground-rounded .agent-control-strip [data-state="on"] svg {
     color: rgba(255, 255, 255, 0.92);
   }
+
+  @keyframes agent-halo-pulse {
+    0% { transform: scale(0.75); opacity: 0.85; }
+    100% { transform: scale(1.4); opacity: 0; }
+  }
+
+  @keyframes agent-breathe-amber {
+    0%, 100% { transform: scale(0.9); opacity: 0.3; }
+    50% { transform: scale(1.2); opacity: 0.75; }
+  }
 }

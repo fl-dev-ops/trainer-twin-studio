@@ -36,6 +36,7 @@ import { AgentTile } from "@/components/session/agent-tile";
 import { CandidateTile } from "@/components/session/candidate-tile";
 import { SessionControlBar } from "@/components/session/session-control-bar";
 import { SessionSidebar } from "@/components/session/session-sidebar";
+import { LiveSubtitles } from "@/components/session/live-subtitles";
 import { CodeEditor } from "@/components/session/code-editor";
 import { Whiteboard } from "@/components/session/whiteboard";
 import { PresentationViewer } from "@/components/session/presentation-viewer";
@@ -85,9 +86,7 @@ export function SessionView({
   introVideos = {},
   autoStart = false,
 }: Props) {
-  // One stable Room instance for the whole mount: the intro video element lives in the
-  // session shell and must never remount when the room flips from "connecting" to
-  // "connected", or playback would restart and break the session illusion.
+  // One stable Room instance for the whole mount
   const room = useMemo(
     () =>
       new Room({
@@ -120,15 +119,13 @@ export function SessionView({
 
   const [entries, setEntries] = useState<Entry[]>([]);
   const [coverage, setCoverage] = useState<Coverage>({});
-  const [interviewReady, setInterviewReady] = useState(false);
   const [surface, setSurface] = useState<AgentSurface>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [subtitlesActive, setSubtitlesActive] = useState(true);
+  const [latestSpokenText, setLatestSpokenText] = useState("");
   const [elapsed, setElapsed] = useState(0);
 
   const reduceMotion = useReducedMotion();
-  const layoutTransition = reduceMotion
-    ? ({ duration: 0 } as const)
-    : ({ type: "spring", stiffness: 300, damping: 32, mass: 0.8 } as const);
 
   const startedRef = useRef(false);
   const releasedRef = useRef(false);
@@ -158,8 +155,8 @@ export function SessionView({
     setIntroDone(false);
     setEntries([]);
     setCoverage({});
-    setInterviewReady(false);
     setSurface(null);
+    setLatestSpokenText("");
     setElapsed(0);
   }, []);
 
@@ -192,9 +189,9 @@ export function SessionView({
         runtimeToken: launch.session.runtimeToken,
       });
     } catch (e) {
-      startedRef.current = false; // allow retrying from the card or the error overlay
+      startedRef.current = false;
       setError(e instanceof Error ? e.message : "Failed to start session");
-      if (!autoStart) setLaunched(false); // back to the configure card, error shown there
+      if (!autoStart) setLaunched(false);
     }
   }, [agent, contextId, contextIds, sessionCode, autoStart]);
 
@@ -204,15 +201,11 @@ export function SessionView({
     void handleStartSession();
   }, [handleStartSession]);
 
-  // Learner-facing entries have no start button: the session UI appears immediately with
-  // the intro playing in the trainer pane while tokens are fetched in parallel.
   const isContextRequired = Boolean(agentContextRequired[agent]);
 
   useEffect(() => {
     if (!autoStart || ended || !agent || !persona || launched) return;
     if (isContextRequired && contextIds.length === 0) return;
-    // Deferred a microtask: launching flips component state, which must not happen
-    // synchronously inside the effect body.
     void Promise.resolve().then(() => {
       setLaunched(true);
       void handleStartSession();
@@ -237,9 +230,6 @@ export function SessionView({
     };
   }, [room, connection, connected]);
 
-  // Track the agent participant so "begin-opening" is only sent once the agent is
-  // actually in the room — a data packet fired before the agent joins is dropped
-  // silently and the greeting would hang until the agent-side timeout.
   useEffect(() => {
     if (!connected) return;
     const markAgent = () => setAgentInRoom(true);
@@ -253,11 +243,6 @@ export function SessionView({
     };
   }, [room, connected]);
 
-  // The room is joined while the intro video still plays, but the mic stays unpublished
-  // and the agent holds its greeting (gated server-side via hold_opening metadata)
-  // until the video ends AND the agent is in the room — then the mic opens and one
-  // "begin-opening" packet releases the agent's first speech exactly at the video's
-  // end. Without an intro both happen right after the agent joins.
   useEffect(() => {
     if (!connected || !agentInRoom || ended) return;
     if (introSrc && !introDone) return;
@@ -311,6 +296,22 @@ export function SessionView({
     [room, finalizeSession, resetSessionState],
   );
 
+  const handleSendMessage = useCallback(
+    async (text: string) => {
+      if (!text.trim()) return;
+      setEntries((prev) => [...prev, { role: "user" as const, text }]);
+      try {
+        await room.localParticipant.publishData(
+          new TextEncoder().encode(JSON.stringify({ type: "chat-message", text })),
+          { reliable: true },
+        );
+      } catch (err) {
+        console.error("Could not send chat message:", err);
+      }
+    },
+    [room],
+  );
+
   useEffect(() => {
     if (!connection) return;
     const activeConnection = connection;
@@ -320,6 +321,9 @@ export function SessionView({
       for (const seg of segments) {
         if (!seg.final) continue;
         const role = isUser ? ("user" as const) : ("trainer" as const);
+        if (!isUser && seg.text) {
+          setLatestSpokenText(seg.text);
+        }
         setEntries((prev) => {
           const last = prev[prev.length - 1];
           if (role === "trainer" && last?.role === "trainer" && (last.text === seg.text || seg.text.startsWith(last.text))) {
@@ -354,15 +358,13 @@ export function SessionView({
       try {
         const text = new TextDecoder().decode(payload);
         const data = JSON.parse(text) as Record<string, unknown>;
-        if (data.type === "session-started") {
-          setInterviewReady(true);
-        } else if (data.type === "session-ended" && data.status === "completed") {
+        if (data.type === "session-ended" && data.status === "completed") {
           void handleDisconnect("completed");
         } else if (data.type === "interview_question_started") {
-          setInterviewReady(true);
           const metadata = data.metadata as { question?: { spokenText?: string } } | undefined;
           if (metadata?.question?.spokenText) {
             const spoken = metadata.question.spokenText;
+            setLatestSpokenText(spoken);
             setEntries((prev) => {
               const last = prev[prev.length - 1];
               if (last?.role === "trainer" && last.text === spoken) return prev;
@@ -408,8 +410,8 @@ export function SessionView({
 
   if (ended) {
     return (
-      <div className="dark flex h-dvh w-dvw items-center justify-center bg-background p-6 text-foreground">
-        <Card className="w-full max-w-md text-center">
+      <div className="dark flex h-dvh w-dvw items-center justify-center bg-[#14161a] p-6 text-foreground">
+        <Card className="w-full max-w-md border border-white/[0.06] bg-[#1c1f26] text-center shadow-2xl">
           <CardHeader>
             <CardTitle>{endReason === "completed" ? "Session complete" : "Session ended"}</CardTitle>
             <CardDescription>
@@ -438,11 +440,21 @@ export function SessionView({
 
   if (!launched) {
     return (
-      <div className="dark flex h-dvh w-dvw flex-col overflow-hidden bg-background text-foreground">
-        <PreJoinHeader />
-        <main className="relative flex min-h-0 flex-1 overflow-hidden p-3 sm:p-4">
+      <div className="dark flex h-dvh w-dvw flex-col overflow-hidden bg-[#14161a] text-foreground">
+        <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/[0.035] bg-[#14161a]/85 px-6 backdrop-blur-xl">
+          <Link href="/" className="flex items-center gap-2.5">
+            <Image src="/trainertwin-mark.svg" alt="" width={22} height={17} priority />
+            <span className="font-bold text-lg tracking-tight text-white">TrainerTwin</span>
+          </Link>
+          <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <span className="inline-block size-1.5 rounded-full bg-muted-foreground/50" />
+            Disconnected
+          </span>
+        </header>
+
+        <main className="relative flex min-h-0 flex-1 overflow-hidden p-4 sm:p-6">
           <div className="mx-auto flex h-full w-full max-w-xl items-center">
-            <Card className="w-full">
+            <Card className="w-full border border-white/[0.06] bg-[#1c1f26] shadow-2xl">
               <CardHeader>
                 <CardTitle>Configure the session</CardTitle>
                 <CardDescription>
@@ -466,11 +478,12 @@ export function SessionView({
                     </SelectContent>
                   </Select>
                 </label>
+
                 <label className="flex flex-col gap-1.5 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="font-medium">Context document</span>
                     {isContextRequired && (
-                      <span className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                      <span className="text-[11px] font-medium text-amber-500">
                         Required for this scenario
                       </span>
                     )}
@@ -538,14 +551,14 @@ export function SessionView({
                     </Button>
                   </div>
                   <span className="text-xs text-muted-foreground">
-                    PDF, Word, PPT, Excel, CSV, text, or images (.pdf, .docx, .pptx, .xlsx, .csv, .png, etc.).
+                    PDF, Word, PPT, Excel, CSV, text, or images (.pdf, .docx, .pptx, etc.).
                   </span>
                   {contextIds.length > 0 && (
                     <div className="flex flex-wrap gap-2">
                       {contextIds.map((id) => {
                         const file = contextList.find((item) => item.id === id);
                         return (
-                          <span key={id} className="inline-flex items-center gap-1 rounded-full border bg-muted px-2 py-1 text-xs">
+                          <span key={id} className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-muted px-2 py-1 text-xs">
                             {file?.name ?? id}
                             <button
                               type="button"
@@ -560,9 +573,11 @@ export function SessionView({
                     </div>
                   )}
                 </label>
+
                 {error && (
                   <p role="alert" className="text-sm text-destructive">{error}</p>
                 )}
+
                 <Button
                   onClick={() => {
                     setLaunched(true);
@@ -573,11 +588,6 @@ export function SessionView({
                 >
                   <Play data-icon="inline-start" /> Start session
                 </Button>
-                {isContextRequired && contextIds.length === 0 && (
-                  <p className="text-xs text-muted-foreground text-center">
-                    Please select or upload a document (.pdf, .txt, .md) to start this scenario.
-                  </p>
-                )}
               </CardContent>
             </Card>
           </div>
@@ -589,181 +599,178 @@ export function SessionView({
   const elapsedLabel = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
 
   return (
-    <div className="dark fixed inset-0 z-50 flex h-dvh w-dvw flex-col overflow-hidden bg-background text-foreground">
+    <div className="dark flex h-dvh w-dvw flex-col overflow-hidden bg-[#14161a] text-foreground">
       <RoomContext.Provider value={room}>
         <LiveKitWorkspaceProvider
           room={room}
           onSurface={setSurface}
           onEndSession={() => void handleDisconnect("completed")}
         >
-          <div className="flex h-full w-full flex-1 flex-col overflow-hidden">
-            <header className="session-header flex shrink-0 items-center justify-between px-4 py-3 sm:px-6">
-              <div className="flex min-w-0 items-center gap-3">
-                <Link
-                  href="/"
-                  aria-label="Back to studio"
-                  className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent"
-                >
-                  <Image src="/trainertwin-mark.svg" alt="" width={20} height={15} priority />
-                </Link>
-                <div className="min-w-0">
-                  <h1 className="truncate text-sm font-semibold tracking-tight">
-                    {persona} × {agent}
-                  </h1>
-                  <p className="hidden text-[11px] text-muted-foreground sm:block">Practice session</p>
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-3">
-                <time className="font-mono text-xs text-muted-foreground">{elapsedLabel}</time>
-                <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                  <span
-                    className={cn(
-                      "inline-block size-1.5 rounded-full",
-                      interviewReady ? "bg-emerald-500" : "animate-pulse bg-amber-500",
-                    )}
-                  />
-                  {interviewReady ? "Connected" : "Preparing…"}
-                </span>
-              </div>
-            </header>
+          {/* Topbar Navigation: Clean Logo Left, Live Badge Right */}
+          <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/[0.035] bg-[#14161a]/85 px-6 backdrop-blur-xl">
+            <Link href="/" className="flex items-center gap-2.5">
+              <Image src="/trainertwin-mark.svg" alt="" width={22} height={17} priority />
+              <span className="font-bold text-lg tracking-tight text-white">TrainerTwin</span>
+            </Link>
 
-            <main className="relative flex min-h-0 flex-1 overflow-hidden p-3 sm:p-4">
-              <div className="flex h-full min-h-0 w-full gap-4">
-                <div className="flex h-full min-h-0 w-full flex-1 flex-col">
-                  <motion.div
-                    layout
-                    data-has-surface={surface !== null}
-                    transition={layoutTransition}
-                    className="interview-stage h-full min-h-0 gap-4"
+            <div className="flex items-center gap-2 rounded-full bg-[#e03b3b] px-3 py-1 font-semibold text-white text-xs shadow-sm">
+              <span className="size-1.5 animate-pulse rounded-full bg-white" />
+              <span>Live</span>
+              <time className="font-mono text-xs font-semibold">{elapsedLabel}</time>
+            </div>
+          </header>
+
+          {/* Main Body: Stage (Left) & Chat Sidebar (Right) — EQUAL HEIGHT */}
+          <main className="flex min-h-0 flex-1 gap-4 p-4 pb-2">
+            {/* Stage Section */}
+            <div className="relative flex min-h-0 flex-1">
+              <div className="flex min-h-0 w-full gap-4 transition-all duration-300">
+                {/* Surface Presentation Mode (Left Large Workspace) */}
+                {surface && (
+                  <motion.section
+                    key={surface.key}
+                    aria-label="Session workspace"
+                    initial={reduceMotion ? false : { opacity: 0, scale: 0.98 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={reduceMotion ? undefined : { opacity: 0, scale: 0.98 }}
+                    transition={reduceMotion ? { duration: 0 } : { duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                    className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/[0.035] bg-[#15181f]"
                   >
-                    <AnimatePresence initial={false} mode="wait">
-                      {surface && (
-                        <motion.section
+                    <div className="flex h-10 shrink-0 items-center justify-between border-b border-white/[0.035] bg-white/[0.02] px-4">
+                      <span className="text-xs font-semibold text-foreground/90">
+                        {surface.tool === "code" && "Code Workspace"}
+                        {surface.tool === "canvas" && "Whiteboard"}
+                        {surface.tool === "pdf" && "PDF Document"}
+                        {surface.tool === "image" && "Image Viewer"}
+                        {surface.tool === "presentation" && "Presentation"}
+                      </span>
+                      <Button variant="ghost" size="icon-sm" aria-label="Close workspace" onClick={() => setSurface(null)}>
+                        <X className="size-4" />
+                      </Button>
+                    </div>
+                    <div className="min-h-0 flex-1">
+                      {surface.tool === "code" && (
+                        <CodeEditor
                           key={surface.key}
-                          aria-label="Session workspace"
-                          layout
-                          initial={reduceMotion ? false : { opacity: 0, scale: 0.97 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          exit={reduceMotion ? undefined : { opacity: 0, scale: 0.98 }}
-                          transition={reduceMotion ? { duration: 0 } : { duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-                          className="interview-surface flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border"
-                        >
-                          <div className="flex h-10 shrink-0 items-center justify-end border-b px-2">
-                            <Button variant="ghost" size="icon-sm" aria-label="Close workspace" onClick={() => setSurface(null)}>
-                              <X />
-                            </Button>
-                          </div>
-                          <div className="min-h-0 flex-1">
-                            {surface.tool === "code" && (
-                              <CodeEditor
-                                key={surface.key}
-                                initialLanguage={surface.language}
-                                initialCode={surface.starterCode || undefined}
-                                highlightLines={surface.highlightLines}
-                              />
-                            )}
-                            {surface.tool === "canvas" && <Whiteboard key={surface.key} />}
-                            {surface.tool === "pdf" && (
-                              <PdfViewerSurface
-                                key={surface.key}
-                                sourceUrl={
-                                  surface.sourceUrl
-                                    ? surface.sourceUrl.includes("sessionId=")
-                                      ? surface.sourceUrl
-                                      : `${surface.sourceUrl}${surface.sourceUrl.includes("?") ? "&" : "?"}sessionId=${connection?.sessionId ?? ""}`
-                                    : undefined
-                                }
-                                initialPage={surface.page}
-                                title={contextList.find((c) => c.id === surface.fileId)?.name}
-                              />
-                            )}
-                            {surface.tool === "image" && (
-                              <ImageViewerSurface
-                                key={surface.key}
-                                sourceUrl={
-                                  surface.sourceUrl
-                                    ? surface.sourceUrl.includes("sessionId=")
-                                      ? surface.sourceUrl
-                                      : `${surface.sourceUrl}${surface.sourceUrl.includes("?") ? "&" : "?"}sessionId=${connection?.sessionId ?? ""}`
-                                    : undefined
-                                }
-                                title={contextList.find((c) => c.id === surface.fileId)?.name}
-                              />
-                            )}
-                            {surface.tool === "presentation" && (
-                              <PresentationViewer
-                                key={surface.key}
-                                sourceUrl={surface.sourceUrl}
-                                initialSlideNumber={surface.slideNumber}
-                              />
-                            )}
-                          </div>
-                        </motion.section>
+                          initialLanguage={surface.language}
+                          initialCode={surface.starterCode || undefined}
+                          highlightLines={surface.highlightLines}
+                        />
                       )}
-                    </AnimatePresence>
+                      {surface.tool === "canvas" && <Whiteboard key={surface.key} />}
+                      {surface.tool === "pdf" && (
+                        <PdfViewerSurface
+                          key={surface.key}
+                          sourceUrl={
+                            surface.sourceUrl
+                              ? surface.sourceUrl.includes("sessionId=")
+                                ? surface.sourceUrl
+                                : `${surface.sourceUrl}${surface.sourceUrl.includes("?") ? "&" : "?"}sessionId=${connection?.sessionId ?? ""}`
+                              : undefined
+                          }
+                          initialPage={surface.page}
+                          title={contextList.find((c) => c.id === surface.fileId)?.name}
+                        />
+                      )}
+                      {surface.tool === "image" && (
+                        <ImageViewerSurface
+                          key={surface.key}
+                          sourceUrl={
+                            surface.sourceUrl
+                              ? surface.sourceUrl.includes("sessionId=")
+                                ? surface.sourceUrl
+                                : `${surface.sourceUrl}${surface.sourceUrl.includes("?") ? "&" : "?"}sessionId=${connection?.sessionId ?? ""}`
+                              : undefined
+                          }
+                          title={contextList.find((c) => c.id === surface.fileId)?.name}
+                        />
+                      )}
+                      {surface.tool === "presentation" && (
+                        <PresentationViewer
+                          key={surface.key}
+                          sourceUrl={surface.sourceUrl}
+                          initialSlideNumber={surface.slideNumber}
+                        />
+                      )}
+                    </div>
+                  </motion.section>
+                )}
 
-                    <motion.div
-                      layout
-                      data-compact={surface !== null}
-                      transition={layoutTransition}
-                      className="interview-participants min-h-0 gap-4"
-                    >
-                      <motion.div layout transition={layoutTransition} className="min-h-0">
-                        {introSrc && !introDone ? (
-                          <ScenarioIntro
-                            key={agent}
-                            src={introSrc}
-                            personaLabel={persona}
-                            onFinished={() => setIntroDone(true)}
-                            className="h-full min-h-0 w-full"
-                          />
-                        ) : (
-                          <AgentTile persona={persona} compact={surface !== null} />
-                        )}
-                      </motion.div>
-                      <motion.div layout transition={layoutTransition} className="min-h-0">
-                        <CandidateTile compact={surface !== null} />
-                      </motion.div>
-                    </motion.div>
-                  </motion.div>
-                </div>
-
-                <AnimatePresence initial={false}>
-                  {sidebarOpen && (
-                    <motion.div
-                      initial={reduceMotion ? false : { opacity: 0, x: 24 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={reduceMotion ? undefined : { opacity: 0, x: 24 }}
-                      transition={reduceMotion ? { duration: 0 } : { duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
-                      className="absolute inset-3 z-20 xl:static xl:inset-auto xl:z-auto xl:w-[22rem] xl:shrink-0"
-                    >
-                      <SessionSidebar
-                        entries={entries}
-                        coverage={coverage}
-                        preparing={!interviewReady}
-                        onClose={() => setSidebarOpen(false)}
-                        className="h-full"
-                      />
-                    </motion.div>
+                {/* Participant Tiles:
+                    - Normal Mode: 2 equal side-by-side columns
+                    - Presenting Mode: Stacked vertically on the right side!
+                */}
+                <div
+                  className={cn(
+                    surface ? "flex w-[280px] shrink-0 flex-col gap-3.5" : "grid flex-1 grid-cols-2 gap-4",
+                    "min-h-0 transition-all duration-300",
                   )}
-                </AnimatePresence>
+                >
+                  <div className="min-h-0 flex-1">
+                    {introSrc && !introDone ? (
+                      <ScenarioIntro
+                        key={agent}
+                        src={introSrc}
+                        personaLabel={persona}
+                        onFinished={() => setIntroDone(true)}
+                        className="h-full min-h-0 w-full"
+                      />
+                    ) : (
+                      <AgentTile persona={persona} compact={surface !== null} />
+                    )}
+                  </div>
+                  <div className="min-h-0 flex-1">
+                    <CandidateTile compact={surface !== null} />
+                  </div>
+                </div>
               </div>
-            </main>
 
-            <footer className="session-footer flex shrink-0 items-center justify-center px-4 py-3">
-              <SessionControlBar
-                room={room}
-                isConnected={connected}
-                transcriptOpen={sidebarOpen}
-                onTranscriptToggle={setSidebarOpen}
-                onEnd={() => void handleDisconnect("manual")}
-              />
-            </footer>
-          </div>
+              {/* YouTube / Prime Video Style Streaming Subtitles */}
+              <LiveSubtitles text={latestSpokenText} visible={subtitlesActive} />
+            </div>
+
+            {/* Chat Sidebar (Pure Chat, exact same height as stage!) */}
+            <AnimatePresence initial={false}>
+              {sidebarOpen && (
+                <motion.div
+                  initial={reduceMotion ? false : { opacity: 0, width: 0 }}
+                  animate={{ opacity: 1, width: 360 }}
+                  exit={reduceMotion ? undefined : { opacity: 0, width: 0 }}
+                  transition={reduceMotion ? { duration: 0 } : { duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                  className="shrink-0 overflow-hidden"
+                >
+                  <SessionSidebar
+                    entries={entries}
+                    onSendMessage={handleSendMessage}
+                    onClose={() => setSidebarOpen(false)}
+                    className="h-full"
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </main>
+
+          {/* Common Footer across full width */}
+          <footer className="flex h-16 shrink-0 items-center justify-center pb-2">
+            <SessionControlBar
+              room={room}
+              isConnected={connected}
+              screenShareActive={surface !== null}
+              onScreenShareToggle={() => {
+                if (surface) setSurface(null);
+                else setSurface({ tool: "code", key: "manual-share", language: "javascript", starterCode: "" });
+              }}
+              subtitlesActive={subtitlesActive}
+              onSubtitlesToggle={() => setSubtitlesActive((v) => !v)}
+              chatOpen={sidebarOpen}
+              onChatToggle={() => setSidebarOpen((v) => !v)}
+              onEnd={() => void handleDisconnect("manual")}
+            />
+          </footer>
 
           {error && (
-            <div className="absolute inset-0 z-30 grid place-items-center bg-background/85 p-6 backdrop-blur-sm">
-              <Card className="w-full max-w-md text-center">
+            <div className="absolute inset-0 z-50 grid place-items-center bg-[#14161a]/85 p-6 backdrop-blur-md">
+              <Card className="w-full max-w-md border border-white/[0.06] bg-[#1c1f26] text-center shadow-2xl">
                 <CardHeader>
                   <CardTitle>Connection problem</CardTitle>
                   <CardDescription>{error}</CardDescription>
@@ -792,37 +799,6 @@ export function SessionView({
   );
 }
 
-function PreJoinHeader() {
-  return (
-    <header className="session-header flex shrink-0 items-center justify-between px-4 py-3 sm:px-6">
-      <div className="flex min-w-0 items-center gap-3">
-        <Link
-          href="/"
-          aria-label="Back to studio"
-          className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent"
-        >
-          <Image src="/trainertwin-mark.svg" alt="" width={20} height={15} priority />
-        </Link>
-        <div className="min-w-0">
-          <h1 className="truncate text-sm font-semibold tracking-tight">New session</h1>
-          <p className="hidden text-[11px] text-muted-foreground sm:block">Practice session</p>
-        </div>
-      </div>
-      <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-        <span className="inline-block size-1.5 rounded-full bg-muted-foreground/50" />
-        Disconnected
-      </span>
-    </header>
-  );
-}
-
-/**
- * Scenario introduction clip, played inside the live session UI in place of the trainer
- * tile. Browsers refuse unmuted autoplay without a user gesture, so this falls back to
- * muted playback and offers the sound back, then to an explicit tap. A clip that fails to
- * load or stalls must never hold the session hostage: a duration + 2s watchdog calls
- * onFinished even if the ended event never fires.
- */
 function ScenarioIntro({
   src,
   personaLabel,
@@ -837,7 +813,6 @@ function ScenarioIntro({
   const video = useRef<HTMLVideoElement>(null);
   const [muted, setMuted] = useState(false);
   const [needsTap, setNeedsTap] = useState(false);
-  /** Watchdog deadline (ms epoch), armed once real duration is known. */
   const [releaseDeadline, setReleaseDeadline] = useState<number | null>(null);
 
   useEffect(() => {
@@ -851,10 +826,6 @@ function ScenarioIntro({
   }, [src]);
 
   useEffect(() => {
-    // Safety net: if playback progresses but "ended" never fires (or never starts),
-    // release the session 2s after the clip should be done. Armed only once metadata
-    // gives a real duration — at mount it is still NaN, and a NaN deadline would arm
-    // a bogus 2s release.
     if (releaseDeadline === null) return;
     const timer = window.setTimeout(() => onFinished?.(), Math.max(0, releaseDeadline - Date.now()));
     return () => clearTimeout(timer);
@@ -877,7 +848,7 @@ function ScenarioIntro({
   }
 
   return (
-    <div className={cn("relative overflow-hidden rounded-xl border bg-black", className)}>
+    <div className={cn("relative overflow-hidden rounded-2xl border border-white/[0.035] bg-black", className)}>
       <video
         ref={video}
         src={src}
@@ -889,7 +860,7 @@ function ScenarioIntro({
         onLoadedMetadata={armReleaseDeadline}
       />
       {personaLabel ? (
-        <div className="absolute bottom-3 left-4 flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="absolute bottom-3.5 left-3.5 flex items-center gap-2 rounded-md bg-[#121419]/85 px-2.5 py-1 text-xs text-muted-foreground backdrop-blur-md">
           <span className="font-medium text-foreground">
             {personaLabel.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Trainer"}
           </span>
@@ -911,7 +882,7 @@ function ScenarioIntro({
         <button
           type="button"
           onClick={playWithSound}
-          className="absolute right-3 bottom-3 flex items-center gap-2 rounded-full bg-background/90 px-3 py-1.5 text-xs font-medium text-foreground"
+          className="absolute right-3.5 bottom-3.5 flex items-center gap-2 rounded-full bg-background/90 px-3 py-1.5 text-xs font-medium text-foreground"
         >
           <Volume2 className="size-3.5" /> Unmute
         </button>
