@@ -183,6 +183,31 @@ async function callOpenRouter(
 const transcriptText = (transcript: TranscriptTurn[]) =>
   transcript.map((turn) => `${turn.role === "trainer" ? "Trainer" : "Learner"}: ${turn.text}`).join("\n");
 
+export function formatSessionFacts(specs: CompiledSpecs): string {
+  if (specs.contextDocument?.content) {
+    return [
+      `SESSION FACTS — Context Document (${specs.contextDocument.name || "uploaded_document"}):`,
+      specs.contextDocument.content.trim(),
+      `Treat this document as verified ground truth for the learner. You have full access to it. Quote, reference, or evaluate against its claims, project names, and details. Never invent details not present in this text.`,
+    ].join("\n");
+  }
+  return [
+    `SESSION FACTS:`,
+    `No document or résumé was uploaded for this session.`,
+    `Do NOT claim to have access to, see, or possess the learner's resume or document.`,
+    `If the learner asks whether you have their resume/document or asks about document details, truthfully state that no document was uploaded and ask them to describe their experience verbally.`,
+    `Only treat statements in the conversation transcript as facts about the learner.`,
+  ].join("\n");
+}
+
+export function adaptOpeningWithoutContext(opening: string): string {
+  return opening
+    .replace(/\bfrom your (?:uploaded )?resume\b/gi, "from your experience")
+    .replace(/\bfrom the (?:uploaded )?resume\b/gi, "from your experience")
+    .replace(/\bfrom your (?:uploaded )?document\b/gi, "from your experience")
+    .replace(/\bfrom the (?:uploaded )?document\b/gi, "from your experience");
+}
+
 export function isRepeatRequest(direction: DirectionCheck): boolean {
   return !direction.should_grade && /restate the pending question/i.test(direction.response_instruction);
 }
@@ -250,6 +275,7 @@ Domain principles: ${JSON.stringify(specs.domain.principles ?? [])}
 Current topic: ${state.current_topic ?? "not established"}
 Pending trainer question: ${state.pending_question ?? "none"}
 Relevant domain references: ${JSON.stringify(knowledgeHits)}
+${formatSessionFacts(specs)}
 Complete transcript:\n${transcriptText(transcript)}
 
 Return JSON only:
@@ -313,6 +339,7 @@ async function runAnalyzerLLM(
 Active phase: ${JSON.stringify(phase ? { name: phase.name, objective: phase.objective } : { objective: specs.agent.objective })}
 Active evidence definitions: ${JSON.stringify(required)}
 Active claim-handling policy: ${phase?.claim_handling ?? specs.agent.claim_handling}
+${formatSessionFacts(specs)}
 Reference material from knowledge base: ${JSON.stringify(knowledgeHits.slice(0, 5))}
 Conversation direction check: ${JSON.stringify(direction)}
 Pending trainer question: ${state.pending_question ?? "none"}
@@ -464,6 +491,7 @@ Scenario: ${specs.agent.name ?? "interview session"}
 Objective: ${specs.agent.objective}
 Active phase: ${JSON.stringify(phase ? { name: phase.name, objective: phase.objective, opening: phase.opening } : null)}
 Domain principles: ${JSON.stringify(specs.domain.principles ?? [])}
+${formatSessionFacts(specs)}
 ${state.primer ? `Corpus behavior statistics: ${JSON.stringify(state.primer.statistics)}` : ""}
 ${episodes.length ? `\nPAST CONVERSATION EXAMPLES — different learners, behavior evidence only; never copy names, employers, projects or facts:\n${episodes.map((hit) => hit.text).join("\n---\n")}` : ""}
 ${knowledgeHits.length ? `\nRelevant knowledge references: ${JSON.stringify(knowledgeHits.slice(0, 3))}` : ""}
@@ -951,7 +979,10 @@ async function runCompletionPipeline(
         close: false,
         expects_answer: true,
       };
-      const baseOpening = specs.agent.opening || "Welcome to the interview session. Let's begin.";
+      const rawOpening = specs.agent.opening || "Welcome to the interview session. Let's begin.";
+      const baseOpening = specs.contextDocument
+        ? rawOpening
+        : adaptOpeningWithoutContext(rawOpening);
       const opening = await generateSpeech(
         baseOpening,
         openingAction,
@@ -1007,7 +1038,10 @@ async function runCompletionPipeline(
         close: false,
         expects_answer: true,
       };
-      const baseOpening = specs.agent.opening || "Welcome to the interview session. Let's begin.";
+      const rawOpening = specs.agent.opening || "Welcome to the interview session. Let's begin.";
+      const baseOpening = specs.contextDocument
+        ? rawOpening
+        : adaptOpeningWithoutContext(rawOpening);
       const opening = await generateSpeech(
         baseOpening,
         openingAction,

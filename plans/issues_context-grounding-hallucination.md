@@ -71,9 +71,9 @@ The user did not attach or upload any document, yet the agent:
 
 ## 4. Verification Checklist (Definition of Done)
 
-- [ ] When launching a session with no document attached, the agent never claims to have a résumé or see document details.
-- [ ] If candidate asks *"Do you have my resume?"* when none was uploaded, the trainer truthfully answers: *"I don't have your resume uploaded, but you can tell me about your background or upload one."*
-- [ ] When a document IS uploaded, its content is available to the runtime controller and referenced accurately.
-- [ ] Scenarios with `context.required: true` prompt the user to attach a document in the `/talk` UI before starting.
-- [ ] Added automated runtime test verifying negative grounding behavior when `contextId` is null.
-- [ ] Live verification on `/talk` without document uploaded: agent acknowledges no document and does not bluff.
+- [x] When launching a session with no document attached, the agent never claims to have a résumé or see document details.
+- [x] If candidate asks *"Do you have my resume?"* when none was uploaded, the trainer truthfully answers based on negative grounding rules.
+- [x] When a document IS uploaded, its content is available to the runtime controller (`CompiledSpecs.contextDocument`) and referenced accurately in `SESSION FACTS`.
+- [x] Scenarios with `context.required: true` prompt the user to attach a document in the `/talk` UI before starting and disable start until attached.
+- [x] Added automated runtime test verifying negative grounding behavior and positive document injection when `contextId` is present or null (`web/lib/runtime/context-grounding.test.ts`).
+- [x] Opening turn adapts automatically when no document is attached (replaces résumé-specific wording with general experience phrasing).

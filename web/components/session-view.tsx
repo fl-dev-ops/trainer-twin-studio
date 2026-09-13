@@ -60,6 +60,7 @@ type Props = {
   agents: string[];
   contexts: { id: string; name: string; size?: number }[];
   agentPersonas?: Record<string, string>;
+  agentContextRequired?: Record<string, boolean>;
   sessionCode?: string;
   /** Playable intro video per scenario slug. */
   introVideos?: Record<string, string | null>;
@@ -78,6 +79,7 @@ export function SessionView({
   agents,
   contexts,
   agentPersonas = {},
+  agentContextRequired = {},
   sessionCode,
   introVideos = {},
   autoStart = false,
@@ -200,15 +202,18 @@ export function SessionView({
 
   // Learner-facing entries have no start button: the session UI appears immediately with
   // the intro playing in the trainer pane while tokens are fetched in parallel.
+  const isContextRequired = Boolean(agentContextRequired[agent]);
+
   useEffect(() => {
     if (!autoStart || ended || !agent || !persona || launched) return;
+    if (isContextRequired && !contextId) return;
     // Deferred a microtask: launching flips component state, which must not happen
     // synchronously inside the effect body.
     void Promise.resolve().then(() => {
       setLaunched(true);
       void handleStartSession();
     });
-  }, [autoStart, ended, agent, persona, launched, handleStartSession]);
+  }, [autoStart, ended, agent, persona, launched, isContextRequired, contextId, handleStartSession]);
 
   useEffect(() => {
     if (!connection || connected) return;
@@ -458,7 +463,14 @@ export function SessionView({
                   </Select>
                 </label>
                 <label className="flex flex-col gap-1.5 text-sm">
-                  <span className="font-medium">Context document</span>
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">Context document</span>
+                    {isContextRequired && (
+                      <span className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                        Required for this scenario
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2">
                     <Select value={contextId || "none"} onValueChange={(v) => v !== null && setContextId(v === "none" ? "" : v)}>
                       <SelectTrigger className="w-full">
@@ -528,11 +540,16 @@ export function SessionView({
                     setLaunched(true);
                     void handleStartSession();
                   }}
-                  disabled={!persona || !agent}
+                  disabled={!persona || !agent || (isContextRequired && !contextId)}
                   className="w-full"
                 >
                   <Play data-icon="inline-start" /> Start session
                 </Button>
+                {isContextRequired && !contextId && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    Please select or upload a document (.pdf, .txt, .md) to start this scenario.
+                  </p>
+                )}
               </CardContent>
             </Card>
           </div>

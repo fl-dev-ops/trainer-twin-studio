@@ -92,11 +92,18 @@ export interface DomainSpec {
   classifications?: Record<string, string>;
 }
 
+export interface ContextDocumentSpec {
+  id: string;
+  name: string;
+  content: string;
+}
+
 export interface CompiledSpecs {
   persona: PersonaSpec;
   agent: AgentSpec;
   domain: DomainSpec;
   knowledgeBases: string[];
+  contextDocument?: ContextDocumentSpec | null;
 }
 
 function deepMerge(base: Record<string, any>, override: Record<string, any>): Record<string, any> {
@@ -308,5 +315,15 @@ export function buildSpecs(config: Record<string, any>): CompiledSpecs {
     completion: "Configured completion keys or turn limits.",
   };
 
-  return { persona, agent, domain, knowledgeBases: kbs };
+  const rawContext = config.context;
+  const contextDocument: ContextDocumentSpec | null =
+    rawContext && typeof rawContext === "object" && typeof rawContext.content === "string" && rawContext.content.trim().length > 0
+      ? {
+          id: String(rawContext.id ?? ""),
+          name: String(rawContext.name ?? ""),
+          content: String(rawContext.content ?? ""),
+        }
+      : null;
+
+  return { persona, agent, domain, knowledgeBases: kbs, contextDocument };
 }

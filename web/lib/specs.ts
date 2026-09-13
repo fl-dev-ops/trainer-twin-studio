@@ -124,6 +124,21 @@ export async function listAgentPersonas(orgId: string, slugs: string[]) {
   return Object.fromEntries(agents.map((agent) => [agent.slug, agent.persona.slug]));
 }
 
+export async function listAgentContextRequired(orgId: string, slugs: string[]): Promise<Record<string, boolean>> {
+  if (slugs.length === 0) return {};
+  const agents = await db.agent.findMany({
+    where: { orgId, slug: { in: slugs } },
+    select: { slug: true, data: true },
+  });
+  return Object.fromEntries(
+    agents.map((agent) => {
+      const data = agent.data as Record<string, any> | null;
+      const required = Boolean(data?.config?.context?.required);
+      return [agent.slug, required];
+    }),
+  );
+}
+
 /**
  * Playable intro video per scenario, keyed by slug. The stored value is an S3 object key;
  * an absolute URL is passed through so a CDN-fronted video needs no special casing.

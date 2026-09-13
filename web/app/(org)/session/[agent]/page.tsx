@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { SessionView } from "@/components/session-view";
 import { signInUrl } from "@/lib/base-domain";
 import { getSessionOrg } from "@/lib/org";
-import { listAgentPersonas, listRunnableSpecs, listScenarioIntroVideos, listUploads } from "@/lib/specs";
+import { listAgentContextRequired, listAgentPersonas, listRunnableSpecs, listScenarioIntroVideos, listUploads } from "@/lib/specs";
 
 export const dynamic = "force-dynamic";
 
@@ -24,10 +24,11 @@ export default async function PortalSessionPage({
   const agents = await listRunnableSpecs("agents", portalOrgId);
   if (!agents.includes(agent)) notFound();
 
-  const [personas, contexts, agentPersonas] = await Promise.all([
+  const [personas, contexts, agentPersonas, agentContextRequired] = await Promise.all([
     listRunnableSpecs("personas", portalOrgId),
     org?.id === portalOrgId ? listUploads(org.id) : Promise.resolve([]),
     listAgentPersonas(portalOrgId, [agent]),
+    listAgentContextRequired(portalOrgId, [agent]),
   ]);
   if (personas.length === 0) notFound();
 
@@ -38,6 +39,7 @@ export default async function PortalSessionPage({
       personas={personas}
       agents={[agent]}
       agentPersonas={agentPersonas}
+      agentContextRequired={agentContextRequired}
       introVideos={introVideos}
       autoStart
       contexts={contexts.map((c) => ({ id: c.id, name: c.name, size: c.size }))}
