@@ -319,11 +319,16 @@ export function SessionView({
     function handleTranscription(segments: TranscriptionSegment[], participant: { identity?: string } | undefined) {
       const isUser = participant?.identity === room.localParticipant.identity;
       for (const seg of segments) {
-        if (!seg.final) continue;
-        const role = isUser ? ("user" as const) : ("trainer" as const);
-        if (!isUser && seg.text) {
+        if (isUser && seg.text) {
+          // Clear trainer subtitle text when candidate starts speaking
+          setLatestSpokenText("");
+        } else if (!isUser && seg.text) {
+          // Update trainer subtitles immediately with active streaming or final text
           setLatestSpokenText(seg.text);
         }
+
+        if (!seg.final) continue;
+        const role = isUser ? ("user" as const) : ("trainer" as const);
         setEntries((prev) => {
           const last = prev[prev.length - 1];
           if (role === "trainer" && last?.role === "trainer" && (last.text === seg.text || seg.text.startsWith(last.text))) {

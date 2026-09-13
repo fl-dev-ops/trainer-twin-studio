@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useVoiceAssistant } from "@livekit/components-react";
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "@/lib/utils";
@@ -15,7 +16,26 @@ export function LiveSubtitles({
 }) {
   const voiceAssistant = useVoiceAssistant();
   const isSpeaking = voiceAssistant.state === "speaking";
-  const shouldShow = visible && isSpeaking && Boolean(text.trim());
+
+  const latestAgentSegment = voiceAssistant.agentTranscriptions?.length
+    ? voiceAssistant.agentTranscriptions[voiceAssistant.agentTranscriptions.length - 1]?.text
+    : "";
+
+  const [currentText, setCurrentText] = useState("");
+
+  useEffect(() => {
+    if (!isSpeaking) {
+      // Clear immediately when agent stops speaking so stale text is never shown on the next turn
+      setCurrentText("");
+      return;
+    }
+    const active = latestAgentSegment || text;
+    if (active) {
+      setCurrentText(active);
+    }
+  }, [isSpeaking, latestAgentSegment, text]);
+
+  const shouldShow = visible && isSpeaking && Boolean(currentText.trim());
 
   return (
     <AnimatePresence>
@@ -32,7 +52,7 @@ export function LiveSubtitles({
         >
           <div className="inline-block rounded-md bg-black/85 px-3.5 py-1.5 shadow-[0_6px_24px_rgba(0,0,0,0.65)] backdrop-blur-md">
             <p className="text-[14px] sm:text-[15px] font-medium leading-relaxed tracking-wide text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.8)]">
-              {text}
+              {currentText}
             </p>
           </div>
         </motion.div>

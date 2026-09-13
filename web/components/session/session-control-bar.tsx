@@ -45,7 +45,11 @@ export function SessionControlBar({
   onEnd: () => void;
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [cameraActive, setCameraActive] = useState(false);
+
+  const { buttonProps: cameraProps, enabled: cameraOn, pending: cameraPending } = useTrackToggle({
+    room,
+    source: Track.Source.Camera,
+  });
 
   const { buttonProps: micProps, enabled: micOn, pending: micPending } = useTrackToggle({
     room,
@@ -74,15 +78,21 @@ export function SessionControlBar({
 
         {/* 1. Camera / Video */}
         <button
+          {...cameraProps}
           type="button"
-          onClick={() => setCameraActive((v) => !v)}
-          title="Toggle camera (Voice only)"
+          title={cameraOn ? "Turn off camera" : "Turn on camera"}
           className={cn(
             "grid size-10 shrink-0 place-items-center rounded-full text-foreground/80 transition-colors hover:bg-white/10 hover:text-foreground",
-            cameraActive && "bg-white/15 text-white",
+            cameraOn && "bg-white/15 text-white",
           )}
         >
-          {cameraActive ? <Video className="size-5" /> : <VideoOff className="size-5" />}
+          {cameraPending ? (
+            <LoaderCircle className="size-5 animate-spin" />
+          ) : cameraOn ? (
+            <Video className="size-5" />
+          ) : (
+            <VideoOff className="size-5" />
+          )}
         </button>
 
         {/* 2. Microphone */}
