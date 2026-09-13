@@ -32,6 +32,7 @@ export async function createLiveKitSessionToken({
   orgId,
   agentSlug,
   holdOpening = false,
+  voice,
 }: {
   sessionId: string;
   userId: string;
@@ -41,6 +42,8 @@ export async function createLiveKitSessionToken({
   agentSlug?: string;
   /** When true the agent worker holds its greeting until the client sends "begin-opening". */
   holdOpening?: boolean;
+  /** Optional TTS voice id; resolved by the caller and validated against the voice library. */
+  voice?: string;
 }): Promise<{ url: string; token: string; room: string }> {
   const { url, apiKey, apiSecret, agentName } = getLiveKitConfig();
   const room = `session-${sessionId}`;
@@ -57,6 +60,7 @@ export async function createLiveKitSessionToken({
       version: "v1",
     },
     hold_opening: holdOpening,
+    ...(voice ? { voice } : {}),
   };
 
   const at = new AccessToken(apiKey, apiSecret, {

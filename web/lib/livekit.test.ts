@@ -34,6 +34,7 @@ test("createLiveKitSessionToken generates token with RoomConfiguration and agent
       runtimeToken: "rt-tok-789",
       orgId: "org-1",
       agentSlug: "lead-engineer",
+      voice: "voice-custom-123",
     });
 
     assert.equal(result.url, "wss://example.livekit.cloud");
@@ -53,6 +54,7 @@ test("createLiveKitSessionToken generates token with RoomConfiguration and agent
     assert.equal(meta.sessionId, "session-123");
     assert.equal(meta.agent_id, "lead-engineer");
     assert.equal(meta.runtimeToken, "rt-tok-789");
+    assert.equal(meta.voice, "voice-custom-123");
   } finally {
     process.env = origEnv;
   }

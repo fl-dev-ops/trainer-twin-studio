@@ -50,9 +50,26 @@ export async function POST(req: Request) {
             select: { data: true },
           })
         : null;
-      const holdOpening = Boolean(
-        (agentRow?.data as { introVideo?: unknown } | null)?.introVideo,
-      );
+      const agentData = agentRow?.data as { introVideo?: unknown; voiceId?: unknown } | null;
+      const holdOpening = Boolean(agentData?.introVideo);
+      // Agent Studio configuration is authoritative. Custom voices are used only
+      // by agents explicitly configured with their voiceId; otherwise use a
+      // shared sample voice, never another org/custom voice.
+      const configuredVoiceId = typeof agentData?.voiceId === "string" ? agentData.voiceId : "";
+      const configuredVoice = configuredVoiceId
+        ? await db.voice.findFirst({
+            where: { id: configuredVoiceId, status: "ready", OR: [{ orgId: org.id }, { orgId: null }] },
+            select: { id: true },
+          })
+        : null;
+      const sharedDefault = configuredVoice
+        ? null
+        : await db.voice.findFirst({
+            where: { status: "ready", orgId: null },
+            orderBy: { name: "asc" },
+            select: { id: true },
+          });
+      const voiceId = configuredVoice?.id ?? sharedDefault?.id;
       livekit = await createLiveKitSessionToken({
         sessionId: session.id,
         userId: user.id,
@@ -61,6 +78,7 @@ export async function POST(req: Request) {
         orgId: org.id,
         agentSlug: session.agentSlug,
         holdOpening,
+        voice: voiceId,
       });
     } catch (tokenErr) {
       console.error("Failed to start LiveKit session:", tokenErr);
