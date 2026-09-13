@@ -4,7 +4,12 @@ import { createHash, randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import yaml from "js-yaml";
-import { explicitCommunicationRecovery, explicitSurfaceRequest, handleCompletions } from "./openai";
+import {
+  explicitCommunicationRecovery,
+  explicitSurfaceRequest,
+  handleCompletions,
+  screenVisionClarification,
+} from "./openai";
 import { GET as getSessionSnapshot } from "@/app/api/sessions/[id]/route";
 
 const tokenHash = (t: string) => createHash("sha256").update(t).digest("hex");
@@ -45,8 +50,25 @@ describe("Interview Runtime Pipeline", () => {
   it("recognizes explicit workspace requests without opening surfaces for ordinary mentions", () => {
     expect(explicitSurfaceRequest("Can you open the code editor?")).toBe("open_code_editor");
     expect(explicitSurfaceRequest("Canvas, not the code editor. Can you open that?")).toBe("open_whiteboard");
+    expect(explicitSurfaceRequest("Can you present my resume that you have in this in a viewer?")).toBe("open_pdf");
+    expect(explicitSurfaceRequest("Please open my resume")).toBe("open_pdf");
     expect(explicitSurfaceRequest("I used a canvas to sketch the design.")).toBeNull();
     expect(explicitSurfaceRequest("Close it", "open_whiteboard")).toBe("close_surface");
+  });
+
+  it("handles screen vision questions truthfully without hallucinating visual elements", () => {
+    const onCanvas = screenVisionClarification("Can you see the screen?", "open_whiteboard");
+    expect(onCanvas).toContain("whiteboard is open on screen, but I do not see any diagrams");
+
+    const whatDoYouSee = screenVisionClarification("just to confirm, what do you actually see on the screen?", "open_whiteboard");
+    expect(whatDoYouSee).toContain("whiteboard is open on screen, but I do not see any diagrams");
+    expect(whatDoYouSee).not.toContain("boxes and arrows");
+
+    const onPdf = screenVisionClarification("Can you see my screen?", "open_pdf");
+    expect(onPdf).toContain("resume is open on screen");
+
+    const noSurface = screenVisionClarification("Do you see my screen?", null);
+    expect(noSurface).toContain("do not have direct screen vision");
   });
 });
 
@@ -334,7 +356,58 @@ describe("Interview Runtime End-to-End Suite", () => {
     expect(afterState.learner_turns).toBe(beforeState.learner_turns);
   });
 
-  it("7. Snapshot route GET /api/sessions/[id]: returns authoritative state and coverage", async () => {
+  it("7. Answers screen visibility queries truthfully without spending a learner turn or hallucinating", async () => {
+    const before = await db.interviewSession.findUniqueOrThrow({ where: { id: sessionId } });
+    const beforeState = before.runtimeState as any;
+    expect(beforeState.current_surface).toBe("open_whiteboard");
+
+    const res = await handleCompletions(new Request("http://localhost/api/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${runtimeToken}` },
+      body: JSON.stringify({
+        messages: [
+          { role: "assistant", content: "The whiteboard is open. Go ahead and show me what you want to discuss." },
+          { role: "user", content: "Can you see the screen?" },
+        ],
+        stream: false,
+      }),
+    }));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body.choices[0].finish_reason).toBe("stop");
+    const spoken = body.choices[0].message.content;
+    expect(spoken).toContain("whiteboard is open");
+    expect(spoken).toContain("do not see any diagrams");
+    expect(spoken).not.toContain("boxes and arrows");
+
+    const after = await db.interviewSession.findUniqueOrThrow({ where: { id: sessionId } });
+    const afterState = after.runtimeState as any;
+    expect(afterState.learner_turns).toBe(beforeState.learner_turns);
+  });
+
+  it("8. Dispatches open_pdf surface tool call when candidate asks to present their resume", async () => {
+    const res = await handleCompletions(new Request("http://localhost/api/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${runtimeToken}` },
+      body: JSON.stringify({
+        messages: [
+          { role: "assistant", content: "The whiteboard is open." },
+          { role: "user", content: "Can you present my resume that you have in this in a viewer?" },
+        ],
+        tools: [{ type: "function", function: { name: "surface" } }],
+        stream: false,
+      }),
+    }));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body.choices[0].finish_reason).toBe("tool_calls");
+    const toolCall = body.choices[0].message.tool_calls[0];
+    expect(toolCall.function.name).toBe("surface");
+    const args = JSON.parse(toolCall.function.arguments);
+    expect(args.action).toBe("open_pdf");
+  });
+
+  it("9. Snapshot route GET /api/sessions/[id]: returns authoritative state and coverage", async () => {
     const req = new Request(`http://localhost/api/sessions/${sessionId}`, {
       method: "GET",
       headers: {

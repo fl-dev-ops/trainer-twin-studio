@@ -77,7 +77,7 @@ export interface RuntimeState {
     query: string;
     page?: number | null;
   } | null;
-  pending_surface_request?: "open_code_editor" | "open_whiteboard" | "close_surface" | null;
+  pending_surface_request?: "open_code_editor" | "open_whiteboard" | "open_pdf" | "close_surface" | null;
 }
 
 export function initRuntimeState(): RuntimeState {
@@ -106,7 +106,8 @@ export function initRuntimeState(): RuntimeState {
 
 export function surfaceForPhase(
   agent: AgentSpec,
-  index: number
+  index: number,
+  documentManifests?: Array<{ id: string; kind: string; name: string }>
 ): { action: string; payload: Record<string, unknown> } | null {
   if (!agent.phases || index < 0 || index >= agent.phases.length) {
     return null;
@@ -141,6 +142,23 @@ export function surfaceForPhase(
   }
   if (typeof scenario.presentation_url === "string") {
     return { action: "open_presentation", payload: { sourceUrl: scenario.presentation_url } };
+  }
+  if (documentManifests?.length) {
+    const isDocumentGrounded =
+      phase.context_mode === "resume_grounding" ||
+      phase.context_mode === "resume_topics_only" ||
+      Boolean(phase.context_required) ||
+      agent.context_mode === "resume_grounding" ||
+      agent.context_mode === "resume_topics_only" ||
+      agent.claim_handling === "resume_evidence";
+    if (isDocumentGrounded) {
+      const pdfDoc =
+        documentManifests.find((m) => m.kind === "document" && m.name.toLowerCase().endsWith(".pdf")) ??
+        documentManifests.find((m) => m.kind === "document");
+      if (pdfDoc) {
+        return { action: "open_pdf", payload: { fileId: pdfDoc.id } };
+      }
+    }
   }
   return null;
 }
