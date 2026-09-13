@@ -8,8 +8,8 @@ export default defineAgent({
   modelContextWindowTokens: 1_048_576,
   reasoning: "low",
   limits: {
-    maxInputTokensPerSession: 300_000,
-    maxOutputTokensPerSession: 30_000,
-    sessionTimeoutMs: 7 * 24 * 60 * 60 * 1000,
+    maxInputTokensPerSession: false,
+    maxOutputTokensPerSession: false,
+    sessionTimeoutMs: false,
   },
 });

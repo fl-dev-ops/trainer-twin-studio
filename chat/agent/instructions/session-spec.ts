@@ -1,26 +1,28 @@
 import { defineDynamic, defineInstructions } from "eve/instructions";
-import { formatSessionSpec, loadSessionSpecs } from "../lib/brain";
+import { formatSessionSpec, loadSessionContext } from "../lib/brain";
 
 /**
- * Per-session grounding: pulls the scenario (agent) and trainer (persona) specs
- * from the studio and injects them as system context. The auth attributes
- * (orgId, agentSlug, personaSlug) are attached by the calling channel.
+ * Per-session grounding: pulls scenario specs, persona traits, and attached
+ * documents from the studio and injects them as system context for the session.
  */
 export default defineDynamic({
   events: {
     "session.started": async (_event, ctx) => {
       const auth = ctx.session.auth.current;
-      const attributes = auth?.attributes ?? {};
+      const attributes = (auth?.attributes ?? {}) as Record<string, string | undefined>;
       const orgId = attributes.orgId;
-      const agentSlug = attributes.agentSlug;
-      if (typeof orgId !== "string" || typeof agentSlug !== "string") return null;
+      if (typeof orgId !== "string" || !orgId) return null;
+
+      const sessionId = typeof attributes.sessionId === "string" ? attributes.sessionId : undefined;
+      const agentSlug = typeof attributes.agentSlug === "string" ? attributes.agentSlug : undefined;
       const personaSlug = typeof attributes.personaSlug === "string" ? attributes.personaSlug : undefined;
+      const mode = (attributes.mode === "chat" ? "chat" : "voice") as "voice" | "chat";
 
       try {
-        const specs = await loadSessionSpecs(orgId, agentSlug, personaSlug);
-        return defineInstructions({ content: formatSessionSpec(specs, agentSlug) });
-      } catch {
-        // Grounding failure must not kill the session; the core instructions still hold.
+        const specs = await loadSessionContext(orgId, sessionId, agentSlug, personaSlug, mode);
+        return defineInstructions({ content: formatSessionSpec(specs) });
+      } catch (err) {
+        console.error("Failed to load session context for brain grounding:", err);
         return null;
       }
     },
