@@ -10,11 +10,14 @@ services:
       AGENT_NAME: ${AGENT_NAME:-intervoo-agent}
       DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY}
       WEB_URL: ${WEB_URL:-https://dash.trainertwin.com}
-      TTS_PROVIDER: ${TTS_PROVIDER:-sarvam}
+      TTS_PROVIDER: ${TTS_PROVIDER:-voxcpm2}
+      TTS_SERVICE_URL: ${TTS_SERVICE_URL:-https://tts.trainertwin.com}
+      TTS_API_KEY: ${TTS_API_KEY:-}
       SARVAM_API_KEY: ${SARVAM_API_KEY:-}
       SARVAM_SPEAKER: ${SARVAM_SPEAKER:-rohan}
-      AGENT_VOICE_ID_OVERRIDE: ${AGENT_VOICE_ID_OVERRIDE:-}
+      AGENT_VOICE_ID_OVERRIDE: ${AGENT_VOICE_ID_OVERRIDE:-ethan-sample}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://dash.trainertwin.com/api/v1}
+      COPILOT_SERVICE_SECRET: ${COPILOT_SERVICE_SECRET:-}
       S3_BUCKET: ${S3_BUCKET:-trainer-twin-prod}
       AWS_S3_BUCKET: ${AWS_S3_BUCKET:-trainer-twin-prod}
       AWS_REGION: ${AWS_REGION:-ap-south-1}
