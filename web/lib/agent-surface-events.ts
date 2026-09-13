@@ -14,10 +14,16 @@ export type AgentSurface =
       tool: "code";
       language: SupportedCodeExecutionLanguage;
       starterCode: string;
+      highlightLines?: [number, number];
     }
-  | { key: string; tool: "canvas" }
+  | {
+      key: string;
+      tool: "canvas";
+      highlightElements?: string[];
+      scrollToElements?: string[];
+    }
   | { key: string; tool: "pdf"; sourceUrl?: string; fileId?: string; page?: number }
-  | { key: string; tool: "presentation"; sourceUrl?: string }
+  | { key: string; tool: "presentation"; sourceUrl?: string; slideNumber?: number }
   | { key: string; tool: "image"; sourceUrl?: string; fileId?: string }
   | null;
 
@@ -34,11 +40,19 @@ function codeSurface(source: Record<string, unknown>, key: string): AgentSurface
     ? (source.language as SupportedCodeExecutionLanguage)
     : "javascript";
   const starterCode = source.starterCode ?? source.starter_code ?? "";
+  const highlightLines =
+    Array.isArray(source.highlightLines) &&
+    source.highlightLines.length === 2 &&
+    typeof source.highlightLines[0] === "number" &&
+    typeof source.highlightLines[1] === "number"
+      ? (source.highlightLines as [number, number])
+      : undefined;
   return {
     key,
     tool: "code",
     language,
     starterCode: typeof starterCode === "string" ? starterCode : "",
+    highlightLines,
   };
 }
 
@@ -58,10 +72,18 @@ export function parseAgentSurfaceMessage(value: unknown):
       };
     }
     if (event.type === "open_whiteboard") {
+      const highlightElements = Array.isArray(event.highlightElements)
+        ? event.highlightElements.map(String)
+        : undefined;
+      const scrollToElements = Array.isArray(event.scrollToElements)
+        ? event.scrollToElements.map(String)
+        : undefined;
       return {
         surface: {
           key: `agent-canvas-${String(event.eventId ?? event.questionId ?? "current")}`,
           tool: "canvas",
+          highlightElements,
+          scrollToElements,
         },
       };
     }
@@ -93,11 +115,19 @@ export function parseAgentSurfaceMessage(value: unknown):
     }
     if (event.type === "open_presentation") {
       const sourceUrl = typeof event.sourceUrl === "string" ? event.sourceUrl : undefined;
+      const fileId = typeof event.fileId === "string" ? event.fileId : undefined;
+      const slideNumber =
+        typeof event.slideNumber === "number"
+          ? event.slideNumber
+          : typeof event.page === "number"
+            ? event.page
+            : undefined;
       return {
         surface: {
-          key: `agent-presentation-${String(event.eventId ?? "current")}`,
+          key: `agent-presentation-${String(event.eventId ?? fileId ?? "current")}`,
           tool: "presentation",
-          sourceUrl,
+          sourceUrl: sourceUrl || (fileId ? `/api/documents/${fileId}/raw` : undefined),
+          slideNumber,
         },
       };
     }

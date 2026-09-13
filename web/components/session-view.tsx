@@ -659,6 +659,7 @@ export function SessionView({
                                 key={surface.key}
                                 initialLanguage={surface.language}
                                 initialCode={surface.starterCode || undefined}
+                                highlightLines={surface.highlightLines}
                               />
                             )}
                             {surface.tool === "canvas" && <Whiteboard key={surface.key} />}
@@ -690,7 +691,11 @@ export function SessionView({
                               />
                             )}
                             {surface.tool === "presentation" && (
-                              <PresentationViewer key={surface.key} sourceUrl={surface.sourceUrl} />
+                              <PresentationViewer
+                                key={surface.key}
+                                sourceUrl={surface.sourceUrl}
+                                initialSlideNumber={surface.slideNumber}
+                              />
                             )}
                           </div>
                         </motion.section>

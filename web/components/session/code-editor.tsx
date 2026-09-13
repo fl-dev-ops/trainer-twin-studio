@@ -123,9 +123,11 @@ function ExecutionOutput({
 export function CodeEditor({
   initialLanguage = "javascript",
   initialCode = defaultCode,
+  highlightLines,
 }: {
   initialLanguage?: SupportedCodeExecutionLanguage;
   initialCode?: string;
+  highlightLines?: [number, number];
 }) {
   const { resolvedTheme } = useTheme();
   const registerWorkspaceHandler = useWorkspaceHandlers();
@@ -279,6 +281,15 @@ export function CodeEditor({
           value={code}
           onCreateEditor={(view) => {
             editorView.current = view;
+            if (highlightLines && highlightLines.length === 2) {
+              const [fromLine, toLine] = highlightLines;
+              const doc = view.state.doc;
+              if (fromLine >= 1 && toLine >= fromLine && toLine <= doc.lines) {
+                const from = doc.line(fromLine).from;
+                const to = doc.line(toLine).to;
+                view.dispatch({ selection: { anchor: from, head: to }, scrollIntoView: true });
+              }
+            }
           }}
           height="100%"
           onChange={(value) => {

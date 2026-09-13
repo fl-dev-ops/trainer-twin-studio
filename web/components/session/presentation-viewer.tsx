@@ -34,7 +34,13 @@ import "@extend-ai/react-pptx/styles.css";
 
 const zoomSteps = [50, 75, 100, 125, 150, 200];
 
-export function PresentationViewer({ sourceUrl }: { sourceUrl?: string }) {
+export function PresentationViewer({
+  sourceUrl,
+  initialSlideNumber,
+}: {
+  sourceUrl?: string;
+  initialSlideNumber?: number;
+}) {
   const registerWorkspaceHandler = useWorkspaceHandlers();
   const controllerRef = useRef<PptxViewerController | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -227,7 +233,7 @@ export function PresentationViewer({ sourceUrl }: { sourceUrl?: string }) {
             }}
             source={source}
             mode="slide"
-            initialSlide={0}
+            initialSlide={initialSlideNumber && initialSlideNumber > 0 ? initialSlideNumber - 1 : 0}
             zoom={zoom}
             fitMode="contain"
             height="100%"

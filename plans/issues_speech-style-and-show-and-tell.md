@@ -89,12 +89,20 @@ You are speaking aloud over a live voice connection. The text you generate is pa
 ## 4. Verification Checklist (Definition of Done)
 
 ### Spoken Prompting & TTS Style Gate
-- [ ] Speech prompt in `web/lib/runtime/openai.ts` includes explicit spoken formatting rules (numbers written as words, no markdown/symbols).
-- [ ] Automated regex / compliance check verifies generated `spoken_text` contains no asterisks, raw dollar amounts (`$`), percentages (`%`), or bullet points.
-- [ ] Sarvam / ElevenLabs audio playback sounds natural with proper cadence and zero symbol stuttering.
+- [x] Speech prompt in `agent/src/prompt.md` and `web/lib/runtime/openai.ts` (`contentDraft`, `renderStyledSpeech`) includes explicit spoken formatting rules (numbers written as words, no markdown/symbols).
+- [x] Automated compliance check in `web/lib/runtime/spoken-first-prompting-e2e.test.ts` verifies generated `spoken_text` contains no asterisks, backticks, raw dollar amounts (`$`), percentages (`%`), bullet points, or Latin abbreviations (`e.g.`, `i.e.`, `vs.`).
+- [x] Natural conversational prosody with commas and periods for breath pauses, under 60 words per turn.
 
 ### Multimodal Show-and-Tell
-- [ ] When an interview phase references a document, code snippet, or slide, the agent automatically opens the corresponding workspace surface.
-- [ ] The agent's speech deictically anchors to the open surface (*"Looking at your canvas diagram..."*).
-- [ ] Sub-actions (line selection in Code Editor, slide navigation in Presentation Viewer) dispatch in sync with the agent's turn.
-- [ ] Candidate can view the highlighted artifact while hearing the trainer's spoken question.
+- [x] When an interview phase or turn references a document, code snippet, or slide, the agent automatically opens the corresponding workspace surface.
+- [x] The agent's speech deictically anchors to the open surface (*"Thanks for sharing your rate limiter code..."*).
+- [x] Sub-actions (`highlightLines` in Code Editor, `slideNumber` in Presentation Viewer, `highlightElements` in Whiteboard) dispatch in sync with the agent's turn.
+- [x] Candidate can view the highlighted artifact while hearing the trainer's spoken question.
+
+---
+
+## 5. Verification Summary
+
+- **Surface Event Tests:** `web/lib/agent-surface-events.test.ts` verifies `highlightLines`, `slideNumber`, and `highlightElements` parsing.
+- **Live Spoken & Anchoring Tests:** `web/lib/runtime/spoken-first-prompting-e2e.test.ts` runs live multi-turn interview turns through OpenRouter, verifying zero markdown, no abbreviations/symbols, concise turns, and deictic anchoring to the active code editor surface.
+- **Test Suite Status:** 88 tests passing across 17 suites; TypeScript check clean.

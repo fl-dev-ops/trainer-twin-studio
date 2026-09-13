@@ -653,6 +653,21 @@ Decide the correct response using the session spec, the conversation observation
 Do not invent facts about the learner or documents. If the session spec refers to a document that is unavailable, adapt naturally and ask the learner to describe the relevant experience verbally.
 Keep exactly one clear response purpose and its intended question. A later stage renders the spoken wording, so write content, not style.
 
+AUDIO & SPOKEN OUTPUT RULES (MANDATORY):
+You are speaking aloud over a live voice connection directly to a Text-to-Speech (TTS) synthesizer:
+1. Write out all numbers, currencies, percentages, and multipliers phonetically as natural spoken words:
+   - "$100k" -> "a hundred thousand dollars"
+   - "$50,000" -> "fifty thousand dollars"
+   - "3.5x" -> "three point five times"
+   - "80%" -> "eighty percent"
+   - "2026" -> "twenty twenty-six"
+   - "v2" -> "version two"
+2. ABSOLUTE BAN on Markdown formatting: never output asterisks (**bold** or *italic*), backticks (\`code\`), bullet points, numbered lists, hashtags (#), or emojis.
+3. Spell out all abbreviations conversationally: use "for example" (never "e.g."), "versus" (never "vs."), "that is" (never "i.e."), "and so on" (never "etc."), "with" (never "w/"), "without" (never "w/o").
+4. Use commas and periods deliberately as prosody breath markers for natural human speech pauses.
+5. Keep spoken turns concise (under 60 words). Ask exactly one focal question per turn.
+${state.current_surface ? `\nACTIVE WORKSPACE SURFACE ON LEARNER'S SCREEN: ${state.current_surface}. When relevant, deictically anchor your question to what the learner sees (for example, "Looking at your code on the screen...", "In your diagram on the whiteboard...", "On your resume on the screen...").` : ""}
+
 SESSION SPEC
 Scenario: ${specs.agent.name ?? "interview session"}
 Objective: ${specs.agent.objective}
@@ -782,6 +797,14 @@ async function renderStyledSpeech(
 Preserve the draft's meaning, technical facts, correction, uncertainty, response purpose, intended question, and number of focal questions. Do not add names, projects, employers, technologies, or claims from past examples. Do not answer a different question.
 Match or shorten the draft's length. Never add a question. Keep the draft's question count.
 ${state.primer ? `Corpus behavior statistics: ${JSON.stringify(state.primer.statistics)}\nCurrent-session drift: ${JSON.stringify(compareStyleRates(current, state.primer.statistics))}\nCorpus rates describe a whole session, not every turn; vary wording when the current session overuses a form.` : ""}
+
+AUDIO & SPOKEN OUTPUT RULES (MANDATORY FOR TTS):
+You are outputting text directly to a voice synthesizer:
+- Write out all numbers, currencies, percentages, and multipliers phonetically as spoken words (for example: "fifty thousand dollars", "eighty percent", "three point five times").
+- NEVER output Markdown formatting, asterisks (**bold**), backticks (\`code\`), bullet lists, or emojis.
+- Spell out abbreviations: "for example" instead of "e.g.", "versus" instead of "vs.", "that is" instead of "i.e.", "and so on" instead of "etc.".
+- Use commas and periods deliberately for natural prosody breath pauses.
+- Keep the response concise (under 60 words).
 
 HOW ${persona.name.toUpperCase()} TALKS (copy rhythm, fillers, phrasing; do not copy names, companies, or facts):
 ${styleExamples.map((hit) => hit.text).join("\n---\n") || "(no retrieved examples)"}
