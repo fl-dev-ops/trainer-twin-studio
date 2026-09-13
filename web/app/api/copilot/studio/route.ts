@@ -28,6 +28,12 @@ const requestSchema = z.discriminatedUnion("action", [
     query: z.string().trim().min(2).max(500),
     limit: z.number().int().min(1).max(10),
   }).strict(),
+  z.object({
+    action: z.literal("getSessionContext"),
+    sessionId: z.string().optional(),
+    agentSlug: z.string().optional(),
+    personaSlug: z.string().optional(),
+  }).strict(),
 ]);
 
 function authorized(request: Request) {
@@ -47,9 +53,73 @@ export async function POST(request: Request) {
   if (!parsed.success) return Response.json({ error: "Invalid Copilot request" }, { status: 400 });
   const input = parsed.data;
 
+  if (input.action === "getSessionContext") {
+    const session = input.sessionId
+      ? await db.interviewSession.findFirst({
+          where: { id: input.sessionId, orgId },
+          include: {
+            context: { select: { id: true, name: true, mimeType: true, kind: true, size: true, manifest: true } },
+            documents: {
+              include: {
+                document: { select: { id: true, name: true, mimeType: true, kind: true, size: true, manifest: true } },
+              },
+            },
+          },
+        })
+      : null;
+
+    const agentSlug = session?.agentSlug ?? input.agentSlug;
+    const personaSlug = session?.personaSlug ?? input.personaSlug;
+
+    const [agent, persona] = await Promise.all([
+      agentSlug
+        ? db.agent.findFirst({ where: { slug: { equals: agentSlug, mode: "insensitive" }, orgId }, select: { slug: true, version: true, data: true } })
+        : null,
+      personaSlug
+        ? db.persona.findFirst({ where: { slug: { equals: personaSlug, mode: "insensitive" }, orgId }, select: { slug: true, version: true, data: true } })
+        : null,
+    ]);
+
+    const docMap = new Map<string, { id: string; name: string; kind: string; mimeType: string; size: number; pageCount?: number }>();
+    if (session?.context) {
+      const manifest = session.context.manifest as { pageCount?: number } | null;
+      docMap.set(session.context.id, {
+        id: session.context.id,
+        name: session.context.name,
+        kind: session.context.kind,
+        mimeType: session.context.mimeType,
+        size: session.context.size,
+        pageCount: manifest?.pageCount,
+      });
+    }
+    if (session?.documents) {
+      for (const d of session.documents) {
+        const doc = d.document;
+        if (!doc) continue;
+        const manifest = doc.manifest as { pageCount?: number } | null;
+        docMap.set(doc.id, {
+          id: doc.id,
+          name: doc.name,
+          kind: doc.kind,
+          mimeType: doc.mimeType,
+          size: doc.size,
+          pageCount: manifest?.pageCount,
+        });
+      }
+    }
+
+    return Response.json({
+      sessionId: session?.id ?? input.sessionId ?? null,
+      agent: agent ?? null,
+      persona: persona ?? null,
+      documents: Array.from(docMap.values()),
+      learnerName: (session?.runtimeState as Record<string, unknown> | null)?.learner_name ?? null,
+    });
+  }
+
   if (input.action === "searchStyleEpisodes") {
     const persona = await db.persona.findFirst({
-      where: { slug: input.personaSlug, orgId },
+      where: { slug: { equals: input.personaSlug, mode: "insensitive" }, orgId },
       select: { id: true, name: true },
     });
     if (!persona) return Response.json({ error: `No persona named "${input.personaSlug}"` });

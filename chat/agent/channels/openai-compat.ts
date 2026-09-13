@@ -119,10 +119,15 @@ export default defineChannel({
       const modeHeader = request.headers.get("x-trainertwin-mode")?.trim();
       const mode = modeHeader === "chat" ? "chat" : "voice";
 
+      const requestedModel =
+        request.headers.get("x-trainertwin-model")?.trim() ||
+        (body?.model && body.model !== "trainertwin-brain" ? body.model : undefined);
+
       const attributes: Record<string, string> = {
         orgId,
         sessionId,
         mode,
+        ...(requestedModel ? { model: requestedModel } : {}),
       };
       const agentSlug = request.headers.get("x-trainertwin-agent-slug")?.trim();
       const personaSlug = request.headers.get("x-trainertwin-persona-slug")?.trim();
@@ -154,7 +159,7 @@ export default defineChannel({
 
       const completionId = `chatcmpl-${crypto.randomUUID()}`;
       const created = Math.floor(Date.now() / 1000);
-      const model = body?.model ?? "trainertwin-brain";
+      const model = requestedModel ?? body?.model ?? "trainertwin-brain";
       const turnStartMs = Date.now();
 
       const stream = await session.getEventStream(tailIndex === undefined ? {} : { startIndex: tailIndex });
@@ -170,6 +175,7 @@ export default defineChannel({
         let sawActivity = false;
         let sawTurnStarted = false;
         let toolIndex = 0;
+        let ttftMs: number | null = null;
         let usage: { inputTokens?: number; outputTokens?: number } | null = null;
         const allToolsCalled: { name: string; callId: string; input: unknown }[] = [];
         const finishReason = () => (sawToolCall ? "tool_calls" : "stop");
@@ -186,6 +192,9 @@ export default defineChannel({
 
             // Text deltas
             if (ev.type === "message.appended" && typeof ev.data.messageDelta === "string") {
+              if (ttftMs === null) {
+                ttftMs = Date.now() - turnStartMs;
+              }
               sawActivity = true;
               await writeChunk({
                 id: completionId,
@@ -251,6 +260,7 @@ export default defineChannel({
                 model,
                 choices: [{ index: 0, delta: {}, finish_reason: finishReason() }],
                 tools_called: allToolsCalled,
+                ttft_ms: ttftMs ?? wallMs,
                 wall_ms: wallMs,
                 ...(usage
                   ? {

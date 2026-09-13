@@ -50,6 +50,65 @@ export type MainCollectionMetadata = KnowledgeMetadata | PersonaVoiceMetadata;
 
 const collectionCache = new Map<string, Collection>();
 
+interface CachedStyleRecord {
+  id: string;
+  personaId: string;
+  sourceId: string;
+  sourceName: string;
+  text: string;
+  embedding: Float32Array;
+  sessionPhase?: string;
+  pastLearnerName?: string;
+  styleFunction?: string;
+  styleShape?: string;
+  usesLearnerName?: boolean;
+  startsWithThanks?: boolean;
+  hasDoubledAcknowledgement?: boolean;
+}
+
+const styleEpisodeCache = new Map<string, Promise<CachedStyleRecord[]>>();
+
+async function loadStyleEpisodesForPersona(orgId: string, personaId: string): Promise<CachedStyleRecord[]> {
+  return runOnChromaLane(async () => {
+    const collection = await MainCollectionService.getCollection(orgId);
+    const records: CachedStyleRecord[] = [];
+    for (let offset = 0; offset < 2000; offset += 300) {
+      const page = await collection.get({
+        where: { $and: [{ type: "persona_style_episode" }, { personaId }] } as Where,
+        limit: 300,
+        offset,
+        include: ["documents", "metadatas", "embeddings"],
+      });
+      const ids = page.ids ?? [];
+      const docs = page.documents ?? [];
+      const metas = (page.metadatas ?? []) as Record<string, unknown>[];
+      const embeddings = page.embeddings ?? [];
+
+      for (let i = 0; i < ids.length; i++) {
+        if (!embeddings[i]) continue;
+        const meta = metas[i] ?? {};
+        records.push({
+          id: ids[i],
+          personaId,
+          sourceId: String(meta.sourceId ?? ids[i]),
+          sourceName: String(meta.sourceName ?? ""),
+          text: docs[i] ?? "",
+          embedding: new Float32Array(embeddings[i]),
+          ...(typeof meta.sessionPhase === "string" ? { sessionPhase: meta.sessionPhase } : {}),
+          ...(typeof meta.pastLearnerName === "string" ? { pastLearnerName: meta.pastLearnerName } : {}),
+          ...(typeof meta.styleFunction === "string" ? { styleFunction: meta.styleFunction } : {}),
+          ...(typeof meta.styleShape === "string" ? { styleShape: meta.styleShape } : {}),
+          ...(meta.usesLearnerName !== undefined ? { usesLearnerName: meta.usesLearnerName === true } : {}),
+          ...(meta.startsWithThanks !== undefined ? { startsWithThanks: meta.startsWithThanks === true } : {}),
+          ...(meta.hasDoubledAcknowledgement !== undefined ? { hasDoubledAcknowledgement: meta.hasDoubledAcknowledgement === true } : {}),
+        });
+      }
+      if (ids.length < 300) break;
+    }
+    return records;
+  });
+}
+
 /** Evicts the cached org collection handle (called on org Chroma teardown). */
 export function invalidateCollectionCache(orgId: string): void {
   collectionCache.delete(orgId);
@@ -519,6 +578,60 @@ export class MainCollectionService {
       styleFilters?: { usesLearnerName?: boolean; startsWithThanks?: boolean; hasDoubledAcknowledgement?: boolean };
     } = {},
   ) {
+    if (options.personaId) {
+      const cacheKey = `${orgId}:${options.personaId}`;
+      let cachedPromise = styleEpisodeCache.get(cacheKey);
+      if (!cachedPromise) {
+        cachedPromise = loadStyleEpisodesForPersona(orgId, options.personaId);
+        styleEpisodeCache.set(cacheKey, cachedPromise);
+      }
+      const records = await cachedPromise;
+      if (records.length > 0) {
+        const [queryEmbedding] = await embedTexts([query]);
+        const qVec = new Float32Array(queryEmbedding);
+
+        const scored: { r: CachedStyleRecord; score: number }[] = [];
+        for (const r of records) {
+          if (options.sessionPhase && r.sessionPhase !== options.sessionPhase) continue;
+          if (options.styleFilters?.usesLearnerName !== undefined && r.usesLearnerName !== options.styleFilters.usesLearnerName) continue;
+          if (options.styleFilters?.startsWithThanks !== undefined && r.startsWithThanks !== options.styleFilters.startsWithThanks) continue;
+          if (options.styleFilters?.hasDoubledAcknowledgement !== undefined && r.hasDoubledAcknowledgement !== options.styleFilters.hasDoubledAcknowledgement) continue;
+
+          let dot = 0;
+          for (let j = 0; j < qVec.length; j++) dot += qVec[j] * r.embedding[j];
+          scored.push({ r, score: dot });
+        }
+
+        scored.sort((a, b) => b.score - a.score);
+
+        const limit = options.limit ?? 4;
+        const hits: Record<string, unknown>[] = [];
+        const seenSources = new Set<string>();
+        for (const { r, score } of scored) {
+          if (options.diversify) {
+            if (seenSources.has(r.sourceId)) continue;
+            seenSources.add(r.sourceId);
+          }
+          hits.push({
+            id: r.id,
+            personaId: r.personaId,
+            sourceId: r.sourceId,
+            sourceName: r.sourceName,
+            text: r.text,
+            score,
+            ...(r.sessionPhase ? { sessionPhase: r.sessionPhase } : {}),
+            ...(r.pastLearnerName ? { pastLearnerName: r.pastLearnerName } : {}),
+            ...(r.styleFunction ? { styleFunction: r.styleFunction } : {}),
+            ...(r.styleShape ? { styleShape: r.styleShape } : {}),
+            ...(r.usesLearnerName !== undefined ? { usesLearnerName: r.usesLearnerName } : {}),
+            ...(r.startsWithThanks !== undefined ? { startsWithThanks: r.startsWithThanks } : {}),
+            ...(r.hasDoubledAcknowledgement !== undefined ? { hasDoubledAcknowledgement: r.hasDoubledAcknowledgement } : {}),
+          });
+          if (hits.length >= limit) break;
+        }
+        return hits as never;
+      }
+    }
     return this.searchPersonaVoiceType(orgId, query, "persona_style_episode", options);
   }
 

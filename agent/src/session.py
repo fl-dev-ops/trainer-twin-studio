@@ -27,6 +27,7 @@ def build_agent_session(
     model: str | None = None,
     voice: str = "",
     turn_detector: Any | None = None,
+    extra_headers: dict[str, str] | None = None,
 ) -> AgentSession:
     dg_api_key = os.getenv("DEEPGRAM_API_KEY", "").strip() or "test-key"
     stt = deepgram.STTv2(model=DEFAULT_DEEPGRAM_STT_MODEL, api_key=dg_api_key)
@@ -42,6 +43,7 @@ def build_agent_session(
         model=resolved_model,
         base_url=resolved_base_url,
         api_key=resolved_api_key,
+        extra_headers=extra_headers,
     )
 
     tts = build_tts(voice=voice)

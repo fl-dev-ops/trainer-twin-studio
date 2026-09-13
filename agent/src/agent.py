@@ -185,9 +185,24 @@ async def entrypoint(ctx: agents.JobContext) -> None:
     egress_data = await start_session_egress(lk_api=ctx.api, org_id=org_id, room_name=ctx.room.name)
 
     tools = build_interview_tools(room=ctx.room, participant_identity=participant_identity)
+
+    agent_slug = str(metadata.get("agent_id") or metadata.get("agentSlug") or "").strip()
+    extra_headers: dict[str, str] = {
+        "x-trainertwin-session-id": session_id,
+        "x-trainertwin-org-id": org_id,
+        "x-trainertwin-agent-slug": agent_slug,
+        "x-trainertwin-mode": "voice",
+    }
+    copilot_secret = os.getenv("COPILOT_SERVICE_SECRET", "").strip()
+    if copilot_secret and org_id:
+        import base64
+        b64_auth = base64.b64encode(f"{org_id}:{copilot_secret}".encode()).decode()
+        extra_headers["Authorization"] = f"Basic {b64_auth}"
+
     session = build_agent_session(
         api_key=runtime_token,
         voice=voice,
+        extra_headers=extra_headers,
     )
 
     _sessions[ctx.room.name] = {
