@@ -1786,40 +1786,40 @@ async function runCompletionPipeline(
         choices: [{ index: 0, message: { role: "assistant", content: repeatText }, finish_reason: "stop" }],
       };
     } else if (requestedSurface && advertisedToolNames.has("surface")) {
-        state.pending_surface_request = requestedSurface;
-        state.current_surface = requestedSurface === "close_surface" ? null : requestedSurface;
-        state.actions.push("surface");
-        const surfaceToolCall = {
-          id: `call_surface_${requestedSurface}_${state.actions.length}`,
-          type: "function" as const,
-          function: {
-            name: "surface",
-            arguments: JSON.stringify({ action: requestedSurface, payload: {} }),
-          },
-        };
-        sseChunks = [
-          {
-            id: completionId,
-            object: "chat.completion.chunk",
-            created: timestamp,
-            model,
-            choices: [{ index: 0, delta: { role: "assistant", content: null, tool_calls: [surfaceToolCall] }, finish_reason: null }],
-          },
-          {
-            id: completionId,
-            object: "chat.completion.chunk",
-            created: timestamp,
-            model,
-            choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }],
-          },
-        ];
-        fullResponse = {
+      state.pending_surface_request = requestedSurface;
+      state.current_surface = requestedSurface === "close_surface" ? null : requestedSurface;
+      state.actions.push("surface");
+      const surfaceToolCall = {
+        id: `call_surface_${requestedSurface}_${state.actions.length}`,
+        type: "function" as const,
+        function: {
+          name: "surface",
+          arguments: JSON.stringify({ action: requestedSurface, payload: {} }),
+        },
+      };
+      sseChunks = [
+        {
           id: completionId,
-          object: "chat.completion",
+          object: "chat.completion.chunk",
           created: timestamp,
           model,
-          choices: [{ index: 0, message: { role: "assistant", content: null, tool_calls: [surfaceToolCall] }, finish_reason: "tool_calls" }],
-        };
+          choices: [{ index: 0, delta: { role: "assistant", content: null, tool_calls: [surfaceToolCall] }, finish_reason: null }],
+        },
+        {
+          id: completionId,
+          object: "chat.completion.chunk",
+          created: timestamp,
+          model,
+          choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }],
+        },
+      ];
+      fullResponse = {
+        id: completionId,
+        object: "chat.completion",
+        created: timestamp,
+        model,
+        choices: [{ index: 0, message: { role: "assistant", content: null, tool_calls: [surfaceToolCall] }, finish_reason: "tool_calls" }],
+      };
     } else {
       if (intent === "answer" || intent === "off_topic" || intent === "question") {
         state.learner_turns += 1;
