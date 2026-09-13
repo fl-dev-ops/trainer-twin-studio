@@ -266,6 +266,29 @@ Ordered plan, one change at a time, measured against the baseline after each:
 
 1. **Cache Chroma client + collection handles in-process** (per org). Expected: removes ~1.0–1.8 s per warm turn.
 2. **Tune HNSW `ef_search`** from 200 toward ~40–60 after measuring recall.
+
+### 2. ef_search / nprobe experiment — TESTED, NO CHANGE
+
+The production collection is **SPANN**, not HNSW: Chroma Cloud silently ignored our `hnsw` creation config, and the real schema reports `spann: { search_nprobe: 64, ef_search: 200, … }`. So the `ef_search` tuning assumption was wrong for this collection; the live query-depth knob is `spann.search_nprobe` (read via `collection.configuration`, adjustable via `collection.modify({ configuration: { spann: { search_nprobe } } })`).
+
+Method (`web/scripts/efsearch-test.ts`): forked the real org collection (fork `main-efsearch-test-3`, deleted after), embedded the 3 real runtime query shapes once, timed 5 trials per query per config with identical vectors, and compared result overlap against the baseline.
+
+| Config | knowledge (3) | episode (9) | style (15) | Recall vs baseline |
+|---|---:|---:|---:|---|
+| baseline (`search_nprobe=64`) | 546 ms* | 317 ms | 314 ms | — |
+| `search_nprobe=32` | 305 ms | 313 ms | 318 ms | episode 7/9, knowledge 0/3 |
+| `search_nprobe=16` | 295 ms | 323 ms | 319 ms | episode 3/9 |
+| `search_nprobe=8` | 302 ms | 315 ms | 371 ms | episode **0 results**, style 10/15 |
+| restored `search_nprobe=64` | 334 ms | 323 ms | 359 ms | 3/3, 9/9, 15/15 |
+
+\* baseline knowledge includes a cold-connection outlier (3,270 ms max); warm queries are ~300 ms everywhere.
+
+Findings:
+
+1. **No latency win.** Query time is a ~300 ms flat floor at every nprobe value — for our collection sizes (743 episodes, small KB) the cost is network/service round trip, not index search depth.
+2. **Recall collapses below 64.** nprobe 16 → 3/9 episodes; nprobe 8 → 0 episode results and 10/15 style. The server default 64 is the recall sweet spot for this data.
+3. Conclusion: **do not change production.** `search_nprobe=64` stays. The `hnsw` block in `getOrCreateCollection` creation config is dead config for Chroma Cloud (ignored in favor of SPANN); harmless but should not be relied on.
+4. The real query-time floor is ~300 ms per Chroma round trip → strengthens the case for the next rung: **fewer round trips (batch queries/embeddings) and parallelizing independent retrievals**, not shallower searches.
 3. **Batch/parallelize retrievals and embeddings** where dependencies allow.
 4. Repeat-request short-circuit before knowledge retrieval (~1.1 s waste).
 
