@@ -1,16 +1,25 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FileUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { PDFViewer } from "@/components/extend/pdf-viewer";
+import { PDFViewer, type PDFViewerHandle } from "@/components/extend/pdf-viewer";
 
-export function PdfViewerSurface({ sourceUrl }: { sourceUrl?: string }) {
+export function PdfViewerSurface({ sourceUrl, initialPage, title }: { sourceUrl?: string; initialPage?: number; title?: string }) {
   const fileInput = useRef<HTMLInputElement>(null);
+  const viewerRef = useRef<PDFViewerHandle>(null);
   const [source, setSource] = useState<string | undefined>(sourceUrl);
   const [fileName, setFileName] = useState(
-    sourceUrl ? decodeURIComponent(sourceUrl.split("/").pop()?.split("?")[0] || "Document.pdf") : "Document.pdf",
+    title || (sourceUrl ? decodeURIComponent(sourceUrl.split("/").pop()?.split("?")[0] || "Document.pdf") : "Document.pdf"),
   );
+
+  useEffect(() => {
+    if (sourceUrl) setSource(sourceUrl);
+  }, [sourceUrl]);
+
+  useEffect(() => {
+    if (title) setFileName(title);
+  }, [title]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -41,7 +50,18 @@ export function PdfViewerSurface({ sourceUrl }: { sourceUrl?: string }) {
       </header>
       <div className="relative min-h-0 flex-1">
         {source ? (
-          <PDFViewer src={source} fileName={fileName} className="h-full" showUpload={false} />
+          <PDFViewer
+            ref={viewerRef}
+            src={source}
+            fileName={fileName}
+            className="h-full"
+            showUpload={false}
+            onDocumentLoadSuccess={() => {
+              if (initialPage && initialPage > 1) {
+                setTimeout(() => viewerRef.current?.scrollToPage(initialPage), 150);
+              }
+            }}
+          />
         ) : (
           <div className="absolute inset-0 grid place-items-center p-6">
             <div className="flex max-w-sm flex-col items-center gap-4 text-center">

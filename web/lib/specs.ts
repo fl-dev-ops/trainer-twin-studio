@@ -1,4 +1,5 @@
 import yaml from "js-yaml";
+import { randomUUID } from "node:crypto";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { deletePrefix, getObjectText, kbPrefix, presignedGetUrl, putObject } from "@/lib/s3";
 import { db } from "@/lib/db";
@@ -12,6 +13,7 @@ import { personaCoverageLevel } from "@/lib/persona-voice";
 import { MainCollectionService } from "@/lib/main-collection";
 import { ChromaTenantService } from "@/lib/chroma-tenant";
 import { enqueueIngestionWork } from "@/lib/ingestion-queue";
+import { prepareContextDocument, type DocumentManifest } from "@/lib/context-document-service";
 
 export type SpecType = "personas" | "agents" | "domains";
 
@@ -486,21 +488,52 @@ export async function removeEmbeddings(orgId: string, kbSlug: string, docIds: st
 }
 // ---- Learner context documents ----
 
-export async function saveUpload(orgId: string, name: string, mimeType: string, content: Buffer) {
-  if (!/^[a-z0-9][a-z0-9._-]*\.(md|txt|pdf)$/i.test(name)) {
-    throw new Error("Only .md, .txt or .pdf uploads are supported");
-  }
-  return db.contextDocument.create({
-    data: { orgId, name, mimeType, content: new Uint8Array(content), size: content.length },
-    select: { id: true, name: true, size: true, createdAt: true },
+export async function saveUpload(
+  orgId: string,
+  name: string,
+  mimeType: string,
+  content: Buffer,
+  ownerUserId: string
+) {
+  if (!ownerUserId) throw new Error("ownerUserId is required for uploads");
+  const prepared = await prepareContextDocument(name, mimeType, new Uint8Array(content));
+  const id = randomUUID();
+  const manifest: DocumentManifest = { ...prepared.manifest, id };
+  const doc = await db.contextDocument.create({
+    data: {
+      id,
+      orgId,
+      ownerUserId,
+      name: prepared.name,
+      mimeType: prepared.mimeType,
+      kind: prepared.kind,
+      content: new Uint8Array(content),
+      size: prepared.size,
+      sha256: prepared.sha256,
+      extractedText: prepared.extractedText,
+      manifest: manifest as unknown as Prisma.InputJsonValue,
+      chunks: {
+        create: prepared.chunks.map((c) => ({
+          chunkIndex: c.chunkIndex,
+          heading: c.heading,
+          pageNumber: c.pageNumber,
+          text: c.text,
+        })),
+      },
+    },
+    select: { id: true, name: true, size: true, kind: true, manifest: true, createdAt: true },
   });
+  return { ...doc, manifest };
 }
 
-export async function listUploads(orgId: string) {
+export async function listUploads(orgId: string, userId: string) {
   return db.contextDocument.findMany({
-    where: { orgId },
+    where: {
+      orgId,
+      ownerUserId: userId,
+    },
     orderBy: { createdAt: "desc" },
-    select: { id: true, name: true, size: true, createdAt: true },
+    select: { id: true, name: true, size: true, kind: true, manifest: true, createdAt: true },
   });
 }
 
@@ -510,15 +543,22 @@ export async function readUploadBytes(id: string, orgId: string) {
 
 // ---- Compiled config for the voice agent ----
 
-export async function getAgentConfigForAgent(agentId: string, orgId: string, contextId?: string) {
+export async function getAgentConfigForAgent(agentId: string, orgId: string, contextId?: string, contextIds?: string[]) {
   const agent = await db.agent.findFirst({
     where: { id: agentId, orgId },
     include: { persona: true },
   });
   if (!agent) return null;
-  const [domain, contextDoc] = await Promise.all([
+
+  const docIds = Array.from(new Set([...(contextIds ?? []), ...(contextId ? [contextId] : [])])).filter(Boolean);
+  const [domain, contextDocs] = await Promise.all([
     db.domain.findFirst({ where: { slug: agent.domainSlug, orgId } }),
-    contextId ? readUploadBytes(contextId, orgId) : Promise.resolve(null),
+    docIds.length
+      ? db.contextDocument.findMany({
+          where: { id: { in: docIds }, orgId },
+          select: { id: true, name: true, mimeType: true, kind: true, size: true, manifest: true },
+        })
+      : Promise.resolve([]),
   ]);
   const persona = agent.persona;
   if (!domain) return null;
@@ -553,14 +593,24 @@ export async function getAgentConfigForAgent(agentId: string, orgId: string, con
   );
   const personaVoiceCoverage = personaCoverageLevel(personaVoiceSources);
 
-  let context: { id: string; name: string; content: string } | null = null;
-  if (contextDoc) {
-    // The agent can run on another machine: send readable content, not a web-local path.
-    const { markdown } = await documentToMarkdown(
-      new File([new Uint8Array(contextDoc.content)], contextDoc.name, { type: contextDoc.mimeType }),
-    );
-    context = { id: contextDoc.id, name: contextDoc.name, content: markdown };
-  }
+  const documentManifests: DocumentManifest[] = contextDocs.map((doc) => {
+    if (doc.manifest && typeof doc.manifest === "object") {
+      return { ...(doc.manifest as unknown as DocumentManifest), id: doc.id };
+    }
+    return {
+      id: doc.id,
+      name: doc.name,
+      kind: (doc.kind as "document" | "image") || "document",
+      mimeType: doc.mimeType,
+      size: doc.size,
+      summary: `Document: ${doc.name}`,
+    };
+  });
+
+  const primaryDoc = contextDocs.find((d) => d.id === contextId) ?? contextDocs[0];
+  const context: { id: string; name: string; content: string } | null = primaryDoc
+    ? { id: primaryDoc.id, name: primaryDoc.name, content: "" }
+    : null;
 
   return {
     persona: { id: persona.id, slug: persona.slug, version: persona.version, data: persona.data },
@@ -570,6 +620,8 @@ export async function getAgentConfigForAgent(agentId: string, orgId: string, con
     personaVoiceAvailable,
     personaVoiceCoverage,
     context,
+    documentManifests,
+    sessionDocumentIds: docIds,
   };
 }
 

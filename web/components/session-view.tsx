@@ -40,6 +40,7 @@ import { CodeEditor } from "@/components/session/code-editor";
 import { Whiteboard } from "@/components/session/whiteboard";
 import { PresentationViewer } from "@/components/session/presentation-viewer";
 import { PdfViewerSurface } from "@/components/session/pdf-viewer";
+import { ImageViewerSurface } from "@/components/session/image-viewer";
 import { LiveKitWorkspaceProvider } from "@/lib/livekit-workspaces";
 import type { AgentSurface } from "@/lib/agent-surface-events";
 import type { Entry } from "@/lib/session-transcript";
@@ -102,7 +103,8 @@ export function SessionView({
 
   const [agent, setAgent] = useState(agents[0] ?? "");
   const persona = agentPersonas[agent] ?? personas[0] ?? "";
-  const [contextId, setContextId] = useState("");
+  const [contextIds, setContextIds] = useState<string[]>([]);
+  const contextId = contextIds[0] ?? "";
   const [contextList, setContextList] = useState<{ id: string; name: string; size?: number }[]>(contexts);
   const [uploadingContext, setUploadingContext] = useState(false);
   const contextInput = useRef<HTMLInputElement>(null);
@@ -149,6 +151,8 @@ export function SessionView({
     finalizedRef.current = false;
     setConnection(null);
     setConnected(false);
+    setLaunched(false);
+    setAgentInRoom(false);
     setError("");
     setEndReason("disconnected");
     setIntroDone(false);
@@ -169,8 +173,8 @@ export function SessionView({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
           sessionCode
-            ? { shareCode: sessionCode, contextId: contextId || undefined }
-            : { agentSlug: agent, contextId: contextId || undefined },
+            ? { shareCode: sessionCode, contextId: contextId || undefined, contextIds }
+            : { agentSlug: agent, contextId: contextId || undefined, contextIds },
         ),
       });
       const launch = await launchResponse.json().catch(() => ({}));
@@ -192,7 +196,7 @@ export function SessionView({
       setError(e instanceof Error ? e.message : "Failed to start session");
       if (!autoStart) setLaunched(false); // back to the configure card, error shown there
     }
-  }, [agent, contextId, sessionCode, autoStart]);
+  }, [agent, contextId, contextIds, sessionCode, autoStart]);
 
   const handleRetry = useCallback(() => {
     startedRef.current = false;
@@ -206,14 +210,14 @@ export function SessionView({
 
   useEffect(() => {
     if (!autoStart || ended || !agent || !persona || launched) return;
-    if (isContextRequired && !contextId) return;
+    if (isContextRequired && contextIds.length === 0) return;
     // Deferred a microtask: launching flips component state, which must not happen
     // synchronously inside the effect body.
     void Promise.resolve().then(() => {
       setLaunched(true);
       void handleStartSession();
     });
-  }, [autoStart, ended, agent, persona, launched, isContextRequired, contextId, handleStartSession]);
+  }, [autoStart, ended, agent, persona, launched, isContextRequired, contextIds, handleStartSession]);
 
   useEffect(() => {
     if (!connection || connected) return;
@@ -472,16 +476,21 @@ export function SessionView({
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <Select value={contextId || "none"} onValueChange={(v) => v !== null && setContextId(v === "none" ? "" : v)}>
+                    <Select
+                      value="none"
+                      onValueChange={(v) => {
+                        if (v && v !== "none") setContextIds((prev) => prev.includes(v) ? prev : [...prev, v]);
+                      }}
+                    >
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="None" />
+                        <SelectValue placeholder={contextIds.length ? `${contextIds.length} selected` : "Select document"} />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectGroup>
                           <SelectLabel>Uploaded contexts</SelectLabel>
-                          <SelectItem value="none">None</SelectItem>
+                          <SelectItem value="none">Select a document</SelectItem>
                           {contextList.map((c) => (
-                            <SelectItem key={c.id} value={c.id}>
+                            <SelectItem key={c.id} value={c.id} disabled={contextIds.includes(c.id)}>
                               {c.name} · {formatBytes(c.size ?? 0)}
                             </SelectItem>
                           ))}
@@ -491,7 +500,7 @@ export function SessionView({
                     <input
                       ref={contextInput}
                       type="file"
-                      accept=".md,.txt,.pdf"
+                      accept=".md,.txt,.pdf,.json,.csv,.png,.jpg,.jpeg,.webp"
                       hidden
                       onChange={async (e) => {
                         const file = e.target.files?.[0];
@@ -509,7 +518,7 @@ export function SessionView({
                             ...prev,
                             { id: data.id, name: data.name, size: file.size },
                           ]);
-                          setContextId(data.id);
+                          setContextIds((prev) => prev.includes(data.id) ? prev : [...prev, data.id]);
                         } catch (uploadError) {
                           setError(uploadError instanceof Error ? uploadError.message : "Upload failed");
                         } finally {
@@ -529,8 +538,27 @@ export function SessionView({
                     </Button>
                   </div>
                   <span className="text-xs text-muted-foreground">
-                    Résumé or reference doc (.pdf, .md, .txt) uploaded right before the session.
+                    Documents or images (.pdf, .md, .txt, .json, .csv, .png, .jpg, .webp).
                   </span>
+                  {contextIds.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {contextIds.map((id) => {
+                        const file = contextList.find((item) => item.id === id);
+                        return (
+                          <span key={id} className="inline-flex items-center gap-1 rounded-full border bg-muted px-2 py-1 text-xs">
+                            {file?.name ?? id}
+                            <button
+                              type="button"
+                              aria-label={`Remove ${file?.name ?? "document"}`}
+                              onClick={() => setContextIds((prev) => prev.filter((value) => value !== id))}
+                            >
+                              <X className="size-3" />
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
                 </label>
                 {error && (
                   <p role="alert" className="text-sm text-destructive">{error}</p>
@@ -540,12 +568,12 @@ export function SessionView({
                     setLaunched(true);
                     void handleStartSession();
                   }}
-                  disabled={!persona || !agent || (isContextRequired && !contextId)}
+                  disabled={!persona || !agent || (isContextRequired && contextIds.length === 0)}
                   className="w-full"
                 >
                   <Play data-icon="inline-start" /> Start session
                 </Button>
-                {isContextRequired && !contextId && (
+                {isContextRequired && contextIds.length === 0 && (
                   <p className="text-xs text-muted-foreground text-center">
                     Please select or upload a document (.pdf, .txt, .md) to start this scenario.
                   </p>
@@ -635,7 +663,31 @@ export function SessionView({
                             )}
                             {surface.tool === "canvas" && <Whiteboard key={surface.key} />}
                             {surface.tool === "pdf" && (
-                              <PdfViewerSurface key={surface.key} sourceUrl={surface.sourceUrl} />
+                              <PdfViewerSurface
+                                key={surface.key}
+                                sourceUrl={
+                                  surface.sourceUrl
+                                    ? surface.sourceUrl.includes("sessionId=")
+                                      ? surface.sourceUrl
+                                      : `${surface.sourceUrl}${surface.sourceUrl.includes("?") ? "&" : "?"}sessionId=${connection?.sessionId ?? ""}`
+                                    : undefined
+                                }
+                                initialPage={surface.page}
+                                title={contextList.find((c) => c.id === surface.fileId)?.name}
+                              />
+                            )}
+                            {surface.tool === "image" && (
+                              <ImageViewerSurface
+                                key={surface.key}
+                                sourceUrl={
+                                  surface.sourceUrl
+                                    ? surface.sourceUrl.includes("sessionId=")
+                                      ? surface.sourceUrl
+                                      : `${surface.sourceUrl}${surface.sourceUrl.includes("?") ? "&" : "?"}sessionId=${connection?.sessionId ?? ""}`
+                                    : undefined
+                                }
+                                title={contextList.find((c) => c.id === surface.fileId)?.name}
+                              />
                             )}
                             {surface.tool === "presentation" && (
                               <PresentationViewer key={surface.key} sourceUrl={surface.sourceUrl} />

@@ -3,6 +3,8 @@
  * Direct 1:1 port of build_specs from agent/interview.py.
  */
 
+import type { DocumentManifest } from "@/lib/context-document-service";
+
 export type ClaimProvenance =
   | "context_declared"
   | "observed_incident"
@@ -104,6 +106,8 @@ export interface CompiledSpecs {
   domain: DomainSpec;
   knowledgeBases: string[];
   contextDocument?: ContextDocumentSpec | null;
+  documentManifests?: DocumentManifest[];
+  sessionDocumentIds?: string[];
 }
 
 function deepMerge(base: Record<string, any>, override: Record<string, any>): Record<string, any> {
@@ -325,5 +329,13 @@ export function buildSpecs(config: Record<string, any>): CompiledSpecs {
         }
       : null;
 
-  return { persona, agent, domain, knowledgeBases: kbs, contextDocument };
+  const rawManifests = Array.isArray(config.documentManifests) ? config.documentManifests : [];
+  const documentManifests: DocumentManifest[] = rawManifests.filter(
+    (m): m is DocumentManifest => m && typeof m === "object" && typeof m.id === "string"
+  );
+  const sessionDocumentIds: string[] = Array.isArray(config.sessionDocumentIds)
+    ? config.sessionDocumentIds.filter((id): id is string => typeof id === "string")
+    : documentManifests.map((m) => m.id);
+
+  return { persona, agent, domain, knowledgeBases: kbs, contextDocument, documentManifests, sessionDocumentIds };
 }

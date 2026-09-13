@@ -72,6 +72,11 @@ export interface RuntimeState {
   learner_name?: string | null;
   primer?: { statistics: CorpusStyleStats } | null;
   recent_style_docs?: string[];
+  pending_document_lookup?: {
+    file_id: string;
+    query: string;
+    page?: number | null;
+  } | null;
 }
 
 export function initRuntimeState(): RuntimeState {
@@ -93,6 +98,7 @@ export function initRuntimeState(): RuntimeState {
     learner_name: null,
     primer: null,
     recent_style_docs: [],
+    pending_document_lookup: null,
   };
 }
 

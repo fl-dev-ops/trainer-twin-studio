@@ -16,8 +16,9 @@ export type AgentSurface =
       starterCode: string;
     }
   | { key: string; tool: "canvas" }
-  | { key: string; tool: "pdf"; sourceUrl?: string }
+  | { key: string; tool: "pdf"; sourceUrl?: string; fileId?: string; page?: number }
   | { key: string; tool: "presentation"; sourceUrl?: string }
+  | { key: string; tool: "image"; sourceUrl?: string; fileId?: string }
   | null;
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -66,11 +67,27 @@ export function parseAgentSurfaceMessage(value: unknown):
     }
     if (event.type === "open_pdf") {
       const sourceUrl = typeof event.sourceUrl === "string" ? event.sourceUrl : undefined;
+      const fileId = typeof event.fileId === "string" ? event.fileId : undefined;
+      const page = typeof event.page === "number" ? event.page : undefined;
       return {
         surface: {
-          key: `agent-pdf-${String(event.eventId ?? "current")}`,
+          key: `agent-pdf-${String(event.eventId ?? fileId ?? "current")}`,
           tool: "pdf",
-          sourceUrl,
+          sourceUrl: sourceUrl || (fileId ? `/api/documents/${fileId}/raw` : undefined),
+          fileId,
+          page,
+        },
+      };
+    }
+    if (event.type === "open_image") {
+      const sourceUrl = typeof event.sourceUrl === "string" ? event.sourceUrl : undefined;
+      const fileId = typeof event.fileId === "string" ? event.fileId : undefined;
+      return {
+        surface: {
+          key: `agent-image-${String(event.eventId ?? fileId ?? "current")}`,
+          tool: "image",
+          sourceUrl: sourceUrl || (fileId ? `/api/documents/${fileId}/raw` : undefined),
+          fileId,
         },
       };
     }

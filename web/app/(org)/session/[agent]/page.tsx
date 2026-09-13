@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { SessionView } from "@/components/session-view";
 import { signInUrl } from "@/lib/base-domain";
 import { getSessionOrg } from "@/lib/org";
+import { resolveSessionUser } from "@/lib/session-user";
 import { listAgentContextRequired, listAgentPersonas, listRunnableSpecs, listScenarioIntroVideos, listUploads } from "@/lib/specs";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +17,7 @@ export default async function PortalSessionPage({
   const host = (await headers()).get("host") ?? "";
   const orgSlug = host.split(":")[0].split(".")[0];
   const org = await getSessionOrg();
+  const { user } = await resolveSessionUser();
   const { agent } = await params;
   if (!org) redirect(signInUrl(host, `/session/${encodeURIComponent(agent)}`));
   const portalOrgId = (await getOrgId(orgSlug)) ?? "";
@@ -26,7 +28,7 @@ export default async function PortalSessionPage({
 
   const [personas, contexts, agentPersonas, agentContextRequired] = await Promise.all([
     listRunnableSpecs("personas", portalOrgId),
-    org?.id === portalOrgId ? listUploads(org.id) : Promise.resolve([]),
+    org?.id === portalOrgId && user ? listUploads(org.id, user.id) : Promise.resolve([]),
     listAgentPersonas(portalOrgId, [agent]),
     listAgentContextRequired(portalOrgId, [agent]),
   ]);

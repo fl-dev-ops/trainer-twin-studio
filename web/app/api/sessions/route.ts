@@ -33,6 +33,9 @@ export async function POST(req: Request) {
       shareCode: typeof body.shareCode === "string" ? body.shareCode : undefined,
       agentSlug: typeof body.agentSlug === "string" ? body.agentSlug : undefined,
       contextId: typeof body.contextId === "string" ? body.contextId : undefined,
+      contextIds: Array.isArray(body.contextIds)
+        ? body.contextIds.filter((id: unknown): id is string => typeof id === "string")
+        : undefined,
     });
     if (!session) return NextResponse.json({ error: "Invalid session URL" }, { status: 403 });
 

@@ -3,10 +3,10 @@ import { formatFromExtension, toMarkdownBytes } from "@firecrawl/anydoc";
 /** Extensions AnyDoc can convert to Markdown. */
 export const SUPPORTED_DOCUMENT_EXTENSIONS = [
   "doc", "docx", "docm", "ppt", "pps", "pot", "pptx", "pptm", "ppsx", "ppsm",
-  "xls", "xlsx", "xlsm", "xlsb", "odt", "ods", "odp", "rtf", "epub", "csv", "pdf",
+  "xls", "xlsx", "xlsm", "xlsb", "odt", "ods", "odp", "rtf", "epub", "pdf",
 ] as const;
 
-const PLAIN_EXTENSIONS = ["md", "txt"] as const;
+const PLAIN_EXTENSIONS = ["md", "txt", "json", "csv"] as const;
 export const ALL_DOCUMENT_EXTENSIONS = [...SUPPORTED_DOCUMENT_EXTENSIONS, ...PLAIN_EXTENSIONS] as const;
 
 export async function documentToMarkdown(file: File, maxBytes = 25 * 1024 * 1024) {

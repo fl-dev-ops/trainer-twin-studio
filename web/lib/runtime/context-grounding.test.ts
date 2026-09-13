@@ -87,21 +87,27 @@ describe("Context Grounding & Document Ingestion", () => {
     expect(specsEmptyContent.contextDocument).toBeNull();
   });
 
-  it("formatSessionFacts generates positive grounding when contextDocument is provided", () => {
+  it("formatSessionFacts exposes only a lightweight document manifest", () => {
     const specs = buildSpecs({
       ...baseConfig,
-      context: {
+      documentManifests: [{
         id: "doc-1",
         name: "candidate_cv.pdf",
-        content: "Led team of 5 backend engineers migrating monolith to Go microservices.",
-      },
+        kind: "document",
+        mimeType: "application/pdf",
+        size: 100,
+        pageCount: 2,
+        headings: ["Experience", "Projects"],
+      }],
+      sessionDocumentIds: ["doc-1"],
     });
 
     const facts = formatSessionFacts(specs);
-    expect(facts).toContain("SESSION FACTS — Context Document (candidate_cv.pdf):");
-    expect(facts).toContain("Led team of 5 backend engineers migrating monolith to Go microservices.");
-    expect(facts).toContain("Treat this document as verified ground truth for the learner.");
-    expect(facts).toContain("Never invent details not present in this text.");
+    expect(facts).toContain("SESSION DOCUMENT MANIFEST");
+    expect(facts).toContain("candidate_cv.pdf");
+    expect(facts).toContain("Experience, Projects");
+    expect(facts).not.toContain("Led team of 5 backend engineers");
+    expect(facts).toContain("Do not claim facts from a file unless a TARGETED DOCUMENT EXCERPT");
   });
 
   it("formatSessionFacts generates negative grounding instructions when contextDocument is null", () => {
@@ -111,10 +117,9 @@ describe("Context Grounding & Document Ingestion", () => {
     });
 
     const facts = formatSessionFacts(specs);
-    expect(facts).toContain("SESSION FACTS:");
-    expect(facts).toContain("No document or résumé was uploaded for this session.");
-    expect(facts).toContain("Do NOT claim to have access to, see, or possess the learner's resume or document.");
-    expect(facts).toContain("truthfully state that no document was uploaded and ask them to describe their experience verbally.");
+    expect(facts).toContain("SESSION DOCUMENT MANIFEST: None attached.");
+    expect(facts).toContain("Do NOT claim to have access to, see, or possess the learner's resume, document, or image.");
+    expect(facts).toContain("truthfully state that no file was uploaded and ask the learner to describe their experience verbally.");
   });
 
   it("adaptOpeningWithoutContext rewrites resume-dependent openings to experience-based openings", () => {

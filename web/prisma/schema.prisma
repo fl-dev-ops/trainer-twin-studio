@@ -191,16 +191,49 @@ model Voice {
 }
 
 model ContextDocument {
-  orgId     String?
-  id        String             @id @default(cuid())
-  name      String
-  mimeType  String
-  content   Bytes
-  size      Int
-  createdAt DateTime           @default(now())
-  sessions  InterviewSession[]
+  orgId            String?
+  id               String                     @id @default(cuid())
+  ownerUserId      String?
+  name             String
+  mimeType         String
+  kind             String                     @default("document") // "document" | "image"
+  content          Bytes
+  size             Int
+  sha256           String?
+  extractedText    String?
+  manifest         Json?
+  createdAt        DateTime                   @default(now())
+  sessions         InterviewSession[]
+  chunks           ContextDocumentChunk[]
+  sessionDocuments InterviewSessionDocument[]
+  owner            User?                      @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
 
   @@index([orgId])
+  @@index([orgId, ownerUserId])
+}
+
+model ContextDocumentChunk {
+  id         String          @id @default(cuid())
+  documentId String
+  document   ContextDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  chunkIndex Int
+  heading    String?
+  pageNumber Int?
+  text       String
+
+  @@index([documentId])
+}
+
+model InterviewSessionDocument {
+  sessionId  String
+  documentId String
+  createdAt  DateTime         @default(now())
+  session    InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  document   ContextDocument  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@id([sessionId, documentId])
+  @@index([sessionId])
+  @@index([documentId])
 }
 
 // ---- Persona source ingestion ----
@@ -262,7 +295,8 @@ model InterviewSession {
   organization Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
   user         User                @relation(fields: [userId], references: [id], onDelete: Restrict)
   agent        Agent               @relation(fields: [agentId], references: [id], onDelete: Restrict)
-  context      ContextDocument?    @relation(fields: [contextId], references: [id], onDelete: SetNull)
+  context      ContextDocument?           @relation(fields: [contextId], references: [id], onDelete: SetNull)
+  documents    InterviewSessionDocument[]
   assignment   RolePlayAssignment?
 
   @@index([orgId, userId])
@@ -282,6 +316,7 @@ model User {
   members            Member[]
   invitations        Invitation[]
   interviewSessions  InterviewSession[]
+  contextDocuments   ContextDocument[]
   notionConnections  NotionConnection[]
   notionOAuthStates  NotionOAuthState[]
   youtubeConnections YouTubeConnection[]

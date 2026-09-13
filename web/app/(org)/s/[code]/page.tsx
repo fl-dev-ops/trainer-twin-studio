@@ -5,7 +5,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import { signInUrl } from "@/lib/base-domain";
 import { db } from "@/lib/db";
 import { resolveSessionUser } from "@/lib/session-user";
-import { listScenarioIntroVideos, listUploads } from "@/lib/specs";
+import { listAgentContextRequired, listScenarioIntroVideos, listUploads } from "@/lib/specs";
 
 export const dynamic = "force-dynamic";
 
@@ -36,13 +36,17 @@ export default async function SharedSessionPage({ params }: { params: Promise<{ 
       </main>
     );
   }
-  const contexts = await listUploads(org.id);
-  const introVideos = await listScenarioIntroVideos(org.id, [session.agent.slug]);
+  const [contexts, introVideos, agentContextRequired] = await Promise.all([
+    listUploads(org.id, user.id),
+    listScenarioIntroVideos(org.id, [session.agent.slug]),
+    listAgentContextRequired(org.id, [session.agent.slug]),
+  ]);
   return (
     <SessionView
       personas={[session.agent.persona.slug]}
       agents={[session.agent.slug]}
       agentPersonas={{ [session.agent.slug]: session.agent.persona.slug }}
+      agentContextRequired={agentContextRequired}
       introVideos={introVideos}
       autoStart
       contexts={contexts.map((context) => ({ id: context.id, name: context.name, size: context.size }))}
