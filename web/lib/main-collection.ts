@@ -1,4 +1,5 @@
 import type { Collection, EmbeddingFunction, Where } from "chromadb";
+import { unstable_cache, revalidateTag } from "next/cache";
 import { ChromaTenantService, isSharedScope } from "@/lib/chroma-tenant";
 import { embedTexts } from "@/lib/knowledge";
 import type { PersonaVoiceMoment } from "@/lib/persona-voice";
@@ -66,16 +67,43 @@ interface CachedStyleRecord {
   hasDoubledAcknowledgement?: boolean;
 }
 
+interface SerializedStyleRecord {
+  id: string;
+  sourceId: string;
+  sourceName: string;
+  text: string;
+  int8EmbeddingB64: string;
+  sessionPhase?: string;
+  pastLearnerName?: string;
+  styleFunction?: string;
+  styleShape?: string;
+  usesLearnerName?: boolean;
+  startsWithThanks?: boolean;
+  hasDoubledAcknowledgement?: boolean;
+}
+
 const styleEpisodeCache = new Map<string, Promise<CachedStyleRecord[]>>();
 
-async function loadStyleEpisodesForPersona(orgId: string, personaId: string): Promise<CachedStyleRecord[]> {
-  return runOnChromaLane(async () => {
-    const collection = await MainCollectionService.getCollection(orgId);
-    const records: CachedStyleRecord[] = [];
-    for (let offset = 0; offset < 2000; offset += 300) {
+/** Evicts the in-memory L1 and Next.js Data Cache for persona style moments (call on reindex). */
+export function invalidatePersonaStyleCache(): void {
+  styleEpisodeCache.clear();
+  try {
+    revalidateTag("persona-style-episodes", "max");
+  } catch {
+    // Outside request context
+  }
+}
+
+/** Paged loader from Chroma Cloud, cached across lambdas in Next.js Data Cache using Int8 quantization (~500KB per page). */
+const getCachedStylePage = unstable_cache(
+  async (orgId: string, personaId: string, pageIndex: number): Promise<SerializedStyleRecord[]> => {
+    const limit = 250;
+    const offset = pageIndex * limit;
+    return runOnChromaLane(async () => {
+      const collection = await MainCollectionService.getCollection(orgId);
       const page = await collection.get({
         where: { $and: [{ type: "persona_style_episode" }, { personaId }] } as Where,
-        limit: 300,
+        limit,
         offset,
         include: ["documents", "metadatas", "embeddings"],
       });
@@ -84,16 +112,20 @@ async function loadStyleEpisodesForPersona(orgId: string, personaId: string): Pr
       const metas = (page.metadatas ?? []) as Record<string, unknown>[];
       const embeddings = page.embeddings ?? [];
 
+      const records: SerializedStyleRecord[] = [];
       for (let i = 0; i < ids.length; i++) {
-        if (!embeddings[i]) continue;
+        const emb = embeddings[i];
+        if (!emb) continue;
+        const int8 = new Int8Array(emb.length);
+        for (let j = 0; j < emb.length; j++) int8[j] = Math.round(emb[j] * 127);
+        const b64 = Buffer.from(int8.buffer, int8.byteOffset, int8.byteLength).toString("base64");
         const meta = metas[i] ?? {};
         records.push({
           id: ids[i],
-          personaId,
           sourceId: String(meta.sourceId ?? ids[i]),
           sourceName: String(meta.sourceName ?? ""),
           text: docs[i] ?? "",
-          embedding: new Float32Array(embeddings[i]),
+          int8EmbeddingB64: b64,
           ...(typeof meta.sessionPhase === "string" ? { sessionPhase: meta.sessionPhase } : {}),
           ...(typeof meta.pastLearnerName === "string" ? { pastLearnerName: meta.pastLearnerName } : {}),
           ...(typeof meta.styleFunction === "string" ? { styleFunction: meta.styleFunction } : {}),
@@ -103,10 +135,52 @@ async function loadStyleEpisodesForPersona(orgId: string, personaId: string): Pr
           ...(meta.hasDoubledAcknowledgement !== undefined ? { hasDoubledAcknowledgement: meta.hasDoubledAcknowledgement === true } : {}),
         });
       }
-      if (ids.length < 300) break;
-    }
-    return records;
-  });
+      return records;
+    });
+  },
+  ["persona-style-episodes-page-v1"],
+  {
+    tags: ["persona-style-episodes"],
+    revalidate: 86400, // 24h fallback
+  },
+);
+
+async function loadStyleEpisodesForPersona(orgId: string, personaId: string): Promise<CachedStyleRecord[]> {
+  // Paged parallel load from Next.js Data Cache (up to 4 pages = 1,000 items)
+  const pages = await Promise.all([
+    getCachedStylePage(orgId, personaId, 0),
+    getCachedStylePage(orgId, personaId, 1),
+    getCachedStylePage(orgId, personaId, 2),
+    getCachedStylePage(orgId, personaId, 3),
+  ]);
+
+  const allSerialized = pages.flat();
+  const records: CachedStyleRecord[] = [];
+
+  for (const s of allSerialized) {
+    const buf = Buffer.from(s.int8EmbeddingB64, "base64");
+    const int8 = new Int8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+    const f32 = new Float32Array(int8.length);
+    for (let j = 0; j < int8.length; j++) f32[j] = int8[j] / 127;
+
+    records.push({
+      id: s.id,
+      personaId,
+      sourceId: s.sourceId,
+      sourceName: s.sourceName,
+      text: s.text,
+      embedding: f32,
+      sessionPhase: s.sessionPhase,
+      pastLearnerName: s.pastLearnerName,
+      styleFunction: s.styleFunction,
+      styleShape: s.styleShape,
+      usesLearnerName: s.usesLearnerName,
+      startsWithThanks: s.startsWithThanks,
+      hasDoubledAcknowledgement: s.hasDoubledAcknowledgement,
+    });
+  }
+
+  return records;
 }
 
 /** Evicts the cached org collection handle (called on org Chroma teardown). */
