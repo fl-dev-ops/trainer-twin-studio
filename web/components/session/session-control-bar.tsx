@@ -8,7 +8,6 @@ import {
   MessageSquare,
   Mic,
   MicOff,
-  MonitorUp,
   PhoneOff,
   Video,
   VideoOff,
@@ -31,8 +30,6 @@ import { cn } from "@/lib/utils";
 export function SessionControlBar({
   room,
   isConnected,
-  screenShareActive,
-  onScreenShareToggle,
   subtitlesActive,
   onSubtitlesToggle,
   chatOpen,
@@ -41,8 +38,6 @@ export function SessionControlBar({
 }: {
   room?: Room;
   isConnected: boolean;
-  screenShareActive: boolean;
-  onScreenShareToggle: () => void;
   subtitlesActive: boolean;
   onSubtitlesToggle: () => void;
   chatOpen: boolean;
@@ -109,20 +104,7 @@ export function SessionControlBar({
           )}
         </button>
 
-        {/* 3. Screen Share / Surface */}
-        <button
-          type="button"
-          onClick={onScreenShareToggle}
-          title="Toggle shared workspace surface"
-          className={cn(
-            "grid size-10 shrink-0 place-items-center rounded-full text-foreground/80 transition-colors hover:bg-white/10 hover:text-foreground",
-            screenShareActive && "bg-white/15 text-white",
-          )}
-        >
-          <MonitorUp className="size-5" />
-        </button>
-
-        {/* 4. Live Subtitles (CC) */}
+        {/* 3. Live Subtitles (CC) */}
         <button
           type="button"
           onClick={onSubtitlesToggle}
@@ -135,7 +117,7 @@ export function SessionControlBar({
           <Captions className="size-5" />
         </button>
 
-        {/* 5. Chat Toggle */}
+        {/* 4. Chat Toggle */}
         <button
           type="button"
           onClick={onChatToggle}
@@ -148,7 +130,7 @@ export function SessionControlBar({
           <MessageSquare className="size-5" />
         </button>
 
-        {/* 6. Red Circular End Call Button */}
+        {/* 5. Red Circular End Call Button */}
         <button
           type="button"
           onClick={() => setConfirmOpen(true)}

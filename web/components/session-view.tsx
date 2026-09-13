@@ -734,11 +734,6 @@ export function SessionView({
             <SessionControlBar
               room={room}
               isConnected={connected}
-              screenShareActive={surface !== null}
-              onScreenShareToggle={() => {
-                if (surface) setSurface(null);
-                else setSurface({ tool: "code", key: "manual-share", language: "javascript", starterCode: "" });
-              }}
               subtitlesActive={subtitlesActive}
               onSubtitlesToggle={() => setSubtitlesActive((v) => !v)}
               chatOpen={sidebarOpen}

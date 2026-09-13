@@ -78,7 +78,7 @@ function ExecutionOutput({
     .join("\n");
 
   return (
-    <div className="min-h-0 overflow-auto rounded-lg border bg-background p-3 font-mono text-xs">
+    <div className="min-h-0 overflow-auto rounded-lg border border-white/10 bg-[#1a1d23] p-3 font-mono text-xs">
       <div className="mb-2 flex items-center justify-between gap-3 font-sans">
         <span className="font-medium capitalize text-foreground">
           {result.outcome}
@@ -302,7 +302,7 @@ export function CodeEditor({
             setRevision((current) => current + 1);
           }}
           extensions={[languages[language]() as never, ...extensions]}
-          theme={mounted && resolvedTheme === "dark" ? oneDark : undefined}
+          theme={oneDark}
           className="h-full overflow-hidden text-foreground [&_.cm-editor]:h-full"
           basicSetup={{
             lineNumbers: true,
@@ -341,10 +341,10 @@ export function CodeEditor({
             setLanguage(value as SupportedCodeExecutionLanguage);
           }}
         >
-          <SelectTrigger className="w-36 bg-popover text-foreground">
+          <SelectTrigger className="w-36 border-white/10 bg-[#1a1d23] text-foreground">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="border-white/10 bg-[#1a1d23] text-foreground">
             {(Object.keys(languages) as SupportedCodeExecutionLanguage[]).map(
               (item) => (
                 <SelectItem key={item} value={item}>

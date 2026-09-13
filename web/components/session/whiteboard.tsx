@@ -15,7 +15,6 @@ const Excalidraw = dynamic(
 );
 
 export function Whiteboard() {
-  const { resolvedTheme } = useTheme();
   const registerWorkspaceHandler = useWorkspaceHandlers();
   const api = useRef<ExcalidrawImperativeAPI | null>(null);
 
@@ -27,12 +26,12 @@ export function Whiteboard() {
   [registerWorkspaceHandler]);
 
   return (
-    <div className="h-full overflow-hidden p-2">
+    <div className="h-full overflow-hidden bg-[#121212] p-2">
       <Excalidraw
         excalidrawAPI={(instance) => {
           api.current = instance;
         }}
-        theme={resolvedTheme === "dark" ? "dark" : "light"}
+        theme="dark"
       />
     </div>
   );
