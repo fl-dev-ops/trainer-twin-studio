@@ -122,6 +122,28 @@ type DocumentLookup = {
   page?: number | null;
 };
 
+type SurfaceRequestAction = "open_code_editor" | "open_whiteboard" | "close_surface";
+
+/** Route explicit workspace commands without spending an LLM call. */
+export function explicitSurfaceRequest(
+  text: string,
+  currentSurface?: string | null,
+): SurfaceRequestAction | null {
+  const normalized = text.toLowerCase().replaceAll("-", " ");
+  const mentionsWhiteboard = normalized.includes("whiteboard") || normalized.includes("canvas");
+  const mentionsEditor = normalized.includes("code editor") || normalized.includes("coding editor");
+  const asksToOpen = /\b(open|show|launch|use)\b|bring up|pull up|switch to/.test(normalized);
+  const asksToClose = /\b(close|hide|dismiss)\b/.test(normalized);
+
+  if (asksToClose && (mentionsWhiteboard || mentionsEditor || normalized.includes("workspace") || currentSurface)) {
+    return "close_surface";
+  }
+  // Prefer the whiteboard when the learner corrects "code editor" to "canvas".
+  if (asksToOpen && mentionsWhiteboard) return "open_whiteboard";
+  if (asksToOpen && mentionsEditor) return "open_code_editor";
+  return null;
+}
+
 type DirectionCheck = {
   learner_intent: "answer" | "question" | "clarification" | "off_topic" | "stop";
   on_track: boolean;
@@ -1477,7 +1499,15 @@ async function runCompletionPipeline(
     }
   } else if (isToolResponseTurn) {
     let replyText = "Thank you. Let's proceed.";
-    if (state.pending_document_lookup) {
+    if (state.pending_surface_request) {
+      const completedSurface = state.pending_surface_request;
+      state.pending_surface_request = null;
+      replyText = completedSurface === "open_whiteboard"
+        ? "The whiteboard is open. Go ahead and show me what you want to discuss."
+        : completedSurface === "open_code_editor"
+          ? "The code editor is open. Go ahead and show me what you want to discuss."
+          : "The workspace is closed. Let's continue.";
+    } else if (state.pending_document_lookup) {
       const pendingLookup = state.pending_document_lookup;
       state.pending_document_lookup = null;
       const docEvidence = await retrieveDocumentEvidence(session.id, session.orgId, specs, {
@@ -1606,13 +1636,19 @@ async function runCompletionPipeline(
     }
     const learnerName = state.learner_name ?? null;
 
-    // Mechanical recovery for stop/repeat/clarify before spending an LLM call.
+    // Mechanical workspace commands and communication recovery avoid an LLM
+    // round trip and guarantee the corresponding tool call.
+    const requestedSurface = explicitSurfaceRequest(latestUserText, state.current_surface);
     const explicit = explicitCommunicationRecovery(latestUserText);
     let intent: "answer" | "question" | "clarification" | "off_topic" | "stop";
     let move: string;
     let retrievalQuery: string;
     let classifiedDocumentLookup: DocumentLookup | null = null;
-    if (explicit) {
+    if (requestedSurface) {
+      intent = "question";
+      move = "clarify";
+      retrievalQuery = `learner requests ${requestedSurface}`;
+    } else if (explicit) {
       intent = explicit.learner_intent;
       move = explicit.learner_intent === "clarification" ? "clarify" : explicit.learner_intent;
       retrievalQuery = `${move}; ${latestUserText.slice(0, 140)}`;
@@ -1749,6 +1785,41 @@ async function runCompletionPipeline(
         model,
         choices: [{ index: 0, message: { role: "assistant", content: repeatText }, finish_reason: "stop" }],
       };
+    } else if (requestedSurface && advertisedToolNames.has("surface")) {
+        state.pending_surface_request = requestedSurface;
+        state.current_surface = requestedSurface === "close_surface" ? null : requestedSurface;
+        state.actions.push("surface");
+        const surfaceToolCall = {
+          id: `call_surface_${requestedSurface}_${state.actions.length}`,
+          type: "function" as const,
+          function: {
+            name: "surface",
+            arguments: JSON.stringify({ action: requestedSurface, payload: {} }),
+          },
+        };
+        sseChunks = [
+          {
+            id: completionId,
+            object: "chat.completion.chunk",
+            created: timestamp,
+            model,
+            choices: [{ index: 0, delta: { role: "assistant", content: null, tool_calls: [surfaceToolCall] }, finish_reason: null }],
+          },
+          {
+            id: completionId,
+            object: "chat.completion.chunk",
+            created: timestamp,
+            model,
+            choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }],
+          },
+        ];
+        fullResponse = {
+          id: completionId,
+          object: "chat.completion",
+          created: timestamp,
+          model,
+          choices: [{ index: 0, message: { role: "assistant", content: null, tool_calls: [surfaceToolCall] }, finish_reason: "tool_calls" }],
+        };
     } else {
       if (intent === "answer" || intent === "off_topic" || intent === "question") {
         state.learner_turns += 1;

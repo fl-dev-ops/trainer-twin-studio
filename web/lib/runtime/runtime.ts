@@ -77,6 +77,7 @@ export interface RuntimeState {
     query: string;
     page?: number | null;
   } | null;
+  pending_surface_request?: "open_code_editor" | "open_whiteboard" | "close_surface" | null;
 }
 
 export function initRuntimeState(): RuntimeState {
@@ -99,6 +100,7 @@ export function initRuntimeState(): RuntimeState {
     primer: null,
     recent_style_docs: [],
     pending_document_lookup: null,
+    pending_surface_request: null,
   };
 }
 

@@ -4,7 +4,7 @@ import { createHash, randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import yaml from "js-yaml";
-import { explicitCommunicationRecovery, handleCompletions } from "./openai";
+import { explicitCommunicationRecovery, explicitSurfaceRequest, handleCompletions } from "./openai";
 import { GET as getSessionSnapshot } from "@/app/api/sessions/[id]/route";
 
 const tokenHash = (t: string) => createHash("sha256").update(t).digest("hex");
@@ -40,6 +40,13 @@ describe("Interview Runtime Pipeline", () => {
     }
     expect(explicitCommunicationRecovery("We finished the migration last week.")).toBeNull();
     expect(explicitCommunicationRecovery("I already mentioned that. Can we continue?")).toBeNull();
+  });
+
+  it("recognizes explicit workspace requests without opening surfaces for ordinary mentions", () => {
+    expect(explicitSurfaceRequest("Can you open the code editor?")).toBe("open_code_editor");
+    expect(explicitSurfaceRequest("Canvas, not the code editor. Can you open that?")).toBe("open_whiteboard");
+    expect(explicitSurfaceRequest("I used a canvas to sketch the design.")).toBeNull();
+    expect(explicitSurfaceRequest("Close it", "open_whiteboard")).toBe("close_surface");
   });
 });
 
@@ -280,7 +287,54 @@ describe("Interview Runtime End-to-End Suite", () => {
     expect(afterState.pending_question).toBe(beforeState.pending_question);
   });
 
-  it("6. Snapshot route GET /api/sessions/[id]: returns authoritative state and coverage", async () => {
+  it("6. Opens a requested whiteboard through a tool call before confirming it", async () => {
+    const before = await db.interviewSession.findUniqueOrThrow({ where: { id: sessionId } });
+    const beforeState = before.runtimeState as any;
+    const userText = "Sorry. I meant the Canvas, not the code editor. Can you open that?";
+    const messages = [
+      { role: "assistant", content: beforeState.pending_question },
+      { role: "user", content: userText },
+    ];
+    const tools = [{ type: "function", function: { name: "surface" } }];
+
+    const toolRes = await handleCompletions(new Request("http://localhost/api/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${runtimeToken}` },
+      body: JSON.stringify({ messages, tools, stream: false }),
+    }));
+    expect(toolRes.status).toBe(200);
+    const toolBody = (await toolRes.json()) as any;
+    expect(toolBody.choices[0].finish_reason).toBe("tool_calls");
+    const toolCall = toolBody.choices[0].message.tool_calls[0];
+    expect(toolCall.function.name).toBe("surface");
+    expect(JSON.parse(toolCall.function.arguments)).toEqual({ action: "open_whiteboard", payload: {} });
+
+    const speechRes = await handleCompletions(new Request("http://localhost/api/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${runtimeToken}` },
+      body: JSON.stringify({
+        messages: [
+          ...messages,
+          { role: "assistant", content: null, tool_calls: [toolCall] },
+          { role: "tool", tool_call_id: toolCall.id, content: JSON.stringify({ status: "ok" }) },
+        ],
+        tools,
+        stream: false,
+      }),
+    }));
+    expect(speechRes.status).toBe(200);
+    const speechBody = (await speechRes.json()) as any;
+    expect(speechBody.choices[0].finish_reason).toBe("stop");
+    expect(speechBody.choices[0].message.content).toContain("whiteboard is open");
+
+    const after = await db.interviewSession.findUniqueOrThrow({ where: { id: sessionId } });
+    const afterState = after.runtimeState as any;
+    expect(afterState.current_surface).toBe("open_whiteboard");
+    expect(afterState.pending_surface_request).toBeNull();
+    expect(afterState.learner_turns).toBe(beforeState.learner_turns);
+  });
+
+  it("7. Snapshot route GET /api/sessions/[id]: returns authoritative state and coverage", async () => {
     const req = new Request(`http://localhost/api/sessions/${sessionId}`, {
       method: "GET",
       headers: {
