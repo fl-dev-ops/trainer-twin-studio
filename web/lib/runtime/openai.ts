@@ -392,7 +392,7 @@ function documentSurfaceArguments(
   evidence: DocumentEvidence | null,
   lookup?: DocumentLookup
 ): { action: string; payload: Record<string, unknown> } | null {
-  if (!lookup?.present) return null;
+  if (!lookup) return null;
   const fileName = (evidence?.fileName ?? "").toLowerCase();
   let action: string = "open_pdf";
   if (evidence?.kind === "image" || /\.(png|jpe?g|webp|gif)$/i.test(fileName)) {
@@ -401,11 +401,13 @@ function documentSurfaceArguments(
     action = "open_presentation";
   }
   const fileId = evidence?.fileId ?? lookup.file_id ?? "";
+  const highlightQuery = lookup.query?.trim();
   return {
     action,
     payload: {
       fileId,
       ...(lookup.page && lookup.page > 0 ? { page: lookup.page } : {}),
+      ...(highlightQuery && highlightQuery.length < 50 ? { highlightQuery } : {}),
     },
   };
 }
@@ -1966,14 +1968,23 @@ async function runCompletionPipeline(
         state.phase_turns += 1;
       }
 
-      // Show-and-tell: surface tool call first when the learner wants to view a document;
+      // Show-and-tell: surface tool call first when the learner wants to view a document
+      // or when an active document viewer should highlight a specific queried section/metric;
       // the follow-up tool-result turn generates the speech.
       const documentEvidence = await retrieveDocumentEvidence(session.id, session.orgId, specs, classifiedDocumentLookup ?? undefined);
       const documentSurface =
         advertisedToolNames.has("surface")
           ? documentSurfaceArguments(documentEvidence, classifiedDocumentLookup ?? undefined)
           : null;
-      if (documentSurface && classifiedDocumentLookup?.present && classifiedDocumentLookup.file_id) {
+      const shouldTriggerSurface =
+        documentSurface &&
+        classifiedDocumentLookup?.file_id &&
+        (classifiedDocumentLookup.present ||
+          (state.current_surface === "open_pdf" &&
+            Boolean(classifiedDocumentLookup.query?.trim()) &&
+            classifiedDocumentLookup.query.trim().length < 40));
+
+      if (shouldTriggerSurface && classifiedDocumentLookup?.file_id && documentSurface) {
         state.pending_document_lookup = {
           file_id: classifiedDocumentLookup.file_id,
           query: classifiedDocumentLookup.query || state.current_topic || "",

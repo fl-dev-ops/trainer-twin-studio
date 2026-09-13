@@ -5,7 +5,17 @@ import { FileUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PDFViewer, type PDFViewerHandle } from "@/components/extend/pdf-viewer";
 
-export function PdfViewerSurface({ sourceUrl, initialPage, title }: { sourceUrl?: string; initialPage?: number; title?: string }) {
+export function PdfViewerSurface({
+  sourceUrl,
+  initialPage,
+  highlightQuery,
+  title,
+}: {
+  sourceUrl?: string;
+  initialPage?: number;
+  highlightQuery?: string;
+  title?: string;
+}) {
   const fileInput = useRef<HTMLInputElement>(null);
   const viewerRef = useRef<PDFViewerHandle>(null);
   const [source, setSource] = useState<string | undefined>(sourceUrl);
@@ -20,6 +30,12 @@ export function PdfViewerSurface({ sourceUrl, initialPage, title }: { sourceUrl?
   useEffect(() => {
     if (title) setFileName(title);
   }, [title]);
+
+  useEffect(() => {
+    if (highlightQuery && viewerRef.current?.search) {
+      viewerRef.current.search(highlightQuery);
+    }
+  }, [highlightQuery]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -56,9 +72,13 @@ export function PdfViewerSurface({ sourceUrl, initialPage, title }: { sourceUrl?
             fileName={fileName}
             className="h-full"
             showUpload={false}
+            initialSearchQuery={highlightQuery}
             onDocumentLoadSuccess={() => {
               if (initialPage && initialPage > 1) {
                 setTimeout(() => viewerRef.current?.scrollToPage(initialPage), 150);
+              }
+              if (highlightQuery) {
+                setTimeout(() => viewerRef.current?.search?.(highlightQuery), 250);
               }
             }}
           />

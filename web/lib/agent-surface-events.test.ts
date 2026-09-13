@@ -2,12 +2,13 @@ import { describe, expect, it } from "bun:test";
 import { parseAgentSurfaceMessage } from "./agent-surface-events";
 
 describe("session document surfaces", () => {
-  it("opens an attached PDF at the requested page", () => {
+  it("opens an attached PDF at the requested page with highlight term", () => {
     expect(parseAgentSurfaceMessage({
       type: "open_pdf",
       eventId: "event-1",
       fileId: "doc-123",
       page: 2,
+      highlightQuery: "40%",
     })).toEqual({
       surface: {
         key: "agent-pdf-event-1",
@@ -15,6 +16,25 @@ describe("session document surfaces", () => {
         sourceUrl: "/api/documents/doc-123/raw",
         fileId: "doc-123",
         page: 2,
+        highlightQuery: "40%",
+      },
+    });
+  });
+
+  it("updates highlight query on an active PDF via highlight_document event", () => {
+    expect(parseAgentSurfaceMessage({
+      type: "highlight_document",
+      eventId: "event-hl-1",
+      fileId: "doc-123",
+      query: "Redis",
+    })).toEqual({
+      surface: {
+        key: "agent-pdf-event-hl-1",
+        tool: "pdf",
+        sourceUrl: "/api/documents/doc-123/raw",
+        fileId: "doc-123",
+        page: undefined,
+        highlightQuery: "Redis",
       },
     });
   });

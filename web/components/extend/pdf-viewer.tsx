@@ -127,6 +127,8 @@ export type PDFViewerHandle = {
     options?: ScrollToOptions
   ) => void
   getViewportElement: () => HTMLDivElement | null
+  search?: (query: string) => void
+  clearSearch?: () => void
 }
 
 export type PDFViewerScrollAreaViewportResolver = (
@@ -137,6 +139,7 @@ export type PDFViewerProps = {
   className?: string
   defaultZoom?: number
   fileName?: string
+  initialSearchQuery?: string
   resolveScrollAreaViewport?: PDFViewerScrollAreaViewportResolver
   showDownload?: boolean
   showToolbar?: boolean
@@ -2079,6 +2082,7 @@ type PDFViewerInnerProps = {
   defaultZoom: number
   className?: string
   fileName?: string
+  initialSearchQuery?: string
   showDownload: boolean
   showToolbar: boolean
   showRotateControls: boolean
@@ -2103,6 +2107,7 @@ function PDFViewerInner({
   defaultZoom,
   className,
   fileName,
+  initialSearchQuery,
   showDownload,
   showToolbar,
   showRotateControls,
@@ -2288,6 +2293,22 @@ function PDFViewerInner({
     [activePage, numPages, scrollToPage]
   )
 
+  const { state: searchState, provides: searchProvider } = useSearch(documentId)
+
+  React.useEffect(() => {
+    if (!initialSearchQuery?.trim() || !searchProvider) return
+    const query = initialSearchQuery.trim()
+    searchProvider.startSearch()
+    searchProvider.searchAllPages(query).wait(
+      (result) => {
+        if (result.results.length > 0) {
+          searchProvider.goToResult(0)
+        }
+      },
+      () => undefined
+    )
+  }, [initialSearchQuery, searchProvider])
+
   React.useImperativeHandle(
     viewerRef,
     () => ({
@@ -2310,8 +2331,23 @@ function PDFViewerInner({
         })
       },
       getViewportElement: () => viewportElementRef.current,
+      search: (query: string) => {
+        if (!searchProvider || !query.trim()) return
+        searchProvider.startSearch()
+        searchProvider.searchAllPages(query.trim()).wait(
+          (result) => {
+            if (result.results.length > 0) {
+              searchProvider.goToResult(0)
+            }
+          },
+          () => undefined
+        )
+      },
+      clearSearch: () => {
+        searchProvider?.stopSearch()
+      },
     }),
-    [pdfDocument, scroll, scrollToPage]
+    [pdfDocument, scroll, scrollToPage, searchProvider]
   )
 
   const handleDownload = React.useCallback(async () => {
@@ -2712,6 +2748,7 @@ export const PDFViewer = React.forwardRef<PDFViewerHandle, PDFViewerProps>(
       className,
       defaultZoom = DEFAULT_ZOOM,
       fileName,
+      initialSearchQuery,
       resolveScrollAreaViewport,
       showDownload = true,
       showRotateControls = true,
@@ -2849,6 +2886,7 @@ export const PDFViewer = React.forwardRef<PDFViewerHandle, PDFViewerProps>(
             defaultZoom={defaultZoom}
             className={className}
             fileName={fileName}
+            initialSearchQuery={initialSearchQuery}
             showDownload={showDownload}
             showToolbar={showToolbar}
             showRotateControls={showRotateControls}

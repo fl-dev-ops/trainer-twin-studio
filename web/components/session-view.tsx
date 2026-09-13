@@ -653,6 +653,7 @@ export function SessionView({
                               : undefined
                           }
                           initialPage={surface.page}
+                          highlightQuery={surface.highlightQuery}
                           title={contextList.find((c) => c.id === surface.fileId)?.name}
                         />
                       )}

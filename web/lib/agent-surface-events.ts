@@ -22,7 +22,7 @@ export type AgentSurface =
       highlightElements?: string[];
       scrollToElements?: string[];
     }
-  | { key: string; tool: "pdf"; sourceUrl?: string; fileId?: string; page?: number }
+  | { key: string; tool: "pdf"; sourceUrl?: string; fileId?: string; page?: number; highlightQuery?: string }
   | { key: string; tool: "presentation"; sourceUrl?: string; slideNumber?: number }
   | { key: string; tool: "image"; sourceUrl?: string; fileId?: string }
   | null;
@@ -91,6 +91,14 @@ export function parseAgentSurfaceMessage(value: unknown):
       const sourceUrl = typeof event.sourceUrl === "string" ? event.sourceUrl : undefined;
       const fileId = typeof event.fileId === "string" ? event.fileId : undefined;
       const page = typeof event.page === "number" ? event.page : undefined;
+      const highlightQuery =
+        typeof event.highlightQuery === "string"
+          ? event.highlightQuery
+          : typeof event.highlight === "string"
+            ? event.highlight
+            : typeof event.query === "string"
+              ? event.query
+              : undefined;
       return {
         surface: {
           key: `agent-pdf-${String(event.eventId ?? fileId ?? "current")}`,
@@ -98,6 +106,30 @@ export function parseAgentSurfaceMessage(value: unknown):
           sourceUrl: sourceUrl || (fileId ? `/api/documents/${fileId}/raw` : undefined),
           fileId,
           page,
+          highlightQuery,
+        },
+      };
+    }
+    if (event.type === "highlight_pdf" || event.type === "highlight_document") {
+      const sourceUrl = typeof event.sourceUrl === "string" ? event.sourceUrl : undefined;
+      const fileId = typeof event.fileId === "string" ? event.fileId : undefined;
+      const page = typeof event.page === "number" ? event.page : undefined;
+      const highlightQuery =
+        typeof event.highlightQuery === "string"
+          ? event.highlightQuery
+          : typeof event.highlight === "string"
+            ? event.highlight
+            : typeof event.query === "string"
+              ? event.query
+              : undefined;
+      return {
+        surface: {
+          key: `agent-pdf-${String(event.eventId ?? fileId ?? "current")}`,
+          tool: "pdf",
+          sourceUrl: sourceUrl || (fileId ? `/api/documents/${fileId}/raw` : undefined),
+          fileId,
+          page,
+          highlightQuery,
         },
       };
     }
