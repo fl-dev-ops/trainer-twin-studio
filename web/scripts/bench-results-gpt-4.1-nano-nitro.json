@@ -1,0 +1,2085 @@
+{
+  "generatedAt": "2026-09-13T08:05:49.086Z",
+  "environment": {
+    "model": "openai/gpt-4.1-nano:nitro",
+    "reranker": null,
+    "agent": {
+      "id": "cmtx0b2db000204jo1hour2f1",
+      "slug": "project-experience-deep-dive"
+    },
+    "persona": {
+      "id": "cmtwyoa1s000004jshzfd5by4",
+      "slug": "Vasanth"
+    },
+    "context": {
+      "id": "cmtx1jwpr000004k111cst5y2",
+      "name": "Harini_Shekar_Senior_Software_Engineer_Resume.pdf"
+    },
+    "knowledgeBases": [
+      "acme-knowledge"
+    ],
+    "personaVoiceAvailable": true,
+    "stream": false
+  },
+  "turns": [
+    {
+      "label": "opening",
+      "wallMs": 10441,
+      "status": 200,
+      "response": "Hi Harini, let's dive deeper into your recent project. Can you explain your specific role and responsibility within it?",
+      "events": [
+        {
+          "stage": "db.auth",
+          "kind": "db",
+          "startMs": 1,
+          "endMs": 100,
+          "ms": 99
+        },
+        {
+          "stage": "persona.primer",
+          "kind": "retrieval",
+          "startMs": 104,
+          "endMs": 3472,
+          "ms": 3368,
+          "meta": {
+            "hits": 743
+          }
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 105,
+          "endMs": 1001,
+          "ms": 896
+        },
+        {
+          "stage": "chroma.get.persona_voice_episode",
+          "kind": "chroma",
+          "startMs": 1001,
+          "endMs": 2830,
+          "ms": 1829,
+          "meta": {
+            "rows": 300,
+            "offset": 0
+          }
+        },
+        {
+          "stage": "chroma.get.persona_voice_episode",
+          "kind": "chroma",
+          "startMs": 2830,
+          "endMs": 3156,
+          "ms": 325,
+          "meta": {
+            "rows": 300,
+            "offset": 300
+          }
+        },
+        {
+          "stage": "chroma.get.persona_voice_episode",
+          "kind": "chroma",
+          "startMs": 3156,
+          "endMs": 3467,
+          "ms": 311,
+          "meta": {
+            "rows": 143,
+            "offset": 600
+          }
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 3472,
+          "endMs": 3810,
+          "ms": 338
+        },
+        {
+          "stage": "persona.episodes",
+          "kind": "retrieval",
+          "startMs": 3472,
+          "endMs": 5070,
+          "ms": 1598,
+          "meta": {
+            "hits": 3,
+            "records": [
+              {
+                "id": "persona_voice_episode_cmtxgkm9f000n2lsecbclu0sn#0",
+                "source": "15.yaml",
+                "score": 0.6399352,
+                "text": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: opening\nVasanth: Prem Kumar, can you please introduce yourself so that we can get started?\nPast learner reaction: Yeah, hi Vasanth. Morning, morning to everyone. So I am working as a React developer at Dimensions, based in Bengaluru. Here we are working on a React based mobile app which is like a one stop solution for multiple data sources. So you can introduce any data source into a single CRM, and then you can allow the user to consume data, and you can customize it in a better way since it is React."
+              },
+              {
+                "id": "persona_voice_episode_cmtxgkoc6000r2lsemvnmdb9u#0",
+                "source": "22.yaml",
+                "score": 0.62050128,
+                "text": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: opening\nVasanth: Aditi, if you can introduce yourself, we can get started.\nPast learner reaction: Yes, hello. My name is Aditi Khedkar and I have three years of experience in Angular. I currently work both in UI and back end. The full stack is Angular and Java."
+              },
+              {
+                "id": "persona_voice_episode_cmtxgkiic000i2lseh3wa13y1#0",
+                "source": "11.yaml",
+                "score": 0.61753643,
+                "text": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: opening\nVasanth: That being said, Ranjit, can you please introduce yourself so that we can get started?\nPast learner reaction: Hi everyone, hi sir. My name is Ranjit. I am actually from Siriguppa, which is in Ballari district in Karnataka. I have completed my diploma in computer science; the college name is S S Polytechnic, which is in Siriguppa only, in my hometown. After that I came to Bengaluru to do a course. I completed it in two thousand twenty two. Due to some covid issues I couldn't complete my diploma in t"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "embedding",
+          "kind": "embedding",
+          "startMs": 3811,
+          "endMs": 4484,
+          "ms": 674,
+          "meta": {
+            "status": 200,
+            "headersMs": 665,
+            "model": "openai/text-embedding-3-small",
+            "requestBytes": 122
+          }
+        },
+        {
+          "stage": "chroma.query.persona_voice_episode",
+          "kind": "chroma",
+          "startMs": 4485,
+          "endMs": 5070,
+          "ms": 585,
+          "meta": {
+            "hits": 9,
+            "nResults": 9
+          }
+        },
+        {
+          "stage": "content",
+          "kind": "llm",
+          "startMs": 5073,
+          "endMs": 5992,
+          "ms": 919,
+          "meta": {
+            "status": 200,
+            "headersMs": 739,
+            "model": "openai/gpt-4.1-nano:nitro",
+            "requestBytes": 8256,
+            "usage": {
+              "prompt_tokens": 1626,
+              "completion_tokens": 24,
+              "total_tokens": 1650,
+              "cost": 0.0001722,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0001722,
+                "upstream_inference_prompt_cost": 0.0001626,
+                "upstream_inference_completions_cost": 0.0000096
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "style_gate",
+          "kind": "llm",
+          "startMs": 5993,
+          "endMs": 7257,
+          "ms": 1263,
+          "meta": {
+            "status": 200,
+            "headersMs": 650,
+            "model": "openai/gpt-4.1-nano:nitro",
+            "requestBytes": 1307,
+            "usage": {
+              "prompt_tokens": 242,
+              "completion_tokens": 85,
+              "total_tokens": 327,
+              "cost": 0.0000582,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0000582,
+                "upstream_inference_prompt_cost": 0.0000242,
+                "upstream_inference_completions_cost": 0.000034
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 7258,
+          "endMs": 7648,
+          "ms": 390
+        },
+        {
+          "stage": "persona.style",
+          "kind": "retrieval",
+          "startMs": 7258,
+          "endMs": 8913,
+          "ms": 1655,
+          "meta": {
+            "hits": 5,
+            "records": [
+              {
+                "id": "persona_style_episode_cmtxgkopp000s2lse47nisylb#0",
+                "source": "02.yaml",
+                "score": 0.6258807200000001,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: opening\nLearner state: greeting\nSpeech function: open_session -> orient -> explain -> probe\nSentence shape: greeting -> self-introduction -> interview overview -> request introduction\nPhrasing features: direct address, repetition, polite request, stepwise outline, reassurance\nCadence: friendly, structured opening with clear agenda\nTopic-neutral pattern: Yeah. So, hi <learner>. As you already know, this is regarding the mock interview with <topic>. I'll start by giving a basic introduction of mine, then I'll "
+              },
+              {
+                "id": "persona_style_episode_cmtxgks9u00102lse8xfxisb9#1",
+                "source": "06.yaml",
+                "score": 0.6157414999999999,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: opening\nLearner state: orient\nSpeech function: orient\nSentence shape: acknowledge -> paraphrase -> direct question\nPhrasing features: direct address, repetition, filler bridge, polite\nCadence: structured and preparatory\nTopic-neutral pattern: Yeah. So today I'm testing your <topic> skills, <learner>. As you mentioned, you are in <example>, and we were just interacting before this — you have solved more than <claim> problems. Okay <learner>, just before we get started with the <topic> round, I have this pract"
+              },
+              {
+                "id": "persona_style_episode_cmtxgklsz000m2lsej2k52ssl#1",
+                "source": "09.yaml",
+                "score": 0.6116686,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: opening\nLearner state: strong\nSpeech function: acknowledge -> paraphrase -> probe\nSentence shape: acknowledge -> paraphrase learner's point -> ask opinion\nPhrasing features: repetition, direct address, tag question, filler bridge\nCadence: encouraging and conversational\nTopic-neutral pattern: Good, good, <learner>. See <learner>, as we were speaking just before the meeting, you said you are from a <claim>, and most know I am also from a <claim>. So a lot of people think it's very difficult to get a job from a"
+              },
+              {
+                "id": "persona_style_episode_cmtxgkqw3000x2lsee7r5p0ei#1",
+                "source": "19.yaml",
+                "score": 0.60400593,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: opening\nLearner state: strong\nSpeech function: acknowledge -> orient -> probe\nSentence shape: acknowledgement -> immediate start proposal -> scenario introduction -> question\nPhrasing features: repetition, direct address, filler bridge, example, tag question\nCadence: energetic and engaging\nTopic-neutral pattern: Wonderful. Wonderful. Let's get started immediately. Let's say, <learner>, you have a scenario where you have to build a <topic>, something like <example>. Okay? What are all the challenges that come"
+              },
+              {
+                "id": "persona_style_episode_cmtxgki22000h2lsevtw2sz9x#0",
+                "source": "01.yaml",
+                "score": 0.6007391200000001,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: opening\nLearner state: greeting\nSpeech function: open_session\nSentence shape: greeting -> self-introduction -> thanks -> open question -> multiple subquestions\nPhrasing features: direct address, repetition, polite request, multiple questions\nCadence: friendly and inviting opening\nTopic-neutral pattern: Hi <learner>. As you know, I'm <learner>. Thanks for registering for the <topic>. Can I know something about you, <learner> — whatever you wish to share? What are your skill sets? What sort of <topic>, which c"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "embedding",
+          "kind": "embedding",
+          "startMs": 7648,
+          "endMs": 8362,
+          "ms": 714,
+          "meta": {
+            "status": 200,
+            "headersMs": 709,
+            "model": "openai/text-embedding-3-small",
+            "requestBytes": 490
+          }
+        },
+        {
+          "stage": "chroma.query.persona_style_episode",
+          "kind": "chroma",
+          "startMs": 8363,
+          "endMs": 8913,
+          "ms": 550,
+          "meta": {
+            "hits": 15,
+            "nResults": 15
+          }
+        },
+        {
+          "stage": "renderer",
+          "kind": "llm",
+          "startMs": 8914,
+          "endMs": 10253,
+          "ms": 1339,
+          "meta": {
+            "status": 200,
+            "headersMs": 708,
+            "model": "openai/gpt-4.1-nano:nitro",
+            "requestBytes": 9239,
+            "usage": {
+              "prompt_tokens": 2025,
+              "completion_tokens": 130,
+              "total_tokens": 2155,
+              "cost": 0.0002545,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0002545,
+                "upstream_inference_prompt_cost": 0.0002025,
+                "upstream_inference_completions_cost": 0.000052
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "db.persist",
+          "kind": "db",
+          "startMs": 10254,
+          "endMs": 10441,
+          "ms": 187
+        }
+      ],
+      "telemetry": {
+        "sessionId": "bench-0fad336376f4386d",
+        "revision": 1,
+        "turn": "opening",
+        "latencyMs": 10151,
+        "promptTokens": 3893,
+        "completionTokens": 239,
+        "totalTokens": 4132,
+        "stages": [
+          "content:919ms",
+          "style_gate:1264ms",
+          "renderer:1339ms"
+        ],
+        "speech": {
+          "attempts": 1,
+          "flags": [],
+          "fallback": false,
+          "rendererFallback": true,
+          "draftWords": 19,
+          "finalWords": 19
+        }
+      },
+      "logs": [
+        {
+          "message": "[interview-runtime] analogous episodes retrieved",
+          "data": {
+            "hits": 3,
+            "ids": [
+              "persona_voice_episode_cmtxgkm9f000n2lsecbclu0sn#0",
+              "persona_voice_episode_cmtxgkoc6000r2lsemvnmdb9u#0",
+              "persona_voice_episode_cmtxgkiic000i2lseh3wa13y1#0"
+            ]
+          }
+        },
+        {
+          "message": "[interview-runtime] content completed",
+          "data": {
+            "model": "openai/gpt-4.1-nano:nitro",
+            "durationMs": 919
+          }
+        },
+        {
+          "message": "[interview-runtime] style_gate completed",
+          "data": {
+            "model": "openai/gpt-4.1-nano:nitro",
+            "durationMs": 1264
+          }
+        },
+        {
+          "message": "[interview-runtime] renderer completed",
+          "data": {
+            "model": "openai/gpt-4.1-nano:nitro",
+            "durationMs": 1339
+          }
+        },
+        {
+          "message": "[interview-runtime] completion served",
+          "data": {
+            "sessionId": "bench-0fad336376f4386d",
+            "revision": 1,
+            "turn": "opening",
+            "latencyMs": 10151,
+            "promptTokens": 3893,
+            "completionTokens": 239,
+            "totalTokens": 4132,
+            "stages": [
+              "content:919ms",
+              "style_gate:1264ms",
+              "renderer:1339ms"
+            ],
+            "speech": {
+              "attempts": 1,
+              "flags": [],
+              "fallback": false,
+              "rendererFallback": true,
+              "draftWords": 19,
+              "finalWords": 19
+            }
+          }
+        }
+      ]
+    },
+    {
+      "label": "ownership-answer",
+      "wallMs": 13602,
+      "status": 200,
+      "response": "Can you tell me more about how you designed the architecture for the event-driven services, specifically how you handled message flow and data consistency?",
+      "events": [
+        {
+          "stage": "db.auth",
+          "kind": "db",
+          "startMs": 0,
+          "endMs": 70,
+          "ms": 70
+        },
+        {
+          "stage": "db.knowledge_bases",
+          "kind": "db",
+          "startMs": 73,
+          "endMs": 130,
+          "ms": 57
+        },
+        {
+          "stage": "knowledge.search",
+          "kind": "retrieval",
+          "startMs": 130,
+          "endMs": 1537,
+          "ms": 1407,
+          "meta": {
+            "hits": 3,
+            "records": [
+              {
+                "id": "kb_9d5bd678-a9aa-4376-8fca-4a56917d7e9a#0",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Placement-assistance-instructions-3121199ccfe3.md",
+                "score": 0.43408820000000004,
+                "text": "Page: Placement assistance instructions\n\nThis program is designed to support participants in their interview preparation and job placement journey after successfully completing the cohort.\n\nThe goal is to ensure every serious learner gets structured guidance, validation, and mentorship while applying for jobs.\n\n---\n\n### 📅 Support Duration\n\nAfter completing the cohort, participants will receive placement support for 3 months.\n\nDuring this period, I will actively help with:\n\n- Interview preparation\n\n- Concept clarification\n\n- Assignment validation\n\n- Job application strategy\n\n- Mock discussions"
+              },
+              {
+                "id": "kb_9d5bd678-a9aa-4376-8fca-4a56917d7e9a#2",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Placement-assistance-instructions-3121199ccfe3.md",
+                "score": 0.4220971,
+                "text": "Page: Placement assistance instructions\nTopic: 🤝 Mode of Support\n\nBased on urgency, complexity, and availability, support may happen through:\n\n- Quick chat guidance\n\n- Voice call\n\n- Video call\n\n- Concept discussion session\n\n- Interview preparation walkthrough\n\nSupport will be provided in the most effective format for the situation.\n\n---\n\n### 🧠 What I Expect From Participants\n\nTo make the best use of this program:\n\n✔ Be proactive in learning and applying\n\n✔ Communicate early about interview schedules\n\n✔ Come prepared with questions or topics\n\n✔ Complete assignments sincerely\n\n✔ Focus on under"
+              },
+              {
+                "id": "kb_328e3cba-730c-400c-add1-8daa41bdba77#1",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Good-resume-formats-3051199ccfe3.md",
+                "score": 0.40051943,
+                "text": "Page: Good resume formats\nTopic: 3️⃣ Headline / Summary\n\n#### ❌ Bad\n\n> Hardworking developer looking for opportunity to grow.\n\n#### ✅ Good\n\n> Frontend Developer with 4 years experience building scalable React applications used by 200k+ users.\n\nFormula\n\n```plain text\nRole + Years +Key Tech + Impact\n```\n\n---\n\n## 4️⃣ Skills Section\n\n#### ❌ Bad Practice\n\nListing every skill ever touched.\n\n```plain text\nHTML CSS JS React Angular Vue Python Java C++ AWS Docker Kubernetes ML AI Blockchain\n```\n\n#### ✅ Good Practice\n\nGroup and prioritize:\n\nLanguages: JavaScript, TypeScript\n\nFrontend: React, Redux, Next"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 131,
+          "endMs": 490,
+          "ms": 359
+        },
+        {
+          "stage": "embedding",
+          "kind": "embedding",
+          "startMs": 490,
+          "endMs": 1228,
+          "ms": 738,
+          "meta": {
+            "status": 200,
+            "headersMs": 734,
+            "model": "openai/text-embedding-3-small",
+            "requestBytes": 514
+          }
+        },
+        {
+          "stage": "chroma.query.knowledge",
+          "kind": "chroma",
+          "startMs": 1228,
+          "endMs": 1537,
+          "ms": 309,
+          "meta": {
+            "hits": 3,
+            "nResults": 3
+          }
+        },
+        {
+          "stage": "direction",
+          "kind": "llm",
+          "startMs": 1538,
+          "endMs": 3007,
+          "ms": 1469,
+          "meta": {
+            "status": 200,
+            "headersMs": 945,
+            "model": "openai/gpt-4.1-nano:nitro",
+            "requestBytes": 10761,
+            "usage": {
+              "prompt_tokens": 2243,
+              "completion_tokens": 80,
+              "total_tokens": 2323,
+              "cost": 0.0002563,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0002563,
+                "upstream_inference_prompt_cost": 0.0002243,
+                "upstream_inference_completions_cost": 0.000032
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "analysis",
+          "kind": "llm",
+          "startMs": 3009,
+          "endMs": 5185,
+          "ms": 2176,
+          "meta": {
+            "status": 200,
+            "headersMs": 802,
+            "model": "openai/gpt-4.1-nano:nitro",
+            "requestBytes": 13122,
+            "usage": {
+              "prompt_tokens": 2781,
+              "completion_tokens": 283,
+              "total_tokens": 3064,
+              "cost": 0.0003913,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0003913,
+                "upstream_inference_prompt_cost": 0.0002781,
+                "upstream_inference_completions_cost": 0.0001132
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 5188,
+          "endMs": 5543,
+          "ms": 355
+        },
+        {
+          "stage": "persona.episodes",
+          "kind": "retrieval",
+          "startMs": 5188,
+          "endMs": 6678,
+          "ms": 1489,
+          "meta": {
+            "hits": 3,
+            "records": [
+              {
+                "id": "persona_voice_episode_cmtxgkoc6000r2lsemvnmdb9u#27",
+                "source": "22.yaml",
+                "score": 0.67274308,
+                "text": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Sure. So Aditi, I'm done from my end. I have my feedback in my mind and I've written down a few things. If you have any questions before I share my feedback, please let me know.\nPast learner: I can't think of one right now. Immediately.\nVasanth: Sure, Aditi. Aditi, let me give you what I feel about the overall interview process, right. At three years of experience, you are somewhere in the mid-range category. Whatever is expected from a senior is not expected from you, but whatever is expec"
+              },
+              {
+                "id": "persona_voice_episode_cmtxgkiic000i2lseh3wa13y1#12",
+                "source": "11.yaml",
+                "score": 0.66979462,
+                "text": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Hmm, correct. Okay, we can check it later, okay — exactly how all these will behave. I am sharing another snippet with you now, okay? Maybe slightly complicated but not difficult. Okay. Slightly complicated, take two to three minutes, okay? But not difficult. Take two to three minutes, read the question carefully and tell me what is the output, okay? Are you clear, Ranjit? What do you think?\nPast learner: It was a totally different thing, sir.\nVasanth: Sure. Let us break it. Let's break it "
+              },
+              {
+                "id": "persona_voice_episode_cmtxgkpii000u2lseg6epsmuh#3",
+                "source": "16.yaml",
+                "score": 0.65709215,
+                "text": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: So you work on both front end and back end, Shreni?\nPast learner: Mostly front end, sometimes it's back end, which consists of Node and Express.\nVasanth: Yes, wonderful, wonderful, Shreni. We can get started immediately, okay? This is a very simple snippet, and my question is also very simple. Let's say in line number nine you remove the hello world and you put the count — what is going to be the output? Line number nine. First you tell me, then we will make the change.\nPast learner reactio"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "embedding",
+          "kind": "embedding",
+          "startMs": 5544,
+          "endMs": 6127,
+          "ms": 584,
+          "meta": {
+            "status": 200,
+            "headersMs": 583,
+            "model": "openai/text-embedding-3-small",
+            "requestBytes": 480
+          }
+        },
+        {
+          "stage": "chroma.query.persona_voice_episode",
+          "kind": "chroma",
+          "startMs": 6128,
+          "endMs": 6678,
+          "ms": 550,
+          "meta": {
+            "hits": 9,
+            "nResults": 9
+          }
+        },
+        {
+          "stage": "content",
+          "kind": "llm",
+          "startMs": 6678,
+          "endMs": 7625,
+          "ms": 946,
+          "meta": {
+            "status": 200,
+            "headersMs": 698,
+            "model": "openai/gpt-4.1-nano:nitro",
+            "requestBytes": 16740,
+            "usage": {
+              "prompt_tokens": 3528,
+              "completion_tokens": 28,
+              "total_tokens": 3556,
+              "cost": 0.000364,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.000364,
+                "upstream_inference_prompt_cost": 0.0003528,
+                "upstream_inference_completions_cost": 0.0000112
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "style_gate",
+          "kind": "llm",
+          "startMs": 7625,
+          "endMs": 9182,
+          "ms": 1556,
+          "meta": {
+            "status": 200,
+            "headersMs": 1475,
+            "model": "openai/gpt-4.1-nano:nitro",
+            "requestBytes": 1559,
+            "usage": {
+              "prompt_tokens": 282,
+              "completion_tokens": 65,
+              "total_tokens": 347,
+              "cost": 0.0000542,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0000542,
+                "upstream_inference_prompt_cost": 0.0000282,
+                "upstream_inference_completions_cost": 0.000026
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 9182,
+          "endMs": 9509,
+          "ms": 327
+        },
+        {
+          "stage": "persona.style",
+          "kind": "retrieval",
+          "startMs": 9182,
+          "endMs": 11499,
+          "ms": 2316,
+          "meta": {
+            "hits": 5,
+            "records": [
+              {
+                "id": "persona_style_episode_cmtxgkopp000s2lse47nisylb#16",
+                "source": "02.yaml",
+                "score": 0.55260646,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: strong\nSpeech function: acknowledge -> explain -> reassure -> feedback\nSentence shape: True, true, true. This is a real example. More from the project point of view, if you have to say — whenever we are having a kind of embedding process. Let's say one person is creating the entire container and somebody will embed the things inside that, correct? For example, some cards or some shopping related items. So the one who creates the container, he doesn't bother who will come tomorrow and in"
+              },
+              {
+                "id": "persona_style_episode_cmtxgkqap000w2lseenvcsevt#2",
+                "source": "14.yaml",
+                "score": 0.55021244,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: strong\nSpeech function: acknowledge -> transition -> question -> orient\nSentence shape: agree -> confirm -> question -> invite response\nPhrasing features: repetition, direct address, tag question, polite invitation\nCadence: engaging and structured\nTopic-neutral pattern: Exactly. Yes, yes, absolutely, <learner>. So <learner>, now let us start. I have a very simple question, okay? How do we basically handle a real-time notification in a <topic>? The best examples for real-time notificatio"
+              },
+              {
+                "id": "persona_style_episode_cmtxgklsz000m2lsej2k52ssl#2",
+                "source": "09.yaml",
+                "score": 0.5450401300000001,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: strong\nSpeech function: acknowledge -> agree -> paraphrase -> encourage transition\nSentence shape: acknowledge -> agree with learner -> paraphrase learner's message -> transition to next question\nPhrasing features: repetition, direct address, reassurance, inclusive language\nCadence: supportive and motivating\nTopic-neutral pattern: Good, good, <learner>. I also second that. Like <learner> mentioned, if you're from a <claim>, life is not over. If you have potential — life is a marathon, w"
+              },
+              {
+                "id": "persona_style_episode_cmtxgkrp9000z2lsekpr2h167#41",
+                "source": "13.yaml",
+                "score": 0.5423599,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: partial\nSpeech function: acknowledge -> explain -> explain -> explain -> explain -> explain -> explain -> explain -> explain -> explain -> explain -> explain\nSentence shape: Correct. -> Yes. -> I'll give you a framework to actually read. -> The framework of reading every concept is very simple. -> Read the concept and understand the basic definition. -> This basic definition is very essential, because — see, what is hoisting? -> People give a lot of definitions, like moving the declarat"
+              },
+              {
+                "id": "persona_style_episode_cmtxgkk5x000k2lsejvfy7m5e#15",
+                "source": "12.yaml",
+                "score": 0.5404417,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: strong\nSpeech function: acknowledge -> feedback -> probe\nSentence shape: acknowledge -> generalization -> question\nPhrasing features: direct address, repetition, polite, personal reference\nCadence: encouraging and evaluative\nTopic-neutral pattern: Okay. Sure. So, <learner>, whatever explanation you gave is good. I think most — when I ask in the interview, everybody gives this example only. But you have <claim> of experience, <learner>. Tell me the practical use case. When did you use <t"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "embedding",
+          "kind": "embedding",
+          "startMs": 9509,
+          "endMs": 10353,
+          "ms": 843,
+          "meta": {
+            "status": 200,
+            "headersMs": 831,
+            "model": "openai/text-embedding-3-small",
+            "requestBytes": 424
+          }
+        },
+        {
+          "stage": "chroma.query.persona_style_episode",
+          "kind": "chroma",
+          "startMs": 10353,
+          "endMs": 11499,
+          "ms": 1146,
+          "meta": {
+            "hits": 15,
+            "nResults": 15
+          }
+        },
+        {
+          "stage": "renderer",
+          "kind": "llm",
+          "startMs": 11500,
+          "endMs": 13371,
+          "ms": 1871,
+          "meta": {
+            "status": 200,
+            "headersMs": 749,
+            "model": "openai/gpt-4.1-nano:nitro",
+            "requestBytes": 15098,
+            "usage": {
+              "prompt_tokens": 3285,
+              "completion_tokens": 159,
+              "total_tokens": 3444,
+              "cost": 0.0003921,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0003921,
+                "upstream_inference_prompt_cost": 0.0003285,
+                "upstream_inference_completions_cost": 0.0000636
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "db.persist",
+          "kind": "db",
+          "startMs": 13372,
+          "endMs": 13602,
+          "ms": 229
+        }
+      ],
+      "telemetry": {
+        "sessionId": "bench-0fad336376f4386d",
+        "revision": 2,
+        "turn": "learner",
+        "latencyMs": 13300,
+        "promptTokens": 12119,
+        "completionTokens": 615,
+        "totalTokens": 12734,
+        "stages": [
+          "direction:1469ms",
+          "analysis:2176ms",
+          "content:947ms",
+          "style_gate:1557ms",
+          "renderer:1872ms"
+        ],
+        "speech": {
+          "attempts": 1,
+          "flags": [],
+          "fallback": false,
+          "rendererFallback": true,
+          "draftWords": 24,
+          "finalWords": 24
+        }
+      },
+      "logs": [
+        {
+          "message": "[interview-runtime] knowledge retrieved",
+          "data": {
+            "hits": 3
+          }
+        },
+        {
+          "message": "[interview-runtime] direction completed",
+          "data": {
+            "model": "openai/gpt-4.1-nano:nitro",
+            "durationMs": 1469
+          }
+        },
+        {
+          "message": "[interview-runtime] analysis completed",
+          "data": {
+            "model": "openai/gpt-4.1-nano:nitro",
+            "durationMs": 2176
+          }
+        },
+        {
+          "message": "[interview-runtime] analogous episodes retrieved",
+          "data": {
+            "hits": 3,
+            "ids": [
+              "persona_voice_episode_cmtxgkoc6000r2lsemvnmdb9u#27",
+              "persona_voice_episode_cmtxgkiic000i2lseh3wa13y1#12",
+              "persona_voice_episode_cmtxgkpii000u2lseg6epsmuh#3"
+            ]
+          }
+        },
+        {
+          "message": "[interview-runtime] content completed",
+          "data": {
+            "model": "openai/gpt-4.1-nano:nitro",
+            "durationMs": 947
+          }
+        },
+        {
+          "message": "[interview-runtime] style_gate completed",
+          "data": {
+            "model": "openai/gpt-4.1-nano:nitro",
+            "durationMs": 1557
+          }
+        },
+        {
+          "message": "[interview-runtime] renderer completed",
+          "data": {
+            "model": "openai/gpt-4.1-nano:nitro",
+            "durationMs": 1872
+          }
+        },
+        {
+          "message": "[interview-runtime] completion served",
+          "data": {
+            "sessionId": "bench-0fad336376f4386d",
+            "revision": 2,
+            "turn": "learner",
+            "latencyMs": 13300,
+            "promptTokens": 12119,
+            "completionTokens": 615,
+            "totalTokens": 12734,
+            "stages": [
+              "direction:1469ms",
+              "analysis:2176ms",
+              "content:947ms",
+              "style_gate:1557ms",
+              "renderer:1872ms"
+            ],
+            "speech": {
+              "attempts": 1,
+              "flags": [],
+              "fallback": false,
+              "rendererFallback": true,
+              "draftWords": 24,
+              "finalWords": 24
+            }
+          }
+        }
+      ]
+    },
+    {
+      "label": "mechanism-answer",
+      "wallMs": 15887,
+      "status": 200,
+      "response": "Exactly. Yes, yes, absolutely. So during that migration, what specific challenge did you face related to message ordering or eventual consistency, okay? The idea is to understand what tricky parts came up when ensuring everything stayed in sync and in the right order. Over to you.",
+      "events": [
+        {
+          "stage": "db.auth",
+          "kind": "db",
+          "startMs": 0,
+          "endMs": 69,
+          "ms": 69
+        },
+        {
+          "stage": "db.knowledge_bases",
+          "kind": "db",
+          "startMs": 70,
+          "endMs": 135,
+          "ms": 65
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 135,
+          "endMs": 471,
+          "ms": 336
+        },
+        {
+          "stage": "knowledge.search",
+          "kind": "retrieval",
+          "startMs": 135,
+          "endMs": 1552,
+          "ms": 1418,
+          "meta": {
+            "hits": 3,
+            "records": [
+              {
+                "id": "kb_787c3f51-fbe9-44cc-91e1-6444cf626a4f#9",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_21st-February-30b1199ccfe3.md",
+                "score": 0.43994135,
+                "text": "Page: 21st February\nTopic: 🏗 System Design Best Practices\n\n✔ Centralized monitoring platform\n\n✔ Structured logging format\n\n✔ Version tagging in every event\n\n✔ Environment awareness (dev / prod)\n\n✔ Graceful failure of monitoring itself (Monitoring must never break the app)\n\n## 🎯 When Observability Is Critical\n\n- Large user base\n\n- Revenue-sensitive flows\n\n- Real-time applications\n\n- Multi-team ownership\n\n- Third-party integrations\n\n## Important Backend concepts :\n\n## 🗄 Data Storage & Data Modeling\n\n---\n\n### 1️⃣ Database (SQL vs NoSQL)\n\nA database stores and manages application data.\n\n#### SQ"
+              },
+              {
+                "id": "kb_9d5bd678-a9aa-4376-8fca-4a56917d7e9a#0",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Placement-assistance-instructions-3121199ccfe3.md",
+                "score": 0.43599069999999995,
+                "text": "Page: Placement assistance instructions\n\nThis program is designed to support participants in their interview preparation and job placement journey after successfully completing the cohort.\n\nThe goal is to ensure every serious learner gets structured guidance, validation, and mentorship while applying for jobs.\n\n---\n\n### 📅 Support Duration\n\nAfter completing the cohort, participants will receive placement support for 3 months.\n\nDuring this period, I will actively help with:\n\n- Interview preparation\n\n- Concept clarification\n\n- Assignment validation\n\n- Job application strategy\n\n- Mock discussions"
+              },
+              {
+                "id": "kb_9dda99f3-370e-48ff-a2bf-072afc23981f#18",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_System-design-Introduction-3061199ccfe3.md",
+                "score": 0.41607059999999996,
+                "text": "Page: System design Introduction\nTopic: Topic 6: Discussing practical questions > Meaningful Solution Architecture > ✅ 2. Request Deduplication / Caching\n\nIf user revisits route quickly:\n\n```plain text\nReuse existing response\n```\n\nUse data layer:\n\n- React Query\n\n- SWR (stale-while-revalidate)\n\n- custom cache map\n\nKey idea:\n\n```plain text\nqueryKey = route + params\n```\n\n---\n\n#### ✅ 3. Stale Response Protection (Critical)\n\nEven if cancellation fails, ignore outdated responses.\n\nTechnique:\n\n- requestId tracking\n\n- version tokens\n\n- latest-only rendering\n\n---\n\n### Interview Summary Answer\n\nCancel i"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "embedding",
+          "kind": "embedding",
+          "startMs": 471,
+          "endMs": 1226,
+          "ms": 754,
+          "meta": {
+            "status": 200,
+            "headersMs": 749,
+            "model": "openai/text-embedding-3-small",
+            "requestBytes": 895
+          }
+        },
+        {
+          "stage": "chroma.query.knowledge",
+          "kind": "chroma",
+          "startMs": 1226,
+          "endMs": 1552,
+          "ms": 326,
+          "meta": {
+            "hits": 3,
+            "nResults": 3
+          }
+        },
+        {
+          "stage": "direction",
+          "kind": "llm",
+          "startMs": 1553,
+          "endMs": 4635,
+          "ms": 3082,
+          "meta": {
+            "status": 200,
+            "headersMs": 988,
+            "model": "openai/gpt-4.1-nano:nitro",
+            "requestBytes": 11610,
+            "usage": {
+              "prompt_tokens": 2435,
+              "completion_tokens": 110,
+              "total_tokens": 2545,
+              "cost": 0.0002875,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0002875,
+                "upstream_inference_prompt_cost": 0.0002435,
+                "upstream_inference_completions_cost": 0.000044
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "analysis",
+          "kind": "llm",
+          "startMs": 4636,
+          "endMs": 6852,
+          "ms": 2217,
+          "meta": {
+            "status": 200,
+            "headersMs": 970,
+            "model": "openai/gpt-4.1-nano:nitro",
+            "requestBytes": 14465,
+            "usage": {
+              "prompt_tokens": 3077,
+              "completion_tokens": 270,
+              "total_tokens": 3347,
+              "cost": 0.0004157,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0004157,
+                "upstream_inference_prompt_cost": 0.0003077,
+                "upstream_inference_completions_cost": 0.000108
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 6853,
+          "endMs": 7187,
+          "ms": 334
+        },
+        {
+          "stage": "persona.episodes",
+          "kind": "retrieval",
+          "startMs": 6853,
+          "endMs": 8680,
+          "ms": 1827,
+          "meta": {
+            "hits": 3,
+            "records": [
+              {
+                "id": "persona_voice_episode_cmtxgkqap000w2lseenvcsevt#4",
+                "source": "14.yaml",
+                "score": 0.61421466,
+                "text": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: See, I've drawn a diagram, a simple starter diagram, Sumit, okay? So we have a client, we have a server. Let's say the chatbot runs here, okay. So now, whatever you are saying — there is a dedicated connection that has been established, correct? So the right way to represent it would be using a plain line, for example. Let me draw. So you have a dedicated socket between the client and the server, correct? So you established a connection, with which the client can send the data to the server"
+              },
+              {
+                "id": "persona_voice_episode_cmtxgkqw3000x2lsee7r5p0ei#8",
+                "source": "19.yaml",
+                "score": 0.6137246000000001,
+                "text": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Got it. Sure, sure. Anything else you want to add? Let me see.\nPast learner: So, something like a chat application — we can use something like Socket.IO where we can...\nVasanth: Yeah, that will do it, but some more interfaces can be added — probably when you're building it, some more things can be added. Let's solve a few problems. The problem is very simple, Chandrashekhar. Listen to me very carefully, okay? The problem is you have to have four characters, A, B, C, D. Consider this A, B, C"
+              },
+              {
+                "id": "persona_voice_episode_cmtxgkoc6000r2lsemvnmdb9u#18",
+                "source": "22.yaml",
+                "score": 0.6070729500000001,
+                "text": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Let's do one thing. You start the implementation, where at least let it start updating the time. The stop part will come — like, how do we solve it? Probably by the time you start solving it you might get some idea. If not, I'll help you. You can get started.\nPast learner: Oh, so okay — so in terms of stop, should I flush both these values to zero? I'm thinking, or...\nVasanth: No, you are doing the right thing. You have to just swap the position. First it should be minutes and then it shoul"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "embedding",
+          "kind": "embedding",
+          "startMs": 7187,
+          "endMs": 7916,
+          "ms": 729,
+          "meta": {
+            "status": 200,
+            "headersMs": 723,
+            "model": "openai/text-embedding-3-small",
+            "requestBytes": 505
+          }
+        },
+        {
+          "stage": "chroma.query.persona_voice_episode",
+          "kind": "chroma",
+          "startMs": 7916,
+          "endMs": 8680,
+          "ms": 764,
+          "meta": {
+            "hits": 9,
+            "nResults": 9
+          }
+        },
+        {
+          "stage": "content",
+          "kind": "llm",
+          "startMs": 8681,
+          "endMs": 9492,
+          "ms": 811,
+          "meta": {
+            "status": 200,
+            "headersMs": 653,
+            "model": "openai/gpt-4.1-nano:nitro",
+            "requestBytes": 16724,
+            "usage": {
+              "prompt_tokens": 3540,
+              "completion_tokens": 18,
+              "total_tokens": 3558,
+              "cost": 0.0003612,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0003612,
+                "upstream_inference_prompt_cost": 0.000354,
+                "upstream_inference_completions_cost": 0.0000072
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "style_gate",
+          "kind": "llm",
+          "startMs": 9492,
+          "endMs": 10829,
+          "ms": 1337,
+          "meta": {
+            "status": 200,
+            "headersMs": 723,
+            "model": "openai/gpt-4.1-nano:nitro",
+            "requestBytes": 1511,
+            "usage": {
+              "prompt_tokens": 276,
+              "completion_tokens": 81,
+              "total_tokens": 357,
+              "cost": 0.00006,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.00006,
+                "upstream_inference_prompt_cost": 0.0000276,
+                "upstream_inference_completions_cost": 0.0000324
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 10829,
+          "endMs": 11190,
+          "ms": 360
+        },
+        {
+          "stage": "persona.style",
+          "kind": "retrieval",
+          "startMs": 10829,
+          "endMs": 12688,
+          "ms": 1859,
+          "meta": {
+            "hits": 5,
+            "records": [
+              {
+                "id": "persona_style_episode_cmtxgkqap000w2lseenvcsevt#2",
+                "source": "14.yaml",
+                "score": 0.56811172,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: strong\nSpeech function: acknowledge -> transition -> question -> orient\nSentence shape: agree -> confirm -> question -> invite response\nPhrasing features: repetition, direct address, tag question, polite invitation\nCadence: engaging and structured\nTopic-neutral pattern: Exactly. Yes, yes, absolutely, <learner>. So <learner>, now let us start. I have a very simple question, okay? How do we basically handle a real-time notification in a <topic>? The best examples for real-time notificatio"
+              },
+              {
+                "id": "persona_style_episode_cmtxgkqw3000x2lsee7r5p0ei#3",
+                "source": "19.yaml",
+                "score": 0.54187083,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: strong\nSpeech function: probe\nSentence shape: restatement of scenario -> conceptual explanation -> question\nPhrasing features: direct address, rhetorical question, clarification\nCadence: focused and conceptual\nTopic-neutral pattern: So my question is, see, we have to transfer <topic> from person X to person Y, correct? So <topic> — at the end of the day there is nothing called media that exists in reality; we have to convert it into some form that is transferable, correct? So tell me wh"
+              },
+              {
+                "id": "persona_style_episode_cmtxgkm9f000n2lsecbclu0sn#4",
+                "source": "15.yaml",
+                "score": 0.5387059000000001,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: partial\nSpeech function: acknowledge -> explain -> probe\nSentence shape: acknowledgement -> caution -> encouragement -> question\nPhrasing features: direct address, reassurance, repetition, filler bridge\nCadence: constructive and guiding\nTopic-neutral pattern: Sure, <learner>. But there are a lot of intricacies to it, okay? It's probably one of the most difficult tasks, to show whether a particular user is online or not. It's a very difficult task. If you observe <example>, they do not d"
+              },
+              {
+                "id": "persona_style_episode_cmtxgkr9x000y2lsewf2fvn71#14",
+                "source": "08.yaml",
+                "score": 0.5381781999999999,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: strong\nSpeech function: feedback -> explain -> probe\nSentence shape: acknowledge -> recommend -> orient -> probe\nPhrasing features: direct address, reassurance, imperative, filler bridge, repetition\nCadence: supportive, guiding\nTopic-neutral pattern: Correct. Nothing wrong, <learner>, but even more clarity can be added to this. Okay, I recommend reading the official documentation at <example>. Now let's go back to the example that we were discussing with <topic>. So <topic> — let's say "
+              },
+              {
+                "id": "persona_style_episode_cmtxgklsz000m2lsej2k52ssl#7",
+                "source": "09.yaml",
+                "score": 0.5379007499999999,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: confused\nSpeech function: reassure -> clarify -> probe\nSentence shape: acknowledge learner's confusion -> explain concept -> ask question\nPhrasing features: repetition, direct address, example, tag question\nCadence: patient and explanatory\nTopic-neutral pattern: Sure. So basically there is only one thread. One thread means one task can be done at a time, as simple as that, correct? But everything cannot be executed sequentially, because there is some constraint. Like, for example, an <e"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "embedding",
+          "kind": "embedding",
+          "startMs": 11190,
+          "endMs": 11908,
+          "ms": 718,
+          "meta": {
+            "status": 200,
+            "headersMs": 715,
+            "model": "openai/text-embedding-3-small",
+            "requestBytes": 511
+          }
+        },
+        {
+          "stage": "chroma.query.persona_style_episode",
+          "kind": "chroma",
+          "startMs": 11908,
+          "endMs": 12688,
+          "ms": 780,
+          "meta": {
+            "hits": 15,
+            "nResults": 15
+          }
+        },
+        {
+          "stage": "renderer",
+          "kind": "llm",
+          "startMs": 12689,
+          "endMs": 15691,
+          "ms": 3002,
+          "meta": {
+            "status": 200,
+            "headersMs": 1316,
+            "model": "openai/gpt-4.1-nano:nitro",
+            "requestBytes": 10123,
+            "usage": {
+              "prompt_tokens": 2168,
+              "completion_tokens": 198,
+              "total_tokens": 2366,
+              "cost": 0.000296,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.000296,
+                "upstream_inference_prompt_cost": 0.0002168,
+                "upstream_inference_completions_cost": 0.0000792
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "db.persist",
+          "kind": "db",
+          "startMs": 15692,
+          "endMs": 15887,
+          "ms": 195
+        }
+      ],
+      "telemetry": {
+        "sessionId": "bench-0fad336376f4386d",
+        "revision": 3,
+        "turn": "learner",
+        "latencyMs": 15622,
+        "promptTokens": 11496,
+        "completionTokens": 677,
+        "totalTokens": 12173,
+        "stages": [
+          "direction:3082ms",
+          "analysis:2217ms",
+          "content:811ms",
+          "style_gate:1337ms",
+          "renderer:3003ms"
+        ],
+        "speech": {
+          "attempts": 1,
+          "flags": [],
+          "fallback": false,
+          "rendererFallback": false,
+          "draftWords": 16,
+          "finalWords": 46
+        }
+      },
+      "logs": [
+        {
+          "message": "[interview-runtime] knowledge retrieved",
+          "data": {
+            "hits": 3
+          }
+        },
+        {
+          "message": "[interview-runtime] direction completed",
+          "data": {
+            "model": "openai/gpt-4.1-nano:nitro",
+            "durationMs": 3082
+          }
+        },
+        {
+          "message": "[interview-runtime] analysis completed",
+          "data": {
+            "model": "openai/gpt-4.1-nano:nitro",
+            "durationMs": 2217
+          }
+        },
+        {
+          "message": "[interview-runtime] analogous episodes retrieved",
+          "data": {
+            "hits": 3,
+            "ids": [
+              "persona_voice_episode_cmtxgkqap000w2lseenvcsevt#4",
+              "persona_voice_episode_cmtxgkqw3000x2lsee7r5p0ei#8",
+              "persona_voice_episode_cmtxgkoc6000r2lsemvnmdb9u#18"
+            ]
+          }
+        },
+        {
+          "message": "[interview-runtime] content completed",
+          "data": {
+            "model": "openai/gpt-4.1-nano:nitro",
+            "durationMs": 811
+          }
+        },
+        {
+          "message": "[interview-runtime] style_gate completed",
+          "data": {
+            "model": "openai/gpt-4.1-nano:nitro",
+            "durationMs": 1337
+          }
+        },
+        {
+          "message": "[interview-runtime] renderer completed",
+          "data": {
+            "model": "openai/gpt-4.1-nano:nitro",
+            "durationMs": 3003
+          }
+        },
+        {
+          "message": "[interview-runtime] completion served",
+          "data": {
+            "sessionId": "bench-0fad336376f4386d",
+            "revision": 3,
+            "turn": "learner",
+            "latencyMs": 15622,
+            "promptTokens": 11496,
+            "completionTokens": 677,
+            "totalTokens": 12173,
+            "stages": [
+              "direction:3082ms",
+              "analysis:2217ms",
+              "content:811ms",
+              "style_gate:1337ms",
+              "renderer:3003ms"
+            ],
+            "speech": {
+              "attempts": 1,
+              "flags": [],
+              "fallback": false,
+              "rendererFallback": false,
+              "draftWords": 16,
+              "finalWords": 46
+            }
+          }
+        }
+      ]
+    },
+    {
+      "label": "impact-answer",
+      "wallMs": 13379,
+      "status": 200,
+      "response": "Okay, got it. So, during that migration, did you face any particular issues related to message ordering or making sure that all updates eventually became consistent? And if so, how did you go about solving those challenges?",
+      "events": [
+        {
+          "stage": "db.auth",
+          "kind": "db",
+          "startMs": 0,
+          "endMs": 72,
+          "ms": 71
+        },
+        {
+          "stage": "db.knowledge_bases",
+          "kind": "db",
+          "startMs": 73,
+          "endMs": 132,
+          "ms": 60
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 133,
+          "endMs": 488,
+          "ms": 355
+        },
+        {
+          "stage": "knowledge.search",
+          "kind": "retrieval",
+          "startMs": 133,
+          "endMs": 1402,
+          "ms": 1269,
+          "meta": {
+            "hits": 3,
+            "records": [
+              {
+                "id": "kb_9d5bd678-a9aa-4376-8fca-4a56917d7e9a#0",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Placement-assistance-instructions-3121199ccfe3.md",
+                "score": 0.455137,
+                "text": "Page: Placement assistance instructions\n\nThis program is designed to support participants in their interview preparation and job placement journey after successfully completing the cohort.\n\nThe goal is to ensure every serious learner gets structured guidance, validation, and mentorship while applying for jobs.\n\n---\n\n### 📅 Support Duration\n\nAfter completing the cohort, participants will receive placement support for 3 months.\n\nDuring this period, I will actively help with:\n\n- Interview preparation\n\n- Concept clarification\n\n- Assignment validation\n\n- Job application strategy\n\n- Mock discussions"
+              },
+              {
+                "id": "kb_787c3f51-fbe9-44cc-91e1-6444cf626a4f#9",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_21st-February-30b1199ccfe3.md",
+                "score": 0.45192109999999996,
+                "text": "Page: 21st February\nTopic: 🏗 System Design Best Practices\n\n✔ Centralized monitoring platform\n\n✔ Structured logging format\n\n✔ Version tagging in every event\n\n✔ Environment awareness (dev / prod)\n\n✔ Graceful failure of monitoring itself (Monitoring must never break the app)\n\n## 🎯 When Observability Is Critical\n\n- Large user base\n\n- Revenue-sensitive flows\n\n- Real-time applications\n\n- Multi-team ownership\n\n- Third-party integrations\n\n## Important Backend concepts :\n\n## 🗄 Data Storage & Data Modeling\n\n---\n\n### 1️⃣ Database (SQL vs NoSQL)\n\nA database stores and manages application data.\n\n#### SQ"
+              },
+              {
+                "id": "kb_9d5bd678-a9aa-4376-8fca-4a56917d7e9a#2",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Placement-assistance-instructions-3121199ccfe3.md",
+                "score": 0.44903930000000003,
+                "text": "Page: Placement assistance instructions\nTopic: 🤝 Mode of Support\n\nBased on urgency, complexity, and availability, support may happen through:\n\n- Quick chat guidance\n\n- Voice call\n\n- Video call\n\n- Concept discussion session\n\n- Interview preparation walkthrough\n\nSupport will be provided in the most effective format for the situation.\n\n---\n\n### 🧠 What I Expect From Participants\n\nTo make the best use of this program:\n\n✔ Be proactive in learning and applying\n\n✔ Communicate early about interview schedules\n\n✔ Come prepared with questions or topics\n\n✔ Complete assignments sincerely\n\n✔ Focus on under"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "embedding",
+          "kind": "embedding",
+          "startMs": 488,
+          "endMs": 1104,
+          "ms": 616,
+          "meta": {
+            "status": 200,
+            "headersMs": 609,
+            "model": "openai/text-embedding-3-small",
+            "requestBytes": 1371
+          }
+        },
+        {
+          "stage": "chroma.query.knowledge",
+          "kind": "chroma",
+          "startMs": 1104,
+          "endMs": 1402,
+          "ms": 297,
+          "meta": {
+            "hits": 3,
+            "nResults": 3
+          }
+        },
+        {
+          "stage": "direction",
+          "kind": "llm",
+          "startMs": 1402,
+          "endMs": 3236,
+          "ms": 1835,
+          "meta": {
+            "status": 200,
+            "headersMs": 880,
+            "model": "openai/gpt-4.1-nano:nitro",
+            "requestBytes": 11986,
+            "usage": {
+              "prompt_tokens": 2481,
+              "completion_tokens": 81,
+              "total_tokens": 2562,
+              "cost": 0.0002805,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0002805,
+                "upstream_inference_prompt_cost": 0.0002481,
+                "upstream_inference_completions_cost": 0.0000324
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "analysis",
+          "kind": "llm",
+          "startMs": 3238,
+          "endMs": 5288,
+          "ms": 2050,
+          "meta": {
+            "status": 200,
+            "headersMs": 1590,
+            "model": "openai/gpt-4.1-nano:nitro",
+            "requestBytes": 14861,
+            "usage": {
+              "prompt_tokens": 3134,
+              "completion_tokens": 233,
+              "total_tokens": 3367,
+              "cost": 0.0004066,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0004066,
+                "upstream_inference_prompt_cost": 0.0003134,
+                "upstream_inference_completions_cost": 0.0000932
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 5289,
+          "endMs": 5612,
+          "ms": 323
+        },
+        {
+          "stage": "persona.episodes",
+          "kind": "retrieval",
+          "startMs": 5289,
+          "endMs": 6633,
+          "ms": 1344,
+          "meta": {
+            "hits": 3,
+            "records": [
+              {
+                "id": "persona_voice_episode_cmtxgkoc6000r2lsemvnmdb9u#19",
+                "source": "22.yaml",
+                "score": 0.6491078,
+                "text": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: No, you are doing the right thing. You have to just swap the position. First it should be minutes and then it should be seconds. Correct? It's happening right, correct only — like now it became three minutes, three minutes one second, three minutes two seconds, three minutes three seconds. It's happening correctly.\nPast learner: Yes. And in terms of stop, what do you think?\nVasanth: What do you think?\nPast learner reaction: To make both these values zero."
+              },
+              {
+                "id": "persona_voice_episode_cmtxgkiic000i2lseh3wa13y1#12",
+                "source": "11.yaml",
+                "score": 0.6447175700000001,
+                "text": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Hmm, correct. Okay, we can check it later, okay — exactly how all these will behave. I am sharing another snippet with you now, okay? Maybe slightly complicated but not difficult. Okay. Slightly complicated, take two to three minutes, okay? But not difficult. Take two to three minutes, read the question carefully and tell me what is the output, okay? Are you clear, Ranjit? What do you think?\nPast learner: It was a totally different thing, sir.\nVasanth: Sure. Let us break it. Let's break it "
+              },
+              {
+                "id": "persona_voice_episode_cmtxgkmsw000o2lsecvrzop1a#21",
+                "source": "04.yaml",
+                "score": 0.62632108,
+                "text": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Sure. You don't have to fully explain, you can write a small block and explain, okay? Like, not to get into it too much, because we have to solve other things also.\nPast learner: Okay, for that I can say it manually.\nVasanth: Sure, sure. Please tell me then. Tell me, what is var?\nPast learner reaction: First I will start with const, okay? We use const — this is like, only one time we can use const. And another time we are using like const name, name is a variable; another time again we star"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "embedding",
+          "kind": "embedding",
+          "startMs": 5612,
+          "endMs": 6095,
+          "ms": 483,
+          "meta": {
+            "status": 200,
+            "headersMs": 478,
+            "model": "openai/text-embedding-3-small",
+            "requestBytes": 519
+          }
+        },
+        {
+          "stage": "chroma.query.persona_voice_episode",
+          "kind": "chroma",
+          "startMs": 6095,
+          "endMs": 6633,
+          "ms": 538,
+          "meta": {
+            "hits": 9,
+            "nResults": 9
+          }
+        },
+        {
+          "stage": "content",
+          "kind": "llm",
+          "startMs": 6633,
+          "endMs": 7543,
+          "ms": 909,
+          "meta": {
+            "status": 200,
+            "headersMs": 672,
+            "model": "openai/gpt-4.1-nano:nitro",
+            "requestBytes": 17041,
+            "usage": {
+              "prompt_tokens": 3590,
+              "completion_tokens": 27,
+              "total_tokens": 3617,
+              "cost": 0.0003698,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0003698,
+                "upstream_inference_prompt_cost": 0.000359,
+                "upstream_inference_completions_cost": 0.0000108
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "style_gate",
+          "kind": "llm",
+          "startMs": 7543,
+          "endMs": 8781,
+          "ms": 1239,
+          "meta": {
+            "status": 200,
+            "headersMs": 750,
+            "model": "openai/gpt-4.1-nano:nitro",
+            "requestBytes": 1555,
+            "usage": {
+              "prompt_tokens": 292,
+              "completion_tokens": 74,
+              "total_tokens": 366,
+              "cost": 0.0000588,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0000588,
+                "upstream_inference_prompt_cost": 0.0000292,
+                "upstream_inference_completions_cost": 0.0000296
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 8782,
+          "endMs": 9108,
+          "ms": 326
+        },
+        {
+          "stage": "persona.style",
+          "kind": "retrieval",
+          "startMs": 8782,
+          "endMs": 10422,
+          "ms": 1641,
+          "meta": {
+            "hits": 5,
+            "records": [
+              {
+                "id": "persona_style_episode_cmtxgks9u00102lse8xfxisb9#22",
+                "source": "06.yaml",
+                "score": 0.51407444,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: strong\nSpeech function: feedback -> explain -> reassure\nSentence shape: Okay, got it. Which I just checked — after the interview I think it can be further optimized, I believe, as far as I have solved this in the past, okay? Definitely you can check it, but whatever you have come up with is better than the initial solution that you proposed. So we'll discuss a few things which I honestly feel there is scope for improvement in, and what you are doing good, okay? So like I mentioned, <lea"
+              },
+              {
+                "id": "persona_style_episode_cmtxgkopp000s2lse47nisylb#33",
+                "source": "02.yaml",
+                "score": 0.51009178,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: closing\nSpeech function: acknowledge -> feedback -> explain -> probe\nSentence shape: acknowledgement -> feedback -> explanation -> question\nPhrasing features: direct address, repetition, encouragement, detailed feedback, polite, inclusive\nCadence: detailed, evaluative, encouraging\nTopic-neutral pattern: Yes. Good, good, <learner>. I'll just pass on my feedback, <learner>. I mean, it was a very clean, neat interview. Overall in my interview process, very few will have very in-depth knowl"
+              },
+              {
+                "id": "persona_style_episode_cmtxgkm9f000n2lsecbclu0sn#34",
+                "source": "15.yaml",
+                "score": 0.50045764,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: closing\nSpeech function: explain -> feedback\nSentence shape: Sure. Prem, I'm done from my end. The biggest problem that I face, Prem Kumar, is comprehending skills. So comprehending skill is one of the most underrated interview skills, where you need to understand the question at the earliest. Interviewers do not like to repeat the question multiple times. It's not because they don't want to repeat it — it's because if they are repeating the question multiple times, they're thinking you"
+              },
+              {
+                "id": "persona_style_episode_cmtxgkk5x000k2lsejvfy7m5e#18",
+                "source": "12.yaml",
+                "score": 0.49840134,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: meta_question\nSpeech function: acknowledge -> explain -> feedback -> probe\nSentence shape: acknowledge -> explanation -> advice -> question\nPhrasing features: direct address, repetition, reassurance, metaphor, imperative, personal reference\nCadence: detailed and advisory\nTopic-neutral pattern: Yeah. Sure, <learner>. Like probably, if time permits, we can discuss any other topics that I asked in the interview, but let me — this is an important phase for me, to give feedback to you. See, "
+              },
+              {
+                "id": "persona_style_episode_cmtxgkqap000w2lseenvcsevt#2",
+                "source": "14.yaml",
+                "score": 0.49384669999999997,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: strong\nSpeech function: acknowledge -> transition -> question -> orient\nSentence shape: agree -> confirm -> question -> invite response\nPhrasing features: repetition, direct address, tag question, polite invitation\nCadence: engaging and structured\nTopic-neutral pattern: Exactly. Yes, yes, absolutely, <learner>. So <learner>, now let us start. I have a very simple question, okay? How do we basically handle a real-time notification in a <topic>? The best examples for real-time notificatio"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "embedding",
+          "kind": "embedding",
+          "startMs": 9108,
+          "endMs": 9620,
+          "ms": 512,
+          "meta": {
+            "status": 200,
+            "headersMs": 508,
+            "model": "openai/text-embedding-3-small",
+            "requestBytes": 489
+          }
+        },
+        {
+          "stage": "chroma.query.persona_style_episode",
+          "kind": "chroma",
+          "startMs": 9621,
+          "endMs": 10422,
+          "ms": 801,
+          "meta": {
+            "hits": 15,
+            "nResults": 15
+          }
+        },
+        {
+          "stage": "renderer",
+          "kind": "llm",
+          "startMs": 10425,
+          "endMs": 13066,
+          "ms": 2642,
+          "meta": {
+            "status": 200,
+            "headersMs": 788,
+            "model": "openai/gpt-4.1-nano:nitro",
+            "requestBytes": 25952,
+            "usage": {
+              "prompt_tokens": 5482,
+              "completion_tokens": 190,
+              "total_tokens": 5672,
+              "cost": 0.0006242,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0006242,
+                "upstream_inference_prompt_cost": 0.0005482,
+                "upstream_inference_completions_cost": 0.000076
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "db.persist",
+          "kind": "db",
+          "startMs": 13067,
+          "endMs": 13379,
+          "ms": 312
+        }
+      ],
+      "telemetry": {
+        "sessionId": "bench-0fad336376f4386d",
+        "revision": 4,
+        "turn": "learner",
+        "latencyMs": 12994,
+        "promptTokens": 14979,
+        "completionTokens": 605,
+        "totalTokens": 15584,
+        "stages": [
+          "direction:1835ms",
+          "analysis:2051ms",
+          "content:909ms",
+          "style_gate:1239ms",
+          "renderer:2642ms"
+        ],
+        "speech": {
+          "attempts": 1,
+          "flags": [],
+          "fallback": false,
+          "rendererFallback": false,
+          "draftWords": 24,
+          "finalWords": 37
+        }
+      },
+      "logs": [
+        {
+          "message": "[interview-runtime] knowledge retrieved",
+          "data": {
+            "hits": 3
+          }
+        },
+        {
+          "message": "[interview-runtime] direction completed",
+          "data": {
+            "model": "openai/gpt-4.1-nano:nitro",
+            "durationMs": 1835
+          }
+        },
+        {
+          "message": "[interview-runtime] analysis completed",
+          "data": {
+            "model": "openai/gpt-4.1-nano:nitro",
+            "durationMs": 2051
+          }
+        },
+        {
+          "message": "[interview-runtime] analogous episodes retrieved",
+          "data": {
+            "hits": 3,
+            "ids": [
+              "persona_voice_episode_cmtxgkoc6000r2lsemvnmdb9u#19",
+              "persona_voice_episode_cmtxgkiic000i2lseh3wa13y1#12",
+              "persona_voice_episode_cmtxgkmsw000o2lsecvrzop1a#21"
+            ]
+          }
+        },
+        {
+          "message": "[interview-runtime] content completed",
+          "data": {
+            "model": "openai/gpt-4.1-nano:nitro",
+            "durationMs": 909
+          }
+        },
+        {
+          "message": "[interview-runtime] style_gate completed",
+          "data": {
+            "model": "openai/gpt-4.1-nano:nitro",
+            "durationMs": 1239
+          }
+        },
+        {
+          "message": "[interview-runtime] renderer completed",
+          "data": {
+            "model": "openai/gpt-4.1-nano:nitro",
+            "durationMs": 2642
+          }
+        },
+        {
+          "message": "[interview-runtime] completion served",
+          "data": {
+            "sessionId": "bench-0fad336376f4386d",
+            "revision": 4,
+            "turn": "learner",
+            "latencyMs": 12994,
+            "promptTokens": 14979,
+            "completionTokens": 605,
+            "totalTokens": 15584,
+            "stages": [
+              "direction:1835ms",
+              "analysis:2051ms",
+              "content:909ms",
+              "style_gate:1239ms",
+              "renderer:2642ms"
+            ],
+            "speech": {
+              "attempts": 1,
+              "flags": [],
+              "fallback": false,
+              "rendererFallback": false,
+              "draftWords": 24,
+              "finalWords": 37
+            }
+          }
+        }
+      ]
+    },
+    {
+      "label": "repeat-request",
+      "wallMs": 1768,
+      "status": 200,
+      "response": "Okay, got it. So, during that migration, did you face any particular issues related to message ordering or making sure that all updates eventually became consistent? And if so, how did you go about solving those challenges?",
+      "events": [
+        {
+          "stage": "db.auth",
+          "kind": "db",
+          "startMs": 0,
+          "endMs": 68,
+          "ms": 68
+        },
+        {
+          "stage": "db.knowledge_bases",
+          "kind": "db",
+          "startMs": 69,
+          "endMs": 144,
+          "ms": 75
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 144,
+          "endMs": 476,
+          "ms": 332
+        },
+        {
+          "stage": "knowledge.search",
+          "kind": "retrieval",
+          "startMs": 144,
+          "endMs": 1524,
+          "ms": 1380,
+          "meta": {
+            "hits": 3,
+            "records": [
+              {
+                "id": "kb_9d5bd678-a9aa-4376-8fca-4a56917d7e9a#2",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Placement-assistance-instructions-3121199ccfe3.md",
+                "score": 0.46051600000000004,
+                "text": "Page: Placement assistance instructions\nTopic: 🤝 Mode of Support\n\nBased on urgency, complexity, and availability, support may happen through:\n\n- Quick chat guidance\n\n- Voice call\n\n- Video call\n\n- Concept discussion session\n\n- Interview preparation walkthrough\n\nSupport will be provided in the most effective format for the situation.\n\n---\n\n### 🧠 What I Expect From Participants\n\nTo make the best use of this program:\n\n✔ Be proactive in learning and applying\n\n✔ Communicate early about interview schedules\n\n✔ Come prepared with questions or topics\n\n✔ Complete assignments sincerely\n\n✔ Focus on under"
+              },
+              {
+                "id": "kb_9d5bd678-a9aa-4376-8fca-4a56917d7e9a#0",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Placement-assistance-instructions-3121199ccfe3.md",
+                "score": 0.45883554000000004,
+                "text": "Page: Placement assistance instructions\n\nThis program is designed to support participants in their interview preparation and job placement journey after successfully completing the cohort.\n\nThe goal is to ensure every serious learner gets structured guidance, validation, and mentorship while applying for jobs.\n\n---\n\n### 📅 Support Duration\n\nAfter completing the cohort, participants will receive placement support for 3 months.\n\nDuring this period, I will actively help with:\n\n- Interview preparation\n\n- Concept clarification\n\n- Assignment validation\n\n- Job application strategy\n\n- Mock discussions"
+              },
+              {
+                "id": "kb_9dda99f3-370e-48ff-a2bf-072afc23981f#18",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_System-design-Introduction-3061199ccfe3.md",
+                "score": 0.4570638,
+                "text": "Page: System design Introduction\nTopic: Topic 6: Discussing practical questions > Meaningful Solution Architecture > ✅ 2. Request Deduplication / Caching\n\nIf user revisits route quickly:\n\n```plain text\nReuse existing response\n```\n\nUse data layer:\n\n- React Query\n\n- SWR (stale-while-revalidate)\n\n- custom cache map\n\nKey idea:\n\n```plain text\nqueryKey = route + params\n```\n\n---\n\n#### ✅ 3. Stale Response Protection (Critical)\n\nEven if cancellation fails, ignore outdated responses.\n\nTechnique:\n\n- requestId tracking\n\n- version tokens\n\n- latest-only rendering\n\n---\n\n### Interview Summary Answer\n\nCancel i"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "embedding",
+          "kind": "embedding",
+          "startMs": 476,
+          "endMs": 1234,
+          "ms": 757,
+          "meta": {
+            "status": 200,
+            "headersMs": 757,
+            "model": "openai/text-embedding-3-small",
+            "requestBytes": 1651
+          }
+        },
+        {
+          "stage": "chroma.query.knowledge",
+          "kind": "chroma",
+          "startMs": 1234,
+          "endMs": 1524,
+          "ms": 290,
+          "meta": {
+            "hits": 3,
+            "nResults": 3
+          }
+        },
+        {
+          "stage": "db.persist",
+          "kind": "db",
+          "startMs": 1525,
+          "endMs": 1768,
+          "ms": 243
+        }
+      ],
+      "telemetry": {
+        "sessionId": "bench-0fad336376f4386d",
+        "revision": 5,
+        "turn": "learner",
+        "latencyMs": 1455,
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "totalTokens": 0,
+        "stages": [],
+        "speech": {
+          "attempts": 0,
+          "flags": [],
+          "fallback": false,
+          "rendererFallback": false,
+          "draftWords": 0,
+          "finalWords": 0
+        }
+      },
+      "logs": [
+        {
+          "message": "[interview-runtime] knowledge retrieved",
+          "data": {
+            "hits": 3
+          }
+        },
+        {
+          "message": "[interview-runtime] completion served",
+          "data": {
+            "sessionId": "bench-0fad336376f4386d",
+            "revision": 5,
+            "turn": "learner",
+            "latencyMs": 1455,
+            "promptTokens": 0,
+            "completionTokens": 0,
+            "totalTokens": 0,
+            "stages": [],
+            "speech": {
+              "attempts": 0,
+              "flags": [],
+              "fallback": false,
+              "rendererFallback": false,
+              "draftWords": 0,
+              "finalWords": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -253,18 +253,23 @@ export async function searchKnowledge(
     targetOrgId = kb?.orgId ?? undefined;
   }
   if (targetOrgId) {
+    const reranking = process.env.RERANK_ENABLED === "1";
     const mainHits = await MainCollectionService.searchKnowledge(targetOrgId, query, {
       kbIds: [knowledgeBaseId],
-      limit: topK,
+      limit: reranking ? Math.max(topK * 4, 20) : topK,
     });
     if (mainHits.length > 0) {
-      return mainHits.map((h) => ({
-        id: h.id,
-        docId: h.docId,
-        source: h.source,
-        text: h.text,
-        score: h.score,
-      }));
+      return rerank(
+        query,
+        mainHits.map((h) => ({
+          id: h.id,
+          docId: h.docId,
+          source: h.source,
+          text: h.text,
+          score: h.score,
+        })),
+        topK,
+      );
     }
   }
   return searchCollection(knowledgeCollectionName(knowledgeBaseId), query, topK);

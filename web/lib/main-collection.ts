@@ -48,6 +48,13 @@ export type PersonaVoiceMetadata = {
 
 export type MainCollectionMetadata = KnowledgeMetadata | PersonaVoiceMetadata;
 
+const collectionCache = new Map<string, Collection>();
+
+/** Evicts the cached org collection handle (called on org Chroma teardown). */
+export function invalidateCollectionCache(orgId: string): void {
+  collectionCache.delete(orgId);
+}
+
 export class MainCollectionService {
   /**
    * Resolves collection name for the org.
@@ -60,19 +67,26 @@ export class MainCollectionService {
 
   /**
    * Gets or creates the `main` collection for an organization.
+   * Handles are cached per org in-process (Chroma docs: reuse one client and
+   * collection instance; the handle is stateless beyond its config).
    */
   static async getCollection(orgId: string): Promise<Collection> {
+    // ponytail: unbounded Map — one entry per org with chroma activity; clear it in dev hot-reload at worst.
+    const cached = collectionCache.get(orgId);
+    if (cached) return cached;
     const client = await ChromaTenantService.getClient(orgId);
     const isSharedFallback = isSharedScope(client.database);
     const name = this.getCollectionName(orgId, isSharedFallback);
 
-    return client.getOrCreateCollection({
+    const collection = await client.getOrCreateCollection({
       name,
       embeddingFunction: openRouterEmbeddings,
       configuration: {
         hnsw: { space: "cosine", ef_construction: 200, ef_search: 200, max_neighbors: 24 },
       },
     });
+    collectionCache.set(orgId, collection);
+    return collection;
   }
 
   /**

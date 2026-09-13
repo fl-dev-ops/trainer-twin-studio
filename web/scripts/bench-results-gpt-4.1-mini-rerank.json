@@ -1,0 +1,2645 @@
+{
+  "generatedAt": "2026-09-13T08:10:40.502Z",
+  "environment": {
+    "model": "openai/gpt-4.1-mini",
+    "reranker": "cohere/rerank-v3.5",
+    "agent": {
+      "id": "cmtx0b2db000204jo1hour2f1",
+      "slug": "project-experience-deep-dive"
+    },
+    "persona": {
+      "id": "cmtwyoa1s000004jshzfd5by4",
+      "slug": "Vasanth"
+    },
+    "context": {
+      "id": "cmtx1jwpr000004k111cst5y2",
+      "name": "Harini_Shekar_Senior_Software_Engineer_Resume.pdf"
+    },
+    "knowledgeBases": [
+      "acme-knowledge"
+    ],
+    "personaVoiceAvailable": true,
+    "stream": false
+  },
+  "turns": [
+    {
+      "label": "opening",
+      "wallMs": 14033,
+      "status": 200,
+      "response": "Yeah. So Harini, let us dive a little deeper into that project. Can you please explain your specific role and responsibility within it?",
+      "events": [
+        {
+          "stage": "db.auth",
+          "kind": "db",
+          "startMs": 1,
+          "endMs": 76,
+          "ms": 75
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 81,
+          "endMs": 1026,
+          "ms": 945
+        },
+        {
+          "stage": "persona.primer",
+          "kind": "retrieval",
+          "startMs": 81,
+          "endMs": 4548,
+          "ms": 4467,
+          "meta": {
+            "hits": 743
+          }
+        },
+        {
+          "stage": "chroma.get.persona_voice_episode",
+          "kind": "chroma",
+          "startMs": 1026,
+          "endMs": 3078,
+          "ms": 2051,
+          "meta": {
+            "rows": 300,
+            "offset": 0
+          }
+        },
+        {
+          "stage": "chroma.get.persona_voice_episode",
+          "kind": "chroma",
+          "startMs": 3078,
+          "endMs": 3998,
+          "ms": 920,
+          "meta": {
+            "rows": 300,
+            "offset": 300
+          }
+        },
+        {
+          "stage": "chroma.get.persona_voice_episode",
+          "kind": "chroma",
+          "startMs": 3999,
+          "endMs": 4539,
+          "ms": 541,
+          "meta": {
+            "rows": 143,
+            "offset": 600
+          }
+        },
+        {
+          "stage": "persona.episodes",
+          "kind": "retrieval",
+          "startMs": 4548,
+          "endMs": 7122,
+          "ms": 2574,
+          "meta": {
+            "hits": 3,
+            "records": [
+              {
+                "id": "persona_voice_episode_cmtxgkm9f000n2lsecbclu0sn#0",
+                "source": "15.yaml",
+                "score": 0.6399352,
+                "text": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: opening\nVasanth: Prem Kumar, can you please introduce yourself so that we can get started?\nPast learner reaction: Yeah, hi Vasanth. Morning, morning to everyone. So I am working as a React developer at Dimensions, based in Bengaluru. Here we are working on a React based mobile app which is like a one stop solution for multiple data sources. So you can introduce any data source into a single CRM, and then you can allow the user to consume data, and you can customize it in a better way since it is React."
+              },
+              {
+                "id": "persona_voice_episode_cmtxgkoc6000r2lsemvnmdb9u#0",
+                "source": "22.yaml",
+                "score": 0.62050128,
+                "text": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: opening\nVasanth: Aditi, if you can introduce yourself, we can get started.\nPast learner reaction: Yes, hello. My name is Aditi Khedkar and I have three years of experience in Angular. I currently work both in UI and back end. The full stack is Angular and Java."
+              },
+              {
+                "id": "persona_voice_episode_cmtxgkiic000i2lseh3wa13y1#0",
+                "source": "11.yaml",
+                "score": 0.61753643,
+                "text": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: opening\nVasanth: That being said, Ranjit, can you please introduce yourself so that we can get started?\nPast learner reaction: Hi everyone, hi sir. My name is Ranjit. I am actually from Siriguppa, which is in Ballari district in Karnataka. I have completed my diploma in computer science; the college name is S S Polytechnic, which is in Siriguppa only, in my hometown. After that I came to Bengaluru to do a course. I completed it in two thousand twenty two. Due to some covid issues I couldn't complete my diploma in t"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 4549,
+          "endMs": 5005,
+          "ms": 456
+        },
+        {
+          "stage": "embedding",
+          "kind": "embedding",
+          "startMs": 5006,
+          "endMs": 6573,
+          "ms": 1567,
+          "meta": {
+            "status": 200,
+            "headersMs": 1562,
+            "model": "openai/text-embedding-3-small",
+            "requestBytes": 122
+          }
+        },
+        {
+          "stage": "chroma.query.persona_voice_episode",
+          "kind": "chroma",
+          "startMs": 6574,
+          "endMs": 7122,
+          "ms": 548,
+          "meta": {
+            "hits": 9,
+            "nResults": 9
+          }
+        },
+        {
+          "stage": "content",
+          "kind": "llm",
+          "startMs": 7123,
+          "endMs": 8103,
+          "ms": 980,
+          "meta": {
+            "status": 200,
+            "headersMs": 710,
+            "model": "openai/gpt-4.1-mini",
+            "requestBytes": 8250,
+            "usage": {
+              "prompt_tokens": 1626,
+              "completion_tokens": 23,
+              "total_tokens": 1649,
+              "cost": 0.0002648,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 1408,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0002648,
+                "upstream_inference_prompt_cost": 0.000228,
+                "upstream_inference_completions_cost": 0.0000368
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "style_gate",
+          "kind": "llm",
+          "startMs": 8104,
+          "endMs": 9636,
+          "ms": 1532,
+          "meta": {
+            "status": 200,
+            "headersMs": 853,
+            "model": "openai/gpt-4.1-mini",
+            "requestBytes": 1294,
+            "usage": {
+              "prompt_tokens": 241,
+              "completion_tokens": 82,
+              "total_tokens": 323,
+              "cost": 0.0002276,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0002276,
+                "upstream_inference_prompt_cost": 0.0000964,
+                "upstream_inference_completions_cost": 0.0001312
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 9638,
+          "endMs": 9961,
+          "ms": 323
+        },
+        {
+          "stage": "persona.style",
+          "kind": "retrieval",
+          "startMs": 9638,
+          "endMs": 11790,
+          "ms": 2152,
+          "meta": {
+            "hits": 5,
+            "records": [
+              {
+                "id": "persona_style_episode_cmtxgkopp000s2lse47nisylb#0",
+                "source": "02.yaml",
+                "score": 0.55104744,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: opening\nLearner state: greeting\nSpeech function: open_session -> orient -> explain -> probe\nSentence shape: greeting -> self-introduction -> interview overview -> request introduction\nPhrasing features: direct address, repetition, polite request, stepwise outline, reassurance\nCadence: friendly, structured opening with clear agenda\nTopic-neutral pattern: Yeah. So, hi <learner>. As you already know, this is regarding the mock interview with <topic>. I'll start by giving a basic introduction of mine, then I'll "
+              },
+              {
+                "id": "persona_style_episode_cmtxgks9u00102lse8xfxisb9#1",
+                "source": "06.yaml",
+                "score": 0.5364243399999999,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: opening\nLearner state: orient\nSpeech function: orient\nSentence shape: acknowledge -> paraphrase -> direct question\nPhrasing features: direct address, repetition, filler bridge, polite\nCadence: structured and preparatory\nTopic-neutral pattern: Yeah. So today I'm testing your <topic> skills, <learner>. As you mentioned, you are in <example>, and we were just interacting before this — you have solved more than <claim> problems. Okay <learner>, just before we get started with the <topic> round, I have this pract"
+              },
+              {
+                "id": "persona_style_episode_cmtxgkoc6000r2lsemvnmdb9u#1",
+                "source": "22.yaml",
+                "score": 0.51594698,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: opening\nLearner state: strong\nSpeech function: acknowledge -> paraphrase -> probe\nSentence shape: acknowledge -> paraphrase learner info -> pose opinion question\nPhrasing features: repetition, direct address, tag question\nCadence: engaging and encouraging elaboration\nTopic-neutral pattern: Wonderful, wonderful, <learner>. So <learner>, you have <claim>. As you have spent <claim>, what is your opinion about it?\nExact Vasanth wording: Wonderful, wonderful, Aditi. So Aditi, you have three years of experience in"
+              },
+              {
+                "id": "persona_style_episode_cmtxgkpwn000v2lsejzrs9whg#1",
+                "source": "21.yaml",
+                "score": 0.5149717300000001,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: opening\nLearner state: orient\nSpeech function: orient\nSentence shape: statement -> explanation -> example -> question\nPhrasing features: repetition, direct address, example, tag question\nCadence: detailed and explanatory\nTopic-neutral pattern: Now, let me ask you a very simple question. One of the common things that is present now on most of these <topic> applications, or on any other sites like <example>, is the <claim> system. Okay? <claim> is nothing but where you will search something, and whenever you s"
+              },
+              {
+                "id": "persona_style_episode_cmtxgkhf2000g2lsepeolnnyq#1",
+                "source": "07.yaml",
+                "score": 0.5139986999999999,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: opening\nLearner state: strong\nSpeech function: acknowledge -> probe\nSentence shape: acknowledge -> direct question\nPhrasing features: repetition, direct address, informal quote, inclusive language\nCadence: friendly and encouraging\nTopic-neutral pattern: Wonderful. So <learner>, just before we start with the actual <topic> process — a lot of freshers reach out to me where they ask, \"<learner>, it is getting really hard to find an <claim>.\" So as you were able to get an <claim> somewhere, can you just tell, wh"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "embedding",
+          "kind": "embedding",
+          "startMs": 9961,
+          "endMs": 10675,
+          "ms": 714,
+          "meta": {
+            "status": 200,
+            "headersMs": 708,
+            "model": "openai/text-embedding-3-small",
+            "requestBytes": 510
+          }
+        },
+        {
+          "stage": "chroma.query.persona_style_episode",
+          "kind": "chroma",
+          "startMs": 10675,
+          "endMs": 11790,
+          "ms": 1115,
+          "meta": {
+            "hits": 15,
+            "nResults": 15
+          }
+        },
+        {
+          "stage": "renderer",
+          "kind": "llm",
+          "startMs": 11792,
+          "endMs": 13844,
+          "ms": 2052,
+          "meta": {
+            "status": 200,
+            "headersMs": 855,
+            "model": "openai/gpt-4.1-mini",
+            "requestBytes": 10774,
+            "usage": {
+              "prompt_tokens": 2344,
+              "completion_tokens": 179,
+              "total_tokens": 2523,
+              "cost": 0.001224,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.001224,
+                "upstream_inference_prompt_cost": 0.0009376,
+                "upstream_inference_completions_cost": 0.0002864
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "db.persist",
+          "kind": "db",
+          "startMs": 13845,
+          "endMs": 14033,
+          "ms": 188
+        }
+      ],
+      "telemetry": {
+        "sessionId": "bench-1adea5c3d2d9b6f9",
+        "revision": 1,
+        "turn": "opening",
+        "latencyMs": 13765,
+        "promptTokens": 4211,
+        "completionTokens": 284,
+        "totalTokens": 4495,
+        "stages": [
+          "content:980ms",
+          "style_gate:1532ms",
+          "renderer:2052ms"
+        ],
+        "speech": {
+          "attempts": 1,
+          "flags": [],
+          "fallback": false,
+          "rendererFallback": false,
+          "draftWords": 18,
+          "finalWords": 23
+        }
+      },
+      "logs": [
+        {
+          "message": "[interview-runtime] analogous episodes retrieved",
+          "data": {
+            "hits": 3,
+            "ids": [
+              "persona_voice_episode_cmtxgkm9f000n2lsecbclu0sn#0",
+              "persona_voice_episode_cmtxgkoc6000r2lsemvnmdb9u#0",
+              "persona_voice_episode_cmtxgkiic000i2lseh3wa13y1#0"
+            ]
+          }
+        },
+        {
+          "message": "[interview-runtime] content completed",
+          "data": {
+            "model": "openai/gpt-4.1-mini",
+            "durationMs": 980
+          }
+        },
+        {
+          "message": "[interview-runtime] style_gate completed",
+          "data": {
+            "model": "openai/gpt-4.1-mini",
+            "durationMs": 1532
+          }
+        },
+        {
+          "message": "[interview-runtime] renderer completed",
+          "data": {
+            "model": "openai/gpt-4.1-mini",
+            "durationMs": 2052
+          }
+        },
+        {
+          "message": "[interview-runtime] completion served",
+          "data": {
+            "sessionId": "bench-1adea5c3d2d9b6f9",
+            "revision": 1,
+            "turn": "opening",
+            "latencyMs": 13765,
+            "promptTokens": 4211,
+            "completionTokens": 284,
+            "totalTokens": 4495,
+            "stages": [
+              "content:980ms",
+              "style_gate:1532ms",
+              "renderer:2052ms"
+            ],
+            "speech": {
+              "attempts": 1,
+              "flags": [],
+              "fallback": false,
+              "rendererFallback": false,
+              "draftWords": 18,
+              "finalWords": 23
+            }
+          }
+        }
+      ]
+    },
+    {
+      "label": "ownership-answer",
+      "wallMs": 18019,
+      "status": 200,
+      "response": "Thanks for sharing that, Harini. So Harini, can you walk me through the key technical mechanism of how you designed the event-driven architecture for the order-processing migration? Specifically, how did you handle the event flow and data consistency across the new microservices?",
+      "events": [
+        {
+          "stage": "db.auth",
+          "kind": "db",
+          "startMs": 0,
+          "endMs": 65,
+          "ms": 65
+        },
+        {
+          "stage": "db.knowledge_bases",
+          "kind": "db",
+          "startMs": 67,
+          "endMs": 135,
+          "ms": 67
+        },
+        {
+          "stage": "knowledge.search",
+          "kind": "retrieval",
+          "startMs": 135,
+          "endMs": 2289,
+          "ms": 2154,
+          "meta": {
+            "hits": 20,
+            "records": [
+              {
+                "id": "kb_328e3cba-730c-400c-add1-8daa41bdba77#2",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Good-resume-formats-3051199ccfe3.md",
+                "score": 0.4404431,
+                "text": "Page: Good resume formats\nTopic: 5️⃣ Experience Section — MOST IMPORTANT > Bullet Formula\n\n```plain text\nAction Verb +Task + Tool + Impact + Metric\n```\n\nExamples:\n\n- Reduced bundle size by 42% using code splitting.\n\n- Improved page load speed from 4.5s → 1.2s.\n\n- Led migration from class components to hooks for 60+ components.\n\n---\n\n## 6️⃣ Quantification — SECRET WEAPON\n\nIf you don’t quantify → recruiter assumes average work.\n\n#### Examples of Metrics\n\n- %\n\n- Time saved\n\n- Revenue impact\n\n- User count\n\n- Performance improvement\n\n- Team size\n\n- Feature adoption\n\n---\n\n#### ❌ Without Numbers\n\n> O"
+              },
+              {
+                "id": "kb_9d5bd678-a9aa-4376-8fca-4a56917d7e9a#0",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Placement-assistance-instructions-3121199ccfe3.md",
+                "score": 0.43635017,
+                "text": "Page: Placement assistance instructions\n\nThis program is designed to support participants in their interview preparation and job placement journey after successfully completing the cohort.\n\nThe goal is to ensure every serious learner gets structured guidance, validation, and mentorship while applying for jobs.\n\n---\n\n### 📅 Support Duration\n\nAfter completing the cohort, participants will receive placement support for 3 months.\n\nDuring this period, I will actively help with:\n\n- Interview preparation\n\n- Concept clarification\n\n- Assignment validation\n\n- Job application strategy\n\n- Mock discussions"
+              },
+              {
+                "id": "kb_9d5bd678-a9aa-4376-8fca-4a56917d7e9a#2",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Placement-assistance-instructions-3121199ccfe3.md",
+                "score": 0.43125820000000004,
+                "text": "Page: Placement assistance instructions\nTopic: 🤝 Mode of Support\n\nBased on urgency, complexity, and availability, support may happen through:\n\n- Quick chat guidance\n\n- Voice call\n\n- Video call\n\n- Concept discussion session\n\n- Interview preparation walkthrough\n\nSupport will be provided in the most effective format for the situation.\n\n---\n\n### 🧠 What I Expect From Participants\n\nTo make the best use of this program:\n\n✔ Be proactive in learning and applying\n\n✔ Communicate early about interview schedules\n\n✔ Come prepared with questions or topics\n\n✔ Complete assignments sincerely\n\n✔ Focus on under"
+              },
+              {
+                "id": "kb_328e3cba-730c-400c-add1-8daa41bdba77#1",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Good-resume-formats-3051199ccfe3.md",
+                "score": 0.40144634,
+                "text": "Page: Good resume formats\nTopic: 3️⃣ Headline / Summary\n\n#### ❌ Bad\n\n> Hardworking developer looking for opportunity to grow.\n\n#### ✅ Good\n\n> Frontend Developer with 4 years experience building scalable React applications used by 200k+ users.\n\nFormula\n\n```plain text\nRole + Years +Key Tech + Impact\n```\n\n---\n\n## 4️⃣ Skills Section\n\n#### ❌ Bad Practice\n\nListing every skill ever touched.\n\n```plain text\nHTML CSS JS React Angular Vue Python Java C++ AWS Docker Kubernetes ML AI Blockchain\n```\n\n#### ✅ Good Practice\n\nGroup and prioritize:\n\nLanguages: JavaScript, TypeScript\n\nFrontend: React, Redux, Next"
+              },
+              {
+                "id": "kb_e0d821c3-555f-43be-bd11-a59a082437c3#3",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Assignments-2ec1199ccfe3.md",
+                "score": 0.40024227,
+                "text": "Page: Assignments\nTopic: Deep and Shallow Copy\n\n#### Atlassian | Machine Coding: The Ultimate Deep Clone\n\nQuestion: Implement deepClone(obj). It must handle circular references. Atlassian specifically checks for memory efficiency and handling of nested structures without using JSON.stringify.\n\nJavaScript\n\n```javascript\nfunction deepClone(value, map = new WeakMap()) {\n  // 1. Base case: handle primitives\n  // 2. Handle circular references using map\n  // 3. Recursive cloning for Arrays and Objects\n}\n\nconst original = {\n  a: 1,\n  b: { c: 2 },\n  d: [11, 7],\n};\noriginal.self = original; // Circular"
+              },
+              {
+                "id": "kb_b1918d7f-3ca4-431b-9483-4d7725b80fb7#1",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Weekly-assignment-30f1199ccfe3.md",
+                "score": 0.39835184999999995,
+                "text": "Page: Weekly assignment\nTopic: 📝 What You Need to Do (For Each System) > 4️⃣ Solve Top Non-Functional Design Problems\n\nFrom your non-functional list:\n\n- Pick top 2 critical non-functional concerns\n\n- Provide design solutions\n\n- Each system must focus on different non-functional priorities (So that overall you will cover most non-functional requirements)\n\nExamples:\n\n- Scalability strategy\n\n- Low latency delivery\n\n- High availability architecture\n\n- Consistency handling\n\n- Fault tolerance\n\n---\n\n###"
+              },
+              {
+                "id": "kb_787c3f51-fbe9-44cc-91e1-6444cf626a4f#9",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_21st-February-30b1199ccfe3.md",
+                "score": 0.3917047,
+                "text": "Page: 21st February\nTopic: 🏗 System Design Best Practices\n\n✔ Centralized monitoring platform\n\n✔ Structured logging format\n\n✔ Version tagging in every event\n\n✔ Environment awareness (dev / prod)\n\n✔ Graceful failure of monitoring itself (Monitoring must never break the app)\n\n## 🎯 When Observability Is Critical\n\n- Large user base\n\n- Revenue-sensitive flows\n\n- Real-time applications\n\n- Multi-team ownership\n\n- Third-party integrations\n\n## Important Backend concepts :\n\n## 🗄 Data Storage & Data Modeling\n\n---\n\n### 1️⃣ Database (SQL vs NoSQL)\n\nA database stores and manages application data.\n\n#### SQ"
+              },
+              {
+                "id": "kb_b1918d7f-3ca4-431b-9483-4d7725b80fb7#0",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Weekly-assignment-30f1199ccfe3.md",
+                "score": 0.39105809999999996,
+                "text": "Page: Weekly assignment\n\n### 🧩 Systems to Design\n\nYou will perform the same exercise for each of the following systems:\n\n1. Code Sandbox Platform (like CodePen / Replit)\n\n1. E-commerce Application (like Amazon / Flipkart)\n\n1. Video Streaming Platform (like YouTube)\n\n1. Seat Booking System (like BookMyShow)\n\n---\n\n### 📝 What You Need to Do (For Each System)\n\n#### 1️⃣ List Functional Requirements\n\nIdentify what features the system must provide to users.\n\nExamples:\n\n- Core capabilities\n\n- User interactions\n\n- Primary workflows\n\n---\n\n#### 2️⃣ List Non-Functional Requirements\n\nDefine system qualit"
+              },
+              {
+                "id": "kb_9dda99f3-370e-48ff-a2bf-072afc23981f#18",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_System-design-Introduction-3061199ccfe3.md",
+                "score": 0.38208914000000005,
+                "text": "Page: System design Introduction\nTopic: Topic 6: Discussing practical questions > Meaningful Solution Architecture > ✅ 2. Request Deduplication / Caching\n\nIf user revisits route quickly:\n\n```plain text\nReuse existing response\n```\n\nUse data layer:\n\n- React Query\n\n- SWR (stale-while-revalidate)\n\n- custom cache map\n\nKey idea:\n\n```plain text\nqueryKey = route + params\n```\n\n---\n\n#### ✅ 3. Stale Response Protection (Critical)\n\nEven if cancellation fails, ignore outdated responses.\n\nTechnique:\n\n- requestId tracking\n\n- version tokens\n\n- latest-only rendering\n\n---\n\n### Interview Summary Answer\n\nCancel i"
+              },
+              {
+                "id": "kb_787c3f51-fbe9-44cc-91e1-6444cf626a4f#11",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_21st-February-30b1199ccfe3.md",
+                "score": 0.37760425,
+                "text": "Page: 21st February\nTopic: 🌐 Request Handling & Infrastructure\n\n---\n\n### 5️⃣  API Gateway\n\nSingle entry point for all client requests.\n\n#### Responsibilities\n\n✔ Authentication / authorization\n\n✔ Rate limiting\n\n✔ Request validation\n\n✔ Aggregating multiple services\n\n✔ Logging / monitoring\n\n✔ Load balancing\n\n✔ Versioning\n\n✔ Security enforcement\n\n✔ Response transformation\n\n```javascript\nClient\n   ↓\nAPI Gateway (policy + control + routing)\n   ↓\nMultiple backend services\n```\n\n#### Example real systems\n\n- AWS API Gateway\n\n- Kong\n\n- Apigee\n\n- Azure API Management\n\n---\n\n### 6️⃣ Load Balancer\n\nDistribu"
+              },
+              {
+                "id": "kb_2fb969cc-476f-4918-9ca1-f62ab674be37#0",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_22nd-February-30b1199ccfe3.md",
+                "score": 0.37267039999999996,
+                "text": "Page: 22nd February\n\nIn this session we designed system design of\n\n1. Auto complete system.\n\nattachment:e7ebaa3c-531c-452f-a781-353460e11028:image.png\n\nNews feed system design:\n\nattachment:c45f27ab-33d8-45e7-bea9-a3ccb23e6212:image.png"
+              },
+              {
+                "id": "kb_787c3f51-fbe9-44cc-91e1-6444cf626a4f#8",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_21st-February-30b1199ccfe3.md",
+                "score": 0.37247777000000004,
+                "text": "Page: 21st February\nTopic: 🧩 Core Pillars of Frontend Observability > 5️⃣ Session Replay (Behavior Reconstruction) > Why useful\n\nSome bugs cannot be reproduced.\n\nReplay shows:\n\n```plain text\nExactly whatuser did\nExactly what UI showed\n```\n\n---\n\n#### Example tools\n\n- LogRocket\n\n- FullStory\n\n---\n\n## 🔔 Alerting Strategy\n\nMonitoring without alerts is useless.\n\nAlerts trigger when thresholds exceed.\n\nExamples:\n\n- error rate > 5%\n\n- API latency spike\n\n- page load > 4s\n\n- feature crash detected\n\n---\n\n### Good alert design\n\n✔ actionable\n\n✔ not noisy\n\n✔ severity classified\n\n✔ routed to correct team\n\n"
+              },
+              {
+                "id": "kb_787c3f51-fbe9-44cc-91e1-6444cf626a4f#15",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_21st-February-30b1199ccfe3.md",
+                "score": 0.36583793,
+                "text": "Page: 21st February\nTopic: ⚙ Reliability & Failure Handling > 1️⃣8️⃣ Circuit Breaker Pattern\n\nry cache                                    │\n│  - Fast reads                                               │\n│  - Reduced DB load                                          │\n│  - Possible stale data                                      │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                         DATABASE                            │\n│                 "
+              },
+              {
+                "id": "kb_68c8a2e4-4516-47b0-b856-f052f831022b#0",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_28th-Feb-3151199ccfe3.md",
+                "score": 0.35826975000000005,
+                "text": "Page: 28th Feb\n\nCode sandbox system design\n\nattachment:b0d35ddc-f459-455c-b281-18ec34f0b2ca:image.png\n\nBookMyShow design was also discussed. One can checkout the video to understand it better."
+              },
+              {
+                "id": "kb_e0d821c3-555f-43be-bd11-a59a082437c3#4",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Assignments-2ec1199ccfe3.md",
+                "score": 0.35473424,
+                "text": "Page: Assignments\nTopic: Deep and Shallow Copy > Adobe | Conceptual Round\n\nQuestion: What will be logged? How do you fix this using the spread operator while keeping the code readable?\n\nJavaScript\n\n```javascript\nconst state = {\n  user: { id: 101, details: { city: 'Bangalore' } },\n  theme: 'dark'\n};\n\nconst newState = {...state };\nnewState.user.details.city = 'Chennai';\n\nconsole.log(state.user.details.city); \n// Expected output? Why did it change?\n```\n\nInterviewer Logic: Demonstrates that the spread operator is a Shallow Copy. If you change a nested object, the original is mutated because the re"
+              },
+              {
+                "id": "kb_1b180004-e7cb-4d06-978b-96a0dc07767a#0",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Session-1-thought-provoking-questions-2dd1199ccfe3.md",
+                "score": 0.3464836,
+                "text": "Page: Session 1: thought provoking questions\n\n1. Environments where there is no browser ex: nodeJS, how will browser web APIs example setTimeout will work ?\n\n1. Which language the v8 engine is written ?\n\n1. Why JS is weekly typed programming language ?\n\n1. Are there event loop for each browser tab or ?\n\n1. If there is only one GEC then how variable duplication works ? in JS\n\n1. Given a project, will you have less number of closures or more ? justify you’re answer.\n\n1. As arrow functions / function expressions are not hoisted, how are you able to call arrow functions anywhere in React ?"
+              },
+              {
+                "id": "kb_faae9cac-1d56-4046-97a3-025e471f544b#0",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Assignment-questions-3031199ccfe3.md",
+                "score": 0.34640990000000005,
+                "text": "Page: Assignment questions\n\nApproximate interview time to solve all the below problems is 45 minutes to 1 hour.\n\n## Problem 1:  Implement a Config-Driven Form Renderer with Validation Rules\n\n#### Problem Statement\n\nBuild a form renderer that does not hardcode inputs in JSX, but instead renders the form entirely from a configuration object.\n\n---\n\n#### Expectations:\n\n#### Form Rendering\n\n- Form fields must be generated dynamically from a config like:\n\n- input type (text, email, number, select, checkbox, etc.)\n\n- label\n\n- name / key\n\n- default value\n\n- Adding a new field should require only confi"
+              },
+              {
+                "id": "kb_787c3f51-fbe9-44cc-91e1-6444cf626a4f#14",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_21st-February-30b1199ccfe3.md",
+                "score": 0.3438909,
+                "text": "Page: 21st February\nTopic: ⚙ Reliability & Failure Handling > 1️⃣8️⃣ Circuit Breaker Pattern\n\n```javascript\n┌─────────────────────────────────────────────────────────────┐\n│                         USERS                               │\n│  Browser / Mobile App                                       │\n│  (Frontend UI, State, Requests, Retries, etc.)             │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           │ HTTPS Requests\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│      "
+              },
+              {
+                "id": "kb_e1274a25-fe1e-47d4-886b-993f09a74f61#0",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_31st-January-2f21199ccfe3.md",
+                "score": 0.33520854,
+                "text": "Page: 31st January\n\n## React Routing — Navigating Without Reloading the Page\n\n---\n\nCode sandbox link: https://codesandbox.io/p/sandbox/careerwithvasanthcohort1reactcoderepo-qs3j72?file=%2Fsrc%2Findex.tsx%3A9%2C21\n\n### Why Routing Is Needed in React\n\nIn traditional websites:\n\n- Each URL change → full page reload\n\n- Browser requests a new HTML page from the server\n\nIn modern React apps:\n\n- We want multiple views\n\n- Without reloading the page\n\n- While keeping URLs meaningful\n\nRouting answers this:\n\n> How do we change views based on the URL without reloading the page?\n\n---\n\n### What Is Routing in "
+              },
+              {
+                "id": "kb_3a5958d0-7e22-4d73-abbc-336282a5f193#3",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_11th-January---Hoisting-Closure-2de1199ccfe3.md",
+                "score": 0.332809,
+                "text": "Page: 11th January - Hoisting & Closure\nTopic: Topic 2: Lexical Environment & Closures > Definition\n\nA Lexical Environment is an internal data structure used by JavaScript to store variable bindings and resolve identifiers.\n\nEvery execution context is associated with a lexical environment.\n\n---\n\n### Structure of a Lexical Environment\n\nA lexical environment consists of:\n\n1. Environment Record\n\n- Stores variable, function, and parameter bindings\n\n- Example: { a: 10, foo: function }\n\n1. Outer Lexical Environment Reference\n\n- Reference to the parent lexical environment\n\n- Enables scope chaining\n\n-"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 136,
+          "endMs": 486,
+          "ms": 350
+        },
+        {
+          "stage": "embedding",
+          "kind": "embedding",
+          "startMs": 486,
+          "endMs": 1227,
+          "ms": 741,
+          "meta": {
+            "status": 200,
+            "headersMs": 741,
+            "model": "openai/text-embedding-3-small",
+            "requestBytes": 530
+          }
+        },
+        {
+          "stage": "chroma.query.knowledge",
+          "kind": "chroma",
+          "startMs": 1228,
+          "endMs": 2289,
+          "ms": 1062,
+          "meta": {
+            "hits": 20,
+            "nResults": 20
+          }
+        },
+        {
+          "stage": "reranker",
+          "kind": "rerank",
+          "startMs": 2291,
+          "endMs": 3100,
+          "ms": 809,
+          "meta": {
+            "status": 200,
+            "headersMs": 809,
+            "model": "cohere/rerank-v3.5",
+            "requestBytes": 28930,
+            "candidates": 20,
+            "results": 3,
+            "ranking": [
+              {
+                "index": 17,
+                "relevance_score": 0.13442354,
+                "document": {
+                  "text": "Page: 21st February\nTopic: ⚙ Reliability & Failure Handling > 1️⃣8️⃣ Circuit Breaker Pattern\n\n```javascript\n┌─────────────────────────────────────────────────────────────┐\n│                         USERS                               │\n│  Browser / Mobile App                                       │\n│  (Frontend UI, State, Requests, Retries, etc.)             │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           │ HTTPS Requests\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                       CDN / EDGE CACHE                      │\n│  - Static asset caching                                    │\n│  - Global delivery                                         │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                        API GATEWAY                          │\n│  - Authentication                                           │\n│  - Rate limiting                                            │\n│  - Request routing                                          │\n│  - Monitoring & logging                                     │\n│  - Request aggregation                                      │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                       LOAD BALANCER                         │\n│  Distributes traffic across service instances               │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                    MICROSERVICES LAYER                      │\n│                                                             │\n│  ┌─────────────────────┐   ┌─────────────────────┐         │\n│  │   User Service      │   │  Order Service      │         │\n│  │   (Stateless)       │   │  (Stateless)        │         │\n│  └─────────────────────┘   └─────────────────────┘         │\n│            │                          │                     │\n│            │                          │                     │\n│            │   ┌────────────────────┐ │                     │\n│            └──►│  Circuit Breaker   │◄┘                     │\n│                │  (Failure control) │                       │\n│                └────────────────────┘                       │\n│                                                             │\n│  Services communicate via:                                  │\n│                                                             │\n│  ┌─────────────────────────────────────────────────────┐    │\n│  │           MESSAGE BROKER / EVENT QUEUE              │    │\n│  │  (Async communication, Pub/Sub, Event-driven flow)  │    │\n│  └─────────────────────────────────────────────────────┘    │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                         CACHE LAYER                         │\n│  Redis / In-memo"
+                }
+              },
+              {
+                "index": 10,
+                "relevance_score": 0.110961735,
+                "document": {
+                  "text": "Page: 22nd February\n\nIn this session we designed system design of\n\n1. Auto complete system.\n\nattachment:e7ebaa3c-531c-452f-a781-353460e11028:image.png\n\nNews feed system design:\n\nattachment:c45f27ab-33d8-45e7-bea9-a3ccb23e6212:image.png"
+                }
+              },
+              {
+                "index": 6,
+                "relevance_score": 0.10296147,
+                "document": {
+                  "text": "Page: 21st February\nTopic: 🏗 System Design Best Practices\n\n✔ Centralized monitoring platform\n\n✔ Structured logging format\n\n✔ Version tagging in every event\n\n✔ Environment awareness (dev / prod)\n\n✔ Graceful failure of monitoring itself (Monitoring must never break the app)\n\n## 🎯 When Observability Is Critical\n\n- Large user base\n\n- Revenue-sensitive flows\n\n- Real-time applications\n\n- Multi-team ownership\n\n- Third-party integrations\n\n## Important Backend concepts :\n\n## 🗄 Data Storage & Data Modeling\n\n---\n\n### 1️⃣ Database (SQL vs NoSQL)\n\nA database stores and manages application data.\n\n#### SQL (Relational Databases)\n\n- Structured tables with fixed schema\n\n- Strong consistency\n\n- Relationships between data\n\n- Examples: PostgreSQL, MySQL\n\nBest for:\n\n✔ transactions\n\n✔ structured data\n\n✔ financial systems\n\n---\n\n#### NoSQL (Non-relational Databases)\n\n- Flexible schema\n\n- Scales easily\n\n- Often optimised for speed and distribution\n\n- Examples: MongoDB, DynamoDB\n\nBest for:\n\n✔ large scale systems\n\n✔ semi-structured data\n\n✔ real-time apps\n\n---"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "stage": "direction",
+          "kind": "llm",
+          "startMs": 3102,
+          "endMs": 4639,
+          "ms": 1537,
+          "meta": {
+            "status": 200,
+            "headersMs": 855,
+            "model": "openai/gpt-4.1-mini",
+            "requestBytes": 14232,
+            "usage": {
+              "prompt_tokens": 2508,
+              "completion_tokens": 74,
+              "total_tokens": 2582,
+              "cost": 0.0011216,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0011216,
+                "upstream_inference_prompt_cost": 0.0010032,
+                "upstream_inference_completions_cost": 0.0001184
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "analysis",
+          "kind": "llm",
+          "startMs": 4641,
+          "endMs": 7297,
+          "ms": 2655,
+          "meta": {
+            "status": 200,
+            "headersMs": 744,
+            "model": "openai/gpt-4.1-mini",
+            "requestBytes": 16580,
+            "usage": {
+              "prompt_tokens": 3045,
+              "completion_tokens": 250,
+              "total_tokens": 3295,
+              "cost": 0.001618,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.001618,
+                "upstream_inference_prompt_cost": 0.001218,
+                "upstream_inference_completions_cost": 0.0004
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 7300,
+          "endMs": 7693,
+          "ms": 392
+        },
+        {
+          "stage": "persona.episodes",
+          "kind": "retrieval",
+          "startMs": 7300,
+          "endMs": 8981,
+          "ms": 1681,
+          "meta": {
+            "hits": 3,
+            "records": [
+              {
+                "id": "persona_voice_episode_cmtxgkiic000i2lseh3wa13y1#12",
+                "source": "11.yaml",
+                "score": 0.6800556200000001,
+                "text": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Hmm, correct. Okay, we can check it later, okay — exactly how all these will behave. I am sharing another snippet with you now, okay? Maybe slightly complicated but not difficult. Okay. Slightly complicated, take two to three minutes, okay? But not difficult. Take two to three minutes, read the question carefully and tell me what is the output, okay? Are you clear, Ranjit? What do you think?\nPast learner: It was a totally different thing, sir.\nVasanth: Sure. Let us break it. Let's break it "
+              },
+              {
+                "id": "persona_voice_episode_cmtxgkoc6000r2lsemvnmdb9u#27",
+                "source": "22.yaml",
+                "score": 0.6690712,
+                "text": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Sure. So Aditi, I'm done from my end. I have my feedback in my mind and I've written down a few things. If you have any questions before I share my feedback, please let me know.\nPast learner: I can't think of one right now. Immediately.\nVasanth: Sure, Aditi. Aditi, let me give you what I feel about the overall interview process, right. At three years of experience, you are somewhere in the mid-range category. Whatever is expected from a senior is not expected from you, but whatever is expec"
+              },
+              {
+                "id": "persona_voice_episode_cmtxgkmsw000o2lsecvrzop1a#21",
+                "source": "04.yaml",
+                "score": 0.6670886300000001,
+                "text": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Sure. You don't have to fully explain, you can write a small block and explain, okay? Like, not to get into it too much, because we have to solve other things also.\nPast learner: Okay, for that I can say it manually.\nVasanth: Sure, sure. Please tell me then. Tell me, what is var?\nPast learner reaction: First I will start with const, okay? We use const — this is like, only one time we can use const. And another time we are using like const name, name is a variable; another time again we star"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "embedding",
+          "kind": "embedding",
+          "startMs": 7693,
+          "endMs": 8459,
+          "ms": 767,
+          "meta": {
+            "status": 200,
+            "headersMs": 754,
+            "model": "openai/text-embedding-3-small",
+            "requestBytes": 496
+          }
+        },
+        {
+          "stage": "chroma.query.persona_voice_episode",
+          "kind": "chroma",
+          "startMs": 8460,
+          "endMs": 8981,
+          "ms": 522,
+          "meta": {
+            "hits": 9,
+            "nResults": 9
+          }
+        },
+        {
+          "stage": "content",
+          "kind": "llm",
+          "startMs": 8982,
+          "endMs": 10384,
+          "ms": 1402,
+          "meta": {
+            "status": 200,
+            "headersMs": 833,
+            "model": "openai/gpt-4.1-mini",
+            "requestBytes": 20455,
+            "usage": {
+              "prompt_tokens": 3857,
+              "completion_tokens": 49,
+              "total_tokens": 3906,
+              "cost": 0.0010452,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 1920,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0010452,
+                "upstream_inference_prompt_cost": 0.0009668,
+                "upstream_inference_completions_cost": 0.0000784
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "style_gate",
+          "kind": "llm",
+          "startMs": 10384,
+          "endMs": 12409,
+          "ms": 2025,
+          "meta": {
+            "status": 200,
+            "headersMs": 1449,
+            "model": "openai/gpt-4.1-mini",
+            "requestBytes": 1665,
+            "usage": {
+              "prompt_tokens": 303,
+              "completion_tokens": 75,
+              "total_tokens": 378,
+              "cost": 0.0002412,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0002412,
+                "upstream_inference_prompt_cost": 0.0001212,
+                "upstream_inference_completions_cost": 0.00012
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 12410,
+          "endMs": 12745,
+          "ms": 335
+        },
+        {
+          "stage": "persona.style",
+          "kind": "retrieval",
+          "startMs": 12410,
+          "endMs": 14401,
+          "ms": 1991,
+          "meta": {
+            "hits": 5,
+            "records": [
+              {
+                "id": "persona_style_episode_cmtxgkqap000w2lseenvcsevt#2",
+                "source": "14.yaml",
+                "score": 0.5572537200000001,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: strong\nSpeech function: acknowledge -> transition -> question -> orient\nSentence shape: agree -> confirm -> question -> invite response\nPhrasing features: repetition, direct address, tag question, polite invitation\nCadence: engaging and structured\nTopic-neutral pattern: Exactly. Yes, yes, absolutely, <learner>. So <learner>, now let us start. I have a very simple question, okay? How do we basically handle a real-time notification in a <topic>? The best examples for real-time notificatio"
+              },
+              {
+                "id": "persona_style_episode_cmtxgkopp000s2lse47nisylb#33",
+                "source": "02.yaml",
+                "score": 0.5526561,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: closing\nSpeech function: acknowledge -> feedback -> explain -> probe\nSentence shape: acknowledgement -> feedback -> explanation -> question\nPhrasing features: direct address, repetition, encouragement, detailed feedback, polite, inclusive\nCadence: detailed, evaluative, encouraging\nTopic-neutral pattern: Yes. Good, good, <learner>. I'll just pass on my feedback, <learner>. I mean, it was a very clean, neat interview. Overall in my interview process, very few will have very in-depth knowl"
+              },
+              {
+                "id": "persona_style_episode_cmtxgkmsw000o2lsecvrzop1a#3",
+                "source": "04.yaml",
+                "score": 0.54868317,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: partial\nSpeech function: feedback -> explain -> orient -> probe -> clarify\nSentence shape: feedback -> explain -> orient -> probe -> confirm question\nPhrasing features: repetition, direct address, filler bridge, sequencing, tag question\nCadence: detailed explanation with gradual questioning\nTopic-neutral pattern: Good, good. The coding part is fine, because there are mainly two broad categories, right? Front end and the back end. So you liked building the user interface — that is the re"
+              },
+              {
+                "id": "persona_style_episode_cmtxgkl3k000l2lsegld2o2ql#2",
+                "source": "18.yaml",
+                "score": 0.54425013,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: partial\nSpeech function: explain -> answer_meta -> explain -> probe\nSentence shape: acknowledge question -> explain complexity -> suggest solution -> transition to new question -> describe example -> ask question\nPhrasing features: repetition, direct address, filler bridge, example, reassurance, multiple questions\nCadence: detailed and explanatory with smooth flow\nTopic-neutral pattern: Good that you brought this question up. See, <topic> is one of the most complex features to build. Th"
+              },
+              {
+                "id": "persona_style_episode_cmtxgkm9f000n2lsecbclu0sn#4",
+                "source": "15.yaml",
+                "score": 0.54391944,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: partial\nSpeech function: acknowledge -> explain -> probe\nSentence shape: acknowledgement -> caution -> encouragement -> question\nPhrasing features: direct address, reassurance, repetition, filler bridge\nCadence: constructive and guiding\nTopic-neutral pattern: Sure, <learner>. But there are a lot of intricacies to it, okay? It's probably one of the most difficult tasks, to show whether a particular user is online or not. It's a very difficult task. If you observe <example>, they do not d"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "embedding",
+          "kind": "embedding",
+          "startMs": 12745,
+          "endMs": 13443,
+          "ms": 698,
+          "meta": {
+            "status": 200,
+            "headersMs": 697,
+            "model": "openai/text-embedding-3-small",
+            "requestBytes": 468
+          }
+        },
+        {
+          "stage": "chroma.query.persona_style_episode",
+          "kind": "chroma",
+          "startMs": 13443,
+          "endMs": 14401,
+          "ms": 957,
+          "meta": {
+            "hits": 15,
+            "nResults": 15
+          }
+        },
+        {
+          "stage": "renderer",
+          "kind": "llm",
+          "startMs": 14402,
+          "endMs": 17820,
+          "ms": 3418,
+          "meta": {
+            "status": 200,
+            "headersMs": 953,
+            "model": "openai/gpt-4.1-mini",
+            "requestBytes": 15216,
+            "usage": {
+              "prompt_tokens": 3287,
+              "completion_tokens": 222,
+              "total_tokens": 3509,
+              "cost": 0.00167,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.00167,
+                "upstream_inference_prompt_cost": 0.0013148,
+                "upstream_inference_completions_cost": 0.0003552
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "db.persist",
+          "kind": "db",
+          "startMs": 17821,
+          "endMs": 18019,
+          "ms": 198
+        }
+      ],
+      "telemetry": {
+        "sessionId": "bench-1adea5c3d2d9b6f9",
+        "revision": 2,
+        "turn": "learner",
+        "latencyMs": 17754,
+        "promptTokens": 13000,
+        "completionTokens": 670,
+        "totalTokens": 13670,
+        "stages": [
+          "direction:1537ms",
+          "analysis:2656ms",
+          "content:1402ms",
+          "style_gate:2025ms",
+          "renderer:3418ms"
+        ],
+        "speech": {
+          "attempts": 1,
+          "flags": [],
+          "fallback": false,
+          "rendererFallback": false,
+          "draftWords": 39,
+          "finalWords": 42
+        }
+      },
+      "logs": [
+        {
+          "message": "[interview-runtime] knowledge retrieved",
+          "data": {
+            "hits": 3
+          }
+        },
+        {
+          "message": "[interview-runtime] direction completed",
+          "data": {
+            "model": "openai/gpt-4.1-mini",
+            "durationMs": 1537
+          }
+        },
+        {
+          "message": "[interview-runtime] analysis completed",
+          "data": {
+            "model": "openai/gpt-4.1-mini",
+            "durationMs": 2656
+          }
+        },
+        {
+          "message": "[interview-runtime] analogous episodes retrieved",
+          "data": {
+            "hits": 3,
+            "ids": [
+              "persona_voice_episode_cmtxgkiic000i2lseh3wa13y1#12",
+              "persona_voice_episode_cmtxgkoc6000r2lsemvnmdb9u#27",
+              "persona_voice_episode_cmtxgkmsw000o2lsecvrzop1a#21"
+            ]
+          }
+        },
+        {
+          "message": "[interview-runtime] content completed",
+          "data": {
+            "model": "openai/gpt-4.1-mini",
+            "durationMs": 1402
+          }
+        },
+        {
+          "message": "[interview-runtime] style_gate completed",
+          "data": {
+            "model": "openai/gpt-4.1-mini",
+            "durationMs": 2025
+          }
+        },
+        {
+          "message": "[interview-runtime] renderer completed",
+          "data": {
+            "model": "openai/gpt-4.1-mini",
+            "durationMs": 3418
+          }
+        },
+        {
+          "message": "[interview-runtime] completion served",
+          "data": {
+            "sessionId": "bench-1adea5c3d2d9b6f9",
+            "revision": 2,
+            "turn": "learner",
+            "latencyMs": 17754,
+            "promptTokens": 13000,
+            "completionTokens": 670,
+            "totalTokens": 13670,
+            "stages": [
+              "direction:1537ms",
+              "analysis:2656ms",
+              "content:1402ms",
+              "style_gate:2025ms",
+              "renderer:3418ms"
+            ],
+            "speech": {
+              "attempts": 1,
+              "flags": [],
+              "fallback": false,
+              "rendererFallback": false,
+              "draftWords": 39,
+              "finalWords": 42
+            }
+          }
+        }
+      ]
+    },
+    {
+      "label": "mechanism-answer",
+      "wallMs": 16610,
+      "status": 200,
+      "response": "Thanks for that explanation, Harini. Can you please describe what specific user or business problem this event-driven migration was trying to solve?",
+      "events": [
+        {
+          "stage": "db.auth",
+          "kind": "db",
+          "startMs": 0,
+          "endMs": 65,
+          "ms": 65
+        },
+        {
+          "stage": "db.knowledge_bases",
+          "kind": "db",
+          "startMs": 67,
+          "endMs": 126,
+          "ms": 59
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 126,
+          "endMs": 457,
+          "ms": 332
+        },
+        {
+          "stage": "knowledge.search",
+          "kind": "retrieval",
+          "startMs": 126,
+          "endMs": 1951,
+          "ms": 1826,
+          "meta": {
+            "hits": 20,
+            "records": [
+              {
+                "id": "kb_787c3f51-fbe9-44cc-91e1-6444cf626a4f#9",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_21st-February-30b1199ccfe3.md",
+                "score": 0.43933064,
+                "text": "Page: 21st February\nTopic: 🏗 System Design Best Practices\n\n✔ Centralized monitoring platform\n\n✔ Structured logging format\n\n✔ Version tagging in every event\n\n✔ Environment awareness (dev / prod)\n\n✔ Graceful failure of monitoring itself (Monitoring must never break the app)\n\n## 🎯 When Observability Is Critical\n\n- Large user base\n\n- Revenue-sensitive flows\n\n- Real-time applications\n\n- Multi-team ownership\n\n- Third-party integrations\n\n## Important Backend concepts :\n\n## 🗄 Data Storage & Data Modeling\n\n---\n\n### 1️⃣ Database (SQL vs NoSQL)\n\nA database stores and manages application data.\n\n#### SQ"
+              },
+              {
+                "id": "kb_9d5bd678-a9aa-4376-8fca-4a56917d7e9a#0",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Placement-assistance-instructions-3121199ccfe3.md",
+                "score": 0.42823429999999996,
+                "text": "Page: Placement assistance instructions\n\nThis program is designed to support participants in their interview preparation and job placement journey after successfully completing the cohort.\n\nThe goal is to ensure every serious learner gets structured guidance, validation, and mentorship while applying for jobs.\n\n---\n\n### 📅 Support Duration\n\nAfter completing the cohort, participants will receive placement support for 3 months.\n\nDuring this period, I will actively help with:\n\n- Interview preparation\n\n- Concept clarification\n\n- Assignment validation\n\n- Job application strategy\n\n- Mock discussions"
+              },
+              {
+                "id": "kb_787c3f51-fbe9-44cc-91e1-6444cf626a4f#15",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_21st-February-30b1199ccfe3.md",
+                "score": 0.42793000000000003,
+                "text": "Page: 21st February\nTopic: ⚙ Reliability & Failure Handling > 1️⃣8️⃣ Circuit Breaker Pattern\n\nry cache                                    │\n│  - Fast reads                                               │\n│  - Reduced DB load                                          │\n│  - Possible stale data                                      │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                         DATABASE                            │\n│                 "
+              },
+              {
+                "id": "kb_9dda99f3-370e-48ff-a2bf-072afc23981f#18",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_System-design-Introduction-3061199ccfe3.md",
+                "score": 0.41955184999999995,
+                "text": "Page: System design Introduction\nTopic: Topic 6: Discussing practical questions > Meaningful Solution Architecture > ✅ 2. Request Deduplication / Caching\n\nIf user revisits route quickly:\n\n```plain text\nReuse existing response\n```\n\nUse data layer:\n\n- React Query\n\n- SWR (stale-while-revalidate)\n\n- custom cache map\n\nKey idea:\n\n```plain text\nqueryKey = route + params\n```\n\n---\n\n#### ✅ 3. Stale Response Protection (Critical)\n\nEven if cancellation fails, ignore outdated responses.\n\nTechnique:\n\n- requestId tracking\n\n- version tokens\n\n- latest-only rendering\n\n---\n\n### Interview Summary Answer\n\nCancel i"
+              },
+              {
+                "id": "kb_b1918d7f-3ca4-431b-9483-4d7725b80fb7#1",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Weekly-assignment-30f1199ccfe3.md",
+                "score": 0.4193382,
+                "text": "Page: Weekly assignment\nTopic: 📝 What You Need to Do (For Each System) > 4️⃣ Solve Top Non-Functional Design Problems\n\nFrom your non-functional list:\n\n- Pick top 2 critical non-functional concerns\n\n- Provide design solutions\n\n- Each system must focus on different non-functional priorities (So that overall you will cover most non-functional requirements)\n\nExamples:\n\n- Scalability strategy\n\n- Low latency delivery\n\n- High availability architecture\n\n- Consistency handling\n\n- Fault tolerance\n\n---\n\n###"
+              },
+              {
+                "id": "kb_9d5bd678-a9aa-4376-8fca-4a56917d7e9a#2",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Placement-assistance-instructions-3121199ccfe3.md",
+                "score": 0.41748977,
+                "text": "Page: Placement assistance instructions\nTopic: 🤝 Mode of Support\n\nBased on urgency, complexity, and availability, support may happen through:\n\n- Quick chat guidance\n\n- Voice call\n\n- Video call\n\n- Concept discussion session\n\n- Interview preparation walkthrough\n\nSupport will be provided in the most effective format for the situation.\n\n---\n\n### 🧠 What I Expect From Participants\n\nTo make the best use of this program:\n\n✔ Be proactive in learning and applying\n\n✔ Communicate early about interview schedules\n\n✔ Come prepared with questions or topics\n\n✔ Complete assignments sincerely\n\n✔ Focus on under"
+              },
+              {
+                "id": "kb_b1918d7f-3ca4-431b-9483-4d7725b80fb7#0",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Weekly-assignment-30f1199ccfe3.md",
+                "score": 0.4073709,
+                "text": "Page: Weekly assignment\n\n### 🧩 Systems to Design\n\nYou will perform the same exercise for each of the following systems:\n\n1. Code Sandbox Platform (like CodePen / Replit)\n\n1. E-commerce Application (like Amazon / Flipkart)\n\n1. Video Streaming Platform (like YouTube)\n\n1. Seat Booking System (like BookMyShow)\n\n---\n\n### 📝 What You Need to Do (For Each System)\n\n#### 1️⃣ List Functional Requirements\n\nIdentify what features the system must provide to users.\n\nExamples:\n\n- Core capabilities\n\n- User interactions\n\n- Primary workflows\n\n---\n\n#### 2️⃣ List Non-Functional Requirements\n\nDefine system qualit"
+              },
+              {
+                "id": "kb_2fb969cc-476f-4918-9ca1-f62ab674be37#0",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_22nd-February-30b1199ccfe3.md",
+                "score": 0.4073,
+                "text": "Page: 22nd February\n\nIn this session we designed system design of\n\n1. Auto complete system.\n\nattachment:e7ebaa3c-531c-452f-a781-353460e11028:image.png\n\nNews feed system design:\n\nattachment:c45f27ab-33d8-45e7-bea9-a3ccb23e6212:image.png"
+              },
+              {
+                "id": "kb_328e3cba-730c-400c-add1-8daa41bdba77#2",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Good-resume-formats-3051199ccfe3.md",
+                "score": 0.40597075000000005,
+                "text": "Page: Good resume formats\nTopic: 5️⃣ Experience Section — MOST IMPORTANT > Bullet Formula\n\n```plain text\nAction Verb +Task + Tool + Impact + Metric\n```\n\nExamples:\n\n- Reduced bundle size by 42% using code splitting.\n\n- Improved page load speed from 4.5s → 1.2s.\n\n- Led migration from class components to hooks for 60+ components.\n\n---\n\n## 6️⃣ Quantification — SECRET WEAPON\n\nIf you don’t quantify → recruiter assumes average work.\n\n#### Examples of Metrics\n\n- %\n\n- Time saved\n\n- Revenue impact\n\n- User count\n\n- Performance improvement\n\n- Team size\n\n- Feature adoption\n\n---\n\n#### ❌ Without Numbers\n\n> O"
+              },
+              {
+                "id": "kb_787c3f51-fbe9-44cc-91e1-6444cf626a4f#8",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_21st-February-30b1199ccfe3.md",
+                "score": 0.40421490000000004,
+                "text": "Page: 21st February\nTopic: 🧩 Core Pillars of Frontend Observability > 5️⃣ Session Replay (Behavior Reconstruction) > Why useful\n\nSome bugs cannot be reproduced.\n\nReplay shows:\n\n```plain text\nExactly whatuser did\nExactly what UI showed\n```\n\n---\n\n#### Example tools\n\n- LogRocket\n\n- FullStory\n\n---\n\n## 🔔 Alerting Strategy\n\nMonitoring without alerts is useless.\n\nAlerts trigger when thresholds exceed.\n\nExamples:\n\n- error rate > 5%\n\n- API latency spike\n\n- page load > 4s\n\n- feature crash detected\n\n---\n\n### Good alert design\n\n✔ actionable\n\n✔ not noisy\n\n✔ severity classified\n\n✔ routed to correct team\n\n"
+              },
+              {
+                "id": "kb_e0d821c3-555f-43be-bd11-a59a082437c3#3",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Assignments-2ec1199ccfe3.md",
+                "score": 0.40356749999999997,
+                "text": "Page: Assignments\nTopic: Deep and Shallow Copy\n\n#### Atlassian | Machine Coding: The Ultimate Deep Clone\n\nQuestion: Implement deepClone(obj). It must handle circular references. Atlassian specifically checks for memory efficiency and handling of nested structures without using JSON.stringify.\n\nJavaScript\n\n```javascript\nfunction deepClone(value, map = new WeakMap()) {\n  // 1. Base case: handle primitives\n  // 2. Handle circular references using map\n  // 3. Recursive cloning for Arrays and Objects\n}\n\nconst original = {\n  a: 1,\n  b: { c: 2 },\n  d: [11, 7],\n};\noriginal.self = original; // Circular"
+              },
+              {
+                "id": "kb_787c3f51-fbe9-44cc-91e1-6444cf626a4f#11",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_21st-February-30b1199ccfe3.md",
+                "score": 0.4030726,
+                "text": "Page: 21st February\nTopic: 🌐 Request Handling & Infrastructure\n\n---\n\n### 5️⃣  API Gateway\n\nSingle entry point for all client requests.\n\n#### Responsibilities\n\n✔ Authentication / authorization\n\n✔ Rate limiting\n\n✔ Request validation\n\n✔ Aggregating multiple services\n\n✔ Logging / monitoring\n\n✔ Load balancing\n\n✔ Versioning\n\n✔ Security enforcement\n\n✔ Response transformation\n\n```javascript\nClient\n   ↓\nAPI Gateway (policy + control + routing)\n   ↓\nMultiple backend services\n```\n\n#### Example real systems\n\n- AWS API Gateway\n\n- Kong\n\n- Apigee\n\n- Azure API Management\n\n---\n\n### 6️⃣ Load Balancer\n\nDistribu"
+              },
+              {
+                "id": "kb_787c3f51-fbe9-44cc-91e1-6444cf626a4f#14",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_21st-February-30b1199ccfe3.md",
+                "score": 0.39720200000000006,
+                "text": "Page: 21st February\nTopic: ⚙ Reliability & Failure Handling > 1️⃣8️⃣ Circuit Breaker Pattern\n\n```javascript\n┌─────────────────────────────────────────────────────────────┐\n│                         USERS                               │\n│  Browser / Mobile App                                       │\n│  (Frontend UI, State, Requests, Retries, etc.)             │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           │ HTTPS Requests\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│      "
+              },
+              {
+                "id": "kb_68c8a2e4-4516-47b0-b856-f052f831022b#0",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_28th-Feb-3151199ccfe3.md",
+                "score": 0.37142085999999996,
+                "text": "Page: 28th Feb\n\nCode sandbox system design\n\nattachment:b0d35ddc-f459-455c-b281-18ec34f0b2ca:image.png\n\nBookMyShow design was also discussed. One can checkout the video to understand it better."
+              },
+              {
+                "id": "kb_328e3cba-730c-400c-add1-8daa41bdba77#1",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Good-resume-formats-3051199ccfe3.md",
+                "score": 0.36582479999999995,
+                "text": "Page: Good resume formats\nTopic: 3️⃣ Headline / Summary\n\n#### ❌ Bad\n\n> Hardworking developer looking for opportunity to grow.\n\n#### ✅ Good\n\n> Frontend Developer with 4 years experience building scalable React applications used by 200k+ users.\n\nFormula\n\n```plain text\nRole + Years +Key Tech + Impact\n```\n\n---\n\n## 4️⃣ Skills Section\n\n#### ❌ Bad Practice\n\nListing every skill ever touched.\n\n```plain text\nHTML CSS JS React Angular Vue Python Java C++ AWS Docker Kubernetes ML AI Blockchain\n```\n\n#### ✅ Good Practice\n\nGroup and prioritize:\n\nLanguages: JavaScript, TypeScript\n\nFrontend: React, Redux, Next"
+              },
+              {
+                "id": "kb_1b180004-e7cb-4d06-978b-96a0dc07767a#0",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Session-1-thought-provoking-questions-2dd1199ccfe3.md",
+                "score": 0.3579148,
+                "text": "Page: Session 1: thought provoking questions\n\n1. Environments where there is no browser ex: nodeJS, how will browser web APIs example setTimeout will work ?\n\n1. Which language the v8 engine is written ?\n\n1. Why JS is weekly typed programming language ?\n\n1. Are there event loop for each browser tab or ?\n\n1. If there is only one GEC then how variable duplication works ? in JS\n\n1. Given a project, will you have less number of closures or more ? justify you’re answer.\n\n1. As arrow functions / function expressions are not hoisted, how are you able to call arrow functions anywhere in React ?"
+              },
+              {
+                "id": "kb_1b49757f-2ec5-4346-8e8c-db46f3865847#1",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_1st-March-3151199ccfe3.md",
+                "score": 0.35430490000000003,
+                "text": "Page: 1st March\nTopic: 🔴 Step 2 — Server Receives B (Created on Old Version)\n\nB says:\n\n```plain text\nDelete 5 chars at pos 6\n```\n\nBut position 6 now points to:\n\n```plain text\nB (start of \"Beautiful\")\n```\n\nThat’s wrong.\n\n---\n\n## 🧠 Operational Transformation Happens\n\nServer transforms B relative to A.\n\nA inserted 10 characters before B’s delete position.\n\nSo shift B’s position right by 10:\n\n```plain text\nOld pos: 6\nNew pos: 6 + 10 = 16\n```\n\nTransformed operation:\n\n```plain text\nDelete(5 chars from pos 16)\n```\n\n---\n\n## 🔵 Step 3 — Server Applies Transformed B\n\nResult:\n\n```plain text\nHello Beaut"
+              },
+              {
+                "id": "kb_6db5252d-65c6-461f-9cb2-20e0ca29f3f2#3",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_10th-January---JavaScript-Basics-2dc1199ccfe3.md",
+                "score": 0.34926784,
+                "text": "Page: 10th January - JavaScript Basics\nTopic: Topic 1: What is JavaScript Runtime? > Key Takeaways\n\n- JavaScript executes code using a single call stack\n\n- Asynchronous operations are handled by browser Web APIs\n\n- Microtasks have higher priority than macrotasks\n\n- Event loop decides execution order\n\n- setTimeout(0) does not mean immediate execution\n\n---\n\n### How is Event Loop different from JS Engine (V8) ?\n\n“The event loop is a browser-side scheduler that coordinates when the JavaScript engine can execute queued callbacks.”\n\n### Why doesn’t the JS Engine include the Event Loop?\n\nBecause Java"
+              },
+              {
+                "id": "kb_e0d821c3-555f-43be-bd11-a59a082437c3#1",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Assignments-2ec1199ccfe3.md",
+                "score": 0.34909225,
+                "text": "Page: Assignments\nTopic: Promises & Asynchronous JavaScript > Microsoft | Technical Round: The Microtask Priority Riddle\n\nQuestion: Predict the exact output. Explain why the asyncFn behaves differently than a standard promise chain.\n\nJavaScript\n\n```javascript\nconsole.log('1 - Sync');\n\nsetTimeout(() => {\n  console.log('2 - Macrotask');\n}, 0);\n\nasync function asyncFn() {\n  console.log('3 - Inside Async');\n  await Promise.resolve();\n  console.log('4 - After Await');\n}\n\nasyncFn();\n\nPromise.resolve().then(() => {\n  console.log('5 - Microtask');\n});\n\nconsole.log('6 - Sync End');\n```\n\n---\n\n### Call, "
+              },
+              {
+                "id": "kb_faae9cac-1d56-4046-97a3-025e471f544b#0",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Assignment-questions-3031199ccfe3.md",
+                "score": 0.34888136000000003,
+                "text": "Page: Assignment questions\n\nApproximate interview time to solve all the below problems is 45 minutes to 1 hour.\n\n## Problem 1:  Implement a Config-Driven Form Renderer with Validation Rules\n\n#### Problem Statement\n\nBuild a form renderer that does not hardcode inputs in JSX, but instead renders the form entirely from a configuration object.\n\n---\n\n#### Expectations:\n\n#### Form Rendering\n\n- Form fields must be generated dynamically from a config like:\n\n- input type (text, email, number, select, checkbox, etc.)\n\n- label\n\n- name / key\n\n- default value\n\n- Adding a new field should require only confi"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "embedding",
+          "kind": "embedding",
+          "startMs": 457,
+          "endMs": 1187,
+          "ms": 730,
+          "meta": {
+            "status": 200,
+            "headersMs": 717,
+            "model": "openai/text-embedding-3-small",
+            "requestBytes": 1036
+          }
+        },
+        {
+          "stage": "chroma.query.knowledge",
+          "kind": "chroma",
+          "startMs": 1187,
+          "endMs": 1951,
+          "ms": 764,
+          "meta": {
+            "hits": 20,
+            "nResults": 20
+          }
+        },
+        {
+          "stage": "reranker",
+          "kind": "rerank",
+          "startMs": 1952,
+          "endMs": 2716,
+          "ms": 764,
+          "meta": {
+            "status": 200,
+            "headersMs": 763,
+            "model": "cohere/rerank-v3.5",
+            "requestBytes": 29962,
+            "candidates": 20,
+            "results": 3,
+            "ranking": [
+              {
+                "index": 12,
+                "relevance_score": 0.42534322,
+                "document": {
+                  "text": "Page: 21st February\nTopic: ⚙ Reliability & Failure Handling > 1️⃣8️⃣ Circuit Breaker Pattern\n\n```javascript\n┌─────────────────────────────────────────────────────────────┐\n│                         USERS                               │\n│  Browser / Mobile App                                       │\n│  (Frontend UI, State, Requests, Retries, etc.)             │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           │ HTTPS Requests\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                       CDN / EDGE CACHE                      │\n│  - Static asset caching                                    │\n│  - Global delivery                                         │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                        API GATEWAY                          │\n│  - Authentication                                           │\n│  - Rate limiting                                            │\n│  - Request routing                                          │\n│  - Monitoring & logging                                     │\n│  - Request aggregation                                      │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                       LOAD BALANCER                         │\n│  Distributes traffic across service instances               │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                    MICROSERVICES LAYER                      │\n│                                                             │\n│  ┌─────────────────────┐   ┌─────────────────────┐         │\n│  │   User Service      │   │  Order Service      │         │\n│  │   (Stateless)       │   │  (Stateless)        │         │\n│  └─────────────────────┘   └─────────────────────┘         │\n│            │                          │                     │\n│            │                          │                     │\n│            │   ┌────────────────────┐ │                     │\n│            └──►│  Circuit Breaker   │◄┘                     │\n│                │  (Failure control) │                       │\n│                └────────────────────┘                       │\n│                                                             │\n│  Services communicate via:                                  │\n│                                                             │\n│  ┌─────────────────────────────────────────────────────┐    │\n│  │           MESSAGE BROKER / EVENT QUEUE              │    │\n│  │  (Async communication, Pub/Sub, Event-driven flow)  │    │\n│  └─────────────────────────────────────────────────────┘    │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                         CACHE LAYER                         │\n│  Redis / In-memo"
+                }
+              },
+              {
+                "index": 2,
+                "relevance_score": 0.39096457,
+                "document": {
+                  "text": "Page: 21st February\nTopic: ⚙ Reliability & Failure Handling > 1️⃣8️⃣ Circuit Breaker Pattern\n\nry cache                                    │\n│  - Fast reads                                               │\n│  - Reduced DB load                                          │\n│  - Possible stale data                                      │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                         DATABASE                            │\n│                                                             │\n│   ┌──────────────────────┐                                  │\n│   │  PRIMARY / LEADER    │  ← Writes                        │\n│   └──────────────────────┘                                  │\n│             │                                               │\n│             │ Replication                                   │\n│             ▼                                               │\n│   ┌──────────────────────┐                                  │\n│   │  REPLICA / FOLLOWER  │  ← Reads                         │\n│   └──────────────────────┘                                  │\n│                                                             │\n│  Consistency Model:                                         │\n│  - Strong OR Eventual                                       │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                DISTRIBUTED TRANSACTION LOGIC                │\n│  - Two Phase Commit                                         │\n│  - Saga Pattern                                             │\n│  - Rollback / Compensation                                  │\n│                                                             │\n│  Idempotency ensures safe retries                           │\n└─────────────────────────────────────────────────────────────┘\n```\n\nOverall backend design diagram, drawn in the session:\n\nattachment:7bcfbb31-70f1-4aac-8d82-18437337dcba:image.png"
+                }
+              },
+              {
+                "index": 7,
+                "relevance_score": 0.20731136,
+                "document": {
+                  "text": "Page: 22nd February\n\nIn this session we designed system design of\n\n1. Auto complete system.\n\nattachment:e7ebaa3c-531c-452f-a781-353460e11028:image.png\n\nNews feed system design:\n\nattachment:c45f27ab-33d8-45e7-bea9-a3ccb23e6212:image.png"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "stage": "direction",
+          "kind": "llm",
+          "startMs": 2717,
+          "endMs": 4501,
+          "ms": 1784,
+          "meta": {
+            "status": 200,
+            "headersMs": 811,
+            "model": "openai/gpt-4.1-mini",
+            "requestBytes": 17016,
+            "usage": {
+              "prompt_tokens": 2769,
+              "completion_tokens": 76,
+              "total_tokens": 2845,
+              "cost": 0.0012292,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0012292,
+                "upstream_inference_prompt_cost": 0.0011076,
+                "upstream_inference_completions_cost": 0.0001216
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "analysis",
+          "kind": "llm",
+          "startMs": 4501,
+          "endMs": 7678,
+          "ms": 3177,
+          "meta": {
+            "status": 200,
+            "headersMs": 776,
+            "model": "openai/gpt-4.1-mini",
+            "requestBytes": 19779,
+            "usage": {
+              "prompt_tokens": 3392,
+              "completion_tokens": 302,
+              "total_tokens": 3694,
+              "cost": 0.00184,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.00184,
+                "upstream_inference_prompt_cost": 0.0013568,
+                "upstream_inference_completions_cost": 0.0004832
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 7678,
+          "endMs": 8008,
+          "ms": 330
+        },
+        {
+          "stage": "persona.episodes",
+          "kind": "retrieval",
+          "startMs": 7678,
+          "endMs": 9309,
+          "ms": 1631,
+          "meta": {
+            "hits": 3,
+            "records": [
+              {
+                "id": "persona_voice_episode_cmtxgkoc6000r2lsemvnmdb9u#27",
+                "source": "22.yaml",
+                "score": 0.6003524,
+                "text": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Sure. So Aditi, I'm done from my end. I have my feedback in my mind and I've written down a few things. If you have any questions before I share my feedback, please let me know.\nPast learner: I can't think of one right now. Immediately.\nVasanth: Sure, Aditi. Aditi, let me give you what I feel about the overall interview process, right. At three years of experience, you are somewhere in the mid-range category. Whatever is expected from a senior is not expected from you, but whatever is expec"
+              },
+              {
+                "id": "persona_voice_episode_cmtxgkk5x000k2lsejvfy7m5e#18",
+                "source": "12.yaml",
+                "score": 0.59180868,
+                "text": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Okay. Good. So I'm done from my end, Kriti, and this is the time where I give my feedback to you. But before I give my feedback, do you have any questions for me? Like primarily around the interview, do you have any questions?\nPast learner: Now it's all good, it's gone very good. I am very much interested about this. So I would like to ask more — then we can just discuss more on the local storage and session storage that you asked. I was actually a little confused there.\nVasanth: Yeah. Sure"
+              },
+              {
+                "id": "persona_voice_episode_cmtxgkiic000i2lseh3wa13y1#12",
+                "source": "11.yaml",
+                "score": 0.58843017,
+                "text": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Hmm, correct. Okay, we can check it later, okay — exactly how all these will behave. I am sharing another snippet with you now, okay? Maybe slightly complicated but not difficult. Okay. Slightly complicated, take two to three minutes, okay? But not difficult. Take two to three minutes, read the question carefully and tell me what is the output, okay? Are you clear, Ranjit? What do you think?\nPast learner: It was a totally different thing, sir.\nVasanth: Sure. Let us break it. Let's break it "
+              }
+            ]
+          }
+        },
+        {
+          "stage": "embedding",
+          "kind": "embedding",
+          "startMs": 8008,
+          "endMs": 8712,
+          "ms": 704,
+          "meta": {
+            "status": 200,
+            "headersMs": 704,
+            "model": "openai/text-embedding-3-small",
+            "requestBytes": 550
+          }
+        },
+        {
+          "stage": "chroma.query.persona_voice_episode",
+          "kind": "chroma",
+          "startMs": 8712,
+          "endMs": 9309,
+          "ms": 597,
+          "meta": {
+            "hits": 9,
+            "nResults": 9
+          }
+        },
+        {
+          "stage": "content",
+          "kind": "llm",
+          "startMs": 9310,
+          "endMs": 10581,
+          "ms": 1271,
+          "meta": {
+            "status": 200,
+            "headersMs": 913,
+            "model": "openai/gpt-4.1-mini",
+            "requestBytes": 24468,
+            "usage": {
+              "prompt_tokens": 4362,
+              "completion_tokens": 28,
+              "total_tokens": 4390,
+              "cost": 0.0012136,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 1920,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0012136,
+                "upstream_inference_prompt_cost": 0.0011688,
+                "upstream_inference_completions_cost": 0.0000448
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "style_gate",
+          "kind": "llm",
+          "startMs": 10582,
+          "endMs": 12267,
+          "ms": 1685,
+          "meta": {
+            "status": 200,
+            "headersMs": 788,
+            "model": "openai/gpt-4.1-mini",
+            "requestBytes": 1542,
+            "usage": {
+              "prompt_tokens": 290,
+              "completion_tokens": 113,
+              "total_tokens": 403,
+              "cost": 0.0002968,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0002968,
+                "upstream_inference_prompt_cost": 0.000116,
+                "upstream_inference_completions_cost": 0.0001808
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 12268,
+          "endMs": 12585,
+          "ms": 318
+        },
+        {
+          "stage": "persona.style",
+          "kind": "retrieval",
+          "startMs": 12268,
+          "endMs": 13792,
+          "ms": 1524,
+          "meta": {
+            "hits": 5,
+            "records": [
+              {
+                "id": "persona_style_episode_cmtxgkp4z000t2lse6p1gvti2#5",
+                "source": "20.yaml",
+                "score": 0.55648184,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: partial\nSpeech function: probe\nSentence shape: request explanation\nPhrasing features: direct address, polite request\nCadence: inquiring and encouraging\nTopic-neutral pattern: OK. Please explain how you are going to — what data does the client pass, what data do we get from the server? Can you elaborate?\nExact Vasanth wording: OK. Please explain how you are going to — what data does the client pass, what data do we get from the server? Can you elaborate?"
+              },
+              {
+                "id": "persona_style_episode_cmtxgklsz000m2lsej2k52ssl#8",
+                "source": "09.yaml",
+                "score": 0.548836,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: partial\nSpeech function: acknowledge -> paraphrase -> probe\nSentence shape: acknowledge learner's answer -> paraphrase -> ask next step\nPhrasing features: repetition, direct address, example, tag question\nCadence: engaged and guiding\nTopic-neutral pattern: I get it. So that is what the question is. There is only one thread, <learner>, correct? So it is doing something. And you say something is happening in the background, and once the background task is completed it again has to get exe"
+              },
+              {
+                "id": "persona_style_episode_cmtxgkpwn000v2lsejzrs9whg#5",
+                "source": "21.yaml",
+                "score": 0.54209423,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: confused\nSpeech function: clarify\nSentence shape: correction -> explanation -> question\nPhrasing features: direct address, repetition, tag question\nCadence: clarifying and guiding\nTopic-neutral pattern: There is no one ask as such in this problem. Okay. Basically this is a system that I want to build. I want to optimise it — anything you can optimise, like that. Correct? Because the basic flow is simple: enter something, make an API call, get the data, show it on the screen. That's the "
+              },
+              {
+                "id": "persona_style_episode_cmtxgkqap000w2lseenvcsevt#2",
+                "source": "14.yaml",
+                "score": 0.5378116399999999,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: strong\nSpeech function: acknowledge -> transition -> question -> orient\nSentence shape: agree -> confirm -> question -> invite response\nPhrasing features: repetition, direct address, tag question, polite invitation\nCadence: engaging and structured\nTopic-neutral pattern: Exactly. Yes, yes, absolutely, <learner>. So <learner>, now let us start. I have a very simple question, okay? How do we basically handle a real-time notification in a <topic>? The best examples for real-time notificatio"
+              },
+              {
+                "id": "persona_style_episode_cmtxgknxv000q2lsehq0f44l5#8",
+                "source": "10.yaml",
+                "score": 0.53748047,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: strong\nSpeech function: explain\nSentence shape: Wonderful. -> Yes, yes. -> Sure, <learner>. -> So I'll ask another question. -> This is one of the common questions that I ask in the interview related to <topic>, okay? -> Let's say you are on a page, and on the page three API calls are made, parallel API calls, which are not dependent on one another. -> This was asked to me in <company> when I had attended the interview, okay? -> So now what is happening is, I have logged into the websit"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "embedding",
+          "kind": "embedding",
+          "startMs": 12585,
+          "endMs": 13269,
+          "ms": 684,
+          "meta": {
+            "status": 200,
+            "headersMs": 678,
+            "model": "openai/text-embedding-3-small",
+            "requestBytes": 667
+          }
+        },
+        {
+          "stage": "chroma.query.persona_style_episode",
+          "kind": "chroma",
+          "startMs": 13269,
+          "endMs": 13792,
+          "ms": 522,
+          "meta": {
+            "hits": 15,
+            "nResults": 15
+          }
+        },
+        {
+          "stage": "renderer",
+          "kind": "llm",
+          "startMs": 13793,
+          "endMs": 16384,
+          "ms": 2591,
+          "meta": {
+            "status": 200,
+            "headersMs": 764,
+            "model": "openai/gpt-4.1-mini",
+            "requestBytes": 11562,
+            "usage": {
+              "prompt_tokens": 2555,
+              "completion_tokens": 196,
+              "total_tokens": 2751,
+              "cost": 0.0013356,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0013356,
+                "upstream_inference_prompt_cost": 0.001022,
+                "upstream_inference_completions_cost": 0.0003136
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "db.persist",
+          "kind": "db",
+          "startMs": 16385,
+          "endMs": 16610,
+          "ms": 225
+        }
+      ],
+      "telemetry": {
+        "sessionId": "bench-1adea5c3d2d9b6f9",
+        "revision": 3,
+        "turn": "learner",
+        "latencyMs": 16318,
+        "promptTokens": 13368,
+        "completionTokens": 715,
+        "totalTokens": 14083,
+        "stages": [
+          "direction:1785ms",
+          "analysis:3177ms",
+          "content:1272ms",
+          "style_gate:1685ms",
+          "renderer:2592ms"
+        ],
+        "speech": {
+          "attempts": 1,
+          "flags": [],
+          "fallback": false,
+          "rendererFallback": false,
+          "draftWords": 22,
+          "finalWords": 22
+        }
+      },
+      "logs": [
+        {
+          "message": "[interview-runtime] knowledge retrieved",
+          "data": {
+            "hits": 3
+          }
+        },
+        {
+          "message": "[interview-runtime] direction completed",
+          "data": {
+            "model": "openai/gpt-4.1-mini",
+            "durationMs": 1785
+          }
+        },
+        {
+          "message": "[interview-runtime] analysis completed",
+          "data": {
+            "model": "openai/gpt-4.1-mini",
+            "durationMs": 3177
+          }
+        },
+        {
+          "message": "[interview-runtime] analogous episodes retrieved",
+          "data": {
+            "hits": 3,
+            "ids": [
+              "persona_voice_episode_cmtxgkoc6000r2lsemvnmdb9u#27",
+              "persona_voice_episode_cmtxgkk5x000k2lsejvfy7m5e#18",
+              "persona_voice_episode_cmtxgkiic000i2lseh3wa13y1#12"
+            ]
+          }
+        },
+        {
+          "message": "[interview-runtime] content completed",
+          "data": {
+            "model": "openai/gpt-4.1-mini",
+            "durationMs": 1272
+          }
+        },
+        {
+          "message": "[interview-runtime] style_gate completed",
+          "data": {
+            "model": "openai/gpt-4.1-mini",
+            "durationMs": 1685
+          }
+        },
+        {
+          "message": "[interview-runtime] renderer completed",
+          "data": {
+            "model": "openai/gpt-4.1-mini",
+            "durationMs": 2592
+          }
+        },
+        {
+          "message": "[interview-runtime] completion served",
+          "data": {
+            "sessionId": "bench-1adea5c3d2d9b6f9",
+            "revision": 3,
+            "turn": "learner",
+            "latencyMs": 16318,
+            "promptTokens": 13368,
+            "completionTokens": 715,
+            "totalTokens": 14083,
+            "stages": [
+              "direction:1785ms",
+              "analysis:3177ms",
+              "content:1272ms",
+              "style_gate:1685ms",
+              "renderer:2592ms"
+            ],
+            "speech": {
+              "attempts": 1,
+              "flags": [],
+              "fallback": false,
+              "rendererFallback": false,
+              "draftWords": 22,
+              "finalWords": 22
+            }
+          }
+        }
+      ]
+    },
+    {
+      "label": "impact-answer",
+      "wallMs": 17751,
+      "status": 200,
+      "response": "Good, good, Harini. That’s a really strong impact you have shared. Now, to get a clearer picture of your role, can you walk me through one specific technical decision or change you made during the migration that directly led to these improvements?",
+      "events": [
+        {
+          "stage": "db.auth",
+          "kind": "db",
+          "startMs": 0,
+          "endMs": 67,
+          "ms": 67
+        },
+        {
+          "stage": "db.knowledge_bases",
+          "kind": "db",
+          "startMs": 68,
+          "endMs": 130,
+          "ms": 62
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 130,
+          "endMs": 455,
+          "ms": 325
+        },
+        {
+          "stage": "knowledge.search",
+          "kind": "retrieval",
+          "startMs": 130,
+          "endMs": 1982,
+          "ms": 1852,
+          "meta": {
+            "hits": 20,
+            "records": [
+              {
+                "id": "kb_9dda99f3-370e-48ff-a2bf-072afc23981f#18",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_System-design-Introduction-3061199ccfe3.md",
+                "score": 0.44333404,
+                "text": "Page: System design Introduction\nTopic: Topic 6: Discussing practical questions > Meaningful Solution Architecture > ✅ 2. Request Deduplication / Caching\n\nIf user revisits route quickly:\n\n```plain text\nReuse existing response\n```\n\nUse data layer:\n\n- React Query\n\n- SWR (stale-while-revalidate)\n\n- custom cache map\n\nKey idea:\n\n```plain text\nqueryKey = route + params\n```\n\n---\n\n#### ✅ 3. Stale Response Protection (Critical)\n\nEven if cancellation fails, ignore outdated responses.\n\nTechnique:\n\n- requestId tracking\n\n- version tokens\n\n- latest-only rendering\n\n---\n\n### Interview Summary Answer\n\nCancel i"
+              },
+              {
+                "id": "kb_787c3f51-fbe9-44cc-91e1-6444cf626a4f#9",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_21st-February-30b1199ccfe3.md",
+                "score": 0.43041149999999995,
+                "text": "Page: 21st February\nTopic: 🏗 System Design Best Practices\n\n✔ Centralized monitoring platform\n\n✔ Structured logging format\n\n✔ Version tagging in every event\n\n✔ Environment awareness (dev / prod)\n\n✔ Graceful failure of monitoring itself (Monitoring must never break the app)\n\n## 🎯 When Observability Is Critical\n\n- Large user base\n\n- Revenue-sensitive flows\n\n- Real-time applications\n\n- Multi-team ownership\n\n- Third-party integrations\n\n## Important Backend concepts :\n\n## 🗄 Data Storage & Data Modeling\n\n---\n\n### 1️⃣ Database (SQL vs NoSQL)\n\nA database stores and manages application data.\n\n#### SQ"
+              },
+              {
+                "id": "kb_b1918d7f-3ca4-431b-9483-4d7725b80fb7#1",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Weekly-assignment-30f1199ccfe3.md",
+                "score": 0.42540290000000003,
+                "text": "Page: Weekly assignment\nTopic: 📝 What You Need to Do (For Each System) > 4️⃣ Solve Top Non-Functional Design Problems\n\nFrom your non-functional list:\n\n- Pick top 2 critical non-functional concerns\n\n- Provide design solutions\n\n- Each system must focus on different non-functional priorities (So that overall you will cover most non-functional requirements)\n\nExamples:\n\n- Scalability strategy\n\n- Low latency delivery\n\n- High availability architecture\n\n- Consistency handling\n\n- Fault tolerance\n\n---\n\n###"
+              },
+              {
+                "id": "kb_328e3cba-730c-400c-add1-8daa41bdba77#2",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Good-resume-formats-3051199ccfe3.md",
+                "score": 0.42111856000000003,
+                "text": "Page: Good resume formats\nTopic: 5️⃣ Experience Section — MOST IMPORTANT > Bullet Formula\n\n```plain text\nAction Verb +Task + Tool + Impact + Metric\n```\n\nExamples:\n\n- Reduced bundle size by 42% using code splitting.\n\n- Improved page load speed from 4.5s → 1.2s.\n\n- Led migration from class components to hooks for 60+ components.\n\n---\n\n## 6️⃣ Quantification — SECRET WEAPON\n\nIf you don’t quantify → recruiter assumes average work.\n\n#### Examples of Metrics\n\n- %\n\n- Time saved\n\n- Revenue impact\n\n- User count\n\n- Performance improvement\n\n- Team size\n\n- Feature adoption\n\n---\n\n#### ❌ Without Numbers\n\n> O"
+              },
+              {
+                "id": "kb_787c3f51-fbe9-44cc-91e1-6444cf626a4f#15",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_21st-February-30b1199ccfe3.md",
+                "score": 0.4196521,
+                "text": "Page: 21st February\nTopic: ⚙ Reliability & Failure Handling > 1️⃣8️⃣ Circuit Breaker Pattern\n\nry cache                                    │\n│  - Fast reads                                               │\n│  - Reduced DB load                                          │\n│  - Possible stale data                                      │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                         DATABASE                            │\n│                 "
+              },
+              {
+                "id": "kb_9d5bd678-a9aa-4376-8fca-4a56917d7e9a#0",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Placement-assistance-instructions-3121199ccfe3.md",
+                "score": 0.41783977000000005,
+                "text": "Page: Placement assistance instructions\n\nThis program is designed to support participants in their interview preparation and job placement journey after successfully completing the cohort.\n\nThe goal is to ensure every serious learner gets structured guidance, validation, and mentorship while applying for jobs.\n\n---\n\n### 📅 Support Duration\n\nAfter completing the cohort, participants will receive placement support for 3 months.\n\nDuring this period, I will actively help with:\n\n- Interview preparation\n\n- Concept clarification\n\n- Assignment validation\n\n- Job application strategy\n\n- Mock discussions"
+              },
+              {
+                "id": "kb_9d5bd678-a9aa-4376-8fca-4a56917d7e9a#2",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Placement-assistance-instructions-3121199ccfe3.md",
+                "score": 0.4134647,
+                "text": "Page: Placement assistance instructions\nTopic: 🤝 Mode of Support\n\nBased on urgency, complexity, and availability, support may happen through:\n\n- Quick chat guidance\n\n- Voice call\n\n- Video call\n\n- Concept discussion session\n\n- Interview preparation walkthrough\n\nSupport will be provided in the most effective format for the situation.\n\n---\n\n### 🧠 What I Expect From Participants\n\nTo make the best use of this program:\n\n✔ Be proactive in learning and applying\n\n✔ Communicate early about interview schedules\n\n✔ Come prepared with questions or topics\n\n✔ Complete assignments sincerely\n\n✔ Focus on under"
+              },
+              {
+                "id": "kb_b1918d7f-3ca4-431b-9483-4d7725b80fb7#0",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Weekly-assignment-30f1199ccfe3.md",
+                "score": 0.40489949999999997,
+                "text": "Page: Weekly assignment\n\n### 🧩 Systems to Design\n\nYou will perform the same exercise for each of the following systems:\n\n1. Code Sandbox Platform (like CodePen / Replit)\n\n1. E-commerce Application (like Amazon / Flipkart)\n\n1. Video Streaming Platform (like YouTube)\n\n1. Seat Booking System (like BookMyShow)\n\n---\n\n### 📝 What You Need to Do (For Each System)\n\n#### 1️⃣ List Functional Requirements\n\nIdentify what features the system must provide to users.\n\nExamples:\n\n- Core capabilities\n\n- User interactions\n\n- Primary workflows\n\n---\n\n#### 2️⃣ List Non-Functional Requirements\n\nDefine system qualit"
+              },
+              {
+                "id": "kb_787c3f51-fbe9-44cc-91e1-6444cf626a4f#8",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_21st-February-30b1199ccfe3.md",
+                "score": 0.40088855999999995,
+                "text": "Page: 21st February\nTopic: 🧩 Core Pillars of Frontend Observability > 5️⃣ Session Replay (Behavior Reconstruction) > Why useful\n\nSome bugs cannot be reproduced.\n\nReplay shows:\n\n```plain text\nExactly whatuser did\nExactly what UI showed\n```\n\n---\n\n#### Example tools\n\n- LogRocket\n\n- FullStory\n\n---\n\n## 🔔 Alerting Strategy\n\nMonitoring without alerts is useless.\n\nAlerts trigger when thresholds exceed.\n\nExamples:\n\n- error rate > 5%\n\n- API latency spike\n\n- page load > 4s\n\n- feature crash detected\n\n---\n\n### Good alert design\n\n✔ actionable\n\n✔ not noisy\n\n✔ severity classified\n\n✔ routed to correct team\n\n"
+              },
+              {
+                "id": "kb_787c3f51-fbe9-44cc-91e1-6444cf626a4f#11",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_21st-February-30b1199ccfe3.md",
+                "score": 0.39458519999999997,
+                "text": "Page: 21st February\nTopic: 🌐 Request Handling & Infrastructure\n\n---\n\n### 5️⃣  API Gateway\n\nSingle entry point for all client requests.\n\n#### Responsibilities\n\n✔ Authentication / authorization\n\n✔ Rate limiting\n\n✔ Request validation\n\n✔ Aggregating multiple services\n\n✔ Logging / monitoring\n\n✔ Load balancing\n\n✔ Versioning\n\n✔ Security enforcement\n\n✔ Response transformation\n\n```javascript\nClient\n   ↓\nAPI Gateway (policy + control + routing)\n   ↓\nMultiple backend services\n```\n\n#### Example real systems\n\n- AWS API Gateway\n\n- Kong\n\n- Apigee\n\n- Azure API Management\n\n---\n\n### 6️⃣ Load Balancer\n\nDistribu"
+              },
+              {
+                "id": "kb_2fb969cc-476f-4918-9ca1-f62ab674be37#0",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_22nd-February-30b1199ccfe3.md",
+                "score": 0.39280630000000005,
+                "text": "Page: 22nd February\n\nIn this session we designed system design of\n\n1. Auto complete system.\n\nattachment:e7ebaa3c-531c-452f-a781-353460e11028:image.png\n\nNews feed system design:\n\nattachment:c45f27ab-33d8-45e7-bea9-a3ccb23e6212:image.png"
+              },
+              {
+                "id": "kb_787c3f51-fbe9-44cc-91e1-6444cf626a4f#14",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_21st-February-30b1199ccfe3.md",
+                "score": 0.3880441,
+                "text": "Page: 21st February\nTopic: ⚙ Reliability & Failure Handling > 1️⃣8️⃣ Circuit Breaker Pattern\n\n```javascript\n┌─────────────────────────────────────────────────────────────┐\n│                         USERS                               │\n│  Browser / Mobile App                                       │\n│  (Frontend UI, State, Requests, Retries, etc.)             │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           │ HTTPS Requests\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│      "
+              },
+              {
+                "id": "kb_e0d821c3-555f-43be-bd11-a59a082437c3#3",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Assignments-2ec1199ccfe3.md",
+                "score": 0.38486659999999995,
+                "text": "Page: Assignments\nTopic: Deep and Shallow Copy\n\n#### Atlassian | Machine Coding: The Ultimate Deep Clone\n\nQuestion: Implement deepClone(obj). It must handle circular references. Atlassian specifically checks for memory efficiency and handling of nested structures without using JSON.stringify.\n\nJavaScript\n\n```javascript\nfunction deepClone(value, map = new WeakMap()) {\n  // 1. Base case: handle primitives\n  // 2. Handle circular references using map\n  // 3. Recursive cloning for Arrays and Objects\n}\n\nconst original = {\n  a: 1,\n  b: { c: 2 },\n  d: [11, 7],\n};\noriginal.self = original; // Circular"
+              },
+              {
+                "id": "kb_328e3cba-730c-400c-add1-8daa41bdba77#1",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Good-resume-formats-3051199ccfe3.md",
+                "score": 0.37324184000000005,
+                "text": "Page: Good resume formats\nTopic: 3️⃣ Headline / Summary\n\n#### ❌ Bad\n\n> Hardworking developer looking for opportunity to grow.\n\n#### ✅ Good\n\n> Frontend Developer with 4 years experience building scalable React applications used by 200k+ users.\n\nFormula\n\n```plain text\nRole + Years +Key Tech + Impact\n```\n\n---\n\n## 4️⃣ Skills Section\n\n#### ❌ Bad Practice\n\nListing every skill ever touched.\n\n```plain text\nHTML CSS JS React Angular Vue Python Java C++ AWS Docker Kubernetes ML AI Blockchain\n```\n\n#### ✅ Good Practice\n\nGroup and prioritize:\n\nLanguages: JavaScript, TypeScript\n\nFrontend: React, Redux, Next"
+              },
+              {
+                "id": "kb_1b49757f-2ec5-4346-8e8c-db46f3865847#1",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_1st-March-3151199ccfe3.md",
+                "score": 0.36634206999999996,
+                "text": "Page: 1st March\nTopic: 🔴 Step 2 — Server Receives B (Created on Old Version)\n\nB says:\n\n```plain text\nDelete 5 chars at pos 6\n```\n\nBut position 6 now points to:\n\n```plain text\nB (start of \"Beautiful\")\n```\n\nThat’s wrong.\n\n---\n\n## 🧠 Operational Transformation Happens\n\nServer transforms B relative to A.\n\nA inserted 10 characters before B’s delete position.\n\nSo shift B’s position right by 10:\n\n```plain text\nOld pos: 6\nNew pos: 6 + 10 = 16\n```\n\nTransformed operation:\n\n```plain text\nDelete(5 chars from pos 16)\n```\n\n---\n\n## 🔵 Step 3 — Server Applies Transformed B\n\nResult:\n\n```plain text\nHello Beaut"
+              },
+              {
+                "id": "kb_faae9cac-1d56-4046-97a3-025e471f544b#0",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Assignment-questions-3031199ccfe3.md",
+                "score": 0.36019254,
+                "text": "Page: Assignment questions\n\nApproximate interview time to solve all the below problems is 45 minutes to 1 hour.\n\n## Problem 1:  Implement a Config-Driven Form Renderer with Validation Rules\n\n#### Problem Statement\n\nBuild a form renderer that does not hardcode inputs in JSX, but instead renders the form entirely from a configuration object.\n\n---\n\n#### Expectations:\n\n#### Form Rendering\n\n- Form fields must be generated dynamically from a config like:\n\n- input type (text, email, number, select, checkbox, etc.)\n\n- label\n\n- name / key\n\n- default value\n\n- Adding a new field should require only confi"
+              },
+              {
+                "id": "kb_1b180004-e7cb-4d06-978b-96a0dc07767a#0",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Session-1-thought-provoking-questions-2dd1199ccfe3.md",
+                "score": 0.3551337,
+                "text": "Page: Session 1: thought provoking questions\n\n1. Environments where there is no browser ex: nodeJS, how will browser web APIs example setTimeout will work ?\n\n1. Which language the v8 engine is written ?\n\n1. Why JS is weekly typed programming language ?\n\n1. Are there event loop for each browser tab or ?\n\n1. If there is only one GEC then how variable duplication works ? in JS\n\n1. Given a project, will you have less number of closures or more ? justify you’re answer.\n\n1. As arrow functions / function expressions are not hoisted, how are you able to call arrow functions anywhere in React ?"
+              },
+              {
+                "id": "kb_e0d821c3-555f-43be-bd11-a59a082437c3#1",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Assignments-2ec1199ccfe3.md",
+                "score": 0.34885484,
+                "text": "Page: Assignments\nTopic: Promises & Asynchronous JavaScript > Microsoft | Technical Round: The Microtask Priority Riddle\n\nQuestion: Predict the exact output. Explain why the asyncFn behaves differently than a standard promise chain.\n\nJavaScript\n\n```javascript\nconsole.log('1 - Sync');\n\nsetTimeout(() => {\n  console.log('2 - Macrotask');\n}, 0);\n\nasync function asyncFn() {\n  console.log('3 - Inside Async');\n  await Promise.resolve();\n  console.log('4 - After Await');\n}\n\nasyncFn();\n\nPromise.resolve().then(() => {\n  console.log('5 - Microtask');\n});\n\nconsole.log('6 - Sync End');\n```\n\n---\n\n### Call, "
+              },
+              {
+                "id": "kb_68c8a2e4-4516-47b0-b856-f052f831022b#0",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_28th-Feb-3151199ccfe3.md",
+                "score": 0.34770049999999997,
+                "text": "Page: 28th Feb\n\nCode sandbox system design\n\nattachment:b0d35ddc-f459-455c-b281-18ec34f0b2ca:image.png\n\nBookMyShow design was also discussed. One can checkout the video to understand it better."
+              },
+              {
+                "id": "kb_6db5252d-65c6-461f-9cb2-20e0ca29f3f2#3",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_10th-January---JavaScript-Basics-2dc1199ccfe3.md",
+                "score": 0.3469671,
+                "text": "Page: 10th January - JavaScript Basics\nTopic: Topic 1: What is JavaScript Runtime? > Key Takeaways\n\n- JavaScript executes code using a single call stack\n\n- Asynchronous operations are handled by browser Web APIs\n\n- Microtasks have higher priority than macrotasks\n\n- Event loop decides execution order\n\n- setTimeout(0) does not mean immediate execution\n\n---\n\n### How is Event Loop different from JS Engine (V8) ?\n\n“The event loop is a browser-side scheduler that coordinates when the JavaScript engine can execute queued callbacks.”\n\n### Why doesn’t the JS Engine include the Event Loop?\n\nBecause Java"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "embedding",
+          "kind": "embedding",
+          "startMs": 455,
+          "endMs": 1222,
+          "ms": 767,
+          "meta": {
+            "status": 200,
+            "headersMs": 766,
+            "model": "openai/text-embedding-3-small",
+            "requestBytes": 1379
+          }
+        },
+        {
+          "stage": "chroma.query.knowledge",
+          "kind": "chroma",
+          "startMs": 1222,
+          "endMs": 1982,
+          "ms": 759,
+          "meta": {
+            "hits": 20,
+            "nResults": 20
+          }
+        },
+        {
+          "stage": "reranker",
+          "kind": "rerank",
+          "startMs": 1982,
+          "endMs": 3153,
+          "ms": 1171,
+          "meta": {
+            "status": 200,
+            "headersMs": 1170,
+            "model": "cohere/rerank-v3.5",
+            "requestBytes": 30305,
+            "candidates": 20,
+            "results": 3,
+            "ranking": [
+              {
+                "index": 4,
+                "relevance_score": 0.405567,
+                "document": {
+                  "text": "Page: 21st February\nTopic: ⚙ Reliability & Failure Handling > 1️⃣8️⃣ Circuit Breaker Pattern\n\nry cache                                    │\n│  - Fast reads                                               │\n│  - Reduced DB load                                          │\n│  - Possible stale data                                      │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                         DATABASE                            │\n│                                                             │\n│   ┌──────────────────────┐                                  │\n│   │  PRIMARY / LEADER    │  ← Writes                        │\n│   └──────────────────────┘                                  │\n│             │                                               │\n│             │ Replication                                   │\n│             ▼                                               │\n│   ┌──────────────────────┐                                  │\n│   │  REPLICA / FOLLOWER  │  ← Reads                         │\n│   └──────────────────────┘                                  │\n│                                                             │\n│  Consistency Model:                                         │\n│  - Strong OR Eventual                                       │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                DISTRIBUTED TRANSACTION LOGIC                │\n│  - Two Phase Commit                                         │\n│  - Saga Pattern                                             │\n│  - Rollback / Compensation                                  │\n│                                                             │\n│  Idempotency ensures safe retries                           │\n└─────────────────────────────────────────────────────────────┘\n```\n\nOverall backend design diagram, drawn in the session:\n\nattachment:7bcfbb31-70f1-4aac-8d82-18437337dcba:image.png"
+                }
+              },
+              {
+                "index": 11,
+                "relevance_score": 0.39796236,
+                "document": {
+                  "text": "Page: 21st February\nTopic: ⚙ Reliability & Failure Handling > 1️⃣8️⃣ Circuit Breaker Pattern\n\n```javascript\n┌─────────────────────────────────────────────────────────────┐\n│                         USERS                               │\n│  Browser / Mobile App                                       │\n│  (Frontend UI, State, Requests, Retries, etc.)             │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           │ HTTPS Requests\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                       CDN / EDGE CACHE                      │\n│  - Static asset caching                                    │\n│  - Global delivery                                         │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                        API GATEWAY                          │\n│  - Authentication                                           │\n│  - Rate limiting                                            │\n│  - Request routing                                          │\n│  - Monitoring & logging                                     │\n│  - Request aggregation                                      │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                       LOAD BALANCER                         │\n│  Distributes traffic across service instances               │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                    MICROSERVICES LAYER                      │\n│                                                             │\n│  ┌─────────────────────┐   ┌─────────────────────┐         │\n│  │   User Service      │   │  Order Service      │         │\n│  │   (Stateless)       │   │  (Stateless)        │         │\n│  └─────────────────────┘   └─────────────────────┘         │\n│            │                          │                     │\n│            │                          │                     │\n│            │   ┌────────────────────┐ │                     │\n│            └──►│  Circuit Breaker   │◄┘                     │\n│                │  (Failure control) │                       │\n│                └────────────────────┘                       │\n│                                                             │\n│  Services communicate via:                                  │\n│                                                             │\n│  ┌─────────────────────────────────────────────────────┐    │\n│  │           MESSAGE BROKER / EVENT QUEUE              │    │\n│  │  (Async communication, Pub/Sub, Event-driven flow)  │    │\n│  └─────────────────────────────────────────────────────┘    │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                         CACHE LAYER                         │\n│  Redis / In-memo"
+                }
+              },
+              {
+                "index": 10,
+                "relevance_score": 0.16943368,
+                "document": {
+                  "text": "Page: 22nd February\n\nIn this session we designed system design of\n\n1. Auto complete system.\n\nattachment:e7ebaa3c-531c-452f-a781-353460e11028:image.png\n\nNews feed system design:\n\nattachment:c45f27ab-33d8-45e7-bea9-a3ccb23e6212:image.png"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "stage": "direction",
+          "kind": "llm",
+          "startMs": 3153,
+          "endMs": 4711,
+          "ms": 1558,
+          "meta": {
+            "status": 200,
+            "headersMs": 871,
+            "model": "openai/gpt-4.1-mini",
+            "requestBytes": 17227,
+            "usage": {
+              "prompt_tokens": 2810,
+              "completion_tokens": 87,
+              "total_tokens": 2897,
+              "cost": 0.0012632,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0012632,
+                "upstream_inference_prompt_cost": 0.001124,
+                "upstream_inference_completions_cost": 0.0001392
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "analysis",
+          "kind": "llm",
+          "startMs": 4713,
+          "endMs": 7436,
+          "ms": 2724,
+          "meta": {
+            "status": 200,
+            "headersMs": 889,
+            "model": "openai/gpt-4.1-mini",
+            "requestBytes": 19942,
+            "usage": {
+              "prompt_tokens": 3430,
+              "completion_tokens": 258,
+              "total_tokens": 3688,
+              "cost": 0.0017848,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0017848,
+                "upstream_inference_prompt_cost": 0.001372,
+                "upstream_inference_completions_cost": 0.0004128
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 7437,
+          "endMs": 7785,
+          "ms": 348
+        },
+        {
+          "stage": "persona.episodes",
+          "kind": "retrieval",
+          "startMs": 7437,
+          "endMs": 10165,
+          "ms": 2729,
+          "meta": {
+            "hits": 3,
+            "records": [
+              {
+                "id": "persona_voice_episode_cmtxgkiic000i2lseh3wa13y1#12",
+                "source": "11.yaml",
+                "score": 0.61597514,
+                "text": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Hmm, correct. Okay, we can check it later, okay — exactly how all these will behave. I am sharing another snippet with you now, okay? Maybe slightly complicated but not difficult. Okay. Slightly complicated, take two to three minutes, okay? But not difficult. Take two to three minutes, read the question carefully and tell me what is the output, okay? Are you clear, Ranjit? What do you think?\nPast learner: It was a totally different thing, sir.\nVasanth: Sure. Let us break it. Let's break it "
+              },
+              {
+                "id": "persona_voice_episode_cmtxgknxv000q2lsehq0f44l5#3",
+                "source": "10.yaml",
+                "score": 0.6132204,
+                "text": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Got it. So Amit, I'll just quickly summarise. Basically you have a product where somebody can come and upload their website and they can do certain modifications. It has to be hosted on your own hosting service, so that you give a lot of options like rolling out the changes to a particular portion of users and seeing how it is performing. So if they are happy they can roll out the changes to everyone, like that. Correct? So here my question is, how are you going to determine which portion o"
+              },
+              {
+                "id": "persona_voice_episode_cmtxgkoc6000r2lsemvnmdb9u#19",
+                "source": "22.yaml",
+                "score": 0.61248863,
+                "text": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: No, you are doing the right thing. You have to just swap the position. First it should be minutes and then it should be seconds. Correct? It's happening right, correct only — like now it became three minutes, three minutes one second, three minutes two seconds, three minutes three seconds. It's happening correctly.\nPast learner: Yes. And in terms of stop, what do you think?\nVasanth: What do you think?\nPast learner reaction: To make both these values zero."
+              }
+            ]
+          }
+        },
+        {
+          "stage": "embedding",
+          "kind": "embedding",
+          "startMs": 7785,
+          "endMs": 9299,
+          "ms": 1513,
+          "meta": {
+            "status": 200,
+            "headersMs": 1513,
+            "model": "openai/text-embedding-3-small",
+            "requestBytes": 467
+          }
+        },
+        {
+          "stage": "chroma.query.persona_voice_episode",
+          "kind": "chroma",
+          "startMs": 9299,
+          "endMs": 10165,
+          "ms": 867,
+          "meta": {
+            "hits": 9,
+            "nResults": 9
+          }
+        },
+        {
+          "stage": "content",
+          "kind": "llm",
+          "startMs": 10166,
+          "endMs": 11245,
+          "ms": 1080,
+          "meta": {
+            "status": 200,
+            "headersMs": 755,
+            "model": "openai/gpt-4.1-mini",
+            "requestBytes": 22921,
+            "usage": {
+              "prompt_tokens": 4024,
+              "completion_tokens": 37,
+              "total_tokens": 4061,
+              "cost": 0.0016688,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0016688,
+                "upstream_inference_prompt_cost": 0.0016096,
+                "upstream_inference_completions_cost": 0.0000592
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "style_gate",
+          "kind": "llm",
+          "startMs": 11246,
+          "endMs": 12883,
+          "ms": 1637,
+          "meta": {
+            "status": 200,
+            "headersMs": 787,
+            "model": "openai/gpt-4.1-mini",
+            "requestBytes": 1602,
+            "usage": {
+              "prompt_tokens": 303,
+              "completion_tokens": 116,
+              "total_tokens": 419,
+              "cost": 0.0003068,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0003068,
+                "upstream_inference_prompt_cost": 0.0001212,
+                "upstream_inference_completions_cost": 0.0001856
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 12884,
+          "endMs": 13219,
+          "ms": 336
+        },
+        {
+          "stage": "persona.style",
+          "kind": "retrieval",
+          "startMs": 12884,
+          "endMs": 14712,
+          "ms": 1829,
+          "meta": {
+            "hits": 5,
+            "records": [
+              {
+                "id": "persona_style_episode_cmtxgkopp000s2lse47nisylb#33",
+                "source": "02.yaml",
+                "score": 0.56547183,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: closing\nSpeech function: acknowledge -> feedback -> explain -> probe\nSentence shape: acknowledgement -> feedback -> explanation -> question\nPhrasing features: direct address, repetition, encouragement, detailed feedback, polite, inclusive\nCadence: detailed, evaluative, encouraging\nTopic-neutral pattern: Yes. Good, good, <learner>. I'll just pass on my feedback, <learner>. I mean, it was a very clean, neat interview. Overall in my interview process, very few will have very in-depth knowl"
+              },
+              {
+                "id": "persona_style_episode_cmtxgknxv000q2lsehq0f44l5#15",
+                "source": "10.yaml",
+                "score": 0.5411952,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: strong\nSpeech function: feedback -> probe\nSentence shape: acknowledge -> question\nPhrasing features: repetition, direct address, reassurance, tag question\nCadence: encouraging, conversational\nTopic-neutral pattern: Okay. Good, good. Whatever you have written is good, <learner>, okay? So now, let's say you have written it in this particular file, correct? And you have written some function on the <topic> and you want to use it all across your project. Are you getting what I'm saying? So "
+              },
+              {
+                "id": "persona_style_episode_cmtxgkl3k000l2lsegld2o2ql#9",
+                "source": "18.yaml",
+                "score": 0.5333458200000001,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: strong\nSpeech function: acknowledge -> explain -> probe\nSentence shape: acknowledge -> detailed explanation -> transition to related question\nPhrasing features: repetition, direct address, reassurance, elaboration, example, tag question\nCadence: detailed and supportive\nTopic-neutral pattern: Sure, sure. Sounds good, <learner>. See, I think while introducing yourself you did not say this — basically you are from a <example> background, correct? ... If you have to create this feature, the"
+              },
+              {
+                "id": "persona_style_episode_cmtxgklsz000m2lsej2k52ssl#2",
+                "source": "09.yaml",
+                "score": 0.53239238,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: strong\nSpeech function: acknowledge -> agree -> paraphrase -> encourage transition\nSentence shape: acknowledge -> agree with learner -> paraphrase learner's message -> transition to next question\nPhrasing features: repetition, direct address, reassurance, inclusive language\nCadence: supportive and motivating\nTopic-neutral pattern: Good, good, <learner>. I also second that. Like <learner> mentioned, if you're from a <claim>, life is not over. If you have potential — life is a marathon, w"
+              },
+              {
+                "id": "persona_style_episode_cmtxgkpii000u2lseg6epsmuh#25",
+                "source": "16.yaml",
+                "score": 0.52397096,
+                "text": "PAST STYLE EXAMPLE — wording only, not facts about the current learner.\nSession phase: middle\nLearner state: strong\nSpeech function: acknowledge -> paraphrase -> probe -> explain -> probe\nSentence shape: Correct. Correct. So basically every time whenever I'm pressing <learner>, multiple closures are getting formed — not multiple, every time one new closure is getting formed. Correct? The number of times you click, that many times the closure has formed. Correct? As simple as that. So, one practical question again I'll ask. What is the value that is returned from <topic>? <topic> is a function,"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "embedding",
+          "kind": "embedding",
+          "startMs": 13219,
+          "endMs": 13913,
+          "ms": 694,
+          "meta": {
+            "status": 200,
+            "headersMs": 684,
+            "model": "openai/text-embedding-3-small",
+            "requestBytes": 697
+          }
+        },
+        {
+          "stage": "chroma.query.persona_style_episode",
+          "kind": "chroma",
+          "startMs": 13914,
+          "endMs": 14712,
+          "ms": 798,
+          "meta": {
+            "hits": 15,
+            "nResults": 15
+          }
+        },
+        {
+          "stage": "renderer",
+          "kind": "llm",
+          "startMs": 14713,
+          "endMs": 17505,
+          "ms": 2793,
+          "meta": {
+            "status": 200,
+            "headersMs": 769,
+            "model": "openai/gpt-4.1-mini",
+            "requestBytes": 14315,
+            "usage": {
+              "prompt_tokens": 3141,
+              "completion_tokens": 214,
+              "total_tokens": 3355,
+              "cost": 0.0015988,
+              "is_byok": false,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "audio_tokens": 0,
+                "video_tokens": 0
+              },
+              "cost_details": {
+                "upstream_inference_cost": 0.0015988,
+                "upstream_inference_prompt_cost": 0.0012564,
+                "upstream_inference_completions_cost": 0.0003424
+              },
+              "completion_tokens_details": {
+                "reasoning_tokens": 0,
+                "image_tokens": 0,
+                "audio_tokens": 0
+              }
+            }
+          }
+        },
+        {
+          "stage": "db.persist",
+          "kind": "db",
+          "startMs": 17506,
+          "endMs": 17751,
+          "ms": 245
+        }
+      ],
+      "telemetry": {
+        "sessionId": "bench-1adea5c3d2d9b6f9",
+        "revision": 4,
+        "turn": "learner",
+        "latencyMs": 17438,
+        "promptTokens": 13708,
+        "completionTokens": 712,
+        "totalTokens": 14420,
+        "stages": [
+          "direction:1558ms",
+          "analysis:2724ms",
+          "content:1080ms",
+          "style_gate:1637ms",
+          "renderer:2793ms"
+        ],
+        "speech": {
+          "attempts": 1,
+          "flags": [],
+          "fallback": false,
+          "rendererFallback": false,
+          "draftWords": 30,
+          "finalWords": 42
+        }
+      },
+      "logs": [
+        {
+          "message": "[interview-runtime] knowledge retrieved",
+          "data": {
+            "hits": 3
+          }
+        },
+        {
+          "message": "[interview-runtime] direction completed",
+          "data": {
+            "model": "openai/gpt-4.1-mini",
+            "durationMs": 1558
+          }
+        },
+        {
+          "message": "[interview-runtime] analysis completed",
+          "data": {
+            "model": "openai/gpt-4.1-mini",
+            "durationMs": 2724
+          }
+        },
+        {
+          "message": "[interview-runtime] analogous episodes retrieved",
+          "data": {
+            "hits": 3,
+            "ids": [
+              "persona_voice_episode_cmtxgkiic000i2lseh3wa13y1#12",
+              "persona_voice_episode_cmtxgknxv000q2lsehq0f44l5#3",
+              "persona_voice_episode_cmtxgkoc6000r2lsemvnmdb9u#19"
+            ]
+          }
+        },
+        {
+          "message": "[interview-runtime] content completed",
+          "data": {
+            "model": "openai/gpt-4.1-mini",
+            "durationMs": 1080
+          }
+        },
+        {
+          "message": "[interview-runtime] style_gate completed",
+          "data": {
+            "model": "openai/gpt-4.1-mini",
+            "durationMs": 1637
+          }
+        },
+        {
+          "message": "[interview-runtime] renderer completed",
+          "data": {
+            "model": "openai/gpt-4.1-mini",
+            "durationMs": 2793
+          }
+        },
+        {
+          "message": "[interview-runtime] completion served",
+          "data": {
+            "sessionId": "bench-1adea5c3d2d9b6f9",
+            "revision": 4,
+            "turn": "learner",
+            "latencyMs": 17438,
+            "promptTokens": 13708,
+            "completionTokens": 712,
+            "totalTokens": 14420,
+            "stages": [
+              "direction:1558ms",
+              "analysis:2724ms",
+              "content:1080ms",
+              "style_gate:1637ms",
+              "renderer:2793ms"
+            ],
+            "speech": {
+              "attempts": 1,
+              "flags": [],
+              "fallback": false,
+              "rendererFallback": false,
+              "draftWords": 30,
+              "finalWords": 42
+            }
+          }
+        }
+      ]
+    },
+    {
+      "label": "repeat-request",
+      "wallMs": 3350,
+      "status": 200,
+      "response": "Good, good, Harini. That’s a really strong impact you have shared. Now, to get a clearer picture of your role, can you walk me through one specific technical decision or change you made during the migration that directly led to these improvements?",
+      "events": [
+        {
+          "stage": "db.auth",
+          "kind": "db",
+          "startMs": 0,
+          "endMs": 65,
+          "ms": 65
+        },
+        {
+          "stage": "db.knowledge_bases",
+          "kind": "db",
+          "startMs": 67,
+          "endMs": 133,
+          "ms": 66
+        },
+        {
+          "stage": "chroma.collection",
+          "kind": "chroma",
+          "startMs": 133,
+          "endMs": 462,
+          "ms": 329
+        },
+        {
+          "stage": "knowledge.search",
+          "kind": "retrieval",
+          "startMs": 133,
+          "endMs": 2278,
+          "ms": 2145,
+          "meta": {
+            "hits": 20,
+            "records": [
+              {
+                "id": "kb_9dda99f3-370e-48ff-a2bf-072afc23981f#18",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_System-design-Introduction-3061199ccfe3.md",
+                "score": 0.4465114,
+                "text": "Page: System design Introduction\nTopic: Topic 6: Discussing practical questions > Meaningful Solution Architecture > ✅ 2. Request Deduplication / Caching\n\nIf user revisits route quickly:\n\n```plain text\nReuse existing response\n```\n\nUse data layer:\n\n- React Query\n\n- SWR (stale-while-revalidate)\n\n- custom cache map\n\nKey idea:\n\n```plain text\nqueryKey = route + params\n```\n\n---\n\n#### ✅ 3. Stale Response Protection (Critical)\n\nEven if cancellation fails, ignore outdated responses.\n\nTechnique:\n\n- requestId tracking\n\n- version tokens\n\n- latest-only rendering\n\n---\n\n### Interview Summary Answer\n\nCancel i"
+              },
+              {
+                "id": "kb_328e3cba-730c-400c-add1-8daa41bdba77#2",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Good-resume-formats-3051199ccfe3.md",
+                "score": 0.4409079,
+                "text": "Page: Good resume formats\nTopic: 5️⃣ Experience Section — MOST IMPORTANT > Bullet Formula\n\n```plain text\nAction Verb +Task + Tool + Impact + Metric\n```\n\nExamples:\n\n- Reduced bundle size by 42% using code splitting.\n\n- Improved page load speed from 4.5s → 1.2s.\n\n- Led migration from class components to hooks for 60+ components.\n\n---\n\n## 6️⃣ Quantification — SECRET WEAPON\n\nIf you don’t quantify → recruiter assumes average work.\n\n#### Examples of Metrics\n\n- %\n\n- Time saved\n\n- Revenue impact\n\n- User count\n\n- Performance improvement\n\n- Team size\n\n- Feature adoption\n\n---\n\n#### ❌ Without Numbers\n\n> O"
+              },
+              {
+                "id": "kb_9d5bd678-a9aa-4376-8fca-4a56917d7e9a#2",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Placement-assistance-instructions-3121199ccfe3.md",
+                "score": 0.4387959,
+                "text": "Page: Placement assistance instructions\nTopic: 🤝 Mode of Support\n\nBased on urgency, complexity, and availability, support may happen through:\n\n- Quick chat guidance\n\n- Voice call\n\n- Video call\n\n- Concept discussion session\n\n- Interview preparation walkthrough\n\nSupport will be provided in the most effective format for the situation.\n\n---\n\n### 🧠 What I Expect From Participants\n\nTo make the best use of this program:\n\n✔ Be proactive in learning and applying\n\n✔ Communicate early about interview schedules\n\n✔ Come prepared with questions or topics\n\n✔ Complete assignments sincerely\n\n✔ Focus on under"
+              },
+              {
+                "id": "kb_9d5bd678-a9aa-4376-8fca-4a56917d7e9a#0",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Placement-assistance-instructions-3121199ccfe3.md",
+                "score": 0.42129682999999996,
+                "text": "Page: Placement assistance instructions\n\nThis program is designed to support participants in their interview preparation and job placement journey after successfully completing the cohort.\n\nThe goal is to ensure every serious learner gets structured guidance, validation, and mentorship while applying for jobs.\n\n---\n\n### 📅 Support Duration\n\nAfter completing the cohort, participants will receive placement support for 3 months.\n\nDuring this period, I will actively help with:\n\n- Interview preparation\n\n- Concept clarification\n\n- Assignment validation\n\n- Job application strategy\n\n- Mock discussions"
+              },
+              {
+                "id": "kb_b1918d7f-3ca4-431b-9483-4d7725b80fb7#1",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Weekly-assignment-30f1199ccfe3.md",
+                "score": 0.4137267,
+                "text": "Page: Weekly assignment\nTopic: 📝 What You Need to Do (For Each System) > 4️⃣ Solve Top Non-Functional Design Problems\n\nFrom your non-functional list:\n\n- Pick top 2 critical non-functional concerns\n\n- Provide design solutions\n\n- Each system must focus on different non-functional priorities (So that overall you will cover most non-functional requirements)\n\nExamples:\n\n- Scalability strategy\n\n- Low latency delivery\n\n- High availability architecture\n\n- Consistency handling\n\n- Fault tolerance\n\n---\n\n###"
+              },
+              {
+                "id": "kb_787c3f51-fbe9-44cc-91e1-6444cf626a4f#9",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_21st-February-30b1199ccfe3.md",
+                "score": 0.40530069999999996,
+                "text": "Page: 21st February\nTopic: 🏗 System Design Best Practices\n\n✔ Centralized monitoring platform\n\n✔ Structured logging format\n\n✔ Version tagging in every event\n\n✔ Environment awareness (dev / prod)\n\n✔ Graceful failure of monitoring itself (Monitoring must never break the app)\n\n## 🎯 When Observability Is Critical\n\n- Large user base\n\n- Revenue-sensitive flows\n\n- Real-time applications\n\n- Multi-team ownership\n\n- Third-party integrations\n\n## Important Backend concepts :\n\n## 🗄 Data Storage & Data Modeling\n\n---\n\n### 1️⃣ Database (SQL vs NoSQL)\n\nA database stores and manages application data.\n\n#### SQ"
+              },
+              {
+                "id": "kb_787c3f51-fbe9-44cc-91e1-6444cf626a4f#8",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_21st-February-30b1199ccfe3.md",
+                "score": 0.40109609999999996,
+                "text": "Page: 21st February\nTopic: 🧩 Core Pillars of Frontend Observability > 5️⃣ Session Replay (Behavior Reconstruction) > Why useful\n\nSome bugs cannot be reproduced.\n\nReplay shows:\n\n```plain text\nExactly whatuser did\nExactly what UI showed\n```\n\n---\n\n#### Example tools\n\n- LogRocket\n\n- FullStory\n\n---\n\n## 🔔 Alerting Strategy\n\nMonitoring without alerts is useless.\n\nAlerts trigger when thresholds exceed.\n\nExamples:\n\n- error rate > 5%\n\n- API latency spike\n\n- page load > 4s\n\n- feature crash detected\n\n---\n\n### Good alert design\n\n✔ actionable\n\n✔ not noisy\n\n✔ severity classified\n\n✔ routed to correct team\n\n"
+              },
+              {
+                "id": "kb_e0d821c3-555f-43be-bd11-a59a082437c3#3",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Assignments-2ec1199ccfe3.md",
+                "score": 0.3979682,
+                "text": "Page: Assignments\nTopic: Deep and Shallow Copy\n\n#### Atlassian | Machine Coding: The Ultimate Deep Clone\n\nQuestion: Implement deepClone(obj). It must handle circular references. Atlassian specifically checks for memory efficiency and handling of nested structures without using JSON.stringify.\n\nJavaScript\n\n```javascript\nfunction deepClone(value, map = new WeakMap()) {\n  // 1. Base case: handle primitives\n  // 2. Handle circular references using map\n  // 3. Recursive cloning for Arrays and Objects\n}\n\nconst original = {\n  a: 1,\n  b: { c: 2 },\n  d: [11, 7],\n};\noriginal.self = original; // Circular"
+              },
+              {
+                "id": "kb_9d5bd678-a9aa-4376-8fca-4a56917d7e9a#1",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Placement-assistance-instructions-3121199ccfe3.md",
+                "score": 0.39685773999999996,
+                "text": "Page: Placement assistance instructions\nTopic: 🧩 How the Placement Support Works > 2️⃣ Referral Eligibility\n\nReferrals are not automatic — they are based on readiness.\n\nYou may be referred if you:\n\n✔ Show strong conceptual clarity\n\n✔ Can explain system design decisions confidently\n\n✔ Demonstrate structured thinking\n\n✔ Show practical understanding, not just theoretical knowledge\n\nThe goal is to ensure you are genuinely prepared to perform well in interviews.\n\n---\n\n#### 3️⃣ Independent Job Applications (Recommended)\n\nParticipants are strongly encouraged to apply for jobs on their own during the"
+              },
+              {
+                "id": "kb_787c3f51-fbe9-44cc-91e1-6444cf626a4f#15",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_21st-February-30b1199ccfe3.md",
+                "score": 0.39662014999999995,
+                "text": "Page: 21st February\nTopic: ⚙ Reliability & Failure Handling > 1️⃣8️⃣ Circuit Breaker Pattern\n\nry cache                                    │\n│  - Fast reads                                               │\n│  - Reduced DB load                                          │\n│  - Possible stale data                                      │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                         DATABASE                            │\n│                 "
+              },
+              {
+                "id": "kb_787c3f51-fbe9-44cc-91e1-6444cf626a4f#11",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_21st-February-30b1199ccfe3.md",
+                "score": 0.39440686,
+                "text": "Page: 21st February\nTopic: 🌐 Request Handling & Infrastructure\n\n---\n\n### 5️⃣  API Gateway\n\nSingle entry point for all client requests.\n\n#### Responsibilities\n\n✔ Authentication / authorization\n\n✔ Rate limiting\n\n✔ Request validation\n\n✔ Aggregating multiple services\n\n✔ Logging / monitoring\n\n✔ Load balancing\n\n✔ Versioning\n\n✔ Security enforcement\n\n✔ Response transformation\n\n```javascript\nClient\n   ↓\nAPI Gateway (policy + control + routing)\n   ↓\nMultiple backend services\n```\n\n#### Example real systems\n\n- AWS API Gateway\n\n- Kong\n\n- Apigee\n\n- Azure API Management\n\n---\n\n### 6️⃣ Load Balancer\n\nDistribu"
+              },
+              {
+                "id": "kb_328e3cba-730c-400c-add1-8daa41bdba77#1",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Good-resume-formats-3051199ccfe3.md",
+                "score": 0.39405369999999995,
+                "text": "Page: Good resume formats\nTopic: 3️⃣ Headline / Summary\n\n#### ❌ Bad\n\n> Hardworking developer looking for opportunity to grow.\n\n#### ✅ Good\n\n> Frontend Developer with 4 years experience building scalable React applications used by 200k+ users.\n\nFormula\n\n```plain text\nRole + Years +Key Tech + Impact\n```\n\n---\n\n## 4️⃣ Skills Section\n\n#### ❌ Bad Practice\n\nListing every skill ever touched.\n\n```plain text\nHTML CSS JS React Angular Vue Python Java C++ AWS Docker Kubernetes ML AI Blockchain\n```\n\n#### ✅ Good Practice\n\nGroup and prioritize:\n\nLanguages: JavaScript, TypeScript\n\nFrontend: React, Redux, Next"
+              },
+              {
+                "id": "kb_b1918d7f-3ca4-431b-9483-4d7725b80fb7#0",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Weekly-assignment-30f1199ccfe3.md",
+                "score": 0.38927495,
+                "text": "Page: Weekly assignment\n\n### 🧩 Systems to Design\n\nYou will perform the same exercise for each of the following systems:\n\n1. Code Sandbox Platform (like CodePen / Replit)\n\n1. E-commerce Application (like Amazon / Flipkart)\n\n1. Video Streaming Platform (like YouTube)\n\n1. Seat Booking System (like BookMyShow)\n\n---\n\n### 📝 What You Need to Do (For Each System)\n\n#### 1️⃣ List Functional Requirements\n\nIdentify what features the system must provide to users.\n\nExamples:\n\n- Core capabilities\n\n- User interactions\n\n- Primary workflows\n\n---\n\n#### 2️⃣ List Non-Functional Requirements\n\nDefine system qualit"
+              },
+              {
+                "id": "kb_1b49757f-2ec5-4346-8e8c-db46f3865847#1",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_1st-March-3151199ccfe3.md",
+                "score": 0.38078004,
+                "text": "Page: 1st March\nTopic: 🔴 Step 2 — Server Receives B (Created on Old Version)\n\nB says:\n\n```plain text\nDelete 5 chars at pos 6\n```\n\nBut position 6 now points to:\n\n```plain text\nB (start of \"Beautiful\")\n```\n\nThat’s wrong.\n\n---\n\n## 🧠 Operational Transformation Happens\n\nServer transforms B relative to A.\n\nA inserted 10 characters before B’s delete position.\n\nSo shift B’s position right by 10:\n\n```plain text\nOld pos: 6\nNew pos: 6 + 10 = 16\n```\n\nTransformed operation:\n\n```plain text\nDelete(5 chars from pos 16)\n```\n\n---\n\n## 🔵 Step 3 — Server Applies Transformed B\n\nResult:\n\n```plain text\nHello Beaut"
+              },
+              {
+                "id": "kb_1b180004-e7cb-4d06-978b-96a0dc07767a#0",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Session-1-thought-provoking-questions-2dd1199ccfe3.md",
+                "score": 0.37132823000000004,
+                "text": "Page: Session 1: thought provoking questions\n\n1. Environments where there is no browser ex: nodeJS, how will browser web APIs example setTimeout will work ?\n\n1. Which language the v8 engine is written ?\n\n1. Why JS is weekly typed programming language ?\n\n1. Are there event loop for each browser tab or ?\n\n1. If there is only one GEC then how variable duplication works ? in JS\n\n1. Given a project, will you have less number of closures or more ? justify you’re answer.\n\n1. As arrow functions / function expressions are not hoisted, how are you able to call arrow functions anywhere in React ?"
+              },
+              {
+                "id": "kb_faae9cac-1d56-4046-97a3-025e471f544b#0",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Assignment-questions-3031199ccfe3.md",
+                "score": 0.36664739999999996,
+                "text": "Page: Assignment questions\n\nApproximate interview time to solve all the below problems is 45 minutes to 1 hour.\n\n## Problem 1:  Implement a Config-Driven Form Renderer with Validation Rules\n\n#### Problem Statement\n\nBuild a form renderer that does not hardcode inputs in JSX, but instead renders the form entirely from a configuration object.\n\n---\n\n#### Expectations:\n\n#### Form Rendering\n\n- Form fields must be generated dynamically from a config like:\n\n- input type (text, email, number, select, checkbox, etc.)\n\n- label\n\n- name / key\n\n- default value\n\n- Adding a new field should require only confi"
+              },
+              {
+                "id": "kb_e0d821c3-555f-43be-bd11-a59a082437c3#4",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Assignments-2ec1199ccfe3.md",
+                "score": 0.36543864000000004,
+                "text": "Page: Assignments\nTopic: Deep and Shallow Copy > Adobe | Conceptual Round\n\nQuestion: What will be logged? How do you fix this using the spread operator while keeping the code readable?\n\nJavaScript\n\n```javascript\nconst state = {\n  user: { id: 101, details: { city: 'Bangalore' } },\n  theme: 'dark'\n};\n\nconst newState = {...state };\nnewState.user.details.city = 'Chennai';\n\nconsole.log(state.user.details.city); \n// Expected output? Why did it change?\n```\n\nInterviewer Logic: Demonstrates that the spread operator is a Shallow Copy. If you change a nested object, the original is mutated because the re"
+              },
+              {
+                "id": "kb_2fb969cc-476f-4918-9ca1-f62ab674be37#0",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_22nd-February-30b1199ccfe3.md",
+                "score": 0.3651436,
+                "text": "Page: 22nd February\n\nIn this session we designed system design of\n\n1. Auto complete system.\n\nattachment:e7ebaa3c-531c-452f-a781-353460e11028:image.png\n\nNews feed system design:\n\nattachment:c45f27ab-33d8-45e7-bea9-a3ccb23e6212:image.png"
+              },
+              {
+                "id": "kb_787c3f51-fbe9-44cc-91e1-6444cf626a4f#14",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_21st-February-30b1199ccfe3.md",
+                "score": 0.36198187000000004,
+                "text": "Page: 21st February\nTopic: ⚙ Reliability & Failure Handling > 1️⃣8️⃣ Circuit Breaker Pattern\n\n```javascript\n┌─────────────────────────────────────────────────────────────┐\n│                         USERS                               │\n│  Browser / Mobile App                                       │\n│  (Frontend UI, State, Requests, Retries, etc.)             │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           │ HTTPS Requests\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│      "
+              },
+              {
+                "id": "kb_e0d821c3-555f-43be-bd11-a59a082437c3#1",
+                "source": "public_cmtww7tzt000104l89to2d49m_notion_Assignments-2ec1199ccfe3.md",
+                "score": 0.35821020000000003,
+                "text": "Page: Assignments\nTopic: Promises & Asynchronous JavaScript > Microsoft | Technical Round: The Microtask Priority Riddle\n\nQuestion: Predict the exact output. Explain why the asyncFn behaves differently than a standard promise chain.\n\nJavaScript\n\n```javascript\nconsole.log('1 - Sync');\n\nsetTimeout(() => {\n  console.log('2 - Macrotask');\n}, 0);\n\nasync function asyncFn() {\n  console.log('3 - Inside Async');\n  await Promise.resolve();\n  console.log('4 - After Await');\n}\n\nasyncFn();\n\nPromise.resolve().then(() => {\n  console.log('5 - Microtask');\n});\n\nconsole.log('6 - Sync End');\n```\n\n---\n\n### Call, "
+              }
+            ]
+          }
+        },
+        {
+          "stage": "embedding",
+          "kind": "embedding",
+          "startMs": 462,
+          "endMs": 1182,
+          "ms": 719,
+          "meta": {
+            "status": 200,
+            "headersMs": 717,
+            "model": "openai/text-embedding-3-small",
+            "requestBytes": 1685
+          }
+        },
+        {
+          "stage": "chroma.query.knowledge",
+          "kind": "chroma",
+          "startMs": 1182,
+          "endMs": 2278,
+          "ms": 1096,
+          "meta": {
+            "hits": 20,
+            "nResults": 20
+          }
+        },
+        {
+          "stage": "reranker",
+          "kind": "rerank",
+          "startMs": 2279,
+          "endMs": 3092,
+          "ms": 814,
+          "meta": {
+            "status": 200,
+            "headersMs": 810,
+            "model": "cohere/rerank-v3.5",
+            "requestBytes": 31106,
+            "candidates": 20,
+            "results": 3,
+            "ranking": [
+              {
+                "index": 9,
+                "relevance_score": 0.47373086,
+                "document": {
+                  "text": "Page: 21st February\nTopic: ⚙ Reliability & Failure Handling > 1️⃣8️⃣ Circuit Breaker Pattern\n\nry cache                                    │\n│  - Fast reads                                               │\n│  - Reduced DB load                                          │\n│  - Possible stale data                                      │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                         DATABASE                            │\n│                                                             │\n│   ┌──────────────────────┐                                  │\n│   │  PRIMARY / LEADER    │  ← Writes                        │\n│   └──────────────────────┘                                  │\n│             │                                               │\n│             │ Replication                                   │\n│             ▼                                               │\n│   ┌──────────────────────┐                                  │\n│   │  REPLICA / FOLLOWER  │  ← Reads                         │\n│   └──────────────────────┘                                  │\n│                                                             │\n│  Consistency Model:                                         │\n│  - Strong OR Eventual                                       │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                DISTRIBUTED TRANSACTION LOGIC                │\n│  - Two Phase Commit                                         │\n│  - Saga Pattern                                             │\n│  - Rollback / Compensation                                  │\n│                                                             │\n│  Idempotency ensures safe retries                           │\n└─────────────────────────────────────────────────────────────┘\n```\n\nOverall backend design diagram, drawn in the session:\n\nattachment:7bcfbb31-70f1-4aac-8d82-18437337dcba:image.png"
+                }
+              },
+              {
+                "index": 18,
+                "relevance_score": 0.42491361,
+                "document": {
+                  "text": "Page: 21st February\nTopic: ⚙ Reliability & Failure Handling > 1️⃣8️⃣ Circuit Breaker Pattern\n\n```javascript\n┌─────────────────────────────────────────────────────────────┐\n│                         USERS                               │\n│  Browser / Mobile App                                       │\n│  (Frontend UI, State, Requests, Retries, etc.)             │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           │ HTTPS Requests\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                       CDN / EDGE CACHE                      │\n│  - Static asset caching                                    │\n│  - Global delivery                                         │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                        API GATEWAY                          │\n│  - Authentication                                           │\n│  - Rate limiting                                            │\n│  - Request routing                                          │\n│  - Monitoring & logging                                     │\n│  - Request aggregation                                      │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                       LOAD BALANCER                         │\n│  Distributes traffic across service instances               │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                    MICROSERVICES LAYER                      │\n│                                                             │\n│  ┌─────────────────────┐   ┌─────────────────────┐         │\n│  │   User Service      │   │  Order Service      │         │\n│  │   (Stateless)       │   │  (Stateless)        │         │\n│  └─────────────────────┘   └─────────────────────┘         │\n│            │                          │                     │\n│            │                          │                     │\n│            │   ┌────────────────────┐ │                     │\n│            └──►│  Circuit Breaker   │◄┘                     │\n│                │  (Failure control) │                       │\n│                └────────────────────┘                       │\n│                                                             │\n│  Services communicate via:                                  │\n│                                                             │\n│  ┌─────────────────────────────────────────────────────┐    │\n│  │           MESSAGE BROKER / EVENT QUEUE              │    │\n│  │  (Async communication, Pub/Sub, Event-driven flow)  │    │\n│  └─────────────────────────────────────────────────────┘    │\n└─────────────────────────────────────────────────────────────┘\n                           │\n                           ▼\n┌─────────────────────────────────────────────────────────────┐\n│                         CACHE LAYER                         │\n│  Redis / In-memo"
+                }
+              },
+              {
+                "index": 5,
+                "relevance_score": 0.18120559,
+                "document": {
+                  "text": "Page: 21st February\nTopic: 🏗 System Design Best Practices\n\n✔ Centralized monitoring platform\n\n✔ Structured logging format\n\n✔ Version tagging in every event\n\n✔ Environment awareness (dev / prod)\n\n✔ Graceful failure of monitoring itself (Monitoring must never break the app)\n\n## 🎯 When Observability Is Critical\n\n- Large user base\n\n- Revenue-sensitive flows\n\n- Real-time applications\n\n- Multi-team ownership\n\n- Third-party integrations\n\n## Important Backend concepts :\n\n## 🗄 Data Storage & Data Modeling\n\n---\n\n### 1️⃣ Database (SQL vs NoSQL)\n\nA database stores and manages application data.\n\n#### SQL (Relational Databases)\n\n- Structured tables with fixed schema\n\n- Strong consistency\n\n- Relationships between data\n\n- Examples: PostgreSQL, MySQL\n\nBest for:\n\n✔ transactions\n\n✔ structured data\n\n✔ financial systems\n\n---\n\n#### NoSQL (Non-relational Databases)\n\n- Flexible schema\n\n- Scales easily\n\n- Often optimised for speed and distribution\n\n- Examples: MongoDB, DynamoDB\n\nBest for:\n\n✔ large scale systems\n\n✔ semi-structured data\n\n✔ real-time apps\n\n---"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "stage": "db.persist",
+          "kind": "db",
+          "startMs": 3094,
+          "endMs": 3350,
+          "ms": 256
+        }
+      ],
+      "telemetry": {
+        "sessionId": "bench-1adea5c3d2d9b6f9",
+        "revision": 5,
+        "turn": "learner",
+        "latencyMs": 3026,
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "totalTokens": 0,
+        "stages": [],
+        "speech": {
+          "attempts": 0,
+          "flags": [],
+          "fallback": false,
+          "rendererFallback": false,
+          "draftWords": 0,
+          "finalWords": 0
+        }
+      },
+      "logs": [
+        {
+          "message": "[interview-runtime] knowledge retrieved",
+          "data": {
+            "hits": 3
+          }
+        },
+        {
+          "message": "[interview-runtime] completion served",
+          "data": {
+            "sessionId": "bench-1adea5c3d2d9b6f9",
+            "revision": 5,
+            "turn": "learner",
+            "latencyMs": 3026,
+            "promptTokens": 0,
+            "completionTokens": 0,
+            "totalTokens": 0,
+            "stages": [],
+            "speech": {
+              "attempts": 0,
+              "flags": [],
+              "fallback": false,
+              "rendererFallback": false,
+              "draftWords": 0,
+              "finalWords": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

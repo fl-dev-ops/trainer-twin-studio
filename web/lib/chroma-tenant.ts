@@ -1,7 +1,10 @@
 import { AdminClient, AdminCloudClient, ChromaClient, CloudClient } from "chromadb";
 import { db } from "@/lib/db";
+import { invalidateCollectionCache } from "@/lib/main-collection";
 
 export { AdminClient as ChromaAdminClient };
+
+const clientCache = new Map<string, ChromaClient>();
 
 const CHROMA_URL = process.env.CHROMA_URL;
 const CHROMA_API_KEY = process.env.CHROMA_API_KEY ?? "";
@@ -83,6 +86,8 @@ export class ChromaTenantService {
 
   /** Deletes only the database deterministically owned by this organization. */
   static async deleteOrgDatabase(orgId: string): Promise<void> {
+    clientCache.delete(orgId);
+    invalidateCollectionCache(orgId); // keep the MainCollectionService handle cache coherent
     const org = await db.organization.findUnique({ where: { id: orgId } });
     if (!org) return;
 
@@ -101,8 +106,13 @@ export class ChromaTenantService {
 
   /**
    * Returns a ChromaClient or CloudClient scoped to the organization's tenant and database.
+   * Clients are cached per org in-process; constructing a client is cheap but the
+   * org lookup + auth handshake repeated per search are not (Chroma docs: reuse one client).
    */
   static async getClient(orgId: string): Promise<ChromaClient> {
+    // ponytail: unbounded Map — one entry per active org; per-org DB validation skipped after first resolve.
+    const cached = clientCache.get(orgId);
+    if (cached) return cached;
     let org = await db.organization.findUnique({ where: { id: orgId } });
     if (!org) throw new Error(`Organization ${orgId} not found`);
 
@@ -115,12 +125,15 @@ export class ChromaTenantService {
     const tenant = org.chromaTenantId ?? CHROMA_TENANT;
     const database = org.chromaDatabase ?? CHROMA_DATABASE;
 
+    let client: ChromaClient;
     if (CHROMA_URL) {
-      return new ChromaClient({ ...parseChromaUrl(CHROMA_URL), tenant, database });
+      client = new ChromaClient({ ...parseChromaUrl(CHROMA_URL), tenant, database });
+    } else if (CHROMA_API_KEY) {
+      client = new CloudClient({ apiKey: CHROMA_API_KEY, tenant, database });
+    } else {
+      client = new ChromaClient({ ...parseChromaUrl("http://localhost:8000"), tenant, database });
     }
-    if (CHROMA_API_KEY) {
-      return new CloudClient({ apiKey: CHROMA_API_KEY, tenant, database });
-    }
-    return new ChromaClient({ ...parseChromaUrl("http://localhost:8000"), tenant, database });
+    clientCache.set(orgId, client);
+    return client;
   }
 }
