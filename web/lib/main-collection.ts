@@ -63,21 +63,19 @@ export function invalidateCollectionCache(orgId: string): void {
  * retrieval promises simply wait their turn and still finish during the LLM stages.
  */
 let chromaLane: Promise<unknown> = Promise.resolve();
-async function runOnChromaLane<T>(task: () => Promise<T>, retries = 2): Promise<T> {
-  const run = chromaLane.then(task, task); // run even if the previous task rejected
-  chromaLane = run.catch(() => undefined);
-  let lastError: unknown;
-  for (let attempt = 0; attempt <= retries; attempt++) {
+function runOnChromaLane<T>(task: () => Promise<T>): Promise<T> {
+  const attempt = async (): Promise<T> => {
     try {
-      return (await run) as T;
+      return await task();
     } catch (error) {
-      lastError = error;
       if (!String(error).includes("Failed to connect")) throw error;
-      // rebuild client + collection handles before retrying
-      collectionCache.clear();
+      collectionCache.clear(); // rebuild handles, then retry once
+      return task();
     }
-  }
-  throw lastError;
+  };
+  const run = chromaLane.then(attempt, attempt);
+  chromaLane = run.catch(() => undefined);
+  return run;
 }
 
 export class MainCollectionService {
@@ -313,44 +311,44 @@ export class MainCollectionService {
     options: { kbIds?: string[]; limit?: number } = {},
   ): Promise<{ id: string; docId: string; kbId: string; source: string; text: string; score: number }[]> {
     return runOnChromaLane(async () => {
-    const collection = await this.getCollection(orgId);
-    const limit = options.limit ?? 5;
-    const [queryEmbedding] = await embedTexts([query]);
+      const collection = await this.getCollection(orgId);
+      const limit = options.limit ?? 5;
+      const [queryEmbedding] = await embedTexts([query]);
 
-    let whereFilter: Where = { type: "knowledge" };
-    if (options.kbIds && options.kbIds.length === 1) {
-      whereFilter = { $and: [{ type: "knowledge" }, { kbId: options.kbIds[0] }] } as Where;
-    } else if (options.kbIds && options.kbIds.length > 1) {
-      whereFilter = { $and: [{ type: "knowledge" }, { kbId: { $in: options.kbIds } }] } as Where;
-    }
+      let whereFilter: Where = { type: "knowledge" };
+      if (options.kbIds && options.kbIds.length === 1) {
+        whereFilter = { $and: [{ type: "knowledge" }, { kbId: options.kbIds[0] }] } as Where;
+      } else if (options.kbIds && options.kbIds.length > 1) {
+        whereFilter = { $and: [{ type: "knowledge" }, { kbId: { $in: options.kbIds } }] } as Where;
+      }
 
-    const res = await collection.query({
-      queryEmbeddings: [queryEmbedding],
-      nResults: limit,
-      where: whereFilter,
-      include: ["documents", "metadatas", "distances"],
-    });
-
-    const hits: { id: string; docId: string; kbId: string; source: string; text: string; score: number }[] = [];
-    const ids = res.ids?.[0] ?? [];
-    const docs = res.documents?.[0] ?? [];
-    const metadatas = (res.metadatas?.[0] ?? []) as Record<string, unknown>[];
-    const distances = res.distances?.[0] ?? [];
-
-    for (let i = 0; i < ids.length; i++) {
-      const meta = metadatas[i] ?? {};
-      const dist = distances ? distances[i] : null;
-      hits.push({
-        id: ids[i],
-        docId: String(meta.docId ?? ids[i]),
-        kbId: String(meta.kbId ?? ""),
-        source: String(meta.source ?? ""),
-        text: docs[i] ?? "",
-        score: dist !== null && dist !== undefined ? 1 - dist : 0,
+      const res = await collection.query({
+        queryEmbeddings: [queryEmbedding],
+        nResults: limit,
+        where: whereFilter,
+        include: ["documents", "metadatas", "distances"],
       });
-    }
 
-    return hits;
+      const hits: { id: string; docId: string; kbId: string; source: string; text: string; score: number }[] = [];
+      const ids = res.ids?.[0] ?? [];
+      const docs = res.documents?.[0] ?? [];
+      const metadatas = (res.metadatas?.[0] ?? []) as Record<string, unknown>[];
+      const distances = res.distances?.[0] ?? [];
+
+      for (let i = 0; i < ids.length; i++) {
+        const meta = metadatas[i] ?? {};
+        const dist = distances ? distances[i] : null;
+        hits.push({
+          id: ids[i],
+          docId: String(meta.docId ?? ids[i]),
+          kbId: String(meta.kbId ?? ""),
+          source: String(meta.source ?? ""),
+          text: docs[i] ?? "",
+          score: dist !== null && dist !== undefined ? 1 - dist : 0,
+        });
+      }
+
+      return hits;
     });
   }
 
@@ -443,59 +441,60 @@ export class MainCollectionService {
     hasDoubledAcknowledgement?: boolean;
   }[]> {
     return runOnChromaLane(async () => {
-    const collection = await this.getCollection(orgId);
-    const limit = options.limit ?? 4;
-    const conditions: Where[] = [{ type: recordType }];
-    if (options.personaId) conditions.push({ personaId: options.personaId });
-    if (options.sessionPhase) conditions.push({ sessionPhase: options.sessionPhase });
-    if (options.styleFilters?.usesLearnerName !== undefined) {
-      conditions.push({ usesLearnerName: options.styleFilters.usesLearnerName });
-    }
-    if (options.styleFilters?.startsWithThanks !== undefined) {
-      conditions.push({ startsWithThanks: options.styleFilters.startsWithThanks });
-    }
-    if (options.styleFilters?.hasDoubledAcknowledgement !== undefined) {
-      conditions.push({ hasDoubledAcknowledgement: options.styleFilters.hasDoubledAcknowledgement });
-    }
-    const whereClause: Where = conditions.length > 1 ? ({ $and: conditions } as Where) : conditions[0];
-    const res = await collection.query({
-      queryEmbeddings: await embedTexts([query]),
-      nResults: options.diversify ? limit * 3 : limit,
-      where: whereClause,
-      include: ["documents", "metadatas", "distances"],
-    });
-    const ids = res.ids?.[0] ?? [];
-    const docs = res.documents?.[0] ?? [];
-    const metadatas = (res.metadatas?.[0] ?? []) as Record<string, unknown>[];
-    const distances = res.distances?.[0] ?? [];
-    const hits: Array<Record<string, unknown>> = [];
-    const seenSources = new Set<string>();
-    for (let i = 0; i < ids.length; i++) {
-      const meta = metadatas[i] ?? {};
-      if (options.diversify) {
-        const source = String(meta.sourceId ?? ids[i]);
-        if (seenSources.has(source)) continue;
-        seenSources.add(source);
+      const collection = await this.getCollection(orgId);
+      const limit = options.limit ?? 4;
+      const conditions: Where[] = [{ type: recordType }];
+      if (options.personaId) conditions.push({ personaId: options.personaId });
+      if (options.sessionPhase) conditions.push({ sessionPhase: options.sessionPhase });
+      if (options.styleFilters?.usesLearnerName !== undefined) {
+        conditions.push({ usesLearnerName: options.styleFilters.usesLearnerName });
       }
-      const dist = distances ? distances[i] : null;
-      hits.push({
-        id: ids[i],
-        personaId: String(meta.personaId ?? ""),
-        sourceId: String(meta.sourceId ?? ""),
-        sourceName: String(meta.sourceName ?? ""),
-        text: docs[i] ?? "",
-        score: dist !== null && dist !== undefined ? 1 - dist : 0,
-        ...(typeof meta.sessionPhase === "string" ? { sessionPhase: meta.sessionPhase } : {}),
-        ...(typeof meta.pastLearnerName === "string" ? { pastLearnerName: meta.pastLearnerName } : {}),
-        ...(typeof meta.styleFunction === "string" ? { styleFunction: meta.styleFunction } : {}),
-        ...(typeof meta.styleShape === "string" ? { styleShape: meta.styleShape } : {}),
-        ...(meta.usesLearnerName !== undefined ? { usesLearnerName: meta.usesLearnerName === true } : {}),
-        ...(meta.startsWithThanks !== undefined ? { startsWithThanks: meta.startsWithThanks === true } : {}),
-        ...(meta.hasDoubledAcknowledgement !== undefined ? { hasDoubledAcknowledgement: meta.hasDoubledAcknowledgement === true } : {}),
-      });
-      if (hits.length >= limit) break;
-    }
-    return hits as never;
+      if (options.styleFilters?.startsWithThanks !== undefined) {
+        conditions.push({ startsWithThanks: options.styleFilters.startsWithThanks });
+      }
+      if (options.styleFilters?.hasDoubledAcknowledgement !== undefined) {
+        conditions.push({ hasDoubledAcknowledgement: options.styleFilters.hasDoubledAcknowledgement });
+      }
+      const whereClause: Where = conditions.length > 1 ? ({ $and: conditions } as Where) : conditions[0];
+      const res = await collection.query({
+        queryEmbeddings: await embedTexts([query]),
+        nResults: options.diversify ? limit * 3 : limit,
+        where: whereClause,
+        include: ["documents", "metadatas", "distances"],
+    });
+      const ids = res.ids?.[0] ?? [];
+      const docs = res.documents?.[0] ?? [];
+      const metadatas = (res.metadatas?.[0] ?? []) as Record<string, unknown>[];
+      const distances = res.distances?.[0] ?? [];
+      const hits: Array<Record<string, unknown>> = [];
+      const seenSources = new Set<string>();
+      for (let i = 0; i < ids.length; i++) {
+        const meta = metadatas[i] ?? {};
+        if (options.diversify) {
+          const source = String(meta.sourceId ?? ids[i]);
+          if (seenSources.has(source)) continue;
+          seenSources.add(source);
+        }
+        const dist = distances ? distances[i] : null;
+        hits.push({
+          id: ids[i],
+          personaId: String(meta.personaId ?? ""),
+          sourceId: String(meta.sourceId ?? ""),
+          sourceName: String(meta.sourceName ?? ""),
+          text: docs[i] ?? "",
+          score: dist !== null && dist !== undefined ? 1 - dist : 0,
+          ...(typeof meta.sessionPhase === "string" ? { sessionPhase: meta.sessionPhase } : {}),
+          ...(typeof meta.pastLearnerName === "string" ? { pastLearnerName: meta.pastLearnerName } : {}),
+          ...(typeof meta.styleFunction === "string" ? { styleFunction: meta.styleFunction } : {}),
+          ...(typeof meta.styleShape === "string" ? { styleShape: meta.styleShape } : {}),
+          ...(meta.usesLearnerName !== undefined ? { usesLearnerName: meta.usesLearnerName === true } : {}),
+          ...(meta.startsWithThanks !== undefined ? { startsWithThanks: meta.startsWithThanks === true } : {}),
+          ...(meta.hasDoubledAcknowledgement !== undefined ? { hasDoubledAcknowledgement: meta.hasDoubledAcknowledgement === true } : {}),
+        });
+        if (hits.length >= limit) break;
+      }
+
+      return hits as never;
     });
   }
 
@@ -544,47 +543,47 @@ export class MainCollectionService {
     if (cached) return cached;
 
     return runOnChromaLane(async () => {
-    const collection = await this.getCollection(orgId);
-    const entries: Array<{ name: string; response: string }> = [];
-    for (let offset = 0; offset < 1200; offset += 300) {
-      const page = await collection.get({
-        where: { $and: [{ type: "persona_voice_episode" }, { personaId }] } as Where,
-        limit: 300,
-        offset,
-        include: ["documents", "metadatas"],
-      });
-      const docs = page.documents ?? [];
-      const metas = (page.metadatas ?? []) as Record<string, unknown>[];
-      for (let i = 0; i < docs.length; i++) {
-        const response = String(docs[i] ?? "").split("\nVasanth: ")[1]?.split("\nPast learner reaction:")[0];
-        if (!response) continue;
-        entries.push({
-          name: typeof metas[i]?.pastLearnerName === "string" ? (metas[i].pastLearnerName as string) : "",
-          response,
+      const collection = await this.getCollection(orgId);
+      const entries: Array<{ name: string; response: string }> = [];
+      for (let offset = 0; offset < 1200; offset += 300) {
+        const page = await collection.get({
+          where: { $and: [{ type: "persona_voice_episode" }, { personaId }] } as Where,
+          limit: 300,
+          offset,
+          include: ["documents", "metadatas"],
         });
+        const docs = page.documents ?? [];
+        const metas = (page.metadatas ?? []) as Record<string, unknown>[];
+        for (let i = 0; i < docs.length; i++) {
+          const response = String(docs[i] ?? "").split("\nVasanth: ")[1]?.split("\nPast learner reaction:")[0];
+          if (!response) continue;
+          entries.push({
+            name: typeof metas[i]?.pastLearnerName === "string" ? (metas[i].pastLearnerName as string) : "",
+            response,
+          });
+        }
+        if (docs.length < 300) break;
       }
-      if (docs.length < 300) break;
-    }
-    const doubledRe = /\b(yes|yeah|correct|right|good|okay|sure|no)[,. ]+\1\b/i;
-    const words = (response: string) => response.trim().split(/\s+/).filter(Boolean).length;
-    const rate = (predicate: (entry: { name: string; response: string }) => boolean) =>
-      entries.length ? entries.filter(predicate).length / entries.length : 0;
-    const escapeRe = (name: string) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const stats = {
-      turns: entries.length,
-      learner_name_use_rate: rate(({ name, response }) =>
-        Boolean(name && new RegExp(`\\b${escapeRe(name)}\\b`, "i").test(response))),
-      doubled_acknowledgement_rate: rate(({ response }) => doubledRe.test(response)),
-      thanks_turn_start_rate: rate(({ response }) => /^(thanks|thank you)\b/i.test(response)),
-      average_spoken_words: entries.length
-        ? entries.reduce((sum, { response }) => sum + words(response), 0) / entries.length
-        : 0,
-      average_questions: entries.length
-        ? entries.reduce((sum, { response }) => sum + (response.match(/\?/g)?.length ?? 0), 0) / entries.length
-        : 0,
-    };
-    primerStatsCache.set(cacheKey, stats);
-    return stats;
+      const doubledRe = /\b(yes|yeah|correct|right|good|okay|sure|no)[,. ]+\1\b/i;
+      const words = (response: string) => response.trim().split(/\s+/).filter(Boolean).length;
+      const rate = (predicate: (entry: { name: string; response: string }) => boolean) =>
+        entries.length ? entries.filter(predicate).length / entries.length : 0;
+      const escapeRe = (name: string) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const stats = {
+        turns: entries.length,
+        learner_name_use_rate: rate(({ name, response }) =>
+          Boolean(name && new RegExp(`\\b${escapeRe(name)}\\b`, "i").test(response))),
+        doubled_acknowledgement_rate: rate(({ response }) => doubledRe.test(response)),
+        thanks_turn_start_rate: rate(({ response }) => /^(thanks|thank you)\b/i.test(response)),
+        average_spoken_words: entries.length
+          ? entries.reduce((sum, { response }) => sum + words(response), 0) / entries.length
+          : 0,
+        average_questions: entries.length
+          ? entries.reduce((sum, { response }) => sum + (response.match(/\?/g)?.length ?? 0), 0) / entries.length
+          : 0,
+      };
+      primerStatsCache.set(cacheKey, stats);
+      return stats;
     });
   }
 }
