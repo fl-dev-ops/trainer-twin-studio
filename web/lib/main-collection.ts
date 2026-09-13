@@ -55,6 +55,31 @@ export function invalidateCollectionCache(orgId: string): void {
   collectionCache.delete(orgId);
 }
 
+/**
+ * Chroma Cloud drops concurrent requests from the same client (observed in the
+ * parallel-episodes bench: 10 connection failures when knowledge + episodes ran
+ * concurrently, 0 when sequential). All collection reads therefore pass through
+ * this single-lane queue. Pipeline-level parallelism is preserved: early-started
+ * retrieval promises simply wait their turn and still finish during the LLM stages.
+ */
+let chromaLane: Promise<unknown> = Promise.resolve();
+async function runOnChromaLane<T>(task: () => Promise<T>, retries = 2): Promise<T> {
+  const run = chromaLane.then(task, task); // run even if the previous task rejected
+  chromaLane = run.catch(() => undefined);
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return (await run) as T;
+    } catch (error) {
+      lastError = error;
+      if (!String(error).includes("Failed to connect")) throw error;
+      // rebuild client + collection handles before retrying
+      collectionCache.clear();
+    }
+  }
+  throw lastError;
+}
+
 export class MainCollectionService {
   /**
    * Resolves collection name for the org.
@@ -287,6 +312,7 @@ export class MainCollectionService {
     query: string,
     options: { kbIds?: string[]; limit?: number } = {},
   ): Promise<{ id: string; docId: string; kbId: string; source: string; text: string; score: number }[]> {
+    return runOnChromaLane(async () => {
     const collection = await this.getCollection(orgId);
     const limit = options.limit ?? 5;
     const [queryEmbedding] = await embedTexts([query]);
@@ -325,6 +351,7 @@ export class MainCollectionService {
     }
 
     return hits;
+    });
   }
 
   /**
@@ -415,6 +442,7 @@ export class MainCollectionService {
     startsWithThanks?: boolean;
     hasDoubledAcknowledgement?: boolean;
   }[]> {
+    return runOnChromaLane(async () => {
     const collection = await this.getCollection(orgId);
     const limit = options.limit ?? 4;
     const conditions: Where[] = [{ type: recordType }];
@@ -468,6 +496,7 @@ export class MainCollectionService {
       if (hits.length >= limit) break;
     }
     return hits as never;
+    });
   }
 
   /** Searches situation episodes (full labelled conversation exchanges). */
@@ -514,6 +543,7 @@ export class MainCollectionService {
     const cached = primerStatsCache.get(cacheKey);
     if (cached) return cached;
 
+    return runOnChromaLane(async () => {
     const collection = await this.getCollection(orgId);
     const entries: Array<{ name: string; response: string }> = [];
     for (let offset = 0; offset < 1200; offset += 300) {
@@ -555,6 +585,7 @@ export class MainCollectionService {
     };
     primerStatsCache.set(cacheKey, stats);
     return stats;
+    });
   }
 }
 

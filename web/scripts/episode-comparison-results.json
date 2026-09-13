@@ -1,0 +1,155 @@
+[
+  {
+    "turn": "ownership-answer",
+    "early": {
+      "query": "Session phase: middle\nLearner situation: I personally designed and led the migration of our order-processing monolith into event-driven services. I owned the architecture, broke the work into milestones, and reviewed the implementation from five engineers.\nPending trainer question: Greet the learner by name and start the session\nLearner state: vague",
+      "latencyMs": 2301,
+      "hits": [
+        {
+          "id": "persona_voice_episode_cmtxgkiic000i2lseh3wa13y1#31",
+          "score": "0.707",
+          "preview": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: So Ranjit, are you getting nervous?"
+        },
+        {
+          "id": "persona_voice_episode_cmtxgki22000h2lsevtw2sz9x#26",
+          "score": "0.704",
+          "preview": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: What, Anubhav? I did not hear.\nPast"
+        },
+        {
+          "id": "persona_voice_episode_cmtxgkmsw000o2lsecvrzop1a#21",
+          "score": "0.702",
+          "preview": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Sure. You don't have to fully expla"
+        }
+      ]
+    },
+    "enriched": {
+      "query": "Session phase: middle\nLearner situation: I personally designed and led the migration of our order-processing monolith into event-driven services. I owned the architecture, broke the work into milestones, and reviewed the implementation from five engineers.\nPending trainer question: Greet the learner by name and start the session\nLearner state: partial\nTopic: Candidate's specific role and ownership in a project\nTrainer action: isolate_missing_part",
+      "contextAdded": {
+        "classification": "partial",
+        "topic": "Candidate's specific role and ownership in a project",
+        "action": "isolate_missing_part"
+      },
+      "latencyMs": 1217,
+      "hits": [
+        {
+          "id": "persona_voice_episode_cmtxgkmsw000o2lsecvrzop1a#21",
+          "score": "0.714",
+          "preview": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Sure. You don't have to fully expla"
+        },
+        {
+          "id": "persona_voice_episode_cmtxgklsz000m2lsej2k52ssl#11",
+          "score": "0.704",
+          "preview": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Okay. What are the different states"
+        },
+        {
+          "id": "persona_voice_episode_cmtxgkiic000i2lseh3wa13y1#31",
+          "score": "0.703",
+          "preview": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: So Ranjit, are you getting nervous?"
+        }
+      ]
+    },
+    "overlap": "2 of 3 shared"
+  },
+  {
+    "turn": "mechanism-answer",
+    "early": {
+      "query": "Session phase: middle\nLearner situation: We used Kafka with an outbox pattern so database writes and emitted events stayed consistent. Consumers were idempotent using the order ID, and we used dead-letter queues with replay tooling for failures.\nPending trainer question: Can you walk me through the key technical mechanism of how you designed the event-driven architecture?\nLearner state: vague",
+      "latencyMs": 1514,
+      "hits": [
+        {
+          "id": "persona_voice_episode_cmtxgki22000h2lsevtw2sz9x#43",
+          "score": "0.625",
+          "preview": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Why is it not guaranteed? Can you t"
+        },
+        {
+          "id": "persona_voice_episode_cmtxgkoc6000r2lsemvnmdb9u#18",
+          "score": "0.620",
+          "preview": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Let's do one thing. You start the i"
+        },
+        {
+          "id": "persona_voice_episode_cmtxgkqw3000x2lsee7r5p0ei#7",
+          "score": "0.616",
+          "preview": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Yes, exactly. Correct? So let me as"
+        }
+      ]
+    },
+    "enriched": {
+      "query": "Session phase: middle\nLearner situation: We used Kafka with an outbox pattern so database writes and emitted events stayed consistent. Consumers were idempotent using the order ID, and we used dead-letter queues with replay tooling for failures.\nPending trainer question: Can you walk me through the key technical mechanism of how you designed the event-driven architecture?\nLearner state: partial\nTopic: event-driven architecture design and mechanisms\nTrainer action: isolate_missing_part",
+      "contextAdded": {
+        "classification": "partial",
+        "topic": "event-driven architecture design and mechanisms",
+        "action": "isolate_missing_part"
+      },
+      "latencyMs": 1362,
+      "hits": [
+        {
+          "id": "persona_voice_episode_cmtxgki22000h2lsevtw2sz9x#43",
+          "score": "0.631",
+          "preview": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Why is it not guaranteed? Can you t"
+        },
+        {
+          "id": "persona_voice_episode_cmtxgkoc6000r2lsemvnmdb9u#18",
+          "score": "0.618",
+          "preview": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Let's do one thing. You start the i"
+        },
+        {
+          "id": "persona_voice_episode_cmtxgklsz000m2lsej2k52ssl#44",
+          "score": "0.616",
+          "preview": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Sure. So store, reducer, then dispa"
+        }
+      ]
+    },
+    "overlap": "2 of 3 shared"
+  },
+  {
+    "turn": "impact-answer",
+    "early": {
+      "query": "Session phase: middle\nLearner situation: After rollout, deployment time fell from 40 minutes to 8 minutes, order-processing failures dropped by 35 percent, and the team moved from weekly releases to daily releases.\nPending trainer question: What specific user or business problem this event-driven migration was trying to solve?\nLearner state: vague",
+      "latencyMs": 5031,
+      "hits": [
+        {
+          "id": "persona_voice_episode_cmtxgkoc6000r2lsemvnmdb9u#23",
+          "score": "0.613",
+          "preview": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Just before you save it, think — wh"
+        },
+        {
+          "id": "persona_voice_episode_cmtxgkqw3000x2lsee7r5p0ei#17",
+          "score": "0.612",
+          "preview": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Is it always changing, right? Or is"
+        },
+        {
+          "id": "persona_voice_episode_cmtxgkiic000i2lseh3wa13y1#12",
+          "score": "0.605",
+          "preview": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Hmm, correct. Okay, we can check it"
+        }
+      ]
+    },
+    "enriched": {
+      "query": "Session phase: middle\nLearner situation: After rollout, deployment time fell from 40 minutes to 8 minutes, order-processing failures dropped by 35 percent, and the team moved from weekly releases to daily releases.\nPending trainer question: What specific user or business problem this event-driven migration was trying to solve?\nLearner state: vague\nTopic: Project & Experience Deep Dive\nTrainer action: isolate_missing_part",
+      "contextAdded": {
+        "classification": "vague",
+        "topic": "Project & Experience Deep Dive",
+        "action": "isolate_missing_part"
+      },
+      "latencyMs": 1470,
+      "hits": [
+        {
+          "id": "persona_voice_episode_cmtxgkpwn000v2lsejzrs9whg#5",
+          "score": "0.621",
+          "preview": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Sure, sure. Take a moment.\nPast lea"
+        },
+        {
+          "id": "persona_voice_episode_cmtxgkqw3000x2lsee7r5p0ei#17",
+          "score": "0.619",
+          "preview": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Is it always changing, right? Or is"
+        },
+        {
+          "id": "persona_voice_episode_cmtxgkoc6000r2lsemvnmdb9u#18",
+          "score": "0.618",
+          "preview": "PAST CONVERSATION EXAMPLE — not facts about the current learner.\nSession phase: middle\nPrevious Vasanth: Let's do one thing. You start the i"
+        }
+      ]
+    },
+    "overlap": "1 of 3 shared"
+  }
+]

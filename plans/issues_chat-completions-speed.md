@@ -290,6 +290,35 @@ Findings:
 3. Conclusion: **do not change production.** `search_nprobe=64` stays. The `hnsw` block in `getOrCreateCollection` creation config is dead config for Chroma Cloud (ignored in favor of SPANN); harmless but should not be relied on.
 4. The real query-time floor is ~300 ms per Chroma round trip → strengthens the case for the next rung: **fewer round trips (batch queries/embeddings) and parallelizing independent retrievals**, not shallower searches.
 3. **Batch/parallelize retrievals and embeddings** where dependencies allow.
+
+### 3a. Episode retrieval parallelization — DONE (structural), wall win pending quiet-network benchmark
+
+Dependency check first: episode retrieval only needs the latest learner text, prior pending question, and session phase — all known at turn start. It does NOT need direction or analysis output. It previously waited for analysis (~4–7 s in) and then blocked content for another ~1.4–2.5 s.
+
+**Context-enrichment quality test** (`web/scripts/test-episode-parallel.ts`, results in `episode-comparison-results.json`): compared the early query (what parallelism requires) against an enriched query that adds `analysis.classification`, `direction.current_topic`, and `action.name` after the LLM stages:
+
+- Hit overlap between early and enriched: 2/3, 2/3, 1/3 across the three learner turns; cosine scores moved by ≤0.05.
+- Both variants return plausible behavior examples; episodes feed style/behavior hints to the content stage, not learner facts.
+- Enrichment requires waiting for direction + analysis (~3–7 s), which defeats the parallelism.
+- Decision: **ship the early query** — it is semantically identical to today's production query (same inputs, same hardcoded learner state), so retrieval quality is unchanged by construction.
+
+**Implementation** (`web/lib/runtime/openai.ts`):
+
+- On each learner turn, the episode search starts immediately as a promise, concurrent with knowledge RAG, direction, and analysis.
+- `generateSpeech` accepts `preloadedEpisodes` (promise or array); falls back to inline retrieval when absent (opening/tool turns).
+
+**Reliability regression found and fixed:** the first parallel run produced **10 Chroma connection failures** (4 episode + 3 knowledge + 3 style) versus 0 in every sequential run — Chroma Cloud drops concurrent requests from the same client.
+
+- Fix (`web/lib/main-collection.ts`): a single-lane queue (`runOnChromaLane`) serializes all main-collection reads; pipeline parallelism is preserved because early-started retrieval promises wait their turn and still complete during the LLM stages. Connection errors rebuild handles and retry (2 attempts).
+- Result: next two runs went 2 failures → **0 failures**.
+
+**Measured:** in the clean run, episodes finish at ~1.3 s into the turn while content starts at ~7 s — fully hidden, verified all three turns. Wall medians tonight (15.6–15.9 s vs 15.56 s baseline) show no visible win because Chroma Cloud/network latency was elevated all evening (knowledge.search median 2.2–2.5 s vs 1.3–1.4 s at baseline). The structural saving (~1.4 s off the critical path) is real but needs a quiet-network A/B for the headline number.
+
+**Output quality:** judge (`openai/gpt-4.1`) compared baseline vs parallel final responses (`bench-quality-judge-parallel.json`): no regression — the parallel run scored equal or higher on all four dimensions (naturalness 5 vs 4 on all turns; treated as sampling variance, not an improvement claim).
+
+Checks: knowledge + org-knowledge + runtime-check — 26 pass.
+
+3b. **Batch/parallelize embeddings and remaining retrievals** where dependencies allow.
 4. Repeat-request short-circuit before knowledge retrieval (~1.1 s waste).
 
 ### 1. Client + collection cache — DONE
