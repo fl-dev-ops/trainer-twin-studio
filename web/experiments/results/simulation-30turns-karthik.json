@@ -1,0 +1,416 @@
+{
+  "session_id": "bench-30turns-karthik-1789334422",
+  "summary": {
+    "median_wall_ms": 4066.5
+  },
+  "turns": [
+    {
+      "turn": 1,
+      "wall_ms": 9945,
+      "ttft_ms": 9463,
+      "words": 36,
+      "tools": [
+        "surface",
+        "search_style"
+      ],
+      "text": "Thanks, Karthik. I've opened your resume on screen. Let's start by discussing one quantified impact you mentioned. Can you explain the specific metrics you used to measure that impact, and how you tracked improvements over time?",
+      "usage": {
+        "prompt_tokens": 9521,
+        "completion_tokens": 46,
+        "total_tokens": 9567
+      }
+    },
+    {
+      "turn": 2,
+      "wall_ms": 6237,
+      "ttft_ms": 5509,
+      "words": 37,
+      "tools": [
+        "search_style"
+      ],
+      "text": "Right, Karthik, handling fifteen thousand transactions per second is impressive. Can you walk me through the metrics you monitored to ensure consistent performance at that scale? How did you validate those numbers in production or testing environments?",
+      "usage": {
+        "prompt_tokens": 15179,
+        "completion_tokens": 46,
+        "total_tokens": 15225
+      }
+    },
+    {
+      "turn": 3,
+      "wall_ms": 5658,
+      "ttft_ms": 5138,
+      "words": 35,
+      "tools": [
+        "search_style"
+      ],
+      "text": "Okay, Karthik. Migrating to Kafka and Redis is a big architectural change. Can you describe how this shift improved your system's scalability or reliability? What metrics or incidents confirmed the positive impact of this migration?",
+      "usage": {
+        "prompt_tokens": 20845,
+        "completion_tokens": 46,
+        "total_tokens": 20891
+      }
+    },
+    {
+      "turn": 4,
+      "wall_ms": 6700,
+      "ttft_ms": 6001,
+      "words": 34,
+      "tools": [
+        "search_style"
+      ],
+      "text": "Right, Karthik. Absorbing ninety-two percent of the read traffic is significant. Can you explain how you measured this reduction in database load? What monitoring or metrics confirmed the Redis cache effectiveness in real time?",
+      "usage": {
+        "prompt_tokens": 26510,
+        "completion_tokens": 46,
+        "total_tokens": 26556
+      }
+    },
+    {
+      "turn": 5,
+      "wall_ms": 6350,
+      "ttft_ms": 5825,
+      "words": 35,
+      "tools": [
+        "search_style"
+      ],
+      "text": "Okay, Karthik. Separating reads and writes for Postgres is critical in financial systems. Can you describe the main advantages this brought to your system, and what challenges you faced ensuring ACID compliance while scaling writes?",
+      "usage": {
+        "prompt_tokens": 32346,
+        "completion_tokens": 47,
+        "total_tokens": 32393
+      }
+    },
+    {
+      "turn": 6,
+      "wall_ms": 3505,
+      "ttft_ms": 2768,
+      "words": 32,
+      "tools": [],
+      "text": "Right, Karthik. Using a write-through cache with a short sixty-second time-to-live is smart. How did you ensure data consistency during cache invalidation, and did you observe any trade-offs between performance and consistency?",
+      "usage": {
+        "prompt_tokens": 32423,
+        "completion_tokens": 47,
+        "total_tokens": 32470
+      }
+    },
+    {
+      "turn": 7,
+      "wall_ms": 3906,
+      "ttft_ms": 3287,
+      "words": 36,
+      "tools": [],
+      "text": "Okay, Karthik. Implementing single-flight request coalescing for flash sales is clever. How did you measure the effectiveness of Redis locks in preventing cache stampedes, and what fallback mechanisms did you have in case of lock failures?",
+      "usage": {
+        "prompt_tokens": 32504,
+        "completion_tokens": 50,
+        "total_tokens": 32554
+      }
+    },
+    {
+      "turn": 8,
+      "wall_ms": 4127,
+      "ttft_ms": 3039,
+      "words": 31,
+      "tools": [],
+      "text": "Right, Karthik. That single-fetch approach during multiple requests shows solid concurrency control. Can you share how you monitored or measured contention and latency impacts on those waiting threads in high load?",
+      "usage": {
+        "prompt_tokens": 32626,
+        "completion_tokens": 40,
+        "total_tokens": 32666
+      }
+    },
+    {
+      "turn": 9,
+      "wall_ms": 3795,
+      "ttft_ms": 3140,
+      "words": 35,
+      "tools": [],
+      "text": "Okay, Karthik. A Redis cluster with three masters and three read replicas, each with thirty-two gigabytes RAM, is robust. How did you decide on this sizing? What metrics or load tests guided your capacity planning?",
+      "usage": {
+        "prompt_tokens": 32706,
+        "completion_tokens": 42,
+        "total_tokens": 32748
+      }
+    },
+    {
+      "turn": 10,
+      "wall_ms": 4084,
+      "ttft_ms": 3143,
+      "words": 29,
+      "tools": [],
+      "text": "Okay, Karthik. Using volatile least recently used eviction protects keys without TTL. How did you evaluate this policy's impact on cache hit rates and system stability under peak loads?",
+      "usage": {
+        "prompt_tokens": 32769,
+        "completion_tokens": 40,
+        "total_tokens": 32809
+      }
+    },
+    {
+      "turn": 11,
+      "wall_ms": 3763,
+      "ttft_ms": 2662,
+      "words": 36,
+      "tools": [],
+      "text": "Right, Karthik. A ninety-five milliseconds p ninety-nine latency on the ledger table initially is a clear baseline. How did this latency change after your architectural improvements, and what monitoring tools did you use to track it?",
+      "usage": {
+        "prompt_tokens": 32844,
+        "completion_tokens": 34,
+        "total_tokens": 32878
+      }
+    },
+    {
+      "turn": 12,
+      "wall_ms": 3702,
+      "ttft_ms": 2624,
+      "words": 21,
+      "tools": [],
+      "text": "Okay, Karthik. Discovering sequential scans from multi-column filters is insightful. How did you optimize those queries or indexes to reduce latency?",
+      "usage": {
+        "prompt_tokens": 32902,
+        "completion_tokens": 46,
+        "total_tokens": 32948
+      }
+    },
+    {
+      "turn": 13,
+      "wall_ms": 3637,
+      "ttft_ms": 2468,
+      "words": 38,
+      "tools": [],
+      "text": "Right, Karthik. Adding composite partial B-tree indexes on user ID and created at for completed status is targeted. How much did this indexing improve your p ninety-nine latency, and did it have any side effects on write throughput?",
+      "usage": {
+        "prompt_tokens": 32975,
+        "completion_tokens": 33,
+        "total_tokens": 33008
+      }
+    },
+    {
+      "turn": 14,
+      "wall_ms": 7649,
+      "ttft_ms": 7187,
+      "words": 31,
+      "tools": [
+        "search_style"
+      ],
+      "text": "Exactly, Karthik. Dropping the p ninety-nine latency from ninety-five milliseconds to fourteen is a solid gain. Did adding these indexes have any noticeable side effects on write performance or transactional throughput?",
+      "usage": {
+        "prompt_tokens": 37608,
+        "completion_tokens": 42,
+        "total_tokens": 37650
+      }
+    },
+    {
+      "turn": 15,
+      "wall_ms": 4365,
+      "ttft_ms": 3784,
+      "words": 30,
+      "tools": [],
+      "text": "Okay, Karthik. Switching to sequential UUID version seven to reduce B-tree fragmentation is smart. How did you measure the effect of this change on write latency and overall database health?",
+      "usage": {
+        "prompt_tokens": 37676,
+        "completion_tokens": 39,
+        "total_tokens": 37715
+      }
+    },
+    {
+      "turn": 16,
+      "wall_ms": 9051,
+      "ttft_ms": 4488,
+      "words": 55,
+      "tools": [
+        "surface",
+        "search_style"
+      ],
+      "text": "Okay, I have opened the code editor for you. Please go ahead and show me the SQL transaction locking pattern you used for double-entry ledger entries.Thanks, Karthik. Now looking at your SQL transaction locking pattern for double-entry ledger entries, can you explain how you handle concurrency and ensure atomicity across both debit and credit updates?",
+      "usage": {
+        "prompt_tokens": 41198,
+        "completion_tokens": 40,
+        "total_tokens": 41238
+      }
+    },
+    {
+      "turn": 17,
+      "wall_ms": 3206,
+      "ttft_ms": 2683,
+      "words": 30,
+      "tools": [],
+      "text": "Okay, Karthik. Sorting account IDs alphabetically before locking is a good strategy to prevent deadlocks. How do you ensure this approach scales when many concurrent transactions involve overlapping account sets?",
+      "usage": {
+        "prompt_tokens": 41268,
+        "completion_tokens": 40,
+        "total_tokens": 41308
+      }
+    },
+    {
+      "turn": 18,
+      "wall_ms": 3978,
+      "ttft_ms": 2835,
+      "words": 32,
+      "tools": [],
+      "text": "Right, Karthik. Timing out at two hundred milliseconds and using exponential backoff retries sounds robust. How did you tune the timeout and retry parameters to balance throughput versus latency under peak load?",
+      "usage": {
+        "prompt_tokens": 41381,
+        "completion_tokens": 46,
+        "total_tokens": 41427
+      }
+    },
+    {
+      "turn": 19,
+      "wall_ms": 5151,
+      "ttft_ms": 4761,
+      "words": 18,
+      "tools": [
+        "surface"
+      ],
+      "text": "Okay, I have opened the whiteboard canvas for you. Please go ahead and sketch your Kafka partitioning topology.",
+      "usage": {
+        "prompt_tokens": 41432,
+        "completion_tokens": 25,
+        "total_tokens": 41457
+      }
+    },
+    {
+      "turn": 20,
+      "wall_ms": 3198,
+      "ttft_ms": 2542,
+      "words": 30,
+      "tools": [],
+      "text": "Right, Karthik. Keying each Kafka partition by tenant ID for in-order event processing per merchant is clever. How did you handle partition rebalancing during scaling events without disrupting event order?",
+      "usage": {
+        "prompt_tokens": 41485,
+        "completion_tokens": 42,
+        "total_tokens": 41527
+      }
+    },
+    {
+      "turn": 21,
+      "wall_ms": 3379,
+      "ttft_ms": 2815,
+      "words": 29,
+      "tools": [],
+      "text": "Okay, Karthik. Reassigning partitions within three seconds using cooperative sticky assignors is efficient. How did you verify that no message ordering or processing guarantees were violated during these failovers?",
+      "usage": {
+        "prompt_tokens": 41557,
+        "completion_tokens": 41,
+        "total_tokens": 41598
+      }
+    },
+    {
+      "turn": 22,
+      "wall_ms": 5257,
+      "ttft_ms": 3938,
+      "words": 33,
+      "tools": [],
+      "text": "Right, Karthik. Using Redis Sentinel for failover with promotion under six seconds is solid. How did you ensure the system detected failover correctly and clients resumed operations without data loss or stale reads?",
+      "usage": {
+        "prompt_tokens": 41671,
+        "completion_tokens": 41,
+        "total_tokens": 41712
+      }
+    },
+    {
+      "turn": 23,
+      "wall_ms": 4512,
+      "ttft_ms": 3107,
+      "words": 37,
+      "tools": [],
+      "text": "Okay, Karthik. Queuing balance updates in-memory up to ten seconds during failover is a good safety net. How did you monitor and handle potential memory pressure or data loss risks in the API gateway during these periods?",
+      "usage": {
+        "prompt_tokens": 41749,
+        "completion_tokens": 51,
+        "total_tokens": 41800
+      }
+    },
+    {
+      "turn": 24,
+      "wall_ms": 4250,
+      "ttft_ms": 2862,
+      "words": 34,
+      "tools": [],
+      "text": "Right, Karthik. Multi-region replication with under one second recovery point objective is strong. How did you validate your disaster recovery plan with failover drills, and what challenges did you face ensuring minimal data loss?",
+      "usage": {
+        "prompt_tokens": 41825,
+        "completion_tokens": 42,
+        "total_tokens": 41867
+      }
+    },
+    {
+      "turn": 25,
+      "wall_ms": 4049,
+      "ttft_ms": 2961,
+      "words": 35,
+      "tools": [],
+      "text": "Okay, Karthik. Cutting traffic to the primary region during your quarterly drill is a thorough test. What issues or surprises emerged during this drill, and how did you address them to improve your recovery process?",
+      "usage": {
+        "prompt_tokens": 41892,
+        "completion_tokens": 47,
+        "total_tokens": 41939
+      }
+    },
+    {
+      "turn": 26,
+      "wall_ms": 4133,
+      "ttft_ms": 3074,
+      "words": 33,
+      "tools": [],
+      "text": "Right, Karthik. Tracking p ninety-five and p ninety-nine latency with Prometheus, Grafana, and OpenTelemetry is comprehensive. Can you explain how you correlated tracing data with latency spikes to diagnose bottlenecks during your drill?",
+      "usage": {
+        "prompt_tokens": 41971,
+        "completion_tokens": 38,
+        "total_tokens": 42009
+      }
+    },
+    {
+      "turn": 27,
+      "wall_ms": 3289,
+      "ttft_ms": 2792,
+      "words": 30,
+      "tools": [],
+      "text": "Okay, Karthik. A ninety-nine point ninety-five percent availability SLO with p ninety-nine response under fifty milliseconds is ambitious. How did your system perform against this during normal and failover conditions?",
+      "usage": {
+        "prompt_tokens": 41999,
+        "completion_tokens": 43,
+        "total_tokens": 42042
+      }
+    },
+    {
+      "turn": 28,
+      "wall_ms": 3976,
+      "ttft_ms": 3290,
+      "words": 32,
+      "tools": [],
+      "text": "Exactly, Karthik. Maintaining ninety-nine point nine eight percent availability and processing over two billion dollars is impressive. How did you ensure reliability at this scale, especially under unexpected traffic spikes or failures?",
+      "usage": {
+        "prompt_tokens": 42074,
+        "completion_tokens": 42,
+        "total_tokens": 42116
+      }
+    },
+    {
+      "turn": 29,
+      "wall_ms": 3905,
+      "ttft_ms": 2864,
+      "words": 29,
+      "tools": [],
+      "text": "Right, Karthik. Realistic skew load testing is essential when five percent of merchants generate eighty percent of traffic. How did this insight shape your capacity planning and scaling strategies?",
+      "usage": {
+        "prompt_tokens": 42188,
+        "completion_tokens": 44,
+        "total_tokens": 42232
+      }
+    },
+    {
+      "turn": 30,
+      "wall_ms": 3668,
+      "ttft_ms": 3024,
+      "words": 29,
+      "tools": [],
+      "text": "Sure, Karthik. It was great discussing your architecture and impact details. Best of luck with your interviews. If you want more practice, just reach out. Have a good day!",
+      "usage": {
+        "prompt_tokens": 42211,
+        "completion_tokens": 40,
+        "total_tokens": 42251
+      }
+    }
+  ]
+}

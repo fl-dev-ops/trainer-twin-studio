@@ -1,0 +1,258 @@
+[
+  {
+    "model": "openai/gpt-4.1-mini",
+    "avg_latency_ms": 1452,
+    "turns": [
+      {
+        "turn": 1,
+        "wall_ms": 1947,
+        "words": 0,
+        "tools": [],
+        "text": "",
+        "usage": {}
+      },
+      {
+        "turn": 2,
+        "wall_ms": 1306,
+        "words": 0,
+        "tools": [],
+        "text": "",
+        "usage": {}
+      },
+      {
+        "turn": 3,
+        "wall_ms": 1103,
+        "words": 0,
+        "tools": [],
+        "text": "",
+        "usage": {}
+      }
+    ]
+  },
+  {
+    "model": "google/gemini-3.8-flash",
+    "avg_latency_ms": 16211,
+    "turns": [
+      {
+        "turn": 1,
+        "wall_ms": 14211,
+        "words": 41,
+        "tools": [
+          "search_style"
+        ],
+        "text": "Hi Karthik, welcome. In today's session, we are going to look closely at the measurable impact you have achieved in your projects. To get us started, could you walk me through one specific project where you delivered a significant quantified result?",
+        "usage": {
+          "prompt_tokens": 9417,
+          "completion_tokens": 643,
+          "total_tokens": 10060
+        }
+      },
+      {
+        "turn": 2,
+        "wall_ms": 19852,
+        "words": 35,
+        "tools": [
+          "search_style"
+        ],
+        "text": "Right. That is a noticeable drop, Karthik. Tell me, what exact index changes or query access patterns did you modify under the hood to bring that p ninety-nine down from eighty milliseconds to sixteen milliseconds?",
+        "usage": {
+          "prompt_tokens": 18240,
+          "completion_tokens": 411,
+          "total_tokens": 18651
+        }
+      },
+      {
+        "turn": 3,
+        "wall_ms": 14571,
+        "words": 23,
+        "tools": [
+          "surface",
+          "search_style"
+        ],
+        "text": "Sure, Karthik. I have opened the code editor for you on the screen. Please go ahead and share your schema and index definition.",
+        "usage": {
+          "prompt_tokens": 25273,
+          "completion_tokens": 153,
+          "total_tokens": 25426
+        }
+      }
+    ]
+  },
+  {
+    "model": "google/gemini-3.5-flash",
+    "avg_latency_ms": 13845,
+    "turns": [
+      {
+        "turn": 1,
+        "wall_ms": 15478,
+        "words": 39,
+        "tools": [
+          "search_style"
+        ],
+        "text": "Wonderful, wonderful, Karthik. Glad to have you here. Let's start with your background. I want to look at your actual engineering work. Can you share one specific project where you drove a clear, measurable impact, either technical or business?",
+        "usage": {
+          "prompt_tokens": 12149,
+          "completion_tokens": 779,
+          "total_tokens": 12928
+        }
+      },
+      {
+        "turn": 2,
+        "wall_ms": 14553,
+        "words": 23,
+        "tools": [
+          "search_style"
+        ],
+        "text": "That is a huge improvement, Karthik. Tell me, what exactly was the bottleneck in the original Postgres index that you had to redesign?",
+        "usage": {
+          "prompt_tokens": 21096,
+          "completion_tokens": 498,
+          "total_tokens": 21594
+        }
+      },
+      {
+        "turn": 3,
+        "wall_ms": 11504,
+        "words": 23,
+        "tools": [
+          "surface",
+          "search_style"
+        ],
+        "text": "Sure, Karthik. I have opened the code editor for you. Please go ahead and write down your database schema and the indexing definitions.",
+        "usage": {
+          "prompt_tokens": 25216,
+          "completion_tokens": 28,
+          "total_tokens": 25244
+        }
+      }
+    ]
+  },
+  {
+    "model": "deepseek/deepseek-v4-flash-0731",
+    "avg_latency_ms": 34416,
+    "turns": [
+      {
+        "turn": 1,
+        "wall_ms": 18980,
+        "words": 43,
+        "tools": [
+          "search_style"
+        ],
+        "text": "Karthik, great to meet you. I'm Vasanth, and this is a mock interview on quantified impact. I'll be digging into the numbers behind your claims. So let's start: tell me about one result you can measure, and how you arrived at that number.",
+        "usage": {
+          "prompt_tokens": 8882,
+          "completion_tokens": 162,
+          "total_tokens": 9044
+        }
+      },
+      {
+        "turn": 2,
+        "wall_ms": 58856,
+        "words": 33,
+        "tools": [
+          "search_style",
+          "search_style"
+        ],
+        "text": "That's a clean drop, Karthik. Before we get into the indexes themselves, tell me: how did you measure that eighty to sixteen milliseconds? Production traffic or a load test, and over what window?",
+        "usage": {
+          "prompt_tokens": 17832,
+          "completion_tokens": 341,
+          "total_tokens": 18173
+        }
+      },
+      {
+        "turn": 3,
+        "wall_ms": 25412,
+        "words": 31,
+        "tools": [
+          "surface",
+          "search_style"
+        ],
+        "text": "Sure, Karthik, I've opened the code editor for you. Please go ahead and paste your SQL schema and the index definition, and we'll go through it together. Looking forward to it.",
+        "usage": {
+          "prompt_tokens": 26640,
+          "completion_tokens": 65,
+          "total_tokens": 26705
+        }
+      }
+    ]
+  },
+  {
+    "model": "openai/gpt-5.6-luna",
+    "avg_latency_ms": 1289,
+    "turns": [
+      {
+        "turn": 1,
+        "wall_ms": 1705,
+        "words": 0,
+        "tools": [],
+        "text": "",
+        "usage": {}
+      },
+      {
+        "turn": 2,
+        "wall_ms": 1084,
+        "words": 0,
+        "tools": [],
+        "text": "",
+        "usage": {}
+      },
+      {
+        "turn": 3,
+        "wall_ms": 1080,
+        "words": 0,
+        "tools": [],
+        "text": "",
+        "usage": {}
+      }
+    ]
+  },
+  {
+    "model": "z-ai/glm-5.3-flash",
+    "avg_latency_ms": 15305,
+    "turns": [
+      {
+        "turn": 1,
+        "wall_ms": 16698,
+        "words": 42,
+        "tools": [
+          "search_style"
+        ],
+        "text": "Hi Karthik, I'm Vasanth, and thanks for joining this session. Today we'll focus on impact and quantification \u2014 how you prove your work with numbers. Let's start simple: tell me about your most recent project, and one measurable outcome you delivered there.",
+        "usage": {
+          "prompt_tokens": 7173,
+          "completion_tokens": 128,
+          "total_tokens": 7301
+        }
+      },
+      {
+        "turn": 2,
+        "wall_ms": 24205,
+        "words": 36,
+        "tools": [
+          "search_style"
+        ],
+        "text": "Okay, strong numbers, Karthik \u2014 eighty to sixteen is a clean eighty percent. Now let's validate it, correct? Walk me through the root cause: what exactly was making those queries take eighty milliseconds before your redesign?",
+        "usage": {
+          "prompt_tokens": 15237,
+          "completion_tokens": 254,
+          "total_tokens": 15491
+        }
+      },
+      {
+        "turn": 3,
+        "wall_ms": 5013,
+        "words": 29,
+        "tools": [
+          "surface"
+        ],
+        "text": "Done, the code editor is open on your screen. Paste your schema and index definitions there, and then tell me \u2014 what exactly was causing those eighty milliseconds before?",
+        "usage": {
+          "prompt_tokens": 15697,
+          "completion_tokens": 53,
+          "total_tokens": 15750
+        }
+      }
+    ]
+  }
+]

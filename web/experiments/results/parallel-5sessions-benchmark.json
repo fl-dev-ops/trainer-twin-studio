@@ -1,0 +1,1303 @@
+{
+  "timestamp": 1789327178.430988,
+  "total_time_s": 84.67014813423157,
+  "sessions_count": 5,
+  "turns_per_session": 16,
+  "summary": {
+    "median_wall_ms": 296.5,
+    "p90_wall_ms": 11524.1,
+    "avg_words_per_turn": 14.6875,
+    "tool_counts": {
+      "search_style": 38
+    }
+  },
+  "sessions": [
+    {
+      "session_id": "bench-session-1-karthik-1789327093",
+      "candidate": "Karthik",
+      "topic": "Distributed Messaging & Caching",
+      "turns": [
+        {
+          "user_text": "Hi, I am ready to start. My name is Karthik.",
+          "trainer_text": "Right, Karthik. Let's begin. I want to focus today on validating the measurable impact claims you make. To start, can you tell me about one quantified impact you have claimed on your resume?",
+          "word_count": 33,
+          "wall_ms": 8799,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_O44FuGHEIeELDF7ihS7u3qWm",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer opening greeting and starting session",
+                "limit": 5
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5203,
+            "completion_tokens": 43,
+            "total_tokens": 5246
+          },
+          "turn_number": 1
+        },
+        {
+          "user_text": "In my last project, I redesigned our ingestion pipeline using Kafka and Redis, handling around 25,000 events per second.",
+          "trainer_text": "Okay, Karthik, that sounds like a significant throughput. Can you explain how you measured the event handling rate of twenty-five thousand events per second in this Kafka and Redis pipeline? What tools or metrics did you use to validate it?",
+          "word_count": 40,
+          "wall_ms": 10214,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_l9EblbjVuccB2RZMP429i68r",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing candidate on Kafka ingestion pipeline handling 25,000 events per second",
+                "limit": 5
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 13805,
+            "completion_tokens": 50,
+            "total_tokens": 13855
+          },
+          "turn_number": 2
+        },
+        {
+          "user_text": "We used Kafka topic partitions keyed by customer ID to guarantee strict per-customer ordering.",
+          "trainer_text": "Okay, using Kafka topic partitions keyed by customer ID is interesting. How did you ensure that this partitioning strategy maintained strict ordering, even under high throughput or failure scenarios?",
+          "word_count": 29,
+          "wall_ms": 12755,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_lBeruZTQKSvMf6HsdUU3ugaD",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing Kafka topic partitions keyed by customer ID for ordering guarantee",
+                "limit": 5
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 18300,
+            "completion_tokens": 36,
+            "total_tokens": 18336
+          },
+          "turn_number": 3
+        },
+        {
+          "user_text": "We had 32 partitions per topic across a 4-node broker cluster, which gave us enough parallelism.",
+          "trainer_text": "Good, Karthik. How did you monitor or measure the impact of having thirty-two partitions spread across four brokers? Did this cluster setup help maintain the throughput and fault tolerance you aimed for?",
+          "word_count": 32,
+          "wall_ms": 10538,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_7vAhvtNruQKzVoQcheIf6Cjo",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing Kafka cluster configuration with 32 partitions across 4 brokers for parallelism",
+                "limit": 5
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 27443,
+            "completion_tokens": 41,
+            "total_tokens": 27484
+          },
+          "turn_number": 4
+        },
+        {
+          "user_text": "When rebalances occurred, we switched to Cooperative Sticky Assignors to avoid stop-the-world pauses.",
+          "trainer_text": "Okay, Karthik. How did switching to Cooperative Sticky Assignors reduce rebalance pauses specifically? Can you describe what stop-the-world delays you faced before, and how this change improved the system's availability or throughput?",
+          "word_count": 32,
+          "wall_ms": 8944,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_3FYdQT1xUuZG5AdTHH6QYHQx",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing Kafka Cooperative Sticky Assignor for rebalance pauses",
+                "limit": 5
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 32580,
+            "completion_tokens": 46,
+            "total_tokens": 32626
+          },
+          "turn_number": 5
+        },
+        {
+          "user_text": "That dropped our rebalance latency from forty seconds down to under two seconds.",
+          "trainer_text": "Okay, Karthik. Dropping rebalance latency from forty seconds to under two seconds is impressive. How did you monitor those latency improvements? Can you explain how this change affected overall system availability during rebalances?",
+          "word_count": 33,
+          "wall_ms": 9978,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_iGXKtwlotZvNjB4OzxhC6Jze",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing claim of reducing Kafka rebalance latency from forty seconds to under two seconds",
+                "limit": 5
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 42534,
+            "completion_tokens": 45,
+            "total_tokens": 42579
+          },
+          "turn_number": 6
+        },
+        {
+          "user_text": "For deduplication, we maintained a Redis SET with a 24-hour TTL keyed by event idempotency key.",
+          "trainer_text": "Okay, Karthik. How did using a Redis SET with a twenty-four hour TTL keyed by event idempotency key ensure deduplication? Did you face any challenges with Redis scaling or evictions affecting this?",
+          "word_count": 32,
+          "wall_ms": 6423,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_ljnRdE95uDdEhhur7AS522um",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing Redis set with 24-hour TTL for deduplication using event idempotency key",
+                "limit": 5
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 53046,
+            "completion_tokens": 46,
+            "total_tokens": 53092
+          },
+          "turn_number": 7
+        },
+        {
+          "user_text": "Yes, we considered memory usage. Each key was only 32 bytes, so 20 million keys took around 1.5 gigabytes of RAM.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 166,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 8
+        },
+        {
+          "user_text": "Can you open the whiteboard canvas so I can sketch the partition and consumer group topology?",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 194,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 9
+        },
+        {
+          "user_text": "Thanks. As drawn here, consumers read from assigned partitions and write to a buffer before flushing to Postgres.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 193,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 10
+        },
+        {
+          "user_text": "If a consumer crashes, the remaining consumers pick up its partitions after the heartbeat timeout of three seconds.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 220,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 11
+        },
+        {
+          "user_text": "For exactly-once delivery, we used Kafka transactional producer IDs combined with downstream idempotent database upserts.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 189,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 12
+        },
+        {
+          "user_text": "We tested network partition edge cases using Chaos Mesh by injecting packet loss between brokers.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 198,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 13
+        },
+        {
+          "user_text": "During testing, we discovered our producer ack setting was set to 1 instead of all, which risked data loss on leader failure.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 189,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 14
+        },
+        {
+          "user_text": "We corrected it to acks equals all and set min.insync.replicas to two to guarantee durability.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 196,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 15
+        },
+        {
+          "user_text": "I think we have covered the key architecture. We are done for today.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 276,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 16
+        }
+      ]
+    },
+    {
+      "session_id": "bench-session-2-anubhav-1789327093",
+      "candidate": "Anubhav",
+      "topic": "Payments & Transaction Concurrency",
+      "turns": [
+        {
+          "user_text": "Hello, I am Anubhav. Good to connect today.",
+          "trainer_text": "Right, Anubhav. Good to connect with you. Let's start by validating some quantified impact claims from your experience. Could you share one measurable achievement from your recent work that you are most proud of?",
+          "word_count": 34,
+          "wall_ms": 7171,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_tau6AWPITiwO5QODdJNV2yDU",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer greeting and starting interview session",
+                "limit": 3
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5249,
+            "completion_tokens": 43,
+            "total_tokens": 5292
+          },
+          "turn_number": 1
+        },
+        {
+          "user_text": "I led the core ledger team where we built an ACID-compliant double-entry payment service in Java and Postgres.",
+          "trainer_text": "Right, Anubhav. Leading an ACID-compliant double-entry ledger team is impressive. Can you quantify the impact of this service? For example, how did it improve transaction accuracy, processing speed, or reduce errors?",
+          "word_count": 31,
+          "wall_ms": 7680,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_7HNmPGNjredjooSMK4CDS3u7",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing candidate on ACID-compliant double-entry ledger system implementation and measurable impact",
+                "limit": 3
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 9941,
+            "completion_tokens": 47,
+            "total_tokens": 9988
+          },
+          "turn_number": 2
+        },
+        {
+          "user_text": "We handled 12 million transactions daily with zero financial reconciliation discrepancies.",
+          "trainer_text": "Okay, twelve million transactions daily with zero discrepancies is quite the achievement. Can you explain how you ensured data integrity at such scale? What specific mechanisms or checks prevented reconciliation errors?",
+          "word_count": 31,
+          "wall_ms": 15057,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_ZJy9aNUOZV0NfpLTBzeTBzpW",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing candidate on handling twelve million daily transactions with zero financial reconciliation discrepancies in a payment service",
+                "limit": 3
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 14610,
+            "completion_tokens": 37,
+            "total_tokens": 14647
+          },
+          "turn_number": 3
+        },
+        {
+          "user_text": "We used Postgres serializable isolation for high-value transfers, and read-committed with row-level locks for standard payments.",
+          "trainer_text": "Okay, good. How did you decide to apply serializable isolation only for high-value transfers? What was your strategy to balance performance and consistency across these different isolation levels?",
+          "word_count": 28,
+          "wall_ms": 9685,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_kAI1FcgNvZtM1UOXm5upxG95",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing candidate on use of serializable isolation and read-committed isolation with row-level locks in Postgres for handling high-value and standard payments",
+                "limit": 3
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 20291,
+            "completion_tokens": 36,
+            "total_tokens": 20327
+          },
+          "turn_number": 4
+        },
+        {
+          "user_text": "To prevent deadlocks during high-concurrency wallet transfers, we always locked user accounts in alphabetical order of their UUIDs.",
+          "trainer_text": "Okay, Anubhav. Locking user accounts in alphabetical order of UUIDs is a common deadlock prevention technique. How did you verify this approach worked reliably under high concurrency? Did you monitor or test for any deadlock occurrences?",
+          "word_count": 36,
+          "wall_ms": 10053,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_9SXLWWLfsSSooM47Py4B8VfP",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing candidate on deadlock prevention strategy by locking user accounts in alphabetical order of UUIDs",
+                "limit": 3
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 27807,
+            "completion_tokens": 49,
+            "total_tokens": 27856
+          },
+          "turn_number": 5
+        },
+        {
+          "user_text": "Before that sorting rule, we were seeing around 150 deadlock exceptions per hour during flash sales.",
+          "trainer_text": "Okay, Anubhav. You mentioned seeing around one hundred fifty deadlock exceptions per hour during flash sales before adopting the sorting rule. How did the deadlock frequency change after you enforced locking accounts alphabetically by UUID?",
+          "word_count": 35,
+          "wall_ms": 9890,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_8MKBvFTdSH5i4uj7lN5M2LxA",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing candidate on deadlock exceptions before applying sorting rule during flash sales",
+                "limit": 3
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 35324,
+            "completion_tokens": 46,
+            "total_tokens": 35370
+          },
+          "turn_number": 6
+        },
+        {
+          "user_text": "After enforcing the account locking order, deadlock errors dropped to zero.",
+          "trainer_text": "Exactly, Anubhav. Reducing deadlock errors from around one hundred fifty per hour to zero by enforcing a consistent locking order shows a strong grasp of concurrency control. How did you monitor and ensure this improvement was sustained over time in production?",
+          "word_count": 41,
+          "wall_ms": 6922,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_4BP5pyDt0kIJuUx3HYWCOoSZ",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer acknowledging candidate's success in reducing deadlock errors to zero by enforcing account locking order",
+                "limit": 3
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 42034,
+            "completion_tokens": 51,
+            "total_tokens": 42085
+          },
+          "turn_number": 7
+        },
+        {
+          "user_text": "We handled idempotency at the API gateway using an SHA-256 hash of the request payload and an idempotency token.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 4474,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_JKsczjIZ5N8AYYbwgjQOuoYR",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing candidate on handling idempotency at API gateway using SHA-256 hash and idempotency token",
+                "limit": 3
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 42117,
+            "completion_tokens": 47,
+            "total_tokens": 42164
+          },
+          "turn_number": 8
+        },
+        {
+          "user_text": "Can you open the code editor? I can show the row-locking implementation in SQL.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 171,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 9
+        },
+        {
+          "user_text": "Here in the editor, we use SELECT FOR UPDATE NOWAIT so transactions fail fast rather than hanging indefinitely.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 159,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 10
+        },
+        {
+          "user_text": "If NOWAIT raises an error, our retry mechanism uses exponential backoff with jitter across three attempts.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 174,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 11
+        },
+        {
+          "user_text": "For disaster recovery, we configured synchronous replication across two availability zones with 10ms max replica lag.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 215,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 12
+        },
+        {
+          "user_text": "During our chaos drill, failover completed in under twelve seconds using Patroni and etcd.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 265,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 13
+        },
+        {
+          "user_text": "One challenge was table bloat in Postgres due to heavy updates on hot account balance rows.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 241,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 14
+        },
+        {
+          "user_text": "We tuned autovacuum thresholds and implemented an append-only transaction ledger with nightly rollup tables.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 271,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 15
+        },
+        {
+          "user_text": "That summarizes our transaction safety design. We can conclude the session here.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 256,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 16
+        }
+      ]
+    },
+    {
+      "session_id": "bench-session-3-vinay-1789327093",
+      "candidate": "Vinay",
+      "topic": "Authentication & Rate Limiting",
+      "turns": [
+        {
+          "user_text": "Hi, my name is Vinay. Ready for the interview.",
+          "trainer_text": "Hi Vinay. I am Vasanth. This interview will focus on impact and quantification claims made on your resume. I will ask questions to validate and understand those claims. To begin, please introduce yourself with your skills and recent work.",
+          "word_count": 39,
+          "wall_ms": 11480,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_snw2ZAJ2wHwBuABNPJOEs3or",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer greeting candidate and starting interview",
+                "limit": 5
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5659,
+            "completion_tokens": 51,
+            "total_tokens": 5710
+          },
+          "turn_number": 1
+        },
+        {
+          "user_text": "I designed the centralized authentication and authorization service serving 15 microservices at my previous company.",
+          "trainer_text": "Right, Vinay. Can you quantify the impact of this centralized service? For example, how much did it improve efficiency, reduce latency, or save cost for those fifteen microservices?",
+          "word_count": 28,
+          "wall_ms": 14299,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_GG8LXv4kikL5J4PVmG8bUIeq",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing candidate on centralized authentication service for microservices impact claim",
+                "limit": 5
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 12349,
+            "completion_tokens": 39,
+            "total_tokens": 12388
+          },
+          "turn_number": 2
+        },
+        {
+          "user_text": "We handled over 8,000 token validation requests per second with a p99 response time under 4 milliseconds.",
+          "trainer_text": "Okay, Vinay. How did you achieve keeping the p ninety nine response time under four milliseconds for handling eight thousand token validations per second?",
+          "word_count": 24,
+          "wall_ms": 10225,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_vnRq1SWlpPFCQXFsWbfxZLjN",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing candidate on token validation throughput claim and p ninety nine response time",
+                "limit": 5
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 21644,
+            "completion_tokens": 30,
+            "total_tokens": 21674
+          },
+          "turn_number": 3
+        },
+        {
+          "user_text": "We used asymmetric RS256 JWTs so downstream services could verify tokens locally using the public key without network hops.",
+          "trainer_text": "Okay. Using asymmetric RS two fifty six JWTs helps avoid network hops for downstream services. How did you manage key rotation and ensure the public key distribution was consistent and secure across all services?",
+          "word_count": 34,
+          "wall_ms": 9514,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_wqj5DvxNDYQvEgvPSihpdrK8",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing use of asymmetric RS two hundred fifty six JWTs for local token verification optimization",
+                "limit": 5
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 24490,
+            "completion_tokens": 40,
+            "total_tokens": 24530
+          },
+          "turn_number": 4
+        },
+        {
+          "user_text": "To support immediate token revocation when a user logs out or changes password, we maintained a Redis blacklist.",
+          "trainer_text": "Good, Vinay. How did you ensure that checking this Redis blacklist did not become a bottleneck for the token validation throughput?",
+          "word_count": 21,
+          "wall_ms": 11958,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_PjLOq0219L73OQDkGceuWgMC",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing use of Redis blacklist for immediate token revocation in authentication service",
+                "limit": 5
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 34110,
+            "completion_tokens": 28,
+            "total_tokens": 34138
+          },
+          "turn_number": 5
+        },
+        {
+          "user_text": "The blacklist only stores revoked JTI IDs with a TTL matching the token remaining lifespan, keeping the set small.",
+          "trainer_text": "Got it, Vinay. Keeping the blacklist size small using TTL on revoked JTIs is a smart move. How did you handle the edge case of token reuse within the TTL period after a token is revoked?",
+          "word_count": 36,
+          "wall_ms": 5957,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_5NMeLaOQbE62XDx3diQQMCRq",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing Redis blacklist JTI storage with TTL to keep set small and efficient",
+                "limit": 5
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 43222,
+            "completion_tokens": 44,
+            "total_tokens": 43266
+          },
+          "turn_number": 6
+        },
+        {
+          "user_text": "For rate limiting, we implemented a distributed token bucket algorithm using Redis Lua scripts.",
+          "trainer_text": "Okay, Vinay. Can you explain in detail how you implemented the distributed token bucket using Redis Lua scripts? How did you handle concurrency and ensure accuracy in rate limiting?",
+          "word_count": 29,
+          "wall_ms": 6665,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_fZbUOAbEjnTDWDdN0HunJK9b",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing distributed token bucket algorithm implementation using Redis Lua scripts for rate limiting",
+                "limit": 5
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 53445,
+            "completion_tokens": 36,
+            "total_tokens": 53481
+          },
+          "turn_number": 7
+        },
+        {
+          "user_text": "A Lua script guarantees atomic check-and-decrement in a single round-trip without race conditions.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 249,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 8
+        },
+        {
+          "user_text": "Can you open the whiteboard canvas so I can diagram the public key caching flow?",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 206,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 9
+        },
+        {
+          "user_text": "As sketched, services fetch the JWKS once at startup and refresh it every six hours or on cache misses.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 204,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 10
+        },
+        {
+          "user_text": "If Redis goes down, we have a circuit breaker that falls back to in-memory local caches with a conservative 100-request limit.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 210,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 11
+        },
+        {
+          "user_text": "We secured user passwords using Argon2id with 64 megabytes of memory cost and three iterations.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 278,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 12
+        },
+        {
+          "user_text": "We mitigated brute force attacks by introducing tiered rate limits based on client IP and account username.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 313,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 13
+        },
+        {
+          "user_text": "Our monitoring with Prometheus and Grafana alerts us if failed authentication attempts spike above 2 percent.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 244,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 14
+        },
+        {
+          "user_text": "This setup successfully defended against two credential stuffing attacks without impacting legitimate users.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 270,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 15
+        },
+        {
+          "user_text": "I think we have touched upon all the key security layers. We can wrap up for today.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 263,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 16
+        }
+      ]
+    },
+    {
+      "session_id": "bench-session-4-priya-1789327093",
+      "candidate": "Priya",
+      "topic": "Search & Event-Driven Indexing",
+      "turns": [
+        {
+          "user_text": "Hello, I am Priya. Nice to meet you.",
+          "trainer_text": "Hi Priya, nice to meet you too. I am Vasanth. This session is about validating measurable impact claims from your experience. Let's start with you telling me about a recent backend project where you made a quantifiable impact. What were your specific contributions?",
+          "word_count": 43,
+          "wall_ms": 12934,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_qBiJZYVCUD4G0tbSqhNaSJ9B",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer greeting and starting the session with candidate Priya",
+                "limit": 3
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5383,
+            "completion_tokens": 55,
+            "total_tokens": 5438
+          },
+          "turn_number": 1
+        },
+        {
+          "user_text": "I engineered our product search system using Elasticsearch and Kafka, serving over 30 million item queries per day.",
+          "trainer_text": "Okay, Priya. Serving over thirty million queries a day is significant. Can you explain how you ensured Elasticsearch and Kafka handled this load reliably? What architecture or strategies did you use for scaling and fault tolerance?",
+          "word_count": 36,
+          "wall_ms": 15479,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_JoWrmjMjguPcpoxS35HnCjJJ",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing candidate on Elasticsearch and Kafka handling 30 million queries per day in product search system",
+                "limit": 3
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 10905,
+            "completion_tokens": 44,
+            "total_tokens": 10949
+          },
+          "turn_number": 2
+        },
+        {
+          "user_text": "Our primary challenge was search latency during peak catalog updates, which we reduced from 280ms to 35ms.",
+          "trainer_text": "Right, Priya. Reducing latency from two hundred eighty milliseconds to thirty-five is impressive. Can you detail the specific changes or optimizations you made to reduce this during peak catalog updates?",
+          "word_count": 30,
+          "wall_ms": 11529,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_n3syeTbOWLyOnZEVx0sLmaE8",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing candidate on reducing search latency from 280 milliseconds to 35 milliseconds during peak catalog updates",
+                "limit": 3
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 16936,
+            "completion_tokens": 40,
+            "total_tokens": 16976
+          },
+          "turn_number": 3
+        },
+        {
+          "user_text": "We separated the write pipeline from the read cluster by streaming database changes via Debezium CDC into Kafka.",
+          "trainer_text": "Okay, Priya. Separating the write pipeline from the read cluster using Debezium CDC and Kafka is a solid choice. How did this design help you handle data consistency and reduce latency during peak updates? What challenges did you face?",
+          "word_count": 39,
+          "wall_ms": 7645,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_aIisHUMLZ8TU2fGJW5dRNF99",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing candidate on design choice to separate write pipeline from read cluster using Debezium CDC and Kafka",
+                "limit": 3
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 20986,
+            "completion_tokens": 50,
+            "total_tokens": 21036
+          },
+          "turn_number": 4
+        },
+        {
+          "user_text": "Kafka consumers bulk-indexed updates into Elasticsearch in batches of 500 documents every 200 milliseconds.",
+          "trainer_text": "Got it, Priya. Bulk-indexing in batches of five hundred documents every two hundred milliseconds is an interesting approach. How did you balance the batch size and frequency to optimize both indexing latency and system throughput?",
+          "word_count": 35,
+          "wall_ms": 10841,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_0LVn3M3uMbz7SQL8rnMY2prS",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing candidate on Kafka consumers bulk-indexing Elasticsearch in batches of 500 documents every 200 milliseconds to reduce latency",
+                "limit": 3
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 26831,
+            "completion_tokens": 44,
+            "total_tokens": 26875
+          },
+          "turn_number": 5
+        },
+        {
+          "user_text": "This batching reduced Elasticsearch indexing CPU load by over 60 percent compared to single-document updates.",
+          "trainer_text": "Okay, Priya. Reducing CPU load on Elasticsearch by over sixty percent through batching is a strong impact. How did you measure and verify this efficiency gain in production? Did you face any trade-offs in latency or throughput due to batching?",
+          "word_count": 40,
+          "wall_ms": 6868,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_1JQhXDw4PQA50uffQsUVMn36",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing candidate on impact of batching on Elasticsearch CPU load and efficiency",
+                "limit": 3
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 32483,
+            "completion_tokens": 50,
+            "total_tokens": 32533
+          },
+          "turn_number": 6
+        },
+        {
+          "user_text": "For relevance, we customized BM25 similarity scoring with field-level boosts on product titles and brand names.",
+          "trainer_text": "Okay, Priya. Customizing BM25 with field-level boosts on product titles and brand names makes sense for relevance. How did you decide the boost values? Did you measure improvement in search result quality or business metrics?",
+          "word_count": 35,
+          "wall_ms": 5008,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_5ohTVNMqnPQt8ZImgNnIh0Yg",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing candidate on customizing BM25 similarity scoring with field-level boosts for relevance in product search system",
+                "limit": 3
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 36553,
+            "completion_tokens": 46,
+            "total_tokens": 36599
+          },
+          "turn_number": 7
+        },
+        {
+          "user_text": "We used custom edge-ngram tokenizers to support fast autocomplete queries with prefix matching.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 3228,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_PusdgxZtPn4kFCvsvvUQ2vAA",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing candidate on using custom edge-ngram tokenizers for fast autocomplete with prefix matching",
+                "limit": 3
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 36622,
+            "completion_tokens": 43,
+            "total_tokens": 36665
+          },
+          "turn_number": 8
+        },
+        {
+          "user_text": "Can you open the code editor so I can share our Elasticsearch index mapping schema?",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 289,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 9
+        },
+        {
+          "user_text": "In this mapping, we disabled norms on non-text fields and set doc_values to true to optimize memory usage.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 221,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 10
+        },
+        {
+          "user_text": "To handle node failures without data loss, we configured two replica shards per primary shard across three availability zones.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 214,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 11
+        },
+        {
+          "user_text": "When dealing with eventual consistency between MySQL and Elasticsearch, we added version timestamps to ignore out-of-order Kafka events.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 234,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 12
+        },
+        {
+          "user_text": "If an update had an older version timestamp than the current index doc, the consumer safely discarded it.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 199,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 13
+        },
+        {
+          "user_text": "We tracked query latency percentiles using Jaeger distributed tracing across the search gateway and ES nodes.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 185,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 14
+        },
+        {
+          "user_text": "This architecture maintained 99.95 percent availability during our annual holiday shopping sale.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 217,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 15
+        },
+        {
+          "user_text": "That covers the main aspects of our search infrastructure. We are done for today.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 177,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 16
+        }
+      ]
+    },
+    {
+      "session_id": "bench-session-5-sneha-1789327093",
+      "candidate": "Sneha",
+      "topic": "Cloud Infrastructure & SRE",
+      "turns": [
+        {
+          "user_text": "Hi, I am Sneha. Excited to discuss my background.",
+          "trainer_text": "Right, Sneha. Nice to meet you, and I\u2019m excited too. Let's start by you sharing a bit about your recent projects or accomplishments that you are proud of. Can you tell me about one with some measurable impact?",
+          "word_count": 38,
+          "wall_ms": 10708,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_Oel1d7dkjMPbD1jMIv2eo43D",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer greeting candidate and starting session",
+                "limit": 3
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5348,
+            "completion_tokens": 48,
+            "total_tokens": 5396
+          },
+          "turn_number": 1
+        },
+        {
+          "user_text": "I was the lead SRE responsible for migrating 40 microservices from EC2 instances to AWS EKS Kubernetes clusters.",
+          "trainer_text": "Okay, Sneha. Could you explain what were the main challenges you faced during migrating those microservices to Kubernetes clusters, and how did you measure the success or impact of that migration?",
+          "word_count": 31,
+          "wall_ms": 10285,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_eQFYL18xb3klGY15xK8d0os8",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing candidate on specifics of migrating microservices to Kubernetes clusters",
+                "limit": 3
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 9435,
+            "completion_tokens": 39,
+            "total_tokens": 9474
+          },
+          "turn_number": 2
+        },
+        {
+          "user_text": "The migration reduced our AWS cloud infrastructure spend by 38 percent while improving deployment frequency from weekly to daily.",
+          "trainer_text": "Okay, Sneha. How did you measure the thirty-eight percent reduction in AWS cost? And what specific metrics or tools did you use to verify that deployment frequency improved from weekly to daily?",
+          "word_count": 32,
+          "wall_ms": 12394,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_2PStxzgHsOj5ko7cL5zlmozm",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing candidate on validating quantified impact claim on cloud cost reduction and deployment frequency improvement",
+                "limit": 3
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 15411,
+            "completion_tokens": 40,
+            "total_tokens": 15451
+          },
+          "turn_number": 3
+        },
+        {
+          "user_text": "We used Kubernetes Horizontal Pod Autoscaler based on custom Prometheus metrics, specifically request queue depth.",
+          "trainer_text": "Okay, Sneha. Can you explain how using the Kubernetes Horizontal Pod Autoscaler with custom Prometheus metrics like request queue depth helped optimize both cost and performance during this migration?",
+          "word_count": 29,
+          "wall_ms": 11399,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_qn7i9cvwzKhbtg6hL3UHA8ka",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing candidate on usage of Kubernetes Horizontal Pod Autoscaler and custom Prometheus metrics for performance and cost optimization",
+                "limit": 3
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 20628,
+            "completion_tokens": 37,
+            "total_tokens": 20665
+          },
+          "turn_number": 4
+        },
+        {
+          "user_text": "Scaling on queue depth allowed our worker pods to scale up 90 seconds faster than standard CPU threshold scaling.",
+          "trainer_text": "Okay, Sneha. Why do you think scaling pods on request queue depth gives a faster response than using CPU threshold scaling, and how did that advantage impact service availability or performance during traffic spikes? your",
+          "word_count": 35,
+          "wall_ms": 9703,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_8pY4RbBUUhZHh13g2xKGtQNq",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing candidate on advantage of scaling pods based on request queue depth versus CPU threshold scaling",
+                "limit": 3
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 25565,
+            "completion_tokens": 42,
+            "total_tokens": 25607
+          },
+          "turn_number": 5
+        },
+        {
+          "user_text": "For zero-downtime deployments, we configured readiness probes and pod disruption budgets with rolling update strategies.",
+          "trainer_text": "Okay, Sneha. Can you walk me through how you configured readiness probes, pod disruption budgets, and rolling update strategies to ensure zero downtime during your deployments?",
+          "word_count": 26,
+          "wall_ms": 8109,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_ASo6ECLxS4asuIR2Xjzl16BN",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing candidate on readiness probes, pod disruption budgets, and rolling update strategies for zero-downtime deployments",
+                "limit": 3
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 29579,
+            "completion_tokens": 34,
+            "total_tokens": 29613
+          },
+          "turn_number": 6
+        },
+        {
+          "user_text": "Our maximum unavailable pods was capped at 10 percent during deployments to prevent traffic degradation.",
+          "trainer_text": "Okay, Sneha. How did capping the maximum unavailable pods at ten percent during deployments help prevent traffic degradation, and were there any trade-offs you had to consider?",
+          "word_count": 27,
+          "wall_ms": 5704,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_2atKIoW64dJJM90chfM3OKLT",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing candidate on capping maximum unavailable pods at ten percent during deployments to prevent traffic degradation",
+                "limit": 3
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 35580,
+            "completion_tokens": 36,
+            "total_tokens": 35616
+          },
+          "turn_number": 7
+        },
+        {
+          "user_text": "We implemented Cilium as our CNI plugin for eBPF-based network policy enforcement and observability.",
+          "trainer_text": "Okay, Sneha. What benefits did you observe after implementing Cilium as your CNI plugin for eBPF-based network policy enforcement and observability?",
+          "word_count": 21,
+          "wall_ms": 5175,
+          "tools_called": [
+            {
+              "name": "search_style",
+              "callId": "call_8e2OcihnUW3cY0CiFlJnY5T2",
+              "input": {
+                "personaSlug": "Vasanth",
+                "query": "interviewer probing candidate on benefits of Cilium as CNI plugin for eBPF-based network policy enforcement and observability",
+                "limit": 3
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 40790,
+            "completion_tokens": 33,
+            "total_tokens": 40823
+          },
+          "turn_number": 8
+        },
+        {
+          "user_text": "Can you open the whiteboard canvas so I can draw our multi-cluster networking topology?",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 304,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 9
+        },
+        {
+          "user_text": "As shown here, we route ingress traffic through AWS ALB directly to pod IPs using the AWS Load Balancer Controller.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 173,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 10
+        },
+        {
+          "user_text": "Bypassing kube-proxy NodePort hops reduced our intra-cluster network latency by approximately 8 milliseconds.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 205,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 11
+        },
+        {
+          "user_text": "For disaster recovery, we used Velero to back up Kubernetes persistent volumes and cluster state to S3 every four hours.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 207,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 12
+        },
+        {
+          "user_text": "In our restore simulation, we brought up a secondary cluster in another region in twenty-four minutes.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 208,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 13
+        },
+        {
+          "user_text": "We standardized our SLOs with Prometheus alertmanager, tracking error budgets with a 99.9 percent monthly availability target.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 174,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 14
+        },
+        {
+          "user_text": "Our mean time to recovery dropped from forty minutes to under nine minutes after implementing these automated runbooks.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 285,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 15
+        },
+        {
+          "user_text": "I believe that covers our reliability engineering work. We are done for today.",
+          "trainer_text": "",
+          "word_count": 0,
+          "wall_ms": 167,
+          "tools_called": [],
+          "usage": {},
+          "turn_number": 16
+        }
+      ]
+    }
+  ]
+}
