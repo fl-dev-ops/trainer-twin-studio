@@ -4,15 +4,42 @@ import { documentToMarkdown } from "@/lib/documents";
 
 export const MAX_DOCUMENT_SIZE = 20 * 1024 * 1024; // 20 MB
 
-export const SUPPORTED_DOC_EXTS = new Set(["pdf", "txt", "md", "json", "csv"]);
+export const SUPPORTED_DOC_EXTS = new Set([
+  "pdf",
+  "docx",
+  "doc",
+  "pptx",
+  "ppt",
+  "xlsx",
+  "xls",
+  "csv",
+  "txt",
+  "md",
+  "json",
+]);
 export const SUPPORTED_IMG_EXTS = new Set(["png", "jpg", "jpeg", "webp"]);
 
 const EXT_ALLOWED_MIMES: Record<string, Set<string>> = {
   pdf: new Set(["application/pdf"]),
+  docx: new Set([
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/octet-stream",
+  ]),
+  doc: new Set(["application/msword", "application/octet-stream"]),
+  pptx: new Set([
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/octet-stream",
+  ]),
+  ppt: new Set(["application/vnd.ms-powerpoint", "application/octet-stream"]),
+  xlsx: new Set([
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/octet-stream",
+  ]),
+  xls: new Set(["application/vnd.ms-excel", "application/octet-stream"]),
+  csv: new Set(["text/csv", "text/plain", "application/vnd.ms-excel"]),
   txt: new Set(["text/plain"]),
   md: new Set(["text/markdown", "text/plain"]),
-  json: new Set(["application/json"]),
-  csv: new Set(["text/csv", "text/plain"]),
+  json: new Set(["application/json", "text/plain"]),
   png: new Set(["image/png"]),
   jpg: new Set(["image/jpeg"]),
   jpeg: new Set(["image/jpeg"]),

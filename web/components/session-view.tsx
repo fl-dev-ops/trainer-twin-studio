@@ -500,7 +500,7 @@ export function SessionView({
                     <input
                       ref={contextInput}
                       type="file"
-                      accept=".md,.txt,.pdf,.json,.csv,.png,.jpg,.jpeg,.webp"
+                      accept=".md,.txt,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.csv,.json,.png,.jpg,.jpeg,.webp"
                       hidden
                       onChange={async (e) => {
                         const file = e.target.files?.[0];
@@ -538,7 +538,7 @@ export function SessionView({
                     </Button>
                   </div>
                   <span className="text-xs text-muted-foreground">
-                    Documents or images (.pdf, .md, .txt, .json, .csv, .png, .jpg, .webp).
+                    PDF, Word, PPT, Excel, CSV, text, or images (.pdf, .docx, .pptx, .xlsx, .csv, .png, etc.).
                   </span>
                   {contextIds.length > 0 && (
                     <div className="flex flex-wrap gap-2">

@@ -319,7 +319,15 @@ function documentSurfaceArguments(
   lookup?: DocumentLookup
 ): { action: string; payload: Record<string, unknown> } | null {
   if (!evidence || !lookup?.present) return null;
-  const action = evidence.kind === "image" ? "open_image" : evidence.fileName.toLowerCase().endsWith(".pdf") ? "open_pdf" : null;
+  const name = evidence.fileName.toLowerCase();
+  let action: string | null = null;
+  if (evidence.kind === "image") {
+    action = "open_image";
+  } else if (name.endsWith(".pdf")) {
+    action = "open_pdf";
+  } else if (name.endsWith(".pptx") || name.endsWith(".ppt")) {
+    action = "open_presentation";
+  }
   if (!action) return null;
   return {
     action,
@@ -385,7 +393,7 @@ async function retrieveKnowledge(
   }
 }
 
-async function runDirectionCheck(
+export async function runDirectionCheck(
   learnerText: string,
   transcript: TranscriptTurn[],
   specs: CompiledSpecs,
@@ -473,7 +481,7 @@ A relevant requirements question may be gradeable when the active phase assesses
   }
 }
 
-async function runAnalyzerLLM(
+export async function runAnalyzerLLM(
   learnerText: string,
   transcript: TranscriptTurn[],
   direction: DirectionCheck,
@@ -830,7 +838,8 @@ export async function generateSpeech(
   orgId: string,
   personaVoiceAvailable: boolean,
   usage?: UsageSink,
-  providedDocumentEvidence?: DocumentEvidence | null
+  providedDocumentEvidence?: DocumentEvidence | null,
+  preloadedEpisodes?: Promise<PersonaRecordHit[]> | PersonaRecordHit[]
 ): Promise<{ text: string; meta: SpeechMeta }> {
   const trainerTurnTexts = transcript.filter((turn) => turn.role === "trainer").map((turn) => turn.text);
   const current = currentSessionStyle(trainerTurnTexts, state.learner_name ?? null);
@@ -852,15 +861,17 @@ export async function generateSpeech(
   }
 
   const phase = sessionPhaseOf(state, action);
-  const episodes = await retrieveAnalogousEpisodes(
-    orgId,
-    specs.persona.id,
-    action,
-    state,
-    transcript,
-    phase === "opening" ? "greeting" : "vague",
-    personaVoiceAvailable
-  );
+  const episodes = preloadedEpisodes
+    ? await preloadedEpisodes
+    : await retrieveAnalogousEpisodes(
+        orgId,
+        specs.persona.id,
+        action,
+        state,
+        transcript,
+        phase === "opening" ? "greeting" : "vague",
+        personaVoiceAvailable
+      );
 
   let documentEvidence: DocumentEvidence | null = providedDocumentEvidence ?? null;
   if (phase === "opening" && specs.agent.phases[state.phase_index]?.context_required && documentEvidence === null) {
@@ -967,7 +978,8 @@ async function generatePipelineSpeech(
   orgId: string,
   personaVoiceAvailable: boolean,
   usage?: UsageSink,
-  documentEvidence?: DocumentEvidence | null
+  documentEvidence?: DocumentEvidence | null,
+  preloadedEpisodes?: Promise<PersonaRecordHit[]> | PersonaRecordHit[]
 ): Promise<{ text: string; meta: SpeechMeta }> {
   if (isRepeatRequest(direction) && action.fallback_text) {
     return {
@@ -976,7 +988,7 @@ async function generatePipelineSpeech(
     };
   }
   const contentContract = spokenContentContract(action, state, transcript);
-  return generateSpeech(contentContract, action, specs, state, transcript, direction, knowledgeHits, orgId, personaVoiceAvailable, usage, documentEvidence);
+  return generateSpeech(contentContract, action, specs, state, transcript, direction, knowledgeHits, orgId, personaVoiceAvailable, usage, documentEvidence, preloadedEpisodes);
 }
 
 export async function handleCompletions(request: Request): Promise<Response> {
@@ -1327,6 +1339,21 @@ async function runCompletionPipeline(
     const latestUserText = String(userMessages[userMessages.length - 1]?.content ?? "");
     turnUserText = latestUserText;
     const fullTranscript = [...currentTranscript, { role: "user" as const, text: latestUserText }];
+
+    // Parallel episode preloading: episode search only needs the latest learner text
+    // and prior pending question; run concurrently with knowledge RAG, direction, and analysis.
+    const preloadedEpisodesPromise = personaVoiceAvailable
+      ? retrieveAnalogousEpisodes(
+          session.orgId,
+          specs.persona.id,
+          { name: "probe", close: false } as InterviewAction,
+          state,
+          fullTranscript,
+          "vague",
+          personaVoiceAvailable
+        )
+      : Promise.resolve([]);
+
     const knowledgeHits = await retrieveKnowledge(
       specs.knowledgeBases,
       `${transcriptText(fullTranscript)}\nActive objective: ${specs.agent.phases[state.phase_index]?.objective ?? specs.agent.objective}`,
@@ -1529,7 +1556,8 @@ async function runCompletionPipeline(
           session.orgId,
           personaVoiceAvailable,
           usageSink,
-          documentEvidence
+          documentEvidence,
+          preloadedEpisodesPromise
         );
         const spokenText = spoken.text;
         turnSpeechMeta = spoken.meta;
@@ -1626,7 +1654,8 @@ async function runCompletionPipeline(
         session.orgId,
         personaVoiceAvailable,
         usageSink,
-        documentEvidence
+        documentEvidence,
+        preloadedEpisodesPromise
       );
       const spokenText = spoken.text;
       turnSpeechMeta = spoken.meta;
