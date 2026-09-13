@@ -971,7 +971,7 @@ export async function executeWithOutbox&lt;T&gt;(
       </div>
 
       <!-- Right Sidebar: Pure Chat (Exact same height as Stage Area!) -->
-      <aside class="sidebar-pane" id="sidebar-pane">
+      <aside class="sidebar-pane collapsed" id="sidebar-pane">
         
         <!-- Sidebar Navigation: Chevron + Chat Tab + Input Visibility Toggle -->
         <div class="sidebar-header">
@@ -984,7 +984,7 @@ export async function executeWithOutbox&lt;T&gt;(
             <span>Chat</span>
             <span class="unread-badge">12</span>
           </div>
-          <button class="input-toggle-btn active" id="btn-toggle-input" title="Toggle Message Input Bar">
+          <button class="input-toggle-btn" id="btn-toggle-input" title="Toggle Message Input Bar">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="2" y="4" width="20" height="16" rx="2"></rect>
               <line x1="6" y1="8" x2="6" y2="8"></line>
@@ -1041,7 +1041,7 @@ export async function executeWithOutbox&lt;T&gt;(
           </div>
 
           <!-- Message Input Bar (Toggleable) -->
-          <div class="message-input-container" id="message-input-container">
+          <div class="message-input-container hidden" id="message-input-container">
             <input type="text" id="input-msg" placeholder="Message the trainer…">
             <button class="send-btn" id="btn-send" title="Send message">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -1098,7 +1098,7 @@ export async function executeWithOutbox&lt;T&gt;(
         </button>
 
         <!-- 5. Chat Toggle Button -->
-        <button class="dock-btn active" id="btn-chat-toggle" title="Toggle Chat Sidebar">
+        <button class="dock-btn" id="btn-chat-toggle" title="Toggle Chat Sidebar">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
           </svg>
@@ -1121,8 +1121,8 @@ export async function executeWithOutbox&lt;T&gt;(
     let isPresenting = false;
     let micActive = true;
     let cameraActive = false;
-    let sidebarOpen = true;
-    let inputVisible = true;
+    let sidebarOpen = false;
+    let inputVisible = false;
     let transcriptVisible = true;
     let timerSeconds = 581; // 09:41
 

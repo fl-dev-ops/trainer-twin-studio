@@ -22,7 +22,7 @@ export function SessionSidebar({
   const isThinking = voiceAssistant.state === "thinking";
 
   const [inputText, setInputText] = useState("");
-  const [inputVisible, setInputVisible] = useState(true);
+  const [inputVisible, setInputVisible] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

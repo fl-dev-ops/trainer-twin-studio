@@ -120,7 +120,7 @@ export function SessionView({
   const [entries, setEntries] = useState<Entry[]>([]);
   const [coverage, setCoverage] = useState<Coverage>({});
   const [surface, setSurface] = useState<AgentSurface>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [subtitlesActive, setSubtitlesActive] = useState(true);
   const [latestSpokenText, setLatestSpokenText] = useState("");
   const [elapsed, setElapsed] = useState(0);
@@ -551,26 +551,6 @@ export function SessionView({
                   <span className="text-xs text-muted-foreground">
                     PDF, Word, PPT, Excel, CSV, text, or images (.pdf, .docx, .pptx, etc.).
                   </span>
-                  {contextId && (
-                    <div className="flex items-center gap-2">
-                      {(() => {
-                        const file = contextList.find((item) => item.id === contextId);
-                        return (
-                          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-muted px-2.5 py-1 text-xs text-foreground">
-                            <span className="max-w-[280px] truncate">{file?.name ?? contextId}</span>
-                            <button
-                              type="button"
-                              aria-label="Remove document"
-                              onClick={() => setContextIds([])}
-                              className="text-muted-foreground hover:text-foreground"
-                            >
-                              <X className="size-3" />
-                            </button>
-                          </span>
-                        );
-                      })()}
-                    </div>
-                  )}
                 </label>
 
                 {error && (
