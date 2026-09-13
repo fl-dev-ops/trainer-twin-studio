@@ -16,15 +16,23 @@ export async function callStudio<T>(payload: Record<string, unknown>, ctx: Studi
   const principal = ctx.session.auth.initiator ?? ctx.session.auth.current;
   if (principal?.principalType !== "organization") throw new Error("No TrainerTwin organization is attached to this conversation");
 
+  return studioFetch<T>(principal.principalId, payload, ctx.abortSignal);
+}
+
+/** Plain studio call without an eve session context (instruction resolvers, channels). */
+export async function studioFetch<T>(orgId: string, payload: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
+  const secret = process.env.COPILOT_SERVICE_SECRET;
+  if (!secret) throw new Error("COPILOT_SERVICE_SECRET is not configured");
+
   const response = await fetch(new URL("/api/copilot/studio", studioUrl), {
     method: "POST",
     headers: {
       authorization: `Bearer ${secret}`,
       "content-type": "application/json",
-      "x-trainertwin-org-id": principal.principalId,
+      "x-trainertwin-org-id": orgId,
     },
     body: JSON.stringify(payload),
-    signal: ctx.abortSignal,
+    signal,
   });
   const result = await response.json().catch(() => null) as { error?: string } | null;
   if (!response.ok) throw new Error(result?.error ?? `Studio request failed (${response.status})`);
