@@ -373,8 +373,8 @@ Measured (same 5-turn conversation, `gpt-4.1-mini`, rerun `bench-results-cached-
 ### Verification checklist
 
 - [x] `bun test` — knowledge, org-knowledge, runtime-check (26 pass)
-- [ ] `bun test lib/runtime/runtime-stream.test.ts` + vitest `interview-sessions`, `livekit` suites
-- [ ] Deploy web to Vercel; confirm startup env validation passes
+- [x] Full bun test suite: 67 pass across 12 files (runtime-stream, interview-sessions, livekit included; no vitest dependency in repo)
+- [x] Deployed to Vercel production (`58a9d68`); deployment state `success`; route responds with OpenAI-structured 401
 - [ ] One live E2E voice session on the deployed route: opening, two learner answers, one repeat request; confirm responses and timing in `completion served` logs
 - [ ] Watch Vercel logs for `[interview-runtime]` warnings (retrieval failed / renderer rejected) over the first few sessions
 
