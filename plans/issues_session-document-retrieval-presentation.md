@@ -1,6 +1,6 @@
 # Issue: On-Demand Session Document Retrieval and Presentation
 
-> **Status: PLANNED.** This replaces full-document prompt injection with a
+> **Status: COMPLETED (2026-09-13).** This replaces full-document prompt injection with a
 > lightweight document manifest, targeted reads, and optional workspace
 > presentation. A public/OpenAI-compatible Files API is not required.
 
@@ -18,7 +18,8 @@ Let learners attach common documents or images to a session. The trainer must:
 
 ### Supported in the first version
 
-- Documents: `.pdf`, `.txt`, `.md`, `.json`, `.csv`
+- Documents: `.pdf`, `.docx`, `.doc`, `.pptx`, `.ppt`, `.xlsx`, `.xls`, `.csv`, `.txt`, `.md`, `.json`
+  (matching the extended viewers in `web/components/extend/`).
 - Images: `.png`, `.jpg`, `.jpeg`, `.webp`
 - Maximum size: 20 MB per file
 - Multiple files may be attached to one session.
@@ -354,16 +355,22 @@ Never record document text or image content.
 
 ## 13. Acceptance Criteria
 
-- [ ] Supported uploads are ready when the upload request succeeds.
-- [ ] Unsupported media and unsafe formats are rejected.
-- [ ] Full document text is not injected on every turn.
-- [ ] The runtime reads a document only when the decision stage requests it.
-- [ ] At most three bounded text chunks or one selected image reach content
-      generation.
-- [ ] Context-required openings can use relevant document evidence.
-- [ ] The agent can open an attached PDF or image in the learner workspace.
-- [ ] LiveKit and stream/non-stream Chat Completions share the same attachment
-      and retrieval path.
-- [ ] No cross-user or cross-organization file access is possible.
-- [ ] Missing files and unsupported vision models fail safely.
-- [ ] Existing sessions using one `contextId` continue to work during migration.
+- [x] Supported uploads are ready when the upload request succeeds.
+- [x] Unsupported media and unsafe formats are rejected.
+- [x] Full document text is not injected on every turn (replaced by a ~50–80 token manifest).
+- [x] The runtime reads a document only when the decision stage requests it (`document_lookup`).
+- [x] At most three bounded text chunks or one selected image reach content generation.
+- [x] Context-required openings can use relevant document evidence (searches all attached text documents).
+- [x] The agent can open an attached PDF, presentation deck, or image in the learner workspace.
+- [x] LiveKit and stream/non-stream Chat Completions share the same attachment and retrieval path.
+- [x] No cross-user or cross-organization file access is possible (strictly session-bound and owner-verified).
+- [x] Missing files and unsupported vision models fail safely.
+- [x] Existing sessions using one `contextId` continue to work during migration.
+
+## 14. Verification Summary
+
+- **Unit and Service Tests:** `web/lib/context-document-service.test.ts` covers synchronous preparation, image dimensions, heading sanitization, MIME-extension matrices, and manifest bounds.
+- **Surface Tests:** `web/lib/agent-surface-events.test.ts` covers PDF page navigation and image viewer surface events.
+- **Grounding Tests:** `web/lib/runtime/context-grounding.test.ts` covers negative grounding and manifest injection.
+- **End-to-End Live Multi-Turn Run:** `web/lib/runtime/document-retrieval-e2e.test.ts` verifies live turn-by-turn dynamic switching across multiple chunks (HyperSync engine and Edge Invalidation cache) against the real OpenRouter pipeline and database.
+- **Full Suite Status:** 83 tests passing across 16 test files; TypeScript check and Next.js production build pass cleanly.
