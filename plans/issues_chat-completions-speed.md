@@ -312,9 +312,21 @@ Dependency check first: episode retrieval only needs the latest learner text, pr
 - Fix (`web/lib/main-collection.ts`): a single-lane queue (`runOnChromaLane`) serializes all main-collection reads; pipeline parallelism is preserved because early-started retrieval promises wait their turn and still complete during the LLM stages. Connection errors rebuild handles and retry (2 attempts).
 - Result: next two runs went 2 failures → **0 failures**.
 
-**Measured:** in the clean run, episodes finish at ~1.3 s into the turn while content starts at ~7 s — fully hidden, verified all three turns. Wall medians tonight (15.6–15.9 s vs 15.56 s baseline) show no visible win because Chroma Cloud/network latency was elevated all evening (knowledge.search median 2.2–2.5 s vs 1.3–1.4 s at baseline). The structural saving (~1.4 s off the critical path) is real but needs a quiet-network A/B for the headline number.
+**Measured — verified with a controlled A/B test** (3 interleaved pairs of full conversations, identical turns, toggle `BENCH_DISABLE_EPISODE_PRELOAD=1` restores the old sequential path; data `bench-ab-A1..3.json` / `bench-ab-B1..3.json`):
 
-**Output quality:** judge (`openai/gpt-4.1`) compared baseline vs parallel final responses (`bench-quality-judge-parallel.json`): no regression — the parallel run scored equal or higher on all four dimensions (naturalness 5 vs 4 on all turns; treated as sampling variance, not an improvement claim).
+| Metric | A: parallel preload | B: sequential (old) |
+|---|---:|---:|
+| Wall median, gradeable turns | **15,470 ms** | 17,762 ms |
+| Wall mean | **17,239 ms** | 17,923 ms |
+| Content generation starts (median) | **7,339 ms** | 9,072 ms |
+| Chroma connection failures | **0 / 9 turns** | 1 / 9 turns |
+| Episodes hidden under LLM stages | 9/9 | n/a |
+
+Parallel preloading is worth ~**1.7–2.3 s per gradeable turn** and starts ~13% faster overall.
+
+**A/B round 1 exposed a bug, fixed before round 2:** in the first implementation the early episode promise entered the chroma lane *before* the knowledge search, so knowledge (which direction depends on) queued behind it — content actually started later than sequential (round 1: A 8,029 ms vs B 7,226 ms content-start). Fix: create the preload promise only after `retrieveKnowledge` is awaited, so lane order is knowledge → episodes, and episodes still overlap the full direction+analysis window (~5 s for a ~1.3 s search).
+
+**Output quality (judge, `openai/gpt-4.1`, `bench-quality-judge-ab.json`):** no regression — A and B scored 4.0–4.67 across relevance/grounding/interview-quality/naturalness; judge marginally preferred A (within noise).
 
 Checks: knowledge + org-knowledge + runtime-check — 26 pass.
 

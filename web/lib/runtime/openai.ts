@@ -1339,21 +1339,6 @@ async function runCompletionPipeline(
     const latestUserText = String(userMessages[userMessages.length - 1]?.content ?? "");
     turnUserText = latestUserText;
     const fullTranscript = [...currentTranscript, { role: "user" as const, text: latestUserText }];
-
-    // Parallel episode preloading: episode search only needs the latest learner text
-    // and prior pending question; run concurrently with knowledge RAG, direction, and analysis.
-    const preloadedEpisodesPromise = personaVoiceAvailable
-      ? retrieveAnalogousEpisodes(
-          session.orgId,
-          specs.persona.id,
-          { name: "probe", close: false } as InterviewAction,
-          state,
-          fullTranscript,
-          "vague",
-          personaVoiceAvailable
-        )
-      : Promise.resolve([]);
-
     const knowledgeHits = await retrieveKnowledge(
       specs.knowledgeBases,
       `${transcriptText(fullTranscript)}\nActive objective: ${specs.agent.phases[state.phase_index]?.objective ?? specs.agent.objective}`,
@@ -1377,7 +1362,25 @@ async function runCompletionPipeline(
         { status: 400 }
       );
     }
+    // Parallel episode preloading: needs only data known now (learner text, pending
+    // question, phase), so it runs concurrently with direction/analysis instead of
+    // blocking between analysis and content. Created AFTER knowledge retrieval is
+    // awaited so the chroma lane serves knowledge first (direction depends on it).
+    // BENCH_DISABLE_EPISODE_PRELOAD=1 restores sequential inline retrieval (A/B testing only).
+    const preloadedEpisodesPromise =
+      personaVoiceAvailable && process.env.BENCH_DISABLE_EPISODE_PRELOAD !== "1"
+        ? retrieveAnalogousEpisodes(
+            session.orgId,
+            specs.persona.id,
+            { name: "probe", close: false } as InterviewAction,
+            state,
+            fullTranscript,
+            "vague",
+            personaVoiceAvailable
+          )
+        : undefined;
     const direction = await runDirectionCheck(latestUserText, fullTranscript, specs, state, knowledgeHits, latestAttachmentIds, usageSink);
+
     const documentEvidence = await retrieveDocumentEvidence(session.id, session.orgId, specs, direction.document_lookup);
     const documentSurface = advertisedToolNames.has("surface")
       ? documentSurfaceArguments(documentEvidence, direction.document_lookup)
