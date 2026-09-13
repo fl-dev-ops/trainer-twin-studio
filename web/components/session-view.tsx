@@ -486,20 +486,21 @@ export function SessionView({
                   </div>
                   <div className="flex items-center gap-2">
                     <Select
-                      value="none"
+                      value={contextId || "none"}
                       onValueChange={(v) => {
-                        if (v && v !== "none") setContextIds((prev) => prev.includes(v) ? prev : [...prev, v]);
+                        if (!v || v === "none") setContextIds([]);
+                        else setContextIds([v]);
                       }}
                     >
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder={contextIds.length ? `${contextIds.length} selected` : "Select document"} />
+                        <SelectValue placeholder="Select document" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectGroup>
                           <SelectLabel>Uploaded contexts</SelectLabel>
-                          <SelectItem value="none">Select a document</SelectItem>
+                          <SelectItem value="none">None</SelectItem>
                           {contextList.map((c) => (
-                            <SelectItem key={c.id} value={c.id} disabled={contextIds.includes(c.id)}>
+                            <SelectItem key={c.id} value={c.id}>
                               {c.name} · {formatBytes(c.size ?? 0)}
                             </SelectItem>
                           ))}
@@ -527,7 +528,8 @@ export function SessionView({
                             ...prev,
                             { id: data.id, name: data.name, size: file.size },
                           ]);
-                          setContextIds((prev) => prev.includes(data.id) ? prev : [...prev, data.id]);
+                          // Single-selection: newly uploaded file becomes the selected document
+                          setContextIds([data.id]);
                         } catch (uploadError) {
                           setError(uploadError instanceof Error ? uploadError.message : "Upload failed");
                         } finally {
@@ -549,23 +551,24 @@ export function SessionView({
                   <span className="text-xs text-muted-foreground">
                     PDF, Word, PPT, Excel, CSV, text, or images (.pdf, .docx, .pptx, etc.).
                   </span>
-                  {contextIds.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {contextIds.map((id) => {
-                        const file = contextList.find((item) => item.id === id);
+                  {contextId && (
+                    <div className="flex items-center gap-2">
+                      {(() => {
+                        const file = contextList.find((item) => item.id === contextId);
                         return (
-                          <span key={id} className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-muted px-2 py-1 text-xs">
-                            {file?.name ?? id}
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-muted px-2.5 py-1 text-xs text-foreground">
+                            <span className="max-w-[280px] truncate">{file?.name ?? contextId}</span>
                             <button
                               type="button"
-                              aria-label={`Remove ${file?.name ?? "document"}`}
-                              onClick={() => setContextIds((prev) => prev.filter((value) => value !== id))}
+                              aria-label="Remove document"
+                              onClick={() => setContextIds([])}
+                              className="text-muted-foreground hover:text-foreground"
                             >
                               <X className="size-3" />
                             </button>
                           </span>
                         );
-                      })}
+                      })()}
                     </div>
                   )}
                 </label>
