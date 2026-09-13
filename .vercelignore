@@ -1,0 +1,13 @@
+.venv*
+.venv-eval
+venv
+__pycache__
+*.pyc
+agent/.venv*
+agent/.local
+agent/tests
+chroma-data
+evals
+bench
+node_modules
+.git
