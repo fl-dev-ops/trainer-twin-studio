@@ -224,17 +224,28 @@ export async function POST(request: Request) {
       select: { id: true, name: true },
     });
     if (!persona) return Response.json({ error: `No persona named "${input.personaSlug}"` });
-    const hits = await MainCollectionService.searchStyleEpisodes(orgId, input.query, {
-      personaId: persona.id,
-      limit: input.limit,
-      diversify: true,
-    });
-    // Redact past learner names from every returned field so retrieved examples
-    // never carry another learner's identity.
+
+    const [styleHits, episodeHits] = await Promise.all([
+      MainCollectionService.searchStyleEpisodes(orgId, input.query, {
+        personaId: persona.id,
+        limit: input.limit,
+        diversify: true,
+      }),
+      MainCollectionService.searchPersonaEpisodes(orgId, input.query, {
+        personaId: persona.id,
+        limit: 2,
+        diversify: true,
+      }),
+    ]);
+
     return Response.json({
       query: input.query,
       persona: persona.name,
-      results: hits.map((hit) => {
+      pastExchanges: episodeHits.map((hit) => ({
+        exchange: redactLearnerNames(hit.text, []),
+        score: hit.score,
+      })),
+      phrasingStyle: styleHits.map((hit) => {
         const pastName = hit.pastLearnerName;
         return {
           text: redactLearnerNames(hit.text, [pastName]),
