@@ -6,10 +6,17 @@ import {
   isSessionReport,
 } from "@/lib/session-report";
 
-const OPENROUTER_BASE_URL = (
-  process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1"
+const AI_GATEWAY_BASE_URL = (
+  process.env.AI_GATEWAY_BASE_URL ??
+  process.env.OPENROUTER_BASE_URL ??
+  "https://ai-gateway.vercel.sh/v1"
 ).replace(/\/$/, "");
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? process.env.LLM_API_KEY ?? "";
+const AI_GATEWAY_API_KEY =
+  process.env.AI_GATEWAY_API_KEY ??
+  process.env.VERCEL_OIDC_TOKEN ??
+  process.env.OPENROUTER_API_KEY ??
+  process.env.LLM_API_KEY ??
+  "";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? "";
 const REPORT_MODEL = process.env.SESSION_REPORT_MODEL ?? "google/gemini-3.7-flash";
 
@@ -99,7 +106,7 @@ ${transcriptText}`;
     const images = options?.images ?? [];
     let parsed: unknown;
 
-    if (OPENROUTER_API_KEY) {
+    if (AI_GATEWAY_API_KEY) {
       // Format content parts with optional image processing
       const contentParts: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
         { type: "text", text: userPrompt },
@@ -114,11 +121,11 @@ ${transcriptText}`;
         });
       }
 
-      const res = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+      const res = await fetch(`${AI_GATEWAY_BASE_URL}/chat/completions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+          Authorization: `Bearer ${AI_GATEWAY_API_KEY}`,
         },
         body: JSON.stringify({
           model: REPORT_MODEL,

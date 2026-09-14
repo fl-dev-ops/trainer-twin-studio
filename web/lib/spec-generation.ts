@@ -3,7 +3,11 @@ import path from "node:path";
 import yaml from "js-yaml";
 import { specDraftBundleSchema, type SpecDraftBundle } from "@/lib/spec-draft-schema";
 
-const OPENROUTER_BASE_URL = (process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1").replace(/\/$/, "");
+const AI_GATEWAY_BASE_URL = (
+  process.env.AI_GATEWAY_BASE_URL ??
+  process.env.OPENROUTER_BASE_URL ??
+  "https://ai-gateway.vercel.sh/v1"
+).replace(/\/$/, "");
 const MODEL = process.env.SPEC_GENERATION_MODEL ?? "google/gemini-2.5-flash";
 
 export type GenerationInput = {
@@ -215,9 +219,13 @@ async function referenceExample(): Promise<string> {
 }
 
 async function callModel(messages: { role: string; content: string }[]): Promise<unknown> {
-  const key = process.env.OPENROUTER_API_KEY ?? process.env.LLM_API_KEY;
-  if (!key) throw new Error("OPENROUTER_API_KEY is not set");
-  const res = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+  const key =
+    process.env.AI_GATEWAY_API_KEY ??
+    process.env.VERCEL_OIDC_TOKEN ??
+    process.env.OPENROUTER_API_KEY ??
+    process.env.LLM_API_KEY;
+  if (!key) throw new Error("AI_GATEWAY_API_KEY / OPENROUTER_API_KEY is not set");
+  const res = await fetch(`${AI_GATEWAY_BASE_URL}/chat/completions`, {
     method: "POST",
     headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
     body: JSON.stringify({

@@ -14,8 +14,22 @@ const CHROMA_API_KEY = process.env.CHROMA_API_KEY ?? "";
 const CHROMA_TENANT = process.env.CHROMA_TENANT ?? "";
 const CHROMA_DATABASE = process.env.CHROMA_DATABASE ?? "";
 const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL ?? "openai/text-embedding-3-small";
-// OpenRouter serves embeddings and reranking alongside LLMs
-const OPENROUTER_BASE_URL = (process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1").replace(/\/$/, "");
+// Vercel AI Gateway serves OpenAI-compatible embeddings and models
+const AI_GATEWAY_BASE_URL = (
+  process.env.AI_GATEWAY_BASE_URL ??
+  process.env.OPENROUTER_BASE_URL ??
+  "https://ai-gateway.vercel.sh/v1"
+).replace(/\/$/, "");
+
+function getAiGatewayKey(): string {
+  const key =
+    process.env.AI_GATEWAY_API_KEY ??
+    process.env.VERCEL_OIDC_TOKEN ??
+    process.env.OPENROUTER_API_KEY ??
+    process.env.LLM_API_KEY;
+  if (!key) throw new Error("AI_GATEWAY_API_KEY / OPENROUTER_API_KEY is not set");
+  return key;
+}
 
 // ---- chunking -----------------------------------------------------------
 
@@ -49,12 +63,11 @@ export function chunkMarkdown(text: string, targetChars = 1200, maxChars = 2000)
 // ---- embeddings ---------------------------------------------------------
 
 export async function embedTexts(texts: string[]): Promise<number[][]> {
-  const key = process.env.OPENROUTER_API_KEY ?? process.env.LLM_API_KEY;
-  if (!key) throw new Error("OPENROUTER_API_KEY is not set");
+  const key = getAiGatewayKey();
   const out: number[][] = [];
   for (let i = 0; i < texts.length; i += 100) {
     const batch = texts.slice(i, i + 100);
-    const res = await fetch(`${OPENROUTER_BASE_URL}/embeddings`, {
+    const res = await fetch(`${AI_GATEWAY_BASE_URL}/embeddings`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
       body: JSON.stringify({ model: EMBEDDING_MODEL, input: batch }),
@@ -328,16 +341,20 @@ export async function searchCollection(collectionName: string, query: string, to
 
 // ---- reranking ----------------------------------------------------------
 
-/** Cross-encoder rerank via OpenRouter when configured; otherwise pass through RRF order. */
+/** Cross-encoder rerank via Vercel AI Gateway when configured; otherwise pass through RRF order. */
 async function rerank(query: string, hits: Hit[], topK: number): Promise<Hit[]> {
   // ponytail: off by default — the rerank round trip costs seconds of voice silence;
   // RRF ordering is fine for top-3 prompt context. Set RERANK_ENABLED=1 to re-enable.
   if (process.env.RERANK_ENABLED !== "1") return hits.slice(0, topK);
-  const key = process.env.OPENROUTER_API_KEY ?? process.env.LLM_API_KEY;
+  const key =
+    process.env.AI_GATEWAY_API_KEY ??
+    process.env.VERCEL_OIDC_TOKEN ??
+    process.env.OPENROUTER_API_KEY ??
+    process.env.LLM_API_KEY;
   if (!key || hits.length === 0) return hits.slice(0, topK);
   const model = process.env.RERANK_MODEL ?? "cohere/rerank-v3.5";
   try {
-    const res = await fetch(`${OPENROUTER_BASE_URL}/rerank`, {
+    const res = await fetch(`${AI_GATEWAY_BASE_URL}/rerank`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
       body: JSON.stringify({ model, query, documents: hits.map((h) => h.text), top_n: topK }),

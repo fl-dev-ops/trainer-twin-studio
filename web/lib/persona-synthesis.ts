@@ -15,8 +15,17 @@ import { extractPersonaVoiceMoments, shouldRebuildPersona } from "@/lib/persona-
 import { MainCollectionService } from "@/lib/main-collection";
 import { saveSpec } from "@/lib/specs";
 
-const OPENROUTER_BASE_URL = (process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1").replace(/\/$/, "");
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? process.env.LLM_API_KEY ?? "";
+const AI_GATEWAY_BASE_URL = (
+  process.env.AI_GATEWAY_BASE_URL ??
+  process.env.OPENROUTER_BASE_URL ??
+  "https://ai-gateway.vercel.sh/v1"
+).replace(/\/$/, "");
+const AI_GATEWAY_API_KEY =
+  process.env.AI_GATEWAY_API_KEY ??
+  process.env.VERCEL_OIDC_TOKEN ??
+  process.env.OPENROUTER_API_KEY ??
+  process.env.LLM_API_KEY ??
+  "";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? "";
 const ANALYSIS_MODEL = process.env.PERSONA_ANALYSIS_MODEL ?? "google/gemini-2.5-flash";
 const GEMINI_FILES_ENDPOINT = "https://generativelanguage.googleapis.com";
@@ -217,9 +226,9 @@ Rules:
 // ---- Analysis execution ----------------------------------------------------
 
 async function analyzeWithText(content: string, personaName: string, sourceKind: SourceKind, sourceName: string): Promise<unknown> {
-  const res = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+  const res = await fetch(`${AI_GATEWAY_BASE_URL}/chat/completions`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENROUTER_API_KEY}` },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_GATEWAY_API_KEY}` },
     body: JSON.stringify({
       model: ANALYSIS_MODEL,
       messages: [
@@ -452,9 +461,9 @@ persona:
     ask_reflection:
       - <verbatim phrase>`;
 
-  const res = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+  const res = await fetch(`${AI_GATEWAY_BASE_URL}/chat/completions`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENROUTER_API_KEY}` },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_GATEWAY_API_KEY}` },
     body: JSON.stringify({
       model: ANALYSIS_MODEL,
       messages: [

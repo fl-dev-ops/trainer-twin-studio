@@ -40,7 +40,11 @@ import {
   wordCount,
 } from "./runtime";
 
-const OPENROUTER_BASE_URL = env.OPENROUTER_BASE_URL.replace(/\/$/, "");
+const AI_GATEWAY_BASE_URL = (
+  process.env.AI_GATEWAY_BASE_URL ||
+  env.OPENROUTER_BASE_URL ||
+  "https://ai-gateway.vercel.sh/v1"
+).replace(/\/$/, "");
 const RUNTIME_MODEL = env.INTERVIEW_LLM_MODEL;
 
 export interface CompletionUsage {
@@ -225,10 +229,13 @@ async function callOpenRouter(
   usage?: UsageSink,
   maxTokens?: number
 ): Promise<string> {
-  const key = env.OPENROUTER_API_KEY; // validated at startup, never missing here
+  const key =
+    process.env.AI_GATEWAY_API_KEY ||
+    process.env.VERCEL_OIDC_TOKEN ||
+    env.OPENROUTER_API_KEY;
 
   const startedAt = performance.now();
-  const res = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+  const res = await fetch(`${AI_GATEWAY_BASE_URL}/chat/completions`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${key}`,

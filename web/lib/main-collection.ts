@@ -4,12 +4,14 @@ import { ChromaTenantService, isSharedScope } from "@/lib/chroma-tenant";
 import { embedTexts } from "@/lib/knowledge";
 import type { PersonaVoiceMoment } from "@/lib/persona-voice";
 
-export const openRouterEmbeddings: EmbeddingFunction = {
+export const aiGatewayEmbeddings: EmbeddingFunction = {
   generate: embedTexts,
   generateForQueries: embedTexts,
   defaultSpace: () => "cosine",
   supportedSpaces: () => ["cosine"],
 };
+
+export const openRouterEmbeddings = aiGatewayEmbeddings;
 
 export type KnowledgeMetadata = {
   type: "knowledge";
