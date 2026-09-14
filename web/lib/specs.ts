@@ -545,7 +545,10 @@ export async function readUploadBytes(id: string, orgId: string) {
 
 export async function getAgentConfigForAgent(agentId: string, orgId: string, contextId?: string, contextIds?: string[]) {
   const agent = await db.agent.findFirst({
-    where: { id: agentId, orgId },
+    where: {
+      OR: [{ id: agentId }, { slug: agentId }],
+      orgId,
+    },
     include: { persona: true },
   });
   if (!agent) return null;

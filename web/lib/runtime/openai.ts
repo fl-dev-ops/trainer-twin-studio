@@ -1039,7 +1039,10 @@ export async function generateSpeech(
   let rendererFallback = false;
   if (personaVoiceAvailable) {
     try {
-      const styleQuery = await styleGate(draft, [...transcript].reverse().find((turn) => turn.role === "user")?.text ?? "", action, state, current, usage);
+      const styleQuery =
+        phase === "opening"
+          ? "interviewer greeting candidate and opening the session"
+          : await styleGate(draft, [...transcript].reverse().find((turn) => turn.role === "user")?.text ?? "", action, state, current, usage);
       const examples = await retrieveStyleExamplesForTurn(
         orgId,
         specs.persona.id,

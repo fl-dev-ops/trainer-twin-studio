@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { after } from "next/server";
 import { activateSession, authorizeRuntimeSession } from "@/lib/interview-sessions";
 import { createLiveKitSessionToken } from "@/lib/livekit";
 import { prewarmSessionOpening } from "@/lib/runtime/warmup";
@@ -40,8 +41,11 @@ export async function POST(req: Request) {
     });
     if (!session) return NextResponse.json({ error: "Invalid session URL" }, { status: 403 });
 
-    // Pre-warm opening turn and Vercel AI Gateway KV-cache in background while WebRTC connects
-    void prewarmSessionOpening(session.id);
+    // Use Next.js after() to keep serverless execution alive in the background
+    // while the client connects to LiveKit.
+    after(async () => {
+      await prewarmSessionOpening(session.id);
+    });
 
     let livekit = null;
     let livekitError: string | undefined;
