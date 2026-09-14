@@ -24,7 +24,14 @@ def build_surface_tools(*, room: Any, participant_identity: str) -> list[Any]:
         payload: dict[str, Any] | None = None,
     ) -> dict[str, object]:
         actual_payload = payload or {}
-        event_id = uuid.uuid4().hex
+        # A stable event id per file keeps the learner's viewer mounted: re-opening or re-highlighting
+        # the same document then reuses one PDF viewer and only refreshes the search highlight.
+        file_id = actual_payload.get("fileId")
+        event_id = (
+            file_id
+            if isinstance(file_id, str) and file_id and action in ("open_pdf", "highlight_document")
+            else uuid.uuid4().hex
+        )
         logger.info("surface action=%s event_id=%s", action, event_id)
         msg = {
             "type": action,

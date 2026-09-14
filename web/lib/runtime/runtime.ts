@@ -57,7 +57,13 @@ export type PrewarmedOpening = {
   openingText: string;
   neededSurface?: { action: string; payload: Record<string, unknown> } | null;
   turnSpeechMeta?: unknown;
+  /** The resume claim the opening questions, pinned by warmup so the opening
+   * turn highlights exactly this claim instead of re-resolving one. */
+  claim?: { anchor: string; section: string | null; line: string } | null;
 };
+
+/** Reference contract (resume_mastery.v1): at most one follow-up per main question. */
+export const MAX_FOLLOW_UPS_PER_MAIN = 1;
 
 export interface RuntimeState {
   phase_index: number;
@@ -82,9 +88,38 @@ export interface RuntimeState {
     file_id: string;
     query: string;
     page?: number | null;
+    prefer_quantified?: boolean;
+    /** Literal text already highlighted in the learner's viewer for this lookup. */
+    anchor?: string;
+    /** Round angle this main question uses (qualified evidence key), when claim-driven. */
+    angle?: string | null;
+    /** Verbatim claim line the anchor was cut from. */
+    line?: string | null;
+    /** True when this main is not the session's first (the speech opens with a neutral bridge). */
+    bridge?: boolean;
   } | null;
   pending_surface_request?: "open_code_editor" | "open_whiteboard" | "open_pdf" | "close_surface" | null;
   prewarmed_opening?: PrewarmedOpening | null;
+  /** Literal text currently highlighted in the learner's document viewer. */
+  last_highlight_anchor?: string | null;
+  /** Document sections already anchored this session, so questions walk the document. */
+  anchored_sections?: string[];
+  /** Verbatim anchors of claims already questioned this session — never revisited. */
+  used_claims?: string[];
+  /** The claim currently being probed, cached so follow-ups stay on it without re-retrieval. */
+  current_claim?: {
+    anchor: string;
+    section: string | null;
+    line: string;
+    fileId: string;
+    fileName: string;
+    angle: string | null;
+    evidenceText: string;
+  } | null;
+  /** Follow-ups already spent on the current claim's latest main question. */
+  claim_follow_ups_used?: number;
+  /** Main questions asked across the session (drives bridge wording and angle rotation). */
+  main_questions_asked?: number;
 }
 
 export function initRuntimeState(): RuntimeState {
@@ -97,18 +132,22 @@ export function initRuntimeState(): RuntimeState {
     evidence_probe_counts: {},
     pending_evidence_key: null,
     pending_question: null,
+    grounding_probes: [],
+    grounding_probe_counts: {},
     current_topic: null,
     latest_learner_intent: null,
     actions: [],
-    grounding_probes: [],
-    grounding_probe_counts: {},
     current_surface: null,
     learner_name: null,
     primer: null,
     recent_style_docs: [],
     pending_document_lookup: null,
-    pending_surface_request: null,
-    prewarmed_opening: null,
+    last_highlight_anchor: null,
+    anchored_sections: [],
+    used_claims: [],
+    current_claim: null,
+    claim_follow_ups_used: 0,
+    main_questions_asked: 0,
   };
 }
 

@@ -57,10 +57,12 @@ def build_editor_tools(*, room: Any, participant_identity: str) -> list[Any]:
         from_line: int,
         to_line: int,
     ) -> dict[str, object]:
+        # The browser's code RPC takes line ranges for highlight_lines (highlight_range
+        # expects character offsets), so the line-based action is the correct one here.
         return await _call_code(
             room,
             participant_identity,
-            "highlight_range",
+            "highlight_lines",
             fromLine=from_line,
             toLine=to_line,
         )

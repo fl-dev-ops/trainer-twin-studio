@@ -82,7 +82,10 @@ def parse_metadata(raw: str | None) -> dict[str, Any]:
         return {}
 
 
-OPENING_RELEASE_TIMEOUT = 60.0  # client gated on intro video; speak anyway if it never arrives
+# Client gated on the intro video: the greeting releases on "begin-opening". The fixed
+# 60s cap keeps dead clients (refresh loops, broken video) from stalling sessions; keep
+# intro clips comfortably under it.
+OPENING_RELEASE_TIMEOUT = 60.0
 # The common voice prompt lives in prompt.md next to this file and is loaded
 # at import time (see COMMON_VOICE_INSTRUCTIONS above).
 
@@ -153,10 +156,10 @@ async def entrypoint(ctx: agents.JobContext) -> None:
     else:
         webhook_url = webhook_raw or f"{WEB_URL}/api/sessions/webhook"
 
-    await ctx.connect()
-    logger.info("Agent connected to room %s for session %s", ctx.room.name, session_id)
-
-    # Client holds the greeting until its intro video finishes; released via data packet.
+    # Client holds the greeting until its intro video finishes; released via data packet. The
+    # listener is attached BEFORE connecting: the client publishes "begin-opening" as soon as it
+    # sees this participant, so a listener registered after connect can miss the single packet the
+    # client sends and leave the session silent until OPENING_RELEASE_TIMEOUT.
     opening_release = asyncio.Event()
 
     def on_opening_release(packet: rtc.DataPacket) -> None:
@@ -168,6 +171,9 @@ async def entrypoint(ctx: agents.JobContext) -> None:
             opening_release.set()
 
     ctx.room.on("data_received", on_opening_release)
+
+    await ctx.connect()
+    logger.info("Agent connected to room %s for session %s", ctx.room.name, session_id)
 
     participant_identity: str | None = None
     for _ in range(60):

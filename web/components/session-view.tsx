@@ -43,6 +43,7 @@ import { PresentationViewer } from "@/components/session/presentation-viewer";
 import { PdfViewerSurface } from "@/components/session/pdf-viewer";
 import { ImageViewerSurface } from "@/components/session/image-viewer";
 import { LiveKitWorkspaceProvider } from "@/lib/livekit-workspaces";
+import { downloadIntroVideo } from "@/lib/intro-video-cache";
 import type { AgentSurface } from "@/lib/agent-surface-events";
 import type { Entry } from "@/lib/session-transcript";
 import { cn } from "@/lib/utils";
@@ -116,6 +117,9 @@ export function SessionView({
   const [ended, setEnded] = useState(false);
   const [endReason, setEndReason] = useState<EndReason>("disconnected");
   const [introDone, setIntroDone] = useState(false);
+  const [introPlaybackSrc, setIntroPlaybackSrc] = useState<string | null>(null);
+  const [introPrefetchDone, setIntroPrefetchDone] = useState(false);
+  const [introProgress, setIntroProgress] = useState<number | null>(null);
 
   const [entries, setEntries] = useState<Entry[]>([]);
   const [coverage, setCoverage] = useState<Coverage>({});
@@ -140,6 +144,31 @@ export function SessionView({
   }, [entries, coverage]);
 
   const introSrc = introVideos[agent] ?? null;
+
+  // Kick the intro download off on the pre-join screen, before the session exists.
+  // That way a 100 MB clip never has to race the agent's held greeting mid-session.
+  const prefetchRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!introSrc || prefetchRef.current === introSrc) return;
+    prefetchRef.current = introSrc;
+    setIntroPrefetchDone(false);
+    setIntroProgress(0);
+    downloadIntroVideo(introSrc, (p) => {
+      if (typeof p.ratio === "number") setIntroProgress(p.ratio);
+    })
+      .then((url) => {
+        setIntroPlaybackSrc(url);
+        setIntroProgress(null);
+        setIntroPrefetchDone(true);
+      })
+      .catch((err) => {
+        console.error("Intro video prefetch failed:", err);
+        // Fall back to direct streaming; ScenarioIntro's own safeguards apply.
+        setIntroPlaybackSrc(introSrc);
+        setIntroProgress(null);
+        setIntroPrefetchDone(true);
+      });
+  }, [introSrc]);
 
   const resetSessionState = useCallback(() => {
     startedRef.current = false;
@@ -203,14 +232,29 @@ export function SessionView({
 
   const isContextRequired = Boolean(agentContextRequired[agent]);
 
+  /** Resolves once the intro download finishes (or falls back to streaming). */
+  const awaitIntroReady = useCallback(async () => {
+    if (!introSrc || introPrefetchDone) return;
+    try {
+      const url = await downloadIntroVideo(introSrc);
+      setIntroPlaybackSrc(url);
+    } catch {
+      setIntroPlaybackSrc(introSrc);
+    } finally {
+      setIntroPrefetchDone(true);
+      setIntroProgress(null);
+    }
+  }, [introSrc, introPrefetchDone]);
+
   useEffect(() => {
     if (!autoStart || ended || !agent || !persona || launched) return;
     if (isContextRequired && contextIds.length === 0) return;
+    if (introSrc && !introPrefetchDone) return;
     void Promise.resolve().then(() => {
       setLaunched(true);
       void handleStartSession();
     });
-  }, [autoStart, ended, agent, persona, launched, isContextRequired, contextIds, handleStartSession]);
+  }, [autoStart, ended, agent, persona, launched, isContextRequired, contextIds, handleStartSession, introSrc, introPrefetchDone]);
 
   useEffect(() => {
     if (!connection || connected) return;
@@ -562,10 +606,34 @@ export function SessionView({
                   <p role="alert" className="text-sm text-destructive">{error}</p>
                 )}
 
+                {introProgress !== null && (
+                  <div aria-live="polite">
+                    <p className="text-xs text-muted-foreground">
+                      Loading your session context… {Math.round(introProgress * 100)}%
+                    </p>
+                    <div
+                      role="progressbar"
+                      aria-valuenow={Math.round(introProgress * 100)}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]"
+                    >
+                      <div
+                        className="h-full rounded-full bg-foreground transition-all duration-300"
+                        style={{ width: `${Math.round(introProgress * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <Button
-                  onClick={() => {
+                  onClick={async (event) => {
+                    const button = event.currentTarget;
+                    button.disabled = true;
+                    await awaitIntroReady();
                     setLaunched(true);
                     void handleStartSession();
+                    button.disabled = false;
                   }}
                   disabled={!persona || !agent || (isContextRequired && contextIds.length === 0)}
                   className="w-full"
@@ -628,9 +696,6 @@ export function SessionView({
                         {surface.tool === "image" && "Image Viewer"}
                         {surface.tool === "presentation" && "Presentation"}
                       </span>
-                      <Button variant="ghost" size="icon-sm" aria-label="Close workspace" onClick={() => setSurface(null)}>
-                        <X className="size-4" />
-                      </Button>
                     </div>
                     <div className="min-h-0 flex-1">
                       {surface.tool === "code" && (
@@ -695,7 +760,7 @@ export function SessionView({
                     {introSrc && !introDone ? (
                       <ScenarioIntro
                         key={agent}
-                        src={introSrc}
+                        src={introPlaybackSrc ?? introSrc}
                         personaLabel={persona}
                         onFinished={() => setIntroDone(true)}
                         className="h-full min-h-0 w-full"
@@ -791,6 +856,8 @@ function ScenarioIntro({
   className?: string;
 }) {
   const video = useRef<HTMLVideoElement>(null);
+  // Latch the first src: swapping the <video> source mid-playback would restart the clip.
+  const [latchedSrc] = useState(src);
   const [muted, setMuted] = useState(false);
   const [needsTap, setNeedsTap] = useState(false);
   const [releaseDeadline, setReleaseDeadline] = useState<number | null>(null);
@@ -803,7 +870,7 @@ function ScenarioIntro({
       setMuted(true);
       el.play().catch(() => setNeedsTap(true));
     });
-  }, [src]);
+  }, [latchedSrc]);
 
   useEffect(() => {
     if (releaseDeadline === null) return;
@@ -831,7 +898,7 @@ function ScenarioIntro({
     <div className={cn("relative overflow-hidden rounded-2xl border border-white/[0.035] bg-black", className)}>
       <video
         ref={video}
-        src={src}
+        src={latchedSrc}
         playsInline
         muted={muted}
         className="size-full object-contain"

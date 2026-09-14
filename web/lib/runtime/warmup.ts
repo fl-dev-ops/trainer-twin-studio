@@ -8,7 +8,7 @@ import {
   type InterviewAction,
   type RuntimeState,
 } from "./runtime";
-import { adaptOpeningWithoutContext, generateSpeech } from "./openai";
+import { adaptOpeningWithoutContext, generateSpeech, recordClaimMain, resumeTurnGuidance, selectNextClaimEvidence, stripPickOneInstructions, type ClaimTurn } from "./openai";
 
 /**
  * Pre-warms the opening turn for an interview session in the background
@@ -84,12 +84,41 @@ export async function prewarmSessionOpening(sessionId: string): Promise<boolean>
     };
 
     const rawOpening = specs.agent.opening || "Welcome to the interview session. Let's begin.";
-    const baseOpening = specs.documentManifests?.length
-      ? rawOpening
-      : adaptOpeningWithoutContext(rawOpening);
+
+    // Claim-driven opening (Resume Mastery v1): select the first resume claim before
+    // generating speech, so the greeting references the exact claim the viewer highlights.
+    const openingFileId =
+      neededSurface?.action === "open_pdf" && typeof neededSurface.payload.fileId === "string"
+        ? neededSurface.payload.fileId
+        : "";
+    let claimTurn: ClaimTurn | null = null;
+    if (openingFileId) {
+      try {
+        claimTurn = await selectNextClaimEvidence(session, specs, state, openingFileId, specs.agent.phases[0] ?? null);
+      } catch (error) {
+        console.warn("[warmup] opening claim selection failed; opening without a pinned claim", error);
+      }
+    }
+    if (claimTurn) {
+      recordClaimMain(state, claimTurn.selection, claimTurn.evidence, claimTurn.angle);
+    }
+
+    const baseOpening = claimTurn
+      ? stripPickOneInstructions(rawOpening)
+      : specs.documentManifests?.length
+        ? rawOpening
+        : adaptOpeningWithoutContext(rawOpening);
+    const openingContract = claimTurn
+      ? `${baseOpening}\n${resumeTurnGuidance(specs, state, {
+          kind: "new_main",
+          angle: claimTurn.angle,
+          bridge: false,
+          claimLine: claimTurn.selection.line,
+        })}`
+      : baseOpening;
 
     const opening = await generateSpeech(
-      baseOpening,
+      openingContract,
       openingAction,
       specs,
       state,
@@ -97,13 +126,20 @@ export async function prewarmSessionOpening(sessionId: string): Promise<boolean>
       null,
       [],
       session.orgId,
-      personaVoiceAvailable
+      personaVoiceAvailable,
+      undefined,
+      claimTurn?.evidence ?? null
     );
 
     const prewarmed = {
       openingText: opening.text,
-      neededSurface,
+      neededSurface: claimTurn
+        ? { action: neededSurface!.action, payload: { ...neededSurface!.payload, highlightQuery: claimTurn.selection.anchor } }
+        : neededSurface,
       turnSpeechMeta: opening.meta,
+      claim: claimTurn
+        ? { anchor: claimTurn.selection.anchor, section: claimTurn.selection.section, line: claimTurn.selection.line }
+        : null,
     };
 
     // Store in session runtimeState

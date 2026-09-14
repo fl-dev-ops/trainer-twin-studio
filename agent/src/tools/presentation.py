@@ -46,11 +46,12 @@ def build_presentation_tools(*, room: Any, participant_identity: str) -> list[An
         context: RunContext,
         slide_index: int,
     ) -> dict[str, object]:
+        # The browser's presentation RPC is 1-based and names this action go_to_slide.
         return await _call_presentation(
             room,
             participant_identity,
-            "set_slide",
-            index=slide_index,
+            "go_to_slide",
+            slideNumber=slide_index + 1,
         )
 
     @function_tool(
@@ -58,14 +59,14 @@ def build_presentation_tools(*, room: Any, participant_identity: str) -> list[An
         description="Advance to the next slide in the presentation.",
     )
     async def next_presentation_slide(context: RunContext) -> dict[str, object]:
-        return await _call_presentation(room, participant_identity, "next_slide")
+        return await _call_presentation(room, participant_identity, "next")
 
     @function_tool(
         name="previous_presentation_slide",
         description="Return to the previous slide in the presentation.",
     )
     async def previous_presentation_slide(context: RunContext) -> dict[str, object]:
-        return await _call_presentation(room, participant_identity, "previous_slide")
+        return await _call_presentation(room, participant_identity, "previous")
 
     return [
         get_presentation_state,
