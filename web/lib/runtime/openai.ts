@@ -1528,24 +1528,38 @@ async function runCompletionPipeline(
         close: false,
         expects_answer: true,
       };
-      const rawOpening = specs.agent.opening || "Welcome to the interview session. Let's begin.";
-      const baseOpening = specs.documentManifests?.length
-        ? rawOpening
-        : adaptOpeningWithoutContext(rawOpening);
-      const opening = await generateSpeech(
-        baseOpening,
-        openingAction,
-        specs,
-        state,
-        currentTranscript,
-        null,
-        [],
-        session.orgId,
-        personaVoiceAvailable,
-        usageSink
-      );
-      const openingText = opening.text;
-      turnSpeechMeta = opening.meta;
+      let openingText: string;
+      if (state.prewarmed_opening?.openingText) {
+        openingText = state.prewarmed_opening.openingText;
+        turnSpeechMeta = (state.prewarmed_opening.turnSpeechMeta as SpeechMeta) ?? {
+          attempts: 1,
+          flags: [],
+          fallback: false,
+          rendererFallback: false,
+          draftWords: wordCount(openingText),
+          finalWords: wordCount(openingText),
+        };
+        state.prewarmed_opening = null;
+      } else {
+        const rawOpening = specs.agent.opening || "Welcome to the interview session. Let's begin.";
+        const baseOpening = specs.documentManifests?.length
+          ? rawOpening
+          : adaptOpeningWithoutContext(rawOpening);
+        const opening = await generateSpeech(
+          baseOpening,
+          openingAction,
+          specs,
+          state,
+          currentTranscript,
+          null,
+          [],
+          session.orgId,
+          personaVoiceAvailable,
+          usageSink
+        );
+        openingText = opening.text;
+        turnSpeechMeta = opening.meta;
+      }
       state.actions.push("opening");
       recordAskedQuestion(state, openingAction, openingText);
       turnSpokenText = openingText;
@@ -1664,24 +1678,39 @@ async function runCompletionPipeline(
         close: false,
         expects_answer: true,
       };
-      const rawOpening = specs.agent.opening || "Welcome to the interview session. Let's begin.";
-      const baseOpening = specs.documentManifests?.length
-        ? rawOpening
-        : adaptOpeningWithoutContext(rawOpening);
-      const opening = await generateSpeech(
-        baseOpening,
-        openingAction,
-        specs,
-        state,
-        currentTranscript,
-        null,
-        [],
-        session.orgId,
-        personaVoiceAvailable,
-        usageSink
-      );
-      replyText = opening.text;
-      turnSpeechMeta = opening.meta;
+      let openingText: string;
+      if (state.prewarmed_opening?.openingText) {
+        openingText = state.prewarmed_opening.openingText;
+        turnSpeechMeta = (state.prewarmed_opening.turnSpeechMeta as SpeechMeta) ?? {
+          attempts: 1,
+          flags: [],
+          fallback: false,
+          rendererFallback: false,
+          draftWords: wordCount(openingText),
+          finalWords: wordCount(openingText),
+        };
+        state.prewarmed_opening = null;
+      } else {
+        const rawOpening = specs.agent.opening || "Welcome to the interview session. Let's begin.";
+        const baseOpening = specs.documentManifests?.length
+          ? rawOpening
+          : adaptOpeningWithoutContext(rawOpening);
+        const opening = await generateSpeech(
+          baseOpening,
+          openingAction,
+          specs,
+          state,
+          currentTranscript,
+          null,
+          [],
+          session.orgId,
+          personaVoiceAvailable,
+          usageSink
+        );
+        openingText = opening.text;
+        turnSpeechMeta = opening.meta;
+      }
+      replyText = openingText;
       state.actions.push("opening");
       recordAskedQuestion(state, openingAction, replyText);
     } else if (state.end_reason === "completed" || state.actions.includes("close_session")) {

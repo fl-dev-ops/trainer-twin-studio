@@ -53,6 +53,12 @@ export interface InterviewAction {
   expects_answer: boolean;
 }
 
+export type PrewarmedOpening = {
+  openingText: string;
+  neededSurface?: { action: string; payload: Record<string, unknown> } | null;
+  turnSpeechMeta?: unknown;
+};
+
 export interface RuntimeState {
   phase_index: number;
   phase_turns: number;
@@ -78,6 +84,7 @@ export interface RuntimeState {
     page?: number | null;
   } | null;
   pending_surface_request?: "open_code_editor" | "open_whiteboard" | "open_pdf" | "close_surface" | null;
+  prewarmed_opening?: PrewarmedOpening | null;
 }
 
 export function initRuntimeState(): RuntimeState {
@@ -101,6 +108,7 @@ export function initRuntimeState(): RuntimeState {
     recent_style_docs: [],
     pending_document_lookup: null,
     pending_surface_request: null,
+    prewarmed_opening: null,
   };
 }
 

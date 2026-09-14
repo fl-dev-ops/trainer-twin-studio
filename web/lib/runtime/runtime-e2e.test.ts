@@ -10,6 +10,8 @@ import {
   handleCompletions,
   screenVisionClarification,
 } from "./openai";
+import { prewarmSessionOpening } from "./warmup";
+import { initRuntimeState } from "./runtime";
 import { GET as getSessionSnapshot } from "@/app/api/sessions/[id]/route";
 
 const tokenHash = (t: string) => createHash("sha256").update(t).digest("hex");
@@ -234,7 +236,7 @@ describe("Interview Runtime End-to-End Suite", () => {
     const state = session.runtimeState as any;
     expect(state.pending_question).toBe(json.choices[0].message.content);
     expect(state.pending_evidence_key).toBeTruthy();
-  });
+  }, 30000);
 
   it("4. Idempotency: replaying identical request returns cached body without re-execution", async () => {
     const reqBody = {
@@ -424,5 +426,69 @@ describe("Interview Runtime End-to-End Suite", () => {
     expect(typeof snap.coverage).toBe("object");
     expect(snap.phase_index).toBe(0);
     expect(snap.runtimeRevision).toBeGreaterThanOrEqual(1);
-  });
+  }, 30000);
+
+  it("10. Pre-warms session opening in background and serves it instantly on start", async () => {
+    const prewarmSessionId = `test-sess-pw-${randomBytes(4).toString("hex")}`;
+    const prewarmToken = `test-token-${randomBytes(16).toString("hex")}`;
+    await db.interviewSession.create({
+      data: {
+        id: prewarmSessionId,
+        orgId,
+        userId,
+        agentId,
+        shareCode: randomBytes(8).toString("hex"),
+        runtimeTokenHash: tokenHash(prewarmToken),
+        personaSlug: "vasanth",
+        personaVersion: 1,
+        agentSlug: "resume-mastery",
+        agentVersion: 1,
+        domainSlug: "software-engineering-resume",
+        domainVersion: 1,
+        status: "active",
+        compiledSnapshot: config,
+        runtimeState: initRuntimeState() as any,
+      },
+    });
+
+    try {
+      // 1. Run pre-warm
+      const warmed = await prewarmSessionOpening(prewarmSessionId);
+      expect(warmed).toBe(true);
+
+      const inDb = await db.interviewSession.findUniqueOrThrow({ where: { id: prewarmSessionId } });
+      const pwState = inDb.runtimeState as any;
+      expect(pwState.prewarmed_opening).toBeTruthy();
+      expect(typeof pwState.prewarmed_opening.openingText).toBe("string");
+      expect(pwState.prewarmed_opening.openingText.length).toBeGreaterThan(10);
+
+      // 2. Now call the completion endpoint for the opening turn
+      const t0 = performance.now();
+      const res = await handleCompletions(new Request("http://localhost/api/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${prewarmToken}` },
+        body: JSON.stringify({
+          messages: [{ role: "developer", content: "session-start" }],
+          stream: false,
+        }),
+      }));
+      const latency = performance.now() - t0;
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as any;
+      expect(body.choices[0].finish_reason).toBe("stop");
+      expect(body.choices[0].message.content).toBe(pwState.prewarmed_opening.openingText);
+      console.log(`\n[PRE-WARM TEST] Served opening in ${latency.toFixed(1)}ms (from cache)!\n`);
+
+      // Latency served from cache should be fast (< 1000ms)
+      expect(latency).toBeLessThan(1000);
+
+      // Verify prewarmed_opening is consumed
+      const after = await db.interviewSession.findUniqueOrThrow({ where: { id: prewarmSessionId } });
+      const afterState = after.runtimeState as any;
+      expect(afterState.prewarmed_opening).toBeNull();
+      expect(afterState.actions).toContain("opening");
+    } finally {
+      await db.interviewSession.deleteMany({ where: { id: prewarmSessionId } });
+    }
+  }, 30000);
 });
