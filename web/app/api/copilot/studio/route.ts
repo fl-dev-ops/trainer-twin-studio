@@ -29,6 +29,12 @@ const requestSchema = z.discriminatedUnion("action", [
     limit: z.number().int().min(1).max(10),
   }).strict(),
   z.object({
+    action: z.literal("readDocument"),
+    documentId: z.string().trim().min(1).max(120),
+    query: z.string().trim().min(1).max(500).optional(),
+    section: z.string().trim().min(1).max(100).optional(),
+  }).strict(),
+  z.object({
     action: z.literal("getSessionContext"),
     sessionId: z.string().optional(),
     agentSlug: z.string().optional(),
@@ -57,6 +63,43 @@ export async function POST(request: Request) {
   if (!parsed.success) return Response.json({ error: "Invalid Copilot request" }, { status: 400 });
   const input = parsed.data;
 
+  if (input.action === "readDocument") {
+    const doc = await db.contextDocument.findFirst({
+      where: { id: input.documentId, orgId },
+      include: {
+        chunks: { orderBy: { chunkIndex: "asc" } },
+      },
+    });
+    if (!doc) return Response.json({ error: `Document "${input.documentId}" not found` }, { status: 404 });
+
+    let chunks = doc.chunks;
+    if (input.section) {
+      const sec = input.section.toLowerCase();
+      const matched = chunks.filter((c) => c.heading?.toLowerCase().includes(sec));
+      if (matched.length > 0) chunks = matched;
+    }
+    if (input.query) {
+      const qTerms = input.query.toLowerCase().split(/\s+/).filter((t) => t.length > 2);
+      const matched = chunks.filter((c) => {
+        const txt = (c.text + " " + (c.heading ?? "")).toLowerCase();
+        return qTerms.some((term) => txt.includes(term));
+      });
+      if (matched.length > 0) chunks = matched;
+    }
+
+    return Response.json({
+      documentId: doc.id,
+      name: doc.name,
+      kind: doc.kind,
+      chunks: chunks.map((c) => ({
+        index: c.chunkIndex,
+        heading: c.heading,
+        pageNumber: c.pageNumber,
+        text: c.text,
+      })),
+    });
+  }
+
   if (input.action === "getSessionContext") {
     const session = input.sessionId
       ? await db.interviewSession.findFirst({
@@ -84,9 +127,18 @@ export async function POST(request: Request) {
         : null,
     ]);
 
-    const docMap = new Map<string, { id: string; name: string; kind: string; mimeType: string; size: number; pageCount?: number }>();
+    const docMap = new Map<string, {
+      id: string;
+      name: string;
+      kind: string;
+      mimeType: string;
+      size: number;
+      pageCount?: number;
+      summary?: string;
+      headings?: string[];
+    }>();
     if (session?.context) {
-      const manifest = session.context.manifest as { pageCount?: number } | null;
+      const manifest = session.context.manifest as { pageCount?: number; summary?: string; headings?: string[] } | null;
       docMap.set(session.context.id, {
         id: session.context.id,
         name: session.context.name,
@@ -94,13 +146,15 @@ export async function POST(request: Request) {
         mimeType: session.context.mimeType,
         size: session.context.size,
         pageCount: manifest?.pageCount,
+        summary: manifest?.summary,
+        headings: manifest?.headings,
       });
     }
     if (session?.documents) {
       for (const d of session.documents) {
         const doc = d.document;
         if (!doc) continue;
-        const manifest = doc.manifest as { pageCount?: number } | null;
+        const manifest = doc.manifest as { pageCount?: number; summary?: string; headings?: string[] } | null;
         docMap.set(doc.id, {
           id: doc.id,
           name: doc.name,
@@ -108,7 +162,35 @@ export async function POST(request: Request) {
           mimeType: doc.mimeType,
           size: doc.size,
           pageCount: manifest?.pageCount,
+          summary: manifest?.summary,
+          headings: manifest?.headings,
         });
+      }
+    }
+
+    const user = session?.userId
+      ? await db.user.findUnique({ where: { id: session.userId }, select: { id: true, name: true } })
+      : null;
+    const learnerName = (session?.runtimeState as Record<string, unknown> | null)?.learner_name ?? user?.name ?? null;
+    let isReturningLearner = false;
+    let pastSessionCount = 0;
+    let lastSessionDate: string | null = null;
+
+    if (session?.userId) {
+      const past = await db.interviewSession.findMany({
+        where: {
+          orgId,
+          userId: session.userId,
+          ...(session?.id ? { id: { not: session.id } } : {}),
+        },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        select: { id: true, createdAt: true, agentSlug: true },
+      });
+      if (past.length > 0) {
+        isReturningLearner = true;
+        pastSessionCount = past.length;
+        lastSessionDate = past[0].createdAt.toISOString();
       }
     }
 
@@ -117,7 +199,12 @@ export async function POST(request: Request) {
       agent: agent ?? null,
       persona: persona ?? null,
       documents: Array.from(docMap.values()),
-      learnerName: (session?.runtimeState as Record<string, unknown> | null)?.learner_name ?? null,
+      learnerName,
+      learnerHistory: {
+        isReturning: isReturningLearner,
+        pastSessionCount,
+        lastSessionDate,
+      },
     });
   }
 
