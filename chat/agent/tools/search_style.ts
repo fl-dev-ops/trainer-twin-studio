@@ -8,6 +8,7 @@ export default defineTool({
   inputSchema: z.object({
     personaSlug: z.string().trim().min(1).max(80).describe("Slug of the trainer persona from SESSION SPEC, e.g. 'vasanth'"),
     query: z.string().trim().min(2).max(500).describe("Description of the conversational situation (e.g. 'candidate nervous before interview', 'candidate gives project overview', 'candidate claims caching latency drop')"),
+    sessionPhase: z.enum(["opening", "middle", "closing"]).optional().describe("Current session phase: 'opening' (turns 1-3), 'middle' (technical core), 'closing' (wrapup)"),
     limit: z.number().int().min(1).max(6).default(4),
   }),
   async execute(input, ctx) {
@@ -17,6 +18,7 @@ export default defineTool({
       action: "searchStyleEpisodes",
       personaSlug: input.personaSlug,
       query: input.query,
+      sessionPhase: input.sessionPhase,
       limit: input.limit,
     });
   },

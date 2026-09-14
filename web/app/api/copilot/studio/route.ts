@@ -26,7 +26,13 @@ const requestSchema = z.discriminatedUnion("action", [
     action: z.literal("searchStyleEpisodes"),
     personaSlug: slug,
     query: z.string().trim().min(2).max(500),
-    limit: z.number().int().min(1).max(10),
+    sessionPhase: z.enum(["opening", "middle", "closing"]).optional(),
+    limit: z.number().int().min(1).max(10).optional(),
+    styleFilters: z.object({
+      usesLearnerName: z.boolean().optional(),
+      startsWithThanks: z.boolean().optional(),
+      hasDoubledAcknowledgement: z.boolean().optional(),
+    }).optional(),
   }).strict(),
   z.object({
     action: z.literal("readDocument"),
@@ -228,11 +234,14 @@ export async function POST(request: Request) {
     const [styleHits, episodeHits] = await Promise.all([
       MainCollectionService.searchStyleEpisodes(orgId, input.query, {
         personaId: persona.id,
+        sessionPhase: input.sessionPhase,
         limit: input.limit,
         diversify: true,
+        styleFilters: input.styleFilters,
       }),
       MainCollectionService.searchPersonaEpisodes(orgId, input.query, {
         personaId: persona.id,
+        sessionPhase: input.sessionPhase,
         limit: 2,
         diversify: true,
       }),
