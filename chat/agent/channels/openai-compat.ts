@@ -31,6 +31,16 @@ const TRANSPORT_TOOLS = new Set([
   "previous_presentation_slide",
 ]);
 
+/** Pure side-effect transport tools that do not require conversational follow-up speech. */
+const PURE_SIDE_EFFECT_TOOLS = new Set([
+  "surface",
+  "finish_session",
+  "clear_canvas",
+  "highlight_code",
+  "highlight_whiteboard",
+  "highlight_canvas_element",
+]);
+
 type ChatMessage = {
   role: "system" | "user" | "assistant" | "tool";
   content?: unknown;
@@ -61,13 +71,34 @@ function contentToText(content: unknown): string {
   return "";
 }
 
+function isPureSideEffectToolResult(message: ChatMessage | undefined): boolean {
+  if (!message || message.role !== "tool") return false;
+  if (message.name && PURE_SIDE_EFFECT_TOOLS.has(message.name)) return true;
+  const text = contentToText(message.content);
+  // Match {"status": "ok"...}, {'status': 'ok'...}, {"status":"completed"}, etc.
+  if (/['"]status['"]\s*:\s*['"](ok|completed)['"]/i.test(text) || /['"]ok['"]\s*:\s*true/i.test(text)) {
+    return true;
+  }
+  return false;
+}
+
 /**
  * Maps incoming chat-completions messages to ONE Eve turn input: only the
- * latest user or tool message matters because the Eve session maintains the
+ * latest relevant message matters because the Eve session maintains the
  * durable history.
  */
 function mapLatestMessage(messages: ChatMessage[]): string | null {
-  const latest = [...(messages ?? [])].reverse().find((message) => message.role === "user" || message.role === "tool");
+  // LiveKit's generate_reply(instructions="session-start") arrives as a SYSTEM
+  // instructions message in chat ctx (not a user turn), so "session-start" is
+  // matched on content regardless of role. The last relevant message wins.
+  const latest = [...(messages ?? [])]
+    .reverse()
+    .find(
+      (message) =>
+        message.role === "user" ||
+        message.role === "tool" ||
+        contentToText(message.content).trim() === "session-start",
+    );
   if (!latest) return null;
   if (latest.role === "tool") {
     return `[TOOL RESULT] ${latest.tool_call_id ?? ""} ${latest.name ?? ""}\n${contentToText(latest.content)}`;
@@ -100,6 +131,46 @@ export default defineChannel({
       }
 
       const body = (await request.json().catch(() => null)) as ChatCompletionBody | null;
+      const latestRaw = [...(body?.messages ?? [])].reverse().find(
+        (m) => m.role === "user" || m.role === "tool" || contentToText(m.content).trim() === "session-start"
+      );
+
+      // "trainertwin-brain" / "trainertwin-runtime" are magic model names meaning
+      // "use the Eve agent's own default model" — anything else is a model override.
+      const MAGIC_MODELS = new Set(["trainertwin-brain", "trainertwin-runtime"]);
+      const requestedModel =
+        request.headers.get("x-trainertwin-model")?.trim() ||
+        (body?.model && !MAGIC_MODELS.has(body.model) ? body.model : undefined);
+
+      // If this is a tool execution result for a pure side-effect tool (e.g. surface open_pdf,
+      // highlight_whiteboard), complete immediately without invoking the model to speak more.
+      if (isPureSideEffectToolResult(latestRaw)) {
+        const completionId = `chatcmpl-${crypto.randomUUID()}`;
+        const created = Math.floor(Date.now() / 1000);
+        const model = requestedModel ?? body?.model ?? "trainertwin-runtime";
+        const encoder = new TextEncoder();
+        const chunk = {
+          id: completionId,
+          object: "chat.completion.chunk",
+          created,
+          model,
+          choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+        };
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\ndata: [DONE]\n\n`));
+            controller.close();
+          },
+        });
+        return new Response(stream, {
+          headers: {
+            "content-type": "text/event-stream; charset=utf-8",
+            "cache-control": "no-cache",
+            connection: "close",
+          },
+        });
+      }
+
       const message = mapLatestMessage(body?.messages ?? []);
       if (!message) return Response.json({ error: "No user or tool message to process" }, { status: 400 });
 
@@ -119,13 +190,6 @@ export default defineChannel({
 
       const modeHeader = request.headers.get("x-trainertwin-mode")?.trim();
       const mode = modeHeader === "chat" ? "chat" : "voice";
-
-      // "trainertwin-brain" / "trainertwin-runtime" are magic model names meaning
-      // "use the Eve agent's own default model" — anything else is a model override.
-      const MAGIC_MODELS = new Set(["trainertwin-brain", "trainertwin-runtime"]);
-      const requestedModel =
-        request.headers.get("x-trainertwin-model")?.trim() ||
-        (body?.model && !MAGIC_MODELS.has(body.model) ? body.model : undefined);
 
       const attributes: Record<string, string> = {
         orgId,

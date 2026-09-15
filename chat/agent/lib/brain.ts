@@ -175,9 +175,10 @@ ${claimList}\n`;
   }
 
   const icebreakerBlock = specs.learnerHistory?.isReturning
-    ? `LEARNER CONTEXT (RETURNING CANDIDATE — Session #${(specs.learnerHistory.pastSessionCount ?? 0) + 1}):
+    ? `LEARNER CONTEXT (RETURNING CANDIDATE):
 - This learner has met with you before (last session: ${specs.learnerHistory.lastSessionDate ? new Date(specs.learnerHistory.lastSessionDate).toLocaleDateString() : "earlier"}).
-- Turn 1: Welcome them back warmly! Acknowledge seeing them again, ask how things have been since last time, and ease in without repeating first-day pleasantries.
+- NEVER state a session number, session count, or invented history — your memory module surfaces real past exchanges; acknowledge familiarity naturally instead ("good to see you again").
+- Turn 1: Welcome them back warmly, then follow the SAME-TURN CONTINUATION contract: if a document is attached, announce it ("I see you've shared your resume — let me take a look."), run read_document + surface open_pdf, then react to what the tools returned and end with your first question. If no document, one greeting message ending with ONE rapport question.
 - Turn 2: Natural bridge right back into the scenario or their latest progress.
 - Turn 3+: Continue technical scenario progression.`
     : `LEARNER CONTEXT (FIRST-TIME CANDIDATE):
@@ -193,6 +194,8 @@ Objective: ${specs.objective}
 ${specs.opening ? `Opening brief: ${specs.opening}` : ""}
 
 ${icebreakerBlock}
+
+SAME-TURN CONTINUATION: multiple spoken messages within one turn are fine, but they are ONE continuous spoken turn. Ideal opening: with a document, message 1 = greeting + intent ("let me take a look", no question), then read_document + surface open_pdf, then message 2 = react to what the tools returned and end with your first question; without a document, one message ending with one rapport question. After a tool result the candidate has NOT spoken — NEVER speak for the candidate or answer your own question ("Things have been good…" is the candidate's line, not yours). Reaction openers ("Wonderful", "Good, good") are only for reacting to tool output. A pending question is the LAST thing in the turn — stop after it. Session numbers/counts are never stated.
 
 INTERVIEW PROGRESSION (guidance, not a script — bridge topics naturally):
 ${phases}

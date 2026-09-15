@@ -22,7 +22,7 @@ def build_surface_tools(*, room: Any, participant_identity: str) -> list[Any]:
         context: RunContext,
         action: str,
         payload: dict[str, Any] | None = None,
-    ) -> dict[str, object]:
+    ) -> None:
         actual_payload = payload or {}
         # A stable event id per file keeps the learner's viewer mounted: re-opening or re-highlighting
         # the same document then reuses one PDF viewer and only refreshes the search highlight.
@@ -53,13 +53,13 @@ def build_surface_tools(*, room: Any, participant_identity: str) -> list[Any]:
                 json.dumps(msg).encode("utf-8"),
                 reliable=True,
             )
-        return {"status": "ok", "action": action}
+        return None
 
     @function_tool(
         name="finish_session",
         description="Signals the interview conclusion.",
     )
-    async def finish_session(context: RunContext) -> dict[str, object]:
+    async def finish_session(context: RunContext) -> None:
         logger.info("finish_session invoked by web runtime")
 
         async def _graceful_teardown():
@@ -91,7 +91,7 @@ def build_surface_tools(*, room: Any, participant_identity: str) -> list[Any]:
                 job_ctx.shutdown(reason="interview_completed")
 
         asyncio.create_task(_graceful_teardown())
-        return {"status": "completed"}
+        return None
 
     @function_tool(
         name="workspace_request",
