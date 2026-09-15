@@ -1,59 +1,53 @@
 "use client";
 
-import { html } from "@codemirror/lang-html";
-import { java } from "@codemirror/lang-java";
-import { javascript } from "@codemirror/lang-javascript";
-import { python } from "@codemirror/lang-python";
-import { oneDark } from "@codemirror/theme-one-dark";
-import { EditorView } from "@codemirror/view";
-import CodeMirror from "@uiw/react-codemirror";
+import Editor from "@monaco-editor/react";
 import { LoaderCircle, Play } from "lucide-react";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { useTheme } from "next-themes";
-import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import type { editor } from "monaco-editor";
 import type {
   CodeExecutionResult,
   SupportedCodeExecutionLanguage,
 } from "@/lib/code-execution";
-import {
-  CODE_RPC_METHOD,
-  codeHighlightExtension,
-  handleCodeRpc,
-} from "@/lib/code-rpc";
 import { useWorkspaceHandlers } from "@/lib/livekit-workspaces";
 
-const languages = {
-  html,
-  java,
-  javascript,
-  python,
-  react: () => javascript({ jsx: true }),
-} satisfies Record<SupportedCodeExecutionLanguage, () => unknown>;
+const CODE_RPC_METHOD = "workspace.code";
+const MAX_CODE_ANSWER_CHARS = 20_000;
+const MAX_CODE_RPC_RESPONSE_BYTES = 14 * 1024;
+/**
+ * RPC contract mirrors the reference interview agent exactly: the only supported
+ * actions are `get_range` and `highlight_range` with one-based line numbers.
+ */
+function serializeCodeRangeResponse(result: {
+  fromLine: number;
+  toLine: number;
+  from: number;
+  to: number;
+  text: string;
+}) {
+  const response = JSON.stringify({
+    ok: true,
+    result: { ...result, truncated: false },
+  });
+  if (new TextEncoder().encode(response).byteLength > MAX_CODE_RPC_RESPONSE_BYTES) {
+    throw new Error("Code range is too large; request fewer lines");
+  }
+  return response;
+}
 
-const labels: Record<SupportedCodeExecutionLanguage, string> = {
+const LANGUAGE_LABELS: Record<SupportedCodeExecutionLanguage, string> = {
   html: "HTML",
   java: "Java",
   javascript: "JavaScript",
   python: "Python",
-  react: "React",
+  react: "React (JSX)",
 };
 
-const extensions = [EditorView.lineWrapping, codeHighlightExtension];
-const defaultCode = `// Welcome to the code editor
-function greet(name) {
-  return \`Hello, \${name}!\`;
+/** Monaco has no JSX grammar of its own: React answers are edited as JavaScript. */
+function monacoLanguage(language: SupportedCodeExecutionLanguage) {
+  return language === "react" ? "javascript" : language;
 }
-
-console.log(greet("World"));`;
-const subscribe = () => () => {};
-const previewConsoleSource = "mock-interview-code-preview";
 
 type BrowserConsoleEntry = {
   id: number;
@@ -61,60 +55,55 @@ type BrowserConsoleEntry = {
   text: string;
 };
 
-type PreviewTarget = {
-  channel: string;
-  origin: string;
-};
+type PreviewConsoleTarget = { channel: string; origin: string };
 
-function ExecutionOutput({
+function ExecutionConsole({
   result,
-  entries,
+  browserEntries,
 }: {
   result: CodeExecutionResult;
-  entries: BrowserConsoleEntry[];
+  browserEntries: BrowserConsoleEntry[];
 }) {
-  const output = [result.stdout, result.stderr, result.details]
-    .filter(Boolean)
-    .join("\n");
-
+  const stdout = result.stdout ?? "";
+  const stderr = result.stderr ?? "";
   return (
-    <div className="min-h-0 overflow-auto rounded-lg border border-white/10 bg-[#1a1d23] p-3 font-mono text-xs">
-      <div className="mb-2 flex items-center justify-between gap-3 font-sans">
-        <span className="font-medium capitalize text-foreground">
-          {result.outcome}
-        </span>
-        <span className="text-muted-foreground">
-          {result.executionTimeMs !== null
-            ? `${result.executionTimeMs} ms`
-            : ""}
-        </span>
-      </div>
-      {output ? (
-        <pre className="whitespace-pre-wrap wrap-break-word text-foreground">
-          {output}
+    <div className="space-y-3">
+      {result.outcome === "timeout" ? (
+        <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-300">
+          Execution timed out.
+        </p>
+      ) : null}
+      {stdout.length || stderr.length ? (
+        <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-lg border bg-[#101216] p-3 text-xs leading-relaxed text-foreground/85">
+          {stdout}
+          {stderr ? (
+            <span className="block whitespace-pre-wrap text-destructive">{stderr}</span>
+          ) : null}
         </pre>
       ) : null}
-      {entries.map((entry) => (
-        <pre
-          key={entry.id}
-          className={
-            entry.level === "error"
-              ? "whitespace-pre-wrap wrap-break-word text-destructive"
-              : entry.level === "warn"
-                ? "whitespace-pre-wrap wrap-break-word text-amber-700 dark:text-amber-300"
-                : "whitespace-pre-wrap wrap-break-word text-foreground"
-          }
-        >
-          {entry.level === "log" ? "" : `[${entry.level}] `}
-          {entry.text}
-        </pre>
-      ))}
-      {!output && !entries.length ? (
-        <p className="text-muted-foreground">
-          {result.previewUrl
-            ? "Preview loaded. Browser console output appears here."
-            : "Program completed with no output."}
-        </p>
+      {browserEntries.length ? (
+        <div className="rounded-lg border bg-[#101216] p-3">
+          <p className="mb-2 text-xs font-medium text-muted-foreground">Browser console</p>
+          <div className="space-y-1 text-xs">
+            {browserEntries.map((entry) => (
+              <div
+                key={entry.id}
+                className={
+                  entry.level === "error"
+                    ? "text-destructive"
+                    : entry.level === "warn"
+                      ? "text-amber-300"
+                      : "text-foreground/85"
+                }
+              >
+                {entry.text}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      {!stdout.length && !stderr.length && !browserEntries.length ? (
+        <p className="text-sm text-muted-foreground">No output produced.</p>
       ) : null}
     </div>
   );
@@ -122,7 +111,7 @@ function ExecutionOutput({
 
 export function CodeEditor({
   initialLanguage = "javascript",
-  initialCode = defaultCode,
+  initialCode,
   highlightLines,
 }: {
   initialLanguage?: SupportedCodeExecutionLanguage;
@@ -131,61 +120,153 @@ export function CodeEditor({
 }) {
   const { resolvedTheme } = useTheme();
   const registerWorkspaceHandler = useWorkspaceHandlers();
-  const mounted = useSyncExternalStore(
-    subscribe,
-    () => true,
-    () => false,
-  );
-  const editorView = useRef<EditorView | null>(null);
-  const runController = useRef<AbortController | null>(null);
-  const previewFrame = useRef<HTMLIFrameElement | null>(null);
-  const previewTarget = useRef<PreviewTarget | null>(null);
-  const entryId = useRef(0);
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const decorationIdsRef = useRef<string[]>([]);
+  const runAbortControllerRef = useRef<AbortController | null>(null);
+  const previewFrameRef = useRef<HTMLIFrameElement | null>(null);
+  const previewConsoleTargetRef = useRef<PreviewConsoleTarget | null>(null);
+  const browserConsoleSequenceRef = useRef(0);
   const [language, setLanguage] =
     useState<SupportedCodeExecutionLanguage>(initialLanguage);
-  const [code, setCode] = useState(initialCode);
-  const [revision, setRevision] = useState(0);
+  const [code, setCode] = useState(initialCode ?? "");
+  const [activeTab, setActiveTab] = useState<"code" | "output">("code");
   const [isRunning, setIsRunning] = useState(false);
-  const [result, setResult] = useState<CodeExecutionResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [outputVisible, setOutputVisible] = useState(true);
-  const [browserEntries, setBrowserEntries] = useState<BrowserConsoleEntry[]>(
+  const [runResult, setRunResult] = useState<CodeExecutionResult | null>(null);
+  const [browserConsoleEntries, setBrowserConsoleEntries] = useState<
+    BrowserConsoleEntry[]
+  >([]);
+
+  useEffect(
+    () => () => {
+      runAbortControllerRef.current?.abort();
+    },
     [],
   );
 
-  useEffect(() => () => runController.current?.abort(), []);
-
   useEffect(() =>
-    registerWorkspaceHandler(CODE_RPC_METHOD, (request) =>
-      handleCodeRpc(request, {
-        view: editorView.current,
-        language,
-        revision,
-        setLanguage,
-        run: runCode,
-        cancelRun: () => runController.current?.abort(),
-        getOutput: () => ({ result, error, isRunning, browserEntries }),
-        clearOutput: resetRun,
-        setOutputVisible,
-      }),
-    ),
-  );
+    registerWorkspaceHandler(CODE_RPC_METHOD, async (request) => {
+      const mountedEditor = editorRef.current;
+      const model = mountedEditor?.getModel();
+      if (!mountedEditor || !model) {
+        throw new Error("Code editor is not ready");
+      }
+      let parsed: { action?: string; payload?: Record<string, unknown> };
+      try {
+        parsed = JSON.parse(request) as { action?: string; payload?: Record<string, unknown> };
+      } catch {
+        throw new Error("Invalid code command");
+      }
+      const payload = parsed.payload ?? {};
+
+      if (parsed.action === "get_range") {
+        const fromLine = Number(payload.fromLine);
+        const requestedToLine = Number(payload.toLine);
+        if (
+          !Number.isInteger(fromLine) ||
+          !Number.isInteger(requestedToLine) ||
+          fromLine < 1 ||
+          requestedToLine < fromLine ||
+          fromLine > model.getLineCount()
+        ) {
+          throw new Error("Invalid code line range");
+        }
+        const toLine = Math.min(requestedToLine, model.getLineCount());
+        return serializeCodeRangeResponse({
+          fromLine,
+          toLine,
+          from: model.getOffsetAt({ lineNumber: fromLine, column: 1 }),
+          to: model.getOffsetAt({
+            lineNumber: toLine,
+            column: model.getLineMaxColumn(toLine),
+          }),
+          text: model.getValueInRange({
+            startLineNumber: fromLine,
+            startColumn: 1,
+            endLineNumber: toLine,
+            endColumn: model.getLineMaxColumn(toLine),
+          }),
+        });
+      }
+
+      if (parsed.action !== "highlight_range") {
+        throw new Error(`Unsupported code action: ${String(parsed.action)}`);
+      }
+
+      const fromLine = Number(payload.fromLine);
+      const requestedToLine = Number(payload.toLine);
+      if (
+        !Number.isInteger(fromLine) ||
+        !Number.isInteger(requestedToLine) ||
+        fromLine < 1 ||
+        requestedToLine < fromLine ||
+        fromLine > model.getLineCount()
+      ) {
+        throw new Error("Invalid code line range");
+      }
+      const toLine = Math.min(requestedToLine, model.getLineCount());
+      const range = {
+        startLineNumber: fromLine,
+        startColumn: 1,
+        endLineNumber: toLine,
+        endColumn: model.getLineMaxColumn(toLine),
+      };
+      setActiveTab("code");
+      decorationIdsRef.current = mountedEditor.deltaDecorations(
+        decorationIdsRef.current,
+        [
+          {
+            range,
+            options: {
+              isWholeLine: true,
+              inlineClassName: "agent-code-highlight",
+            },
+          },
+        ],
+      );
+      requestAnimationFrame(() => {
+        mountedEditor.layout();
+        mountedEditor.revealRangeInCenter(range);
+      });
+      return JSON.stringify({ ok: true });
+    }));
+
+  // Opening highlight from the surface payload (starter surface can carry a range).
+  function applyInitialHighlight(instance: editor.IStandaloneCodeEditor) {
+    editorRef.current = instance;
+    if (highlightLines && highlightLines.length === 2) {
+      const [fromLine, toLine] = highlightLines;
+      const model = instance.getModel();
+      if (model && fromLine >= 1 && toLine >= fromLine && toLine <= model.getLineCount()) {
+        const range = {
+          startLineNumber: fromLine,
+          startColumn: 1,
+          endLineNumber: toLine,
+          endColumn: model.getLineMaxColumn(toLine),
+        };
+        decorationIdsRef.current = instance.deltaDecorations(decorationIdsRef.current, [
+          { range, options: { isWholeLine: true, inlineClassName: "agent-code-highlight" } },
+        ]);
+        requestAnimationFrame(() => {
+          instance.layout();
+          instance.revealRangeInCenter(range);
+        });
+      }
+    }
+  }
 
   useEffect(() => {
     function handlePreviewMessage(event: MessageEvent) {
-      const target = previewTarget.current;
+      const target = previewConsoleTargetRef.current;
       const data = event.data as Record<string, unknown> | null;
       if (
         !target ||
         event.origin !== target.origin ||
-        event.source !== previewFrame.current?.contentWindow ||
+        event.source !== previewFrameRef.current?.contentWindow ||
         !data ||
-        data.source !== previewConsoleSource ||
+        data.source !== "mock-interview-code-preview" ||
         data.type !== "console" ||
         data.channel !== target.channel ||
-        !["log", "info", "warn", "error", "clear"].includes(
-          String(data.level),
-        ) ||
+        !["log", "info", "warn", "error", "clear"].includes(String(data.level)) ||
         !Array.isArray(data.values) ||
         data.values.length > 20 ||
         !data.values.every(
@@ -194,198 +275,209 @@ export function CodeEditor({
       ) {
         return;
       }
-
       if (data.level === "clear") {
-        setBrowserEntries([]);
+        setBrowserConsoleEntries([]);
         return;
       }
-      entryId.current += 1;
+      browserConsoleSequenceRef.current += 1;
       const entry: BrowserConsoleEntry = {
-        id: entryId.current,
+        id: browserConsoleSequenceRef.current,
         level: data.level as BrowserConsoleEntry["level"],
-        text: data.values.join(" "),
+        text: (data.values as string[]).join(" "),
       };
-      setBrowserEntries((entries) => [...entries.slice(-199), entry]);
+      setBrowserConsoleEntries((entries) => [...entries.slice(-199), entry]);
     }
 
     window.addEventListener("message", handlePreviewMessage);
     return () => window.removeEventListener("message", handlePreviewMessage);
   }, []);
 
-  function resetRun() {
-    runController.current?.abort();
-    runController.current = null;
-    previewTarget.current = null;
-    setIsRunning(false);
-    setResult(null);
-    setError(null);
-    setBrowserEntries([]);
-  }
-
-  async function runCode(): Promise<
-    | CodeExecutionResult
-    | { outcome: "error"; error: string }
-  > {
-    if (!code.trim()) return { outcome: "error", error: "The editor is empty" };
-    if (isRunning) return { outcome: "error", error: "Code is already running" };
-    const controller = new AbortController();
-    runController.current = controller;
+  async function handleRun() {
+    if (!code.trim() || isRunning) return;
+    const abortController = new AbortController();
+    runAbortControllerRef.current = abortController;
     setIsRunning(true);
-    setResult(null);
-    setError(null);
-    setBrowserEntries([]);
-    previewTarget.current = null;
-
+    setRunResult(null);
+    previewConsoleTargetRef.current = null;
+    setBrowserConsoleEntries([]);
+    setActiveTab("output");
     try {
       const response = await fetch("/api/code/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ language, code }),
-        signal: controller.signal,
+        signal: abortController.signal,
       });
-      const body = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(
-          body?.error ?? `Code execution failed: ${response.status}`,
-        );
+        const body = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        throw new Error(body?.error ?? `Code execution failed: ${response.status}`);
       }
-      const nextResult = body as CodeExecutionResult;
-      if (runController.current !== controller) {
-        return { outcome: "error", error: "Code execution was superseded" };
+      const result = (await response.json()) as CodeExecutionResult;
+      if (runAbortControllerRef.current === abortController) {
+        previewConsoleTargetRef.current =
+          result.previewUrl && result.consoleChannel
+            ? {
+                channel: result.consoleChannel,
+                origin: new URL(result.previewUrl).origin,
+              }
+            : null;
+        setRunResult(result);
       }
-      if (nextResult.previewUrl && nextResult.consoleChannel) {
-        previewTarget.current = {
-          channel: nextResult.consoleChannel,
-          origin: new URL(nextResult.previewUrl).origin,
-        };
-      }
-      setResult(nextResult);
-      return nextResult;
-    } catch (runError) {
-      const message =
-        runError instanceof Error ? runError.message : "Code execution failed";
-      if (!controller.signal.aborted) setError(message);
-      return { outcome: "error", error: message };
+    } catch (error) {
+      if (abortController.signal.aborted) return;
+      console.error(error);
+      setActiveTab("code");
+      toast.error(error instanceof Error ? error.message : "Code execution failed.");
     } finally {
-      if (runController.current === controller) {
-        runController.current = null;
+      if (runAbortControllerRef.current === abortController) {
+        runAbortControllerRef.current = null;
         setIsRunning(false);
       }
     }
   }
 
+  const webPreviewUrl =
+    language === "html" || language === "react" ? (runResult?.previewUrl ?? null) : null;
+
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2 overflow-hidden p-2">
-      <div className="min-h-0 flex-1 overflow-hidden rounded-lg">
-        <CodeMirror
-          value={code}
-          onCreateEditor={(view) => {
-            editorView.current = view;
-            if (highlightLines && highlightLines.length === 2) {
-              const [fromLine, toLine] = highlightLines;
-              const doc = view.state.doc;
-              if (fromLine >= 1 && toLine >= fromLine && toLine <= doc.lines) {
-                const from = doc.line(fromLine).from;
-                const to = doc.line(toLine).to;
-                view.dispatch({ selection: { anchor: from, head: to }, scrollIntoView: true });
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <div
+        role="tablist"
+        aria-label="Code editor views"
+        className="flex shrink-0 items-end gap-1 border-b border-white/[0.05] px-3"
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "code"}
+          onClick={() => setActiveTab("code")}
+          className={`cursor-pointer border-b-2 border-transparent px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === "code"
+              ? "border-primary text-foreground"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Code
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "output"}
+          onClick={() => setActiveTab("output")}
+          className={`cursor-pointer border-b-2 border-transparent px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === "output"
+              ? "border-primary text-foreground"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Output
+        </button>
+      </div>
+
+      <div className="min-h-0 flex-1">
+        <div role="tabpanel" hidden={activeTab !== "code"} className="h-full">
+          <Editor
+            height="100%"
+            theme={resolvedTheme === "light" ? "light" : "vs-dark"}
+            language={monacoLanguage(language)}
+            value={code}
+            onMount={applyInitialHighlight}
+            onChange={(value) => {
+              const nextCode = value ?? "";
+              if (nextCode.length > MAX_CODE_ANSWER_CHARS) {
+                toast.error("Code answers are limited to 20,000 characters.");
+                return;
               }
-            }
-          }}
-          height="100%"
-          onChange={(value) => {
-            if (value.length > 20_000) {
-              setError("Code is limited to 20,000 characters.");
-              return;
-            }
-            resetRun();
-            setCode(value);
-            setRevision((current) => current + 1);
-          }}
-          extensions={[languages[language]() as never, ...extensions]}
-          theme={oneDark}
-          className="h-full overflow-hidden text-foreground [&_.cm-editor]:h-full"
-          basicSetup={{
-            lineNumbers: true,
-            highlightActiveLineGutter: true,
-            highlightSpecialChars: true,
-            foldGutter: true,
-            drawSelection: true,
-            dropCursor: true,
-            allowMultipleSelections: true,
-            indentOnInput: true,
-            bracketMatching: true,
-            closeBrackets: true,
-            autocompletion: true,
-            rectangularSelection: true,
-            crosshairCursor: false,
-            highlightActiveLine: true,
-            highlightSelectionMatches: true,
-            closeBracketsKeymap: true,
-            searchKeymap: true,
-            foldKeymap: true,
-            completionKeymap: true,
-            lintKeymap: true,
-          }}
-        />
-      </div>
-
-      <div className="flex shrink-0 justify-between gap-2 px-2 pb-2 pt-1">
-        <Button onClick={runCode} disabled={!code.trim() || isRunning}>
-          {isRunning ? <LoaderCircle className="animate-spin" /> : <Play />}
-          {isRunning ? "Running" : "Run"}
-        </Button>
-        <Select
-          value={language}
-          onValueChange={(value) => {
-            resetRun();
-            setLanguage(value as SupportedCodeExecutionLanguage);
-          }}
+              runAbortControllerRef.current?.abort();
+              runAbortControllerRef.current = null;
+              setIsRunning(false);
+              setCode(nextCode);
+              setRunResult(null);
+              previewConsoleTargetRef.current = null;
+              setBrowserConsoleEntries([]);
+              setActiveTab("code");
+            }}
+            options={{
+              minimap: { enabled: false },
+              fontSize: 14,
+              wordWrap: "on",
+              scrollBeyondLastLine: false,
+              automaticLayout: true,
+            }}
+            loading={<p className="p-4 text-sm text-muted-foreground">Loading editor…</p>}
+          />
+        </div>
+        <div
+          role="tabpanel"
+          hidden={activeTab !== "output"}
+          className="h-full overflow-auto p-4"
         >
-          <SelectTrigger className="w-36 border-white/10 bg-[#1a1d23] text-foreground">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent className="border-white/10 bg-[#1a1d23] text-foreground">
-            {(Object.keys(languages) as SupportedCodeExecutionLanguage[]).map(
-              (item) => (
-                <SelectItem key={item} value={item}>
-                  {labels[item]}
-                </SelectItem>
-              ),
-            )}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {outputVisible && (isRunning || error || result) ? (
-        <section
-          aria-label="Code output"
-          className="grid max-h-[42%] shrink-0 gap-2 md:grid-cols-2"
-        >
-          {result?.previewUrl ? (
-            <iframe
-              ref={previewFrame}
-              src={result.previewUrl}
-              title="Code preview"
-              className="h-48 w-full rounded-lg border bg-white"
-              sandbox="allow-forms allow-modals allow-same-origin allow-scripts"
-              referrerPolicy="no-referrer"
-            />
-          ) : null}
           {isRunning ? (
-            <div className="flex h-24 items-center justify-center rounded-lg border bg-background text-sm text-muted-foreground">
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
               Running code…
             </div>
-          ) : error ? (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive mb-2 mx-2">
-              {error}
+          ) : runResult ? (
+            <div className="space-y-3">
+              {webPreviewUrl ? (
+                <div className="h-72 overflow-hidden rounded-lg bg-white sm:h-80">
+                  <iframe
+                    ref={previewFrameRef}
+                    src={webPreviewUrl}
+                    title="Code preview"
+                    className="size-full border-0 bg-white"
+                    sandbox="allow-forms allow-modals allow-same-origin allow-scripts"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+              ) : null}
+              <ExecutionConsole result={runResult} browserEntries={browserConsoleEntries} />
             </div>
-          ) : result ? (
-            <div className="px-1">
-              <ExecutionOutput result={result} entries={browserEntries} />
+          ) : (
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              Run your code to see its output here.
             </div>
-          ) : null}
-        </section>
-      ) : null}
+          )}
+        </div>
+      </div>
+
+      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-white/[0.05] px-4 py-3">
+        <select
+          value={language}
+          onChange={(event) => {
+            runAbortControllerRef.current?.abort();
+            runAbortControllerRef.current = null;
+            setIsRunning(false);
+            const nextLanguage = event.target.value as SupportedCodeExecutionLanguage;
+            setLanguage(nextLanguage);
+            setRunResult(null);
+            previewConsoleTargetRef.current = null;
+            setBrowserConsoleEntries([]);
+            setActiveTab("code");
+          }}
+          className="rounded-lg border border-white/10 bg-[#1a1d23] px-3 py-1.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring/15"
+        >
+          {(Object.keys(LANGUAGE_LABELS) as SupportedCodeExecutionLanguage[]).map((lang) => (
+            <option key={lang} value={lang}>
+              {LANGUAGE_LABELS[lang]}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={handleRun}
+          disabled={!code.trim() || isRunning}
+          className="flex items-center gap-2 rounded-lg border border-white/10 bg-[#1a1d23] px-4 py-1.5 text-sm font-medium text-foreground transition-[background-color,scale] hover:bg-[#232733] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isRunning ? (
+            <LoaderCircle className="size-4 animate-spin" />
+          ) : (
+            <Play className="size-4" />
+          )}
+          {isRunning ? "Running…" : "Run"}
+        </button>
+      </div>
     </div>
   );
 }

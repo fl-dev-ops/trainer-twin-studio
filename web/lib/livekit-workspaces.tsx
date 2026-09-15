@@ -99,9 +99,14 @@ export function LiveKitWorkspaceProvider({
   }, []);
 
   // Trust boundary: only the session agent may drive the browser workspace
-  // (code editor, canvas, presentation, surface, session.end).
+  // (code editor, whiteboard, presentation, surface, session.end). A participant
+  // publishing on behalf of the agent is a relay, never the workspace controller.
   function guardAgentCaller(callerIdentity: string): string | null {
-    if (room?.remoteParticipants.get(callerIdentity)?.kind === ParticipantKind.AGENT) {
+    const caller = room?.remoteParticipants.get(callerIdentity);
+    if (
+      caller?.kind === ParticipantKind.AGENT &&
+      !caller.attributes["lk.publish_on_behalf"]
+    ) {
       return null;
     }
     return JSON.stringify({ ok: false, error: "Only the session agent may control the workspace" });

@@ -2336,9 +2336,25 @@ function PDFViewerInner({
         searchProvider.startSearch()
         searchProvider.searchAllPages(query.trim()).wait(
           (result) => {
-            if (result.results.length > 0) {
-              searchProvider.goToResult(0)
-            }
+            if (result.results.length === 0) return
+            searchProvider.goToResult(0)
+            // goToResult alone does not move the viewport: scroll explicitly to the
+            // match's page and position, mirroring the in-viewer search behavior.
+            const firstResult = result.results[0]
+            const firstRect = firstResult.rects[0]
+            scroll?.scrollToPage({
+              pageNumber: firstResult.pageIndex + 1,
+              ...(firstRect
+                ? {
+                    pageCoordinates: {
+                      x: firstRect.origin.x,
+                      y: firstRect.origin.y,
+                    },
+                    alignY: 30,
+                  }
+                : {}),
+              behavior: "auto",
+            })
           },
           () => undefined
         )

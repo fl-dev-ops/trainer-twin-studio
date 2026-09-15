@@ -14,6 +14,7 @@ import { MainCollectionService } from "@/lib/main-collection";
 import { ChromaTenantService } from "@/lib/chroma-tenant";
 import { enqueueIngestionWork } from "@/lib/ingestion-queue";
 import { prepareContextDocument, type DocumentManifest } from "@/lib/context-document-service";
+import { scheduleResumeClaimExtraction } from "@/lib/resume-claims";
 
 export type SpecType = "personas" | "agents" | "domains";
 
@@ -526,6 +527,7 @@ export async function saveUpload(
     },
     select: { id: true, name: true, size: true, kind: true, manifest: true, createdAt: true },
   });
+  scheduleResumeClaimExtraction(id, prepared.kind);
   return { ...doc, manifest };
 }
 

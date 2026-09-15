@@ -9,6 +9,7 @@ import {
   type RuntimeState,
 } from "./runtime";
 import { adaptOpeningWithoutContext, generateSpeech, recordClaimMain, resumeTurnGuidance, selectNextClaimEvidence, stripPickOneInstructions, type ClaimTurn } from "./openai";
+import type { Prisma } from "@/lib/generated/prisma/client";
 
 /**
  * Pre-warms the opening turn for an interview session in the background
@@ -93,6 +94,13 @@ export async function prewarmSessionOpening(sessionId: string): Promise<boolean>
         : "";
     let claimTurn: ClaimTurn | null = null;
     if (openingFileId) {
+      // The candidate's full resume text rides the speech prompts all session, so
+      // the agent knows who they are talking to without asking for a name.
+      const resumeDoc = await db.contextDocument.findUnique({
+        where: { id: openingFileId },
+        select: { extractedText: true },
+      });
+      state.resume_text = resumeDoc?.extractedText ?? null;
       try {
         claimTurn = await selectNextClaimEvidence(session, specs, state, openingFileId, specs.agent.phases[0] ?? null);
       } catch (error) {
@@ -100,7 +108,7 @@ export async function prewarmSessionOpening(sessionId: string): Promise<boolean>
       }
     }
     if (claimTurn) {
-      recordClaimMain(state, claimTurn.selection, claimTurn.evidence, claimTurn.angle);
+      recordClaimMain(state, claimTurn.selection, claimTurn.evidence, claimTurn.angle, claimTurn.claimId);
     }
 
     const baseOpening = claimTurn
@@ -142,14 +150,26 @@ export async function prewarmSessionOpening(sessionId: string): Promise<boolean>
         : null,
     };
 
-    // Store in session runtimeState
+    // The opening turn may have completed while this prewarm was generating (the agent's
+    // first completion races this background task once the intro video is disabled). Never
+    // overwrite live session progress with this stale state copy: merge onto the freshest
+    // row and skip entirely when the opening already ran.
+    const fresh = await db.interviewSession.findUnique({
+      where: { id: session.id },
+      select: { runtimeState: true },
+    });
+    const freshState = { ...state, ...((fresh?.runtimeState as Partial<RuntimeState> | null) ?? {}) };
+    if (freshState.actions.includes("opening") || (freshState.used_claims?.length ?? 0) > 0) {
+      return true;
+    }
     await db.interviewSession.update({
       where: { id: session.id },
       data: {
         runtimeState: {
-          ...state,
+          ...freshState,
           prewarmed_opening: prewarmed,
-        } as any,
+          // Prisma jsonb column: the runtime state is JSON-serializable by construction.
+        } as unknown as Prisma.InputJsonValue,
       },
     });
 
