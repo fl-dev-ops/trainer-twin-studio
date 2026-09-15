@@ -55,6 +55,14 @@ export function proxy(request: NextRequest) {
 
   // Dash host: everything lives under /dash, session required.
   if (sub === "dash") {
+    // Auth pages never live on the dash host. Check this BEFORE the session
+    // gate: an expired session cookie still counts as "present" here, so a
+    // dash page's redirect("/auth/sign-in") would otherwise get rewritten to
+    // the nonexistent /dash/auth/sign-in and render the 404 page. The real
+    // session validation happens in the dash pages themselves.
+    if (pathname === "/auth" || pathname.startsWith("/auth/")) {
+      return NextResponse.redirect(`https://auth.${BASE}${port}${pathname.slice("/auth".length) || "/sign-in"}`);
+    }
     if (!hasSession) {
       // Preserve the port so local proxies (portless :NNNN) keep working.
       return NextResponse.redirect(`https://auth.${BASE}${port}/sign-in`);
