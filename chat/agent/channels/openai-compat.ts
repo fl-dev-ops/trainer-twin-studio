@@ -22,6 +22,7 @@ const TRANSPORT_TOOLS = new Set([
   "clear_canvas",
   "read_code_range",
   "highlight_code",
+  "highlight_whiteboard",
   "get_code_state",
   "run_code",
   "get_presentation_state",
@@ -119,9 +120,12 @@ export default defineChannel({
       const modeHeader = request.headers.get("x-trainertwin-mode")?.trim();
       const mode = modeHeader === "chat" ? "chat" : "voice";
 
+      // "trainertwin-brain" / "trainertwin-runtime" are magic model names meaning
+      // "use the Eve agent's own default model" — anything else is a model override.
+      const MAGIC_MODELS = new Set(["trainertwin-brain", "trainertwin-runtime"]);
       const requestedModel =
         request.headers.get("x-trainertwin-model")?.trim() ||
-        (body?.model && body.model !== "trainertwin-brain" ? body.model : undefined);
+        (body?.model && !MAGIC_MODELS.has(body.model) ? body.model : undefined);
 
       const attributes: Record<string, string> = {
         orgId,

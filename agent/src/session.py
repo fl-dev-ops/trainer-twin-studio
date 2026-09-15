@@ -16,10 +16,11 @@ from tts import build_tts
 
 logger = logging.getLogger(__name__)
 
-# "trainertwin-brain" is the magic model name the chat bridge (chat.trainertwin.com
-# /v1/chat/completions) treats as "use the Eve agent's own default model"; the web
-# runtime ignores the request model entirely, so this is safe for both backends.
-DEFAULT_LLM_MODEL = "trainertwin-brain"
+# "trainertwin-runtime" is the magic model name both backends treat as "use the
+# agent's own default model": the web runtime (chat-completions handler) hardcodes
+# it, and the chat bridge accepts it (or "trainertwin-brain") as the default-model
+# signal. Switching backends = changing LLM_BASE_URL only.
+DEFAULT_LLM_MODEL = "trainertwin-runtime"
 DEFAULT_DEEPGRAM_STT_MODEL = "flux-general-en"
 
 
@@ -37,7 +38,10 @@ def build_agent_session(
 
     web_base = os.getenv("WEB_URL", "http://localhost:3000").rstrip("/")
     resolved_base_url = base_url or os.getenv("LLM_BASE_URL", f"{web_base}/api/v1")
-    resolved_model = model or DEFAULT_LLM_MODEL
+    # Model name is backend-magic: "trainertwin-brain" = chat bridge default,
+    # "trainertwin-runtime" = the web runtime (which also ignores it). Set
+    # LLM_MODEL in .env to match LLM_BASE_URL's backend.
+    resolved_model = model or os.getenv("LLM_MODEL", "").strip() or DEFAULT_LLM_MODEL
     resolved_api_key = api_key or ""
     if not resolved_api_key:
         raise ValueError("api_key (per-session runtime token) is required — refusing unauthenticated LLM calls")

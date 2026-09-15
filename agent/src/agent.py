@@ -200,7 +200,11 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         "x-trainertwin-mode": "voice",
     }
     copilot_secret = os.getenv("COPILOT_SERVICE_SECRET", "").strip()
-    if copilot_secret and org_id:
+    # Only the chat bridge wants Basic org:secret. The web runtime must keep the
+    # runtime-token Bearer (api_key) — per-request headers override the client's
+    # default Authorization, so Basic here would break web-runtime auth (401).
+    llm_base = (os.getenv("LLM_BASE_URL") or f"{WEB_URL}/api/v1").rstrip("/")
+    if copilot_secret and org_id and not llm_base.endswith("/api/v1"):
         import base64
         b64_auth = base64.b64encode(f"{org_id}:{copilot_secret}".encode()).decode()
         extra_headers["Authorization"] = f"Basic {b64_auth}"
