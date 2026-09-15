@@ -21,6 +21,7 @@ const requestSchema = z.discriminatedUnion("action", [
     knowledgeBase: slug,
     query: z.string().trim().min(2).max(500),
     limit: z.number().int().min(1).max(8),
+    topics: z.array(z.string().trim().min(1)).optional(),
   }).strict(),
   z.object({
     action: z.literal("searchStyleEpisodes"),
@@ -200,6 +201,56 @@ export async function POST(request: Request) {
       }
     }
 
+    const primaryDocId = session?.context?.id ?? session?.documents?.[0]?.document?.id ?? Array.from(docMap.keys())[0];
+    let resumePayload: {
+      documentId: string;
+      extractedText: string;
+      claims: Array<{
+        id: string;
+        claimNo: number;
+        section: string;
+        kind: string;
+        text: string;
+        anchor: string;
+        metric: string | null;
+        page: number | null;
+      }>;
+    } | null = null;
+
+    if (primaryDocId) {
+      const [docRecord, claims] = await Promise.all([
+        db.contextDocument.findFirst({
+          where: { id: primaryDocId, orgId },
+          select: { id: true, extractedText: true },
+        }),
+        db.resumeClaim.findMany({
+          where: { documentId: primaryDocId },
+          orderBy: { claimNo: "asc" },
+          select: {
+            id: true,
+            claimNo: true,
+            section: true,
+            kind: true,
+            text: true,
+            anchor: true,
+            metric: true,
+            page: true,
+          },
+        }),
+      ]);
+
+      const ELIGIBLE_KINDS = new Set(["project", "experience", "impact", "architecture", "technology"]);
+      const eligibleClaims = claims.filter((c) => ELIGIBLE_KINDS.has(c.kind));
+
+      if (docRecord?.extractedText) {
+        resumePayload = {
+          documentId: docRecord.id,
+          extractedText: docRecord.extractedText,
+          claims: eligibleClaims,
+        };
+      }
+    }
+
     return Response.json({
       sessionId: session?.id ?? input.sessionId ?? null,
       agent: agent ?? null,
@@ -211,6 +262,7 @@ export async function POST(request: Request) {
         pastSessionCount,
         lastSessionDate,
       },
+      resume: resumePayload,
     });
   }
 
@@ -331,7 +383,7 @@ export async function POST(request: Request) {
       select: { id: true },
     });
     if (!knowledgeBase) return Response.json({ error: `No indexed knowledge base named "${input.knowledgeBase}"` });
-    const results = await searchKnowledge(knowledgeBase.id, input.query, input.limit, orgId);
+    const results = await searchKnowledge(knowledgeBase.id, input.query, input.limit, orgId, input.topics);
     return Response.json({
       query: input.query,
       knowledgeBase: input.knowledgeBase,

@@ -18,17 +18,33 @@ export type AttachedDocument = {
   headings?: string[];
 };
 
+export type ResumeClaim = {
+  id: string;
+  claimNo: number;
+  section: string;
+  kind: string;
+  text: string;
+  anchor: string;
+  metric: string | null;
+  page: number | null;
+};
+
 export type SessionSpecs = {
   sessionId?: string;
   agentName: string;
   agentSlug: string;
   objective: string;
-  phases: { name?: string; objective: string }[];
+  phases: { name?: string; objective: string; knowledge_tags?: string[] }[];
   opening?: string;
   personaName?: string;
   personaSlug?: string;
   personaVoice?: string;
   documents: AttachedDocument[];
+  resume?: {
+    documentId: string;
+    extractedText: string;
+    claims: ResumeClaim[];
+  } | null;
   learnerName?: string | null;
   learnerHistory?: {
     isReturning: boolean;
@@ -50,6 +66,11 @@ export async function loadSessionContext(
     agent: SpecRow | null;
     persona: SpecRow | null;
     documents: AttachedDocument[];
+    resume?: {
+      documentId: string;
+      extractedText: string;
+      claims: ResumeClaim[];
+    } | null;
     learnerName?: string | null;
     learnerHistory?: {
       isReturning: boolean;
@@ -73,8 +94,16 @@ export async function loadSessionContext(
   };
 
   const phases = (agentData.phases ?? agentData.stages ?? [])
-    .map((phase) => ({ name: phase.name, objective: phase.objective ?? "" }))
-    .filter((phase) => phase.objective);
+    .map((phase: any) => ({
+      name: phase.name,
+      objective: phase.objective ?? "",
+      knowledge_tags: Array.isArray(phase.knowledge_tags)
+        ? phase.knowledge_tags
+        : Array.isArray(phase.tags)
+          ? phase.tags
+          : undefined,
+    }))
+    .filter((phase: any) => phase.objective);
 
   const personaData = (result.persona?.data ?? {}) as {
     name?: string;
@@ -98,6 +127,7 @@ export async function loadSessionContext(
     personaSlug: result.persona?.slug ?? personaSlug,
     personaVoice,
     documents: result.documents ?? [],
+    resume: result.resume ?? null,
     learnerName: result.learnerName,
     learnerHistory: result.learnerHistory,
     mode,
@@ -106,7 +136,12 @@ export async function loadSessionContext(
 
 export function formatSessionSpec(specs: SessionSpecs): string {
   const phases = specs.phases.length > 0
-    ? specs.phases.map((phase, index) => `${index + 1}. ${phase.name ? `${phase.name}: ` : ""}${phase.objective}`).join("\n")
+    ? specs.phases.map((phase, index) => {
+        const topics = phase.knowledge_tags && phase.knowledge_tags.length > 0
+          ? ` [Approved Knowledge Topics: ${phase.knowledge_tags.join(", ")}]`
+          : "";
+        return `${index + 1}. ${phase.name ? `${phase.name}: ` : ""}${phase.objective}${topics}`;
+      }).join("\n")
     : `1. ${specs.objective}`;
 
   const docsBlock = specs.documents.length > 0
@@ -116,8 +151,28 @@ export function formatSessionSpec(specs: SessionSpecs): string {
           return `- [${d.kind.toUpperCase()}] id: "${d.id}", name: "${d.name}"${d.pageCount ? ` (${d.pageCount} pages)` : ""}${sections}`;
         })
         .join("\n") +
-      "\nDOCUMENT ACCESS RULE: Call the `read_document(documentId, query)` tool whenever the candidate refers to a past company, timeframe, or system from their resume that you need exact details on. Do not guess dates or company details.\nSHOW-AND-TELL ARTIFACT RULE: At session start (or when discussing this document), call surface with action 'open_pdf' and payload { fileId: '<doc_id>' } while speaking. Open it directly without asking permission."
+      "\nDOCUMENT ACCESS RULE: Call the `read_document(documentId, query)` tool whenever the candidate refers to a past company, timeframe, or system from their resume that you need exact details on. Do not guess dates or company details.\nSHOW-AND-TELL ARTIFACT RULE: At session start (or when discussing a document), call surface with action 'open_pdf' and payload { fileId: '<doc_id>' } while speaking. If conducting system design, call surface with action 'open_whiteboard' or use 'highlight_whiteboard'. Open it directly without asking permission."
     : "None attached. Do not claim documents are available on screen.";
+
+  let resumeBlock = "";
+  if (specs.resume) {
+    const claims = specs.resume.claims ?? [];
+    const claimList = claims.length > 0
+      ? claims.slice(0, 30).map((c) => `- [${c.kind.toUpperCase()}] "${c.text}" (section: ${c.section}, anchor: "${c.anchor}"${c.metric ? `, metric: "${c.metric}"` : ""})`).join("\n")
+      : "No structured claims extracted.";
+
+    resumeBlock = `\nTHE CANDIDATE'S RESUME (verbatim reference text):
+${specs.resume.extractedText.slice(0, 3500)}
+
+RESUME CLAIM QUEUE & HIGHLIGHTING RULES:
+1. One claim at a time: select an un-questioned claim from the queue below for your main question.
+2. For impact or quantification rounds, prioritize claims with metrics.
+3. Show-and-Tell Highlight: when asking about a claim, call surface with action 'open_pdf' and payload { fileId: '${specs.resume.documentId}', highlightQuery: '<anchor>' } so the candidate's PDF viewer highlights the exact line while you speak.
+4. Drill into their specific technical contribution, mechanism, challenges, and ownership before moving to another claim. Never re-ask an already answered claim.
+
+CLAIMS AVAILABLE TO PROBE:
+${claimList}\n`;
+  }
 
   const icebreakerBlock = specs.learnerHistory?.isReturning
     ? `LEARNER CONTEXT (RETURNING CANDIDATE — Session #${(specs.learnerHistory.pastSessionCount ?? 0) + 1}):
@@ -147,6 +202,6 @@ ${specs.personaVoice ? `How this trainer behaves and decides (from their indexed
 
 ATTACHED ARTIFACTS FOR SHOW-AND-TELL & INSPECTION:
 ${docsBlock}
-
+${resumeBlock}
 OPERATING MODE: ${specs.mode === "voice" ? "VOICE CALL (Spoken-first, audio formatting strictly enforced, under 50 words)" : "TEXT CHAT (Interactive text conversation)"}`;
 }
