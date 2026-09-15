@@ -16,7 +16,10 @@ from tts import build_tts
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_LLM_MODEL = "trainertwin-runtime"
+# "trainertwin-brain" is the magic model name the chat bridge (chat.trainertwin.com
+# /v1/chat/completions) treats as "use the Eve agent's own default model"; the web
+# runtime ignores the request model entirely, so this is safe for both backends.
+DEFAULT_LLM_MODEL = "trainertwin-brain"
 DEFAULT_DEEPGRAM_STT_MODEL = "flux-general-en"
 
 

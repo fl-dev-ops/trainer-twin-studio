@@ -8,13 +8,13 @@ def test_build_agent_session_configuration():
     session = build_agent_session(
         base_url="http://localhost:3000/api/v1",
         api_key="dynamic-runtime-token",
-        model="trainertwin-runtime",
+        model="trainertwin-brain",
         voice="test-voice",
     )
 
     assert session.llm._client.base_url == "http://localhost:3000/api/v1/"
     assert session.llm._client.api_key == "dynamic-runtime-token"
-    assert session.llm._opts.model == "trainertwin-runtime"
+    assert session.llm._opts.model == "trainertwin-brain"
 
     opts = session.options.turn_handling
     assert opts["preemptive_generation"]["enabled"] is False

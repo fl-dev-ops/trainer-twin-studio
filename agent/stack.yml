@@ -16,8 +16,8 @@ services:
       SARVAM_API_KEY: ${SARVAM_API_KEY:-}
       SARVAM_SPEAKER: ${SARVAM_SPEAKER:-rohan}
       AGENT_VOICE_ID_OVERRIDE: ${AGENT_VOICE_ID_OVERRIDE:-ethan-sample}
-      LLM_BASE_URL: ${LLM_BASE_URL:-https://dash.trainertwin.com/api/v1}
       COPILOT_SERVICE_SECRET: ${COPILOT_SERVICE_SECRET:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://chat.trainertwin.com/v1}
       S3_BUCKET: ${S3_BUCKET:-trainer-twin-prod}
       AWS_S3_BUCKET: ${AWS_S3_BUCKET:-trainer-twin-prod}
       AWS_REGION: ${AWS_REGION:-ap-south-1}
