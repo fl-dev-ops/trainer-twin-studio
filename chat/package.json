@@ -9,6 +9,7 @@
     "build": "eve build",
     "dev": "eve dev",
     "start": "eve start",
+    "test": "node --test agent/instructions.test.ts",
     "typecheck": "tsc"
   },
   "dependencies": {

@@ -134,7 +134,7 @@ export async function POST(request: Request) {
         ? db.persona.findFirst({ where: { slug: { equals: personaSlug, mode: "insensitive" }, orgId }, select: { slug: true, version: true, data: true } })
         : null,
       domainSlug
-        ? db.domain.findFirst({ where: { slug: domainSlug }, select: { slug: true, data: true } })
+        ? db.domain.findFirst({ where: { slug: domainSlug }, select: { slug: true, version: true, data: true } })
         : null,
     ]);
     const knowledgeBases = Array.isArray((domain?.data as { knowledge_bases?: unknown } | null)?.knowledge_bases)
@@ -262,6 +262,7 @@ export async function POST(request: Request) {
       sessionId: session?.id ?? input.sessionId ?? null,
       agent: agent ?? null,
       persona: persona ?? null,
+      domain: domain ?? null,
       knowledgeBases,
       documents: Array.from(docMap.values()),
       learnerName,

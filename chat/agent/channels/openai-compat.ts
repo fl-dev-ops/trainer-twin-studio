@@ -195,6 +195,7 @@ export default defineChannel({
         orgId,
         sessionId,
         mode,
+        clientTools: [...advertisedTools].sort().join(","),
         ...(requestedModel ? { model: requestedModel } : {}),
       };
       const agentSlug = request.headers.get("x-trainertwin-agent-slug")?.trim();

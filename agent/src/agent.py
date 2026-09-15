@@ -38,8 +38,7 @@ if os.path.exists(_default_ca) and "SSL_CERT_FILE" not in os.environ:
 logger = logging.getLogger("trainertwin_agent")
 logging.basicConfig(level=logging.INFO)
 
-# Fixed common voice prompt (plans/issues_persona-validation-loop.md §17.5).
-# Scenario detail and session facts are injected by the web runtime, not here.
+# Transport-only prompt. The configured remote brain owns all behavioral and session instructions.
 COMMON_VOICE_PROMPT_PATH = Path(__file__).with_name("prompt.md")
 COMMON_VOICE_INSTRUCTIONS = COMMON_VOICE_PROMPT_PATH.read_text(encoding="utf-8").strip()
 
@@ -91,7 +90,7 @@ OPENING_RELEASE_TIMEOUT = 60.0
 
 
 class TrainerAgent(Agent):
-    """Interviewer agent that delegates conversation flow to TrainerTwin's web runtime."""
+    """Voice transport that delegates conversation flow to the configured TrainerTwin brain."""
 
     def __init__(
         self,
