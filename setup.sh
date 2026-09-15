@@ -68,21 +68,26 @@ log "Installing Portless as a system service (autostart on boot)"
 portless service install --wildcard || true
 if ! portless service status 2>/dev/null | grep -q "Installed: yes"; then
   echo "FAILED: Portless system service not installed." >&2
-  echo "Run once in your terminal: sudo portless service install" >&2
+  echo "Run once in your terminal: sudo portless service install --wildcard" >&2
   exit 1
 fi
 log "Portless service installed — proxy autostarts on boot, no manual start needed"
 portless hosts sync || echo "hosts sync skipped (needs sudo; only needed for Safari)" >&2
 
-# 5b. Static route: the dev server may be started directly (bun dev / npm run dev)
-#     without portless. Alias the URL to the fixed app port so it always resolves.
+# 5b. Static routes: the dev server may be started directly (bun dev / npm run dev)
+#     without portless. Alias every first-party hostname to the fixed app port;
+#     wildcard mode continues to cover organization subdomains.
 portless alias trainertwin 3000
+portless alias dash.trainertwin 3000
+portless alias auth.trainertwin 3000
 
 # 6. Validation: TLS round-trip must not fail cert verification
-log "Validating HTTPS against https://dash.${BASE_DOMAIN}"
-STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "https://dash.${BASE_DOMAIN}" ) || {
-  echo "FAILED: TLS/HTTPS request rejected. Run: portless doctor" >&2
-  exit 1
-}
-log "HTTPS OK (HTTP ${STATUS} — app may not be running yet, TLS trust is what matters)"
+for HOST in "${BASE_DOMAIN}" "dash.${BASE_DOMAIN}"; do
+  log "Validating HTTPS against https://${HOST}"
+  STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "https://${HOST}" ) || {
+    echo "FAILED: TLS/HTTPS request rejected for https://${HOST}. Run: portless doctor" >&2
+    exit 1
+  }
+  log "HTTPS OK for ${HOST} (HTTP ${STATUS} — app may not be running yet, TLS trust is what matters)"
+done
 echo "Done. Restart your shell (or 'source $RC_FILE') so Node/Python pick up the CA env vars."
