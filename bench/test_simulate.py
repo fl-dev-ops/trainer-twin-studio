@@ -1,8 +1,9 @@
 import unittest
 
 from checks import conversation_likeness, conversation_quality_issues
-from learner_persona import all_learners, create_synthetic_learner_persona
-from simulate import build_golden, build_reference_context
+from learners import all_learners, create_synthetic_learner_persona
+from scenarios import build_reference_context
+from simulate import build_golden
 
 
 class BenchmarkDataTest(unittest.TestCase):

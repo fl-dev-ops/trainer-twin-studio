@@ -1,50 +1,16 @@
-#!/usr/bin/env python3
-"""
-Parallel 5-Session Benchmark for the Eve Autonomous Trainer Brain.
-Runs 5 concurrent sessions with 16 turns each against http://localhost:2001/v1/chat/completions.
-Tracks latency, internal and transport tool calls, token usage, and persona quality per turn.
+"""Parallel 5-session benchmark: 5 concurrent sessions, 16 scripted turns each,
+against the chat bridge. Tracks latency, tool calls, token usage per turn.
+
+  cd bench && uv run python concurrency.py
 """
 
-import asyncio
 import json
-import os
-import re
+import statistics
 import time
-import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
-COPILOT_SECRET = "c67a0c2219ca04a134b1ff23e4b813d3a30f3c2600f695a327b64a30cd29ee9b"
-ORG_ID = "699ffaba-70fa-4fd1-a4ed-d80da8f06bff"
-STUDIO_URL = "http://localhost:2001/v1/chat/completions"
-
-import base64
-B64_AUTH = base64.b64encode(f"{ORG_ID}:{COPILOT_SECRET}".encode()).decode()
-
-TOOLS_SCHEMA = [
-    {
-        "type": "function",
-        "function": {
-            "name": "surface",
-            "description": "Open or close workspace surface",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "action": {"type": "string"},
-                    "payload": {"type": "object"}
-                },
-                "required": ["action"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "finish_session",
-            "description": "Signals interview conclusion",
-            "parameters": {"type": "object", "properties": {}}
-        }
-    }
-]
+from bridge import Bridge
+from conf import AGENT_SLUG, PERSONA_SLUG, RESULTS_DIR
 
 # 5 distinct technical candidate conversation scripts (16 turns each)
 CANDIDATES = [
@@ -68,8 +34,8 @@ CANDIDATES = [
             "We tested network partition edge cases using Chaos Mesh by injecting packet loss between brokers.",
             "During testing, we discovered our producer ack setting was set to 1 instead of all, which risked data loss on leader failure.",
             "We corrected it to acks equals all and set min.insync.replicas to two to guarantee durability.",
-            "I think we have covered the key architecture. We are done for today."
-        ]
+            "I think we have covered the key architecture. We are done for today.",
+        ],
     },
     {
         "id": "session-2-anubhav",
@@ -91,8 +57,8 @@ CANDIDATES = [
             "During our chaos drill, failover completed in under twelve seconds using Patroni and etcd.",
             "One challenge was table bloat in Postgres due to heavy updates on hot account balance rows.",
             "We tuned autovacuum thresholds and implemented an append-only transaction ledger with nightly rollup tables.",
-            "That summarizes our transaction safety design. We can conclude the session here."
-        ]
+            "That summarizes our transaction safety design. We can conclude the session here.",
+        ],
     },
     {
         "id": "session-3-vinay",
@@ -114,8 +80,8 @@ CANDIDATES = [
             "We mitigated brute force attacks by introducing tiered rate limits based on client IP and account username.",
             "Our monitoring with Prometheus and Grafana alerts us if failed authentication attempts spike above 2 percent.",
             "This setup successfully defended against two credential stuffing attacks without impacting legitimate users.",
-            "I think we have touched upon all the key security layers. We can wrap up for today."
-        ]
+            "I think we have touched upon all the key security layers. We can wrap up for today.",
+        ],
     },
     {
         "id": "session-4-priya",
@@ -137,8 +103,8 @@ CANDIDATES = [
             "If an update had an older version timestamp than the current index doc, the consumer safely discarded it.",
             "We tracked query latency percentiles using Jaeger distributed tracing across the search gateway and ES nodes.",
             "This architecture maintained 99.95 percent availability during our annual holiday shopping sale.",
-            "That covers the main aspects of our search infrastructure. We are done for today."
-        ]
+            "That covers the main aspects of our search infrastructure. We are done for today.",
+        ],
     },
     {
         "id": "session-5-sneha",
@@ -160,88 +126,35 @@ CANDIDATES = [
             "In our restore simulation, we brought up a secondary cluster in another region in twenty-four minutes.",
             "We standardized our SLOs with Prometheus alertmanager, tracking error budgets with a 99.9 percent monthly availability target.",
             "Our mean time to recovery dropped from forty minutes to under nine minutes after implementing these automated runbooks.",
-            "I believe that covers our reliability engineering work. We are done for today."
-        ]
-    }
+            "I believe that covers our reliability engineering work. We are done for today.",
+        ],
+    },
 ]
 
-def run_single_turn(session_id, history, user_text, persona_slug="Vasanth"):
-    """Sends a single turn to the Eve OpenAI-compatible endpoint and returns metrics."""
-    history.append({"role": "user", "content": user_text})
-    payload = {
-        "model": "trainertwin-brain",
-        "stream": True,
-        "tools": TOOLS_SCHEMA,
-        "messages": history
-    }
 
-    headers = {
-        "Authorization": f"Basic {B64_AUTH}",
-        "x-trainertwin-org-id": ORG_ID,
-        "x-trainertwin-session-id": session_id,
-        "x-trainertwin-agent-slug": "impact-quantification",
-        "x-trainertwin-persona-slug": persona_slug,
-        "x-trainertwin-mode": "voice",
-        "content-type": "application/json"
-    }
-
-    req = urllib.request.Request(STUDIO_URL, data=json.dumps(payload).encode(), headers=headers)
-    t0 = time.time()
-
-    trainer_text = ""
-    tools_called = []
-    wall_ms = 0
-    usage = {}
-
-    with urllib.request.urlopen(req, timeout=90) as resp:
-        for line in resp:
-            line = line.decode().strip()
-            if not line.startswith("data: ") or line == "data: [DONE]":
-                continue
-            chunk = json.loads(line[6:])
-            delta = chunk["choices"][0]["delta"]
-            if "content" in delta:
-                trainer_text += delta["content"]
-            if "tools_called" in chunk and chunk["tools_called"]:
-                tools_called = chunk["tools_called"]
-            if "wall_ms" in chunk:
-                wall_ms = chunk["wall_ms"]
-            if chunk.get("usage"):
-                usage = chunk["usage"]
-
-    client_wall_ms = int((time.time() - t0) * 1000)
-    effective_wall_ms = wall_ms if wall_ms > 0 else client_wall_ms
-
-    history.append({"role": "assistant", "content": trainer_text})
-
-    return {
-        "user_text": user_text,
-        "trainer_text": trainer_text,
-        "word_count": len(trainer_text.split()),
-        "wall_ms": effective_wall_ms,
-        "tools_called": tools_called,
-        "usage": usage
-    }
-
-def run_session(candidate_info):
-    """Executes all 16 turns for one candidate session sequentially."""
+def run_session(candidate_info: dict) -> dict:
+    bridge = Bridge(agent_slug=AGENT_SLUG, persona_slug=PERSONA_SLUG)
     session_id = f"bench-{candidate_info['id']}-{int(time.time())}"
     candidate_name = candidate_info["candidate"]
-    turns_input = candidate_info["turns"]
+    print(f"[START] Session {candidate_name} ({session_id}) — {len(candidate_info['turns'])} turns...")
 
-    print(f"[START] Session {candidate_name} ({session_id}) — {len(turns_input)} turns...")
-
-    history = []
     turn_results = []
-
-    for turn_num, user_msg in enumerate(turns_input, 1):
+    for turn_num, user_msg in enumerate(candidate_info["turns"], 1):
         try:
-            res = run_single_turn(session_id, history, user_msg)
-            res["turn_number"] = turn_num
-            turn_results.append(res)
-            tool_names = [t["name"] for t in res["tools_called"]]
-            print(f"  [{candidate_name} T{turn_num:02d}] {res['wall_ms']}ms | words={res['word_count']} | tools={tool_names} | text: {res['trainer_text'][:80]}...")
-            time.sleep(0.5)  # brief pacing
+            response = bridge.send(user_msg)
+            text = response["text"]
+            tool_names = [t["name"] for t in response["tools_called"]]
+            turn_results.append({
+                "turn_number": turn_num,
+                "user_text": user_msg,
+                "trainer_text": text,
+                "word_count": len(text.split()),
+                "wall_ms": response["wall_ms"],
+                "tools_called": response["tools_called"],
+                "usage": response["usage"],
+            })
+            print(f"  [{candidate_name} T{turn_num:02d}] {response['wall_ms']}ms | words={len(text.split())} | tools={tool_names} | text: {text[:80]}...")
+            time.sleep(0.5)
         except Exception as exc:
             print(f"  [{candidate_name} T{turn_num:02d}] ERROR: {exc}")
             turn_results.append({
@@ -249,7 +162,7 @@ def run_session(candidate_info):
                 "user_text": user_msg,
                 "error": str(exc),
                 "wall_ms": 0,
-                "tools_called": []
+                "tools_called": [],
             })
             time.sleep(1.0)
 
@@ -258,76 +171,69 @@ def run_session(candidate_info):
         "session_id": session_id,
         "candidate": candidate_name,
         "topic": candidate_info["topic"],
-        "turns": turn_results
+        "turns": turn_results,
     }
+
 
 def main():
     print("=" * 70)
-    print("RUNNING 5 PARALLEL SESSIONS (16 TURNS EACH) AGAINST EVE BRAIN")
-    print(f"Target URL: {STUDIO_URL}")
+    print("RUNNING 5 PARALLEL SESSIONS (16 TURNS EACH) AGAINST THE BRAIN")
     print("=" * 70)
 
     t_start = time.time()
-
-    # Execute all 5 sessions concurrently with ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=5) as executor:
         results = list(executor.map(run_session, CANDIDATES))
-
     total_time_s = time.time() - t_start
 
-    # Compute statistics
     all_latencies = []
-    tool_counts = {}
+    tool_counts: dict = {}
     total_turns = 0
     successful_turns = 0
     words_per_turn = []
 
-    for s in results:
-        for t in s["turns"]:
+    for session in results:
+        for turn in session["turns"]:
             total_turns += 1
-            if "error" not in t and t["wall_ms"] > 0:
+            if "error" not in turn and turn["wall_ms"] > 0:
                 successful_turns += 1
-                all_latencies.append(t["wall_ms"])
-                words_per_turn.append(t["word_count"])
-                for tc in t.get("tools_called", []):
-                    name = tc["name"]
+                all_latencies.append(turn["wall_ms"])
+                words_per_turn.append(turn["word_count"])
+                for tool_call in turn.get("tools_called", []):
+                    name = tool_call["name"]
                     tool_counts[name] = tool_counts.get(name, 0) + 1
 
-    import statistics
     median_lat = statistics.median(all_latencies) if all_latencies else 0
     p90_lat = statistics.quantiles(all_latencies, n=10)[8] if len(all_latencies) >= 10 else (max(all_latencies) if all_latencies else 0)
     avg_words = statistics.mean(words_per_turn) if words_per_turn else 0
 
     print("\n" + "=" * 70)
     print("PARALLEL BENCHMARK RESULTS SUMMARY")
-    print("=" * 70)
     print(f"Total Wall Time for 5 Concurrent Sessions: {total_time_s:.1f}s")
     print(f"Total Turns:                               {total_turns}")
-    print(f"Successful Turns:                          {successful_turns}/{total_turns} ({(successful_turns/total_turns)*100:.1f}%)")
+    print(f"Successful Turns:                          {successful_turns}/{total_turns} ({(successful_turns/max(1,total_turns))*100:.1f}%)")
     print(f"Median Turn Latency:                       {median_lat:.0f} ms")
     print(f"90th Percentile Latency:                   {p90_lat:.0f} ms")
     print(f"Average Words per Turn:                    {avg_words:.1f} words (target < 50)")
     print(f"Tools Executed Across All Turns:           {json.dumps(tool_counts, indent=2)}")
     print("=" * 70)
 
-    # Save to file
-    out_path = "web/experiments/results/parallel-5sessions-benchmark.json"
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    with open(out_path, "w") as f:
-        json.dump({
-            "timestamp": time.time(),
-            "total_time_s": total_time_s,
-            "sessions_count": len(results),
-            "turns_per_session": 16,
-            "summary": {
-                "median_wall_ms": median_lat,
-                "p90_wall_ms": p90_lat,
-                "avg_words_per_turn": avg_words,
-                "tool_counts": tool_counts
-            },
-            "sessions": results
-        }, f, indent=2)
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    out_path = RESULTS_DIR / f"parallel-5sessions-{int(time.time())}.json"
+    out_path.write_text(json.dumps({
+        "timestamp": time.time(),
+        "total_time_s": total_time_s,
+        "sessions_count": len(results),
+        "turns_per_session": 16,
+        "summary": {
+            "median_wall_ms": median_lat,
+            "p90_wall_ms": p90_lat,
+            "avg_words_per_turn": avg_words,
+            "tool_counts": tool_counts,
+        },
+        "sessions": results,
+    }, indent=2) + "\n")
     print(f"Detailed traces saved to: {out_path}")
+
 
 if __name__ == "__main__":
     main()
