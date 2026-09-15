@@ -10,11 +10,13 @@ export function SessionSidebar({
   entries,
   onSendMessage,
   onClose,
+  disabled = false,
   className,
 }: {
   entries: Entry[];
   onSendMessage?: (text: string) => void;
   onClose?: () => void;
+  disabled?: boolean;
   className?: string;
 }) {
   const voiceAssistant = useVoiceAssistant();
@@ -22,7 +24,7 @@ export function SessionSidebar({
   const isThinking = voiceAssistant.state === "thinking";
 
   const [inputText, setInputText] = useState("");
-  const [inputVisible, setInputVisible] = useState(false);
+  const [inputVisible, setInputVisible] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -30,6 +32,7 @@ export function SessionSidebar({
   }, [entries, isSpeaking, isThinking]);
 
   function handleSend() {
+    if (disabled) return;
     const trimmed = inputText.trim();
     if (!trimmed) return;
     onSendMessage?.(trimmed);
@@ -135,24 +138,26 @@ export function SessionSidebar({
           )}
         </div>
 
-        {/* Message Input Box (Toggleable) */}
+        {/* Message Input Box */}
         {inputVisible && (
           <div className="mt-3 flex shrink-0 items-center gap-2 rounded-full bg-white/[0.04] p-1.5 px-3">
             <input
               type="text"
               value={inputText}
+              disabled={disabled}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleSend();
               }}
-              placeholder="Message the trainer…"
-              className="flex-1 bg-transparent text-foreground text-sm placeholder:text-muted-foreground focus:outline-hidden"
+              placeholder={disabled ? "Connecting to trainer…" : "Message the trainer…"}
+              className="flex-1 bg-transparent text-foreground text-sm placeholder:text-muted-foreground focus:outline-hidden disabled:opacity-50"
             />
             <button
               type="button"
               onClick={handleSend}
+              disabled={disabled || !inputText.trim()}
               title="Send message"
-              className="grid size-7 place-items-center rounded-full bg-[#374151] text-white transition-opacity hover:opacity-90"
+              className="grid size-7 place-items-center rounded-full bg-[#374151] text-white transition-opacity hover:opacity-90 disabled:opacity-40"
             >
               <Send className="size-3.5" />
             </button>

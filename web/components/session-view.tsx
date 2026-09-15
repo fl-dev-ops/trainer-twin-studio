@@ -793,6 +793,7 @@ export function SessionView({
                     entries={entries}
                     onSendMessage={handleSendMessage}
                     onClose={() => setSidebarOpen(false)}
+                    disabled={!connected}
                     className="h-full"
                   />
                 </motion.div>

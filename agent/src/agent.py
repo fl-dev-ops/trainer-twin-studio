@@ -161,16 +161,29 @@ async def entrypoint(ctx: agents.JobContext) -> None:
     # sees this participant, so a listener registered after connect can miss the single packet the
     # client sends and leave the session silent until OPENING_RELEASE_TIMEOUT.
     opening_release = asyncio.Event()
+    active_session: Any = None
+    pending_chat_messages: list[str] = []
 
-    def on_opening_release(packet: rtc.DataPacket) -> None:
+    def on_data_received(packet: rtc.DataPacket) -> None:
         try:
             msg = json.loads(packet.data)
         except Exception:
             return
-        if isinstance(msg, dict) and msg.get("type") == "begin-opening":
+        if not isinstance(msg, dict):
+            return
+        msg_type = msg.get("type")
+        if msg_type == "begin-opening":
             opening_release.set()
+        elif msg_type == "chat-message":
+            text = str(msg.get("text") or "").strip()
+            if text:
+                if active_session is not None:
+                    logger.info("Received chat message from participant: %s", text[:80])
+                    asyncio.create_task(active_session.generate_reply(user_input=text))
+                else:
+                    pending_chat_messages.append(text)
 
-    ctx.room.on("data_received", on_opening_release)
+    ctx.room.on("data_received", on_data_received)
 
     await ctx.connect()
     logger.info("Agent connected to room %s for session %s", ctx.room.name, session_id)
@@ -259,6 +272,7 @@ async def entrypoint(ctx: agents.JobContext) -> None:
                     logger.debug("Room teardown note: %s", exc)
                 return
 
+    active_session = session
     await session.start(
         room=ctx.room,
         agent=agent,
@@ -269,6 +283,9 @@ async def entrypoint(ctx: agents.JobContext) -> None:
             close_on_disconnect=False,
         ),
     )
+    for pending_text in pending_chat_messages:
+        asyncio.create_task(session.generate_reply(user_input=pending_text))
+    pending_chat_messages.clear()
     asyncio.create_task(watch_empty_room())
 
 
