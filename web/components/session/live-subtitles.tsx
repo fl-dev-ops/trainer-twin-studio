@@ -15,7 +15,6 @@ export function LiveSubtitles({
   className?: string;
 }) {
   const voiceAssistant = useVoiceAssistant();
-  const isSpeaking = voiceAssistant.state === "speaking";
 
   const latestAgentSegment = voiceAssistant.agentTranscriptions?.length
     ? voiceAssistant.agentTranscriptions[voiceAssistant.agentTranscriptions.length - 1]?.text
@@ -24,18 +23,15 @@ export function LiveSubtitles({
   const [currentText, setCurrentText] = useState("");
 
   useEffect(() => {
-    if (!isSpeaking) {
-      // Clear immediately when agent stops speaking so stale text is never shown on the next turn
-      setCurrentText("");
-      return;
-    }
+    // Prefer the live streaming segment while the agent speaks; otherwise keep the
+    // last finalized turn on screen so the candidate can still read the question.
     const active = latestAgentSegment || text;
     if (active) {
       setCurrentText(active);
     }
-  }, [isSpeaking, latestAgentSegment, text]);
+  }, [latestAgentSegment, text]);
 
-  const shouldShow = visible && isSpeaking && Boolean(currentText.trim());
+  const shouldShow = visible && Boolean(currentText.trim());
 
   return (
     <AnimatePresence>
