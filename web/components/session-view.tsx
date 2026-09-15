@@ -356,6 +356,28 @@ export function SessionView({
     [room],
   );
 
+  // Report what is on screen to the web runtime so the agent brain sees ground truth
+  // (surface opens/closes; null = user closed the panel).
+  useEffect(() => {
+    if (!connection || ended) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      fetch(`/api/sessions/${connection.sessionId}/ui-state`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${connection.runtimeToken}`,
+        },
+        body: JSON.stringify(surface ? { active: surface.tool, key: surface.key } : { active: null }),
+        signal: controller.signal,
+      }).catch(() => {});
+    }, 400);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [connection, ended, surface]);
+
   useEffect(() => {
     if (!connection) return;
     const activeConnection = connection;
@@ -696,6 +718,15 @@ export function SessionView({
                         {surface.tool === "image" && "Image Viewer"}
                         {surface.tool === "presentation" && "Presentation"}
                       </span>
+                      <button
+                        type="button"
+                        aria-label="Close workspace panel"
+                        title="Close panel"
+                        onClick={() => setSurface(null)}
+                        className="grid size-6 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+                      >
+                        <X className="size-3.5" />
+                      </button>
                     </div>
                     <div className="min-h-0 flex-1">
                       {surface.tool === "code" && (

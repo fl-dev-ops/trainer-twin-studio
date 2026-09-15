@@ -51,7 +51,13 @@ export type SessionSpecs = {
     pastSessionCount: number;
     lastSessionDate?: string | null;
   };
+  uiState?: {
+    active: string | null;
+    key?: string | null;
+    updatedAt?: string;
+  } | null;
   mode?: "voice" | "chat";
+  knowledgeBases?: string[];
 };
 
 export async function loadSessionContext(
@@ -77,6 +83,12 @@ export async function loadSessionContext(
       pastSessionCount: number;
       lastSessionDate?: string | null;
     };
+    uiState?: {
+      active: string | null;
+      key?: string | null;
+      updatedAt?: string;
+    } | null;
+    knowledgeBases?: string[];
   }>(orgId, {
     action: "getSessionContext",
     sessionId,
@@ -130,6 +142,8 @@ export async function loadSessionContext(
     resume: result.resume ?? null,
     learnerName: result.learnerName,
     learnerHistory: result.learnerHistory,
+    uiState: result.uiState ?? null,
+    knowledgeBases: Array.isArray(result.knowledgeBases) ? result.knowledgeBases : [],
     mode,
   };
 }
@@ -151,7 +165,7 @@ export function formatSessionSpec(specs: SessionSpecs): string {
           return `- [${d.kind.toUpperCase()}] id: "${d.id}", name: "${d.name}"${d.pageCount ? ` (${d.pageCount} pages)` : ""}${sections}`;
         })
         .join("\n") +
-      "\nDOCUMENT ACCESS RULE: Call the `read_document(documentId, query)` tool whenever the candidate refers to a past company, timeframe, or system from their resume that you need exact details on. Do not guess dates or company details.\nSHOW-AND-TELL ARTIFACT RULE: At session start (or when discussing a document), call surface with action 'open_pdf' and payload { fileId: '<doc_id>' } while speaking. If conducting system design, call surface with action 'open_whiteboard' or use 'highlight_whiteboard'. Open it directly without asking permission."
+      "\nArtifact Guidance: Open an attached document via `surface({ action: 'open_pdf', payload: { fileId: '<doc_id>' } })` when actively discussing or reviewing it. Call `read_document(documentId, query)` when specific unverified dates, metrics, or details are needed."
     : "None attached. Do not claim documents are available on screen.";
 
   let resumeBlock = "";
@@ -165,28 +179,55 @@ export function formatSessionSpec(specs: SessionSpecs): string {
 ${specs.resume.extractedText.slice(0, 3500)}
 
 RESUME CLAIM QUEUE & HIGHLIGHTING RULES:
-1. One claim at a time: select an un-questioned claim from the queue below for your main question.
-2. For impact or quantification rounds, prioritize claims with metrics.
-3. Show-and-Tell Highlight: when asking about a claim, call surface with action 'open_pdf' and payload { fileId: '${specs.resume.documentId}', highlightQuery: '<anchor>' } so the candidate's PDF viewer highlights the exact line while you speak.
-4. Drill into their specific technical contribution, mechanism, challenges, and ownership before moving to another claim. Never re-ask an already answered claim.
+1. One claim at a time — but only AFTER the candidate has given a broad picture of their background (Turn 2's open question has been answered). Until then, keep opening questions broad; do not drill into a specific claim yet.
+2. When drilling in: select an un-questioned claim from the queue below for your main question.
+3. For impact or quantification rounds, prioritize claims with metrics.
+4. Show-and-Tell Highlight: when asking about a claim, call surface with action 'open_pdf' and payload { fileId: '${specs.resume.documentId}', highlightQuery: '<anchor>' } so the candidate's PDF viewer highlights the exact line while you speak.
+5. Drill into their specific technical contribution, mechanism, challenges, and ownership before moving to another claim. Never re-ask an already answered claim.
 
 CLAIMS AVAILABLE TO PROBE:
 ${claimList}\n`;
   }
 
+  const uiStateBlock = specs.uiState
+    ? (() => {
+        const label = (active: string | null) =>
+          active === "code" ? "Code editor"
+          : active === "canvas" ? "Whiteboard"
+          : active === "pdf" ? "PDF document viewer"
+          : active === "image" ? "Image viewer"
+          : active === "presentation" ? "Presentation"
+          : null;
+        const current = label(specs.uiState?.active ?? null);
+        return `CURRENT SCREEN STATE (ground truth of what the candidate sees, reported by their browser${specs.uiState?.updatedAt ? ` as of ${specs.uiState.updatedAt}` : ""}):
+- Active workspace panel: ${current ?? "NONE — no workspace panel is open"}
+SCREEN-STATE RULES:
+1. Trust this report over your assumptions. If it says NONE, no editor, whiteboard, or document is visible — never reference one as if the candidate can see it.
+2. If a panel you opened earlier was closed by the candidate, acknowledge it naturally if relevant ("I see you closed the whiteboard") instead of continuing to talk about it as if open.
+3. To show something again, re-open it with the appropriate surface call — do not assume it is still visible.`;
+      })()
+    : "";
+
+  const nameLine = specs.learnerName ? `- Name: ${specs.learnerName} (use naturally, not every turn)` : "- Name: not yet known — use the candidate's name only if they state it in speech";
+
   const icebreakerBlock = specs.learnerHistory?.isReturning
     ? `LEARNER CONTEXT (RETURNING CANDIDATE):
-- This learner has met with you before (last session: ${specs.learnerHistory.lastSessionDate ? new Date(specs.learnerHistory.lastSessionDate).toLocaleDateString() : "earlier"}).
-- NEVER state a session number, session count, or invented history — your memory module surfaces real past exchanges; acknowledge familiarity naturally instead ("good to see you again").
-- Turn 1: Welcome them back warmly, then follow the SAME-TURN CONTINUATION contract: if a document is attached, announce it ("I see you've shared your resume — let me take a look."), run read_document + surface open_pdf, then react to what the tools returned and end with your first question. If no document, one greeting message ending with ONE rapport question.
-- Turn 2: Natural bridge right back into the scenario or their latest progress.
-- Turn 3+: Continue technical scenario progression.`
+${nameLine}
+- Status: Returning candidate (last session: ${specs.learnerHistory.lastSessionDate ? new Date(specs.learnerHistory.lastSessionDate).toLocaleDateString() : "earlier"}).
+- Never state session counts or numbers; acknowledge familiarity naturally ("good to see you again").
+- Turn 1: Warm welcome + one simple check-in question. Stop and let the candidate speak.
+- Turn 2: Respond warmly, frame the session, and open relevant workspace surfaces (PDF, whiteboard, editor) only when actively transitioning to that topic.`
     : `LEARNER CONTEXT (FIRST-TIME CANDIDATE):
-- Spend the first 2-3 turns breaking the ice and establishing rapport before grilling with technical questions:
-  * Turn 1 (Warm Greeting): Open their resume on screen (surface open_pdf) while greeting them warmly by name. Ask how their day is going or how they are feeling today. Vary your greeting phrasing naturally; NEVER repeat the same canned greeting across sessions.
-  * Turn 2 (Rapport & Comfort): Respond genuinely to what they said, validate their feelings, normalize any interview nerves, and create a calm atmosphere.
-  * Turn 3 (Natural Bridge): Bridge from pleasantries to the interview topic (e.g. "Awesome. Today we'll talk through your distributed systems experience and some projects from your resume. To kick off, what's been keeping you busy recently?").
-  * Turn 4+: Deep-dive into specific technical verification and scenario progression.`;
+${nameLine}
+- Status: First-time candidate.
+- Turn 1: Warm welcome + one simple check-in question. Stop and let the candidate speak.
+- Turn 2: Respond warmly, normalize any nerves, frame the session, and open relevant workspace surfaces only when actively transitioning to that topic.`;
+
+  const knowledgeBlock = (specs.knowledgeBases ?? []).length > 0
+    ? `KNOWLEDGE BASES (approved grounding sources):
+${(specs.knowledgeBases ?? []).map((kb) => `- "${kb}"`).join("\n")}
+When a substantive domain claim needs verification against this trainer's approved materials, call search_knowledge(knowledgeBase: "${(specs.knowledgeBases ?? [])[0]}", query: <standalone concept keywords>, topics: <active phase topics>). If no relevant reference is found, acknowledge calibrated uncertainty — never invent or attribute a trainer-owned fact.`
+    : "";
 
   return `SESSION SPEC
 Scenario: ${specs.agentName} (slug: ${specs.agentSlug})
@@ -195,13 +236,13 @@ ${specs.opening ? `Opening brief: ${specs.opening}` : ""}
 
 ${icebreakerBlock}
 
-SAME-TURN CONTINUATION: multiple spoken messages within one turn are fine, but they are ONE continuous spoken turn. Ideal opening: with a document, message 1 = greeting + intent ("let me take a look", no question), then read_document + surface open_pdf, then message 2 = react to what the tools returned and end with your first question; without a document, one message ending with one rapport question. After a tool result the candidate has NOT spoken — NEVER speak for the candidate or answer your own question ("Things have been good…" is the candidate's line, not yours). Reaction openers ("Wonderful", "Good, good") are only for reacting to tool output. A pending question is the LAST thing in the turn — stop after it. Session numbers/counts are never stated.
-
 INTERVIEW PROGRESSION (guidance, not a script — bridge topics naturally):
 ${phases}
+${knowledgeBlock ? `\n${knowledgeBlock}` : ""}
 
 PERSONA: ${specs.personaName ?? specs.personaSlug ?? "Trainer"} (slug: ${specs.personaSlug ?? "trainer"})
 ${specs.personaVoice ? `How this trainer behaves and decides (from their indexed records): ${specs.personaVoice}` : ""}
+${uiStateBlock ? `\n${uiStateBlock}` : ""}
 
 ATTACHED ARTIFACTS FOR SHOW-AND-TELL & INSPECTION:
 ${docsBlock}

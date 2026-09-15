@@ -124,15 +124,22 @@ export async function POST(request: Request) {
 
     const agentSlug = session?.agentSlug ?? input.agentSlug;
     const personaSlug = session?.personaSlug ?? input.personaSlug;
+    const domainSlug = session?.domainSlug;
 
-    const [agent, persona] = await Promise.all([
+    const [agent, persona, domain] = await Promise.all([
       agentSlug
         ? db.agent.findFirst({ where: { slug: { equals: agentSlug, mode: "insensitive" }, orgId }, select: { slug: true, version: true, data: true } })
         : null,
       personaSlug
         ? db.persona.findFirst({ where: { slug: { equals: personaSlug, mode: "insensitive" }, orgId }, select: { slug: true, version: true, data: true } })
         : null,
+      domainSlug
+        ? db.domain.findFirst({ where: { slug: domainSlug }, select: { slug: true, data: true } })
+        : null,
     ]);
+    const knowledgeBases = Array.isArray((domain?.data as { knowledge_bases?: unknown } | null)?.knowledge_bases)
+      ? ((domain?.data as { knowledge_bases: string[] }).knowledge_bases as string[])
+      : [];
 
     const docMap = new Map<string, {
       id: string;
@@ -255,6 +262,7 @@ export async function POST(request: Request) {
       sessionId: session?.id ?? input.sessionId ?? null,
       agent: agent ?? null,
       persona: persona ?? null,
+      knowledgeBases,
       documents: Array.from(docMap.values()),
       learnerName,
       learnerHistory: {
@@ -263,6 +271,7 @@ export async function POST(request: Request) {
         lastSessionDate,
       },
       resume: resumePayload,
+      uiState: (session?.runtimeState as Record<string, unknown> | null)?.uiState ?? null,
     });
   }
 
