@@ -21,6 +21,7 @@ export type KnowledgeMetadata = {
   source: string;
   title?: string;
   chunkIndex: number;
+  topic?: string;
 };
 
 export type PersonaVoiceMetadata = {
@@ -443,19 +444,27 @@ export class MainCollectionService {
   static async searchKnowledge(
     orgId: string,
     query: string,
-    options: { kbIds?: string[]; limit?: number } = {},
+    options: { kbIds?: string[]; limit?: number; topics?: string[] } = {},
   ): Promise<{ id: string; docId: string; kbId: string; source: string; text: string; score: number }[]> {
     return runOnChromaLane(async () => {
       const collection = await this.getCollection(orgId);
       const limit = options.limit ?? 5;
       const [queryEmbedding] = await embedTexts([query]);
 
-      let whereFilter: Where = { type: "knowledge" };
+      // Build an AND of the active filters. Topic filtering is opt-in: callers
+      // pass topics only for topic-grounded stages, so untagged retrieval is
+      // unchanged (see retrieveKnowledge gating).
+      const conditions: Where[] = [{ type: "knowledge" } as Where];
       if (options.kbIds && options.kbIds.length === 1) {
-        whereFilter = { $and: [{ type: "knowledge" }, { kbId: options.kbIds[0] }] } as Where;
+        conditions.push({ kbId: options.kbIds[0] } as Where);
       } else if (options.kbIds && options.kbIds.length > 1) {
-        whereFilter = { $and: [{ type: "knowledge" }, { kbId: { $in: options.kbIds } }] } as Where;
+        conditions.push({ kbId: { $in: options.kbIds } } as Where);
       }
+      if (options.topics && options.topics.length > 0) {
+        conditions.push({ topic: { $in: options.topics } } as Where);
+      }
+      const whereFilter: Where =
+        conditions.length === 1 ? conditions[0] : ({ $and: conditions } as Where);
 
       const res = await collection.query({
         queryEmbeddings: [queryEmbedding],

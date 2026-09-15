@@ -259,6 +259,7 @@ export async function searchKnowledge(
   query: string,
   topK = 5,
   orgId?: string,
+  topics?: string[],
 ): Promise<Hit[]> {
   let targetOrgId = orgId;
   if (!targetOrgId) {
@@ -270,6 +271,7 @@ export async function searchKnowledge(
     const mainHits = await MainCollectionService.searchKnowledge(targetOrgId, query, {
       kbIds: [knowledgeBaseId],
       limit: reranking ? Math.max(topK * 4, 20) : topK,
+      ...(topics && topics.length ? { topics } : {}),
     });
     if (mainHits.length > 0) {
       return rerank(

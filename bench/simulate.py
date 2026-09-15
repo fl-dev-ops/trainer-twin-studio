@@ -56,6 +56,13 @@ def report_path() -> Path:
 def _ssl() -> ssl.SSLContext | bool:
     if Path(CA_FILE).exists():
         context = ssl.create_default_context()
+        # Python 3.14 enables VERIFY_X509_STRICT by default, which rejects the
+        # portless dev CA (it omits the Authority Key Identifier extension).
+        # Clear just that flag so HTTPS to trainertwin.localhost verifies, while
+        # keeping normal chain verification on.
+        strict = getattr(ssl, "VERIFY_X509_STRICT", 0)
+        if strict:
+            context.verify_flags &= ~strict
         context.load_verify_locations(CA_FILE)
         return context
     return True

@@ -21,6 +21,9 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { seedCopilot } from "@/lib/copilot-handoff";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PersonaBaselinePanel } from "@/components/persona-baseline-panel";
+import type { PersonaBaseline } from "@/lib/persona-baseline";
 import {
   Card,
   CardContent,
@@ -426,6 +429,7 @@ export function SpecResourceEditor({
   shownVersion,
   versions,
   sources = [],
+  baseline = null,
 }: {
   type: ResourceType;
   slug: string;
@@ -435,6 +439,7 @@ export function SpecResourceEditor({
   shownVersion: number;
   versions: VersionInfo[];
   sources?: { id: string; kind: string; name: string; status: string; metadata?: unknown; createdAt: Date }[];
+  baseline?: PersonaBaseline | null;
 }) {
   const router = useRouter();
   const [text, setText] = useState(initialText);
@@ -582,60 +587,22 @@ export function SpecResourceEditor({
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[minmax(0,7fr)_minmax(18rem,3fr)] lg:overflow-hidden">
-        <section className={type === "agents"
-          ? "flex min-h-[32rem] min-w-0 flex-col p-4 sm:p-6 lg:min-h-0 lg:overflow-hidden"
-          : "order-2 min-w-0 border-t bg-muted/20 p-4 sm:p-6 lg:overflow-y-auto lg:border-t-0 lg:border-l"
-        }>
-          {type === "agents" ? (
-            <>
-              <div className="mb-3 shrink-0">
-                <h2 className="text-sm font-medium">Scenario definition</h2>
-                <p className="mt-1 text-xs text-muted-foreground">Advanced behavior, stages, and progression policy.</p>
-              </div>
-              <textarea
-                value={text}
-                readOnly={historical}
-                onChange={(event) => { setText(event.target.value); setDirty(true); }}
-                spellCheck={false}
-                aria-label={`${name} YAML specification`}
-                className="min-h-80 w-full flex-1 resize-none rounded-xl border bg-background p-4 font-mono text-xs leading-relaxed outline-none focus-visible:ring-3 focus-visible:ring-ring/50 read-only:bg-muted"
-              />
-            </>
-          ) : (
-            <>
-              <h2 className="text-sm font-semibold">Persona model</h2>
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                Automatically rebuilt after every source in the library finishes indexing.
-              </p>
-              <div className="mt-5 rounded-xl border bg-background p-4">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <Sparkles className="size-4 text-primary" /> Automatic
-                </div>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  Sources shape the speaking style. The compiled policy keeps behavior stable and versioned.
-                </p>
-              </div>
-              <details className="mt-4 rounded-xl border bg-background">
-                <summary className="cursor-pointer px-4 py-3 text-sm font-medium select-none">
-                  Advanced YAML
-                </summary>
-                <div className="border-t p-3">
-                  <textarea
-                    value={text}
-                    readOnly={historical}
-                    onChange={(event) => { setText(event.target.value); setDirty(true); }}
-                    spellCheck={false}
-                    aria-label={`${name} YAML specification`}
-                    className="min-h-96 w-full resize-y rounded-lg border bg-background p-3 font-mono text-[11px] leading-relaxed outline-none focus-visible:ring-3 focus-visible:ring-ring/50 read-only:bg-muted"
-                  />
-                </div>
-              </details>
-            </>
-          )}
-        </section>
-
-        {type === "agents" ? (
+      {type === "agents" ? (
+        <div className="min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[minmax(0,7fr)_minmax(18rem,3fr)] lg:overflow-hidden">
+          <section className="flex min-h-[32rem] min-w-0 flex-col p-4 sm:p-6 lg:min-h-0 lg:overflow-hidden">
+            <div className="mb-3 shrink-0">
+              <h2 className="text-sm font-medium">Scenario definition</h2>
+              <p className="mt-1 text-xs text-muted-foreground">Advanced behavior, stages, and progression policy.</p>
+            </div>
+            <textarea
+              value={text}
+              readOnly={historical}
+              onChange={(event) => { setText(event.target.value); setDirty(true); }}
+              spellCheck={false}
+              aria-label={`${name} YAML specification`}
+              className="min-h-80 w-full flex-1 resize-none rounded-xl border bg-background p-4 font-mono text-xs leading-relaxed outline-none focus-visible:ring-3 focus-visible:ring-ring/50 read-only:bg-muted"
+            />
+          </section>
           <AgentSettingsPanel
             name={settings.name}
             voiceId={settings.voiceId}
@@ -645,14 +612,56 @@ export function SpecResourceEditor({
             disabled={historical}
             onChange={setAgentField}
           />
-        ) : (
-          <PersonaSourcePanel
-            personaSlug={slug}
-            initialSources={sources}
-            disabled={historical}
-          />
-        )}
-      </div>
+        </div>
+      ) : (
+        <Tabs defaultValue={baseline ? "baseline" : "sources"} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="shrink-0 border-b px-4 py-2 sm:px-6">
+            <TabsList>
+              {baseline && <TabsTrigger value="baseline">Baseline</TabsTrigger>}
+              <TabsTrigger value="sources">Sources</TabsTrigger>
+            </TabsList>
+          </div>
+
+          {baseline && (
+            <TabsContent value="baseline" className="mt-0 min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+              <div className="mx-auto max-w-4xl">
+                <PersonaBaselinePanel baseline={baseline} />
+              </div>
+            </TabsContent>
+          )}
+
+          <TabsContent value="sources" className="mt-0 min-h-0 flex-1 overflow-hidden">
+            <div className="h-full overflow-y-auto lg:grid lg:grid-cols-[minmax(0,7fr)_minmax(18rem,3fr)] lg:overflow-hidden">
+              <PersonaSourcePanel
+                personaSlug={slug}
+                initialSources={sources}
+                disabled={historical}
+              />
+              <section className="order-2 min-w-0 border-t bg-muted/20 p-4 sm:p-6 lg:overflow-y-auto lg:border-t-0 lg:border-l">
+                <h2 className="text-sm font-semibold">Persona model</h2>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Automatically rebuilt after every source in the library finishes indexing.
+                </p>
+                <details className="mt-4 rounded-xl border bg-background">
+                  <summary className="cursor-pointer px-4 py-3 text-sm font-medium select-none">
+                    Advanced YAML
+                  </summary>
+                  <div className="border-t p-3">
+                    <textarea
+                      value={text}
+                      readOnly={historical}
+                      onChange={(event) => { setText(event.target.value); setDirty(true); }}
+                      spellCheck={false}
+                      aria-label={`${name} YAML specification`}
+                      className="min-h-96 w-full resize-y rounded-lg border bg-background p-3 font-mono text-[11px] leading-relaxed outline-none focus-visible:ring-3 focus-visible:ring-ring/50 read-only:bg-muted"
+                    />
+                  </div>
+                </details>
+              </section>
+            </div>
+          </TabsContent>
+        </Tabs>
+      )}
     </main>
   );
 }

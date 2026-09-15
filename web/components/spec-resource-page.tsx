@@ -6,6 +6,7 @@ import { SpecResourceEditor } from "@/components/spec-resource";
 import { getTrainerOrg } from "@/lib/org";
 import { readSpecDraft } from "@/lib/spec-drafts";
 import { listSpecs, listVersions, readSpec, readVersion } from "@/lib/specs";
+import { getPersonaBaseline } from "@/lib/persona-baseline";
 
 export async function SpecResourcePage({
   type,
@@ -108,11 +109,14 @@ export async function SpecResourcePage({
 
   const persona = await db.persona.findUnique({ where: { orgId_slug: { orgId: org.id, slug } }, select: { id: true } });
   if (!persona) notFound();
-  const initialSources = await db.personaSource.findMany({
-    where: { personaId: persona.id, orgId: org.id },
-    orderBy: { createdAt: "asc" },
-    select: { id: true, kind: true, name: true, status: true, metadata: true, createdAt: true },
-  });
+  const [initialSources, baseline] = await Promise.all([
+    db.personaSource.findMany({
+      where: { personaId: persona.id, orgId: org.id },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, kind: true, name: true, status: true, metadata: true, createdAt: true },
+    }),
+    getPersonaBaseline(org.id, slug),
+  ]);
 
   return (
     <SpecResourceEditor
@@ -125,6 +129,7 @@ export async function SpecResourcePage({
       shownVersion={version}
       versions={await listVersions(type, slug, org.id)}
       sources={initialSources}
+      baseline={baseline}
     />
   );
 }
