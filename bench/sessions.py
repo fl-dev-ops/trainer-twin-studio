@@ -1,19 +1,55 @@
-"""Acme interview sessions to simulate against (read-only DB access).
-
-A bench run pointed at a real InterviewSession id inherits that session's
-full grounding (documents/résumé, learner name, agent/persona/domain
-versions) because the bridge forwards x-trainertwin-session-id and the
-studio resolves getSessionContext from it.
-"""
+"""Prepare or resolve document-grounded sessions for simulations."""
 
 from __future__ import annotations
 
+import mimetypes
 import os
+from pathlib import Path
+
+import httpx
 
 import conf
 from scenarios import _db
 
 ORG_ID = os.getenv("BENCH_ORG_ID", conf.ORG_ID)
+
+
+def prepare_file_session(path: Path, agent_slug: str, web_url: str) -> dict:
+    """Upload a document and activate a session through the same services as /talk."""
+    if not path.is_file():
+        raise RuntimeError(f'Document not found: "{path}"')
+    conf.require_bridge_env()
+    mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    with path.open("rb") as file:
+        response = httpx.post(
+            f'{web_url.rstrip("/")}/api/internal/bench/session',
+            headers={
+                "authorization": f"Bearer {conf.SECRET}",
+                "x-trainertwin-org-id": ORG_ID,
+            },
+            data={"agentSlug": agent_slug},
+            files={"file": (path.name, file, mime)},
+            timeout=180,
+        )
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+    if response.is_error:
+        raise RuntimeError(payload.get("error", f"Session preparation failed ({response.status_code})"))
+    session = payload["session"]
+    document = payload["document"]
+    return {
+        "session_id": session["id"],
+        "agent_slug": session["agentSlug"],
+        "persona_slug": session["personaSlug"],
+        "domain_slug": session["domainSlug"],
+        "status": session["status"],
+        "learner_name": session["learnerName"],
+        "document_id": document["id"],
+        "document_name": document["name"],
+        "document_text": document["text"],
+    }
 
 
 def load_acme_sessions(limit: int = 12) -> list[dict]:

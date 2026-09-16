@@ -8,8 +8,15 @@ goes through the **chat bridge over HTTP** (`chat/` agent's
 ```bash
 cd bench
 uv sync
-uv run python simulate.py
+uv run python simulate.py --turns 30 --slugs resume-defense-cross-examination --api-url http://127.0.0.1:2000
+
+# Exercise the /talk upload → attach → activate flow before simulation:
+uv run python simulate.py --turns 30 --slugs resume-defense-cross-examination --api-url http://127.0.0.1:2000 --file ./resume.pdf
 ```
+
+`--file` calls the web app (default `http://localhost:3000`) to upload the
+file and create a newly grounded session through the same services as `/talk`.
+Use `--web-url` when the web app runs elsewhere.
 
 `web/.env` supplies `DATABASE_URL` (read-only fixture loading) and
 `COPILOT_SERVICE_SECRET` (bridge auth). Set `BENCH_ORG_ID` in `bench/.env`
