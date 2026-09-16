@@ -1,13 +1,13 @@
 import { z } from "zod";
 import { BASE_DOMAIN } from "@/lib/base-domain";
-import { assignmentChanges } from "@/lib/assignments";
+import { assignmentChanges, MAX_ASSIGNMENT_RECIPIENTS } from "@/lib/assignments";
 import { db } from "@/lib/db";
 import { sendRolePlayAssignmentEmail } from "@/lib/email";
 import { attachAssignmentSession, revokeAssignedSession } from "@/lib/interview-sessions";
 import { getTrainerOrg } from "@/lib/org";
 
 const bodySchema = z.object({
-  memberIds: z.array(z.string().min(1)).max(500),
+  memberIds: z.array(z.string().min(1)).max(MAX_ASSIGNMENT_RECIPIENTS),
 }).strict();
 
 export async function PUT(
