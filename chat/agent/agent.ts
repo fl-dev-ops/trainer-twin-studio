@@ -30,7 +30,7 @@ export default defineAgent({
       },
     },
   }),
-  reasoning: "low",
+  reasoning: "none",
   limits: {
     maxInputTokensPerSession: false,
     maxOutputTokensPerSession: false,

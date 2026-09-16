@@ -1,5 +1,9 @@
 # Requirements Specification: Autonomous Trainer Twin Brain (`chat/`)
 
+> **Superseded:** The consolidated and current requirements now live in
+> [`trainer-twin-conversation-requirements.md`](./trainer-twin-conversation-requirements.md).
+> This file remains as historical context for the first Eve-brain design.
+
 ---
 
 ## 1. System Vision & Purpose

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { Check, LoaderCircle, Play, Upload as UploadIcon, Volume2 } from "lucide-react";
+import { Check, LoaderCircle, Play, Upload as UploadIcon, Volume2, X } from "lucide-react";
 import "@livekit/components-styles";
 import {
   RoomAudioRenderer,
@@ -415,6 +415,28 @@ export function SessionView({
     }
     setSurface(nextSurface);
   }, []);
+
+  // Browser-confirmed screen state is durable session truth; the brain reads it
+  // through getSessionContext instead of inferring it from LiveKit RPC history.
+  useEffect(() => {
+    if (!connection || ended) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      fetch(`/api/sessions/${connection.sessionId}/ui-state`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${connection.runtimeToken}`,
+        },
+        body: JSON.stringify(surface ? { active: surface.tool, key: surface.key } : { active: null }),
+        signal: controller.signal,
+      }).catch(() => {});
+    }, 400);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [connection, ended, surface]);
 
   const handleChoiceSubmission = useCallback(async () => {
     if (surface?.tool !== "choice" || !selectedChoiceId || choiceSubmitting || choiceSubmitted) return;
@@ -969,6 +991,15 @@ export function SessionView({
                         {surface.tool === "image" && "Image Viewer"}
                         {surface.tool === "presentation" && "Presentation"}
                       </span>
+                      <button
+                        type="button"
+                        aria-label="Close workspace panel"
+                        title="Close panel"
+                        onClick={() => handleSurface(null)}
+                        className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+                      >
+                        <X className="size-3.5" />
+                      </button>
                     </div>
                     <div className="min-h-0 flex-1">
                       {surface.tool === "code" && (

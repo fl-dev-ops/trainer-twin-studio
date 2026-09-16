@@ -1,0 +1,517 @@
+id: "12"
+title: JavaScript Mock Interview - 8 Years Experience
+source: 12 - JavaScript Mock Interview - 8 Years Experience
+duration: "00:24:23"
+track: frontend
+topics: [authentication, tokens, caching, interceptors, session-storage, local-storage, javascript, call-apply-bind, this-keyword]
+seniority: senior
+participants:
+  interviewer: Vasanth
+  candidate: Kriti
+  candidate_experience_years: 7
+
+# Two raw ids, cleanly assigned for once - Speaker 1 is Vasanth, Speaker 2 is
+# Kriti - but the ordering is not chronological: Sarvam emits a run of one
+# speaker's 30-second chunks and only then dumps the other speaker's
+# interjections from the same window. Two entries are also crossed (00:00:52
+# "Wonderful. Wonderful." under Speaker 2). Attribution below is by content.
+raw_speaker_ids:
+  interviewer: [1]
+  candidate: [2]
+
+invariants:
+  - Turns strictly alternate interviewer -> candidate. No two consecutive same-role turns.
+  - No reference to a YouTube channel, video, subscriber, audience or viewer.
+  - No screen-sharing, editor or tool-operation instructions.
+  - Text is English in Latin script only.
+
+counts:
+  raw_entries: 217
+  clean_turns: 41
+
+removed:
+  monologue:
+    - span: "00:00:00-00:00:25"
+      what: >-
+        Channel intro - "welcome back to Career with Vasanth YouTube channel,
+        previously known as Uncommon Geeks", session framing.
+    - span: "00:09:19-00:09:37"
+      what: Mid-interview pause-the-video appeal to viewers.
+    - span: "00:19:16-00:19:40"
+      what: >-
+        Outro - like the video, share with friends, subscribe to Career with
+        Vasanth, "I'll make a short extension to this video", catch you in the
+        next video.
+    - span: "00:19:40-00:24:23"
+      what: >-
+        Solo post-interview explainer recorded after Kriti left ("in this
+        particular video, it's a short video, post video basically I'm
+        discussing the important question that I asked"). Four and a half
+        minutes of single-speaker channel content on session vs local storage
+        and the access/authorization token flow. It is not interview dialogue
+        and cannot be represented as alternating turns, so the whole segment is
+        dropped.
+  self_promotion:
+    - "00:16:16 - 'it's also applicable for a lot of candidates who are watching the video'"
+    - "00:16:16 - 'primarily everybody who's watching the video consider a fact'"
+    - "00:17:40 - 'my advice to all basically who are watching this video'"
+    - "00:18:10 - 'reading an article or reading official documentation or YouTube video may not trigger that'"
+    - "00:15:13 - 'and audience whoever watching you can also just look at the snippet and try to guess the output'"
+  logistics:
+    - "00:01:35 - 'I tried presenting a whiteboard'"
+    - "00:06:13 - 'I've stopped the whiteboard'"
+    - "00:07:33 - 'can you present your Chrome, one window where nothing is opened, open the plain Chrome window? I'll share an online editor link with you and please open this link'"
+    - "00:11:32 - 'you can remove whatever is here and write', 'remove everything'"
+    - "00:14:53 - 'sending a code snippet in the chat section, copy the snippet and paste the snippet in the same window'"
+    - "00:15:42 - 'please run the code', 'stop share me'"
+    - "00:15:46 - 'you can stop sharing Kriti'"
+  backchannels: 88
+  asr_noise: 36
+
+corrections:
+  "salt encryptions": salt encryption
+  "pre flight access tower": pre-flight access token
+  "Free flight": pre-flight
+  "it will directly interpret with this cache": it will directly interact with this cache
+  "print full web": printFullName
+  "some split and rest operator": some spread and rest operator
+  "the same quant method": the same count method
+  "program miss dot com / programbiz.com": programiz.com
+  "now it's all good go far very good": now it's all good, it's gone very good
+  "so we can just expand our expiry time": so we can just extend our expiry time
+uncertain:
+  - >-
+    00:15:19-00:15:42 - the snippet itself is never read out, so Kriti's answer
+    ("it should print like this", "one", "it should print as a zero") cannot be
+    tied to concrete values. Preserved verbatim rather than reconstructed.
+  - >-
+    00:14:13 - "hopefully I came here return functions" was garbled; read as "so
+    I came here, returned a function".
+name_note: >-
+  Vasanth introduces her as "Kriti Suman"; Sarvam elsewhere produces "Kriti M.
+  Sen" (a garbling of "Kriti, I'm sending"). Normalised to Kriti throughout.
+romanized: 6
+
+turns:
+  - t: "00:00:25"
+    role: interviewer
+    text: >-
+      And without wasting further time, let's get started. Kriti, if you can
+      introduce yourself.
+
+  - t: "00:00:30"
+    role: candidate
+    text: >-
+      Yeah, sure. So I have a total of seven point one years of experience, and
+      totally I'm working in the Angular framework. I started from Angular two and
+      right now it's Angular eleven. Apart from this, I'm working in the banking
+      domain and leading the team as well. And I have sorts of knowledge in
+      JavaScript and Node.js apart from Angular.
+
+  - t: "00:00:52"
+    role: interviewer
+    restitched: true
+    text: >-
+      Wonderful. Wonderful, Kriti. Kriti, let me start by asking a very simple
+      question, okay? So in an Angular application, I'm very sure you might have
+      built something for the authentication flow, correct? I'll ask you only two
+      flows — whether you built it or not, it's a very common interview question.
+      A user logs in to your website, and after login, basically next time, let's
+      say they close the tab and open it next time, definitely we'll not ask them
+      to log in again. The same way Facebook, YouTube, Instagram, everything works
+      — as long as you're logged in to the application you continue to be logged
+      in, correct? Can you just explain to me this entire authentication flow,
+      Kriti? How will we achieve this? Would you like to draw the basic
+      architecture here?
+
+  - t: "00:01:40"
+    role: candidate
+    text: >-
+      So suppose that this is the page where I am creating a login page basically.
+      Yes, it's a login here.
+
+  - t: "00:01:49"
+    role: interviewer
+    text: >-
+      That is fine, yeah. And I'm primarily interested in the different elements
+      that would interact — like you told me, the caching, the back end. I'm
+      interested in which all systems interact and how they interact.
+
+  - t: "00:01:59"
+    role: candidate
+    restitched: true
+    text: >-
+      So from here we are just making some data go to our caching component, the
+      cache controller. And it is not simply like that, because whenever we are
+      passing some data from this component we are also using salt encryption
+      there. So we are encrypting our passwords. And that password we are loading
+      into our cache system, and in the cache system we have some token expiration
+      session as well. So I'll provide some token here, with some timeline. Once it
+      has passed the cache, it will go to my server side. So the server will have
+      to validate whether the token is valid or not, whether expiration is there or
+      not. So that cache will store there. So suppose the second time again I am
+      coming to my login page, and since that time I don't have a cache, right? So
+      before sending my data directly to the server through my browser, it will
+      first go and check in the cache whether the data is available there or not.
+      So it will not repeatedly call the server API again and again. So it will
+      stop here itself. If that is, suppose, expired, it doesn't mean that it will
+      again call the server because it's expired — then it will just try to give
+      some pre-flight XHR to this guy. Pre-flight. So this pre-flight access token,
+      it will just try to knock the door on the server side, whether the data is
+      available with you or not. So it will again — because this data is directly
+      integrated with the cache system as well, the server will respond to this
+      cache system, and from here, as we are using Google Chrome or the V8 engine,
+      it will directly interact with this cache only. So it will not go to the
+      server directly. That's how we are handling it.
+
+  - t: "00:04:00"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      Sure. So Kriti, I'll try to summarise, okay? So we have a website, okay? And
+      whenever a user tries to log in — let's say this is a login button — as soon
+      as they log in, what we are doing is, we are making an API call, getting the
+      user information, correct? And let's say you are getting some token; that
+      token you are storing in the cache system, correct? So this is the cache
+      where you are storing, okay? So you are storing this cache. So next time,
+      let's say the user has closed the tab and opens the tab next time, you will
+      check in the cache whether the token is available. If the token is available,
+      then you will take the user directly to the home screen. Correct? Home is
+      just an indicator here, like wherever the core of your application is.
+      Correct? So there you will take the user, whenever you have a valid token.
+      Correct? Let's say the token is expired. Whenever the token is expired, you
+      will make an API call. Am I right? Like the pre-flight you took. You make an
+      API call — here is the server. Correct? So here is the server, where we will
+      make an API call, get the token back. Once you get the token back, you are
+      again going to store that in the cache and the process repeats. Correct? So
+      Kriti, let us understand, or elaborate — if you want to add any more points,
+      you can add.
+
+  - t: "00:05:16"
+    role: candidate
+    restitched: true
+    text: >-
+      If again I am getting the token, that will be matched here itself with
+      another service we have created. So we will just check if the token is
+      available from the state management or not, and we are only updating our
+      expiry date or expiry time. So we know that the token is already available
+      for the entire system. That's how it continues.
+
+  - t: "00:05:42"
+    role: interviewer
+    restitched: true
+    text: >-
+      Okay, sure. I'll summarise quickly again, Kriti. So I, as a user, came to
+      your website. I clicked, I entered my email ID, password, I clicked on login.
+      As soon as I click on login, you made an API call, got the token, you stored
+      the token, and next time whenever I open the application, you checked whether
+      the token is available in the cache. Get that particular token, and if it is
+      valid you are going to take me to the home screen. If it is invalid, you are
+      going to make an API call to the server to get a new token. Correct? So now
+      the only question that I have is, first of all, how do you get to know
+      whether the token is valid or not next time whenever I open the website?
+
+  - t: "00:06:21"
+    role: candidate
+    text: >-
+      So in that condition, actually, that is why I just told you about that
+      pre-flight or XHR mode, right? So every time when I open...
+
+  - t: "00:06:27"
+    role: interviewer
+    text: >-
+      Mode, right? So every time when I open, you make an API call with that, to
+      check whether it is valid or not. Okay.
+
+  - t: "00:06:35"
+    role: candidate
+    text: >-
+      And we are also using some interceptors in our Angular application, or in
+      the entire application. So that is going to make the pre-flight mode XHR
+      call, and then it is checking there itself whether that is available or not.
+      So we can just extend our expiry time from the front end side, not the back
+      end always.
+
+  - t: "00:06:57"
+    role: interviewer
+    romanized: true
+    text: >-
+      Okay, so in the overall process, Kriti, how many tokens are involved? One
+      token, two tokens — how many tokens are involved?
+
+  - t: "00:07:02"
+    role: candidate
+    text: I think there is only one token per user.
+
+  - t: "00:07:05"
+    role: interviewer
+    text: >-
+      Okay, so that is — got it. What is the token you call it? What do you refer
+      to it as — authentication, authorization?
+
+  - t: "00:07:10"
+    role: candidate
+    restitched: true
+    text: >-
+      Authentication, authorization — that is also involved with the
+      authentication only, not with the authorization things. So we generally call
+      it a session ID in our terms, and that is only to help for the authentication
+      purpose.
+
+  - t: "00:07:33"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      Okay, sure. Sounds good, Kriti. There are a lot more details required for
+      this. Probably I'll explain if time permits at the end, okay? But whatever
+      you said so far is not wrong, but we can add more clarity into this, okay?
+      So, can you tell me the difference between session storage and local storage?
+
+  - t: "00:08:08"
+    role: candidate
+    restitched: true
+    text: >-
+      So session storage is just like — suppose I have stored my data here in the
+      session storage. And if I close my browser, or even if I close the tab, my
+      session is gone already. And if I inspect it, my session storage data will
+      not be available there. But in the case of local storage, if I close my
+      system as well and the entire Google Chrome as well, still my storage,
+      whatever the data I have stored, it will be available there. Even if I come
+      and log in again, my data will be there.
+
+  - t: "00:08:44"
+    role: interviewer
+    text: >-
+      Okay. I have two follow-up questions on this, okay? So session storage,
+      whatever you are storing — is it accessible even when multiple tabs are open
+      from the same web application? Like for example, this website that we opened
+      is programiz.com, correct? I open the same website in another tab in the same
+      browser. So can both the tabs access the session storage? Got my question,
+      right, Kriti?
+
+  - t: "00:09:06"
+    role: candidate
+    text: >-
+      Yeah, I got your point. No, I think in session storage, when I just open my
+      one tab, only the data will be available here itself. You cannot share,
+      basically.
+
+  - t: "00:09:14"
+    role: interviewer
+    restitched: true
+    text: >-
+      You cannot share basically between the tabs. Correct? Yeah, sure, we will
+      discuss, Kriti. Now, another follow-up question that I had was on the local
+      storage. Like you told me, local storage is storage that — even if you close
+      the window, or even if you restart the system — is going to be always
+      present, unless probably we clear the browser's cache. Correct? So now the
+      question is, let's say you've not opened the website programiz.com. The
+      website you have not opened. Is there any way, without opening that website,
+      that you can access the local storage, the data that you have stored? Got my
+      question, right?
+
+  - t: "00:09:58"
+    role: candidate
+    text: >-
+      So, yeah. So what you mean to say, from what I understood, is that you wanted
+      to close the browser and you wanted to access it somewhere else, right?
+
+  - t: "00:10:07"
+    role: interviewer
+    text: >-
+      No, no, let's say — see, this programiz.com saved some information in the
+      local storage. Okay? And I closed that tab. I opened google.com now. Okay? So
+      is there any way I can access the local storage values that are stored by
+      programiz.com? Got my question, right? Now I think it is clear.
+
+  - t: "00:10:25"
+    role: candidate
+    text: Yeah, it's clear.
+
+  - t: "00:10:26"
+    role: interviewer
+    text: >-
+      Yeah, thank you. Without opening the website, can we access the local storage
+      data that was saved or persisted by the website?
+
+  - t: "00:10:34"
+    role: candidate
+    text: >-
+      Yeah, I think yes, we can get it, because our local data will be there,
+      right? We have to just say get the item. So if that is available, we can get
+      it, right?
+
+  - t: "00:10:48"
+    role: interviewer
+    text: >-
+      Okay. Let's say I am aware of the key with which you saved it. Like, let's
+      say we saved the key as login_key. And if I try to get access to that, like
+      localStorage.getItem of login_key, and just execute that in the Chrome
+      inspect — you think I'll be able to get that? Got my question? I think I'm
+      clear, Kriti, correct?
+
+  - t: "00:11:09"
+    role: candidate
+    text: I think you cannot get it, even if the key is the same.
+
+  - t: "00:11:11"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      Okay. Then you're saying it is stored persistently. You're saying it is
+      stored persistently but you cannot access it without opening the website.
+      Correct? Okay. Sure. So, are you aware of call, apply, bind, Kriti? Can you
+      write an example for all the three — call, apply, bind — here? You can start
+      giving an example: call, apply, bind. You write it fully, then we will
+      discuss.
+
+  - t: "00:11:51"
+    role: candidate
+    restitched: true
+    text: >-
+      So I have created two users and I wanted to print, because that is available
+      in some other function. So what can I do? I can just take the reference of
+      this printFullName basically. And then I'll apply the call method here, and
+      then I can just pass user one or two, whatever it is. So this will reference
+      this, with the help of the this keyword — that is what is happening here. And
+      here I forgot to mention that this keyword, that this dot first name and this
+      dot last name here. So it will try to refer to this guy, and now it is asking
+      which one it is referring to. So this will refer to whichever immediate object
+      is calling it. So it will give the output like this. And with the help of the
+      apply method and the call method — suppose I wanted to pass multiple arguments,
+      like here I have a country as well and a city as well. So here I can just pass
+      India and then Bangalore. So like this, individual elements I can create and I
+      can pass as an argument, as a particular parameter. But in the apply method,
+      what is happening is I can just create one array type and inside that I can
+      just do that. So the same thing will be happening there. With the bind method,
+      what is happening is, the same way it's bind here, but bind is always
+      available for your future reference, not for the current one. So suppose you
+      wanted all those functions in the future — you can just pass some reference to
+      the bind method.
+
+  - t: "00:13:58"
+    role: interviewer
+    text: >-
+      Okay. Sure. So, Kriti, whatever explanation you gave is good. I think most —
+      when I ask in the interview, everybody gives this example only. But you have
+      seven years of experience, Kriti. Tell me the practical use case. When did you
+      use call, apply, bind?
+
+  - t: "00:14:13"
+    role: candidate
+    restitched: true
+    text: >-
+      I was creating one function, okay? And then I got to know that I have to
+      create one utility class of functions as well. But since, whatever the items I
+      had here, right, I'm not so sure what the argument is that someone is passing
+      there, because that was using some spread and rest operator as well. So I came
+      here, returned a function, and then I used the function which I am passing
+      here — I used the generate dot apply method here itself. So it was taking the
+      function as a callback function, and whatever the arguments or parameters we
+      were passing, it was referring to this guy again, that this keyword, with the
+      help of the apply method.
+
+  - t: "00:14:53"
+    role: interviewer
+    text: >-
+      Okay. Got it. Sure. Sure. Okay, Kriti. Try to guess the output for this
+      snippet.
+
+  - t: "00:15:19"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      So when I will try to invoke it, it should print like this. One. And if I
+      will just try to print it, it should print as a zero, because this guy is
+      taking — the scope will be the same count method here. So again it will
+      become zero.
+
+  - t: "00:15:42"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      Okay. Good. So I'm done from my end, Kriti, and this is the time where I give
+      my feedback to you. But before I give my feedback, do you have any questions
+      for me? Like primarily around the interview, do you have any questions?
+
+  - t: "00:15:57"
+    role: candidate
+    restitched: true
+    text: >-
+      Now it's all good, it's gone very good. I am very much interested about this.
+      So I would like to ask more — then we can just discuss more on the local
+      storage and session storage that you asked. I was actually a little confused
+      there.
+
+  - t: "00:16:16"
+    role: interviewer
+    restitched: true
+    text: >-
+      Yeah. Sure, Kriti. Like probably, if time permits, we can discuss any other
+      topics that I asked in the interview, but let me — this is an important phase
+      for me, to give feedback to you. See, consider a fact: if you're somebody who
+      is having an experience of more than six years, then you are considered like a
+      senior developer in an organization. So the primary expectation from you is,
+      how do you basically create a system and manage it? So that is the reason I
+      asked you the authentication flow, right? There is no one right way or wrong
+      way. I don't even consider that like a system design, a deep system design
+      sort of a question, but a very basic level question, correct? What you
+      explained was not wrong. But there was an opportunity where you could have
+      induced more clarity. Like step by step, probably how we can proceed further,
+      okay? So that's a small feedback. So anybody who goes for an interview, or who
+      is having like six plus years of experience, make sure you go with extreme
+      clarity about the things that you explain. I'm not saying like you don't know
+      the concepts, but an interviewer will have a very short time, and within that
+      time frame only they need to judge you. So try to give very crystal clear
+      answers. And then next, the next question, whatever I asked on the local
+      storage and session storage, right? So by looking at those answers, Kriti,
+      what can be inferred is, you need the concepts. Like for example, if I asked
+      you a question like how to create a session storage, how to create a local
+      storage, you could have created it. The questions that I asked, probably you
+      were not anticipating. Correct? So where I'm coming from is, my advice is,
+      have the temperament of "why" in your mind. Like why basically this is
+      happening. So whenever you keep asking why, then only will you identify,
+      discover some questions, because reading an article or reading official
+      documentation may not trigger that. So you should start asking why multiple
+      times, so probably then you will get into that temperament of reading. Okay?
+      And the snippet you are able to interpret excellently, Kriti, which is good. I
+      think whatever you know, at least whatever you answered so far — so you have
+      clarity on some, complete clarity; some you are having a little bit of
+      mediocre clarity. So that's where I want you to just polish your skills.
+      Okay? Yeah. That's my honest feedback, Kriti. You tell me, are there any
+      closing questions for your last two minutes?
+
+  - t: "00:18:30"
+    role: candidate
+    text: >-
+      I really would like to work more on the authentication and authorization,
+      since I didn't get much more chances, as we are building a product for some
+      other product based company. So we don't have that much control over there.
+
+  - t: "00:18:48"
+    role: interviewer
+    restitched: true
+    text: >-
+      Got it. Yes, yes, I understand, Kriti, but like I told you, with your
+      experience these things matter. So even if you have not got an opportunity,
+      please try to learn on your own, so that next interview, when this is asked,
+      you're able to answer and clear that interview. Okay? Sure. So yeah, we are
+      closing the session, Kriti. I hope this session was useful and you liked the
+      questions that I asked.
+
+  - t: "00:19:09"
+    role: candidate
+    text: >-
+      Yeah, sure, obviously, it's very helpful for me. And I can always practice on
+      those.
+
+  - t: "00:19:16"
+    role: interviewer
+    text: >-
+      Got it. Sure, sure. Thank you so much for joining the session, Kriti, and
+      taking the mock interview with me.

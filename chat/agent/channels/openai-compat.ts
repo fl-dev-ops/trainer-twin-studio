@@ -202,6 +202,7 @@ export default defineChannel({
         orgId,
         sessionId,
         mode,
+        clientTools: [...advertisedTools].sort().join(","),
         ...(requestedModel ? { model: requestedModel } : {}),
       };
       const agentSlug = request.headers.get("x-trainertwin-agent-slug")?.trim();
@@ -351,6 +352,17 @@ export default defineChannel({
 
             if (terminal && (sawActivity || sawTurnStarted)) {
               const wallMs = Date.now() - t_start;
+              console.info("[openai-compat] turn timing", {
+                sessionId,
+                mode,
+                resolve_session_ms: t_resolved - t_start,
+                get_tail_ms: t_tail - t_resolved,
+                session_send_ms: t_sent - t_tail,
+                stream_attach_ms: t_stream - t_sent,
+                first_event_ms: tFirstEvent,
+                first_token_ms: ttftMs,
+                total_turn_ms: wallMs,
+              });
               await writeChunk({
                 id: completionId,
                 object: "chat.completion.chunk",

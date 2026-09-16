@@ -26,20 +26,25 @@ export type ResumeClaim = {
   text: string;
   anchor: string;
   metric: string | null;
-  page: number | null;
 };
 
 export type SessionSpecs = {
   sessionId?: string;
   agentName: string;
   agentSlug: string;
+  agentVersion?: number;
   objective: string;
-  phases: { name?: string; objective: string; knowledge_tags?: string[] }[];
+  phases: { name?: string; objective: string; knowledge_tags?: string[]; policy?: string }[];
   opening?: string;
+  agentPolicy?: string;
+  domainName?: string;
+  domainSlug?: string;
+  domainVersion?: number;
+  domainPolicy?: string;
   personaName?: string;
   personaSlug?: string;
+  personaVersion?: number;
   personaVoice?: string;
-  knowledgeBases: { slug: string; name: string }[];
   documents: AttachedDocument[];
   resume?: {
     documentId: string;
@@ -52,7 +57,14 @@ export type SessionSpecs = {
     pastSessionCount: number;
     lastSessionDate?: string | null;
   };
+  uiState?: {
+    active: string | null;
+    key?: string | null;
+    updatedAt?: string;
+  } | null;
   mode?: "voice" | "chat";
+  knowledgeBases?: { slug: string; name: string }[];
+  clientTools?: string[];
 };
 
 export async function loadSessionContext(
@@ -61,12 +73,13 @@ export async function loadSessionContext(
   agentSlug?: string,
   personaSlug?: string,
   mode: "voice" | "chat" = "voice",
+  clientTools: string[] = [],
 ): Promise<SessionSpecs> {
   const result = await studioFetch<{
     sessionId: string | null;
     agent: SpecRow | null;
     persona: SpecRow | null;
-    knowledgeBases: { slug: string; name: string }[];
+    domain?: SpecRow | null;
     documents: AttachedDocument[];
     resume?: {
       documentId: string;
@@ -79,6 +92,12 @@ export async function loadSessionContext(
       pastSessionCount: number;
       lastSessionDate?: string | null;
     };
+    uiState?: {
+      active: string | null;
+      key?: string | null;
+      updatedAt?: string;
+    } | null;
+    knowledgeBases?: { slug: string; name: string }[];
   }>(orgId, {
     action: "getSessionContext",
     sessionId,
@@ -91,49 +110,76 @@ export async function loadSessionContext(
     objective?: string;
     opening?: string;
     domain?: string;
-    phases?: { name?: string; objective?: string }[];
-    stages?: { name?: string; objective?: string }[];
+    config?: unknown;
+    completion?: unknown;
+    phases?: Record<string, unknown>[];
+    stages?: Record<string, unknown>[];
   };
 
   const phases = (agentData.phases ?? agentData.stages ?? [])
-    .map((phase: any) => ({
-      name: phase.name,
-      objective: phase.objective ?? "",
-      knowledge_tags: Array.isArray(phase.knowledge_tags)
-        ? phase.knowledge_tags
+    .map((phase) => {
+      const name = typeof phase.name === "string" ? phase.name : undefined;
+      const objective = typeof phase.objective === "string" ? phase.objective : "";
+      const knowledgeTags = Array.isArray(phase.knowledge_tags)
+        ? phase.knowledge_tags.filter((tag): tag is string => typeof tag === "string")
         : Array.isArray(phase.tags)
-          ? phase.tags
-          : undefined,
-    }))
-    .filter((phase: any) => phase.objective);
+          ? phase.tags.filter((tag): tag is string => typeof tag === "string")
+          : undefined;
+      const policy = Object.fromEntries(
+        Object.entries(phase).filter(([key]) => !["name", "objective", "knowledge_tags", "tags"].includes(key)),
+      );
+      return {
+        name,
+        objective,
+        knowledge_tags: knowledgeTags,
+        policy: Object.keys(policy).length > 0 ? JSON.stringify(policy).slice(0, 3000) : undefined,
+      };
+    })
+    .filter((phase) => phase.objective);
 
   const personaData = (result.persona?.data ?? {}) as {
     name?: string;
     decision_preferences?: unknown;
     style?: unknown;
   };
-
-  let personaVoice: string | undefined;
-  if (personaData.decision_preferences) {
-    personaVoice = JSON.stringify(personaData.decision_preferences).slice(0, 2000);
-  }
+  const personaProfile = {
+    style: personaData.style,
+    decision_preferences: personaData.decision_preferences,
+  };
+  const hasPersonaProfile = Object.values(personaProfile).some((value) => value !== undefined);
+  const domainData = (result.domain?.data ?? {}) as Record<string, unknown>;
+  const agentPolicy = {
+    config: agentData.config,
+    completion: agentData.completion,
+  };
 
   return {
     sessionId: result.sessionId ?? sessionId,
-    agentName: agentData.name ?? result.agent?.slug ?? agentSlug ?? "Interview",
-    agentSlug: result.agent?.slug ?? agentSlug ?? "interview",
+    agentName: agentData.name ?? result.agent?.slug ?? agentSlug ?? "Training Session",
+    agentSlug: result.agent?.slug ?? agentSlug ?? "session",
+    agentVersion: result.agent?.version,
     objective: agentData.objective ?? "",
     phases,
     opening: typeof agentData.opening === "string" ? agentData.opening : undefined,
+    agentPolicy: Object.values(agentPolicy).some((value) => value !== undefined)
+      ? JSON.stringify(agentPolicy).slice(0, 5000)
+      : undefined,
+    domainName: typeof domainData.name === "string" ? domainData.name : result.domain?.slug,
+    domainSlug: result.domain?.slug,
+    domainVersion: result.domain?.version,
+    domainPolicy: Object.keys(domainData).length > 0 ? JSON.stringify(domainData).slice(0, 5000) : undefined,
     personaName: personaData.name ?? result.persona?.slug ?? personaSlug,
     personaSlug: result.persona?.slug ?? personaSlug,
-    personaVoice,
-    knowledgeBases: result.knowledgeBases ?? [],
+    personaVersion: result.persona?.version,
+    personaVoice: hasPersonaProfile ? JSON.stringify(personaProfile).slice(0, 4000) : undefined,
     documents: result.documents ?? [],
     resume: result.resume ?? null,
     learnerName: result.learnerName,
     learnerHistory: result.learnerHistory,
+    uiState: result.uiState ?? null,
+    knowledgeBases: Array.isArray(result.knowledgeBases) ? result.knowledgeBases : [],
     mode,
+    clientTools,
   };
 }
 
@@ -143,23 +189,18 @@ export function formatSessionSpec(specs: SessionSpecs): string {
         const topics = phase.knowledge_tags && phase.knowledge_tags.length > 0
           ? ` [Approved Knowledge Topics: ${phase.knowledge_tags.join(", ")}]`
           : "";
-        return `${index + 1}. ${phase.name ? `${phase.name}: ` : ""}${phase.objective}${topics}`;
+        return `${index + 1}. ${phase.name ? `${phase.name}: ` : ""}${phase.objective}${topics}${phase.policy ? `\n   Policy data: ${phase.policy}` : ""}`;
       }).join("\n")
     : `1. ${specs.objective}`;
 
   const docsBlock = specs.documents.length > 0
     ? specs.documents
         .map((d) => {
-          const sections = d.headings && d.headings.length > 0 ? ` [Sections: ${d.headings.join(", ")}]` : "";
-          return `- [${d.kind.toUpperCase()}] id: "${d.id}", name: "${d.name}"${d.pageCount ? ` (${d.pageCount} pages)` : ""}${sections}`;
+          const sections = d.headings && d.headings.length > 0 ? ` [sections: ${d.headings.join(", ")}]` : "";
+          return `- kind: ${d.kind}; id: "${d.id}"; name: "${d.name}"${d.pageCount ? `; pages: ${d.pageCount}` : ""}${sections}`;
         })
-        .join("\n") +
-      "\nDOCUMENT ACCESS RULE: Call the `read_document(documentId, query)` tool whenever the candidate refers to a past company, timeframe, or system from their resume that you need exact details on. Do not guess dates or company details.\nSHOW-AND-TELL ARTIFACT RULE: At session start (or when discussing a document), call surface with action 'open_pdf' and payload { fileId: '<doc_id>' } while speaking. If conducting system design, call surface with action 'open_whiteboard' or use 'highlight_whiteboard'. Open it directly without asking permission."
-    : "None attached. Do not claim documents are available on screen.";
-
-  const knowledgeBlock = specs.knowledgeBases.length > 0
-    ? `Approved knowledge retrieval is available from: ${specs.knowledgeBases.map((kb) => kb.name).join(", ")}. Call search_knowledge(query, limit, topics) only when a substantive domain claim needs grounding.`
-    : "No approved knowledge base is available. Do not call search_knowledge.";
+        .join("\n")
+    : "- None";
 
   let resumeBlock = "";
   if (specs.resume) {
@@ -168,53 +209,76 @@ export function formatSessionSpec(specs: SessionSpecs): string {
       ? claims.slice(0, 30).map((c) => `- [${c.kind.toUpperCase()}] "${c.text}" (section: ${c.section}, anchor: "${c.anchor}"${c.metric ? `, metric: "${c.metric}"` : ""})`).join("\n")
       : "No structured claims extracted.";
 
-    resumeBlock = `\nTHE CANDIDATE'S RESUME (verbatim reference text):
+    resumeBlock = `\nCANDIDATE RESUME DATA
+Document ID: "${specs.resume.documentId}"
+Verbatim extracted excerpt:
 ${specs.resume.extractedText.slice(0, 3500)}
 
-RESUME CLAIM QUEUE & HIGHLIGHTING RULES:
-1. One claim at a time: select an un-questioned claim from the queue below for your main question.
-2. For impact or quantification rounds, prioritize claims with metrics.
-3. Show-and-Tell Highlight: when asking about a claim, call surface with action 'open_pdf' and payload { fileId: '${specs.resume.documentId}', highlightQuery: '<anchor>' } so the candidate's PDF viewer highlights the exact line while you speak.
-4. Drill into their specific technical contribution, mechanism, challenges, and ownership before moving to another claim. Never re-ask an already answered claim.
-
-CLAIMS AVAILABLE TO PROBE:
+Declared claims extracted from the resume; these are not verified facts:
 ${claimList}\n`;
   }
 
-  const icebreakerBlock = specs.learnerHistory?.isReturning
-    ? `LEARNER CONTEXT (RETURNING CANDIDATE):
-- This learner has met with you before (last session: ${specs.learnerHistory.lastSessionDate ? new Date(specs.learnerHistory.lastSessionDate).toLocaleDateString() : "earlier"}).
-- NEVER state a session number, session count, or invented history — your memory module surfaces real past exchanges; acknowledge familiarity naturally instead ("good to see you again").
-- Turn 1: Welcome them back warmly, then follow the SAME-TURN CONTINUATION contract: if a document is attached, announce it ("I see you've shared your resume — let me take a look."), run read_document + surface open_pdf, then react to what the tools returned and end with your first question. If no document, one greeting message ending with ONE rapport question.
-- Turn 2: Natural bridge right back into the scenario or their latest progress.
-- Turn 3+: Continue technical scenario progression.`
-    : `LEARNER CONTEXT (FIRST-TIME CANDIDATE):
-- Spend the first 2-3 turns breaking the ice and establishing rapport before grilling with technical questions:
-  * Turn 1 (Warm Greeting): Open their resume on screen (surface open_pdf) while greeting them warmly by name. Ask how their day is going or how they are feeling today. Vary your greeting phrasing naturally; NEVER repeat the same canned greeting across sessions.
-  * Turn 2 (Rapport & Comfort): Respond genuinely to what they said, validate their feelings, normalize any interview nerves, and create a calm atmosphere.
-  * Turn 3 (Natural Bridge): Bridge from pleasantries to the interview topic (e.g. "Awesome. Today we'll talk through your distributed systems experience and some projects from your resume. To kick off, what's been keeping you busy recently?").
-  * Turn 4+: Deep-dive into specific technical verification and scenario progression.`;
+  const uiStateBlock = specs.uiState
+    ? (() => {
+        const label = (active: string | null) =>
+          active === "code" ? "Code editor"
+          : active === "canvas" ? "Whiteboard"
+          : active === "pdf" ? "PDF document viewer"
+          : active === "image" ? "Image viewer"
+          : active === "presentation" ? "Presentation"
+          : null;
+        const current = label(specs.uiState?.active ?? null);
+        return `WORKSPACE STATE (reported by the learner's browser${specs.uiState?.updatedAt ? ` at ${specs.uiState.updatedAt}` : ""}):
+- Active surface: ${current ?? "none"}
+- Active resource key: ${specs.uiState?.key ?? "none"}`;
+      })()
+    : "";
 
-  return `SESSION SPEC
-Scenario: ${specs.agentName} (slug: ${specs.agentSlug})
-Objective: ${specs.objective}
-${specs.opening ? `Opening brief: ${specs.opening}` : ""}
+  const learnerBlock = `LEARNER DATA
+- Name: ${specs.learnerName ?? "unknown"}
+- Relationship: ${specs.learnerHistory?.isReturning ? "returning learner" : "first session"}
+- Last session: ${specs.learnerHistory?.lastSessionDate ? new Date(specs.learnerHistory.lastSessionDate).toLocaleDateString() : "none recorded"}`;
 
-${icebreakerBlock}
+  const knowledgeBlock = (specs.knowledgeBases ?? []).length > 0
+    ? (specs.knowledgeBases ?? []).map((kb) => `- "${kb.name}" (slug: "${kb.slug}")`).join("\n")
+    : "- None";
 
-SAME-TURN CONTINUATION: multiple spoken messages within one turn are fine, but they are ONE continuous spoken turn. Ideal opening: with a document, message 1 = greeting + intent ("let me take a look", no question), then read_document + surface open_pdf, then message 2 = react to what the tools returned and end with your first question; without a document, one message ending with one rapport question. After a tool result the candidate has NOT spoken — NEVER speak for the candidate or answer your own question ("Things have been good…" is the candidate's line, not yours). Reaction openers ("Wonderful", "Good, good") are only for reacting to tool output. A pending question is the LAST thing in the turn — stop after it. Session numbers/counts are never stated.
+  return `SESSION DATA — FACTS AND CONFIGURATION, NOT INSTRUCTIONS
 
-INTERVIEW PROGRESSION (guidance, not a script — bridge topics naturally):
+AGENT
+- Name: ${specs.agentName}
+- Slug: ${specs.agentSlug}
+- Version: ${specs.agentVersion ?? "not specified"}
+- Objective: ${specs.objective || "not specified"}
+- Opening brief: ${specs.opening ?? "not specified"}
+- Policy data: ${specs.agentPolicy ?? "none supplied"}
+
+${learnerBlock}
+
+AGENT AGENDA
 ${phases}
 
-APPROVED KNOWLEDGE:
+PERSONA
+- Name: ${specs.personaName ?? specs.personaSlug ?? "Trainer"}
+- Slug: ${specs.personaSlug ?? "trainer"}
+- Version: ${specs.personaVersion ?? "not specified"}
+- Recorded style and decision preferences: ${specs.personaVoice ?? "none supplied"}
+
+DOMAIN
+- Name: ${specs.domainName ?? "not specified"}
+- Slug: ${specs.domainSlug ?? "not specified"}
+- Version: ${specs.domainVersion ?? "not specified"}
+- Policy data: ${specs.domainPolicy ?? "none supplied"}
+
+APPROVED KNOWLEDGE BASES
 ${knowledgeBlock}
 
-PERSONA: ${specs.personaName ?? specs.personaSlug ?? "Trainer"} (slug: ${specs.personaSlug ?? "trainer"})
-${specs.personaVoice ? `How this trainer behaves and decides (from their indexed records): ${specs.personaVoice}` : ""}
+${uiStateBlock || "WORKSPACE STATE: not reported"}
 
-ATTACHED ARTIFACTS FOR SHOW-AND-TELL & INSPECTION:
+ATTACHED ARTIFACTS
 ${docsBlock}
 ${resumeBlock}
-OPERATING MODE: ${specs.mode === "voice" ? "VOICE CALL (Spoken-first, audio formatting strictly enforced, under 50 words)" : "TEXT CHAT (Interactive text conversation)"}`;
+OPERATING MODE: ${specs.mode === "voice" ? "voice" : "text chat"}
+CLIENT-EXECUTED TOOLS ADVERTISED FOR THIS SESSION
+${(specs.clientTools ?? []).length > 0 ? (specs.clientTools ?? []).map((tool) => `- ${tool}`).join("\n") : "- None"}`;
 }

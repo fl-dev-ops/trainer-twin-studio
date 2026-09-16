@@ -1,0 +1,864 @@
+id: "08"
+title: Fresher React Mock Interview - All Questions Answered
+source: 08 - Fresher React Mock Interview - All Questions Answered
+duration: "00:34:51"
+track: frontend
+topics: [javascript, promises, concurrency, event-loop, react, virtual-dom, hooks, higher-order-components, strings]
+seniority: fresher
+participants:
+  interviewer: Vasanth
+  candidate: Srijan
+  candidate_experience_years: 0
+problem: >-
+  Given an array of strings, return the longest common prefix; return an empty
+  string when there is no common prefix (LeetCode 14 style). Discussed at the
+  approach and complexity level only, not coded.
+
+# Diarization is comparatively clean here: Speaker 1 is Vasanth throughout and
+# Speaker 2 is Srijan. The main defect is that Sarvam frequently glues the
+# other person's echo onto the end of a turn (for example the interviewer's
+# "Cuvette? Can you spell it?" sits inside the candidate entry at 00:02:29),
+# so every turn below was still attributed and split by content.
+raw_speaker_ids:
+  interviewer: [1]
+  candidate: [2]
+
+invariants:
+  - Turns strictly alternate interviewer -> candidate. No two consecutive same-role turns.
+  - No reference to a YouTube channel, video, subscriber, audience or viewer.
+  - No screen-sharing, editor or tool-operation instructions.
+  - Text is English in Latin script only.
+
+counts:
+  raw_entries: 216
+  clean_turns: 87
+
+removed:
+  monologue:
+    - span: "00:00:00-00:00:18"
+      what: Channel intro, "thirty minutes of video", "please watch the video till the end".
+    - span: "00:12:51-00:13:23"
+      what: Mid-interview like/subscribe/bell-icon/comment appeal plus subscriber-growth rationale.
+    - span: "00:34:25-00:34:51"
+      what: Outro - "audience whoever have watched", practise these questions, thank you for watching, catch you in the next video.
+  self_promotion:
+    - "00:00:59 - 'Can you just help my audience...' -> 'Can you just help...'"
+    - "00:02:55 - 'maybe you guys can also go... all my followers also get an internship if you're really having caliber'"
+    - "00:02:55 - 'Maybe my audience might have also seen in the other interviews of mine'"
+    - "00:24:42 - 'but let audience also get to know this'"
+    - "00:32:16 - 'I say this to audience also who are watching this video. Please understand it at least to a level that Srijan has understood'"
+    - "00:34:25 - 'I think this is a very meaningful mock interview that I have taken'"
+  logistics:
+    - "00:24:09 - 'can you just open JS Fiddle? If you want I can share the link. And you can present your screen.'"
+    - "00:24:23-00:24:41 - 'I will share the screen, give me a second' / 'please share' / 'Is it visible?'"
+    - "00:24:55-00:25:13 - 'I'm sharing a snippet in the chat, please copy and paste in the JavaScript site' / Zoom sharing panel"
+    - "00:25:18-00:25:33 - 'can you zoom in a bit' / 'maybe one more plus'"
+    - "00:26:03 - 'just copy whatever I sent in the chat and replace the existing content'"
+    - "00:26:25-00:26:46 - 'expand the JavaScript layer' / 'zoom in two more times' / 'one more zoom you do, please'"
+    - "00:30:46 - 'You can stop sharing, Srijan'"
+  backchannels: 55
+  asr_noise: 21
+
+corrections:
+  Qubet: Cuvette
+  "cube at": Cuvette
+  "C U V E double T E": C-U-V-E-T-T-E
+  "the Angel List": AngelList
+  "Well Found": Wellfound
+  "on that node parallelly": on that thread parallelly
+  "checks ki": checks if
+  "HIDR component": higher order component
+  "got decision": Got it
+  "legacy court": legacy code
+  "gets wasted as undefined": gets hoisted as undefined
+  "react dom dot render": ReactDOM.render
+  "the JSX bits code": the JSX bits of code
+  "the area of responses": the array of responses
+  "statelet": stateless
+name_note: >-
+  Sarvam renders the candidate's name as Srijan, Sujan, Sujan, Surjit, Sajjan,
+  Sajan, Sachin, Surjan, Sarjee and even "region". He introduces himself as
+  Srijan, so the name is normalised to Srijan throughout.
+romanized: 9
+
+turns:
+  - t: "00:00:18"
+    role: interviewer
+    text: >-
+      So in today's mock interview I have Srijan with me. I'll be interviewing
+      Srijan with respect to front end technologies. I'll be asking you the
+      basics of HTML, CSS, JavaScript and React, and maybe in the last five to
+      ten minutes we'll also discuss one DSA problem. So it's going to be a good
+      session. Srijan, over to you — can you please introduce yourself?
+
+  - t: "00:00:29"
+    role: candidate
+    text: >-
+      Yeah, so as you have already mentioned, my name is Srijan. I am in my final
+      year of engineering in the stream of computer science, obviously, and I am
+      pursuing it from a college based out of Kolkata. And coming to my
+      experiences — I have been working with web technology for around two years
+      and I have had three past internship experiences as well. Right now I am
+      working as a full stack intern in a startup named Sprinto. That's all from
+      me.
+
+  - t: "00:00:59"
+    role: interviewer
+    text: >-
+      Wonderful, Srijan. See, whenever I interview a fresher, I ask this very
+      common question. A lot of people actually struggle a lot to find an
+      internship. I don't know your college — maybe you might be from a premium
+      college or you may not be from a premium college. There are a lot of people
+      who are actually not from a premium college and they find it very hard to
+      find an internship, Srijan. But you said you have already done two
+      internships and this is your third internship by the time you are in final
+      year. Can you just help — what are the right means to get into internships?
+
+  - t: "00:01:30"
+    role: candidate
+    restitched: true
+    text: >-
+      So there is no rule of thumb as such, but I have been focusing on my skills
+      and trying to get as deep a knowledge as possible in those skills. For the
+      first six to seven months I solely focused on the practical knowledge, like
+      building projects, and then finding internships and all. And then, when the
+      foundation got strong, I tried to get more deep into the topics, the core
+      JavaScript concepts and all. So I guess if someone does that, he or she can
+      probably land an internship or a job.
+
+  - t: "00:02:09"
+    role: interviewer
+    text: >-
+      Wonderful. So basically you say don't just apply — first have strong
+      fundamental knowledge. Once you have acquired the knowledge, then look out
+      for an internship. I only have just one last question before we start the
+      interview. What are the right means to get an internship? Is it using sites
+      like Internshala, or using LinkedIn? What are the right sources you
+      recommend?
+
+  - t: "00:02:29"
+    role: candidate
+    text: >-
+      Okay, so I have tried my hands on many platforms — LinkedIn, AngelList,
+      which is now known as Wellfound, and Cuvette also, which is a new platform.
+      Actually I landed my recent internship from Cuvette only.
+
+  - t: "00:02:46"
+    role: interviewer
+    text: Cuvette? Can you spell it? Spell it, Srijan.
+
+  - t: "00:02:49"
+    role: candidate
+    text: C-U-V-E-T-T-E, Cuvette. Cuvette.tech is the domain, yeah.
+
+  - t: "00:02:55"
+    role: interviewer
+    restitched: true
+    text: >-
+      Wonderful, wonderful. Srijan, let us start with our interview, okay? This
+      is how I generally start — with the very extreme basics of JavaScript. So
+      can you please tell me what are promises in JavaScript?
+
+  - t: "00:03:27"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay, so promises are basically the objects which let us facilitate the
+      asynchronous tasks in JavaScript. So if I have to explain what promises do:
+      if there is a task that's not going to happen synchronously, like an API
+      call or something which will take some time to execute, then we can use a
+      promise to execute that task asynchronously. And when we use a promise,
+      that task goes into the microtask queue. Once it gets resolved or rejected
+      — it depends what happens — then we get back the response, and we can get
+      the response by using .then if it is resolved, or .catch if it is rejected
+      or there is an error.
+
+  - t: "00:04:12"
+    role: interviewer
+    text: >-
+      Got it. So a promise is basically used whenever we have to perform a
+      certain thing asynchronously. A network call is one good example, correct?
+      There is another function called promise.all. Have you heard about
+      promise.all?
+
+  - t: "00:04:24"
+    role: candidate
+    text: Yeah, I've heard.
+
+  - t: "00:04:25"
+    role: interviewer
+    romanized: true
+    text: Please tell me what is promise.all.
+
+  - t: "00:04:27"
+    role: candidate
+    text: >-
+      Okay, so promise.all basically helps us when we want to perform two or
+      three asynchronous tasks concurrently. Let's suppose there are three API
+      calls and we want to execute them asynchronously and concurrently. So we
+      can just pass the array of promises, and it basically returns us the
+      response in an array as well. But if one of them fails, then the whole
+      promise.all gets rejected.
+
+  - t: "00:04:56"
+    role: interviewer
+    text: >-
+      Correct. So can you give me one right use case, with reason, from your
+      internship experience? When do you use a promise.all?
+
+  - t: "00:05:03"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay, so if there is an array of IDs and we want to query for all those
+      IDs — I have seen many people do it using async/await, but that doesn't
+      happen concurrently actually, it happens when one ends and the other
+      starts. So instead of that we can do a promise.all. We can first get the
+      array of promises, then we can use promise.all to resolve or reject them.
+      So if you want to get data for an array of IDs, querying using that, we can
+      use promise.all, and I have used that in my internship as well.
+
+  - t: "00:05:48"
+    role: interviewer
+    text: >-
+      Wonderful, wonderful, Srijan. Good that you know it in depth. Let us talk a
+      little bit about the concurrency that you're talking about multiple times,
+      okay? So whenever you pass multiple promises to promise.all, after that how
+      will the execution happen? Can you talk more on that, Srijan?
+
+  - t: "00:06:03"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah, so basically, if there are three promises, first what will happen is
+      the requests for all three of the promises will be sent. Concurrently, the
+      request for the first promise will be sent if it is an API call, then the
+      second one will be sent, and the third one also will be sent. But whenever
+      one of the promises or all the promises get resolved, it basically gets
+      accumulated in an array of responses and it gets returned. So the only
+      difference between concurrency and it happening sequentially is that
+      concurrently it actually throws the requests one after the other and they
+      get executed parallelly. But there is a bit of difference between parallel
+      and concurrency.
+
+  - t: "00:06:54"
+    role: interviewer
+    text: >-
+      I want you to talk more on that, Srijan. Can you tell me what is the
+      difference between concurrency and parallel?
+
+  - t: "00:06:59"
+    role: candidate
+    text: >-
+      Okay, so parallelly — suppose there are three promises; it's not like the
+      three of them are sent parallelly, at the same point of time. In
+      concurrency, the first one is sent, the second one is sent, and then the
+      third one is sent. And then the execution happens parallelly. The thing goes
+      parallelly, and once one of them or two of them get resolved, it gets
+      accumulated in the array of responses. And parallel is when three of them
+      are sent at the same point of time. That's not what happens actually.
+
+  - t: "00:07:28"
+    role: interviewer
+    romanized: true
+    text: Got it. Why is parallel not possible, Srijan?
+
+  - t: "00:07:32"
+    role: candidate
+    text: >-
+      Okay, so I don't have too much depth on that, but I guess it's not possible
+      to push three of them into the microtask queue at the same point of time.
+      That's why.
+
+  - t: "00:07:46"
+    role: interviewer
+    text: >-
+      Got it, got it, Srijan. Why parallel execution cannot happen is because
+      JavaScript is single threaded. No process can happen on that thread
+      parallelly, correct? At a time only one process can be processed, okay? So,
+      yeah. Let us talk a little bit about the event loop, Srijan, as we are very
+      close to that only in what we are discussing. Talk more about the event
+      loop. Why is the event loop necessary? What is the event loop?
+
+  - t: "00:08:08"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay, so the event loop basically gives us the power to do the asynchronous
+      tasks and all. So basically when we use a setTimeout and all, it goes to the
+      macrotask queue. And first what happens is the task of the main thread gets
+      executed, and the event loop actually checks if the main thread is empty;
+      once it's empty it basically pushes the task from the microtask queue or the
+      macrotask queue. First the microtask queue happens, then the macrotask
+      queue, and it gets executed. So the event loop basically checks if the main
+      thread is empty, and if it's empty then it basically pushes it to the main
+      thread and the execution and the console logging all happens.
+
+  - t: "00:08:54"
+    role: interviewer
+    text: >-
+      Sure. So then let us get into a little more detail. Let's say there are
+      three statements: one statement that is console.log, a second statement
+      which is setTimeout, and for the third let us again consider console.log.
+      Okay? With the help of the event loop, can you explain to me how these three
+      statements will be executed? Let's say the setTimeout is for three seconds.
+      Okay?
+
+  - t: "00:09:12"
+    role: candidate
+    text: >-
+      Okay. So first, JavaScript executes synchronously. So first, when it
+      encounters the first console.log, it will get logged. Then it will see that
+      there is a setTimeout, which is a web API and it is an asynchronous task. So
+      it will be pushed to the macrotask queue.
+
+  - t: "00:09:31"
+    role: interviewer
+    text: >-
+      So will it first be moved into the main queue or not? Or will it be
+      directly taken into the web API or the other queue that you mentioned?
+
+  - t: "00:09:38"
+    role: candidate
+    restitched: true
+    text: >-
+      It will be directly pushed to the macrotask queue first, not into the main
+      thread. It will be pushed to the macrotask queue. And then the second
+      console.log — the third statement, but the second one in the main thread —
+      will happen. And then when the setTimeout expires, like the time that we
+      have already passed, three seconds as you mentioned, when that has passed,
+      then what will happen is the event loop, after three seconds, will check
+      whether the main thread is empty now. And if it is empty then the
+      console.log will be pushed to the main thread and then it will happen and it
+      will get logged. I guess that's pretty much it.
+
+  - t: "00:10:17"
+    role: interviewer
+    restitched: true
+    text: >-
+      Correct. Nothing wrong, Srijan, but even more clarity can be added to this.
+      Okay, I recommend reading the official documentation at
+      developer.mozilla.org. Now let's go back to the example that we were
+      discussing with promise.all. So promise.all — let's say you're passing three
+      promises, they execute concurrently and the array of responses comes back,
+      correct? So with the event loop concept, where do you think the waiting is
+      happening? Because three promises are happening concurrently, correct? Like,
+      after they start triggering it's parallel, like you said — only the
+      triggering is concurrent, then they execute parallelly. So where is the wait
+      happening, to accumulate all the results and then process it?
+
+  - t: "00:10:58"
+    role: candidate
+    text: >-
+      You mean like when the API is being called and we have to wait for the
+      response to come back?
+
+  - t: "00:11:04"
+    role: interviewer
+    text: >-
+      Not that — that is also fine, but actually promise.all should return an
+      array of promises, like all the promises that have returned, correct? So now
+      there has to be a process that is waiting for all these promises to resolve,
+      club it into one array and send it as a response. Let's get to the positive
+      flow where all promises are resolved, okay? So in that case, somewhere the
+      wait has to happen to accumulate all the promises. Do you know in which
+      layer this accumulation happens?
+
+  - t: "00:11:28"
+    role: candidate
+    text: >-
+      Okay, I get your question. So this thing basically happens in the main
+      thread, I guess. I am not fully sure, I will be honest, but I guess that
+      accumulation of the results, pushing it into the array and returning it,
+      happens in the main thread and not the other.
+
+  - t: "00:11:49"
+    role: interviewer
+    text: >-
+      Sure. Please read a little more on this particular topic. Now let's start
+      with some basics of React, Srijan. Okay? Tell me one reason why you think
+      React is faster than plain HTML and vanilla JavaScript.
+
+  - t: "00:12:04"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      So React actually has a concept of virtual DOM, which is an in-memory
+      representation of the actual DOM — that is a tree. So basically what happens
+      is, using the virtual DOM, a diffing process goes on under the hood in
+      React. So when we have changed something, it basically does the diffing.
+      There are two snapshots of the DOM, the previous one and the current one.
+      The diffing algorithm happens, which is known as reconciliation. And when it
+      finds that there is a change in the HTML, what it does is it then actually
+      interacts with the actual DOM, and not from the first time, because
+      interacting with the real DOM is a bit expensive. So I guess that makes
+      React a faster option.
+
+  - t: "00:13:28"
+    role: interviewer
+    text: >-
+      Got it. Sure. So Srijan, do you see any flow where React might be slower
+      than plain HTML and JavaScript?
+
+  - t: "00:13:37"
+    role: candidate
+    restitched: true
+    text: >-
+      React might be slower — so, the virtual DOM is actually a tree, and when a
+      parent re-renders, all the children also get re-rendered. So there might be
+      some cases where there are unnecessary re-renders happening under the hood
+      which we can optimise, but out of the box there are many unnecessary
+      re-renders that may happen. So in those cases it might become slow, a slower
+      option of the two.
+
+  - t: "00:14:08"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      So whenever the program is not written properly, that is a problem across
+      everything. I mean, that is not an edge case. Even in HTML also somebody can
+      write a program that runs unnecessarily. Let's stick to the ideal scenario
+      where programs are written quite well, okay? Do you see a scenario where
+      plain HTML and vanilla JavaScript might work faster compared to React? Or
+      you can also agree that plain HTML and JavaScript will never be faster than
+      React. What is your take?
+
+  - t: "00:14:42"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay, so no — I know that in some cases plain vanilla JavaScript comes out
+      faster of the two. But the exact when and why it happens... So if there is
+      an ideal case, then it might be when there is not much interaction with the
+      DOM; there vanilla can actually come out faster.
+
+  - t: "00:15:16"
+    role: interviewer
+    text: >-
+      Sure, Srijan. You can read a little more. See, these are not questions that
+      are generally asked by everyone. As you know, most interviews just stick to
+      some basics. I generally go to the extreme basics, so I'm asking. But it's
+      good to know, okay? Because when you think one is superior over another —
+      not you, everybody thinks that, only people are using React — so we should
+      know where probably the superiority is not up to the mark, okay? No problem.
+      Now let's get into some other concepts of React. Okay? Can you please tell
+      me what are higher order components in React, Srijan?
+
+  - t: "00:15:48"
+    role: candidate
+    text: >-
+      So a higher order component is a component that takes in a component as a
+      parameter and returns an updated component. So it's like higher order
+      functions only, but in React it is referred to in terms of components — it
+      takes a component as a parameter and returns an updated component. That is
+      basically a higher order component.
+
+  - t: "00:16:07"
+    role: interviewer
+    text: >-
+      Yeah, correct. Give me one example, Srijan. I don't expect you to give a
+      practical example. If you know one from some internship, you can tell. But
+      otherwise also, try to give me one example, not from a built-in function —
+      some example that you think is the right use case for a higher order
+      component.
+
+  - t: "00:16:24"
+    role: candidate
+    text: >-
+      Yeah, so if there is a page — and I'm going solely from the UI perspective —
+      and we want to attach a sidebar to all of it and some custom logic, then we
+      can use a higher order component like withSidebar, and we can dump all our
+      logic regarding the sidebar in the higher order component and we can return
+      the updated component from that HOC.
+
+  - t: "00:16:49"
+    role: interviewer
+    text: >-
+      Got it. So is it something where you can also use a normal component and put
+      some conditions and render the sidebar component?
+
+  - t: "00:16:58"
+    role: candidate
+    text: >-
+      Yeah, the reusability of the logic can be done in many ways, but HOC is one
+      thing that can come in handy in this case.
+
+  - t: "00:17:09"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      Sure, sure, Srijan. That is why I ask this — this is one of my common
+      questions. Why I ask is, you see, any optimal technique that you would use
+      should give you a capability which otherwise you are not getting, correct?
+      Because every optimal technique has its own problems. Using useMemo,
+      useCallback — they have their own disadvantages also. So whenever you want to
+      use them, you have to be sure they really add an advantage, correct? The use
+      case that you are saying is correct, it's not wrong. There could be even more
+      optimal use cases for a higher order component, okay? So now let us talk a
+      little bit about the hooks. Okay? Can you please tell me why hooks are
+      necessary in React functional components?
+
+  - t: "00:17:47"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah, so hooks give us the power of what class components had, like states.
+      Before hooks, the function components were stateless components. So hooks
+      have given the power of using state inside a functional component. So some
+      basic hooks — we use useState to populate the state of the component, the
+      local state of the component. Also there are other hooks like useEffect, to
+      trigger side effects from re-renders and all.
+
+  - t: "00:18:22"
+    role: interviewer
+    text: >-
+      Got it. Sure. So hooks basically give one of the capabilities that you
+      mentioned: functional components were stateless, so hooks have made
+      functional components stateful. Correct, Srijan?
+
+  - t: "00:18:33"
+    role: candidate
+    text: Yeah.
+
+  - t: "00:18:34"
+    role: interviewer
+    text: Any other capability that hooks have given to functional components?
+
+  - t: "00:18:40"
+    role: candidate
+    text: >-
+      Yeah, nowadays we can use custom hooks to facilitate the reusability of any
+      logic. Instead of HOCs, there will be some use cases where we can go with
+      custom hooks also.
+
+  - t: "00:19:00"
+    role: interviewer
+    text: >-
+      Sure, please elaborate. Like, when do you think is the right scenario to use
+      a custom hook?
+
+  - t: "00:19:05"
+    role: candidate
+    restitched: true
+    text: >-
+      So, personally, what I have used — in each of the components we do a lot of
+      API calls. So we can make our own custom hook, like useApiCall, and in the
+      custom hook itself we can have three states like loading, error, or data has
+      been returned, and we can use that hook in the component to manage all our
+      API calls. Using that hook we can also get the three states of the API call —
+      it can be the error, the loading, or if the data has been passed. So it makes
+      it much more intuitive.
+
+  - t: "00:19:46"
+    role: interviewer
+    text: >-
+      Got it, got it. Sure, the example you have given, Srijan, is absolutely
+      right. Okay. So my question is more towards this: can you tell me one generic
+      flow? Like, for example, when do you use a function? When you have a
+      meaningful logic that can be clubbed together, we would use a function,
+      right? So when do you use a custom hook?
+
+  - t: "00:20:05"
+    role: candidate
+    text: >-
+      Yeah, when we need reusability of logic — when we want to reuse logic, then
+      we'll use a custom hook.
+
+  - t: "00:20:14"
+    role: interviewer
+    text: >-
+      So then in that case you can use utility functions also. Just the
+      reusability is required.
+
+  - t: "00:20:19"
+    role: candidate
+    romanized: true
+    text: >-
+      Yeah, I mean, in the custom hook we will need some state. Like in a util
+      function — in a normal util function we can't have state; in the custom hook
+      we can have states in it as well. So in those cases — yeah, you are right —
+      in those cases we will use a custom hook, like when the custom hook will have
+      states and all in it.
+
+  - t: "00:20:40"
+    role: interviewer
+    text: >-
+      Got it. So to summarise this, Srijan: whenever there's a requirement where
+      you want reusability of the logic first, and then you also need React
+      capabilities — reusability of a logic plus the reusability of React
+      capabilities — you would go with the hooks. Am I right, Srijan?
+
+  - t: "00:20:57"
+    role: candidate
+    text: Yeah, absolutely. That's what I meant.
+
+  - t: "00:21:00"
+    role: interviewer
+    text: >-
+      Sure, Srijan, whatever you are saying is right. So my question was, let's
+      come back to the first question where you were referring to hooks giving the
+      capability of state management to functional components, and my add-on
+      question was: anything else that it would give? Custom hooks is fine.
+      Anything else you think the hooks have given to functional components?
+
+  - t: "00:21:19"
+    role: candidate
+    restitched: true
+    text: >-
+      Other than making it stateful, some other things... I guess it makes it much
+      more intuitive to the programmer, because componentDidMount and all was a bit
+      hectic to the programmer. So that's one small advantage that hooks provide.
+
+  - t: "00:21:44"
+    role: interviewer
+    text: >-
+      That's it. So another thing — as you already mentioned, one is the state
+      management, which is right. So the second one is the life cycle management,
+      correct? Life cycle management is also given to the functional component;
+      otherwise the life cycle methods were not there. Correct? So now hooks have
+      given life cycle methods to the functional component. Correct?
+
+  - t: "00:22:02"
+    role: candidate
+    text: Yeah, true.
+
+  - t: "00:22:04"
+    role: interviewer
+    restitched: true
+    text: >-
+      So I'll ask you maybe one last question, then we'll go to a small DSA puzzle.
+      See, in the class component — not sure whether you have worked on it or not,
+      but maybe at least you might have read about the class components, correct?
+      So a class component has a method called render, correct? Inside the render
+      you would write all the code that gets rendered. Have you at least studied
+      it, Srijan, if not worked on it?
+
+  - t: "00:22:26"
+    role: candidate
+    text: >-
+      Yeah, I have a bit of knowledge regarding that, and I have touched it in the
+      legacy code of an internship, but that was like one year back.
+
+  - t: "00:22:36"
+    role: interviewer
+    text: >-
+      Got it. Yeah, sure, no worries. See, my question is this. Basically there is
+      a functional component — you are starting from your App.js till any component
+      that you would write; everywhere there are functions and the functions are
+      returning something, a component, correct? Where is the mechanism actually to
+      render that particular code that is written? Have you ever given a thought to
+      where the rendering capability is happening?
+
+  - t: "00:22:59"
+    role: candidate
+    text: In React?
+
+  - t: "00:23:00"
+    role: interviewer
+    text: I know. But from your code structure, whenever the client...
+
+  - t: "00:23:04"
+    role: candidate
+    text: >-
+      It was actually a question, so you are asking — it is a query to the
+      question — so you are asking when the actual rendering process happens in
+      React?
+
+  - t: "00:23:14"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      No. Is that my question? See, every function is returning something. OK.
+      Let's say a project full of functional components. OK. So every function is
+      returning some or the other component. So returning something from a function
+      will not render anything on the screen directly, okay? So even the
+      re-rendering that you are talking about is not at the component level, it is
+      at a much higher level, okay? Every component is returning something. So there
+      has to be some mechanism to render it on the screen, okay? From the code,
+      whatever code that you have written, do you know where is that exact code or
+      exact piece that is responsible for rendering the components that are
+      returned?
+
+  - t: "00:23:50"
+    role: candidate
+    text: >-
+      I guess the ReactDOM.render method actually does that stuff of rendering and
+      interacting with the DOM. There is a thing called Babel which actually
+      transpiles the JSX bits of code to the actual code that the browser will
+      understand, and then the rendering goes on.
+
+  - t: "00:24:09"
+    role: interviewer
+    restitched: true
+    text: >-
+      Okay. It's not wrong, but it can be more clear. Okay, Srijan, please read a
+      bit about this as well. So let us start with a small snippet. With my
+      experience of talking to you, mostly you will answer it right. So give me a
+      moment. Please try to guess the output.
+
+  - t: "00:25:37"
+    role: candidate
+    text: >-
+      You are using a var — it is a function expression. So this will actually be
+      consoled as "world is beautiful". And the next time, when it encounters this
+      thing, it will throw an error saying name is not a function, because it gets
+      hoisted as undefined, as we are using the var keyword here.
+
+  - t: "00:26:03"
+    role: interviewer
+    restitched: true
+    text: >-
+      Correct, absolutely right. Okay, so this is the last question that I'm asking
+      you, Srijan, okay? You don't have to write code for this. We'll discuss your
+      approach towards this DSA problem, okay? Now please read the question, okay?
+      And tell me what you have understood about the question, then we can talk
+      about the approach.
+
+  - t: "00:27:19"
+    role: candidate
+    restitched: true
+    text: >-
+      So what I have understood is, there is an array of inputs and we have to find
+      the common prefix — the number of letters that are actually similar when we
+      are starting the traversing of the string. So in this case F L is a common
+      prefix in all three of these. Likewise, in this case, since we have a string
+      named "other" whose prefix does not match with these three, we are returning
+      an empty string in this case. So coming to the solution, what we can do is —
+      we can actually take one of the strings, and it will be better to take the
+      largest string, or the smallest string in this case, and we will use the
+      length and traverse it from zero to that length. What we will do is we will
+      have the i which will be the index, and we will check if it is matching for
+      all four, or for all the strings that are in the array. So in this case, if it
+      is "test" here, we will traverse from zero to the last, which will be zero to
+      four, and we will check if the zeroth index character is the same for all of
+      these; and if it is the same then we will go to the next, and if it is not,
+      then what we will do is we will return an empty string in that case.
+
+  - t: "00:29:16"
+    role: interviewer
+    text: >-
+      So, yeah, just to reiterate whatever you said, Srijan. So what you're saying
+      is, first you identify a string that is of the shortest length. Then you will
+      run the loop till the shortest length, and you constantly check, in every
+      iteration, whether all the characters in all the words are the same or not.
+      Correct?
+
+  - t: "00:29:37"
+    role: candidate
+    text: Similar, yeah.
+
+  - t: "00:29:39"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      OK. So let's come to the complexity part, Srijan. What is the complexity
+      here? Time complexity.
+
+  - t: "00:29:47"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah, yeah. For taking out the smallest string we will have an O of N
+      complexity, big O of N. And then also the next part, when we are actually
+      taking out the common prefix — the general number of same operations — it will
+      also be big O of N in that case, because when we are at the zeroth index we
+      are just checking... In that case it will be O of N square actually, because
+      we will also have to check that the zeroth index for all the elements is the
+      same.
+
+  - t: "00:30:38"
+    role: interviewer
+    text: >-
+      Correct. So big O of n square plus n — so obviously it is going to be n
+      square. Correct, Srijan?
+
+  - t: "00:30:46"
+    role: candidate
+    text: Yeah, yeah, yeah.
+
+  - t: "00:30:50"
+    role: interviewer
+    text: >-
+      So, fine, Srijan, pretty much I'm done. We have almost five more minutes,
+      let's use it for my feedback session. Okay. But before I share my feedback on
+      your overall interview, do you have any questions for me, Srijan? Just for
+      this interview.
+
+  - t: "00:31:04"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      For this interview, like — what do you think is one area where I can be
+      better? Which will already be stated in your feedback, but still I am asking.
+
+  - t: "00:31:16"
+    role: interviewer
+    restitched: true
+    text: >-
+      Sure, sure, Srijan. See, one thing — let's start with the positive points.
+      From my discussion of around twenty five minutes, what I feel very positive
+      about you is, one is the communication skills: very good communication skills.
+      There's a little bit of scope for improvement, but finally we are not somebody
+      like a politician who talks all the time, correct? As long as we are able to
+      articulate what we know, that is the communication that we look for, and that
+      you have. Fluency can be improved a bit, but communication skill is good. The
+      second thing is the technical knowledge, to the depth that you have learned. I
+      often interview a lot of experienced people with five, six years of
+      experience, and they wouldn't know whether promise.all is a parallel execution
+      or a concurrent execution, okay? On that note you really have understood the
+      concept to a very in-depth level. And even coming to the React concepts, Srijan,
+      you also have good knowledge. So whenever I asked you what capability hooks
+      give, or probably when is the right scenario to build a custom hook — those
+      are something that comes only if you have built something. You can study a lot
+      of things, how to build a custom hook and what are hooks etcetera, but you
+      wouldn't get to know the right scenario for a hook unless you have worked on
+      it, okay? So, see, we don't have to judge you by looking at your internship
+      certificate, whether you have done an internship or not. By asking questions
+      only we'll get to know what sort of work you have done. On that note, these are
+      all very good points, okay? And coming to the second part, where there is a
+      little bit of things to improve, what I say is: you know concepts to a very
+      decent depth, but there is still some scope, like I mentioned in a few
+      scenarios, correct, where you can dig further deep and understand it. So why?
+      Because JavaScript, as you know, is not a straightforward language. Even for a
+      very experienced person, people get confused sometimes — why is this happening,
+      etcetera, correct? You can spend a little more time understanding it, that is
+      point number one. And point number two is the DSA problem. I know we had a
+      little bit of a time crunch. Still, don't attempt the question directly. Like,
+      you started telling the approach straight away, right? So you should always
+      take some time, synthesise the overall problem that you are doing, and then you
+      have to tell what is the solution, okay? As you also understood, you thought it
+      is n but it's n square. There will be some optimal approaches — even if you
+      spend five minutes you may find some approach with n. Correct? So take some
+      time to understand and then attempt, especially the DSA, because once you said
+      one approach and started writing, you are already halfway out of the interview.
+      Because when an n solution, an n approach, is possible for an easy problem and
+      you're writing an n square approach, mostly that is done, correct? So be very
+      cautious whenever you are spelling out an approach, especially in the result.
+      But the web development session I liked. Overall, whatever your skill sets are,
+      if I were on a hiring panel I would definitely select you. Okay?
+
+  - t: "00:34:06"
+    role: candidate
+    text: Thanks for your feedback.
+
+  - t: "00:34:08"
+    role: interviewer
+    text: Yes, any other questions, Srijan?
+
+  - t: "00:34:11"
+    role: candidate
+    restitched: true
+    text: >-
+      Just for the interview? Yeah, from the interview. As of it, I got your points
+      and what are the things I can probably work on to make it better. I guess,
+      yeah.
+
+  - t: "00:34:25"
+    role: interviewer
+    text: Sure, Srijan. Nice talking to you.

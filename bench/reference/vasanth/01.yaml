@@ -1,0 +1,822 @@
+id: "01"
+title: React and JavaScript Mock Interview - Mid-Level Engineer
+source: 01 - React and JavaScript Mock Interview - Mid-Level Engineer
+duration: "00:37:25"
+track: frontend
+topics: [javascript, react, event-loop, closures, reconciliation, hoisting, settimeout]
+seniority: mid
+participants:
+  interviewer: Vasanth
+  candidate: Anubhav
+  candidate_experience_years: 4
+
+# Raw Sarvam speaker_ids are unreliable here: 5 ids for 2 people. Vasanth is
+# mostly id 1 but also appears as 0 and 2; Anubhav is mostly 4 and 3 but also
+# appears as 0 and 2. Every turn below was attributed by content.
+raw_speaker_ids:
+  interviewer: [1, 0, 2]
+  candidate: [4, 3, 0, 2]
+
+invariants:
+  - Turns strictly alternate interviewer -> candidate. No two consecutive same-role turns.
+  - No reference to a YouTube channel, video, subscriber, audience or viewer.
+  - No screen-sharing, editor or tool-operation instructions.
+  - Text is English in Latin script only.
+
+counts:
+  raw_entries: 268
+  clean_turns: 100
+
+removed:
+  monologue:
+    - span: "00:00:00-00:00:48"
+      what: Channel intro, subscriber count, giveaway framing, LinkedIn plug.
+    - span: "00:22:47-00:23:11"
+      what: Mid-interview like-and-comment appeal to viewers.
+    - span: "00:36:05-00:37:25"
+      what: Post-interview outro - Google form, subscribe, GitHub repo, Medium.
+  self_promotion:
+    - "00:08:01 - 'I've created one video recently about function caching... whenever you have time check out'"
+    - "00:22:01 - 'I've tried explaining in my hoisting videos, I'll share the links personally with you'"
+    - "00:32:35 - 'I have already made tutorials, all the way till linked lists I have covered'"
+    - "00:35:25 - entire turn: 'I have sixty plus videos... watch my summary videos'"
+    - "00:22:01 / 00:32:35 - 'I'll try to link that on the screen for the audience'"
+    - "00:35:16 - 'hope you are watching Uncommon Geeks'"
+  logistics:
+    - "00:13:47 - 'I'll share a link, present your screen, can you open JSFiddle'"
+    - "00:14:09-00:14:34 - adding the question in the Zoom chat, third window, don't run"
+    - "00:16:35-00:16:54 - top-left run icon, Console (Beta), expand the white area"
+    - "00:18:02-00:18:38 - copy, paste, comment the above one, line fifteen to nine, zoom in"
+    - "00:19:05 - 'can you please run now, top left'"
+    - "00:27:23-00:27:45 - zoom out, run the code, expand white area, clear console, run again"
+    - "00:29:47 - 'you can stop sharing'"
+  backchannels: 61
+  asr_noise: 34
+
+corrections:
+  hosting: hoisting
+  "Herodotor component": higher order component
+  "uncut type error": Uncaught TypeError
+  "Different is algorithm name": Diffing is the algorithm name
+  "the rate of time": ahead-of-time
+  underlined: undefined
+  war: var
+  "the mang": MAANG
+  "type of A": typeof a
+romanized: 8
+
+turns:
+  - t: "00:00:54"
+    role: interviewer
+    text: >-
+      Hi Anubhav. As you know, I'm Vasanth. Thanks for registering for the mock
+      interview. Can I know something about you, Anubhav — whatever you wish to
+      share? What are your skill sets? What sort of interview, which companies
+      are you aspiring for at the moment?
+
+  - t: "00:01:24"
+    role: candidate
+    text: >-
+      So I have a total of four years of experience as a full stack developer,
+      and the tech stacks that I work on mostly include JavaScript, React, HTML,
+      CSS on the front end, and on the back end I usually work with Node.js. And
+      the companies that I'm targeting — basically I'm looking forward to joining
+      some big product-based companies.
+
+  - t: "00:01:48"
+    role: interviewer
+    text: >-
+      Good, good. Since you are aspiring for big companies, it is good you take
+      some serious mock interviews like this so that you get the end-to-end
+      preparation practice. Sure, Anubhav. Let's get started with extreme
+      fundamentals. This is something that I generally ask at the beginning of
+      the interview. JavaScript is a single-threaded interpreted programming
+      language. Am I right or wrong, Anubhav?
+
+  - t: "00:02:10"
+    role: candidate
+    text: Yeah, that is correct.
+
+  - t: "00:02:12"
+    role: interviewer
+    text: Correct. So can you tell me what is interpretation in general?
+
+  - t: "00:02:16"
+    role: candidate
+    romanized: true
+    text: >-
+      So interpretation is like, one by one, each line of code will get executed
+      and then you will receive the output.
+
+  - t: "00:02:24"
+    role: interviewer
+    text: >-
+      Exactly, absolutely right. So can you tell me any interpreted language
+      example other than JavaScript?
+
+  - t: "00:02:32"
+    role: candidate
+    text: I think C. C was interpreted — not sure.
+
+  - t: "00:02:36"
+    role: interviewer
+    text: >-
+      C is compiled. C, Java, C# — all are compiled. No problem. So now, if
+      JavaScript is interpreted, line-by-line execution happens. In general, do
+      you know how JavaScript code is executed — the execution context and those
+      things? Can you please elaborate a little bit?
+
+  - t: "00:02:58"
+    role: candidate
+    restitched: true
+    text: >-
+      So we have this main stack wherein all the statements that we have written
+      in JavaScript are brought in, and then we get the output basically on the
+      terminal or browser, wherever we want to see the output. And basically the
+      event loop is the concept behind all this, which helps in managing and
+      allocating different tasks in the different queues that we have — we have
+      the microtask queue as well as another queue for web APIs. So all of this
+      is managed: if we have promises, it will be put in the microtask queue; if
+      we have a web API like setTimeout, it is placed in a different queue; and
+      if we have a console.log statement, they are directly executed on the
+      stack, and the rest are handled asynchronously and then we get the output.
+
+  - t: "00:03:53"
+    role: interviewer
+    text: >-
+      Correct, fine. The event loop concept is fine, Anubhav. I am much more
+      interested in the execution context — how the execution context is
+      created. Let's say you have created a file called one.js. There are some
+      functions in it, you are calling the function, you are doing some
+      operations. Whenever you run this JavaScript on the browser, what all
+      operations take place? Can you please try explaining that? First, what
+      happens whenever the browser encounters it?
+
+  - t: "00:04:22"
+    role: candidate
+    text: >-
+      So from the first instance, there are two steps in which JavaScript
+      handles the execution of the code. The first is it will check the
+      different functions and whatever variables are there, so it will try to
+      create that context. And from the second time it will basically go over
+      those values and all those things and then give us the output. That's from
+      a high level.
+
+  - t: "00:04:49"
+    role: interviewer
+    text: >-
+      True, true, true. What you said is absolutely right. This is a two-step
+      execution that JavaScript takes. So now my question is: you say
+      interpretation is line-by-line execution, correct? So if line-by-line
+      execution is happening, but the execution is happening in two steps, then
+      they're contradicting each other, correct? So that's not line-by-line
+      execution. Can you justify how line-by-line execution happens in this
+      two-step execution process?
+
+  - t: "00:05:16"
+    role: candidate
+    text: >-
+      I will say it is kind of a just-in-time compilation that basically runs
+      behind, with which JavaScript is basically able to give us the output.
+      And... yeah, I will have to read more about it, I think.
+
+  - t: "00:05:35"
+    role: interviewer
+    text: Sure, no problem. So you think React is a just-in-time compilation?
+
+  - t: "00:05:40"
+    role: candidate
+    text: >-
+      Oh yeah, it's kind of a library of JavaScript, though it has a number of
+      more concepts as well.
+
+  - t: "00:05:50"
+    role: interviewer
+    text: >-
+      Got it. So tell me the difference between just-in-time compilation and
+      ahead-of-time compilation. Also, if you know, please tell me which popular
+      framework uses ahead-of-time compilation.
+
+  - t: "00:06:08"
+    role: candidate
+    text: I'm not very sure of ahead-of-time.
+
+  - t: "00:06:10"
+    role: interviewer
+    text: >-
+      No problem. The purpose I ask all these in the beginning is, these are
+      extreme fundamentals, correct? You are able to answer most of them, and
+      wherever you think you are not so confident, please touch base on those.
+      Now, let me ask you a few basic questions, another continuation of
+      JavaScript only. Can you tell me what are closures in JavaScript?
+
+  - t: "00:06:31"
+    role: candidate
+    text: >-
+      So closures are basically kind of functions in JavaScript which help the
+      inner function to have more control over the context of the outer function
+      as well — like you can have a certain variable which you can control with
+      the help of the inner function.
+
+  - t: "00:06:49"
+    role: interviewer
+    romanized: true
+    text: It's not wrong, but not fully correct. Do you want to rephrase, Anubhav?
+
+  - t: "00:06:57"
+    role: candidate
+    text: >-
+      Like controlling the scope, I would say. That is what makes more sense.
+      Inner functions have more access to the scope of outer functions.
+
+  - t: "00:07:07"
+    role: interviewer
+    text: >-
+      Correct, correct. This definition is fine. So basically inner functions
+      have access to the lexical environment of the outer function. If there is
+      no outer function, the global itself is the outer function. Correct? That
+      is called closure. Can you tell me one practical example where you might
+      use closures? Obviously in interviews there are many questions people ask —
+      setTimeout and all those things. Any practical example that you think
+      where closures can be used?
+
+  - t: "00:07:39"
+    role: candidate
+    text: >-
+      A basic application is, for example, you want to keep the value in check
+      for all the different function calls that we have for some sort of
+      variable. But in practical terms, if it is used somewhere, I will have to
+      check upon it.
+
+  - t: "00:08:01"
+    role: interviewer
+    text: >-
+      Sure, sure. Function caching is one of the good and efficient examples of
+      using closures — how to cache a function with a variable number of
+      arguments. Obviously there are a lot of other examples too where
+      practically we can use closures. So, I'll ask you just a couple of
+      questions on React, then we'll solve some snippets. Tell me, what is
+      reconciliation in React?
+
+  - t: "00:08:29"
+    role: candidate
+    restitched: true
+    text: >-
+      So reconciliation is kind of the mechanism with which React basically does
+      the re-rendering. It uses certain algorithms, it compares the different —
+      because it creates a tree kind of structure, like the DOM elements we have,
+      the tree structure — and the different nodes, they try to compare basically
+      what was previously being rendered and what is the new set of structure in
+      the virtual DOM. So they kind of compare it and then render only those
+      certain nodes which need to be re-rendered or which have a certain kind of
+      change.
+
+  - t: "00:09:04"
+    role: interviewer
+    text: >-
+      Exactly. Can you tell me which algorithm is used for this tree comparison?
+      As you might know, tree comparison is a very costly operation, correct?
+      Can you tell me which algorithm is used for this comparison?
+
+  - t: "00:09:14"
+    role: candidate
+    text: I think it is diffing, something — diffing.
+
+  - t: "00:09:16"
+    role: interviewer
+    text: >-
+      Correct. Diffing is the algorithm name. Absolutely right. I have one
+      practical question, Anubhav. Think and answer. Let's say you have plain
+      HTML and JavaScript code written — for example, just an input box and a
+      button, nothing much. The same code is written in React as well. As React
+      proposes the concept of reconciliation and it technically says it is faster
+      than plain JavaScript, so people should basically use it. You tell me
+      whether React is faster than vanilla JavaScript in all the scenarios or
+      not.
+
+  - t: "00:09:52"
+    role: candidate
+    text: >-
+      So I think there might be certain scenarios where React won't be faster,
+      because it does some kind of unnecessary rendering at times as well,
+      depending upon the structure we have created in our file — like if we have
+      a parent or child kind of thing. So we have to enhance it step by step, and
+      so JavaScript might have an edge at times. Not necessarily, and we can
+      prevent creating React components.
+
+  - t: "00:10:22"
+    role: interviewer
+    text: >-
+      Got it. So the answer is right, but what an interviewer will generally
+      expect is that you should tell an exact scenario, correct? Where JavaScript
+      is faster than React. Please check certain scenarios. Your answer is right,
+      but it can be right only when you justify it. Tell me, what are higher
+      order components in React?
+
+  - t: "00:10:44"
+    role: candidate
+    text: >-
+      Higher order components are kind of created in order to reduce the
+      redundancy which might be there in certain kinds of components that we have
+      created, and in order to prevent that effort we create a component which
+      has a certain set of execution being handled at the higher level, and we
+      pass our component to it so that it basically doesn't alter the thing but
+      it adds certain kinds of things to that particular component that we are
+      passing.
+
+  - t: "00:11:13"
+    role: interviewer
+    text: >-
+      Give me one practical example, Anubhav. Don't give me any built-in
+      examples — a practical example where you created a higher order component.
+
+  - t: "00:11:21"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      So I had one scenario with ref forwarding. Basically I was using
+      forwardRef, and there I passed it to a higher order component. I wanted, I
+      think, to highlight some of the input boxes, and for that I passed it,
+      because that is also kind of a higher order option.
+
+  - t: "00:11:47"
+    role: interviewer
+    text: >-
+      I need more concrete, Anubhav. Can you please elaborate — why you needed a
+      higher order component? Without a higher order component, what problem
+      would you have faced? I mean, what inefficiency would you have faced? Can
+      you elaborate?
+
+  - t: "00:12:00"
+    role: candidate
+    restitched: true
+    text: >-
+      So, for instance, I can take an example wherein I was rendering some kind
+      of data from an API. So there were two sets of components and they were
+      both again fetching data from the same API. Though the UI varied a little
+      bit, the basic call, the network call, was the same. So in order to handle
+      that, a higher order component was created and then the data was fetched in
+      that particular component so that it could be supplied to this component.
+
+  - t: "00:12:35"
+    role: interviewer
+    text: Higher order component you use for making a network call. Am I right?
+
+  - t: "00:12:40"
+    role: candidate
+    text: Yeah, like that.
+
+  - t: "00:12:41"
+    role: interviewer
+    text: >-
+      Got it. But rather than making the same set of activity in both — just the
+      URL and other things might be changed — you have tried creating a higher
+      order component which can handle these activities. Am I right, Anubhav?
+
+  - t: "00:12:52"
+    role: candidate
+    text: Right.
+
+  - t: "00:12:52"
+    role: interviewer
+    text: >-
+      Correct. So I'll ask you one simple question around this. I got the
+      scenario where you used it. Can't you just use a utility class to do this
+      activity? Just a file which will export a function which will obviously do
+      post, get, etcetera, and you pass the URL and the parameters in and it will
+      return the result to you. Can't you use that approach? That is also
+      possible, correct?
+
+  - t: "00:13:15"
+    role: candidate
+    text: Correct, correct.
+
+  - t: "00:13:17"
+    role: interviewer
+    text: >-
+      The purpose I ask this question, Anubhav, is that every efficient technique
+      like a higher order component comes with its own complexities. Higher order
+      component, useMemo, useCallback — anything that gives you efficiency comes
+      with its own set of trade-offs in performance. Correct? So it is good to
+      use them only when required. Correct? So I generally ask some practical
+      scenarios. Many people say Redux connect. Correct? Redux connect is one of
+      the most common usages of the higher order component. But it is not
+      something that we want to use — it is inherently something you cannot avoid
+      using, so you are using it. So I asked for practical examples just around
+      that. Anyway, now let's spend around fifteen minutes, Anubhav, on some
+      snippet-driven questions. My expectation is that you predict the output.
+      Guess the output — you have a minute to guess. So there are three logs
+      basically: typeof a, typeof b and typeof c.
+
+  - t: "00:15:57"
+    role: candidate
+    text: >-
+      It should be undefined, because the const is not stored, so they can't have
+      access. Basically checking typeof — I think it should be undefined for all
+      three.
+
+  - t: "00:16:26"
+    role: interviewer
+    text: >-
+      Got it. So your typeof a, b, c are undefined, correct? That's what you are
+      saying.
+
+  - t: "00:16:33"
+    role: candidate
+    text: That's what my guess is.
+
+  - t: "00:16:55"
+    role: interviewer
+    romanized: true
+    text: >-
+      So it is not all three that are undefined — one is undefined and the rest
+      two are numbers, OK? Can you try deducing why the remaining two are
+      numbers, Anubhav?
+
+  - t: "00:17:10"
+    role: candidate
+    text: I thought that it should be undefined as well.
+
+  - t: "00:17:17"
+    role: interviewer
+    text: >-
+      It's not an easy question. It's a medium-to-hard question only. I mean,
+      even the first time when I looked at it, I also answered all three as
+      undefined only. That's why I thought of putting it, so that somebody else
+      will not make that mistake. So you would like to guess, or we'll go to the
+      next question?
+
+  - t: "00:17:38"
+    role: candidate
+    text: Let me check it for five seconds.
+
+  - t: "00:17:44"
+    role: interviewer
+    text: What, Anubhav? I did not hear.
+
+  - t: "00:17:47"
+    role: candidate
+    text: I said, yeah, we can move to the next one.
+
+  - t: "00:17:50"
+    role: interviewer
+    text: Sure, sure. Let me give you another snippet.
+
+  - t: "00:18:56"
+    role: candidate
+    text: >-
+      It should print both the statements. The first output should be "is to
+      call" and then it should be "hello world".
+
+  - t: "00:19:14"
+    role: interviewer
+    text: >-
+      It is printing "world is beautiful", but "hello world" is not printing — it
+      is getting the Uncaught TypeError. Correct?
+
+  - t: "00:19:31"
+    role: candidate
+    text: Yeah.
+
+  - t: "00:19:32"
+    role: interviewer
+    text: Yes. Can you try deducing again why you are getting the type error?
+
+  - t: "00:19:40"
+    role: candidate
+    text: Okay, I'll do something.
+
+  - t: "00:20:24"
+    role: interviewer
+    text: What is happening?
+
+  - t: "00:20:26"
+    role: candidate
+    text: I think it is something to do with var.
+
+  - t: "00:20:34"
+    role: interviewer
+    text: Can you be a little louder, Anubhav? I am not clearly hearing.
+
+  - t: "00:20:37"
+    role: candidate
+    text: Uh yeah, so I said I think it's something to do with the var.
+
+  - t: "00:20:42"
+    role: interviewer
+    text: OK. You want to convert var into const or let and try?
+
+  - t: "00:20:47"
+    role: candidate
+    text: Yeah, I think let's do that.
+
+  - t: "00:20:49"
+    role: interviewer
+    text: Please, please try.
+
+  - t: "00:21:10"
+    role: candidate
+    text: That would not work, because the call is before the definition of the function.
+
+  - t: "00:21:55"
+    role: interviewer
+    romanized: true
+    text: OK, we will go to the next question, Anubhav. Or you want to still guess?
+
+  - t: "00:21:59"
+    role: candidate
+    text: Yeah, no problem.
+
+  - t: "00:22:01"
+    role: interviewer
+    text: >-
+      No problem. See, it's a simple hoisting concept. This is the last snippet
+      that I'll give you, Anubhav. It's the most common one — I like asking this
+      question, so I ask it in almost all the interviews. Can you guess the
+      output?
+
+  - t: "00:23:22"
+    role: candidate
+    text: It will print five, five times.
+
+  - t: "00:23:27"
+    role: interviewer
+    text: >-
+      So it prints five, five times — with what interval, Anubhav? Will it print
+      five at a time, or is there some delay? One second? So you mean you run the
+      code, no delay, immediately all the five are printed? Or there is a one
+      second delay and then the five are printed? Or after printing all, there is
+      some delay? How is it?
+
+  - t: "00:23:47"
+    role: candidate
+    text: >-
+      They should not be delayed, because by the time the setTimeout gets
+      executed the loop has already entered. So it should be all at once, without
+      delay.
+
+  - t: "00:24:03"
+    role: interviewer
+    text: >-
+      Are you sure? Can you just justify why there is no delay between printing,
+      or at the beginning of printing, why there is no delay? Can you justify
+      just that thing? So overall, how many setTimeouts are created, Anubhav? You
+      tell me.
+
+  - t: "00:24:31"
+    role: candidate
+    romanized: true
+    text: So only there will be a total of five only.
+
+  - t: "00:24:35"
+    role: interviewer
+    text: >-
+      Exactly. What you said is right. So five timeouts are created, correct?
+      Each is having a delay of what? I mean, a timeout of...
+
+  - t: "00:24:44"
+    role: candidate
+    text: Yeah, it says a thousand milliseconds, so one second.
+
+  - t: "00:24:50"
+    role: interviewer
+    text: >-
+      Correct. So there are five timeouts created with a one second delay each.
+      Correct? So you're telling me when you run the code there is no delay in
+      printing.
+
+  - t: "00:25:09"
+    role: candidate
+    text: They shouldn't be, because they will be put in a different queue.
+
+  - t: "00:25:14"
+    role: interviewer
+    text: >-
+      Let's come to the output part separately, Anubhav. Just tell me now,
+      whenever this runs, tell me what will happen. Like, as soon as this
+      statement is encountered, how many seconds will the for loop take to
+      execute? Then how setTimeout will — step by step, can you just explain? I
+      don't want to get into very much depth like execution context and all those
+      things, just the basics. How will the things execute? Probably we can take
+      a little bit of event loop and explain.
+
+  - t: "00:25:40"
+    role: candidate
+    restitched: true
+    text: >-
+      OK, so this is a browser API, setTimeout. So they will be put in a separate
+      queue as and when the loop is iterating. So nothing will be executed until
+      their execution is completed. And once the execution is over — like this
+      delay is over, of a thousand milliseconds — then they will be brought back
+      to the main stack and then they execute.
+
+  - t: "00:26:11"
+    role: interviewer
+    text: >-
+      Correct. Yes. So what you said is absolutely right, Anubhav. One add-on
+      question I'll ask, this is also a common question. So setTimeout — will it
+      guarantee the delay whatever is given? Let's leave this case. In general,
+      let's say a three second delay is given for setTimeout. Will it for sure
+      execute after three seconds?
+
+  - t: "00:26:31"
+    role: candidate
+    text: In this loop?
+
+  - t: "00:26:33"
+    role: interviewer
+    text: >-
+      In general, in general I am asking — not inside the for loop. In general,
+      will it guarantee it will execute after that many seconds?
+
+  - t: "00:26:42"
+    role: candidate
+    text: >-
+      Uh, no, I think it is not always a guarantee. It depends on the scenario it
+      has been called in.
+
+  - t: "00:26:49"
+    role: interviewer
+    text: Why is it not guaranteed? Can you tell a little bit?
+
+  - t: "00:26:53"
+    role: candidate
+    text: I think because of the asynchronous nature.
+
+  - t: "00:26:56"
+    role: interviewer
+    romanized: true
+    text: >-
+      Exactly. Yes. Because only the main thread is executing things, correct? So
+      finally all these activities have to go to the main thread when the main
+      thread is free. So though the setTimeout, after three seconds elapsed, can
+      come to the stack, there could be other tasks in the stack. Correct? So the
+      main thread may not be able to execute it at the exact time when it was
+      supposed to execute. Correct? So that is a trade-off using setTimeout. I
+      see a delay, Anubhav. You are not seeing a delay? A one second delay.
+      Correct?
+
+  - t: "00:27:56"
+    role: candidate
+    text: Yeah, there is.
+
+  - t: "00:27:58"
+    role: interviewer
+    text: >-
+      Correct? Yeah, that's the reason I asked this question. People generally
+      get confused with the delays. Five times five is absolutely right. And you
+      also mentioned there is no delay between each printing — that was also
+      absolutely right. But there is a one second delay in the beginning.
+      Correct? Would you like to guess why there is a one second delay? I'll give
+      one hint. Basically, five timeouts are created almost at the same time.
+      Correct? The for loop will take microseconds to execute this loop. Correct?
+      This much I can tell; further you need to guess.
+
+  - t: "00:28:38"
+    role: candidate
+    text: >-
+      By the time the loop executes, I think one of the setTimeouts, I guess,
+      gets that delay.
+
+  - t: "00:28:47"
+    role: interviewer
+    restitched: true
+    text: >-
+      Yes, you are right, you are close. See, what I wanted to say is the for
+      loop will execute much faster. Obviously it is not going to take one
+      second, correct? So five timeouts are created in less than, let's say, a
+      few microseconds or milliseconds. Let's say five milliseconds is taken to
+      run the loop. So by that time already the five setTimeouts are created,
+      correct? So now at least one second has to elapse before running the first
+      timeout, correct? There is a delay. If the for loop would have taken one
+      second to execute this code, then the answer you gave would have been
+      right — it will immediately execute, because one second is already elapsed.
+      Since the for loop is faster than whatever the setTimeout interval that we
+      have given, due to that nature we get an initial one second delay. OK? So
+      yeah, that's all about the snippet-driven questions that I wanted to ask,
+      Anubhav. We are at almost half an hour, we have finished. I did not know
+      how the time flew. So let us spend the last five to ten minutes on the
+      feedback and any questions you have. First, let us start with any questions
+      that you have, then I'll try to give my feedback. Tell me if you have any
+      questions, ask me.
+
+  - t: "00:30:05"
+    role: candidate
+    text: >-
+      So, for these concepts — how do we prepare for the machine coding round?
+      Are these rounds very frequent, or does it depend on the years of
+      experience we have?
+
+  - t: "00:30:21"
+    role: interviewer
+    restitched: true
+    text: >-
+      So machine coding is very common in the premium companies. Whatever you're
+      aspiring to — let's say Microsoft you are aspiring, or Amazon you are
+      aspiring, Swiggy you are aspiring. So machine coding is mandatory in all
+      the premium companies, whatever the big product companies we call, right?
+      So the machine coding round is mandatory. You have to prepare for the
+      machine coding interview if you are aspiring for that. But there are a lot
+      of companies which I can tell — I can't name the companies — but there are
+      many tier-two kind of companies which don't have the machine coding round
+      as separate. So it depends on your preparations, Anubhav. If you are
+      preparing for tier one or the first few companies in tier two, then
+      obviously you need to prepare for machine coding. If not, then probably it
+      is not necessary.
+
+  - t: "00:31:05"
+    role: candidate
+    text: >-
+      And then one more question please, related to data structures and
+      algorithms. In general, if you are a back end developer, we cover TP and
+      all those hard topics as well. But as a front end — because even if we are
+      working on Node.js we are more commonly referred to as front end only —
+      still, what all topics do we need to lay emphasis on if we have like one or
+      two weeks' time to prepare?
+
+  - t: "00:31:35"
+    role: interviewer
+    restitched: true
+    text: >-
+      So my advice is this, Anubhav. Let's say you are preparing for companies
+      like Apple, Google, Facebook or Meta, what we call. If you're preparing for
+      these companies, then the sky is the limit — whether you are a front end
+      developer or a back end developer. They hire the generalist, not the
+      specialist, correct? So all the topics you need to cover. This includes
+      Amazon as well. Amazon, Apple, Facebook — all these companies, you have to
+      prepare almost all the data structures. But if you're preparing for some
+      other companies, from my experience like Microsoft, SAP and this kind of
+      companies, then probably you can limit yourself to strings, arrays, linked
+      lists and binary search trees. There are very few occasions where these
+      companies ask graphs or dynamic programming, greedy approach, backtracking,
+      all these questions to a front end developer. They will have a machine
+      coding round to test your skills, right? So they will not spend a lot on
+      data structures and algorithms. But obviously, my funda is simple: if you
+      are appearing for not-at-all-premium companies, then limit yourself to
+      strings and arrays. If you are applying for semi-premium, then go till
+      linked lists. If you are applying for premium, excluding MAANG — excluding
+      MAANG there are a lot of premium companies — then go till linked lists and
+      binary search trees also. Any other questions regarding the interview? And
+      overall also.
+
+  - t: "00:33:01"
+    role: candidate
+    text: So that's all. Okay. That's all from us.
+
+  - t: "00:33:04"
+    role: interviewer
+    restitched: true
+    text: >-
+      Sure, Anubhav. So it was a nice interview. From my side, whatever I felt,
+      I'll tell. So with whatever the answers that you are giving, fundamentally
+      you are strong — like the conceptual area, you are able to explain very
+      well. Technical communication skills are good. So there are two things:
+      communication and technical communication. There are many, whenever I ask
+      what is hoisting, they start writing the code; or whenever I ask closure,
+      they start writing the code. So code writing is one part of the developer
+      job, correct? You should know how to articulate whatever you know. So in
+      that way you are able to technically communicate what you know. That is
+      good. And React concepts also, fundamentally, are good. Many still don't
+      know what reconciliation itself is. Reconciliation, your higher order
+      component — you are able to answer well. So conceptual knowledge, I'll give
+      full marks. Whatever things that you can improve, that I notice, is — as I
+      mentioned to you in the beginning — there is a breadth and depth concept in
+      the interview, where you touch base on a lot of topics and we get into
+      depth wherever we feel it is essential. So in that depth I feel you need to
+      work a little more. For example, the interpretation question that I had. So
+      you may have to dig a little deeper to understand what interpretation is,
+      etcetera. Correct? Or for example the setTimeout one, or the hoisting
+      question which I had, snippet-driven. Snippet-driven are very, very common
+      in the interview. Why? Because all the snippet-driven questions will have
+      one tricky part. Obviously one tricky part will be there, and you need to
+      be able to unlock it. So that is the important part of the snippet-driven
+      questions. But if you fundamentally become strong — let's say you already
+      know what closures are, but if you spend more time and understand the depth
+      of closure, you will be able to easily answer the for loop and setTimeout
+      one that I asked. Correct? Your answer was right; what I'm telling is in
+      depth. So why in depth? Whenever you are applying for the tier one
+      companies, they always look for in-depth questions, in-depth concepts.
+      Correct? Because obviously they'll have problems inside which somebody who
+      has in-depth knowledge only can solve. A mediocre person cannot solve.
+      That's the only feedback that I'll give. Like I mentioned, I'll send a more
+      detailed email to you as well, which consolidates everything that I
+      explained. Now that's all from me, Anubhav. It was nice talking to you. Any
+      questions you have, Anubhav?
+
+  - t: "00:35:09"
+    role: candidate
+    text: >-
+      I would say it was a good experience. I think it will surely help me as
+      well in my future.
+
+  - t: "00:35:16"
+    role: interviewer
+    romanized: true
+    text: >-
+      Thank you, thank you. OK, that's all, Anubhav. Very nice talking to you.
+      Have a good day. Bye.
+
+  - t: "00:36:01"
+    role: candidate
+    text: Thank you.

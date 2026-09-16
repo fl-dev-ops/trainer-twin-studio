@@ -1,0 +1,544 @@
+id: "21"
+title: Self-Taught React Mock Interview - 4 Years Experience
+source: 21 - Self-Taught React Mock Interview - 4 Years Experience
+duration: "00:21:32"
+track: frontend
+topics: [typeahead, debouncing, throttling, javascript, primitive-types, memory, react, controlled-components, machine-coding]
+seniority: mid
+participants:
+  interviewer: Vasanth
+  candidate: Praveen
+  candidate_experience_years: 4
+
+problem: >-
+  Build a basic calculator in React that can perform addition, subtraction,
+  multiplication and division. Typical calculator UI - a display area on top,
+  digit buttons zero to nine, four operator buttons and an equals button. The
+  expression is built purely from button presses; on equals the result is
+  shown, and it is hidden again as soon as the user starts typing.
+
+# Diarization is comparatively clean here - Speaker 1 is Vasanth and Speaker 2
+# is Praveen for the whole recording. The unreliability is in the content, not
+# the ids - roughly a third of the entries are one- or two-word interjections
+# that Sarvam attributed to whichever speaker was louder. Attribution below is
+# by content.
+raw_speaker_ids:
+  interviewer: [1]
+  candidate: [2]
+
+invariants:
+  - Turns strictly alternate interviewer -> candidate. No two consecutive same-role turns.
+  - No reference to a YouTube channel, video, subscriber, audience or viewer.
+  - No screen-sharing, editor or tool-operation instructions.
+  - Text is English in Latin script only.
+
+counts:
+  raw_entries: 206
+  clean_turns: 47
+
+removed:
+  monologue:
+    - span: "00:00:00-00:00:30"
+      what: >-
+        Channel intro, former channel name, "pause the video and try to answer
+        by yourself" framing.
+    - span: "00:00:30-00:00:53"
+      what: Post-video promise, "watch the video till the end", agenda pitch to viewers.
+    - span: "00:01:30-00:02:00"
+      what: >-
+        Audience-facing recap of the candidate's background plus "mention that
+        in the comment section" twice.
+    - span: "00:13:52-00:14:02"
+      what: >-
+        "Audience who are watching, pause the video, solve the problem and come
+        back and see how Praveen has solved it."
+    - span: "00:21:17-00:21:32"
+      what: Outro - like, comment, share the video, catch you in the next video.
+  self_promotion:
+    - "00:03:32 - 'another option could be Career with Vasanth, which is my YouTube channel'"
+    - "00:06:45 - 'if audience know other optimisation techniques, please mention that in the comment section'"
+    - "00:20:29 - 'so I'm not making a post video where I'm going to explain answers'"
+  logistics:
+    - "00:02:00 - 'let me present the whiteboard as usual'"
+    - "00:02:39 - 'I'm just drawing to make it a little quick'"
+    - "00:03:02 - 'you can unmute yourself'"
+    - "00:10:42 - 'can you present your screen, Praveen'"
+    - "00:10:48 - 'I can put it in the chat section, you can just copy the question from the chat section'"
+    - "00:17:20 - 'can you scroll right, scroll right'"
+    - "00:18:24 - 'right now, can you refresh on the right hand side'"
+    - "00:18:32 - 'you can just refresh, can you click on that here'"
+    - "00:18:39 - 'now click on, like, one plus two'"
+    - "00:19:10 - 'you can stop sharing, okay'"
+  backchannels: 71
+  asr_noise: 34
+
+corrections:
+  "D bone sac": debouncing
+  kickstock: keystroke
+  "primitive and non-primitive pyramids": primitive and non-primitive types
+  "they are non-mutable": they are immutable
+  "using all our method": using all our memory
+  "infield validation": inline field validation
+  "Edemy Point Praveen": Did you get my point, Praveen
+  "this equal to pattern": this equals button
+  "Got my parts, eh": Got it
+  farm: form
+  "Kanjivaram": Kanchipuram
+name_note: >-
+  Sarvam renders the candidate's name only as "Praveen" (he introduces himself
+  as "G Praveen Kumar"), but spells it "prime" once at 00:01:30 in the removed
+  monologue. Normalised to Praveen.
+uncertain:
+  - >-
+    00:15:26-00:15:37 - "I know that problem" is emitted for both speakers a
+    second apart; assigned to the candidate, with the interviewer keeping the
+    "multiple operations" observation.
+  - >-
+    00:19:59 - "what is the minimum what impact such question should be asked"
+    is garbled; rendered as "what is the minimum, what is the maximum".
+  - "00:21:01 - trailing 'so not blacksmithing' was unrecoverable and dropped."
+romanized: 3
+
+turns:
+  - t: "00:00:30"
+    role: interviewer
+    text: Praveen, if you can introduce yourself, we can get started.
+
+  - t: "00:00:55"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      Yes sir. Thank you for giving me the opportunity to have a mock with you.
+      So, actually, myself G Praveen Kumar. I completed my graduation in the
+      year twenty twenty from the University College of Engineering,
+      Kanchipuram, specialised in the mechanical department. Post graduation I
+      got placed in an MNC, and the office space is in Bengaluru. I've been
+      working with that MNC in the networking and security field for around
+      three years now. But I'm more towards the development side, so I just want
+      to switch my career to development rather than going in networking. That's
+      all about me.
+
+  - t: "00:02:00"
+    role: interviewer
+    restitched: true
+    text: >-
+      Now, let me ask you a very simple question. One of the common things that
+      is present now on most of these e-commerce applications, or on any other
+      sites like social media, is the typeahead system. Okay? Typeahead is
+      nothing but where you will search something, and whenever you search
+      something you start getting the results below that. Correct? Let's say
+      this is the search bar, Praveen — a search bar of any website, let us say
+      e-commerce, social media, anything. The user is searching something here,
+      and whenever the user is searching something, basically we are giving a
+      list of results that he is potentially looking for. The simplest example
+      is, let's say you go to YouTube and search for "career". Correct? One
+      option is career guidance for professors, another option is career
+      guidance for experienced. So multiple options will be shown on the screen.
+      Correct? So let's say we have to build this feature. As you know, the user
+      can type something and you have to make an API call to get the results and
+      show them on the screen. Yeah, I'm not too concerned about how the back
+      end would process this and send the result — that part is fine. Just from
+      the client side, you tell me, if you have to implement this, what all
+      things come to your mind, Praveen?
+
+  - t: "00:04:04"
+    role: candidate
+    restitched: true
+    text: >-
+      Yes sir. So basically, when the user tries to type something we need to
+      fetch some data. We can do it in some ways, like for every keystroke we
+      will be making an API call and we will be suggesting them something. And I
+      think that will not be the optimal approach, because the number of API
+      calls made will be large. So we can implement a concept of debouncing
+      here, where we can reduce the number of API calls by a delay. If the user
+      delays the key press event by a particular timing, we can call the API and
+      we can give them the suggestions.
+
+  - t: "00:04:48"
+    role: interviewer
+    restitched: true
+    text: >-
+      Correct? Okay. See, one of the techniques that you are proposing for
+      better rendering here is debouncing, correct? I'm just noting it down
+      here. Okay? So one technique is debouncing, correct — where, instead of
+      making an API call every time the user types something, we are going to
+      give some delay and then we are going to make an API call, correct? What
+      other things come to your mind, Praveen? Anything else that comes to you
+      where you could optimise?
+
+  - t: "00:05:16"
+    role: candidate
+    text: Yeah, the other thing I can think of is we can use the concept of throttling as well.
+
+  - t: "00:05:22"
+    role: interviewer
+    restitched: true
+    text: >-
+      That's fine. Both are basically similar, actually, correct? Anything else
+      in your mind, Praveen? As you told, the simple thing that we need to do is
+      when a user types something, we need to make an API call, get the data and
+      show it on the screen. That's the minimum that we need to do. What are all
+      the ways with which we can optimise this? If you're building this
+      autocomplete as a system, what are all the ways that you think of
+      optimising it? One you told, debouncing, which is hundred percent correct.
+      Anything else?
+
+  - t: "00:05:59"
+    role: candidate
+    text: Let me think about that.
+
+  - t: "00:06:00"
+    role: interviewer
+    text: Sure, sure. Take a moment.
+
+  - t: "00:06:02"
+    role: candidate
+    text: >-
+      So, for every keystroke we should not be able to suggest that, so we need
+      to optimise that. That was the ask, right?
+
+  - t: "00:06:10"
+    role: interviewer
+    restitched: true
+    text: >-
+      There is no one ask as such in this problem. Okay. Basically this is a
+      system that I want to build. I want to optimise it — anything you can
+      optimise, like that. Correct? Because the basic flow is simple: enter
+      something, make an API call, get the data, show it on the screen. That's
+      the most basic thing that we need to implement. Correct? What are all the
+      ways with which we could optimise? Please tell me.
+
+  - t: "00:06:35"
+    role: candidate
+    text: >-
+      The one thing I can think about is debouncing and throttling, but I
+      suspect that we can use something called the React lifecycle to do that.
+
+  - t: "00:06:45"
+    role: interviewer
+    restitched: true
+    text: >-
+      Yes. Yes. I mean, whatever you told is correct. There are some more things
+      as well. Okay? Now, I'll ask you a couple of basic questions on React and
+      JavaScript in general, then probably we'll get started with coding. Okay?
+      So, as a matter of this, primitive and non-primitive types in JavaScript —
+      tell me, what are primitive types and what are non-primitive types?
+
+  - t: "00:07:10"
+    role: candidate
+    text: >-
+      Yeah, the primitive data types consist of number, bigint, boolean, string,
+      undefined and symbol, whereas the non-primitive data types consist of
+      arrays, objects and functions. So basically all will be considered as
+      objects.
+
+  - t: "00:07:28"
+    role: interviewer
+    text: Yes. So what is the primary difference between primitive and non-primitive types?
+
+  - t: "00:07:33"
+    role: candidate
+    restitched: true
+    text: >-
+      Primitive data types are used when we want to store a single value, and
+      the non-primitive type is more like something defined by the developer —
+      we can store multiple values. And the other difference is that primitives
+      will be stored in the stack, whereas non-primitives will be stored in the
+      heap memory.
+
+  - t: "00:07:53"
+    role: interviewer
+    text: >-
+      Got it. Sure, sure. Any idea, Praveen, why do you think there are two
+      types, primitive and non-primitive? Putting it another way, the primitive
+      types have individual memory allocation, correct? Like, they are
+      immutable — basically once you allocate a memory they are immutable,
+      whereas non-primitive types are usually mutable. Correct? Why do you think
+      that is?
+
+  - t: "00:08:17"
+    role: candidate
+    text: >-
+      Yeah, why I think that is required is, we are not sure how much memory it
+      will take for the non-primitive type, and we are sure that this much
+      memory space is required for the primitive data types, so that will be
+      stored in the stack. But in the heap we can expand the memory.
+
+  - t: "00:08:36"
+    role: interviewer
+    text: >-
+      No, but I think it is correct, Praveen. Like, in the heap you are storing
+      because you could expand, because there is a liberty compared to here. But
+      why do you think these arrays and objects are necessarily kept in the
+      heap? Like, why can't an array or object be a primitive type? What is the
+      problem in making them a primitive type?
+
+  - t: "00:08:55"
+    role: candidate
+    text: >-
+      Yes sir, we are not sure how much memory space it would take. We can't
+      initially tell that this much memory space it will take.
+
+  - t: "00:09:03"
+    role: interviewer
+    text: >-
+      Correct. I agree. That is the reason why they are non-primitive. That's
+      one way, and another thing could be that usually the assumption is it's
+      quite larger data in the case of arrays and objects in a practical
+      application. So it's better to keep them as non-primitive, because if you
+      start storing them as primitive then we would end up using all our memory.
+      Correct? Yes. Sure. So Praveen, are you aware of controlled components and
+      uncontrolled components in React?
+
+  - t: "00:09:31"
+    role: candidate
+    restitched: true
+    text: >-
+      Yes sir. So controlled components and uncontrolled components are both
+      ways of handling the input element. So in the controlled component we will
+      be handling the input element using React state — that input will be
+      stored in React, whereas in the uncontrolled component that will be stored
+      in the HTML. Like whenever we are clicking on the submit button we are able
+      to perform the actions which we require. But in the controlled component we
+      can do some other things like inline field validation, conditional
+      rendering of the submit button and dynamic input. So this much more we can
+      do with a controlled component.
+
+  - t: "00:10:19"
+    role: interviewer
+    text: >-
+      Correct. So, putting it up, the controlled component is more the React way
+      of handling, and uncontrolled or non-controlled is the traditional
+      HTML/JavaScript way of handling forms. Correct?
+
+  - t: "00:10:30"
+    role: candidate
+    text: >-
+      Yeah, in uncontrolled the input will be directly kept in the DOM. So in
+      controlled we will be having it in the variable which we are storing.
+
+  - t: "00:10:42"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      Good, good, sure. Let's start with a simple problem. Okay? So, the problem
+      is very simple. I'm going to explain it to you orally. The question is,
+      simple calculator — build a basic calculator that can perform addition,
+      subtraction, multiplication and division. As simple a problem as that.
+      Okay? So I require something similar to a Google calculator or a typical
+      calculator UI, where there is one box on top, and we have the buttons one,
+      two, three, four, five, six, seven, eight, nine and zero, and there will be
+      an equals button, and we have plus, minus, star and divide — four
+      operations.
+
+  - t: "00:11:29"
+    role: candidate
+    text: Plus, minus, multiply and divide.
+
+  - t: "00:11:32"
+    role: interviewer
+    restitched: true
+    text: >-
+      Addition, subtraction, multiplication, division — four operations we will
+      be performing. Okay? So, as you are transitioning yourself from networking
+      to React, I'll give you a few hints while solving this problem. Divide the
+      entire problem solving into two parts. One is building the basic calculator
+      UI — that's part one, that's going to take some time. Okay. And another
+      thing is how to take the right input from the user and store it. The third
+      thing is where you are going to evaluate an expression. Correct? I'm sure
+      probably for evaluating the expression you might need some help. First
+      complete these things, and let me know during the evaluate expression part
+      where we could discuss further.
+
+  - t: "00:12:12"
+    role: candidate
+    text: >-
+      Okay sir. So I have some questions on that. So the user needs to enter a
+      value and he needs to click on the plus button, and again he needs to enter
+      some value to add that?
+
+  - t: "00:12:22"
+    role: interviewer
+    text: >-
+      Nothing like that. How would a typical calculator work, right? Like, I can
+      click on button two, and I can click on the plus button, and I can click on
+      the two again — it becomes two plus two, that's my expression.
+
+  - t: "00:12:33"
+    role: candidate
+    text: Okay, got it. So I need to evaluate the result and I need to return it.
+
+  - t: "00:12:38"
+    role: interviewer
+    restitched: true
+    text: >-
+      Correct. So to begin with, let's not use a calculator help. Let's imagine
+      everything the user types is on the buttons only — like one, two, three;
+      one plus two plus three. Then the expression becomes one, two, three. All
+      the expressions are created just by manually pressing on those buttons,
+      which are actually numbers. Got my point? Can we start? Like I told you,
+      let's start with the UI building first. Once you have built the UI with the
+      button click events and etcetera, and finally showing whatever the user has
+      typed, then we could discuss. I don't think an input is required, because
+      the user only presses these buttons to form the input, okay?
+
+  - t: "00:13:18"
+    role: candidate
+    romanized: true
+    text: So I need buttons from one to nine and the four operations.
+
+  - t: "00:13:21"
+    role: interviewer
+    restitched: true
+    text: >-
+      You should first build that calculator layout — the complete calculator
+      layout for me. Like how a typical calculator would look, right? The top is
+      where the expression would show. Below is where nine, eight, seven, six,
+      five, four and one, two, three will be, and there will be a zero also and
+      an equals, and on the right hand side we can have plus, minus, star,
+      multiplication buttons. I mean, I'll give you the liberty of the UI,
+      however you want. Okay? You have the last five minutes, Praveen. Okay.
+
+  - t: "00:14:45"
+    role: candidate
+    restitched: true
+    text: Okay sir, I'm just including it. Okay, here I need to show it — a paragraph tag.
+
+  - t: "00:15:26"
+    role: interviewer
+    text: >-
+      There are multiple problems, as you also know — like, we could keep
+      entering multiple operations here, like plus, minus, star. Yeah. That's
+      okay.
+
+  - t: "00:15:33"
+    role: candidate
+    text: Yeah, I know that problem. You can have a form under it.
+
+  - t: "00:15:37"
+    role: interviewer
+    restitched: true
+    text: >-
+      Let's try to evaluate the expression. Let's say we are ignoring all the
+      potential errors. Okay? Or probably the evaluating expression would take
+      more time. Let's look at something that is very easy that we could do.
+      Okay? At least, the equals — whatever you are doing, that equals should not
+      be visible on the screen. That's not the intent, correct? Whenever equals
+      is entered, we need to actually perform something, correct? Yeah. Okay? So
+      I'll only give you around three more minutes, where whenever equals is
+      hidden — equals should not be shown on the screen. Okay? So you have
+      another paragraph tag that will tell the result of the operation.
+      Definitely we cannot compute it, but that should be visible whenever
+      somebody presses equals. Okay? And as soon as they start typing again, that
+      result of the operation should become hidden. Correct, that's what I want.
+      But you should also show whatever...
+
+  - t: "00:16:40"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah, I need to — yeah, I need to pass this. In this arrow function I need
+      to pass this value everywhere, like set the state to false, so that it will
+      be hidden. So, can I do that, sir?
+
+  - t: "00:16:59"
+    role: interviewer
+    restitched: true
+    text: >-
+      See, what you're doing is you're setting a value everywhere — line number
+      seventeen, like twenty. What you're doing is you're setting the value,
+      correct? And when a user presses the equals, what I want to show is the
+      result of the operation, correct? Where the user presses equals, you're
+      doing that, and whatever the set value is that is already stored is part of
+      the value, correct? Anything can keep showing that, like line number
+      twelve. So the result of the operation will be the value. Correct? Okay.
+      Where I'm coming from is, whatever the expression that you are showing
+      whenever the user types something, and the result shown, should not be
+      mutually exclusive. You can show both. For example, earlier what we were
+      showing — one plus two star three — we were showing one plus two star
+      three. Whenever the user clicks on equals, we can just show the result
+      below that. Correct? The user starts typing again, you remove the result of
+      the operation and you can just show the expression. Did you get my point,
+      Praveen?
+
+  - t: "00:18:03"
+    role: candidate
+    text: I'm a bit confused, sir.
+
+  - t: "00:18:05"
+    role: interviewer
+    restitched: true
+    text: >-
+      Let us keep it very simple. Let's say — I'm making it even more simple.
+      Whenever you type something, you show it, like one plus two star three, you
+      are going to show that. And whenever you type equals, you are showing the
+      result of the value. Result is the result, correct? Can we just do that?
+
+  - t: "00:18:30"
+    role: candidate
+    restitched: true
+    text: I think this button I need to... Basically it is not showing.
+
+  - t: "00:18:43"
+    role: interviewer
+    restitched: true
+    text: >-
+      It is not shown. Can you make sure that whatever you're typing shows on the
+      screen? Okay, one plus two is shown, correct? So it's coming as the result
+      of the operation — it will be one plus two. Whenever you hit the equals it
+      is shown, correct? Earlier, whenever you typed, it was showing.
+
+  - t: "00:19:02"
+    role: candidate
+    text: >-
+      Yes sir, like we have a state value which will change to false, which will
+      change to true when we are clicking on this equals button.
+
+  - t: "00:19:10"
+    role: interviewer
+    restitched: true
+    text: >-
+      Sure, sure, Praveen. Okay. We'll discuss things in detail — collectively,
+      whatever feedback I can give you. So coming to the interview feedback,
+      Praveen, right? Basically, I was not expecting you to be fundamentally this
+      strong, being very honest. But all the theoretical questions that I asked,
+      Praveen, you were able to answer them fairly well, which makes me feel you
+      have studied a good amount of the basics very well, which is something
+      expected to clear the interview. That is very good. The other things where
+      I feel the areas of improvement are, Praveen — I think I've told this
+      multiple times — every time a machine coding question is asked, ask the
+      question about extremities. I told you an expression: the user will type an
+      expression and you have to evaluate that expression, correct? What if the
+      user types a thirty digit number and they ask you to evaluate it — will the
+      calculator work? What is the extremity? How many numbers can be added? You
+      should ask that question. What is the minimum, what is the maximum — such
+      questions should be asked. Okay? And the numbers that you rendered — one,
+      two, three — that can be further optimised by using a component, correct?
+      And third, the most, most important thing: not just you, I have seen many
+      making this mistake, where they do not think through the complete solution
+      in their mind before starting. They start coding, and eventually they figure
+      out there is a problem, and then let's use another variable or another thing
+      to solve this. So try to figure out the complete problem in your mind and
+      then start coding, Praveen. Okay? And even the result portion that I told
+      you about — I wanted to see that expression and followed by the result.
+      Probably there is a bit of a confusion, with which you were not able to
+      build that. Okay? So overall, on machine coding, Praveen, there is a decent
+      scope for improvement. Solving more problems will definitely help you there.
+      Otherwise, the rest looks good to me. That's all from my end, Praveen. I
+      hope you also enjoyed the session, the mock interview. Do you have any
+      questions?
+
+  - t: "00:21:01"
+    role: candidate
+    text: >-
+      Yeah, sure. Yes sir, I enjoyed it a lot. I know I need to make further
+      improvement in the coding, so I'll do that, sir. I'm more towards learning
+      about the fundamentals of JavaScript.
+
+  - t: "00:21:17"
+    role: interviewer
+    text: >-
+      Good. But I feel you are an inspiration to a lot of people who are
+      basically looking for a transition from mechanical to IT.

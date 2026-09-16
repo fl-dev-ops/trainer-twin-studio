@@ -1,0 +1,608 @@
+id: "15"
+title: React Mock Interview - English Communication
+source: 15 - React Mock Interview - English Communication
+duration: "00:24:39"
+track: frontend
+topics: [react, hooks, usestate, usememo, usecallback, custom-hooks, closures, garbage-collection, real-time]
+seniority: mid
+participants:
+  interviewer: Vasanth
+  candidate: Prem Kumar
+  candidate_experience_years: 3.5
+
+# Speaker 1 is Vasanth and Speaker 2 is Prem Kumar, but the ids are heavily
+# contaminated: whole clauses of Vasanth's speech are emitted under Speaker 2
+# (and vice versa) a second or two out of order, and there is a high volume of
+# Tamil- and Devanagari-script interjections on both ids. Every turn below was
+# attributed by content.
+raw_speaker_ids:
+  interviewer: [1]
+  candidate: [2]
+
+invariants:
+  - Turns strictly alternate interviewer -> candidate. No two consecutive same-role turns.
+  - No reference to a YouTube channel, video, subscriber, audience or viewer.
+  - No screen-sharing, editor or tool-operation instructions.
+  - Text is English in Latin script only.
+
+counts:
+  raw_entries: 209
+  clean_turns: 73
+
+removed:
+  monologue:
+    - span: "00:00:00-00:00:38"
+      what: >-
+        Channel intro, playlist framing, description of what the session will
+        cover for viewers, subscribe appeal.
+    - span: "00:20:09-00:24:39"
+      what: >-
+        Outro plus the entire post-interview solo explainer segment addressed to
+        viewers - a whiteboard walk-through of the online/offline design
+        (polling vs server-sent events vs sockets), a plug for his React
+        tutorial videos, a book and description-section plug, and a closing
+        subscribe appeal.
+  self_promotion:
+    - "00:01:22 - 'if any Tamil audience are watching, please like and comment about the video'"
+    - "00:03:56 - 'you and audience, everybody who is watching'"
+    - "00:05:19-00:05:59 - 'for audience who are watching... pause the video and try to come up with an answer... please watch the video till the end'"
+    - "00:08:29 - 'audience who are watching, please also look at the snippet and try to guess the exact output'"
+    - "00:10:19 - 'audience also can think this'"
+    - "00:20:09 - 'if you like the video, please like the video, comment, share with your friends'"
+    - "00:20:09 - 'probably I'll make an extension to this video and explain how we'll do it'"
+  logistics:
+    - "00:05:04 - 'open a fresh tab on Chrome, nothing open, open the link I shared in the chat section, copy the snippet'"
+    - "00:05:19 - 'put it in the editor, don't run the snippet, just copy paste'"
+    - "00:07:03 - 'okay, let us click it three times'"
+    - "00:08:18 - 'can you zoom in, can you press control plus'"
+    - "00:08:38 - 'top left you see run, can you click on run'"
+    - "00:12:39-00:13:00 - 'you can close this, can you go back to the React editor, you can zoom, can you do control plus, you can remove this code'"
+    - "00:13:36 - 'you can remove all of the functions, even component, odd component, remove all of that'"
+    - "00:16:42 - 'let me just log' / 'you don't need to log' (kept the coaching, dropped the editor action)"
+    - "00:17:47 - 'you can stop sharing, Prem'"
+  backchannels: 74
+  asr_noise: 24
+
+corrections:
+  "Cred app": CRUD app
+  "U state": useState
+  "new state": useState
+  "custom book": custom hook
+  "Get name is tried, written name": getName is returning the name
+  "from where whatever it is told": from wherever it is stored
+  "hardware fast rule": hard and fast rule
+  "the mic connection you substituted": the connection you subscribed to
+  "N N": NaN
+  tring: string
+  "maybe I have aspit": maybe I have missed it
+uncertain:
+  - >-
+    00:01:22 - Vasanth says the candidate has "almost six years of experience
+    and eight years of overall experience", which contradicts the removed
+    channel intro where he introduces Prem Kumar as having around three and a
+    half years. Kept as spoken; the participants block follows the intro figure.
+  - >-
+    00:03:09 - "based on the mic connection you substituted" was not fully
+    recoverable; read as "based on the connection you subscribed to", which is
+    what the surrounding answer supports.
+  - >-
+    00:16:56 - an interviewer fragment rendered as "How previous college is
+    structured" was unrecoverable and has been dropped as cross-talk.
+name_note: >-
+  Sarvam alternates between "Prem Kumar", "Premkumar", "Prem" and "frame".
+  Normalised to "Prem Kumar" for the full name and "Prem" where Vasanth uses the
+  short form, which is how the candidate is addressed throughout.
+romanized: 7
+
+turns:
+  - t: "00:00:38"
+    role: interviewer
+    text: "Prem Kumar, can you please introduce yourself so that we can get started?"
+
+  - t: "00:00:45"
+    role: candidate
+    text: >-
+      Yeah, hi Vasanth. Morning, morning to everyone. So I am working as a React
+      developer at Dimensions, based in Bengaluru. Here we are working on a React
+      based mobile app which is like a one stop solution for multiple data
+      sources. So you can introduce any data source into a single CRM, and then
+      you can allow the user to consume data, and you can customize it in a
+      better way since it is React.
+
+  - t: "00:01:16"
+    role: interviewer
+    text: "Wonderful, wonderful, Prem Kumar. So, which place are you from?"
+
+  - t: "00:01:20"
+    role: candidate
+    text: "I am from Namakkal, Tamil Nadu."
+
+  - t: "00:01:22"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      Wonderful. Prem Kumar, you might be seeing a lot of social media
+      applications, whether it's LinkedIn, Facebook, Facebook Messenger and a lot
+      of other applications, right? So whenever you open the app, most of the
+      apps show whether a user is online or not. Correct? Can you please tell me,
+      if you have to build a feature like that, how — end to end? I'm not asking
+      just from the front end point of view. As you have almost six years of
+      experience and eight years of overall experience, just tell me at a high
+      level how do you implement this feature, just to show whether a user is
+      online or not. I'll give a little overview. I'm presenting a whiteboard.
+      Okay. See, let's say we have one particular thing — you have a user one,
+      okay? So this is user one. So I am chatting with like ten different people.
+      Now whenever I open my mobile application or web application, for all the
+      ten users you need to show whether they are online or not, correct? So
+      let's say there is a green dot that you will be showing, whether they are
+      online or not, correct? Green for, let's say, online, and red if they are
+      offline, okay? So let me, just for the sake of this one, say this is online,
+      okay? And this guy is also online, and here is offline. So this particular
+      guy is offline, the first two are online. So let's say you have to
+      implement this functionality, Prem Kumar, OK. So now think, how are you
+      going to basically build this? Because a user can be online or offline
+      anytime. First you made an API call, got the data — that is wonderful. But
+      eventually the user might change again, right? Let's say you are online and
+      you go offline. How do you update this screen?
+
+  - t: "00:03:09"
+    role: candidate
+    text: >-
+      So you want to update these green and red dots based on the connection you
+      subscribed to, right?
+
+  - t: "00:03:15"
+    role: interviewer
+    text: >-
+      Yes, because we cannot show somebody online when they are not online. That
+      is a false implementation, correct? How do you go forward and implement
+      this, Prem Kumar?
+
+  - t: "00:03:26"
+    role: candidate
+    text: >-
+      So I will give it a trial, let's see how it goes. Upon my initial login, I
+      will fetch my list of connections, whoever is there, and then their
+      available states. And then I need to subscribe to my connections' state
+      change, like whether they are going offline or not. If they are logging
+      out, I need to fetch that data and then I need to update my relevant status
+      here — I mean the relevant connection status here.
+
+  - t: "00:03:56"
+    role: interviewer
+    text: >-
+      Sure, Prem Kumar. But there are a lot of intricacies to it, okay? It's
+      probably one of the most difficult tasks, to show whether a particular user
+      is online or not. It's a very difficult task. If you observe WhatsApp, they
+      do not do that. It's not that very easy, and whatever you're saying is at a
+      very high level, Prem Kumar. With your experience, you need to dig a little
+      deeper to understand the end to end implementation, okay? So now in React,
+      Prem Kumar, what are all the different types of applications that you have
+      built?
+
+  - t: "00:04:26"
+    role: candidate
+    text: >-
+      So I have built this mobile application, which is to consume data based on
+      an API, and then we allow the user to —
+
+  - t: "00:04:36"
+    role: interviewer
+    text: >-
+      This is fine. The current project is fine. Other than that, any other type
+      of project — e-commerce, social media, any other applications that you have
+      built?
+
+  - t: "00:04:45"
+    role: candidate
+    text: >-
+      Okay. No, currently I'm working on an app which is like a CRUD app for
+      Google Sheets. So I'm consuming data from Google Sheets and I'm building an
+      app where the user can see the data and then they can add or edit or
+      delete. So I'm just currently working on this.
+
+  - t: "00:05:04"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      Sure, Prem Kumar. So yeah, got it. So Prem Kumar, I'm sharing a snippet
+      with you. OK. So Prem Kumar, my question would be — if you click the
+      Increment button three times, what will be the output?
+
+  - t: "00:06:11"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay, zero plus one. It will be one, because we are directly updating the
+      state without considering its previous value. So it will be set to one, and
+      count will always take one from zero.
+
+  - t: "00:06:32"
+    role: interviewer
+    text: "Prem Kumar, what was my question?"
+
+  - t: "00:06:36"
+    role: candidate
+    text: "If you click the button three times, what is the value of count, right?"
+
+  - t: "00:06:40"
+    role: interviewer
+    text: "Did I ask what is the value of count if I click three times?"
+
+  - t: "00:06:44"
+    role: candidate
+    romanized: true
+    text: "Oh. Maybe I have missed it. Can you repeat again, maybe I —"
+
+  - t: "00:06:48"
+    role: interviewer
+    text: >-
+      If you click the increment three times, what is it that will be rendered on
+      the screen below the increment button?
+
+  - t: "00:06:55"
+    role: candidate
+    text: "It will return or render the odd component."
+
+  - t: "00:06:58"
+    role: interviewer
+    text: >-
+      Yeah, I think you have to export that App component, because of which
+      you're getting an error. Got it. It's a very simple question, correct? So
+      you just tell me how it is displaying odd.
+
+  - t: "00:07:17"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      OK, so here on click, each time we are setting the count and we are
+      incrementing the count by one. So one modulus two — I mean anything
+      modulus, any odd number modulus two will return one, so it will render the
+      odd component.
+
+  - t: "00:07:34"
+    role: interviewer
+    text: >-
+      Correct, absolutely. Okay. So line number four, you have a useState, right,
+      Prem Kumar?
+
+  - t: "00:07:39"
+    role: candidate
+    text: Yes.
+
+  - t: "00:07:40"
+    role: interviewer
+    text: "So what is useState?"
+
+  - t: "00:07:43"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah, so useState is a hook provided by React where we can manage the
+      state. It has two parameters — one is, sorry, two values: one is the state
+      value and the other is a set state function. So this is like a variable
+      which you can render inside any JSX, or you can use in any computation. And
+      any value or any update to this state variable should be done using the set
+      state function. We cannot directly modify this.
+
+  - t: "00:08:18"
+    role: interviewer
+    romanized: true
+    text: >-
+      So, I will also share a simple JavaScript code snippet with you. OK. Tell
+      me, what will be the output?
+
+  - t: "00:08:34"
+    role: candidate
+    text: "So we'll get John as the output."
+
+  - t: "00:08:38"
+    role: interviewer
+    text: "Okay. Yeah, sure. Please explain to me what is happening behind the scenes."
+
+  - t: "00:08:47"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah. So upon execution we are encountering a function call here. So this
+      executes createPerson, and it has two parameters, name and age. And here we
+      are returning an object as a value. Again, inside the object we have two
+      keys which are holding a function. And here, what we will get is this
+      entire object. And since the object has two functions, we are calling one
+      of them, which is getName. getName is returning the name which we have
+      passed here when the function is getting executed. So it is returning —
+
+  - t: "00:09:23"
+    role: interviewer
+    text: "Which famous JavaScript concept does it relate to, Prem?"
+
+  - t: "00:09:28"
+    role: candidate
+    restitched: true
+    text: >-
+      So this is closure. Where it holds the lexical scope even after this
+      execution. So upon execution of this statement, right, the memory whatever
+      is assigned to this variable will be cleared ideally, but since it has the
+      function definitions here, this holds the lexical scope of the variable
+      whatever it is entitled to. So here we are calling the function, and it is
+      trying to get the name from its lexical scope, and then it is printing.
+
+  - t: "00:10:04"
+    role: interviewer
+    text: >-
+      Okay. See, I'll just summarize, Prem. So even after a function has returned
+      some value — a function has returned a function — even the function that is
+      returned will still have access to its parent scope, correct?
+
+  - t: "00:10:18"
+    role: candidate
+    text: Correct.
+
+  - t: "00:10:19"
+    role: interviewer
+    text: >-
+      Looking at it, Prem Kumar — this is a simple example which I am also aware
+      of. Looking at it, you tell me, what is the disadvantage of having a
+      closure in JavaScript? What is the disadvantage if you look at this
+      example?
+
+  - t: "00:10:35"
+    role: candidate
+    text: >-
+      Yeah, the main disadvantage of closure is the memory leak, because it
+      consumes more memory. This is a simple function and we don't have any
+      challenge with that, but as it grows more and more, all the lexical scope
+      will be remaining in the memory, which consumes more space for each and
+      every variable or function.
+
+  - t: "00:10:53"
+    role: interviewer
+    text: >-
+      Yeah, to an extent that is correct. The memory — we have to allocate more
+      memory, as every inner function needs to have access to the lexical scope.
+      That is one. Anything else that comes to your mind, Prem Kumar?
+
+  - t: "00:11:06"
+    role: candidate
+    text: Not at the moment.
+
+  - t: "00:11:08"
+    role: interviewer
+    text: >-
+      I'll tell you probably what the problem is — you try to build on that. How
+      do you think, will it add any problem to the garbage collection of
+      JavaScript, clearing the memory? Have you heard the term garbage
+      collection?
+
+  - t: "00:11:24"
+    role: candidate
+    text: "Yes, yes."
+
+  - t: "00:11:25"
+    role: interviewer
+    text: "Yeah. So will having a closure have any effect on the garbage collection?"
+
+  - t: "00:11:30"
+    role: candidate
+    text: >-
+      It will not be garbage collected, because it remains in the lexical — all
+      of it remains in the lexical scope.
+
+  - t: "00:11:35"
+    role: interviewer
+    text: >-
+      That's my question. So do you feel closure is having any problem, or any
+      effect on the garbage collection of JavaScript?
+
+  - t: "00:11:42"
+    role: candidate
+    text: >-
+      The memory whatever is getting allocated to these variables, right, or
+      functions — it will not be cleared upon its completion in the call stack,
+      because it still remains in the JavaScript memory. So it will not be
+      garbage collected, whatever the lexical scope that is available here.
+
+  - t: "00:12:02"
+    role: interviewer
+    text: >-
+      Right. So what is your recommendation? Should we be using more closures or
+      less closures in a given project?
+
+  - t: "00:12:10"
+    role: candidate
+    text: >-
+      So it depends on the case. If the use of closure is going to reduce the
+      definition whatever you are going to write, or if it is enhancing the
+      reusability, we can go with closure; or else we can go with normal.
+
+  - t: "00:12:31"
+    role: interviewer
+    romanized: true
+    text: >-
+      So you recommend, not necessarily we should — there is no hard and fast
+      rule; only if you need it, use closure. Is that what you are saying, Prem
+      Kumar? Correct?
+
+  - t: "00:12:38"
+    role: candidate
+    text: "Yes, yes."
+
+  - t: "00:12:39"
+    role: interviewer
+    text: >-
+      Okay, sure. Be a little louder. Yeah, again, can you give me an example for
+      the useMemo hook? I need an example for the useMemo hook.
+
+  - t: "00:13:02"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay. So useMemo is basically — memo is the result of any function,
+      whatever it is returning. And it re-executes the function only if there is
+      any change in the dependency whatever you are passing. Similar to useEffect,
+      where it takes a dependency. So upon a change in dependency it will
+      re-execute the function and it will give the value. If there is no change
+      in the dependency value, it will give the value from wherever it is stored.
+
+  - t: "00:13:33"
+    role: interviewer
+    text: "Sure. Give an example. Write an example — I want an example for useMemo."
+
+  - t: "00:13:52"
+    role: candidate
+    text: "I just couldn't get anything immediately as an example."
+
+  - t: "00:13:58"
+    role: interviewer
+    text: "You're not able to come up with an example, is it?"
+
+  - t: "00:14:03"
+    role: candidate
+    text: "Yeah, yeah, I couldn't get it instantly."
+
+  - t: "00:14:06"
+    role: interviewer
+    text: "Sure. Do you know how to write an example for the useCallback hook?"
+
+  - t: "00:14:09"
+    role: candidate
+    text: >-
+      Yeah, I know about both of them but I couldn't collect any examples now. So
+      useCallback is similar to useMemo, where it stores the definition of the
+      function and it re-executes the function only if there is any change in
+      dependency.
+
+  - t: "00:14:27"
+    role: interviewer
+    text: >-
+      Got it. So yeah, I got it. So other than useState and useEffect, for which
+      other hook can you write an example?
+
+  - t: "00:14:36"
+    role: candidate
+    text: "So useEffect, which we all know, and I have used custom hooks as well."
+
+  - t: "00:14:45"
+    role: interviewer
+    text: "Okay, which custom hook?"
+
+  - t: "00:14:47"
+    role: candidate
+    text: >-
+      So I have written a custom hook as part of the personal project I'm doing.
+      There I used a custom hook where all the data fetching is handled inside the
+      custom hook, and then I'm just calling the function here. So all the data
+      fetching code will not be in the main component; it will be part of the
+      custom hook.
+
+  - t: "00:15:10"
+    role: interviewer
+    restitched: true
+    text: >-
+      Okay. I'll give you seven minutes. I'll give you seven minutes, Prem Kumar.
+      Okay. Can you write a simple hook within this page itself, App.js, to
+      increment and decrement a counter? So a custom hook that returns two
+      methods, increment counter and decrement counter, and the current count
+      value, where you render the count value in the App component. Very simple.
+      Plain custom hook. Can you do that? You are almost done with the time frame,
+      okay? So you have done a small mistake — in line number seventeen, setCount
+      is actually, yes, it is small. setCount.
+
+  - t: "00:16:08"
+    role: candidate
+    romanized: true
+    text: "OK. Thank you. Fine, I'll figure it out. That's it."
+
+  - t: "00:16:25"
+    role: interviewer
+    text: "No, it's not fine. Why is it coming NaN?"
+
+  - t: "00:16:28"
+    role: candidate
+    restitched: true
+    text: "Yeah, so because it should be a number, and it is coming as a string. Let me just —"
+
+  - t: "00:16:45"
+    role: interviewer
+    text: "You don't need to log, you just think — why do you think NaN is coming?"
+
+  - t: "00:16:52"
+    role: candidate
+    restitched: true
+    text: >-
+      Because it might be getting it as a string, so string with the previous
+      string. Okay, so here previous is what I'm trying to take, so it should not
+      be there.
+
+  - t: "00:17:07"
+    role: interviewer
+    text: "Where is previous? You cannot do this."
+
+  - t: "00:17:10"
+    role: candidate
+    restitched: true
+    text: >-
+      Maybe... Sorry. Because I accidentally used that argument, right, so
+      previous is undefined.
+
+  - t: "00:17:43"
+    role: interviewer
+    restitched: true
+    text: >-
+      Sure. Prem, I'm done from my end. The biggest problem that I face, Prem
+      Kumar, is comprehending skills. So comprehending skill is one of the most
+      underrated interview skills, where you need to understand the question at
+      the earliest. Interviewers do not like to repeat the question multiple
+      times. It's not because they don't want to repeat it — it's because if they
+      are repeating the question multiple times, they're thinking you're not able
+      to understand the question itself. Correct? So work on it, where you need
+      to understand the question at the earliest, Prem. Okay, that's one. It goes
+      along with another skill called listening skills also, where you have to
+      listen; you should not hurry in acting. You should understand things
+      carefully before you start basically working. Okay? Another small thing,
+      it's not a very major thing, is on the communication skills. Especially
+      whenever you start applying for bigger companies, right, your English
+      communication skills matter a lot. It doesn't mean people who cannot speak
+      very fluently are less intelligent, but that's how the industry is right
+      now. So you need to work on these things. And technically, whatever you
+      told — let's say the same simple counter example I asked, correct? The
+      problem with you and most people who take these simple examples, right, is
+      that you do not ask obvious questions. So I asked you to increment and
+      decrement a counter — how long do you keep doing it? Did you ask me what is
+      the extreme limit of this, or what is the least limit of it? You did not
+      ask. You got my point?
+
+  - t: "00:19:06"
+    role: candidate
+    text: "No. I had a thought, like if it is going negative what should I do."
+
+  - t: "00:19:11"
+    role: interviewer
+    text: >-
+      Yes. So ask obvious questions before you start doing it, because now your
+      program will break, just because there is a limit on the particular data
+      type, right? Whenever it crosses that, what will happen? Is it acceptable
+      or not? Whenever a simple question is asked in the interview, be prepared
+      like it's a trap. Try to ask as many questions as possible around that, so
+      that you are trying to answer all of the questions around that frame. Okay?
+      That's all the feedback from me, Prem. Just before we close, do you have any
+      last questions or comments?
+
+  - t: "00:19:38"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah, it's really good. It starts like a simple thing, but given the moment
+      you need to act correctly. Whoever is attending, most of them will be
+      knowing the answer, but as you told, I was running for the answers. Because
+      it's like a race — since you told me, the moment you started telling, I
+      started coding in the back of my mind, and then I started. So probably I
+      need to wait a moment and then, when the question comes, ask the doubts and
+      get them clear.
+
+  - t: "00:20:09"
+    role: interviewer
+    text: "Sure. Sure, Prem. Yeah, thanks, Prem."

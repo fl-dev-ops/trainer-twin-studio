@@ -7,10 +7,12 @@ import os
 from typing import Any
 
 from livekit.agents import (
+    APIConnectOptions,
     AgentSession,
     TurnHandlingOptions,
 )
 from livekit.agents.inference import TurnDetector
+from livekit.agents.voice.agent_session import SessionConnectOptions
 from livekit.plugins import deepgram, openai
 from tts import build_tts
 
@@ -60,6 +62,13 @@ def build_agent_session(
         llm=llm,
         tts=tts,
         max_tool_steps=5,
+        # The Eve bridge buffers until the durable turn starts streaming; the session's
+        # default llm_conn_options timeout (10s) kills every turn whose TTFT exceeds it
+        # (measured 4.5-8s with reasoning enabled, plus retry overhead).
+        # ponytail: generous LLM timeout; revisit when the bridge streams TTFT-first.
+        conn_options=SessionConnectOptions(
+            llm_conn_options=APIConnectOptions(max_retry=3, timeout=60.0),
+        ),
         turn_handling=TurnHandlingOptions(
             turn_detection=turn_detector or TurnDetector(version="v1-mini"),
             endpointing={

@@ -125,13 +125,17 @@ export async function POST(request: Request) {
 
     const agentSlug = session?.agentSlug ?? input.agentSlug;
     const personaSlug = session?.personaSlug ?? input.personaSlug;
+    const domainSlug = session?.domainSlug;
 
-    const [agent, persona, sharedKnowledgeBase] = await Promise.all([
+    const [agent, persona, domain, sharedKnowledgeBase] = await Promise.all([
       agentSlug
         ? db.agent.findFirst({ where: { slug: { equals: agentSlug, mode: "insensitive" }, orgId }, select: { slug: true, version: true, data: true } })
         : null,
       personaSlug
         ? db.persona.findFirst({ where: { slug: { equals: personaSlug, mode: "insensitive" }, orgId }, select: { slug: true, version: true, data: true } })
+        : null,
+      domainSlug
+        ? db.domain.findFirst({ where: { slug: domainSlug, orgId }, select: { slug: true, version: true, data: true } })
         : null,
       db.knowledgeBase.findFirst({
         where: {
@@ -262,6 +266,7 @@ export async function POST(request: Request) {
       sessionId: session?.id ?? input.sessionId ?? null,
       agent: agent ?? null,
       persona: persona ?? null,
+      domain: domain ?? null,
       knowledgeBases: sharedKnowledgeBase ? [sharedKnowledgeBase] : [],
       documents: Array.from(docMap.values()),
       learnerName,
@@ -271,6 +276,7 @@ export async function POST(request: Request) {
         lastSessionDate,
       },
       resume: resumePayload,
+      uiState: (session?.runtimeState as Record<string, unknown> | null)?.uiState ?? null,
     });
   }
 

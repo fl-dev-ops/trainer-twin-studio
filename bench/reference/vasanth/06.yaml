@@ -1,0 +1,474 @@
+id: "06"
+title: IIT Fresher Google DSA Mock Interview
+source: 06 - IIT Fresher Google DSA Mock Interview
+duration: "00:20:44"
+track: dsa
+topics: [time-complexity, graphs, topological-sort, bfs, hash-map, merge-sort]
+seniority: fresher
+participants:
+  interviewer: Vasanth
+  candidate: Vijay
+  candidate_experience_years: 0
+problem: >-
+  Given a list of recipes, the ingredients each recipe needs, and a list of
+  initially available supplies, return all recipes that can be created, where a
+  recipe that has been made can itself become an ingredient for another recipe
+  (LeetCode 2115, Find All Possible Recipes from Given Supplies).
+
+# Sarvam gives 3 speaker ids for 2 people. Speaker 1 is Vasanth for almost all
+# substantive turns; Speaker 3 is Vijay. Speaker 2 is a garbage bucket that
+# holds fragments from both (echoes of Vasanth at 00:10:52, real Vijay content
+# at 00:08:09 and 00:20:13). Every turn below was attributed by content.
+raw_speaker_ids:
+  interviewer: [1, 2]
+  candidate: [3, 2]
+
+invariants:
+  - Turns strictly alternate interviewer -> candidate. No two consecutive same-role turns.
+  - No reference to a YouTube channel, video, subscriber, audience or viewer.
+  - No screen-sharing, editor or tool-operation instructions.
+  - Text is English in Latin script only.
+
+counts:
+  raw_entries: 201
+  clean_turns: 49
+
+removed:
+  monologue:
+    - span: "00:00:00-00:00:18"
+      what: Channel intro, "content creator", the mock-interview series, yesterday's interview being live.
+    - span: "00:20:23-00:20:44"
+      what: Outro - paste your solution link, I'll review it, thank you all for watching, catch you in the next video.
+  self_promotion:
+    - "00:02:06 - 'Audience who are watching, yesterday also I asked this, today also I'm saying please check'"
+    - "00:02:06 - 'audience who are watching, the link to the question will be there in the description section'"
+    - "00:02:36 - 'audience if you're seriously preparing for any product based companies, you can take this question also and start along with Vijay'"
+    - "00:03:06 - 'So you guys can also start coding like how Vijay'"
+    - "00:01:13 - 'yesterday also we were saying the same'"
+    - "00:18:53 - 'our audience who are in your particular level' -> 'at your particular level'"
+  logistics:
+    - "00:02:06 - 'I'll give you share access as well'"
+    - "00:03:06 - 'Can you share the screen, Vijay?'"
+    - "00:17:27 - 'You can stop sharing, okay?'"
+    - "00:17:49 - 'Yeah, yeah, please, please stop sharing'"
+  backchannels: 70
+  asr_noise: 26
+
+corrections:
+  "time compulsory": time complexity
+  "metallurgical and medicine engineering": metallurgical and materials engineering
+  "and love and": n log n
+  "add into subtitles": add into supplies
+  "design some craft here": draw some graph here
+  east: yeast
+  floor: flour
+  "two defenses": two dependencies
+  "roaming the dependency": removing the dependency
+  "in the cube": into the queue
+  "Binance XT": binary search trees
+  "its complex trees are login only": its complexity is always log n only
+  "R into N of log N": R into I into log n
+uncertain:
+  - "00:08:02 - 'bird is dependent on fish' was unrecoverable; rendered as 'bread is dependent on yeast and flour' from the LeetCode example the candidate was drawing, and folded together with the stray token 'floor' at 00:08:06."
+  - "00:16:00 - 'unordered map sometimes give order of n square, order of n complexity'; the candidate's exact worst-case claim is garbled, rendered as 'a worse time complexity'."
+romanized: 1
+
+turns:
+  - t: "00:00:18"
+    role: interviewer
+    text: Vijay, can you please introduce yourself so that we can get started?
+
+  - t: "00:00:24"
+    role: candidate
+    restitched: true
+    text: >-
+      I am Vijay. I am currently in my fourth year of undergrad in metallurgical
+      and materials engineering at IIT Madras. Yeah, I am currently giving an
+      interview for DSA.
+
+  - t: "00:00:40"
+    role: interviewer
+    text: >-
+      Yeah. So today I'm testing your DSA skills, Vijay. As you mentioned, you
+      are in IIT, and we were just interacting before this — you have solved more
+      than thirteen hundred plus problems. Okay Vijay, just before we get started
+      with the DSA round, I have this practice of asking two common questions to
+      almost every fresher or junior developer. Can you tell me what is time
+      complexity in general?
+
+  - t: "00:01:06"
+    role: candidate
+    text: Time complexity is like the time required for the program to run.
+
+  - t: "00:01:13"
+    role: interviewer
+    text: >-
+      Okay. So let me give you an example then. Let's say we have a merge sort,
+      okay? So merge sort — ten elements are passed to merge sort, correct?
+      Before asking that, can you tell me what is the time complexity of merge
+      sort?
+
+  - t: "00:01:28"
+    role: candidate
+    text: n log n. It's n log n.
+
+  - t: "00:01:29"
+    role: interviewer
+    text: >-
+      Correct, absolutely. So in merge sort you pass ten elements, it will take
+      some time to sort those elements — let's say some milliseconds, correct?
+      So now you pass one crore elements, probably it will take one second to
+      sort that entire list, that particular set of elements that you passed. So
+      now in this case, what is the time complexity of merge sort? Ten
+      milliseconds or one second?
+
+  - t: "00:01:50"
+    role: candidate
+    restitched: true
+    text: >-
+      It's based on the number of inputs, the number of the input basically.
+      It's based on the input. So if the input is one million, the time
+      complexity is ten milliseconds.
+
+  - t: "00:02:06"
+    role: interviewer
+    restitched: true
+    text: >-
+      Sure, sure. That is not the answer, okay? Please read more about it after
+      the interview. That's not how time complexity works. But that doesn't make
+      you any less, okay? So now I'm sharing the question with you, Vijay. It's
+      not an easy problem, it's a medium difficulty problem. This problem was
+      recently asked in a Google interview for freshers and for one to two years
+      of experience. I've taken this question from, I think, Glassdoor or
+      LeetCode interview experiences. So let's see whether you can solve the
+      problem. The time duration to solve this problem is around twenty minutes.
+      It's a medium difficulty question — twenty, maximum twenty five minutes.
+      The first five to ten minutes we'll spend on the approach, the remaining
+      time on the coding. Please read the question, Vijay. It will go like this:
+      you read the question, you understand the question. If you have any doubts
+      you can ask me. If you are clear about the question, you tell the approach
+      to me, how you are going to solve the problem, okay? Once we are both fine
+      with the approach, then you get started with the coding, okay? So right now
+      it's nine twenty five. For completing this overall, we have a maximum time
+      of twenty five minutes, okay?
+
+  - t: "00:03:53"
+    role: candidate
+    restitched: true
+    text: >-
+      I'll reiterate the question, to check whether I have understood it
+      correctly. So I have some initial supplies — some ingredients, some
+      elements. I need to use those supplies and make recipes. And for each
+      recipe we have ingredients, where only if I have those ingredients can I
+      make that recipe.
+
+  - t: "00:04:34"
+    role: interviewer
+    restitched: true
+    text: >-
+      So the only thing — you already read it — whatever recipes are prepared can
+      become an ingredient for something else, as you know. I mean, they keep on
+      getting added. So take one or two minutes, come with the right approach and
+      let me know what you're going to do, okay?
+
+  - t: "00:05:05"
+    role: candidate
+    restitched: true
+    text: >-
+      So I'm thinking of a DFS kind of approach, where initially I have some
+      supplies and I can start with them. I'll iterate through the recipes —
+      let's say I will refer to recipes as R. I'll iterate through the R array.
+      So for each recipe I'll see the ingredients, whether they are already in
+      supplies; then I can prepare that, and I can add this recipe to the
+      supplies. And then I'll keep on iterating: if I have all the ingredients
+      for that particular recipe, then I can prepare it and I can add it into
+      supplies.
+
+  - t: "00:06:08"
+    role: interviewer
+    text: Sure. What is the complexity that you're thinking? Time complexity of the algorithm.
+
+  - t: "00:06:18"
+    role: candidate
+    text: Firstly, I am thinking I am iterating through the R array. So basically...
+
+  - t: "00:06:23"
+    role: interviewer
+    text: Correct. So basically you iterate through recipes, correct?
+
+  - t: "00:06:27"
+    role: candidate
+    restitched: true
+    text: >-
+      Yes. So the length of it will be order of the length of the recipes. And
+      for each one I need to check the supplies — I will be checking in the
+      supplies whether it is present or not. Basically I will have one set, a set
+      of strings, to check whether it's present in supplies or not.
+
+  - t: "00:06:50"
+    role: interviewer
+    text: >-
+      Yeah. So the minimum complexity of this would be R into N — minimum,
+      whatever you are saying. Because ingredients — you already know the
+      ingredients, correct? You will extract the ingredients and you will check
+      the ingredients in this array, correct? But again, I think it's not R into
+      N, it's R into I into N, correct?
+
+  - t: "00:07:11"
+    role: candidate
+    text: >-
+      R into I into log n, basically — like if I check in the set of strings, it
+      will be log n.
+
+  - t: "00:07:19"
+    role: interviewer
+    text: A set of strings. Supplies are also an array, right? You will convert it.
+
+  - t: "00:07:22"
+    role: candidate
+    text: Yes, I can convert that into a set.
+
+  - t: "00:07:27"
+    role: interviewer
+    text: We'll convert that into a set, all unique. Correct?
+
+  - t: "00:07:29"
+    role: candidate
+    text: Unique. Yes, yes, yes.
+
+  - t: "00:07:32"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      OK. So you are in the right direction, Vijay, but I would say probably you
+      can optimize it even a little further. Can you think of something? You are
+      not totally wrong, but there is still scope for optimization.
+
+  - t: "00:07:48"
+    role: candidate
+    restitched: true
+    text: >-
+      So let me draw some graph here. If I have some dependency, directed — so
+      bread is dependent on yeast and flour, and sandwich is dependent on bread
+      and meat. So can I do it like this? Can I do a kind of topological sort? So
+      I'll have dependencies for each recipe. Initially I have supplies. So if I
+      start with supplies, whenever I traverse through that particular supply, if
+      a particular recipe is dependent on that, I'll remove that edge. And if the
+      dependency of that particular recipe is zero, then I can actually prepare
+      that. So it's a kind of directed graph, and it's basically topological sort
+      in the directed graph.
+
+  - t: "00:09:23"
+    role: interviewer
+    text: Got it. Are you comfortable implementing this in fifteen, twenty minutes?
+
+  - t: "00:09:27"
+    role: candidate
+    text: Yes, I think I can write it.
+
+  - t: "00:09:29"
+    role: interviewer
+    text: >-
+      What will be the complexity? Do you think this is better than the previous
+      one that you proposed?
+
+  - t: "00:09:34"
+    role: candidate
+    text: >-
+      Yeah, it should be better. For making the graph it will be order n square,
+      I guess. For each recipe I need to have the ingredients — it's order n
+      only. And for traversing, for the topological sort, it's order n only. So
+      it should be order n only.
+
+  - t: "00:09:53"
+    role: interviewer
+    text: Sure, get started then.
+
+  - t: "00:10:46"
+    role: candidate
+    text: Let me run three additional test cases.
+
+  - t: "00:10:53"
+    role: interviewer
+    restitched: true
+    text: >-
+      Yes, yes, please submit. Then we will discuss the solution in detail.
+      Wonderful. Let's get back to the solution again now, Vijay. Let's go
+      through the solution line by line. Explain to me what is happening.
+
+  - t: "00:11:14"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah. So basically what I'm doing here is, I have the initial supplies, and
+      for each recipe there are some ingredients which that particular recipe is
+      depending on. So I need to make those recipes with the help of these
+      supplies. So what I am basically doing here is, I know that each recipe is
+      depending on the ingredients, depending on something. So I am building the
+      directed graph where the particular node is pointing to its parent. Let's
+      say, in the first example, the recipe is bread and the ingredients are yeast
+      and flour. So let's say I have three nodes: bread, yeast and flour. So I
+      will be pointing the edges as yeast to bread and flour to bread. Basically
+      what it means is, for bread it has two in-edges. That means two dependencies
+      were there for bread. So, yeah, I have the supplies and I'm starting with
+      the supplies first. Basically for each supply, if I encounter it, I'll
+      remove the edges which are pointing outward from there. If I remove that,
+      then for that particular parent I am removing one dependency.
+
+  - t: "00:13:04"
+    role: interviewer
+    text: >-
+      Okay, this part I'm not clear. Can you elaborate a little more? Like, yeast
+      and flour have an inward edge to the bread — that part I'm clear. When are
+      you going to remove the edges?
+
+  - t: "00:13:13"
+    role: candidate
+    restitched: true
+    text: >-
+      So let's say I'm given yeast, flour and corn, right? So in the initial queue
+      here, I'll be having all the supplies — I'll have yeast, flour and corn. So
+      now if I pop here, I will get yeast. So I'll see what edges it is pointing
+      to, what nodes it is pointing to. Let's say here yeast is pointing to bread.
+      Here I used a degree map to store the degree, where for each node it stores
+      the number of incoming nodes pointing to that. That degree represents the
+      number of incoming nodes. So let's say I have yeast in my hand now — let's
+      say S is yeast. So now from yeast it's pointing to bread. That means bread
+      is depending on yeast. So if I traverse the yeast, I can remove that edge
+      from the bread. So basically I am removing one edge which is pointing to
+      bread; I am decreasing one dependency for the bread.
+
+  - t: "00:14:41"
+    role: interviewer
+    text: Got it, got it. I got the gist. Please, please continue.
+
+  - t: "00:14:46"
+    role: candidate
+    text: >-
+      Yeah. So if I had removed all the dependencies, all the ingredients, then
+      I'll have the degree as zero. That means there is no incoming edge to that
+      particular node. That implies there is no ingredient which is required — I
+      have all the ingredients. So I can prepare that recipe.
+
+  - t: "00:15:12"
+    role: interviewer
+    text: >-
+      Got it. So whenever one particular recipe is already done — like yeast and
+      flour, say you did the bread, correct? So the bread can be used secondarily
+      for making something else, a sandwich. So how is that taken care of?
+
+  - t: "00:15:23"
+    role: candidate
+    text: >-
+      Yeah, that is taken care of, because I added that particular element which
+      is already prepared into the queue. So now if I traverse that element, I'll
+      remove the edges which are depending on that recipe.
+
+  - t: "00:15:41"
+    role: interviewer
+    restitched: true
+    text: >-
+      Got it, got it. So now line number ten to seventeen, right? This is the for
+      loop where you are forming the basic graph, correct? And the actual
+      processing is happening after line number twenty, correct? So tell me now,
+      what do you think is the time complexity here?
+
+  - t: "00:15:59"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah, here I'm using a map. I can use unordered_map, but unordered_map
+      sometimes gives a worse time complexity to check the data. It depends on
+      the implementation — it's hashing basically, unordered_map is implemented
+      with hashing. So I can't trust that, because it can sometimes give a worse
+      time complexity. So I'm using map here, which is built with red-black trees
+      and binary search trees, so its complexity is always log n only. So here the
+      time complexity is log n into order of N — the number of recipes into the
+      number of ingredients in each recipe.
+
+  - t: "00:16:54"
+    role: interviewer
+    text: >-
+      Yeah, so log n into the recipes into the ingredients, correct? R into I into
+      log n, correct? Got it. And what about the second part, line number twenty?
+      So there you're processing.
+
+  - t: "00:17:09"
+    role: candidate
+    text: Yeah, it's order of n. It's basically order of n plus order of n.
+
+  - t: "00:17:18"
+    role: interviewer
+    text: >-
+      Correct. So supplies is basically here in this case, correct? Kind of S plus
+      R into I into log n. Correct?
+
+  - t: "00:17:20"
+    role: candidate
+    text: Yes, yes, correct.
+
+  - t: "00:17:27"
+    role: interviewer
+    restitched: true
+    text: >-
+      Okay, got it. Which I just checked — after the interview I think it can be
+      further optimized, I believe, as far as I have solved this in the past,
+      okay? Definitely you can check it, but whatever you have come up with is
+      better than the initial solution that you proposed. So we'll discuss a few
+      things which I honestly feel there is scope for improvement in, and what you
+      are doing good, okay? So like I mentioned, Vijay, this is a problem by
+      Google. I have read this, and I have also read it posted by a Google
+      engineer in some places where this question was asked. So good that you are
+      able to solve it. A couple of points on what is positive, Vijay. You very
+      well know you have already solved a lot of problems, so your problem solving
+      intuition is very good. Whenever you look at a problem you can think of
+      multiple approaches, because you have already solved so many problems, which
+      is good — so you have to keep it up. And second, the way you are quickly
+      able to turn from one approach to another approach, correct? On one proposal
+      I said you can optimize it further, and you thought of a totally different
+      approach and you were able to solve the problem in that approach, which is
+      very good. Third, your typing abilities. A lot of times people undervalue
+      this, but you are able to write a solution after a discussion in less than
+      ten minutes, which is very good. Because many people are vocal enough to
+      explain the solution, but whenever they have to type, right, they start
+      imagining where to put what and they will not be able to type so quickly,
+      okay? So these are all very positive points, Vijay, which I think you might
+      have acquired because of your tremendous practice of thirteen hundred plus
+      problems. One main thing that I suggest you improve at your particular level
+      is communication, Vijay. Why I say this is, especially since you are from
+      IIT, probably you would be targeting quite premium companies. Let's say
+      Google, Amazon, etcetera — simply I'm saying, or you may not be, I'm just
+      giving an example. So what happens is, you may not always get an interviewer
+      from our time zone, the Indian time zone, correct? So we may get some
+      interviewer from the US or some foreign interviewers as well. In such
+      scenarios what happens is they would expect a little bit more clear
+      communication. You really know the answer, Vijay, but sometimes even I
+      struggled a bit understanding, and then finally I was able to understand the
+      entire graph approach. But they will have even more limited time — as you
+      know, in Google, forty five minutes, you have to solve two problems,
+      correct? Medium, sometimes one hard, or sometimes a medium and another
+      medium also. So you have to communicate it so clearly that they understand
+      the things, correct? So rather than the solution, the way you articulate
+      matters a lot. First, if your articulation is good, they know what you're
+      explaining, then they wouldn't ask a lot of questions when you're writing,
+      correct? Because they already know what you have said. Otherwise they have
+      to go through each line one by one and ask questions to you to understand
+      the solution, okay? This is my honest feedback, Vijay. If you have any
+      questions feel free to ask me.
+
+  - t: "00:20:13"
+    role: candidate
+    text: Yeah, thank you for the feedback.
+
+  - t: "00:20:15"
+    role: interviewer
+    text: Yeah. Do you have any other questions?
+
+  - t: "00:20:18"
+    role: candidate
+    text: I don't have any other questions. Thanks for the feedback.
+
+  - t: "00:20:23"
+    role: interviewer
+    text: Okay, nice talking to you, Vijay. Thank you.

@@ -1,0 +1,753 @@
+id: "10"
+title: React and JavaScript Mock Interview - 2 Years Experience
+source: 10 - React and JavaScript Mock Interview - 2 Years Experience
+duration: "00:34:59"
+track: frontend
+topics: [react, usestate, immutability, spread-operator, nested-objects, reference-types, polyfill, array-map, reconciliation, virtual-dom, diffing, higher-order-components, usecallback, token-refresh]
+seniority: mid
+participants:
+  interviewer: Vasanth
+  candidate: Amit
+  candidate_experience_years: 2
+
+# Only two raw ids in this recording, but they are badly crossed: whole runs of
+# Amit's coding narration are emitted as Speaker 1, and two of Vasanth's
+# like-and-subscribe lines are emitted as Speaker 2. Sarvam also batches one
+# speaker's run and then dumps the other speaker's interjections from the same
+# window afterwards, so the file is not chronological. Every turn below was
+# attributed by content and re-sorted by timestamp.
+raw_speaker_ids:
+  interviewer: [1, 2]
+  candidate: [2, 1]
+
+invariants:
+  - Turns strictly alternate interviewer -> candidate. No two consecutive same-role turns.
+  - No reference to a YouTube channel, video, subscriber, audience or viewer.
+  - No screen-sharing, editor or tool-operation instructions.
+  - Text is English in Latin script only.
+
+counts:
+  raw_entries: 401
+  clean_turns: 60
+
+removed:
+  monologue:
+    - span: "00:00:00-00:00:30"
+      what: Channel intro, "in this specific video", pause-the-video framing.
+    - span: "00:13:39-00:14:11"
+      what: Mid-interview like/subscribe/bell-icon appeal (emitted under both speaker ids).
+    - span: "00:34:42-00:34:57"
+      what: Outro - "audience you also enjoyed the video", comment section, catch you in next video.
+  self_promotion:
+    - "00:06:32 - 'people you and audience who are watching I'll try to paste the object in the description section'"
+    - "00:11:45 - 'I think I recently wrote this on LinkedIn also'"
+    - "00:14:13 - 'I'm just writing a small boilerplate for the audience'"
+    - "00:16:43 - 'if audience if you know the answer, mention in the comment section' (twice)"
+    - "00:22:48 - 'Audience also comment if you know any better solution'"
+    - "00:31:50 - 'which I want audience also to guess... I'll be more than happy to add a comment'"
+    - "00:34:11 - 'I recently wrote a LinkedIn post about few of the website that I generally go and read... one this to you and to all audience'"
+    - "00:34:11 - 'obviously my channel also lot of good content you and audience can also watch'"
+  logistics:
+    - "00:01:05-00:01:32 - 'can you please present your screen', giving screen-share access, 'I hope you can see my screen'"
+    - "00:05:08-00:05:26 - 'can you please open the project', 'I'm sharing one small object for you in the chat', 'I'm just copying'"
+    - "00:05:30-00:06:28 - go back to React app, go back to code, paste the object in line number four, above the return, casing, small case, give some random value"
+    - "00:09:19 - 'let's do this command X and put it here'"
+    - "00:17:01 - 'you can just create here only one file, like something.js'"
+    - "00:21:15-00:21:39 - let me run this, node, go to the source directory, SRC"
+    - "00:21:41 - 'not there in this hierarchy'"
+    - "00:22:48-00:23:15 - 'you can stop sharing' (twice), 'some other tab you can open'"
+  backchannels: 152
+  asr_noise: 93
+
+corrections:
+  "AV testing": A/B testing
+  "software engineer to role": software engineer II
+  "the whole command line very easy": the whole flow is very easy
+  "which patient is performing well": which version is performing well
+  "So this keeps you inside": So this gives you an insight
+  "use you do sir / use UDSL": useReducer
+  "alternative operation": alternative option
+  "R A dot map": array dot map
+  "we will take qualification": we will take a callback
+  "set dot length": self dot length
+  "I press plus": i plus plus
+  cell: self
+  "reconciliation in reactor": reconciliation in React
+  "preconscious in India": reconciliation
+  "the whole process is called economical analysis": the whole process is called reconciliation
+  "out of N cube": order of n cube
+  "nearby order of measure": nearly order of n
+  "Good damage": "Good, Amit"
+  "wrapping this at a useful point": wrapping this in a useCallback
+  "if response one strategy is something like say it is two hundred": if response one's status is something like two hundred
+  "Please write it up, Ali": "Please write it up, Amit"
+  "hire other components": higher order components
+uncertain:
+  - "00:11:14-00:11:36 - Sarvam renders a hook name as 'use you do sir' and 'use UDSL'; read here as useReducer."
+  - "00:02:20 - 'the whole command line very easy' read as 'the whole flow is very easy'; the noun was not recoverable."
+  - "00:25:26 - 'nearby order of measure' read as 'nearly order of n'."
+name_note: >-
+  Sarvam mostly renders the candidate as "Amit" but also produces "Amee",
+  "Ali", "Mind" and "damage" inside garbled spans. Normalised to Amit
+  throughout.
+romanized: 7
+
+turns:
+  - t: "00:00:30"
+    role: interviewer
+    text: >-
+      Okay. Now without wasting further time, let's get started. Amit, can you
+      give a quick intro of yourself?
+
+  - t: "00:00:36"
+    role: candidate
+    restitched: true
+    text: >-
+      So I am Amit. I am from Forbesganj, Bihar. Currently I'm working as a
+      software engineer II in Wingify. It's been more than two years — I have
+      more than two years of experience working as a front end developer. Prior
+      to Wingify I was in Victor Labs, and the tech which I mostly use is React
+      JS. Apart from this, JavaScript, HTML, CSS is the common thing, and for
+      styling purposes I mostly use styled components. Apart from this I have a
+      small bit of knowledge of Node JS.
+
+  - t: "00:01:05"
+    role: interviewer
+    text: >-
+      Wonderful, wonderful, Amit. Amit, let me look at your resume so that I can
+      see if there is any question that I can ask from your resume. So, you are
+      working in Wingify, where you are working on a flagship product, the
+      editor, which generates around seventy percent of the total revenue. There
+      is a React website that you have built here, and Tailwind CSS, lazy loading
+      concepts. Can you talk a little bit about the project? What is the project
+      here?
+
+  - t: "00:01:50"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay, so our main product is called the editor. That product is used by the
+      client so that they can do some A/B testing. I can give you an easier
+      example. Let's say you have your website. You have your headings and
+      images. Now you want, let's say, different versions of your website. Let's
+      say you want a different heading, like heading one, and in another version
+      you want your images to be different images — image one, image two. So we
+      give you a solution. We have our own front end. You go there, you upload,
+      you use your website and then you can do all the changing. The whole flow
+      is very easy: you just click on an element and you will get all the
+      options, like do you want to change the HTML, do you want to change the
+      image, everything. Once you save everything, then we will also host
+      everything. So now what will happen? Let's say you have a hundred users and
+      now you created variations, and you specified everything as thirty three
+      percent each — all the weightage. So thirty three people will see your
+      original website, thirty three will see a version where you just made the
+      heading into header one, and then thirty three people will see a version
+      where you changed some images. This way we are also tracking some
+      engagement, like how much time the user spent on the website, what they
+      clicked. These are some of the tracking things which we track. So this
+      gives you an insight — okay, which version is performing well. So after
+      doing this, you can improve your website. That's what we do.
+
+  - t: "00:03:30"
+    role: interviewer
+    restitched: true
+    text: >-
+      Got it. So Amit, I'll just quickly summarise. Basically you have a product
+      where somebody can come and upload their website and they can do certain
+      modifications. It has to be hosted on your own hosting service, so that you
+      give a lot of options like rolling out the changes to a particular portion
+      of users and seeing how it is performing. So if they are happy they can
+      roll out the changes to everyone, like that. Correct? So here my question
+      is, how are you going to determine which portion of the users? Let's say we
+      have a product where thirty percent are using one header and thirty percent
+      are using the remaining header. So how are you going to determine this
+      thirty percent of users? Which thirty percent — you don't know. Let's say
+      there are a hundred users. So how are you going to pick the thirty percent
+      users, at random, or?
+
+  - t: "00:04:10"
+    role: candidate
+    text: Okay, so yeah, it's random. It's random, it's not specific, it's random.
+
+  - t: "00:04:14"
+    role: interviewer
+    text: >-
+      Got it. So now let's say you made the change, okay, only to that specific
+      portion of thirty percent of users. Then you are not happy with the
+      experience — like customers are not happy with the change that has been
+      made. Now they want to revert the change. So do you have the capability to
+      enable it only for those thirty percent users?
+
+  - t: "00:04:30"
+    role: candidate
+    text: >-
+      No, no, we don't have such a thing, but yeah, you can just delete this
+      variation, so that now the user can't see that such a variation existed.
+
+  - t: "00:04:38"
+    role: interviewer
+    restitched: true
+    text: >-
+      I get it, I get it. So basically you don't have that. Why I'm asking this
+      is, see, app rollouts happen, right, on Android and iOS. There is a
+      percentage rollout that happens — one percent, two percent, ten percent. So
+      after a ten percent rollout, sometimes the company decides to stop the
+      rollout. Okay? So ninety percent of people have not received the latest
+      version but ten percent have received the latest version, correct? So if it
+      rolls out and then gives a new release with an enhanced version, it will go
+      back to the same ten percent of users which were there before. It will not
+      go to another ten percent. Okay? That's why I asked. Sure, sounds good,
+      Amit. Now let's get started with some React questions, okay? So my
+      expectation is this, Amit. You have an object, and you have a button. On
+      click of the button, only the second line value has to be changed, from
+      test two to test three. The rest has to remain as it is. Am I clear?
+
+  - t: "00:06:49"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay, please. So let me go through the question again so that we can be on
+      the same page. So we have an object, okay? And I'm assuming that I need to
+      show everything, like Amit Kumar, whatever the values are there. Let's say I
+      will give you a mock implementation, like a mock view. Now what will happen?
+      You have a button — let's say the button will change the second line. Once
+      we click it, the test two is going to change to something different. Let's
+      say we created a different value, test three.
+
+  - t: "00:07:19"
+    role: interviewer
+    text: >-
+      Different value, test three. Okay. Yeah, the rest of the values should be
+      untouched. There should be no change. So you can create like an h1 tag and
+      render all of this — first name, second name, address, first line, second
+      line, all of that. So on click of a button, just the second line should
+      change. The rest should remain as it is. You have just less than five
+      minutes to solve this.
+
+  - t: "00:07:39"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      No problem. Okay, let's do it. Let's use this. So I'll just use the first
+      name. So I'm going to do this. Now I think I need one thing: I need to store
+      the value so that it can be changed. So now let's do the main part. I'm just
+      using const, the same name object — I don't need to do anything — and
+      setObject, using useState. And then I will use this object here. So now we
+      have our object and the setObject, okay? Now we need a function, and then I
+      need a handle change. And then change — and what will we do? So whenever I
+      click this, I need to change the second line, okay? So I will do setObject.
+      What do I need? I will just copy whatever the object we have right now,
+      then I will get all the object. Then I need to do the address part, okay? So
+      I will just use address and I will do a colon, then I will again do the
+      same — colon of object, whatever the address we have, object dot address.
+      Okay? So now then I just need to confirm the second line, which will be my
+      test three. Oh, I think — let's save it. Okay, let me go with this one.
+      Okay, it's like — okay, I missed. Okay, sorry, that was my mistake. I just
+      need to wrap everything in the JavaScript. Okay, why is it not working? So I
+      think this will work now. Yeah — Amit Kumar, test one. If I click on change,
+      so this is test three.
+
+  - t: "00:10:53"
+    role: interviewer
+    text: >-
+      Good. Good. Any other alternative solution to this, Amit, rather than doing
+      the spread operator?
+
+  - t: "00:10:58"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      Alternative option. Okay, let me think what we can do apart from the spread
+      operator. We always need — if we do some changing, we also need to keep
+      track of what about the other values there. I think there was a way, I'm
+      just getting confused. I think there is one method, useReducer, we can use
+      that. There is still one way, because if you have a lot of complex scenarios
+      and you want a special part of the object to just set, that will be very
+      easy to use — useReducer.
+
+  - t: "00:11:37"
+    role: interviewer
+    text: >-
+      Okay. Sure, sure. So this is a nested object — not deeply nested, but a
+      nested object. Address is the nested object inside the object, correct? So
+      how is it stored in the memory, Amit?
+
+  - t: "00:11:57"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay, so whenever this — oh yeah, I think I got it. So whenever we have an
+      object, we know objects are reference-wise. So it will store the reference.
+      Now when we have an extra object, let's say, now in this object it is not
+      going to sit there. So there is a proof — I can even prove the whole thing.
+      Here, this object, you can think about this as one more extra object. Like I
+      can give you, let test, and there we have the definition of this whole
+      object. And now it just points to this test reference. So that's why, if you
+      do the copy, that's why we still have the reference of the same, in the same
+      way, if you don't do the deep cloning.
+
+  - t: "00:12:36"
+    role: interviewer
+    restitched: true
+    text: >-
+      Wonderful. Yes, yes. Sure, Amit. So I'll ask another question. This is one
+      of the common questions that I ask in the interview related to React, okay?
+      Let's say you are on a page, and on the page three API calls are made,
+      parallel API calls, which are not dependent on one another. This was asked
+      to me in Reliance Jio when I had attended the interview, okay? So now what
+      is happening is, I have logged into the website, let us say, and you have
+      not logged out. No need to write, I'll tell. So you have not logged out.
+      Next time you open the application, but your authorization token is already
+      expired. Even before the first API call is made, your authorization token is
+      already expired. So now what you have to do is — as I mentioned, you have to
+      make three API calls, correct? So these three API calls, whatever you are
+      making, now all the calls will fail because the authorization token has
+      expired, as they are happening in parallel. So propose a solution where only
+      one API call is made and you get to know that the token is expired, and
+      further calls are made only after the new token has arrived. What is your
+      solution to this problem?
+
+  - t: "00:14:13"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah. So I think, let's say we have a fetch call. I'm just writing a small
+      boilerplate. So we have a fetch call. Let's say this is some URL one. I will
+      get some value, URL one. Then I will have a then call, because there I need
+      to check whether everything is working or not. Correct? So now, let's say
+      this URL one is giving some status. Let's say I have something called
+      status. Let's say this is my response, and in the response I will have
+      something called onboard status. Okay? Now the status is there. So, response
+      — I will just check this status. Once this is done, then I will do the other
+      two API calls here. This way I will always be sure.
+
+  - t: "00:14:59"
+    role: interviewer
+    text: >-
+      No, no, the thing is, Amit, the calls are happening in parallel. There is no
+      connection between one call and another call, like I mentioned. So let's say
+      one call is to get user details, another call to get something else. They
+      don't know each other, they are happening in parallel. Okay, in that case
+      what will you do?
+
+  - t: "00:15:14"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay, then in that case — so we have one call. Let me think. The call is
+      happening, then all the calls are in parallel. Okay, so how can we decide?
+      If it is a success, then only will the call eventually happen. So the only
+      thing we can do — I'm just thinking. Okay, Promise.allSettled is a method.
+      But, okay, I'm just asking for a small hint: do I need to use some of the
+      promise methods? Like there are already some promise methods.
+
+  - t: "00:15:56"
+    role: interviewer
+    text: >-
+      It's not more on what concept you use, it's more on your system design
+      thinking. So if you are building the system, what will you do? That is the
+      intention of the question. It's nothing to do with concepts like promises or
+      anything like that.
+
+  - t: "00:16:17"
+    role: candidate
+    text: >-
+      I'm thinking, if I have such a thing. Okay, I'm just thinking that I will
+      use this Promise.allSettled thing, because at that time I will have all the
+      responses, like exactly, response one, response two, everything. And now, if
+      response one's status is something like, say, two hundred, then only will I
+      go and track everything from two or three.
+
+  - t: "00:16:43"
+    role: interviewer
+    text: >-
+      Okay. Sure, sure. Amit, definitely there is a better answer. You can read
+      about it after the interview. Yeah, Amit, now can you write the polyfill for
+      the array dot map method? You know how to write a polyfill, right? First
+      tell me what array dot map does — you tell me.
+
+  - t: "00:17:21"
+    role: candidate
+    text: >-
+      Okay, so array dot map — the map is a method which is introduced on the
+      array. So it will iterate through each and every element of the array, and
+      let's say we want to do some modification to each of our elements. So it
+      will do the modification and it will return a new array with the modified
+      result.
+
+  - t: "00:17:44"
+    role: interviewer
+    text: So what is the difference between map and forEach? Common question.
+
+  - t: "00:17:47"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      Okay, so yeah. So map and forEach. So as I can say, both are array methods,
+      both are used to iterate. The only difference is that in map, if I use map,
+      I will get a returned array. And if I use forEach, I don't get such an
+      array. So it's like, if you want to modify your array, then you can use your
+      forEach method. But if you want some modification and you don't want to
+      affect your array, then you can use map.
+
+  - t: "00:18:15"
+    role: interviewer
+    text: >-
+      Sure, please go ahead. You have five minutes, okay? It's straightforward.
+      Please write it up, Amit.
+
+  - t: "00:18:21"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      Okay, okay, polyfill. So let me just write function myMap. Okay, so I will
+      take and call that function, that's one thing. Yeah, I think that's one
+      thing, we will take a callback. So whenever I call this function, because
+      whenever I use a dot operator then this points to the object which is
+      representing it — and an array is also an object. So I'm just saying that
+      let self be our this. So self equal to this, so I get to this operation. Now
+      I need to say to which element, so let me think — let output, this will be my
+      output array, because output is even empty. Now I will use a for loop: for
+      let i equal to zero, i less than self dot length, then i plus plus, and I
+      will just use — okay, so what will happen? So whatever the output, this
+      callback will do something and it will return something. So I will just do
+      output of i is equal to — okay, not self, it's callback, it is a function
+      and it will take, so it will take first the first element, like whatever
+      element you are working on, self of i, then obviously I think it will take a
+      second element which is the i, the current index, and the whole array,
+      that's something. And now this callback function will get called and
+      whatever the response it gets will be stored in the output. Then I will just
+      return the output. Yes. Okay, now this is my function. But now, since this
+      method is not available on array, I need to tell the array that okay, we
+      have such a function. So for that I need to use prototype. So I will use
+      array dot — this is the main method — array dot prototype, then I will write
+      my myMap. myMap is equal to my map which I have already written. Okay. So if
+      I need to test this, I can do it.
+
+  - t: "00:20:31"
+    role: interviewer
+    text: Please test.
+
+  - t: "00:20:33"
+    role: candidate
+    text: >-
+      Yeah, so let's say we have one, two, three — one comma two comma three. And
+      I will use myMap. Okay, and I will just write — let's call this, the
+      function will do like... Okay, so this is a function. It will take the
+      current element and it will just return current into two. Let's say I'm just
+      multiplying, just for the array to get me something, and let's see. Just
+      putting const output, then just console.log.
+
+  - t: "00:21:48"
+    role: interviewer
+    restitched: true
+    text: >-
+      Okay. Good, good. Whatever you have written is good, Amit, okay? So now,
+      let's say you have written it in this particular file, correct? And you have
+      written some function on the array and you want to use it all across your
+      project. Are you getting what I'm saying? So in that case, what is the thing
+      that you will do? Let's say this myMap, right — it should be accessible to
+      the entire React project that you have written. What is the process then?
+      Like, anywhere you go and write array dot, push, pop and all will come,
+      right? Like that, this myMap also should appear. If you are structuring the
+      project, where will you keep that?
+
+  - t: "00:22:26"
+    role: candidate
+    text: >-
+      Okay, so I think I need to use the polyfill — I mean, let's say this is some
+      map, some such thing, so I need to put this inside, I think, index dot js.
+      So that will be the root, and if I use that value there, then I have the
+      access everywhere.
+
+  - t: "00:22:48"
+    role: interviewer
+    text: >-
+      Okay. I'm thinking. Sure, sure. Please read up on it. Let's get into some
+      conceptual topics now. So please tell me — this is again a very common
+      question — what is reconciliation in React, Amit? Yeah, reconciliation,
+      reconciliation in React.
+
+  - t: "00:23:23"
+    role: candidate
+    restitched: true
+    text: >-
+      Reconciliation. So as we know, in React, what will happen — React uses the
+      virtual DOM concept. And the virtual DOM is already in sync with the real
+      DOM, okay? And that real thing is called reconciliation. So to sync your
+      virtual DOM with the real DOM, that's reconciliation, okay? Now this
+      involves two things: one thing is the virtual DOM, and there is another
+      thing called the diffing algorithm. Okay, so what is the diffing algorithm?
+      The diffing algorithm is basically a method which will do — whenever we make
+      some changes, a new virtual DOM gets created. So now what it will do, it will
+      compare with the old virtual DOM, then it will figure out okay, what are the
+      minimum steps I need so that I can convert from my old virtual DOM to the
+      new virtual DOM. That's the diffing algorithm, and yeah, the whole process is
+      called reconciliation.
+
+  - t: "00:24:25"
+    role: interviewer
+    text: So how many virtual DOMs are there in the overall process now?
+
+  - t: "00:24:29"
+    role: candidate
+    text: >-
+      Currently there are two, right? So in this process, till the diffing is
+      done. Once the diffing is done, now we again have one.
+
+  - t: "00:24:35"
+    role: interviewer
+    text: >-
+      Okay. So now, once the diffing is done, is the old virtual DOM decommissioned
+      or is the new virtual DOM decommissioned?
+
+  - t: "00:24:43"
+    role: candidate
+    text: >-
+      Okay, so I think the old one is going to be decommissioned, because the new
+      one has the latest data.
+
+  - t: "00:24:50"
+    role: interviewer
+    text: >-
+      Correct. Correct. Have you ever looked into the diffing algorithm, like how
+      the algorithm actually works under the hood?
+
+  - t: "00:24:56"
+    role: candidate
+    restitched: true
+    text: >-
+      I have not gone through it, because I tried to go through the docs and the
+      docs were not that expansive — like, okay, exactly how the things are. But
+      yeah, I got a small idea. So normally what will happen, as we know, the DOM
+      is basically a tree. So if I need to compare two trees, I need to go through
+      each and every node and compare the sub-nodes. So I think this whole process
+      takes around order of n cube time complexity. And the diffing, what they do
+      — I think they made some tweaks around the whole algorithm and they reduced
+      this complexity somehow to nearly order of n.
+
+  - t: "00:25:32"
+    role: interviewer
+    text: >-
+      Got it. Good. Good, Amit. Good. Okay, let's talk about something about
+      higher order components. Can you please tell me what are higher order
+      components in React?
+
+  - t: "00:25:42"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      Okay, so a higher order component is basically a component which will take
+      another component and it will give you again one more component. So now
+      let's say we have some component and we want some modification to such a
+      component. So we will create a higher order component. Now this higher order
+      component will take a different component and it will do some modification
+      and it will return a new component.
+
+  - t: "00:26:07"
+    role: interviewer
+    romanized: true
+    text: >-
+      Okay. Give me one practical example, Amit. Don't give me a bookish example —
+      a practical example where you used a higher order component.
+
+  - t: "00:26:12"
+    role: candidate
+    text: >-
+      Okay, okay, so the practical example — I think, if I use the thing which I
+      mostly use, I think React.memo, the memoization of...
+
+  - t: "00:26:19"
+    role: interviewer
+    text: >-
+      That's not a — no, no, that is something built in. Something you built for
+      your requirement. You think you had a requirement for a component and you
+      built it.
+
+  - t: "00:26:27"
+    role: candidate
+    romanized: true
+    text: Okay, I built it with some component. Let me say.
+
+  - t: "00:26:33"
+    role: interviewer
+    text: >-
+      Not necessarily you — you can tell me, if not you, your team has built it.
+      So you are aware of that requirement.
+
+  - t: "00:26:40"
+    role: candidate
+    restitched: true
+    text: >-
+      I think you know what we have to use. Okay, I think the practical
+      implementation is like the error boundary check — that is one thing you can
+      even think of, where we need to take an extra component and then return.
+      That is something I do. I never use this; the only thing I use is the
+      inbuilt functions. Yeah, I will create a new one, or maybe I will post it on
+      LinkedIn.
+
+  - t: "00:27:11"
+    role: interviewer
+    text: >-
+      Exactly. The reason for that is, see, every optimal technique — unless you
+      have mastered when to use it, right, you wouldn't use it, like in your case.
+      There could be scenarios where you might have used a higher order component
+      but you have not used it. Correct? So just if you check, you'll be able to
+      get to know when to use it properly. Okay. Please tell me when you will use
+      the useCallback hook.
+
+  - t: "00:27:31"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay, useCallback. So useCallback is used to make — it's again a memoization
+      technique. So useCallback will memoize the function. What will happen?
+      Sometimes we also pass a function from a parent component to a child
+      component. And we know, whenever re-rendering happens, the function again
+      gets re-created and it will again get new memory. But still the whole
+      function is the same. But now what will happen? Due to this, the child
+      component which is taking this function as a prop is now again going to
+      re-render. So we can minimise this thing by just wrapping this in a
+      useCallback.
+
+  - t: "00:28:20"
+    role: interviewer
+    text: >-
+      Got it. Got it. So I get it. So basically there is a function in the parent
+      component and something is calling that function — some component, some
+      return statement, something is calling that particular function. So every
+      time some change has happened in the parent component, the function is
+      recreated. In that case the child is also re-rendered unnecessarily even
+      though there is no change in the function. Correct? So then we can use
+      useCallback for almost all the functions, right? As it will improve the
+      efficiency. Correct?
+
+  - t: "00:28:48"
+    role: candidate
+    text: >-
+      Yeah, yeah, that's correct. But basically, let's say — yeah, I can give you
+      the example. Let's say if the function is doing nothing, just a normal
+      function, like we don't have lots of calculations, not a lot of things, just
+      a plain normal function which is not dependent on any of the states. So I
+      don't think this will impact performance a lot. You can just use it directly,
+      you don't need too much. But now let's say we have some function which is
+      dependent on some inputs, some states. So this way it is very good to, I
+      mean, you can say, just memoize this thing.
+
+  - t: "00:29:18"
+    role: interviewer
+    restitched: true
+    text: >-
+      I got it. So, but technically, Amit, if you start using useCallback for all
+      the functions, overall efficiency would increase. But people are not doing
+      that, correct? Like you said, only very specific functions they are using.
+      Any other reason, other than what you said, that you think is blocking you
+      from using useCallback? Because, like you said, it may not have a lot of
+      performance impact, but let's say one millisecond is also a saving —
+      everywhere I can use useCallback, correct? So some amount of time I am
+      saving.
+
+  - t: "00:29:49"
+    role: candidate
+    text: Yeah. I think probably — I don't exactly know why we are not using this.
+
+  - t: "00:29:58"
+    role: interviewer
+    text: >-
+      No, what you say is also right, but there are a little bit of in-depth
+      explanations as well, okay? I'm mostly done from my end, Amit, okay? Before I
+      give my feedback, if you have any general questions about the interview, you
+      can ask.
+
+  - t: "00:30:12"
+    role: candidate
+    text: >-
+      Okay. So I think one question you asked me — I really want your opinion
+      about this fetch call thing.
+
+  - t: "00:30:20"
+    role: interviewer
+    restitched: true
+    text: >-
+      So there are multiple ways to solve the problem. I can't say there is a
+      right or wrong way to solve this; it depends on the approach. So one easiest
+      approach is, keep a common block where API calls would go. You write a
+      utility function where all the API calls basically go through that, okay? So
+      what you're going to do is, let's say three API calls are going through one
+      gateway, correct? So some call will definitely go to that particular utility
+      function first, correct? As soon as that call goes, you make an API call,
+      okay? And if the API call has failed due to any reason, at that time what you
+      will do is you will set some flag variable as false, okay? And whenever the
+      further calls come to that — so there is a chance where, when this is
+      happening, another call might also have happened. All the further calls are
+      pushed into an array. If that particular flag value, such as
+      isAuthorizationFailed, is true, then all the calls are pushed into an array,
+      okay? Then one call you will make separately, okay, to get the authorization
+      token. So this you keep in a separate function which will get the token. Then
+      check whether there is any value in the array, any pending calls that need to
+      be made, and then it will make the pending calls. Okay? So this is one way,
+      one approach to solve this, but this again involves, like I mentioned, a lot
+      of things you need to take care of. Okay? If your application is not so
+      critical, in that case you can give a retry mechanism everywhere. Like, the
+      three calls you are not saving basically — they make a call, and once the
+      token is expired, right, maybe they will retrigger the call by then, with the
+      assumption that the token has already come, because whenever that status code
+      comes you might have already triggered a call for this one. There are
+      multiple other approaches also. Okay? Any other questions, Amit?
+
+  - t: "00:32:05"
+    role: candidate
+    text: >-
+      Okay, I think, yeah, this useCallback thing. I gave some explanation, but
+      maybe if you can just highlight it.
+
+  - t: "00:32:11"
+    role: interviewer
+    restitched: true
+    text: >-
+      So one thing what you said was absolutely right. See, everywhere we cannot
+      use it, because everywhere we might not be doing a very complex operation.
+      Very important point to notice: every optimization technique — useCallback,
+      useMemo, higher order components, pure components — they all have a
+      performance effect by themselves. They add certain overhead, because they are
+      optimization techniques, right? They have written a lot of code behind the
+      hood to make them optimal. So it is not that you use them like a silver
+      bullet for solving all the problems. They have their own problems, okay? In
+      the React official documentation they mention: try to build your component in
+      such a way that you are not using useCallback, useMemo kind of things. Okay.
+      If there is no way, if you have come to a situation where you cannot do
+      without it, only then use the optimization technique, because they introduce
+      some amount of delay. So it is only good if you use it for something like you
+      mentioned, a complex operation — then it is good. Okay. Otherwise it is not
+      that worth using. Okay. So I'll share my brief feedback about whatever the
+      interview that I took. It's almost thirty five minutes so far. So one thing:
+      you are fundamentally strong with whatever React concepts and JavaScript
+      concepts that I've asked you so far, building the polyfill and other things,
+      which is very good. So let's say if you are attempting for any service based
+      company or a preliminary kind of product based company, you'll definitely be
+      able to clear the interview, okay? Only one thing that I want to highlight is
+      like, product based companies, especially premium product based companies,
+      they get into too much depth. So I have a time limitation, I cannot get into
+      very much depth in all of the concepts. But whenever they go into a lot of
+      concepts very much in depth, I see a little bit of hollowness. Like, you need
+      to master a little bit about the fundamentals. At a very high level you have
+      a very good understanding, okay? For two years of experience you have been
+      phenomenal. There is no doubt about it. But if you are targeting very premium
+      companies, Google, Microsoft, this kind of companies, probably my advice is
+      go and read something in depth. Constantly have a practice of reading.
+      developer.mozilla.org is one of my favourites. And now even the beta React
+      documentation, that website also. In the beta React documentation they have
+      not just written about React, they have also written a lot of JavaScript
+      concepts — like I mentioned, the nested object, I actually read it from the
+      React documentation itself. So spend more time, read the concepts. These are
+      my simple pieces of advice, Amit, to proceed further. Okay then. Nice talking
+      to you, Amit.
+
+  - t: "00:34:58"
+    role: candidate
+    text: Thank you, thank you.

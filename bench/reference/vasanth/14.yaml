@@ -1,0 +1,600 @@
+id: "14"
+title: React Mock Interview - 5 Years Experience
+source: 14 - React Mock Interview - 5 Years Experience
+duration: "00:22:59"
+track: frontend
+topics: [websockets, real-time, tcp-udp, react, usememo, usecallback, closures, async, hoisting]
+seniority: senior
+participants:
+  interviewer: Vasanth
+  candidate: Sumit
+  candidate_experience_years: 5
+
+# Note the id polarity is inverted compared with most recordings in this set:
+# Speaker 2 is Vasanth (the interviewer) and Speaker 1 is Sumit. The ids are
+# otherwise stable, but there is very heavy cross-talk bleed, with one-word
+# fragments of one speaker emitted under the other speaker's id. Every turn
+# below was attributed by content.
+raw_speaker_ids:
+  interviewer: [2]
+  candidate: [1]
+
+invariants:
+  - Turns strictly alternate interviewer -> candidate. No two consecutive same-role turns.
+  - No reference to a YouTube channel, video, subscriber, audience or viewer.
+  - No screen-sharing, editor or tool-operation instructions.
+  - Text is English in Latin script only.
+
+counts:
+  raw_entries: 269
+  clean_turns: 69
+
+removed:
+  monologue:
+    - span: "00:00:00-00:00:38"
+      what: >-
+        Channel intro, old channel name, series framing, subscribe/like/share
+        appeal, "watch the video till the end".
+    - span: "00:20:17-00:22:59"
+      what: >-
+        Outro plus the entire post-interview solo explainer segment addressed to
+        viewers - re-answering the websocket question, re-running the React
+        state snippet on camera, book and description-section plug, subscribe
+        appeal.
+  self_promotion:
+    - "00:01:11 - 'for audience sake I'm just saying, before we start the video'"
+    - "00:02:11 - 'if you're facing that, please comment, whatever way I could help I'll help'"
+    - "00:03:03 - 'so that audience can also resonate with it very comfortably'"
+    - "00:03:33 - 'audience also who are watching, you can just mention the video timing'"
+    - "00:08:45 - 'for audience who are watching this video, please comment the video time duration and the output'"
+    - "00:10:08 - 'you and audience whoever thought like one two three followed by four times four'"
+    - "00:18:27 - 'all the audience who are having five plus years of experience'"
+    - "00:18:57 - 'I am also writing a book which will be out soon... that in the description section'"
+  logistics:
+    - "00:07:20 - 'can you please present the screen with JS Fiddle open... code sandbox or any other React editor'"
+    - "00:07:20 - 'copy the snippet and paste the snippet'"
+    - "00:07:46 - 'in line number twenty, remove that'"
+    - "00:07:49 - 'I think some spaces are also copied, can you please remove the spaces'"
+    - "00:08:31-00:09:07 - 'refresh it and click on add item four times', 'now just refresh there, click there, refresh'"
+    - "00:09:11-00:09:52 - 'you can click some more times', 'refresh the entire page once', 'top left you see, let the code load, click on add item'"
+    - "00:10:21 - 'copy this code and put it in the other tab, paste it in another JavaScript editor'"
+    - "00:11:06 / 00:11:50 - 'don't run, don't run', 'please run the code, now run the code'"
+    - "00:15:02-00:15:16 - 'in the React editor', 'yeah, go there'"
+    - "00:16:42 - 'you can stop sharing, Sumit'"
+  backchannels: 118
+  asr_noise: 33
+
+corrections:
+  toxicness: toxicity
+  "we have to leave this life": we have to live this life
+  chartboards: chatboards
+  "the websites there can be loss of data": the web sockets, there can be loss of data
+  "statement function": a function
+  "it's not a wire": it's not a var
+  "context execution": execution context
+  "I'm defined": undefined
+  memorize: memoize
+  "handle this enderclip": handleClick
+  underclick: onClick
+  "use callback": useCallback
+  unmotivation: demotivation
+name_note: >-
+  Sarvam writes the candidate as both "Sumit" and "Sumeet". Normalised to Sumit,
+  which is how he introduces himself.
+romanized: 6
+
+turns:
+  - t: "00:00:38"
+    role: interviewer
+    text: "Sumit, over to you. Can you please introduce yourself?"
+
+  - t: "00:00:45"
+    role: candidate
+    text: >-
+      Yeah, hi, this is Sumit. I've been doing React for the past five years. For
+      the last three and a half years I'm in one company, and before that I was
+      in a company which had a very toxic environment — that's why I changed that
+      company. And yeah, I'm trying to switch again now. That's why I'm
+      preparing.
+
+  - t: "00:01:11"
+    role: interviewer
+    restitched: true
+    text: >-
+      Wonderful, wonderful, wonderful. So before we started, Sumit and I had a
+      short connect. There was a lot of toxicity he faced in his previous
+      company. I will not take much time to explain it, but let me quickly
+      summarize. The primary toxicity he was facing was that he had just joined
+      with two years of experience, but there were leads having like eight to ten
+      years of experience, and they were expecting him to code at a similar
+      level, which was hard to do. And whenever he was not meeting that
+      particular expectation, they were scolding him. So that led Sumit into some
+      amount of depression, and it took a lot of time to recover. The reason I'm
+      saying this is that there could be a lot of people who are also facing this
+      type of problem. So if you are facing that type of problem, my advice is —
+      unless your financial situation is extremely bad, I would highly recommend
+      you leave the company. Please try to switch to a different company, because
+      at the end of the day we have to live this life, and not get into this toxic
+      environment and get into depression and that sort of a thing. Okay.
+      Anything you want to add, Sumit, before we start the actual interview?
+
+  - t: "00:02:16"
+    role: candidate
+    text: >-
+      Yeah, I just want to advise people — if you face any kind of toxic
+      environment in your place and you are not able to cope with it, then I
+      think the best advice is to switch the job. If not, just leave the job,
+      because that will do more harm if you are working in that company.
+
+  - t: "00:02:33"
+    role: interviewer
+    restitched: true
+    text: >-
+      Exactly. Yes, yes, absolutely, Sumit. So Sumit, now let us start. I have a
+      very simple question, okay? How do we basically handle a real-time
+      notification in a web application? The best examples for real-time
+      notification are chatting systems like Facebook Messenger or Zoom chat, or
+      the chatboards that are available on various different websites, correct?
+      So whenever you go to B2C web applications, there are chatboards available.
+      Correct? So let's say we have to implement that functionality, where a
+      client basically sends a message to the server, and whenever the server
+      sends the message the client is receiving it. Okay? I've opened the
+      whiteboard. So I want you to explain the architecture, Sumit, because you
+      have five plus years of experience. If you have to implement this feature,
+      how are you going to implement it? Over to you, Sumit.
+
+  - t: "00:03:37"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay, so I've never worked with chatbots and all that. But what I do
+      sometimes is general Googling of new stuff. So I think web sockets are used
+      to get the messages to and fro, if this is a chatbot. So we can initialize
+      a web socket on a URL that is given to us, and it starts talking to it. So
+      maybe when the web socket — it has different functions like onmessage or
+      something like that. Whenever that message comes, we will store that data
+      into a state. Whenever the state changes we can just render a new
+      component, or render the components depending on the messages coming. So
+      that's the approach I will take.
+
+  - t: "00:04:31"
+    role: interviewer
+    restitched: true
+    text: >-
+      See, I've drawn a diagram, a simple starter diagram, Sumit, okay? So we
+      have a client, we have a server. Let's say the chatbot runs here, okay. So
+      now, whatever you are saying — there is a dedicated connection that has
+      been established, correct? So the right way to represent it would be using
+      a plain line, for example. Let me draw. So you have a dedicated socket
+      between the client and the server, correct? So you established a
+      connection, with which the client can send the data to the server and the
+      server can send data back to the client. Correct. So there can be,
+      depending on the use case, multiple things. For example, let's say it's a
+      chatting application, then there'll be another client, correct? So there'll
+      be another client, client two, correct? Because you're sending a message to
+      me. So now, whatever socket we have, we will have a socket connection here
+      as well. So we have a dedicated connection — let's say we call this
+      connection one, okay? So this particular thing is connection one, and
+      whatever this is that we have is connection two, correct? So both are
+      primarily interacting with the server. And whenever you receive a message
+      from this particular client, correct — let me just colour it. So you get a
+      message from this client to this server, and then you're going to send this
+      to this one, correct? And then when they send back, you're going to send it
+      back immediately to here, correct? And like you told, it's a pub/sub model
+      where the client is always waiting for something to happen. So the client
+      will get the most updated information whenever there is a change; basically
+      it will be getting that new message and we will be showing that. Correct,
+      Sumit? Tell me the disadvantages of using web sockets.
+
+  - t: "00:06:20"
+    role: candidate
+    text: "I think with web sockets, there can be loss of data."
+
+  - t: "00:06:24"
+    role: interviewer
+    text: >-
+      No, there will not be loss of data. That's not the thing. At a high level
+      you tell me, what network protocols do you think these web sockets will
+      use? Or else, in general, tell me what are all the protocols that come to
+      your mind that are usually used for sharing data. To unblock you I'll tell
+      one. TCP is one protocol, correct? Like that, what other protocols exist?
+      UDP is there.
+
+  - t: "00:06:47"
+    role: candidate
+    text: HTTPS.
+
+  - t: "00:06:48"
+    role: interviewer
+    text: "In this case, if you have to use a protocol, which protocol will you use?"
+
+  - t: "00:06:52"
+    role: candidate
+    text: >-
+      HTTPS cannot come, because HTTPS is not continuous, it's not bidirectional,
+      I think. And web socket, I think, uses UDP.
+
+  - t: "00:07:05"
+    role: interviewer
+    text: "You're guessing, right, Sumit? Yeah. Sure, no problem. Okay."
+
+  - t: "00:07:11"
+    role: candidate
+    text: "Yeah. So I never worked with web sockets and all that chat and all that."
+
+  - t: "00:07:14"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      Sure, sure. But at your experience it becomes slightly required, Sumit. OK.
+      So, if you press the Add Item four times, what will be printed? Don't —
+      don't press. Don't press, and tell me what will come.
+
+  - t: "00:08:03"
+    role: candidate
+    text: >-
+      Add item, handle... this will be the new item, set items like this one. So
+      if you press four times, four will be added four times.
+
+  - t: "00:08:15"
+    role: interviewer
+    text: "Okay, so I press —"
+
+  - t: "00:08:16"
+    role: candidate
+    restitched: true
+    text: >-
+      No, no, no. Four will be the four. Then you again — I think four or eight
+      times, something. I have to do the math. Or again if I press —
+
+  - t: "00:08:31"
+    role: interviewer
+    romanized: true
+    text: >-
+      I'm just saying, let's say you click on Add Item four times. What will be
+      shown in the list? That is my question. Now you think, and give me the
+      exact answer.
+
+  - t: "00:08:41"
+    role: candidate
+    text: "One, two, three, four times four. I think."
+
+  - t: "00:08:45"
+    role: interviewer
+    text: "Okay. One, two, three, four times four. Am I right, Sumit? So, what happened?"
+
+  - t: "00:09:10"
+    role: candidate
+    text: "Something else. Nothing happened."
+
+  - t: "00:09:14"
+    role: interviewer
+    text: See why nothing is happening.
+
+  - t: "00:09:15"
+    role: candidate
+    restitched: true
+    text: >-
+      If I press one time, onClick — item.push, the array will be updated, the
+      new array will be set to items, and items will be... No, I think nothing is
+      happening.
+
+  - t: "00:10:02"
+    role: interviewer
+    text: "So then whatever you're saying, that is not happening, Sumit, right?"
+
+  - t: "00:10:05"
+    role: candidate
+    text: "Yeah, nothing is happening."
+
+  - t: "00:10:08"
+    role: interviewer
+    restitched: true
+    text: >-
+      No, it's not like nothing is happening. What you told is not happening.
+      Okay. So whoever thought it would be one, two, three followed by four times
+      four, please check why it did not happen. We'll come back to this, Sumit,
+      if time permits. Okay. So I'll share a simple JavaScript snippet with you.
+      Look at it carefully. Take one to two minutes. Guess the exact output.
+
+  - t: "00:10:44"
+    role: candidate
+    text: >-
+      This is called async. So the async operation returns a function. So this
+      will have a reference to result. Then "async operation completed",
+      console.log result. I think undefined, and then after one second...
+
+  - t: "00:11:01"
+    role: interviewer
+    text: "After that, what will happen?"
+
+  - t: "00:11:03"
+    role: candidate
+    text: "After one second, async operation completed."
+
+  - t: "00:11:06"
+    role: interviewer
+    text: >-
+      Okay. So immediately after you run the code, undefined will be printed. Am
+      I right, Sumit?
+
+  - t: "00:11:16"
+    role: candidate
+    text: Yeah.
+
+  - t: "00:11:17"
+    role: interviewer
+    romanized: true
+    text: >-
+      OK. And after one second, "async operation completed" will be printed. Am I
+      right, Sumit?
+
+  - t: "00:11:24"
+    role: candidate
+    restitched: true
+    text: >-
+      Just wait, setTimeout is called. setTimeout is called with one second. So
+      will the setTimeout be called after the async operation is called, or will
+      it be called when the function is declared? I think if the function is
+      declared, it is not the setTimeout. I think, yeah, what I said the first
+      time — undefined, then after one second, async operation.
+
+  - t: "00:11:59"
+    role: interviewer
+    text: >-
+      Correct. Now please explain why it's undefined followed by "async operation
+      completed".
+
+  - t: "00:12:03"
+    role: candidate
+    text: >-
+      So when the function is returned, the concept that is happening here is
+      closure. Like, the inner function will have a reference to the outer
+      variables. So when the function is returned, the console.log of the result,
+      the let result, will have undefined, when the async operation is —
+
+  - t: "00:12:22"
+    role: interviewer
+    text: >-
+      Result will have undefined — that I did not get, how let result will have
+      undefined.
+
+  - t: "00:12:26"
+    role: candidate
+    text: "Because the initial value of any variable which is defined is —"
+
+  - t: "00:12:31"
+    role: interviewer
+    text: >-
+      It is not undefined. The initial value of any variable is not undefined.
+      You also know that, Sumit, correct?
+
+  - t: "00:12:36"
+    role: candidate
+    restitched: true
+    text: >-
+      I think when they get executed, then when the variables — the declaration,
+      when the initialization happens — if the variable does not have any value,
+      it will have undefined. When the let result is initialized.
+
+  - t: "00:12:56"
+    role: interviewer
+    text: >-
+      You are saying, let's say you create a variable called let result and you
+      log the value — you are saying you will not get a reference error but you
+      will get undefined. Am I right, Sumit?
+
+  - t: "00:13:03"
+    role: candidate
+    restitched: true
+    text: >-
+      Let... oh yeah, it will, because it's not a var. No, if you have declared a
+      variable, it will have its default value; undefined will be there.
+
+  - t: "00:13:18"
+    role: interviewer
+    text: >-
+      The default value of any variable that is created in JavaScript is
+      undefined. Can you say that, Sumit?
+
+  - t: "00:13:24"
+    role: candidate
+    romanized: true
+    text: "Yeah, when they are initialized."
+
+  - t: "00:13:25"
+    role: interviewer
+    text: >-
+      What is that, "when they initialize"? You are not initializing, you just
+      created let result now, correct? You are saying you just declared let
+      result, correct? And its value is undefined now.
+
+  - t: "00:13:37"
+    role: candidate
+    text: >-
+      No, it's not declared, and I think there's something called execution
+      context. So when the code is getting executed one by one, right?
+
+  - t: "00:13:45"
+    role: interviewer
+    restitched: true
+    text: >-
+      We'll get into those concepts. I'm not against it — Sumit, what you're
+      saying is fine. But let's take it in very simple terms. You declared a
+      variable with let. So its default value, can I consider it as undefined,
+      Sumit? Same goes for const, that you have to confirm.
+
+  - t: "00:14:00"
+    role: candidate
+    restitched: true
+    text: >-
+      I think it's undefined, yeah. Because whenever we declare anything and we
+      have not given any value, its value is undefined if you console.log it.
+
+  - t: "00:14:14"
+    role: interviewer
+    text: >-
+      Sure. So just as an extension to this example, Sumit. Give me, what are all
+      the different ways with which we can ask JavaScript to execute
+      asynchronously? Can you name a few different ways?
+
+  - t: "00:14:26"
+    role: candidate
+    restitched: true
+    text: >-
+      Promises is there. And generator functions are there, that's what I can
+      recall. And setTimeout. Set interval also, setTimeout — like this. Yeah,
+      that I think — maybe there are others but I don't know.
+
+  - t: "00:14:54"
+    role: interviewer
+    text: >-
+      So setTimeout, setInterval, promises and generator functions. These are all
+      the primary things that you think can make JavaScript execute
+      asynchronously. Correct?
+
+  - t: "00:15:01"
+    role: candidate
+    text: "Yeah. Okay."
+
+  - t: "00:15:02"
+    role: interviewer
+    text: >-
+      Okay. Sure, sounds good. So can you just write a small example for useMemo
+      or useCallback? Will you be able to write it, Sumit?
+
+  - t: "00:15:13"
+    role: candidate
+    text: Yes.
+
+  - t: "00:15:14"
+    role: interviewer
+    text: "Yeah. Let's write it for useMemo then."
+
+  - t: "00:15:20"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      So this is the example of useMemo, where you can memoize the value. So this
+      is the concept for optimizing performance. If you are calculating some very
+      big thing which is taking so much of time — like for the first time it takes
+      two seconds to calculate — so if we render again and use that value, that
+      value is again calculated and it takes two seconds, so it's a waste of
+      performance. So what we do is, we use useMemo and memoize this value, so
+      that the value is never — is not calculated again on every render.
+
+  - t: "00:15:54"
+    role: interviewer
+    text: "Correct. Correct."
+
+  - t: "00:15:55"
+    role: candidate
+    restitched: true
+    text: >-
+      And for handleClick we can use useCallback. So we can use useCallback. So
+      here what happens is, whenever we return the handleClick function it will
+      have a function reference, and every time it will be created because the
+      render is happening. So to stop that we use useCallback, so that the
+      reference is not changing with every render.
+
+  - t: "00:16:27"
+    role: interviewer
+    text: >-
+      Good, good. So whenever you click on Add Item, we are calling the
+      handleClick, but whatever reference we already had for that function is not
+      basically re-created — a new reference is not getting created. Correct?
+
+  - t: "00:16:41"
+    role: candidate
+    text: "Yeah. Yeah."
+
+  - t: "00:16:42"
+    role: interviewer
+    text: >-
+      I'm mostly done. I'll ask only one question, okay? So both useMemo and
+      useCallback you explained very efficiently. My only question is, if both
+      these functions are having so much of advantage, why can't we use them for
+      all the functions?
+
+  - t: "00:16:57"
+    role: candidate
+    restitched: true
+    text: >-
+      Why can't we use them for all the functions? We can't do it for all the
+      functions, because it will create more code — in the sense that we have to
+      write more code on top of more code, from a code readability point of view.
+      And I think it's a disadvantage that we have to wrap every function with,
+      let's say, useCallback. Wrapping every function with —
+
+  - t: "00:17:10"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      OK. Code readability point of view. Yeah, code readability. Wrapping every
+      function is not a disadvantage. Wrapping every function is not a
+      disadvantage. Definitely code readability is a disadvantage to an extent.
+      Other than that, do you think of anything?
+
+  - t: "00:17:33"
+    role: candidate
+    text: >-
+      Uh, no, I don't think so. I don't think much comes to my mind. What's the
+      disadvantage of useCallback? Maybe one thing is that code readability will
+      have an effect.
+
+  - t: "00:17:48"
+    role: interviewer
+    text: >-
+      Sure, sure. See, Sumit, I'm done from my end. Just before I give feedback
+      to you, if you have any questions, you can ask me.
+
+  - t: "00:17:53"
+    role: candidate
+    text: "No, not right now."
+
+  - t: "00:17:57"
+    role: interviewer
+    restitched: true
+    text: >-
+      No, no problem, Sumit. So yeah, Sumit, first of all, on a personal note —
+      good that you have left your toxic work culture office and joined a new
+      organization. Personally I'm very happy for that. Now, being very honest,
+      the feedback for you, Sumit, is that at your experience of five plus years,
+      right, there will always be scenario driven questions for you, like the one
+      I asked. And luckily front end is not having plenty of scenario driven
+      questions — there are quite a few and they keep repeating, correct? So I
+      would highly advise anybody having five plus years of experience to get to
+      that level where you master these ten to fifteen major scenario driven
+      questions, and any sub-questions asked in that, you should be able to
+      answer. Same applies to you also, okay? Other than that, quite minor
+      feedback — to have analytical thinking, like the guess-the-output sort of
+      questions, right? You have to be very well versed to answer them. Spend
+      more time on that. There are a lot of websites and now AI tools where you
+      can get snippet driven questions and try to guess the output. So that is
+      something I want you to practice, a must. And the last thing is, never ever
+      get into debug mode immediately. This is the mistake that even I used to do
+      in the initial time of my career, but I stopped doing that. I don't debug
+      my code immediately when I'm not getting the desired output. Okay? I just
+      look at the code, I try to understand it step by step, okay? And only if
+      needed I'll debug. Okay. That's all the feedback from me, Sumit. Do you
+      have any closing notes?
+
+  - t: "00:19:35"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah, I will start. Like I told you, this mock interview was kind of a push
+      and motivation that I should start learning more. Before the meeting we
+      said I'm not — I start doing three, four days, five days, one week of
+      learning things, and then out of demotivation I just leave it and don't do
+      anything for three, four months. So maybe this mock interview pushes me to
+      start learning things again — relearn things, do mock interviews, practice
+      more and brush up my skills to an advanced level, or to an intermediate
+      level. And yeah, do that.
+
+  - t: "00:20:17"
+    role: interviewer
+    text: "Thank you. Thank you so much, Sumit."

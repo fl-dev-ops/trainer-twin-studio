@@ -1,0 +1,686 @@
+id: "05"
+title: Infosys and TCS DSA Interview
+source: 05 - Infosys and TCS DSA Interview
+duration: "00:29:45"
+track: dsa
+topics: [time-complexity, space-complexity, strings, hash-map, isomorphic-strings,
+  cpp-maps, asymptotic-notation]
+seniority: fresher
+participants:
+  interviewer: Vasanth
+  candidate: Sushil
+  candidate_experience_years: 0
+problem: >-
+  Given two strings s and t, determine whether they are isomorphic — whether the
+  characters of s can be replaced to get t with a consistent one-to-one mapping,
+  no two characters mapping to the same character (LeetCode 205, with examples
+  egg/add, foo/bar and paper/title).
+
+# Ids are inverted relative to most recordings in this set: Speaker 2 is Vasanth
+# and Speaker 1 is Sushil. Speaker 0 appears twice as noise. The 30-second
+# chunker also routinely puts one speaker's echo of the other under the wrong
+# id, so every turn below was attributed by content.
+raw_speaker_ids:
+  interviewer: [2]
+  candidate: [1]
+
+invariants:
+  - Turns strictly alternate interviewer -> candidate. No two consecutive same-role turns.
+  - No reference to a YouTube channel, video, subscriber, audience or viewer.
+  - No screen-sharing, editor or tool-operation instructions.
+  - Text is English in Latin script only.
+
+counts:
+  raw_entries: 234
+  clean_turns: 63
+
+removed:
+  monologue:
+    - span: "00:00:00-00:00:30"
+      what: Channel intro, series framing, third-person introduction of the candidate to viewers.
+    - span: "00:05:14-00:05:43"
+      what: Audience instructions - question link in the description section, solve it yourself, comment your solution, "I'll be fast forwarding the video".
+    - span: "00:13:09-00:13:42"
+      what: Mid-interview like/subscribe/bell-icon appeal.
+  self_promotion:
+    - "00:01:40 - 'a lot of my followers are freshers' -> 'a lot of freshers reach out to me'"
+    - "00:03:53 - 'this is the question for you and also to the audience'"
+    - "00:05:44 - 'please mention the solution link of the LeetCode in the comment section, I'll personally go through it'"
+    - "00:06:19 - 'so everyone in the audience also start trying it'"
+    - "00:09:53 - 'otherwise for the audience sake also I'm saying'"
+    - "00:23:13 - 'if somebody knows a better approach please mention that in the comment section'"
+    - "00:24:24 - 'what I said initially is wrong for audience'"
+    - "00:24:54 - 'I have certain feedbacks to give it to you and to audience as well'"
+    - "00:26:24 - 'lot of audience who are in fresher' -> 'a lot of freshers'"
+    - "00:29:24 - 'so you and every audience I would say'"
+  logistics:
+    - "00:04:23-00:04:52 - 'I'm sharing the link with you in the chat section', 'open the question and share your screen', 'open a tab'"
+    - "00:04:53-00:05:00 - 'open a fresh tab, in one browser window open just this and share the screen'"
+    - "00:05:43 - 'I'll enable the screen sharing for you' / 'please share'"
+    - "00:06:01 - 'can you click on submissions?'"
+    - "00:22:32 - 'if you go to the left hand side you would see... can you go back?'"
+    - "00:24:54 - 'you can stop sharing now'"
+  backchannels: 46
+  asr_noise: 54
+
+corrections:
+  "temp complexity": time complexity
+  "big of n": big O of n
+  "abstract character": twenty six characters
+  "on order map": unordered map
+  "all the consent": all the constraints
+  "replaced by E": replaced by A
+  "you leave this question already": you had already solved this question
+  DSS: DSA
+  "service case companies": service based companies
+  "D S": DSA
+
+uncertain:
+  - "00:00:36 - the internship employer is rendered by Sarvam as 'Zero Lab'; kept
+    as Zero Labs, unverified."
+  - "00:06:07-00:06:13 - the submission date is rendered as 'Jan 14, 20' by the
+    interviewer and 'January 24' by the candidate. Kept as the interviewer's
+    reading; the exact date is unrecoverable."
+  - "00:21:36 - the candidate's half-sentence about tree-based maps is clipped in
+    the source and has been left as a trailing fragment rather than completed."
+
+romanized: 5
+
+turns:
+  - t: "00:00:00"
+    role: interviewer
+    restitched: true
+    text: >-
+      Welcome, Sushil. Thanks for accepting the invite and coming. Can you please
+      introduce yourself, Sushil, so that we can get started?
+
+  - t: "00:00:36"
+    role: candidate
+    text: >-
+      Okay sir. Sir, my name is Sushil Kumar and I am a final year student at
+      Guru Ghasidas Vishwavidyalaya, Chhattisgarh. So I am a competitive
+      programmer. For the last two years I have been doing programming on various
+      platforms. Basically I do coding in C++. And apart from this I am also
+      working as an intern at Zero Labs in Bangalore. Right now I am doing it in
+      remote mode. So that's all from my side.
+
+  - t: "00:01:01"
+    role: interviewer
+    text: >-
+      Great, great Sushil. You have learned the problem solving and you are day
+      to day solving the problems. You have got an internship. Very good. You are
+      a motivation for a lot of youngsters who are out there. Okay? Before we get
+      started with the problem, Sushil, tell me — why did you think problem
+      solving is important, like DSA is important, and you started practising it?
+      Any particular reason, Sushil?
+
+  - t: "00:01:22"
+    role: candidate
+    text: >-
+      It started in lockdown, some time back in twenty twenty. So we had nothing
+      — we were sitting idle at that time, so we made a group of five to ten
+      people. So we started, and then we started enjoying the process. So it went
+      on.
+
+  - t: "00:01:40"
+    role: interviewer
+    text: >-
+      Sure. One important question I'll ask, Sushil, because a lot of freshers
+      reach out to me who are just starting their career. A lot of people say DSA
+      is boring — like, we don't feel like solving after some point, we don't get
+      interested in solving the problems. So do you feel motivated solving so
+      many problems, or do you also get bored after some time?
+
+  - t: "00:01:59"
+    role: candidate
+    text: >-
+      It happens sir, it happens with everyone. So whenever you have a group of
+      five people, someone will definitely motivate you. And whoever is starting
+      new, when they start programming, that will definitely help you further.
+
+  - t: "00:02:12"
+    role: interviewer
+    restitched: true
+    text: >-
+      Great. So you say, rather than being just alone and then trying to solve
+      the problem, have some group, correct? In college or wherever you are, in a
+      PG — four to five people, so that one or the other will be solving and
+      they'll say what new problem they solved, what new technique they came up
+      with, correct? Yes. So let us start now, Sushil, before solving the
+      problem. Tell me, what is time complexity in general? What is the meaning
+      of time complexity?
+
+  - t: "00:02:35"
+    role: candidate
+    text: >-
+      So time complexity means we can understand how much time that particular
+      program will take. Okay? So in time, there are two types of time complexity
+      we can say — I don't exactly remember. So theoretically there are two
+      types. We can say, like, we have asymptotic notation, right? So that will
+      approximately tell how much time that particular code will take.
+
+  - t: "00:03:02"
+    role: interviewer
+    text: >-
+      I'll give you an example now, Sushil, okay? Let's say you have a merge
+      sort, okay? What is the time complexity of merge sort? Can you tell me?
+
+  - t: "00:03:10"
+    role: candidate
+    romanized: true
+    text: So merge sort will take n log n complexity.
+
+  - t: "00:03:13"
+    role: interviewer
+    restitched: true
+    text: >-
+      Okay. So n log n is the time complexity of merge sort. Okay. But the
+      definition that you said is that time complexity basically tells how much
+      time the algorithm is taking, correct, for processing a given array — for
+      processing the given input. Let's say for merge sort you're passing like a
+      hundred elements, correct? So merge sort will take, let's say, two seconds.
+      And then you're passing one lakh elements. Merge sort will definitely take
+      more time, correct? No, not just ten seconds, more than ten seconds. So now
+      what is the time complexity? Ten seconds or twenty seconds? What is the
+      time complexity?
+
+  - t: "00:03:46"
+    role: candidate
+    text: >-
+      More than two seconds, as you have said. So it will depend on a lot of
+      factors, on which computer we are compiling.
+
+  - t: "00:03:53"
+    role: interviewer
+    restitched: true
+    text: >-
+      Now, this is the question for you. Time complexity is not the time that the
+      algorithm takes. Okay, it's not the time that it takes, it's something else.
+      So please read that. This is very important. Before starting the problem
+      solving, or before understanding the complexity of an algorithm, you need to
+      understand what is basic time complexity. Okay? No worries, but that doesn't
+      create any problem. Okay? Let's start with an easy problem, okay, on
+      LeetCode, Sushil, which is one of my favourite problems. I've seen this
+      being asked in a lot of service based companies like Infosys, TCS, LTI,
+      etcetera. As you know, generally they won't ask DSA questions in their
+      interview, but whenever they ask, I've seen this kind of question being
+      asked quite commonly, and I've gathered this question from the feedback form
+      where freshers write about a lot. Okay? I'm sharing the question with you.
+      Let's see — in case you already solved it, I'll give you another question.
+      The maximum time that everybody has for solving this problem is fifteen
+      minutes, okay?
+
+  - t: "00:05:56"
+    role: candidate
+    text: I think I have solved it.
+
+  - t: "00:05:58"
+    role: interviewer
+    restitched: true
+    text: >-
+      You solved it? Okay, did you solve it recently, or when did you solve it?
+      January fourteenth. So you remember solving it, correct?
+
+  - t: "00:06:16"
+    role: candidate
+    text: I don't know, I think I will try it.
+
+  - t: "00:06:19"
+    role: interviewer
+    restitched: true
+    text: >-
+      Try it. Like I mentioned, try it. Okay? Get started. So my expectation is,
+      go through the question, understand the question, explain the question to
+      me. Okay? If you don't understand, I'll explain if you have any doubt
+      anywhere. But then I want you to explain the approach to me. Okay? Once we
+      both are comfortable with the approach, only then you can get started with
+      the programming. Okay? Get started then.
+
+  - t: "00:07:03"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay sir. So what I can understand from this question is that there will be
+      two strings, right, S and T. So what we have to do is, we have to convert
+      from S to T. How can we convert? We have the option to map — we can change a
+      particular character to another character. Okay. So while mapping to another
+      character, we have to take into mind that we don't map one character to two
+      different characters. Like, if I'm changing E to A, then E should not be
+      changed to any other character. Similarly, vice versa also we have to think.
+      So whenever E is getting mapped to A, then some other character like G
+      should not get mapped to A also. So we have to take that point also.
+
+  - t: "00:07:57"
+    role: interviewer
+    restitched: true
+    text: >-
+      Correct. What you're saying is absolutely right, Sushil. Okay. So just come
+      up with an approach and let me know. What is your approach? Okay, take one
+      or two minutes.
+
+  - t: "00:08:13"
+    role: candidate
+    text: >-
+      Okay sir. Like, we can have a map, one map. So whenever we are changing —
+      whenever we are mapping to a different character — we can just note it down,
+      into what character we are going to change. Okay? So again, whenever we
+      will... I can take an example if you wish.
+
+  - t: "00:08:32"
+    role: interviewer
+    text: >-
+      No, no, you don't have to write, just explain. I'll tell you when to write,
+      okay?
+
+  - t: "00:08:39"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      No sir, I can take the marker if you... So, like, we have egg and add,
+      right? So we can map E to A for the first time. So E is getting mapped to A.
+      Okay? Similarly, like G — I have not encountered G till now, so I can again
+      map G to D. And whenever we come to another G, we will check in this map
+      whether I have already mapped G to something else. If I have already mapped
+      it to something else, then we will check if that G is similar to the
+      required one. If it is, then we can proceed further. If it does not map to
+      the required one — like, for example, if it is something like B here — then
+      there will be a contradiction here. We cannot change G to B, because we have
+      already mapped G to D. So in this scenario we have to return false. If we
+      complete mapping every character, then we can return true.
+
+  - t: "00:09:53"
+    role: interviewer
+    restitched: true
+    text: >-
+      Got it, got it, Sushil. So here only one complication is there, Sushil. I
+      think you already know, as you solved it. It's a two way mapping, correct?
+      So E you have mapped to A, correct? What if — here you have E G G and A D D,
+      correct? Instead of E G G, let's say E G G as it is; the second string you
+      have is A E D. Okay? The second string is A E D. Okay, E G G, A E D. Okay.
+      Yes. Yes. So in this case what will happen is, you will map E to A. Okay? So
+      E is actually A, correct? Next, what you have is G, correct? Next you have
+      G, and G you will map to E.
+
+  - t: "00:10:55"
+    role: candidate
+    text: >-
+      Yeah, you cannot map G to E, sir, because A has already been replaced by E.
+
+  - t: "00:11:02"
+    role: interviewer
+    text: So you're getting my point, right, where I'm heading?
+
+  - t: "00:11:05"
+    role: candidate
+    text: >-
+      Yeah, so that. So we also have to check the second string, the character of
+      the second string — if it has already been mapped to something else, it
+      cannot be. Like, while mapping, what we can do is, we can map E to A; in the
+      same fashion, we have to map A to E also.
+
+  - t: "00:11:31"
+    role: interviewer
+    text: I mean, in one map you maintain both, is what you're saying, Sushil?
+
+  - t: "00:11:34"
+    role: candidate
+    text: Yeah, yeah, yeah sir, we can map.
+
+  - t: "00:11:37"
+    role: interviewer
+    text: >-
+      Got it. So you'll maintain one map, okay? And in one map, whenever you are
+      mapping E to A, you will also map A to E, correct? So that we just avoid the
+      confusion, correct? So next time, whenever you are encountering the same
+      character, both the maps are in one only. Correct?
+
+  - t: "00:11:53"
+    role: candidate
+    restitched: true
+    text: >-
+      Yes, like both mappings. While mapping, we have to check that both the
+      characters have not been encountered earlier.
+
+  - t: "00:12:00"
+    role: interviewer
+    text: >-
+      Yes, yes. So but just see, a duplication might happen, correct? If you go to
+      the third example, paper and title, correct? So where P and P are there,
+      once it's already there. Paper and title, correct? I mean, this may not be
+      the right example. Basically what I mean to say is, if you maintain both
+      characters in one map, correct, the same character might occur a second time
+      and the values might overwrite.
+
+  - t: "00:12:28"
+    role: candidate
+    text: It's okay na, sir. Same thing.
+
+  - t: "00:12:31"
+    role: interviewer
+    text: You don't see any problem with this?
+
+  - t: "00:12:35"
+    role: candidate
+    text: >-
+      I think it will work sir, because P is mapped to T. And again P will be
+      mapped to T — like, P will check, because it is already in the map, right?
+      So when we see to what value it is mapped, it will be T only.
+
+  - t: "00:12:49"
+    role: interviewer
+    text: >-
+      Sure, sure Sushil. Yeah. So now, at the time of this recording it is nine
+      twenty, okay? We have ten more minutes to solve, because we already
+      discussed the approach etcetera, okay? Please solve it in ten minutes and
+      we'll discuss the solution that you have written, how it has come, etcetera.
+
+  - t: "00:13:06"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay sir, let me... can I use an unordered map? I think this is not two way
+      mapping sir, because if I map E to L, then R... So there is only one way
+      mapping, I think. E is mapped to L and I'm also mapping L to E. So when I'm
+      encountering R also, I can change R to E, because R has not been mapped. So
+      I think we should use two maps.
+
+  - t: "00:15:32"
+    role: interviewer
+    text: >-
+      No, where is the problem? Can you just explain to me once again where you
+      are seeing the problem?
+
+  - t: "00:15:38"
+    role: candidate
+    restitched: true
+    text: >-
+      The problem is in this third test, like paper and this title one. Okay? So
+      I'm mapping P to T. P has been mapped to T, and T is also mapped to P; these
+      two are mapped together. And for A also, A is mapped to I and I is mapped to
+      A. Okay? Now when we come to P, we have already encountered P. P is mapped
+      to T and okay, not an issue, because we require T here. Okay? So now coming
+      to E, what we'll do — E will be mapped to L, right? L is also mapped to...
+
+  - t: "00:16:14"
+    role: interviewer
+    text: L is also mapped to E.
+
+  - t: "00:16:17"
+    role: candidate
+    romanized: true
+    text: So when we come to R, R has to map to E.
+
+  - t: "00:16:24"
+    role: interviewer
+    text: But E is already mapped to L. Correct?
+
+  - t: "00:16:26"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      Yes, E is already mapped, so I think we need only two maps. First, what we
+      are mapping, and what it is mapped to. Okay, I think that, like, for paper
+      you can have P mapped to T, and T is mapped to P. And another...
+
+  - t: "00:16:56"
+    role: interviewer
+    restitched: true
+    text: >-
+      Another map, correct? So in both the maps you will check, correct? Sure,
+      continue.
+
+  - t: "00:17:06"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      A should be mapped to I, and similarly I will have one more map for what
+      value I has been previously mapped to. And whenever there is whatever value
+      that we have previously encountered, we will check if it is the exact value
+      or not.
+
+  - t: "00:17:22"
+    role: interviewer
+    text: >-
+      Sounds good. Get started. We are already done with seven minutes. Okay? So
+      I'll give you seven more minutes to solve this.
+
+  - t: "00:18:36"
+    role: candidate
+    text: It works fine.
+
+  - t: "00:18:38"
+    role: interviewer
+    text: >-
+      Let's come back to the solution now. Yeah. And let's discuss the time
+      complexity, Sushil. What is the time complexity now?
+
+  - t: "00:18:46"
+    role: candidate
+    restitched: true
+    text: >-
+      So this for loop will take O of n time. And for searching purposes it will
+      take logarithmic time, I think. So overall the timing will be O of n log n,
+      I think. That is the overall time complexity.
+
+  - t: "00:19:13"
+    role: interviewer
+    restitched: true
+    text: >-
+      So, see, I'm not an expert in C++. The map's time complexity of searching a
+      value by key — is it not big O of one? Maps don't behave like in Java in
+      C++, where you just try to access a value by key; that doesn't work in C++ I
+      believe, correct? So you have only ways by dot find.
+
+  - t: "00:19:34"
+    role: candidate
+    text: >-
+      But in unordered map it does, sir — O of one time. But somewhere I have read
+      it is logarithmic time, so it is confusing. I am not sure.
+
+  - t: "00:19:44"
+    role: interviewer
+    restitched: true
+    text: >-
+      Okay. So there are two things, Sushil. So I don't know specific to C++, but
+      in the Java context at least, or Java and C# or JavaScript, everywhere — if
+      you try to access the value by key, like A to B is mapped, C to D is mapped,
+      if you try to access A you will get B, right? So that is one. It will
+      immediately access. But if you want to access the other way, where value to
+      key, that is going to take n, because one iteration should happen, okay,
+      where it has to get all the keys and then values and then find the key
+      associated with that. But key to value is one, okay? But in line number
+      eleven, whatever you have written, dot find — is there no way where you can
+      directly access the map value? Like map MP one of S of I cannot be done, I
+      believe, correct, in C++?
+
+  - t: "00:20:31"
+    role: candidate
+    text: We can do it sir. What happens is, by default it keeps default values.
+
+  - t: "00:20:39"
+    role: interviewer
+    restitched: true
+    text: >-
+      Sure, definitely. I'm not so expert in C++. It's quite some time that I
+      haven't worked on it. In Java, for that matter, if you have this, right, how
+      we would do it is MP one of that S of I, okay? That would give you the value.
+      So you don't have to do find again, because that is the purpose why you're
+      using a map. Correct? So maps are used because you can access a value with
+      the help of the key. Correct? So that should help you in the overall
+      processing. Correct? Okay. So I assume that kind of functionality has to be
+      there in C++, because in line number eleven what you're doing is you're
+      trying to find every time. Correct? So I mean, find basically is trying to go
+      through all the keys and trying to find whether that key exists, then you're
+      trying to check the value. Correct? So it's kind of n which is outside, and
+      inside also at the worst case it becomes n again. You're getting my point,
+      right? Because it is searching all the values. Linear search basically.
+      Correct? Find is a linear search. Correct?
+
+  - t: "00:21:36"
+    role: candidate
+    text: Correct — that it is tree based, it will happen in logarithm, logarithm, because...
+
+  - t: "00:21:40"
+    role: interviewer
+    text: >-
+      Logarithm, you can — big O of whatever, that MP one dot find is happening,
+      is what you are saying. It's not a linear search, is it?
+
+  - t: "00:21:48"
+    role: candidate
+    text: It is not linear, sir.
+
+  - t: "00:21:49"
+    role: interviewer
+    restitched: true
+    text: >-
+      Good. Okay, sure. At least let's take up the map approach, the typical map
+      approach. In line number nine, one for loop that we have, which is big O of
+      n. Correct? So it cannot be lesser than big O of n, that is the least,
+      because at least once we need to iterate the array. Correct? Then whatever we
+      are doing inside will add or reduce, will only add to the complexity. I
+      assume, if you had used the proper — I don't know, this could be the right
+      way in C++ — in Java and all, if you had used the right maps, they wouldn't
+      add any other further complexity. Okay? Because accessing the value is big O
+      of one. So in that case you would be just left with a big O of n as the time
+      complexity. Again, the only concern is the space complexity. Correct? So
+      basically now you are maintaining two arrays, okay? And the number of inputs
+      is five into ten to the power four. Correct? So you are maintaining two maps
+      to store the values. Okay? But unfortunately, I have also solved this problem
+      in various different ways. The different approaches are there, but almost
+      every approach follows with the two maps only. I mean, rather than having two
+      maps, rather than having your approach, some actually calculate a value —
+      like F has four, O has one and O has one, that kind of thing. That's what. So
+      any way you go to approach the problem, you end up having two maps only.
+      There are different shortcuts and other things, but you end up having kind of
+      two kinds of maps or arrays. This cannot be eliminated, at least as far as I
+      have read. Okay? So that's what — I think big O of n could be the time
+      complexity, and the space complexity is definitely two n, or n only again. So
+      basically whatever the input size we are given, we are adding that. Correct?
+      That much of a space, two times, we are taking it. Correct? Again, there are
+      two — I think you already know, correct? Like, some people don't include the
+      space complexity of the array that you use for output. Correct? Line number
+      five and six is basically used for processing the output and showing the
+      output. Some people don't consider it, but I think in this case it is not
+      like showing output, this is actually used for processing. Correct? So we
+      have to consider it as O of n in terms of the space complexity.
+
+  - t: "00:24:05"
+    role: candidate
+    text: >-
+      Sir, I think space will be constant, sir, because there are only twenty six
+      characters. So I don't think it will be more. I think it takes twenty six
+      characters also, right?
+
+  - t: "00:24:14"
+    role: interviewer
+    restitched: true
+    text: >-
+      What you say is also right. Because there are only twenty six characters,
+      correct? But only twice the map. That is the only thing. Correct? Two maps we
+      are using. That will also be correct. What you're saying is also correct,
+      Sushil. Just because here we only have twenty six characters, so this we can
+      consider like a constant complexity. Correct? So which generally is not added
+      to the space complexity. Correct? What you're saying is correct. What I said
+      initially is wrong, so what you are currently saying itself is right. Any
+      complexity that is a constant complexity — like, no matter how many times you
+      process, if it remains constant, then generally that is not considered, both
+      time and the space complexity. Okay? Sure, Sushil. I think we are almost done
+      with our time, okay, with the approach and other things discussed. I have
+      certain feedback to give it to you, okay? So I think you already know a few
+      things, okay, but I'll just highlight whatever things I think you have to
+      improve. Point number one, you had already solved this question, okay? So
+      probably you did not read it in detail, but my advice is, every time whenever
+      a question is given — sometimes the question looks similar — go through it
+      and read it carefully. That is point number one. Point number two is, this
+      question again you didn't have any doubt. So if you have any doubts, make
+      sure you ask all the doubts to the interviewer, correct? LeetCode luckily
+      will give you all the constraints and other things, like what is the S size,
+      what is the T size, whether S and T are equal, what is the maximum size. But
+      what happens in an interview is, sometimes the interviewer will not tell all
+      the things explicitly, correct? So be vocal and ask the highest and the
+      lowest limitations. What is the least value that S can have, the least value
+      that T can have, and the maximum values, okay? Another very important point
+      is the approach, correct? For the approach whatever you said, I specifically
+      went to the third example because I knew there were some problems. I also
+      said this: two way mapping in one will create a problem, correct? So
+      interviewers definitely will not say that, correct? They would directly ask
+      you to implement it. So even after I gave that, even after you have solved it
+      already once, still you did not figure it out, correct, where there is a
+      problem. I did not intentionally delve deep into it because I wanted you to
+      figure it out, okay? Luckily you were able to figure it out later whenever you
+      started coding, and then you solved the problem, correct? And as you could see
+      with the title and the paper problem, right — somehow, once you have solved
+      it. A lot of freshers might have already solved the problem like this once.
+      And the same question will be asked in the interview, because interviewers
+      also will not prepare so much for a fresher DSA in most companies. They will
+      also read some basic questions and come for the interview, correct? Once you
+      have solved the problem, don't make the mistake that you did in the initial
+      time, correct? Probably you know now why two maps need to be used, because you
+      did the same mistake the last time, I'm assuming at least, and you could
+      overcome that time also and now also. Correct? So the second time whenever
+      you're solving, you should not make that mistake again. Like, whatever
+      mistakes you did, learn from that. There's a Fibonacci series of learning,
+      right, where you practise one, three, five, seven, keep on doing that, okay?
+      Like today you practise one problem, tomorrow you practise another problem.
+      Whenever you go to the day after tomorrow, after two days back, make sure you
+      revise the remaining two problems, then go to the next question. So that you
+      will not forget this, okay? That is my advice. Coming to the positive point,
+      Sushil. You very well know, like you mentioned, you have already solved so
+      many problems. There is a lot of hold in whatever you are doing, okay? So even
+      if something goes wrong, you have the capability of making sure it goes well.
+      So if I am someone who is looking for a good problem solving skill, I will
+      definitely select you, Sushil. I mean, if I am on the panel currently to select
+      you for the problem solving, probably I would ask you another question, one
+      which you have not solved, to see your approach. Definitely you have a very
+      good problem solving skill, Sushil.
+
+  - t: "00:27:53"
+    role: candidate
+    text: Sir, anything else that I can improve on?
+
+  - t: "00:27:56"
+    role: interviewer
+    restitched: true
+    text: >-
+      Yeah, so to improve, I would suggest a little bit on the communication,
+      Sushil. You can be quite more vocal — like, whenever you are talking, right,
+      you can be very explicit, try to make a point very clear. But whatever the
+      drawings that you are doing, I would say avoid it in the beginning. Okay? The
+      reason being, articulation of the problem solving is very, very important. So
+      a programmer is not just one who develops or builds the code or writes the
+      code, correct? The articulation, means explaining the things that you know to
+      someone who doesn't know, is a very, very important skill of a software
+      engineer, because there will be a lot of stakeholders whenever you come to a
+      company. It's not just the developers. There will be product owners, managers,
+      directors who may not be directly involved in technology every day. So you need
+      to explain in a way where they understand the technical problem that you are
+      solving. Correct? So you shouldn't get into drawing immediately; you should be
+      able to convince someone just by your words. Okay? This is very, very important
+      — articulation, communication are very, very important. Problem solving, I
+      believe you already have the knowledge. My advice is solve more medium and hard
+      difficulty questions also. So freshers in general, except Google and Facebook
+      kind of companies, most companies would ask easy to medium, but some premium
+      companies will definitely ask some hard questions also. So more medium, less
+      hard questions I would suggest. Because, as you know, one hard question is a
+      combination of two medium questions. Okay? Any other questions, Sushil? Okay,
+      how did you like the session, Sushil — overall the interview and my feedback?
+
+  - t: "00:29:21"
+    role: candidate
+    text: >-
+      Yes, it was well. It is after six months that I am giving an interview, so
+      there will be problems.
+
+  - t: "00:29:24"
+    role: interviewer
+    text: >-
+      Great. Great. So, Sushil, I would say DSA becomes mandatory for a fresher in
+      most of the product based companies. So constantly solve it so that you will
+      be able to — I mean, it's not one day you do and two days you stop, correct?
+      Constantly you practise so that you will be able to crack most of the product
+      and the service based companies as well. Okay? That's all, Sushil, then. Nice
+      talking to you. Thank you.
