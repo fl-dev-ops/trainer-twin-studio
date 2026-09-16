@@ -1,0 +1,505 @@
+id: "07"
+title: Fresher Medium DSA Mock Interview
+source: 07 - Fresher Medium DSA Mock Interview
+duration: "00:20:00"
+track: dsa
+topics: [time-complexity, strings, substrings, sliding-window, hash-map, recursion]
+seniority: fresher
+participants:
+  interviewer: Vasanth
+  candidate: Gaurav
+  candidate_experience_years: 0
+problem: >-
+  Remove all adjacent duplicates in a string where a group of k equal
+  characters is deleted and the remaining parts are concatenated, repeated
+  until no such group remains (LeetCode 1209 style).
+
+raw_speaker_ids:
+  interviewer: [1]
+  candidate: [2]
+
+invariants:
+  - Turns strictly alternate interviewer -> candidate. No two consecutive same-role turns.
+  - No reference to a YouTube channel, video, subscriber, audience or viewer.
+  - No screen-sharing, editor or tool-operation instructions.
+  - Text is English in Latin script only.
+
+counts:
+  raw_entries: 130
+  clean_turns: 51
+
+removed:
+  monologue:
+    - span: "00:00:00-00:00:34"
+      what: Channel intro, "content creator", questions-in-description framing.
+    - span: "00:14:14-00:14:44"
+      what: Mid-interview like/subscribe/bell-icon appeal.
+    - span: "00:19:45-00:20:00"
+      what: Outro - post your solution, catch you in the next video.
+  self_promotion:
+    - "00:02:30 - 'people, audience who are watching, also are aware of it'"
+    - "00:03:56 - 'for little more details audience also can check it'"
+    - "00:04:26 - 'audience whoever is watching, the link is in the description section'"
+    - "00:04:26 - 'if you are someone who is also aspiring for DSA interviews, please open the question'"
+    - "00:05:21 - 'so audience also try to solve this only'"
+    - "00:15:32 - 'in case any of the viewers... please paste the link in the description'"
+    - "00:17:02 - 'audience might, everyone might have not understood' -> 'someone might not have understood'"
+    - "00:17:32 - 'if you and any of the audience are saying the brute force approach' -> 'if you are saying'"
+  logistics:
+    - "00:03:56 - 'I'm sharing a LeetCode link with you, open a fresh browser with only one tab'"
+    - "00:04:46 - 'can you share your screen, Gaurav'"
+    - "00:04:55 - 'share the screen'"
+    - "00:05:19 - 'please open this'"
+    - "00:15:16 - 'can you stop sharing'"
+  backchannels: 21
+  asr_noise: 18
+
+corrections:
+  "P X J S": React JS
+  "B I T Jhansi": BIT Jhansi
+  "concrete the left part": concatenate the left part
+  "landing index": ending index
+  "I can entry": I can try
+  "takes some more times to audit": takes some more time to do it
+  "windows lied / windows lies": sliding window
+  "then I sure": then I am sure
+uncertain:
+  - "00:00:34 - employer name rendered by Sarvam as 'Mindos Fleet'; kept verbatim, unverified."
+  - "00:00:34 - an org name rendered as 'coding in Jhansi' was unrecoverable and has been dropped from the sentence."
+romanized: 4
+
+turns:
+  - t: "00:00:30"
+    role: interviewer
+    text: Gaurav, can we start with your introduction?
+
+  - t: "00:00:34"
+    role: candidate
+    restitched: true
+    text: >-
+      Yes sir. Myself, Gaurav Kumar Mishra, currently pursuing my Bachelor of
+      Technology in computer science and engineering from BIT Jhansi. Sir,
+      talking about my technical skills, I have a good command on C, C++, data
+      structures and algorithms, and in front end technology I also have a good
+      command on HTML, CSS, JavaScript and React JS, and in back end I have a
+      good command on PHP. Apart from that, talking about my internship
+      experience, I have also worked as a teaching assistant, after that I worked
+      in Programming Pathshala as a problem setter, and currently I'm working as a
+      software engineer intern in Mindos Fleet. And apart from that I'm also
+      involved in extracurricular activities like sports council and etcetera.
+      Football is my favourite game and I'm also a district level football player.
+      That's all from my side.
+
+  - t: "00:01:21"
+    role: interviewer
+    text: >-
+      Wonderful. So Gaurav, just before we start with the actual interview
+      process — a lot of freshers reach out to me where they ask, "Vasanth, it is
+      getting really hard to find an internship." So as you were able to get an
+      internship somewhere, can you just tell, whatever you can disclose, what are
+      the best ways to get an internship, since you know more than me as you are
+      on that particular path now?
+
+  - t: "00:01:41"
+    role: candidate
+    restitched: true
+    text: >-
+      So actually sir, most of the students in the starting phase of their
+      college, they are trying to find an internship without going to brush up
+      their skills. In the starting phase, they are trying for an internship.
+      First of all, they should go through all the core subjects, like C or C++,
+      choose any programming language and do the data structures and algorithms
+      and increase their problem solving skills. And apart from that, they should
+      choose any technology like web or app according to their interest. So after
+      that, once they have a good grasp, they can contact HR or any seniors and
+      try to find an internship. Then I'm sure they will find an internship much
+      more easily.
+
+  - t: "00:02:30"
+    role: interviewer
+    text: >-
+      Got it. I suggest first upskill yourself and don't directly jump to an
+      opportunity. Even when you get an opportunity, probably you may not be able
+      to aspire to it as you don't have the skills. Correct? Sure. So Gaurav, let
+      us now start with the DSA and the problem solving, like I said in the
+      beginning. I'll have only one question — this is a common question that I
+      ask everyone before I start DSA. Tell me what is time complexity, Gaurav, in
+      general?
+
+  - t: "00:02:56"
+    role: candidate
+    text: >-
+      Okay, so time complexity is a criteria to judge any algorithm — how an
+      algorithm is good or bad in terms of the number of operations. So time
+      complexity generally says how the algorithm is good or bad in terms of time.
+
+  - t: "00:03:16"
+    role: interviewer
+    text: >-
+      Got it. So what is that? Is it the time that an algorithm is taking, or what
+      is it? What is time complexity? The good or bad part is fine, but that
+      doesn't define time complexity, correct? What do you think? I'm not looking
+      for a bookish definition. Anything that you are comfortable saying — what do
+      you think is the definition of time complexity?
+
+  - t: "00:03:37"
+    role: candidate
+    text: >-
+      Okay, by definition of time complexity, actually I am thinking in terms of
+      operations. In any programming language, everything is going in the form of
+      operations. So it's the total number of operations in a particular time that
+      measures — that is the time complexity, I think.
+
+  - t: "00:03:56"
+    role: interviewer
+    restitched: true
+    text: >-
+      Sure, got it. It's not wrong, Gaurav. You are very close. Definitely you can
+      check it once again. So now I'm sharing the question with you, Gaurav. This
+      question has to be solved in twenty to twenty five minutes. Five to ten
+      minutes, you and I will discuss the approach and other things. This is a
+      medium question but not so difficult — actually I can say an easy to medium
+      question.
+
+  - t: "00:04:52"
+    role: candidate
+    text: I think sir, I have already tried this question.
+
+  - t: "00:04:55"
+    role: interviewer
+    text: >-
+      Okay. It's okay, we'll see if there is any other question that I can give
+      you. It's again a very common, I mean popular question. So what is the last
+      time that you solved it? November thirteen, we have solved. The code itself
+      is here, right? So let me try to give you another question, which is
+      slightly harder, but you might have also solved it.
+
+  - t: "00:05:20"
+    role: candidate
+    text: I think I have not seen this question.
+
+  - t: "00:05:21"
+    role: interviewer
+    text: >-
+      It's an interesting problem. I can say a proper medium difficulty problem.
+      Gaurav, it will go like this: you read the question, understand the
+      question, ask me if you have any doubts regarding the question. Then you
+      tell me the approach, we discuss the approach, and if both of us are fine
+      with the approach, then you get started with the coding. Overall, for this
+      entire process we have twenty five minutes. Now it's nine oh five; the
+      overall time for the completion of the interview is nine thirty.
+      Discussion, coding, and then again discussing the solution, everything.
+
+  - t: "00:06:01"
+    role: candidate
+    text: >-
+      Okay, I got it, I got it. So actually the problem is trying to say that if
+      we have a substring of size K and all the characters are equal, then we will
+      remove those characters and we will concatenate the left part and the right
+      part, and we'll proceed with this method until there is no substring of size
+      K with all the characters equal.
+
+  - t: "00:06:28"
+    role: interviewer
+    text: >-
+      Can I look at example three once? Okay, example three is not different.
+      Example two you understood, correct?
+
+  - t: "00:06:36"
+    role: candidate
+    text: Yes, yes, yes.
+
+  - t: "00:06:39"
+    role: interviewer
+    romanized: true
+    text: OK, then take one or two minutes, Gaurav, and come to me with an approach.
+
+  - t: "00:06:44"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay sir, so the brute force approach I'm getting here — I am trying to find
+      all the substrings of size k, and if all the characters of that substring
+      are equal, then we will remove it by adding the strings from the left part
+      to the right part. Suppose we are getting a substring of size k, so the
+      starting index of that substring is i and the ending index is i plus k. So
+      we will add all the strings from zero to i minus one, and from i plus k plus
+      one to n minus one, and we will add it and we will continue this approach.
+
+  - t: "00:07:31"
+    role: interviewer
+    romanized: true
+    text: >-
+      So the brute force approach you already know with respect to example two,
+      correct? See, until the first iteration is done, you cannot form just the
+      substrings of three characters — K equals three in the second example,
+      correct? Even if you form all substrings, still you will not be able to
+      solve this. Correct? The reason being, only after you remove the first
+      iteration will the second level come, where you are seeing D D B B B A,
+      correct? Only if you remove the first set of duplicates will the second set
+      of duplicates populate, correct? So the substring approach, even with brute
+      force, will not work. Correct?
+
+  - t: "00:08:08"
+    role: candidate
+    text: >-
+      Okay, let me check, let me check. Sir, can we explain for test three, or
+      example three?
+
+  - t: "00:08:17"
+    role: interviewer
+    text: >-
+      Yeah, so your approach for example three will work. Why? Because you can
+      form all substrings of two characters, correct? And wherever there is a
+      duplicate you will remove it, correct? Whichever is unique you will keep it.
+      Correct? Example two — how will it work?
+
+  - t: "00:08:34"
+    role: candidate
+    text: >-
+      Okay, for example two, suppose k is three, so we find E E E, okay, so we
+      will remove it, and after that...
+
+  - t: "00:08:41"
+    role: interviewer
+    text: >-
+      You are saying you will kind of find all possible substrings, correct? You
+      don't know which three would, but you will kind of do all possible
+      substrings of three characters, correct?
+
+  - t: "00:08:51"
+    role: candidate
+    text: Yes.
+
+  - t: "00:08:51"
+    role: interviewer
+    text: >-
+      Okay. In that case, E you will definitely be able to find out. But you will
+      not be able to find out this C C C. C C C — they are not adjacent, they are
+      somewhere in the middle. Still you think that also you will be able to form?
+      So C C C you will be able to form, the second one, after you remove that B B
+      B.
+
+  - t: "00:09:13"
+    role: candidate
+    text: >-
+      Yeah, yeah. So actually, first of all I remove E and add the string, then I
+      get D D.
+
+  - t: "00:09:19"
+    role: interviewer
+    text: >-
+      How will you do that? Your approach is that you will have to find all
+      substrings first, right?
+
+  - t: "00:09:25"
+    role: candidate
+    text: Yes sir. I am finding all substrings of size K one by one.
+
+  - t: "00:09:31"
+    role: interviewer
+    text: One by one. Okay, one by one we'll find. Okay.
+
+  - t: "00:09:34"
+    role: candidate
+    text: >-
+      When I get E, I add D and D B B C C C D B A A. Now I get D B D D B B C C D D
+      A A. Now I remove C C, then I get D D B B B D A A. Now I remove B B B and I
+      will get D D D A A. Now I remove D D D and we get A.
+
+  - t: "00:09:55"
+    role: interviewer
+    text: >-
+      Got it. So basically now, the complexity would be one for loop that is
+      running outside for the length, correct? Then another inside for loop for
+      finding the substring, and you need to also maintain a map to make sure you
+      are not populating the substring once again, correct? If you make sure that
+      is already taken care of, correct? So for that, that is additional space.
+      And then substring — what is the complexity that you think substring
+      generation will produce?
+
+  - t: "00:10:22"
+    role: candidate
+    restitched: true
+    text: >-
+      So according to me, there are only lower case English letters. So that means
+      there is A to Z. So a total hash map takes order of twenty six, which means
+      that is order of the number size, in space terms. And apart from this, we
+      are iterating an outer loop of size n equal to the length of the string, and
+      in the inner loop I am iterating for n minus k times, because if I try to
+      find all the substrings of size k then I have to add k for n minus k times.
+      It means it's n into n minus k — it's order n square k.
+
+  - t: "00:10:57"
+    role: interviewer
+    text: >-
+      n square k. And space complexity is also involved, like I mentioned — the
+      substring, you need to maintain whether it's already done or not. A little
+      bit of additional space also, correct? Okay, fine, this approach is... You're
+      saying something. Space is not involved, is that what you're saying?
+
+  - t: "00:11:24"
+    role: candidate
+    text: Yes sir, let me think about this space.
+
+  - t: "00:11:26"
+    role: interviewer
+    text: >-
+      It's okay. Now I would suggest — it is nine thirteen as per our timing.
+      Think for two more minutes at least, to come up with an approach more
+      optimal than this. If by nine fifteen you are not able to come up with any
+      better approach, we'll say let's get started with this only.
+
+  - t: "00:11:42"
+    role: candidate
+    romanized: true
+    text: >-
+      OK. Sir, I think I can solve it through a hash map and a sliding window in
+      the process.
+
+  - t: "00:11:53"
+    role: interviewer
+    text: Okay. Tell me, how do you slide the window?
+
+  - t: "00:11:58"
+    role: candidate
+    restitched: true
+    text: >-
+      Sir, actually, first of all I will take a window of size K, and take a hash
+      map or an array of twenty six size that contains the counts of the lower
+      case letters, from zero to twenty five. A maps to index zero, B maps to index
+      one, that kind of thing. Apart from that, I will take the count of all the
+      elements till index i, and then I slide the window. If I find that the size
+      of the window is equal to any element's value — that means that element is
+      only present in that window — then I will remove it, and I will add the
+      right and left parts. And at last, those elements which are in the map,
+      through that I can calculate the answer, I think.
+
+  - t: "00:13:18"
+    role: interviewer
+    text: >-
+      Got it. So you're comfortable with the approach — you'll be able to write
+      code for this?
+
+  - t: "00:13:23"
+    role: candidate
+    text: >-
+      Actually it takes some more time to do it, because I'm not sure how, at the
+      last, to calculate the answer from that.
+
+  - t: "00:13:31"
+    role: interviewer
+    text: >-
+      Got it. So what about the first approach, the brute force one — you'll be
+      able to write that?
+
+  - t: "00:13:36"
+    role: candidate
+    text: Yeah, yeah, I can try.
+
+  - t: "00:13:37"
+    role: interviewer
+    romanized: true
+    text: >-
+      Get started, Gaurav. You have fifteen minutes, till nine thirty. Get
+      started. So, are you doing a substring approach or the sliding window,
+      Gaurav?
+
+  - t: "00:14:51"
+    role: candidate
+    text: >-
+      I think I'm replacing the substring of size k via a sliding window. The
+      sliding window and substring both.
+
+  - t: "00:15:03"
+    role: interviewer
+    restitched: true
+    text: >-
+      Sure, continue. Let's do one thing. As the time is up, we will stop it for
+      now. I'll pass on my feedback and maybe after this interview we'll spend some
+      more time. So, yeah, Gaurav was close with the approach and the solution. So
+      Gaurav, here is my honest feedback about the overall interview that has
+      happened. Here are a few things that I feel are positive. The first thing is
+      your general communication skills are very good. You are able to explain
+      whatever your experiences are, or wherever you have worked, etcetera, right?
+      So general articulation is very good. And second point, you are quick — you
+      are able to grasp the problem very quickly. You are able to understand things
+      quite quickly. These are the two things which are very good, and you are
+      already doing an internship, other things which will definitely add up to
+      the value. But coming to the things where you can improve — I was just noting
+      down so that I should not miss out anything. First thing, Gaurav, I feel like
+      sometimes you are rushing. Like, you did not even go to example three to see
+      it. I understand in the interview there will be a time crunch, correct? But
+      it so happens that if you are not reading some test cases itself, then you
+      might miss out on the problem as a whole. You may not understand it
+      correctly, correct? So my advice is, whenever you are in the first phase of
+      the problem, which is the understanding phase, don't miss out any scenario,
+      because when coding you again end up spending more time than this because you
+      have not considered that case. So read the problem thoroughly. And the second
+      one is technical articulation. There are two types of communication. One is
+      general communication, another one is technical communication. Technical
+      communication is where you need to explain technical stuff to someone. He
+      could be another engineer, or he could be someone who is not related to
+      engineering — for example your product manager, QA, DevOps, etcetera. They
+      should also understand the technical problem that you are solving, correct?
+      So that part you need to improve a bit. Like the solution whatever you were
+      explaining to me, right, I was able to understand to a level, but someone
+      else might not have understood. So that you need to improve. Why I was saying
+      this is, some interviewers — if you are applying for companies which have a
+      presence in multiple countries, you may get an interviewer who is not from
+      India. They may not understand your accent very clearly, correct? So if you
+      improve on this explanation skill, they will be able to grasp things very
+      quickly. And another thing — the brute force approach whatever you said is
+      good. My only advice is, if you are giving the brute force approach, keep it
+      very short. As you also know, an interviewer is not expecting a brute force
+      approach. Ninety nine percent of the time they would expect something a
+      little more optimal than brute force, correct? So even if the interviewer
+      gets into discussion, don't involve too much of that discussion, because your
+      time is only wasted. Correct? So keep that discussion as short as possible.
+      And the last point — I think this is not a very big feedback, maybe because
+      of the time crunch. Like, you said you got that timeout error and some
+      compilation error. This is not a very big problem considering you are a
+      fresher, but my advice is run the program in your mind so that you know line
+      by line what is happening, so that you don't have to run and solve certain
+      errors. It's not a very big problem, it happens to everyone, but just in
+      general feedback. Tell me, Gaurav, do you have any other questions from the
+      interview point of view? Whatever feedback that I'm giving you — do you think
+      it is really applicable for you?
+
+  - t: "00:18:48"
+    role: candidate
+    text: >-
+      Yes sir, actually I have wasted my time in explaining the approach.
+
+  - t: "00:18:55"
+    role: interviewer
+    text: >-
+      Yeah, no, explaining the approach is very essential. Maybe reduce it a
+      little and be more focused, with more clarity in whatever time you spend
+      there. Tell me, Gaurav.
+
+  - t: "00:19:04"
+    role: candidate
+    text: >-
+      Apart from the sliding window approach, is there any other approach?
+
+  - t: "00:19:09"
+    role: interviewer
+    text: >-
+      Sliding window is the optimal approach that you can do. Substring, as you
+      know, is definitely not an optimal approach. Sliding window is the optimal
+      approach, where with one iteration you can kind of go. There are a couple of
+      ways, because you have to find repetitively, right? Like if the string,
+      after forming one string, contains duplicates again — so recursion you can
+      follow. Recursion you can follow, or there are other approaches also which
+      you can follow. The simplest way is, with the help of a sliding window and
+      recursion you should be able to achieve the solution for this. Yeah, any
+      other questions, Gaurav?
+
+  - t: "00:19:44"
+    role: candidate
+    text: No, I have no question. I'm done.
+
+  - t: "00:19:45"
+    role: interviewer
+    text: Okay. Nice talking to you, Gaurav.

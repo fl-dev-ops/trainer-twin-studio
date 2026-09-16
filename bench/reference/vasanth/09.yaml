@@ -1,0 +1,865 @@
+id: "09"
+title: Tier-3 Fresher React and JavaScript Mock Interview
+source: 09 - Tier-3 Fresher React and JavaScript Mock Interview
+duration: "00:32:55"
+track: frontend
+topics: [javascript, event-loop, promises, closures, scope, strict-mode, react, hooks, virtual-dom, redux]
+seniority: fresher
+participants:
+  interviewer: Vasanth
+  candidate: Aishwarya
+  candidate_experience_years: 0
+
+# Speaker 1 is Vasanth and Speaker 3 is Aishwarya for almost everything.
+# Speaker 2 carries two stray candidate fragments (00:15:25, 00:15:29) and
+# Speaker 0 appears once as noise (00:20:38). Sarvam also repeatedly emits the
+# interviewer's words inside the candidate's entry and vice versa (echo
+# duplicates at 00:07:28, 00:10:43, 00:12:55, 00:16:15), so every turn below was
+# attributed by content, not by id.
+raw_speaker_ids:
+  interviewer: [1]
+  candidate: [3, 2]
+
+invariants:
+  - Turns strictly alternate interviewer -> candidate. No two consecutive same-role turns.
+  - No reference to a YouTube channel, video, subscriber, audience or viewer.
+  - No screen-sharing, editor or tool-operation instructions.
+  - Text is English in Latin script only.
+
+counts:
+  raw_entries: 318
+  clean_turns: 100
+
+removed:
+  monologue:
+    - span: "00:00:00-00:00:36"
+      what: Channel intro, "please watch the video till the end", the pause-the-video-and-answer-along framing.
+    - span: "00:32:10-00:32:52"
+      what: Outro - LinkedIn article plug, "mention the question number and your answer in the comments", thank you for watching, catch you in the next video.
+  self_promotion:
+    - "00:01:06 - 'because a lot of audience will be watching'"
+    - "00:07:53 - 'If audience know the exact concept of event loop, please mention that in a comment section'"
+    - "00:09:29 - 'For audience I'm putting this snippet in the description section'"
+    - "00:15:05 - 'so that audience can see it clearly'"
+    - "00:15:19 - 'Audience also can guess the output and comment what is your output'"
+    - "00:16:58 - 'audience, please mention your answer also in the comment section. Me and Aishwarya will be more than happy to check'"
+    - "00:11:59 - 'small uncommon geeks, which is my channel name' - the snippet's string literal was the channel name; referred to as 'the lowercase value' / 'the capital one' instead at 00:10:58, 00:11:59 and 00:15:59"
+    - "00:31:00 - 'or in my videos also I discuss the concepts in depth, that also you can watch'"
+    - "00:31:40 - 'definitely see my videos, I try to go in depth'"
+    - "00:32:10 - 'recently I wrote one article... please go to my LinkedIn'"
+  logistics:
+    - "00:08:49 - 'Can you please present your screen and open JS Fiddle, Aishwarya?'"
+    - "00:09:09 - 'I'll share one snippet with you in the Zoom chat, copy and paste in the third editor'"
+    - "00:09:29 - 'Don't run the code'"
+    - "00:13:35-00:13:42 - 'top left you see run, can you please click on run' / 'bottom right you see console beta, can you click on that'"
+    - "00:14:39 - 'copy the snippet the same way like before and paste in the chat section'"
+    - "00:15:00-00:15:13 - 'should I replace it' / 'please paste it there' / 'can you zoom in, Control plus, one more plus'"
+    - "00:16:04 - 'can you just remove the single quote... add a different single quote in line number three'"
+    - "00:16:58 - 'You can stop sharing, Aishwarya'"
+  backchannels: 112
+  asr_noise: 38
+
+corrections:
+  "in the our script": in JavaScript
+  "A sentence follows a synchronous asynchronous approach": It follows a synchronous, asynchronous approach
+  "A KPA call": An API call
+  "there's a concept called catch and error": there is a concept called catch and error
+  parsent: parseInt
+  "converting decimal function to particular normal numbers": converting a decimal to a normal number
+  "use trick": use strict
+  "use state tool": useState hook
+  "react gas": React JS
+  "the concept of store comes in reject": the concept of store comes in React
+  "XN, XN, XN state": action, action, action state
+  "I had that term": I have heard that term
+  "so I will need a release": so I will need Redux
+  "these are one of the dispatch to over reducer": dispatch it over the reducer
+  "space and time time complexity": space and time complexity
+uncertain:
+  - "00:10:21 - candidate fragments 'we have one on there' and 'box' were unintelligible and have been dropped from the turn."
+  - "00:16:13 - candidate's 'but I have seen like it's not a thing' was a reply to a removed editor instruction and was unrecoverable; dropped."
+  - "00:22:29 - interviewer's 'I'll only give you a double' was unintelligible; dropped."
+name_note: >-
+  The candidate introduces himself as Aishwarya Bhatle. Sarvam also renders the
+  name in Devanagari script (00:08:49) and in Malayalam script (00:10:32) in a
+  few places; all occurrences are normalised to Aishwarya.
+# Turns 4 and 96 (the candidate's two long advice answers) contained Hindi
+# spoken in Latin script; those spans are translated, not transliterated.
+romanized: 9
+
+turns:
+  - t: "00:00:36"
+    role: interviewer
+    text: Aishwarya, can you please introduce yourself so that we can get started?
+
+  - t: "00:00:43"
+    role: candidate
+    text: >-
+      Yeah, sure sir. I will start with my introduction. My name is Aishwarya
+      Bhatle and I am in the final year of my engineering. I am pursuing software
+      engineering from Priyadarshini College of Engineering, Nagpur. I belong to
+      Gondia city and currently I live in Nagpur. As a tech stack, I am a front
+      end developer and I want to be a full stack developer with some problem
+      solving skills.
+
+  - t: "00:01:06"
+    role: interviewer
+    text: >-
+      Good, good, Aishwarya. See Aishwarya, as we were speaking just before the
+      meeting, you said you are from a tier three college, and most know I am also
+      from a tier three, tier two college. So a lot of people think it's very
+      difficult to get a job from a tier two and tier three college, but you have
+      secured a placement, okay? So how do you say it — being from a tier three
+      college, is it very difficult to get into a company in the current
+      situation, with the layoffs and other things? What is your opinion,
+      Aishwarya?
+
+  - t: "00:01:35"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah, if I particularly talk about tier three — let's connect both the
+      topics, tier three and layoffs, or we can say recession. I don't believe
+      that recession is taking anyone's job, or that there aren't any jobs in the
+      market. To be honest, I believe it's not recession, it's correction. All the
+      waste that got into the market is getting cleared. So if you have proper
+      skill and you have proper focus for your job, or whatever you want to
+      achieve — there are many particular domains in IT, there's web development,
+      there's AI and ML, any domain — but if you have proper skill, and with the
+      skill, one thing I got to learn is that you need proper communication and
+      proper networking skills too. These are some soft skills which are being
+      ignored by students. So I believe that any fresher — and one thing freshers
+      get confused with — when I was in the first year, my vision was like, I will
+      study this language, I will study that one, I will study Java. No, it's not
+      like that. You should be focused on one language, because language is just a
+      syntax; programming is all about logic. And another thing is, I don't think
+      college matters. Actually it matters — like you said, they did the hard work
+      to get into IIT, they sacrificed a lot in eleventh and twelfth, so they got
+      that superiority and they are getting that level of package. But okay, you
+      are in a tier three college — no, it's not the end. You still can secure a
+      good job. There are many engineers who are getting much more than tier one
+      college students. So it's all about skill. And one thing I want to say is,
+      just focus on one skill. Just pick any one language — Python, Java,
+      JavaScript — any one domain, and go with it. And one of the best topics you
+      should focus on is problem solving skill, because programming is all about
+      problem solving. So you should focus on that. It should not be theory and
+      rote learning. So this is something I want to tell all my juniors.
+
+  - t: "00:03:59"
+    role: interviewer
+    restitched: true
+    text: >-
+      Good, good, Aishwarya. I also second that. Like Aishwarya mentioned, if
+      you're from a tier two or tier three college, life is not over. If you have
+      potential — life is a marathon, which I always say, it's not a hundred metre
+      sprint. So if you have potential, in a ten year span, a five year span, you
+      can be competing with everyone. Like you mentioned, I never demean people
+      from IIT or IIM. They have put in a lot of hard work to be there. So you can
+      also put in hard work in whatever ways you can, to become equal to them.
+      Okay? Now without wasting further time, Aishwarya, let's get started with the
+      interview, okay? Please tell me, what is the event loop in JavaScript?
+
+  - t: "00:04:34"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay, so event is one of the major concepts or topics, we can say, that
+      comes with JavaScript. It's one of the basic and starting topics to get
+      started with for a fresher. Like, with basic HTML and CSS, what can we do? We
+      can design a web page. HTML is like the skeleton, CSS is like your designing
+      part, and what is JavaScript? It is the interactivity. What makes a web page
+      interactive is JavaScript.
+
+  - t: "00:05:07"
+    role: interviewer
+    text: >-
+      No, no, no, I'm not asking what is an event, Aishwarya. You can be very
+      specific. Tell me what is the event loop in JavaScript.
+
+  - t: "00:05:15"
+    role: candidate
+    text: >-
+      Event loop in particular. So whenever we call any event... From event, are
+      you talking about the particular event handler?
+
+  - t: "00:05:27"
+    role: interviewer
+    romanized: true
+    text: >-
+      No, no. I am talking about a concept called event loop. There is a concept
+      called event loop that exists in JavaScript. Are you aware of that concept?
+      Event looping.
+
+  - t: "00:05:35"
+    role: candidate
+    text: >-
+      Maybe I am misunderstanding this concept, or I'm not getting the correct
+      name.
+
+  - t: "00:05:39"
+    role: interviewer
+    text: >-
+      Sure. I'll put it in a different way. I'll put it in a different way. Tell
+      me whether JavaScript is a single threaded or a multi threaded language.
+
+  - t: "00:05:48"
+    role: candidate
+    text: >-
+      Yeah, it's a single threaded language. It follows a synchronous,
+      asynchronous approach.
+
+  - t: "00:05:55"
+    role: interviewer
+    text: >-
+      Got it. So if it's a single threaded language, Aishwarya — but there will be
+      a lot of things that cannot be executed sequentially. For example, an API
+      call, correct? So how do you think JavaScript will handle such things?
+
+  - t: "00:06:08"
+    role: candidate
+    text: Sir, can you pardon your question?
+
+  - t: "00:06:10"
+    role: interviewer
+    restitched: true
+    text: >-
+      Sure. So basically there is only one thread. One thread means one task can
+      be done at a time, as simple as that, correct? But everything cannot be
+      executed sequentially, because there is some constraint. Like, for example,
+      an API call takes more time, correct? Then the main thread cannot keep
+      waiting for the API call to finish, okay? So how do you think JavaScript
+      basically achieves this capability?
+
+  - t: "00:06:36"
+    role: candidate
+    restitched: true
+    text: >-
+      Like, we can use — there are await functions for that. We can particularly
+      stop or hold that function for a particular number of seconds, and after
+      that... an asynchronous function, this is what this word means: it will get
+      performed in the background, and after that particular time it will get
+      executed. So till then we will get the response from the API.
+
+  - t: "00:07:07"
+    role: interviewer
+    restitched: true
+    text: >-
+      I get it. So that is what the question is. There is only one thread,
+      Aishwarya, correct? So it is doing something. And you say something is
+      happening in the background, and once the background task is completed it
+      again has to get executed, correct? An API call is done, then there is some
+      .then method which needs to get executed, correct? Do you know how that will
+      happen in the background? There's only one thread, like doing one thing.
+      Okay. So it encountered an API call. What is the next step?
+
+  - t: "00:07:35"
+    role: candidate
+    text: >-
+      Yeah, if I'm getting a response from a server, then I will get a result and
+      I'll fetch it. Otherwise, there is a concept called catch and error. So if
+      I'm not getting any response, it will throw an error; otherwise I'll catch
+      the response.
+
+  - t: "00:07:53"
+    role: interviewer
+    text: >-
+      Sure, sure, sure. It is not wrong, Aishwarya, but there can be more clarity.
+      So Aishwarya, please tell me, what is a promise in JavaScript?
+
+  - t: "00:08:07"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah, okay. So promises are another one of the moderate topics that comes
+      with JavaScript. Whenever we call the promise, it's like the word describes
+      itself — promise. So it has two values in response: I will give you a result,
+      a response and a result; and if I'm not getting any response, I'll get an
+      error. Or it will not stop the program anyway. So in that situation we call
+      the promises.
+
+  - t: "00:08:43"
+    role: interviewer
+    text: Okay. What are the different states of...
+
+  - t: "00:08:47"
+    role: candidate
+    text: I'm not more specific about this topic.
+
+  - t: "00:09:29"
+    role: interviewer
+    text: >-
+      Okay, sure, sure. Just analyse the code. Take one or two minutes. Try to
+      guess what is the output.
+
+  - t: "00:09:43"
+    role: candidate
+    restitched: true
+    text: >-
+      This is about the scope of a variable, right? Yeah, this is about the scope
+      of a variable. We are first declaring a variable with let, then the function,
+      and then it returns a function. For sure this will return... we will get this
+      one as a result.
+
+  - t: "00:10:32"
+    role: interviewer
+    romanized: true
+    text: Okay. Are you sure, Aishwarya?
+
+  - t: "00:10:35"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah, like, as you can see, we will get this one as our result. Let's see —
+      maybe I have, maybe I can be wrong.
+
+  - t: "00:10:50"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      OK, let's do one thing. Let's do one thing. You tell me and justify why that
+      will be printed. Line number five will be printed — the capital one. In line
+      number five, the capital one will be printed. Okay, can you tell me?
+
+  - t: "00:11:04"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah, of course. As I told you, this code is related to scope of function,
+      and as we have three ways — let, var and const — we are using let here and it
+      has a block scope. And the nearest variable, we have declared it inside its
+      block. So that's why, according to me, line number five will be printed.
+
+  - t: "00:11:29"
+    role: interviewer
+    text: >-
+      Got it. Sure. So in line number six, whatever it is, it is returning a
+      function, correct? In line number seven, function A is returning another
+      function. Am I right, Aishwarya?
+
+  - t: "00:11:39"
+    role: candidate
+    text: Yes.
+
+  - t: "00:11:40"
+    role: interviewer
+    text: >-
+      Okay, so what is it forming? A function having a function inside that — what
+      is it forming in JavaScript? Do you know what it is forming?
+
+  - t: "00:11:50"
+    role: candidate
+    text: Concept of recursion?
+
+  - t: "00:11:52"
+    role: interviewer
+    text: No, concept of closure. Have you heard of closure?
+
+  - t: "00:11:56"
+    role: candidate
+    text: >-
+      Yeah, I have heard of closure, but I have not used it yet and I'm not more
+      specific about it.
+
+  - t: "00:11:59"
+    role: interviewer
+    text: >-
+      No problem. Okay. So basically it is forming a closure, Aishwarya — a
+      function having a function inside. Got it. So tell me one thing: in line
+      number one you have a variable called dev, declared with let and set to the
+      lowercase value, correct? Whether that particular variable, dev, can be
+      accessed inside the function A or not — line number four.
+
+  - t: "00:12:27"
+    role: candidate
+    text: Yeah, it should not be accessible.
+
+  - t: "00:12:29"
+    role: interviewer
+    text: It should not be accessible. Okay, why should it not be accessible?
+
+  - t: "00:12:32"
+    role: candidate
+    text: Because it's outside the function, and it has a functional scope.
+
+  - t: "00:12:38"
+    role: interviewer
+    romanized: true
+    text: >-
+      OK. So a variable declared in line number one — you are saying that cannot be
+      accessed inside the function A. Correct? Okay. So in line number...
+
+  - t: "00:12:46"
+    role: candidate
+    text: Yeah. No, no, no. Sorry, you are talking about the first one, right?
+
+  - t: "00:12:51"
+    role: interviewer
+    text: Correct, line number one, dev. Yeah.
+
+  - t: "00:12:53"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      Oh yeah, yeah, it will be accessible. But this one won't be accessible
+      outside this function.
+
+  - t: "00:13:03"
+    role: interviewer
+    text: >-
+      Correct. Got it. So now how are you going to access the one that is written
+      in line number one inside function A? If you want to use that dev, is there
+      any way that you can use it?
+
+  - t: "00:13:15"
+    role: candidate
+    text: We can use var.
+
+  - t: "00:13:18"
+    role: interviewer
+    text: >-
+      If you make it var, you will be able to; if you use let, you will not be
+      able to use that inside the function A.
+
+  - t: "00:13:24"
+    role: candidate
+    text: Yeah, but we can use var.
+
+  - t: "00:13:26"
+    role: interviewer
+    text: >-
+      var — if you do that, then you will be able to use it inside the function A.
+      That's what you are saying. Are you sure, Aishwarya?
+
+  - t: "00:13:33"
+    role: candidate
+    text: Yes sir.
+
+  - t: "00:13:42"
+    role: interviewer
+    text: >-
+      So your answer is right, okay? Whatever you said is correct. Only a little
+      bit of clarity can be improved, okay, in the way that you are answering.
+      Okay? I'll share one more snippet with you, okay? Then we'll continue with
+      the other things. Okay? Have you heard — there is a function called parseInt
+      in JavaScript?
+
+  - t: "00:14:10"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah, I have used it in the very beginning, for what we can say, converting a
+      decimal to a normal number. Like, I remember about it. Or, what we can say,
+      it's like a prompt for entering numbers only.
+
+  - t: "00:14:39"
+    role: interviewer
+    restitched: true
+    text: >-
+      Okay. Sure, sure. So I'll send you a comparatively easy snippet. Okay. Please
+      try to guess the output.
+
+  - t: "00:15:29"
+    role: candidate
+    restitched: true
+    text: >-
+      We haven't declared the variable. This will console out the same variable
+      given there.
+
+  - t: "00:15:53"
+    role: interviewer
+    text: So, I mean, in line number four, what is the value of dev?
+
+  - t: "00:15:59"
+    role: candidate
+    text: Line number four — yeah, this will console the same as line number three.
+
+  - t: "00:16:15"
+    role: interviewer
+    text: So what will be the output?
+
+  - t: "00:16:23"
+    role: candidate
+    text: >-
+      Firstly we need to declare the variable using any declaration that works —
+      const.
+
+  - t: "00:16:30"
+    role: interviewer
+    text: So otherwise, now what will happen in line number four?
+
+  - t: "00:16:31"
+    role: candidate
+    text: >-
+      What will happen in line number four? I'm saying that because we are using
+      "use strict" here. Use strict. So we need to declare it, otherwise it will
+      not... If I write "let dev" then it will give the same answer, or it will
+      print dev. But if I run the same code of yours, it will give an error,
+      because we are using "use strict", so the variable needs to be declared.
+
+  - t: "00:16:58"
+    role: interviewer
+    text: >-
+      Okay. Sure. Sure. So Aishwarya, let us speak something about the React
+      concepts now. Okay? Can you tell me what are hooks and why they are used in
+      React?
+
+  - t: "00:17:17"
+    role: candidate
+    text: >-
+      Yes sir, sure, sure. So, starting with React JS and hooks. These hooks come
+      with the functional components in React JS, and they are a major concept used
+      with React JS. Let's start with the example of the useState hook. So why do
+      we...
+
+  - t: "00:17:34"
+    role: interviewer
+    text: >-
+      Don't start with the useState hook. Tell me in general — why were hooks
+      introduced first? What was the need for hooks? Then probably we'll talk about
+      one or two hooks, Aishwarya.
+
+  - t: "00:17:46"
+    role: candidate
+    text: >-
+      To generalise — what we can say, to achieve small functionality. Let's take
+      an example: in the class based components we had a particular concept of
+      state, but in this we use useState. So to achieve the bigger functionality
+      using the small concepts, hooks were introduced.
+
+  - t: "00:18:15"
+    role: interviewer
+    text: Sure, please talk. You are talking about useState. Please speak about useState.
+
+  - t: "00:18:18"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah, yeah. So, like, in the class based components earlier we had a concept
+      of state. That was a complex one. But when the hooks concept came with the
+      functional component, many more functionalities got easier to implement. Like
+      managing the state — we can manage it easily using the useState hook. And we
+      can do background activities without rendering any component, using the
+      useEffect hook. So these are something — small functional pieces, bigger
+      functionality, that we can use with hooks.
+
+  - t: "00:18:58"
+    role: interviewer
+    text: >-
+      Got it, got it, sure. So tell me one main reason, Aishwarya, why React JS is
+      faster than basic HTML and CSS and JavaScript. Why should you use React JS?
+      Why is it faster?
+
+  - t: "00:19:11"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah, yeah, sir. One of the basic and biggest reasons behind this, and the
+      advantage of React JS, is the virtual DOM. Nothing beats the virtual DOM,
+      everyone will agree with this. Like, in HTML, CSS and JavaScript, in normal
+      code, we manipulate the page using the DOM. So every time, whenever we are
+      calling an event, or we are rendering anything, or whatever we are doing, the
+      page needs to get loaded. But what we are doing in React JS is, it is making
+      its own virtual DOM. So here is the HTML and CSS code, and here is the whole
+      UI code which is stored in the virtual DOM, so it is getting loaded at once,
+      and all the functionality or rendering is happening here. And another one is
+      reusable components. Let's talk about Facebook — the Facebook timeline page.
+      It was, I think, one of the first pages on the internet to use React JS. So I
+      don't need to render my whole web page; it's just a particular component or a
+      particular area that I need to render, and the posts are getting loaded. So
+      these are the basic concepts why React JS is faster.
+
+  - t: "00:20:34"
+    role: interviewer
+    text: >-
+      Good. So basically one of the main reasons that you say is the virtual DOM.
+      See, component reusability is something internal, which will make the overall
+      development process faster, but the virtual DOM is something that you say will
+      make the entire application run very fast. Correct? So there's a process
+      called reconciliation. Have you heard the term reconciliation, Aishwarya?
+
+  - t: "00:20:55"
+    role: candidate
+    text: >-
+      Yeah, actually I have heard that term, but as it is something of an extreme
+      topic of React, I have not got into that too much in React.
+
+  - t: "00:21:03"
+    role: interviewer
+    text: >-
+      No problem, no problem. So, let's say you said there's a virtual DOM, okay,
+      which is basically a copy of the real DOM, correct? That is something
+      responsible for updating the real DOM, as you said, whenever there is some
+      change, correct? So, have you ever thought — is there some scenario where
+      React JS is slower than basic HTML, CSS and JavaScript?
+
+  - t: "00:21:27"
+    role: candidate
+    text: Pardon — can you pardon, sir?
+
+  - t: "00:21:29"
+    role: interviewer
+    text: >-
+      You said React JS is faster than basic HTML, CSS and JavaScript, correct? Can
+      you give me a scenario where you think React JS is slower than basic HTML,
+      CSS and JavaScript?
+
+  - t: "00:21:46"
+    role: candidate
+    text: Till now I haven't seen any project or anything where React JS is slower.
+
+  - t: "00:21:54"
+    role: interviewer
+    text: Okay. Sure, sure.
+
+  - t: "00:21:56"
+    role: candidate
+    text: >-
+      But maybe in the industry, in some of the projects, it may be. I will see
+      about this.
+
+  - t: "00:22:01"
+    role: interviewer
+    text: >-
+      Good, good. Sure, sure. So tell me more — what are the other concepts,
+      Aishwarya? Like, one I mentioned was reconciliation. Like that, any other
+      concepts of React JS that you are aware of, so that we can talk more about it?
+
+  - t: "00:22:15"
+    role: candidate
+    restitched: true
+    text: There are major concepts like state, props, props drilling, components...
+
+  - t: "00:22:29"
+    role: interviewer
+    text: >-
+      Sure. Yeah, yeah, thank you for saying. Let's talk about Redux. I hope you're
+      using Redux in the sample project that you've created, Aishwarya. Correct?
+
+  - t: "00:22:38"
+    role: candidate
+    text: Yeah, yeah, I have used it. Yeah, I have used it.
+
+  - t: "00:22:41"
+    role: interviewer
+    text: Got it. Tell me more about Redux — like, when will you use Redux?
+
+  - t: "00:22:45"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah, okay. So, as I said just two minutes ago, we have used it to manage
+      state. But what is Redux? Redux is nothing but a JavaScript library, one of
+      the best libraries to manage complex state. So "complex" describes itself —
+      complex state. I'm not talking about simple states. When I'm making any
+      counter app, I can use useState. But whenever it comes to bigger applications
+      — like in the industry we get e-commerce apps; one of the best examples is an
+      e-commerce app, the Amazon app — we can't handle the state of that particular
+      whole app using the hooks. So we need a library, and that is Redux. That is
+      Redux, and it manages the complex state of major applications.
+
+  - t: "00:23:35"
+    role: interviewer
+    romanized: true
+    text: >-
+      OK. So in simple words tell me, like: if this is a requirement, I am going to
+      use Redux. What is that requirement?
+
+  - t: "00:23:42"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      So the requirement is like where I am given a project where I will be needing
+      to manage multiple states. So I will need a store, and the concept of store
+      comes in React. Like, I'm storing all the states in the store, and whenever I
+      need it I can dispatch it and I can use it. So that's why I gave the example
+      of the e-commerce app.
+
+  - t: "00:24:08"
+    role: interviewer
+    text: >-
+      Sure, sure. But that is right, Aishwarya. Okay, I'll give one explanation —
+      correct me whether I'm right or wrong. So you will use Redux not depending on
+      the project size. You will use Redux when there is data that has to be shared
+      across multiple pages and that requirement is very frequent. That is the
+      right use case for Redux, right?
+
+  - t: "00:24:26"
+    role: candidate
+    text: >-
+      Yeah, yeah, this is one of the specific things. Sorry, but yeah, this is
+      whenever I need to distribute, or I need to manage the state inside various
+      components. So I will need Redux.
+
+  - t: "00:24:41"
+    role: interviewer
+    text: >-
+      Good. So tell me the building blocks of Redux — what are all the important
+      elements that exist inside Redux?
+
+  - t: "00:24:48"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah, it has, like, a life cycle. Before telling it, I will tell one thing:
+      React, as you know, follows the unidirectional flow of data. What does this
+      mean? This means the data will flow from one component to another component to
+      another component, parent to child. So if I need to pass any data from
+      component one to component four, I need to pass it from one, two, three, four.
+      So there comes the concept of Redux. You said building blocks — one of the
+      major building blocks is the store. Let's say I have hundred components in my
+      application and everywhere I need to manage the state; so I will store all the
+      state inside the store. And another building block is the reducer and
+      dispatch. If I need this particular state inside component fifty, I will
+      dispatch it from there — dispatch it over the reducer. So these are the
+      building blocks of Redux.
+
+  - t: "00:26:00"
+    role: interviewer
+    text: >-
+      Sure. So store, reducer, then dispatcher — then is there something called
+      action and action creators? Are those there?
+
+  - t: "00:26:07"
+    role: candidate
+    text: Yeah, action, action, action state. Yeah, action.
+
+  - t: "00:26:10"
+    role: interviewer
+    restitched: true
+    text: >-
+      Sure, sure. I'll ask one last question, Aishwarya, okay, before winding up.
+      So Redux, as you know, is an external library that we are using in the React
+      JS project, correct? So it cannot give a capability to React JS that it
+      doesn't have already. Like, for example, Bootstrap will allow you to style the
+      components, correct, in a very easy way. But Bootstrap is not giving a
+      capability to HTML that it is not already having; it is just making it easy to
+      do, okay? So whatever Bootstrap gives, you can also do with plain CSS, okay?
+      Just that Bootstrap is a library that is giving you all the things readily
+      available. Same way, whatever you can achieve in Redux you should be able to
+      achieve just with the help of React JS, without having the library, okay?
+      Because it is something that is built with some core components of React JS,
+      core capabilities of React JS. Can you please tell me what Redux uses under
+      the hood?
+
+  - t: "00:27:02"
+    role: candidate
+    romanized: true
+    text: Sir, the last line — pardon?
+
+  - t: "00:27:03"
+    role: interviewer
+    text: What does the Redux library use under the hood to achieve this?
+
+  - t: "00:27:07"
+    role: candidate
+    romanized: true
+    text: >-
+      Yeah, yeah, I mean, basically — you mean without using Redux, can I apply the
+      same functionality?
+
+  - t: "00:27:15"
+    role: interviewer
+    text: >-
+      Yeah, one way is that also you can think. But my particular question is,
+      Redux has to be using something that is already available in React, okay, to
+      achieve the state management. What do you think that it is using?
+
+  - t: "00:27:27"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay, like — yeah, you gave the example of Bootstrap and React. So yes, we can
+      do the same functionality with React code too. Like, I had seen one of the
+      podcasts of Tanay Pratap sir; they told the same thing there. Like, there we
+      need to build our own library — then we will need to build our own library
+      inside that particular React JS ecosystem. So why write hundreds of lines of
+      code when we can just import the library and implement the same thing? So this
+      is where the concept of space and time complexity comes in.
+
+  - t: "00:28:09"
+    role: interviewer
+    text: >-
+      Got it. Sure. Aishwarya, I'm done from my end. So mostly I think we spent
+      around thirty minutes in this overall interview process. Please tell me,
+      before I share my feedback, if you have any questions for me, please ask,
+      Aishwarya. Something specific, in general — maybe a personal thing we can
+      connect on later; anything general you can tell me.
+
+  - t: "00:28:27"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah, general — general is nothing, like, for any of the juniors or freshers.
+      The only thing I want to say to freshers, and I will repeat it: just focus on
+      one technology. You can build your entire career on one technology. That's it,
+      it's just one thing. So just focus on one technology and get a good hand on
+      that.
+
+  - t: "00:28:59"
+    role: interviewer
+    restitched: true
+    text: >-
+      Got it. Sure, sure, Aishwarya. See Aishwarya, here is my feedback for the
+      interview that I took so far — a general feedback that I'm giving. First is
+      where you should keep the explanation very short. This applies to you and a
+      lot of other people who know a lot of things, right? We try to inculcate that
+      in all of our answers. What happens is, sometimes the interviewer has to
+      extract the answer from the explanation. Let's say you have said ten lines;
+      two lines have the answer. Some interviewers like me will have the patience and
+      they would extract the answer. But every interviewer will not have that much
+      patience to extract the answer. So my advice is, you or anyone who is like you,
+      be very specific on the answer. Like, what are hooks? Just tell why you are
+      using the hooks, okay? Only if the interviewer asks, extend the answer. Because
+      you don't know what level the interviewer is really looking for, correct? So you
+      by yourself keep the concept a little low. That is one feedback that I would
+      give. First I'll tell the negative, then I'll tell the positive. And the second
+      and very important point that I would say is, read more about concepts — that I
+      say to almost all the freshers. So you know something like closures, correct?
+      You said the right output for that particular program. So what I expect every
+      fresher like you to know is, go and read more about closure from the official
+      documentation. The official documentation is developer.mozilla.org. So you go
+      there, read more about closure, understand the concepts in depth. With that
+      you'll be very authoritative whenever a lot of questions are asked to you in the
+      interview, okay? Because examples are limited, we cannot create thousands of
+      examples, but the concept is the same. If you know the concept clearly, you will
+      be able to answer that, okay? So, fewer things, less explanation, and understand
+      the concepts in depth. Okay? And positive points, Aishwarya: like I said, you
+      are able to interpret most outputs correctly. Snippet driven questions, you are
+      able to answer them well. Conceptual knowledge of JavaScript is good, okay? But
+      there is a little bit of scope for improvement. That is what I would say, where
+      you have to understand things in depth. Coming to even the React JS concepts
+      also, conceptual knowledge is good. But there's again a little bit of scope for
+      improvement. So what I mean by scope for improvement here is, you know things,
+      but where can it be improvised further? So how you can improvise further is by
+      reading the official documentation. This is my honest feedback. Is there any
+      other question that you have, Aishwarya, for me?
+
+  - t: "00:31:22"
+    role: candidate
+    text: >-
+      Yeah, nothing else, sir. I'll take the feedback very positively, and the same
+      thing that you told me I'll tell all my fellow mates: just as sir said, read
+      the official documentation. That is something very specific about the concept.
+      Thank you so much, sir.
+
+  - t: "00:31:40"
+    role: interviewer
+    restitched: true
+    text: >-
+      Yes. So make it a habit — and I'm saying this to everyone — make a habit of
+      reading. Some people cover things shallowly; nothing wrong with that, whatever
+      they want to tell they will tell. And whatever people want to share, or
+      whatever they have understood, they'll write in a blog. But the official
+      documentation, that is the single source of truth. So spend more time; have the
+      practice, as a fresher itself, of reading that. You'll become a master in
+      reading. If you can become a master in reading, then you can learn a lot. So
+      have a habit of reading — that will definitely help you, whether for interview
+      preparation or in general. Okay? That's all then. Thank you so much, Aishwarya,
+      for giving your time for the interview. I hope you got benefited out of it.
+
+  - t: "00:32:54"
+    role: candidate
+    text: Yeah, thank you, sir.

@@ -1,0 +1,761 @@
+id: "02"
+title: React and JavaScript Mock Interview - Senior Developer
+source: 02 - React and JavaScript Mock Interview - Senior Developer
+duration: "00:39:17"
+track: frontend
+topics: [javascript, hoisting, closures, currying, react, pure-components,
+  component-composition, this-binding, event-loop, settimeout, iife]
+seniority: senior
+participants:
+  interviewer: Vasanth
+  candidate: Deepak
+  candidate_experience_years: 8
+
+# Diarization here is unusually clean at the id level - Speaker 1 is Vasanth and
+# Speaker 2 is Deepak throughout - but the 30-second chunker constantly bleeds
+# the other person's words into the head or tail of a chunk (for example the
+# Speaker 1 chunk at 00:12:48 opens with Deepak's "...eat of that. Sorry.").
+# Every turn below was attributed by content, not by id.
+raw_speaker_ids:
+  interviewer: [1]
+  candidate: [2]
+
+invariants:
+  - Turns strictly alternate interviewer -> candidate. No two consecutive same-role turns.
+  - No reference to a YouTube channel, video, subscriber, audience or viewer.
+  - No screen-sharing, editor or tool-operation instructions.
+  - Text is English in Latin script only.
+
+counts:
+  raw_entries: 363
+  clean_turns: 72
+
+removed:
+  monologue:
+    - span: "00:00:00-00:00:49"
+      what: Channel intro, content-creator framing, subscriber count, series links in the description section.
+    - span: "00:19:07-00:19:37"
+      what: Mid-interview like-and-comment appeal to viewers.
+    - span: "00:37:07-00:39:17"
+      what: Post-interview outro - Google form, like and subscribe, GitHub repo, Medium newsletter.
+  self_promotion:
+    - "00:00:57 - 'As you know I'm Vasanth, I'm a YouTuber'"
+    - "00:32:31 - 'Every viewer also got my feedback, I don't have to explicitly say it'"
+    - "00:32:31 - 'not just the mock interview that I take for the channel'"
+    - "00:35:07 - 'hope you're watching Uncommon Geeks Deepak, my YouTube channel. How are the videos coming?'"
+    - "00:35:17-00:36:09 - candidate's reply trimmed of 'your like channel' and 'from your videos'"
+  logistics:
+    - "00:16:49-00:17:15 - 'can you please open JSFiddle and present your screen'"
+    - "00:17:16-00:18:23 - 'just one second', 'sharing my screen', 'I'm not the host', giving Zoom permission, Zoom security chat, 'I'll write share'"
+    - "00:18:24-00:18:38 - copy the snippet from the Zoom chat, paste in the JavaScript editor, don't run"
+    - "00:18:47-00:19:06 - 'can you zoom in a bit', 'two more times', 'one more'"
+    - "00:22:25-00:22:46 - 'top left you see a run icon, please click', 'extreme left', 'near the URL', 'bottom right you're seeing the output'"
+    - "00:25:40 - 'please run'"
+    - "00:26:35-00:26:55 - 'one moment I'll share', 'copy the snippet and paste there', 'don't run', 'I can remove this'"
+    - "00:27:40-00:27:51 - 'please run', 'please run, top left'"
+    - "00:31:53 - 'can you stop sharing?'"
+  backchannels: 106
+  asr_noise: 57
+
+corrections:
+  hosting: hoisting
+  Karim: currying
+  "carried function": curried function
+  "not the actual moment": not the actual movement
+  "this will be fine": this will be five
+  "your components in React": pure components in React
+  "how depth you have understood": how deeply you have understood
+  "one more brackets": one more bracket
+  "the inner will be later executed": the inner one will be executed later
+
+uncertain:
+  - "Many sub-second entries are pure cross-talk echoes carrying the other
+    speaker's words under the wrong id (00:12:48, 00:23:22, 00:25:49, 00:16:59
+    and others). These were folded into the correct speaker's turn by content."
+  - "00:14:37-00:14:41 - a two-turn 'But you say / But if' exchange was
+    unrecoverable and has been dropped; nothing substantive was lost."
+
+romanized: 3
+
+turns:
+  - t: "00:00:57"
+    role: interviewer
+    restitched: true
+    text: >-
+      Yeah. So, hi Deepak. As you already know, this is regarding the mock
+      interview with JavaScript and React. I'll start by giving a basic
+      introduction of mine, then I'll take your introduction, then I'll give a
+      brief overview about the overall interview process, then we shall get
+      started, okay? As you know, I'm Vasanth. I work as a front end developer,
+      and I have good knowledge on both web and mobile application development.
+      And this interview, very specifically, as we have decided, is a mock
+      interview of JavaScript and React. We have half an hour, where in the
+      first half let us try to delve into concepts — I'll be asking you a few
+      questions on JavaScript and React concepts — and the remaining fifteen to
+      twenty minutes I'll share certain snippets with you and you need to be
+      predicting the output of it. So whenever you are predicting, I'll touch
+      base on some more concepts in depth. Okay? So that's all from my end
+      regarding myself and the interview process. Can I please get your
+      introduction, Deepak? Your skills, your aspirations?
+
+  - t: "00:01:51"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah, sure. So I'm Deepak Chandani and I have around eight years of
+      experience working as a full stack developer. I started my journey from
+      the jQuery days, and then I worked on different frameworks as the JS
+      ecosystem kept evolving. So I worked on AngularJS and then I worked on
+      Backbone JS. And for the past three or four years I've been working in
+      React JS majorly. So that's a brief about my journey. And I am aspiring
+      for product based companies where I can utilize my knowledge and work on
+      some challenging stuff that they are building.
+
+  - t: "00:02:35"
+    role: interviewer
+    text: >-
+      Sure, sure Deepak. Clean introduction, thanks for the same, okay? Let's
+      get started with the extreme basics, Deepak, okay? So please tell me, what
+      is hoisting in JavaScript?
+
+  - t: "00:02:46"
+    role: candidate
+    restitched: true
+    text: >-
+      All right, hoisting. So what happens is, when the JavaScript engine gets a
+      program to be executed, it runs that program in two phases. The first one
+      is the creation phase, in which it basically scans what is inside the
+      code, and then the interpreter comes into the second phase, which is the
+      execution phase, in which line by line it executes all the program that we
+      have written. So in the creation phase what happens is, first, when we
+      give a program file to the interpreter, then in the creation phase all the
+      variable declarations are hoisted to the top of the program. So say
+      suppose we have ten lines in the program and on the fifth line you are
+      creating a variable — so on those top four lines you can use that variable
+      x. Why? Because hoisting is happening, so the JavaScript engine creates a
+      separate space for those variables even though they are defined at the
+      bottom of the file. In the scanning process it creates them and declares
+      them, or initializes them with an undefined value. This is hoisting
+      basically.
+
+  - t: "00:04:08"
+    role: interviewer
+    text: >-
+      Got it. So what you said is absolutely right, Deepak. I'll just add
+      certain variations to it — you confirm whether what I'm saying is right or
+      wrong. So hoisting is a process, like you said, it moves to the top of the
+      block. So I'll add just one more small word into it. Does it really move
+      the declaration to the top of the block, or does it just appear to move
+      the declaration to the top of the block?
+
+  - t: "00:04:30"
+    role: candidate
+    text: It appears to.
+
+  - t: "00:04:31"
+    role: interviewer
+    text: Correct. Why does it appear to move, and why does it not really move?
+
+  - t: "00:04:42"
+    role: candidate
+    restitched: true
+    text: >-
+      It doesn't really move, I can say that. Because we know that it's not
+      happening — the JavaScript engine is not changing the code that we have
+      provided to it. That's what I feel.
+
+  - t: "00:05:06"
+    role: interviewer
+    text: >-
+      Correct. What you're saying is correct, Deepak. Basically, like you said,
+      it doesn't move because there is nobody sitting in the background who will
+      take our variable from line number eight and move it into line number two.
+      Correct? Just because of the memory allocation, the variables can be
+      accessed even before they are declared. It seems to be like that, correct?
+      So it is just appearing, not the actual movement. Good. Okay. Please tell
+      me, what are closures, Deepak?
+
+  - t: "00:05:28"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah, so closures in JavaScript happen when we have — say suppose we have
+      an outer function and we have an inner function. Now that outer function
+      is returning an inner function which will be executed later. And what
+      happens is, because we know that the inner function will be executed later
+      in some time, but it can use some of the variables which were local to
+      that outer function, the parent function. And due to that, JavaScript has
+      to keep some closure. So in this scenario closure happens, where even if
+      the outer function's execution was completed, still the inner function has
+      access to the variables defined inside the outer function. So that's a
+      scenario where closures happen.
+
+  - t: "00:06:20"
+    role: interviewer
+    text: >-
+      Absolutely. It's absolutely right. Can you give me one real-time example,
+      Deepak, where closures can be used?
+
+  - t: "00:06:26"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah, so I've seen this in some of the scenarios. Like, there is a module
+      pattern in JavaScript, where we can create a module in which we want some
+      private variables to be there, and we want to return some of the functions
+      which we want to expose, so that the user of that module can utilize those
+      functions. And as a simple example, say suppose we have a function which
+      has a counter and then it returns two functions, for adding and deleting.
+      But the value of the counter is accessible only to that module, not to the
+      external user.
+
+  - t: "00:07:17"
+    role: interviewer
+    text: >-
+      This is right. Can you give me any practical example that you think of?
+      This one you said is fine. Anything maybe in a little broader perspective.
+      You know anything?
+
+  - t: "00:07:32"
+    role: candidate
+    restitched: true
+    text: >-
+      I think one example can be where I actually use it, where we all use it
+      regularly, is that in React we create a hook, or we create a component.
+      And in that component we create a function — or say suppose we are
+      creating a custom component, custom hook, sorry. And in that we create a
+      variable, but we have access to that variable inside some of the utility
+      functions which we are returning from that custom hook. So say suppose you
+      are creating a custom hook to fetch something, say suppose useFetch. And
+      in that you create some isLoading and other state variables. And those
+      state variables can be used inside the click handlers also. So what
+      essentially we are doing is, we are using a local variable of the parent
+      function, that is the outer function, inside an inner one.
+
+  - t: "00:08:34"
+    role: interviewer
+    text: >-
+      Yeah, I mean, not wrong. It can be a little improvised, but no issues,
+      Deepak. Can you tell me what is function currying in JavaScript? C U
+      double R Y I N G, currying.
+
+  - t: "00:08:52"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah, so in currying what happens is, say suppose we have a function which
+      takes some arguments, and then we want that function to be partially
+      executed. I'll take an example and that will make it easier. So suppose we
+      have an add function, and the add function takes multiple arguments, let's
+      say three or four arguments. And we want to curry it. So in currying what
+      happens is, when you pass that function to a curried function, then what
+      we get is a new function which can be invoked with single parameters. So
+      say suppose A, B, C were passed to the original function; the curried
+      function can be executed partially, so you can pass one and then two, and
+      then it will return a new function which can be invoked by passing three.
+
+  - t: "00:09:55"
+    role: interviewer
+    text: >-
+      Correct, correct. What you said is correct. Basically, currying is not
+      like a fundamental concept — there is not much documentation related to it
+      on Mozilla Developer, so it doesn't have an appropriate definition. What
+      you explained was right, and I am coming that way. Because many in the
+      interview try to find a definition, and there is no absolute definition as
+      such. So it's more like an explanation with a definition. Okay. Sure. Tell
+      me, what are pure components in React, Deepak?
+
+  - t: "00:10:35"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah, so in React what happens is, whenever we change the props — whenever
+      a component's prop is changed, or the state is changed; state is inside
+      that component only, but props are passed from outside — so whenever the
+      prop is changed, the parent component might be providing some prop and
+      then later on it provides a new value of that prop. That time the
+      component re-renders. And usually that's the default behaviour, but
+      sometimes what we want is, we want that component to re-render only when
+      we receive a new value of the prop, and we want to skip the re-rendering
+      whenever the same props are being passed. So in that case we create a
+      component — we can say that the component that we want is a pure
+      component, which only re-renders when the props are changing. And by
+      default, in class components there is a PureComponent class from which we
+      extend and create a new component.
+
+  - t: "00:11:50"
+    role: interviewer
+    text: >-
+      And in functional components? How will you create your pure components in
+      functional components?
+
+  - t: "00:11:56"
+    role: candidate
+    text: >-
+      Okay. This pure behaviour can be achieved in functional components in
+      React by using React...
+
+  - t: "00:12:04"
+    role: interviewer
+    restitched: true
+    text: >-
+      Correct. React.memo you can definitely use for creating pure components
+      with the help of a functional component, correct? I'll ask you one
+      practical example, Deepak. Tell me. Let's say you have a pure component
+      inside a parent component and you are passing a prop called x. Okay? The
+      value of x was ten before. Now the parent component has re-rendered, and
+      due to some reason the value of x has been changed from ten to ten again.
+      Some processing happened but x is still ten. But a setState of x has
+      happened. Okay? Now, will the pure component re-render or not?
+
+  - t: "00:12:46"
+    role: candidate
+    text: I'll need a repeat of that, sorry.
+
+  - t: "00:12:48"
+    role: interviewer
+    restitched: true
+    text: >-
+      Yeah, there's a parent component and a child component inside that parent
+      component, and the child component is a pure component. Okay? So the child
+      component is taking a prop called x, whose value by default was ten. And
+      during some processing the x value is recomputed, but even the recomputed
+      value is also ten. Okay? But a setState has been called for that x with a
+      new value of ten. Okay? Old also ten, new also ten. Will the pure
+      component re-render or not?
+
+  - t: "00:13:21"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay. So we have a child component which was previously also receiving ten
+      as a prop value. And then again, after some computation, the value ten was
+      passed to it again. And that child component is a pure one. Okay, so in
+      this case it won't be re-rendered, I think.
+
+  - t: "00:13:42"
+    role: interviewer
+    text: >-
+      Got it. So I'll extend this example a little bit. Let's say you're passing
+      an object to the child component, and the object is again reset to the
+      same object value. Will it re-render or not?
+
+  - t: "00:13:54"
+    role: candidate
+    text: >-
+      Yeah, in the case of objects, what happens is it depends on whether that
+      object coming from the parent component is a memoized one or not. If it's
+      a memoized one, that means referentially the previous object and the new
+      object that is being passed are equal. In that case it won't re-render.
+      But if you're creating a new object, referentially they are not equal,
+      then that will re-render.
+
+  - t: "00:14:17"
+    role: interviewer
+    text: Good. What about functions? If you are passing a function?
+
+  - t: "00:14:23"
+    role: candidate
+    text: >-
+      Yeah, the same applies to functions also. So if that function is the
+      memoized one — we can say it's referring or pointing to the same function
+      which was previously passed — then re-rendering will not happen.
+
+  - t: "00:14:37"
+    role: interviewer
+    text: Wonderful. Yes, exactly. Can you tell me what is component composition in React?
+
+  - t: "00:14:46"
+    role: candidate
+    restitched: true
+    text: >-
+      All right, component composition. So in React what happens is, we can have
+      a component which — generally what we do is, we create a component, say
+      suppose a list component, and we create li's in a ul, and then inside that
+      li. This is all HTML composition. But in React the beauty is that we can
+      create our own list component which can have list items, a custom
+      component. So in a way what we are doing is, we are creating a parent list
+      component and then we can create list items in that. So those are custom
+      components. And the parent component can receive those children in a
+      children prop.
+
+  - t: "00:15:38"
+    role: interviewer
+    text: >-
+      Yeah, can you give me one realistic example where component composition
+      can be used?
+
+  - t: "00:15:55"
+    role: candidate
+    text: >-
+      Generally I have seen in some of the UI kits, if I can say, like in React
+      Bootstrap or in Material UI, we see a lot of rows and then columns and
+      then a table. So we create a parent table and inside that we create a row
+      and then inside it we create a column. This is a real example.
+
+  - t: "00:16:19"
+    role: interviewer
+    restitched: true
+    text: >-
+      True, true, true. This is a real example. More from the project point of
+      view, if you have to say — whenever we are having a kind of embedding
+      process. Let's say one person is creating the entire container and
+      somebody will embed the things inside that, correct? For example, some
+      cards or some shopping related items. So the one who creates the
+      container, he doesn't bother who will come tomorrow and insert the things.
+      He will only worry about the container. So with the help of compositions,
+      we can allow that. Like, if you don't pass anything, I'll render this; if
+      you wish to pass something, you can pass. So just make sure my container
+      doesn't break. Correct? Good, Deepak.
+
+  - t: "00:16:54"
+    role: candidate
+    text: >-
+      Yeah, just one example I remembered is of the accordion. So the accordion
+      can be a parent one and inside the accordion we have different panels. And
+      the accordion itself takes care of which panel is open or closed.
+
+  - t: "00:17:09"
+    role: interviewer
+    restitched: true
+    text: >-
+      Exactly. Yes, yes, Deepak, correct. So, I'm sharing a code snippet with
+      you. Please guess the output, Deepak. You can take two minutes and try to
+      guess.
+
+  - t: "00:19:38"
+    role: candidate
+    restitched: true
+    text: >-
+      We have a function here, we have an object, object length, and we have
+      this function of zero and then we are calling it. So we are calling
+      object.method. Inside this method we are passing fn. So this fn, and we
+      call this fn. This is called using this object, so here this will be
+      pointing to this object. So the length here — I think it should be five,
+      because this might be pointing to the object. And then here we have
+      arguments of zero and then we are calling it, we are calling that function
+      from here. And inside we don't have this, and here this should give... I've
+      quickly done it. I'll try to explain my thought process.
+
+  - t: "00:21:11"
+    role: interviewer
+    text: First, first confirm the output. Yeah, first confirm what will be the output.
+
+  - t: "00:21:15"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay. So for this first call, we are passing the function, so inside this
+      we are calling from here. So here we... which doesn't have anything. But by
+      default it will be where it is being called. So it's being called from
+      here, so this will be five. This is again being called from here only, not
+      from the event. And inside, this is pointing to this object, so this will
+      also be five. Yeah, so I think this will return five and this will also
+      return five, but I might be wrong. It's ten, and then two.
+
+  - t: "00:22:49"
+    role: interviewer
+    text: Any idea why? You can take a minute and try to deduce.
+
+  - t: "00:22:58"
+    role: candidate
+    restitched: true
+    text: >-
+      So ten I understand — this is returning ten. So what this means is, this
+      here is pointing to window actually. I was thinking that it's pointing to
+      this object, but this is pointing to window, and the length variable is
+      coming from the parent window object. And for this... was that the right
+      one?
+
+  - t: "00:23:26"
+    role: interviewer
+    text: >-
+      Yeah, that is correct. Yes, what you're saying is right. Basically, it
+      doesn't take the object's reference because you're calling a function
+      which is completely external. Let's say there is a method inside the
+      object, like a method two, which has a function and that you are invoking.
+      That time it will look for the reference in the object, correct? So now
+      you're calling something altogether external, a function. So there is
+      nothing of this object; this you are not passing. So there, this points to
+      window, okay? Any idea why two is printing?
+
+  - t: "00:23:55"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah, so this one is interesting. So we have fn. What it's saying is, we
+      have two arguments passed to this — saying arguments of zero and invoking
+      it. Arguments of zero, we see that it's fn. fn is called this way. Okay, so
+      here what I see is, this might be referring to that function. Arguments of
+      zero is fn, and fn is this. Then this function is called; it's saying this
+      function's length. What I can guess right now — I'm not sure whether I'm
+      right or wrong — but I think in this case this is pointing to the function.
+
+  - t: "00:25:16"
+    role: interviewer
+    restitched: true
+    text: >-
+      Okay, function as in the one that you're passing in line number fourteen,
+      correct? The function that you're passing in line number fourteen is the
+      one on line number two. Correct. I mean, that is how two can come. Do one
+      thing — in line number fourteen, after function comma one, add comma two.
+
+  - t: "00:25:49"
+    role: candidate
+    text: Yeah. So this is the method which is being passed.
+
+  - t: "00:25:56"
+    role: interviewer
+    text: >-
+      Now you get a sense, correct? No, no — object.method is in line number
+      eight, that only you are calling. Okay. So now, how did two become three?
+      You got a sense, right, how two turned into three?
+
+  - t: "00:26:08"
+    role: candidate
+    text: This is actually the arguments array.
+
+  - t: "00:26:11"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      You got it. Yes. So that's what I say — maybe even if we work with
+      JavaScript our whole life, none of us will be able to master it, I'm
+      thinking. There will be somewhere or the other edge case where we all
+      miss. Okay? Good. I'll share one last snippet with you. Please guess the
+      output. It's much more straightforward.
+
+  - t: "00:27:03"
+    role: candidate
+    restitched: true
+    text: >-
+      So we are creating a function, self-invoking it. So I'm going to count
+      here. So we'll get one first of all. Then four, straight away. Then these
+      two will go in the queue, as this is having both a setTimeout. So this
+      first setTimeout is zero, so this should execute first, then two, that is
+      after one second.
+
+  - t: "00:27:43"
+    role: interviewer
+    text: You are confident that this is the order?
+
+  - t: "00:27:45"
+    role: candidate
+    text: Confident. This is the order. Yeah, I think I don't see any tricky thing here.
+
+  - t: "00:27:53"
+    role: interviewer
+    text: >-
+      So one, four, three, two, correct? Let's do this. In line number four,
+      setTimeout is taking basically a function, right? Can you convert that
+      into a self-invoking function?
+
+  - t: "00:28:06"
+    role: candidate
+    text: All right. So, this way?
+
+  - t: "00:28:10"
+    role: interviewer
+    restitched: true
+    text: >-
+      Yes, so you have to add one more bracket at the starting and the end.
+      Yeah. Now can you guess the output?
+
+  - t: "00:28:27"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      So basically this will be invoked immediately. So we'll have one as
+      previous, and then this will be immediately executed, so this will give us
+      three. Then we'll have four and then we'll have two.
+
+  - t: "00:28:50"
+    role: interviewer
+    text: Yeah, please explain why that will be immediately executed.
+
+  - t: "00:28:54"
+    role: candidate
+    text: >-
+      Yeah, so what we have done is, this part is creating a function and these
+      two parentheses are immediately executing that function.
+
+  - t: "00:29:05"
+    role: interviewer
+    text: >-
+      Sure. As per the event loop concept, what should happen whenever setTimeout
+      is encountered?
+
+  - t: "00:29:12"
+    role: candidate
+    text: Sorry, I missed that. Can you repeat it?
+
+  - t: "00:29:14"
+    role: interviewer
+    text: >-
+      As per the event loop concept, whenever a setTimeout is encountered, what
+      should the JavaScript engine do? Will it take it from the call stack and
+      move it somewhere else, or what is the process?
+
+  - t: "00:29:24"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah, so whenever setTimeout is encountered, and whatever function is
+      provided, that setTimeout executes but this callback is moved into a
+      queue. And it's a queue which will wait for this particular time to
+      complete, and then the event loop will check if the call execution stack
+      is empty or not. If it's empty, then it will bring that pending callback
+      into the stack and that will be executed.
+
+  - t: "00:30:00"
+    role: interviewer
+    restitched: true
+    text: >-
+      Correct. So now in this case setTimeout is there, and inside that there is
+      a self-invoking function, correct? How come the function will execute
+      immediately? It cannot go directly into the call stack, right? It cannot
+      directly take it into the call stack as per the explanation. Correct?
+
+  - t: "00:30:18"
+    role: candidate
+    text: >-
+      Yes. So what I see here is, the difference between line number three and
+      four is that this is a reference to a function — consider it as a
+      callback. But this is actually executed immediately.
+
+  - t: "00:30:37"
+    role: interviewer
+    restitched: true
+    text: >-
+      Sure. So in line number four, instead of zero, make it three seconds.
+      Three, double zero, three seconds. Okay. Yeah, I'm not asking the output.
+      In this case now, after three seconds something has to happen. What will
+      happen? So will a setTimeout be registered or not? That you tell me.
+
+  - t: "00:31:03"
+    role: candidate
+    restitched: true
+    text: >-
+      So this is a function and it's returned. So the output of this expression
+      would be undefined actually. And what setTimeout will be receiving is
+      basically, once this is executed, it will be receiving undefined, or void
+      as we can say. So there is a chance that it might check that if undefined
+      is passed as a callback to setTimeout, then it won't do anything.
+
+  - t: "00:31:31"
+    role: interviewer
+    restitched: true
+    text: >-
+      True, true. Correct. What you said is absolutely right, Deepak. Okay. Many
+      get confused in this process. First of all, many will not be able to guess
+      the output only, the order of it. Even if they're able to guess the order,
+      whenever a self-invoking function comes, they get confused. Okay. Even
+      after the self-invoking function, whenever this undefined kind of concept
+      comes, they further get confused. You are able to answer all the things
+      well. Okay, Deepak, so I did not get to know how the time flew — we have
+      almost finished half an hour already, okay? So first, please feel free to
+      ask me, Deepak, if you have any questions for me. Not specifically from
+      the interview; if you have any other questions also, generally also, you
+      can ask.
+
+  - t: "00:32:27"
+    role: candidate
+    text: I don't have any question right now.
+
+  - t: "00:32:31"
+    role: interviewer
+    restitched: true
+    text: >-
+      Yes. Good, good, Deepak. I'll just pass on my feedback, Deepak. I mean, it
+      was a very clean, neat interview. Overall in my interview process, very few
+      will have very in-depth knowledge, okay? And I think you will also be
+      taking interviews for a lot of candidates. There is a concept of breadth
+      and depth, where people touch base on a lot of topics and they get in
+      wherever they feel the candidate might not be confident. Okay? With the
+      breadth and depth that I applied with you, you have a good amount of
+      knowledge on all the concepts. Okay? The first thing I always see is the
+      technical communication. Communication is one thing; technical
+      communication is very, very important, correct? Let's say when I asked you
+      function currying, you did not say "I'll type and explain", correct?
+      Because as a developer our job is not just the coding. You should be able
+      to articulate your thoughts to a lot of folks, correct? So the technical
+      communication part is very, very good. And the second part is the
+      conceptual knowledge. This is something that you applaud in an engineer
+      after a point — a senior engineer like you, eight years, ten years.
+      Whenever some concepts come, they should be able to articulate it well, to
+      explain it with the help of the concept. Like the pure component example
+      which I asked: you're passing a function, you're passing an object, and you
+      clearly know what is happening under the hood. That is something that will
+      give respect to an engineer after a point, correct? Just because somebody
+      becomes an architect, people will not respect him. Only because he has
+      that kind of knowledge, then only people respect. So fundamental knowledge
+      is very, very good. The third point is guessing the output, the
+      snippet-driven thing. So the first one you were unable to answer — I mean,
+      partially you were right; the second one you were able to answer clearly,
+      okay? The first question, with my experience, I haven't seen anyone
+      answering in the first go, including me, okay? It's not straightforward. I
+      mean, obviously I also don't say it is something with which we can judge an
+      engineer, but it also depends on how deeply you have understood. That's the
+      only thing. Just because somebody guesses the output wrong, that doesn't
+      mean they are bad, right? But the only thing we try to evaluate is how
+      deeply they are able to understand, just connecting between the thoughts.
+      Only that I can tell — maybe more snippet-driven questions you can solve.
+      The rest seems to be good. I mean, if you are applying for tier two and
+      tier three, you are already there. Maybe if you are applying for tier one,
+      you very well know — maybe you may have to practice if you have not done
+      machine coding and the DSA. That's all I have to say. Any other questions
+      you have, Deepak?
+
+  - t: "00:34:50"
+    role: candidate
+    restitched: true
+    text: >-
+      No, it was really good to communicate with you and doing this. Actually,
+      the general thing is, it's always good to listen to someone who can give
+      feedback to you. So I'm happy with that.
+
+  - t: "00:35:07"
+    role: interviewer
+    text: >-
+      Yes, yes. Sure, Deepak. Like I mentioned, definitely I'll share detailed
+      feedback over email.
+
+  - t: "00:35:17"
+    role: candidate
+    restitched: true
+    text: >-
+      It's good. What happens with most of us is, we try very hard to understand
+      things and then come up with our answers, but we don't know where a mistake
+      is happening and where we need to work upon. And this very much happens
+      when you are in an early phase, when you are learning something and trying
+      and hustling and doing all those things. So that information is very
+      valuable — that this is something you should work upon, and this should be
+      your thought process to explain a solution to an interviewer.
+
+  - t: "00:36:10"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      Thank you, thank you so much, Deepak. Okay. Fine, Deepak, then we are
+      almost at the end of the interview. It was very nice talking to you. I
+      mean, you are a senior engineer — good that I could explore, and I also
+      learned a lot of things from you. Generally, sometimes I get kind of very
+      fast. Now I have reduced it a lot, but even before the question is asked,
+      people try to jump in and try to answer. I had that attitude long way back.
+      But I see, whenever you come, you are very matured — like, you wait until
+      the question is fully asked. That is one of the very important qualities in
+      an interview. You should never jump in, correct? You should fully listen to
+      the question, because in an interview at the end they may say, "I was still
+      explaining and you jumped in", correct? So we should have that patience.
+      And listening skills — just as communication skills are important in the
+      interview, listening skills are also equally important. That is something
+      that I am still working on, and I got to learn that from you further. Okay.
+      Thank you, thank you Deepak. Very nice talking to you. Thank you. Have a
+      good day. Bye.
+
+  - t: "00:37:05"
+    role: candidate
+    text: Thank you, bye.

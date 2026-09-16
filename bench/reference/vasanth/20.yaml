@@ -1,0 +1,682 @@
+id: "20"
+title: React Machine-Coding Interview - 2 Years Experience
+source: 20 - React Machine-Coding Interview - 2 Years Experience
+source_note: >-
+  Built from sarvam.json, not transcript.md. The rendered markdown for this
+  recording lost all diarization and collapsed both speakers into a single
+  paragraph.
+duration: "00:34:48"
+track: frontend
+topics: [system-design, news-feed, infinite-scroll, pagination, react, fragments, children-prop, machine-coding, search-filter]
+seniority: junior
+participants:
+  interviewer: Vasanth
+  candidate: Faizan
+  candidate_experience_years: 2
+problem: >-
+  Fetch a list of posts from the JSONPlaceholder API, render them, and
+  implement a client-side search bar that filters the already-fetched list by
+  post title as the user types.
+
+# Sarvam gives only two ids here, but they are unreliable: the diarized entries
+# are not in chronological order, and short cross-talk fragments are constantly
+# assigned to the wrong speaker. Every turn below was attributed by content.
+raw_speaker_ids:
+  interviewer: [0]
+  candidate: [1]
+
+invariants:
+  - Turns strictly alternate interviewer -> candidate. No two consecutive same-role turns.
+  - No reference to a YouTube channel, video, subscriber, audience or viewer.
+  - No screen-sharing, editor or tool-operation instructions.
+  - Text is English in Latin script only.
+
+counts:
+  raw_entries: 408
+  clean_turns: 55
+
+removed:
+  monologue:
+    - span: "00:00:00-00:00:44"
+      what: >-
+        Channel welcome - "Career with Vasanth YouTube channel, previously known
+        as Uncommon Geeks", video-format explanation, post-video framing,
+        "please watch the video till the end".
+    - span: "00:34:35-00:34:48"
+      what: >-
+        Outro - like the video, comment honestly, share with friends, "see you
+        in the next".
+  self_promotion:
+    - "00:07:43 - 'for the simplicity of you and audience I'm saying'"
+    - "00:08:46 - 'I'm assuming audience got the problem'"
+    - "00:09:57 - 'please you and the audience, if anybody in the audience knows, please mention what is cursor based approach'"
+    - "00:15:57 - 'so that audience can see it better'"
+    - "00:29:24 - 'so that audience can also look at the complete code once'"
+    - "00:30:24 - 'I have so many mock interviews on my channel'"
+    - "00:34:04 - candidate: 'I didn't watched a lot of video of yours, I have watched some of them'"
+  logistics:
+    - "00:01:18 - 'I'm presenting a whiteboard now'"
+    - "00:01:43 - 'I'm just drawing on the screen' / 'Hope you are able to see right?'"
+    - "00:02:55 - 'and control B if I do' - whiteboard tool shortcut"
+    - "00:03:06-00:03:41 - arrow-drawing narration on the whiteboard"
+    - "00:10:27 - 'can you present your screen Faizan with code sandbox open... I'm assuming you already signed in'"
+    - "00:15:57 - 'I'll send a question to you in the chat section... copy the question, paste here on the editor, zoom in this for a while'"
+    - "00:16:52 - 'Can you open that URL once? The JSON placeholder URL, can you open?'"
+    - "00:29:15-00:29:32 - 'zoom out the right side portion, minimize the post this side', 'minimize everything', 'can you zoom in again, maybe control plus command plus'"
+    - "00:29:54 - 'can you scroll down?'"
+    - "00:30:54 - 'can we go to get post, please?'"
+    - "00:32:01 - 'You can stop sharing Faizan'"
+    - "00:32:31 - 'just before we actually drew the entire thing in there, that whiteboard or the drawing board' - kept only the substantive point that follows it"
+  backchannels: 176
+  asr_noise: 58
+
+corrections:
+  "end of PhD": end of page
+  Xeos: axios
+  Xerox: Axios
+  "set hosts": setPosts
+  "the DU": the div
+  "falsi value": falsy value
+  "bot button component": button component
+  javasscript: JavaScript
+  "machine coding ground": machine coding round
+  "system reason": system design
+  "eleven to ten": eleven to twenty
+  "S U M T": S U N T
+  "include I can use": includes I can use
+  "ten is more like fixed letters": ten is more like fixed, let's say
+uncertain:
+  - >-
+    00:00:48 - the employer name is rendered by Sarvam as "in eighty six
+    agency"; kept as "Eighty Six Agency", unverified.
+  - >-
+    00:28:57 - the sentence "So one is for filtering the data, another one is
+    for getting the posts" is diarized as the interviewer but reads equally well
+    as the candidate's answer. Kept with the interviewer, per diarization and
+    the surrounding walkthrough.
+  - >-
+    00:13:34 - "Any other questions that comes to your mind present?" was
+    unrecoverable as literal text; rendered as "Anything else that comes to your
+    mind, Faizan?" which is the only coherent reading.
+name_note: >-
+  Sarvam renders the candidate's name as "Faizan", "Vyasa", "Vizan", "Vasa",
+  "present" and "phyton" at different points. He introduces himself as Faizan,
+  so every occurrence is normalised to Faizan.
+romanized: 8
+
+turns:
+  - t: "00:00:44"
+    role: interviewer
+    text: Faizan, if you can introduce yourself, we can get started.
+
+  - t: "00:00:48"
+    role: candidate
+    text: >-
+      Yeah, so my name is Faizan. I'm from Delhi. I'm working at Eighty Six
+      Agency — it's a service based startup — as a senior front end engineer.
+      And I have around two years of experience.
+
+  - t: "00:01:01"
+    role: interviewer
+    text: >-
+      Good, good, Faizan. So you have overall two years of experience, and where
+      does that two years of experience lie, Faizan?
+
+  - t: "00:01:07"
+    role: candidate
+    text: >-
+      So basically, in my initial career I was working as a full stack
+      developer, but later I switched to front end engineering and I work on the
+      React framework.
+
+  - t: "00:01:18"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      Got it. Sure, sure. So Faizan, let's start with one of the most common
+      interview questions, okay? One of the most common interview questions in
+      system design — not recently, it's been quite some time now — is the news
+      feed app. Let's say this is a typical Facebook app, let us imagine, okay?
+      We will have multiple posts here, correct? For example, post one, post
+      two, followed by the remaining posts, correct? And on the top we will have
+      an option to create a post, correct? So here you will have an option where
+      you could create a post. Basically this post one, post two can be
+      anything — it could be text, it could be an image, it could be something
+      with everything. All those things are a possibility, correct? So now my
+      question would be, let's start with one of the most common interview
+      questions around this, which is infinite scrolling, correct? So right now
+      you are able to see two cards, correct? And whenever you are scrolling —
+      correct? So what happens is you will have like more cards. After you
+      scroll, probably you will have this as post three, correct? This will
+      become post three, this will become post four. So let's say this is the
+      initial render, and this is more like after the user scrolls. Please tell
+      me, if you have to implement the infinite scrolling of Facebook, what are
+      all the things that come to your mind? You can start explaining step by
+      step — if you have to implement this, how are you going to do it?
+      Consider an example of Facebook only, like we are building a system
+      similar to Facebook. Please start.
+
+  - t: "00:04:00"
+    role: candidate
+    restitched: true
+    text: >-
+      So, on the header part, the create post button is a fixed one, so I'll
+      choose a sticky button, so that if we scroll it should not go out of the
+      window or out of the viewport. Then what I'll think, according to my user
+      base and user experience, is: suppose two posts are in the viewport and we
+      decided to put two posts in the viewport, I'll check the viewport height
+      and according to it I'll fetch two extra posts for the initial rendering.
+      After that, if we check that the fourth post is getting into the picture
+      in the viewport, then I'll fetch the next two posts and append them into
+      my data. So I'll use this approach.
+
+  - t: "00:04:55"
+    role: interviewer
+    text: >-
+      So yeah, whatever you told is correct, Faizan. So basically, the whole
+      point of infinite scrolling is how you're going to track that the end of
+      the page is reached — and even before the end of the page is reached, or
+      sometimes when the end of the page is reached, you're going to get the
+      next set of data and show it on the screen. Correct? Can you start by
+      answering how basically you're going to determine whether the end of the
+      page is reached or not?
+
+  - t: "00:05:20"
+    role: candidate
+    text: >-
+      Okay, so we can use the viewport for it. We can check, on scroll, whether
+      post four is in the viewport. I don't remember the exact API, because I
+      feel like I have not implemented it. But we can check the viewport size
+      and all those things, and there may be something there.
+
+  - t: "00:05:50"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      OK, so you are somehow going to identify that the end of the page is
+      reached. And you're going to make an API call to get the next set of data,
+      correct, Faizan? That's how it's going to work. So now there is another
+      problem. As you know, one of the biggest problems in pagination is that
+      you should keep getting the data from the server, correct? So are you
+      aware of the different pagination techniques, Faizan, that are used from
+      the back end? In general, what are the different pagination techniques
+      that are available?
+
+  - t: "00:06:18"
+    role: candidate
+    romanized: true
+    text: >-
+      So one which I have followed is limit and page number, which we use to
+      fetch the data.
+
+  - t: "00:06:26"
+    role: interviewer
+    romanized: true
+    text: >-
+      OK. Please explain how you are going to — what data does the client pass,
+      what data do we get from the server? Can you elaborate?
+
+  - t: "00:06:33"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      Yes. So in that technique we pass two parameters in the URL for a GET
+      endpoint. One is limit and one is page. The limit tells us what amount of
+      data we are fetching at a single time when an API is called, and the page
+      tells us the sequence. Suppose I am fetching two posts at a time and I
+      need post number five and six — so I'll pass page three, and the limit
+      will be the same, two. So I can vary the limit and the posts. I can also
+      check the scroll speed, and I can increase the limit in that case as well.
+
+  - t: "00:07:13"
+    role: interviewer
+    restitched: true
+    text: >-
+      So basically you are going to pass the number of posts required and the
+      page number, correct? For example, initially let's say page one and ten,
+      so you're going to get around ten. Then — ten is more like fixed, let's
+      say, hypothetically imagine — second page and then again ten posts,
+      correct? Eleven to twenty you'll be getting, correct? So let this be the
+      last question on this, then we'll go to other problems. See, one of the
+      biggest problems that I can think of with this approach, Faizan, is that
+      systems like Facebook are very dynamic — a lot of data keeps coming in.
+      For example, by the time you scrolled, probably so much data has come
+      already. Let's say there are a hundred records on the back end, okay? And
+      you requested one to ten for the beginning render, correct? You got the
+      data and you rendered it. By that time the user hit the end of the page.
+      Obviously more data might have come. So let's say ten more records have
+      come, ten more posts. So whatever the earlier database size was, a
+      hundred, it became a hundred and ten now. Obviously the new data will not
+      be added to the end of the database, it will be added at the beginning
+      only, because that's the whole intent — fresh posts have to be shown. So
+      now what would happen is, we had one to hundred. One to ten already came
+      to the client. Now that one to ten became eleven to twenty, and a new one
+      to ten has come, correct? So next time, what you would do is send a
+      request to the server where you are sending page two, where eleven to
+      twenty is what the server should send. But what has happened now? Eleven
+      to twenty is the same as one to ten. You got my point, right? So this is
+      the problem with this approach — the window has slided. One to ten became
+      eleven to twenty, and a new one to ten has come, correct? Just think
+      whether there is any way you can answer this, how to overcome this
+      problem. Have any idea?
+
+  - t: "00:09:05"
+    role: candidate
+    text: >-
+      At the time of pagination as well, we can sort the data, something like
+      new to old. So we can tackle those problems.
+
+  - t: "00:09:18"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      Sure, sure, Faizan. One approach is similar to what you told: basically
+      the client takes care of the filtering. Let's say every time you get data,
+      you check whether that data already exists or not. This can be easily
+      achieved if you are maintaining a map of post ID and actual post content —
+      we can easily check whether that post data is already present or not, and
+      if it is already present, make the next request. Okay? But the problem is,
+      how long do you keep doing this? This becomes recursion. Exactly like I
+      gave you a simple example where one to ten became eleven to twenty. It
+      need not necessarily be like that, correct? By the time you decide to make
+      the next call, in that next call also the data might have slided. You know
+      what I'm saying? You send two, it becomes three, but eleven to twenty
+      might have become twenty one to thirty, so you might end up getting the
+      same result, correct? Again, there's no right or wrong implementation, it
+      depends on the system we are building. But read more about this: there are
+      two types of pagination, mainly the cursor based and the offset based. So
+      right now whatever we decided is the offset based approach; there is
+      another thing called the cursor based approach. So Faizan, now let us
+      start with some very basic theory questions, and then we'll go to some
+      coding things. Okay? Please explain to me, Faizan, what are fragments in
+      JSX, or fragments in React in general?
+
+  - t: "00:10:47"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay, so in React there is a big challenge when we want to wrap a
+      component with some extra things. Suppose we need to write a box and we
+      don't want to use nested divs and all, so that the DOM will not become
+      heavy. So we use the fragment. A fragment is an empty wrapper — it's a
+      kind of empty wrapper which can be used in React, and it is used in the
+      virtual DOM. So it will not be appended in the real DOM. That's why we
+      call it a fragment. It is a feature of React.
+
+  - t: "00:11:27"
+    role: interviewer
+    text: Can you give a simple example please, and when do you use a fragment?
+
+  - t: "00:11:33"
+    role: candidate
+    text: >-
+      Yeah, so if you want to append something — suppose this is a project and I
+      don't want this div to be present on the DOM — we can use this empty
+      fragment in that case. Or we can import Fragment from React. So these are
+      the two ways.
+
+  - t: "00:11:57"
+    role: interviewer
+    restitched: true
+    text: >-
+      I get what you're saying. But I think the simplest answer is: a tag, or a
+      group of tags, cannot exist by themselves. They have to be enclosed by
+      something. That's the basic, correct? H one, P and any other list tag —
+      they cannot be represented just like that, they should be enclosed in
+      something. Either you could enclose them in a div, or you could enclose
+      them in a Fragment, correct? Or you could enclose them in the empty thing
+      you added — the empty opening and empty closing brackets. Three
+      possibilities, Faizan, correct? So now can you tell me the difference,
+      Faizan? Just using the Fragment, and just the opening and closing — what
+      is the difference?
+
+  - t: "00:12:34"
+    role: candidate
+    text: >-
+      So the main problem I face in my day to day development is that we cannot
+      pass a key to an empty fragment, but we can pass the key to this Fragment.
+
+  - t: "00:12:45"
+    role: interviewer
+    text: >-
+      Correct. Why do you think you need to pass a key? What is the need for
+      that?
+
+  - t: "00:12:49"
+    role: candidate
+    text: >-
+      When we need to append an array of data or an object, we need to pass a
+      key to every element we are mapping.
+
+  - t: "00:13:00"
+    role: interviewer
+    text: >-
+      Okay. And what is the problem with using a div versus a fragment? What is
+      the difference between enclosing within a fragment and enclosing within a
+      div? What is the difference?
+
+  - t: "00:13:15"
+    role: candidate
+    text: >-
+      So suppose styling is given to a parent. If we enclose it with a div, it
+      will not be applied to the child tags. But if you use a fragment, and you
+      give the styling on the parent, it will be reflected to the child.
+
+  - t: "00:13:34"
+    role: interviewer
+    text: Sure. Anything else that comes to your mind, Faizan?
+
+  - t: "00:13:37"
+    role: candidate
+    text: >-
+      The DOM becomes heavy. If we use multiple divs, some of the divs are not
+      used as a container or anything, but if we use a fragment we can avoid
+      that.
+
+  - t: "00:13:50"
+    role: interviewer
+    restitched: true
+    text: >-
+      Got it. So a fragment, you say, is lightweight compared to a div, and
+      where we feel a div is not at all necessary — it is just an unnecessary
+      requirement, as a div is basically a meaningful division — at that time we
+      could use a fragment. Okay? Sure. So now probably we can get started with
+      the problem, but just before that I have only one question. What is the
+      children prop in React? Can you please explain, Faizan? Children prop.
+
+  - t: "00:14:22"
+    role: candidate
+    text: >-
+      Okay. So suppose in a component, let's... should I show you an example as
+      well?
+
+  - t: "00:14:31"
+    role: interviewer
+    text: No, I think roughly you can explain. If I need it, I'll ask.
+
+  - t: "00:14:33"
+    role: candidate
+    restitched: true
+    text: >-
+      So, children is an inbuilt prop in JavaScript. Suppose we are creating a
+      component — suppose we are creating a button component to reuse it
+      everywhere — so if we wrap that component, suppose this is a component we
+      created in React, then all the code inside that component will be passed
+      to its children prop. So we can access those children props inside that
+      component.
+
+  - t: "00:15:07"
+    role: interviewer
+    text: >-
+      Okay, let's say you want to render the children. So everything that is
+      inside that particular component can be used. Correct? Can you give me one
+      practical example of wherever you felt like you used this? When is the
+      right scenario to use a children property?
+
+  - t: "00:15:22"
+    role: candidate
+    restitched: true
+    text: >-
+      So one example I already gave, like when we create a button component.
+      There we use the children prop multiple times. Suppose I created a
+      component called AppButton — I can reuse that component, and the text
+      inside it I can pass as children. So I'll take those children and I can
+      pass an empty button, like I can use the button tag inside my component
+      and pass it inside that. Inside the curly brackets I can use the children
+      prop and append the text.
+
+  - t: "00:15:57"
+    role: interviewer
+    text: >-
+      Okay, sure, Faizan. You have around fifteen to twenty minutes to solve the
+      problem. If you have any question regarding the problem, you can ask me,
+      otherwise you can get started.
+
+  - t: "00:16:17"
+    role: candidate
+    restitched: true
+    text: >-
+      Search filter: display a list of posts, implement a search bar and filter
+      the list based on user input. Okay, so here I need to display a list of
+      posts using this API, correct. And I need to implement a search bar. If a
+      search bar is mentioned, then we need to search — whatever we search,
+      according to it we need to append the posts.
+
+  - t: "00:16:52"
+    role: interviewer
+    text: >-
+      Correct. So here let us search by the title. I think that one is a little
+      lesser in length. So let's say in the first case I search S U N T, and for
+      simplicity's sake let's imagine any title that starts with S U N T should
+      show. Got it?
+
+  - t: "00:17:16"
+    role: candidate
+    text: Okay. Any title that starts with the query.
+
+  - t: "00:17:17"
+    role: interviewer
+    restitched: true
+    text: >-
+      Any title that is in the query, yeah, yeah. Sure. No, they're not going to
+      give that. They're only giving the posts. Okay, you can check if they are
+      giving it. That filtering is something that you need to do, not on the
+      API. So you have to implement that. Whenever you do the search, it's not
+      like a global search, it's more like a local search. In the data that you
+      already got, perform a search. Okay? Get started.
+
+  - t: "00:17:46"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay, so I'll create a posts state, so that I can store the data in a
+      state. I'll use useState to store the state, and for the initial value
+      I'll use an empty one. So I'll create a function to get the data. I'll be
+      needing Axios — I can use it to fetch the data. Axios is an API client. So
+      I'll use axios.get. I'll use an async function to make it more clear. I'll
+      fetch the data, and I'll use async await. Let me first console log it — I
+      believe we should get it inside response.data, so setPosts. I'm going to
+      map the posts. And here I'll give a key. Okay, but my post is not visible
+      yet, so let me check. In the useEffect I will call the get data function,
+      so that when my component mounts, getPosts will be called and the data
+      will be stored in this. So, I have not imported Axios. Okay, so currently
+      I am getting all the data. So we need to create a search bar — it will be
+      of type text — and I'll create another state, input, with an empty string.
+
+  - t: "00:21:59"
+    role: interviewer
+    text: I think that input is a spelling mistake.
+
+  - t: "00:22:04"
+    role: candidate
+    romanized: true
+    text: >-
+      Yeah, so I'll give a value to it as input, and on the onChange event I'll
+      call it as e — setInput to e.target.value. So this is a controlled
+      component now.
+
+  - t: "00:22:44"
+    role: interviewer
+    text: >-
+      Styling we'll check later. Okay, give the basic one. Next we'll check the
+      styling later.
+
+  - t: "00:22:56"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      Ah yes. So suppose this is working fine as of now. So I will do one more
+      thing — I will write a useEffect where I'll give a dependency as input, so
+      whenever input changes, this useEffect will be called. And now I'll check
+      if input is... I need to do the filtering, the filter logic, as well,
+      right? So I'll create a function. Every time this is called, I will do a
+      filterData. And I'll write another state, queryData. So this queryData
+      I'll use to pass — suppose the input box is empty, then I'll try to get
+      the filter from all the posts. Suppose I search for S U N T, then all
+      posts will be stored there and I'll show the filter state here only. So
+      I'll pass it here for now. So for the initial rendering, let's suppose
+      data, if post is also changing. And inside, if input is empty, it is a
+      falsy value, so I will set queryData as posts. So I'll show all the data
+      if input is empty. Suppose I'll get something in the input. First time
+      when it is empty...
+
+  - t: "00:25:21"
+    role: interviewer
+    text: >-
+      I get it, basically. The first time when it is empty we are going to
+      return all.
+
+  - t: "00:25:26"
+    role: candidate
+    restitched: true
+    text: >-
+      Return all the things, yeah — filtered data. Now I'm going to filter it.
+      So I'll filter from the posts, so that I get the filter from all the
+      posts. So, post.filter. And I'll check with the post, if post.title begins
+      with — post.title will be a string, so includes I can use. So do I need to
+      return all the things, or will it only be the ones that start with it?
+      Suppose S U N T is in between.
+
+  - t: "00:26:12"
+    role: interviewer
+    text: >-
+      In between. That begins with S U N T. So all the strings that begin with
+      the given search string, in the complete title.
+
+  - t: "00:26:29"
+    role: candidate
+    restitched: true
+    text: >-
+      That may be a starts-with — I'm not sure. Starts with: we have a function
+      called startsWith. I'll use it with the input. So this will give me the
+      filtered data, so I will set queryData as the filter data.
+
+  - t: "00:27:22"
+    role: interviewer
+    text: You have your last three to four minutes, okay?
+
+  - t: "00:27:24"
+    role: candidate
+    text: >-
+      Okay, yeah. So now if I check with this — this is S U N T. I'm getting
+      this, but I'm not sure why I'm getting this as well.
+
+  - t: "00:27:37"
+    role: interviewer
+    text: "E X E A also, let's see. E X C — not coming, correct?"
+
+  - t: "00:27:57"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay, I need to figure out whether this is working correctly. post.title —
+      we have post.title. S U N T is working fine, Q U I is working fine. I
+      think that's completely...
+
+  - t: "00:28:26"
+    role: interviewer
+    text: >-
+      I think that's completely one string. I think this is completely one
+      string. It's correct. You could try.
+
+  - t: "00:28:34"
+    role: candidate
+    text: >-
+      It will be better if I can do this. And here I can give this. Okay, I'm
+      not getting the value due to Tailwind.
+
+  - t: "00:28:57"
+    role: interviewer
+    restitched: true
+    text: >-
+      Anyway, I think that is fine. Most of the things are working as expected,
+      correct? It's fine. Anything else you want to change, Faizan, or shall we
+      discuss? So basically, I'll just quickly summarise. What we are trying to
+      do here is, we have two functions — one is getPosts and another one is
+      filterData. So getPosts is where we make an API call to get the data.
+      filterData is where we are actually filtering the data to match whatever
+      the user has searched — are we matching with that or not, correct? We have
+      used two useEffects. So one is for filtering the data, another one is for
+      getting the posts. First, line number thirty seven gets triggered, where
+      we get the posts. And in line number thirty three, every time the input
+      that we are typing is changed, or every time the posts are changed —
+      basically only the first time the posts would change — we are calling
+      filterData. Finally, whatever we are rendering on the UI is the filter
+      data, right? That's what we are rendering on the page. So now, where do
+      you think the posts are actually getting used? Only in line number twenty
+      five, for filtering purposes, correct? The posts are used only there. Got
+      it. Sure, sure. So we'll discuss, Faizan, this and overall how the things
+      went. See, regarding this, Faizan — very clean implementation. This is one
+      of the cleanest machine coding rounds. I know the question is fairly easy,
+      I'm not saying it's very hard, but still, the approach you took step by
+      step, you are able to do it, which is very clean and neat, and that's
+      kudos to you. Okay? A few things that I, as an interviewer, see that could
+      have been improved. One is the API, correct? If you go to getPosts — here
+      in line number seventeen, you know, we are not handling any error. The app
+      can easily crash, correct, if you're doing this. And another thing, one of
+      the common mistakes almost everybody makes in the machine coding
+      interview, is not asking the obvious question. See, I shared an API with
+      you and there is some X number of records, and you started your
+      implementation. What if that API tomorrow returns one million records? You
+      are getting my point — then the filter's efficiency will be totally
+      degraded, at line number twenty five, right? This is not a problem, this
+      is just something where, probably in the next interview, whenever some
+      questions are asked, you can think around it. Correct? Because always make
+      sure you ask the extremities. What is an extremity? What is the minimum
+      value, what is the maximum value — ask in the interview so that you are
+      always going to be safe. Correct? Otherwise there can be a chance. Now
+      this is fine, it's a mock interview. If an interviewer asks, like, one
+      million records are there, then the filter would fail. Correct? It's not
+      that the filter fails — the performance obviously will get reduced,
+      correct? And another thing that I noticed... I think the rest looks good
+      to me. It's a very clean approach, only a couple of suggestions that I
+      give. And I have a couple of other pieces of feedback, not specifically on
+      the problem solving, around the basics. Like the couple of questions that
+      I asked — the news feed, correct, where we started with the news feed. I'm
+      not expecting a two year guy to know all of it about the news feed. Like I
+      always say, think — look at every system like, how do you develop it? Take
+      a drawing board itself, correct? So next time whenever you look at a
+      drawing board, don't look at it like a user, look at it like a developer.
+      If you have to build the drawing board, how are we going to do it? The same
+      applies with the Facebook news feed, right? That is the easiest way to
+      start understanding systems, like how you become. So whatever answers you
+      told were not fully correct, and not even wrong — you told one approach,
+      whatever you would build. But I would highly suggest you, and all the
+      young developers at that starting journey, two to three years of
+      experience, to look at every system like, how do you build it? So that
+      whenever such questions are asked in the interview, most likely you'll be
+      able to answer. I'm sure most companies do not have system design for two
+      to three year experience, but they would have some scenario driven
+      questions, like some portion of the system, just to see how you guess the
+      output, Faizan. That, I think, is something that you could improve on. And
+      regarding fragments and other things, what I feel — one common thing
+      around the theory questions is that you know answers to many of them, you
+      are able to give answers, but the initial answer that you are saying is
+      not the answer. Eventually you are coming to that answer. For example,
+      fragments. What is the use of fragments? Basically, a list of tags has to
+      be enclosed within something, so you are using the fragments, correct? So
+      you told it, but you came there eventually, correct? You can give that
+      to-the-point answer, because some interviewers have enough time to discuss
+      and extract the answer, but some interviews will be in a rush where they
+      will not have time to extract answers out of your sentences, Faizan.
+      Okay? That's all I wanted to say. If you have any questions you can ask
+      me, Faizan, or you can share with me the interview experience also.
+
+  - t: "00:34:04"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah, so it was a nice experience for me. I have been interviewing after a
+      very long time, so it is a great experience. And the questions — I didn't
+      expect these types of questions. So it met my expectations. I got very
+      good feedback, I got very good questions, and this will help me to improve
+      and to structure my answers and all those things.
+
+  - t: "00:34:35"
+    role: interviewer
+    text: Thank you so much, Faizan.

@@ -1,0 +1,805 @@
+id: "11"
+title: Diploma Fresher React Mock Interview
+source: 11 - Diploma Fresher React Mock Interview
+duration: "00:31:10"
+track: frontend
+topics: [javascript, closures, currying, hoisting, higher-order-functions, react, usestate, useref, useeffect, state, async]
+seniority: fresher
+participants:
+  interviewer: Vasanth
+  candidate: Ranjit
+  candidate_experience_years: 0
+
+# Three raw ids for two people. Speaker 1 is Vasanth throughout. Ranjit is
+# mostly Speaker 2, but Speaker 3 carries a large share of his short answers
+# ("Okay sir", "Thank you sir", "J S Fidel") and also picks up echo fragments of
+# Vasanth's own speech. Speaker 3 was resolved by content, turn by turn. The
+# file is also not chronological: Sarvam batches a run of one speaker and then
+# dumps the other speaker's interjections from the same window afterwards.
+raw_speaker_ids:
+  interviewer: [1]
+  candidate: [2, 3]
+
+invariants:
+  - Turns strictly alternate interviewer -> candidate. No two consecutive same-role turns.
+  - No reference to a YouTube channel, video, subscriber, audience or viewer.
+  - No screen-sharing, editor or tool-operation instructions.
+  - Text is English in Latin script only.
+
+counts:
+  raw_entries: 381
+  clean_turns: 87
+
+removed:
+  monologue:
+    - span: "00:00:00-00:00:25"
+      what: >-
+        Teaser montage spliced onto the front of the recording. All five entries
+        are verbatim duplicates of exchanges that recur in the body at 00:12:51,
+        00:13:03, 00:21:38, 00:21:44 and 00:21:51. Dropped here, kept in place.
+    - span: "00:00:25-00:01:23"
+      what: Channel intro, "Bengaluru boys" framing, pause-the-video appeal.
+    - span: "00:08:15-00:08:49"
+      what: >-
+        "these are the questions discussed in my JavaScript interview
+        preparation series", link in the description, "audience also take two to
+        three minutes".
+    - span: "00:08:55-00:09:27"
+      what: Mid-interview like/subscribe/bell-icon appeal.
+    - span: "00:30:18-00:30:30"
+      what: >-
+        Start of outro - "a lot of audience also might have learned something".
+    - span: "00:30:49-00:31:10"
+      what: Outro - like the video, subscribe to Uncommon Geeks, free mock interviews, catch you in next video.
+  self_promotion:
+    - "00:03:27 - 'And also for audience, can you please zoom in'"
+    - "00:25:21 - 'as lot of freshers are watching the video'"
+    - "00:28:16 - 'it applies to you everyone who is watching'"
+  logistics:
+    - "00:02:41-00:03:08 - 'can you open JS Fiddle', copy the snippet, paste in the third editor where the cursor is blinking"
+    - "00:03:27 - zoom in, control and plus, scroll up a bit"
+    - "00:05:40-00:05:56 - 'please run, top left', 'can you keep on the console beta'"
+    - "00:06:44 - 'run the code again'"
+    - "00:07:35 - 'okay, please run top left, please run'"
+    - "00:08:10 - 'again I'm adding it in Zoom chat, just copy from there'"
+    - "00:10:48-00:11:18 - 'you can stop sharing' / 'no no you don't have to stop sharing', open the React project, go to app.tsx"
+    - "00:11:33-00:11:45 - 'can you zoom in? control plus again. Zoom in a bit.'"
+    - "00:17:39-00:17:58 - go back to JS Fiddle, on the Chrome, Google Chrome, 'you can do control Z'"
+    - "00:20:39-00:21:02 - 'you can stop sharing' (twice)"
+  backchannels: 138
+  asr_noise: 72
+
+corrections:
+  "IR order function": higher order function
+  "hair door components": higher order components
+  "higher compression": higher order components
+  "uncut reference error": Uncaught ReferenceError
+  "you are learning a loop": you are running a loop
+  "use content": useContext
+  "use parents / there are parents also": useParams
+  "the user F": useRef
+  "use text": useState
+  "U state": useState
+  "that is what the user feels": that is what the useEffect is
+  hosting: hoisting
+  "where is hoisted": var is hoisted
+  "latent constant": let and const
+  "temporal depth zone": temporal dead zone
+  "O C Cronos": asynchronous
+  "on MT": empty
+uncertain:
+  - >-
+    00:14:51 - Vasanth's Devanagari-script line transliterates to "OK, it is
+    returning just ring"; the final word is unrecoverable and has been read as
+    "just a string", since content was initialised with an empty string.
+  - >-
+    00:01:55 - the training institute is rendered by Sarvam as "Jetsiders"; kept
+    verbatim, unverified.
+  - >-
+    00:21:13 - the opening Devanagari-script clause of Ranjit's answer
+    transliterates to "yes sir" followed by three unrecoverable words; the
+    unrecoverable part has been dropped from the sentence.
+name_note: >-
+  Sarvam renders the candidate as "Ranjit" and occasionally "range" inside
+  garbled spans. Normalised to Ranjit throughout. Genuinely non-English tokens
+  in this recording are limited to one Kannada word for "yes" at 00:26:06 and
+  Tamil-script "yeah" / "okay" backchannels; these were translated rather than
+  transliterated, and the backchannels were deleted.
+romanized: 12
+
+turns:
+  - t: "00:01:23"
+    role: interviewer
+    text: >-
+      That being said, Ranjit, can you please introduce yourself so that we can
+      get started?
+
+  - t: "00:01:25"
+    role: candidate
+    restitched: true
+    text: >-
+      Hi everyone, hi sir. My name is Ranjit. I am actually from Siriguppa, which
+      is in Ballari district in Karnataka. I have completed my diploma in computer
+      science; the college name is S S Polytechnic, which is in Siriguppa only, in
+      my hometown. After that I came to Bengaluru to do a course. I completed it
+      in two thousand twenty two. Due to some covid issues I couldn't complete my
+      diploma in the proper time, so it took me two years to complete. After that
+      I came to Bengaluru and joined Jetsiders. Right now it's been six months.
+      The front end part is completely completed and the back end is going on
+      right now, but I am focusing on the front end module.
+
+  - t: "00:02:11"
+    role: interviewer
+    restitched: true
+    text: >-
+      Wonderful, wonderful, Ranjit. So this I say quite frequently: don't fall for
+      the full stack developer scam that happens everywhere. Not to any tech firms
+      — I'm not naming any. Make sure you understand one stack properly and apply
+      for a job. This I always say. Don't try to learn everything and end up not
+      learning anything, okay? Fine. Anyway, now we will start, Ranjit, okay? So
+      I'm sharing a small snippet with you now. Please go through the snippet and
+      let me know what will be the output. Take your time. Check this snippet and
+      tell me what is the output, okay? Take one or two minutes. And I'm not just
+      looking for an output, I need a solid explanation why that is the output,
+      okay?
+
+  - t: "00:03:59"
+    role: candidate
+    romanized: true
+    text: One plus two plus three, and the total answer will be six.
+
+  - t: "00:04:04"
+    role: interviewer
+    text: Okay, tell me why it is six. What, what? Please, please.
+
+  - t: "00:04:10"
+    role: candidate
+    restitched: true
+    text: >-
+      At the beginning sir, A is called with an argument of one; it is passed to
+      the x parameter and saved in the x parameter. After that, inside that
+      function, B is called, sir. B is passed a two as the argument and it is
+      passed to the y parameter. And after that, inside B's function, three is
+      passed — C is called and three is stored in the z parameter. And inside that
+      function there will be a console dot log which will get printed in the
+      console window, which is one plus two plus three. The total answer will be
+      six.
+
+  - t: "00:04:46"
+    role: interviewer
+    romanized: true
+    text: >-
+      Okay. Can you remove the console dot log from line number seven and put it
+      in line number four? Okay, now what is the output?
+
+  - t: "00:05:05"
+    role: candidate
+    text: >-
+      Sir, here we can see that automatically z is changed — the colour has
+      changed, sir, because the parameter is not used; z is not declared. So the
+      output will be one plus two plus undefined.
+
+  - t: "00:05:23"
+    role: interviewer
+    text: What will be the output? One plus two plus undefined is what?
+
+  - t: "00:05:28"
+    role: candidate
+    text: It is a string, sir. It will get converted to string data.
+
+  - t: "00:05:31"
+    role: interviewer
+    text: Okay, what you're saying is it'll be one, two, undefined. Correct?
+
+  - t: "00:05:35"
+    role: candidate
+    romanized: true
+    text: One plus two, it is three sir. Three plus undefined, concatenated.
+
+  - t: "00:05:40"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      Three — three concatenated with undefined, so three-undefined, correct? With
+      no space. Yeah, what is the output? So then it is not what you are saying.
+      Correct?
+
+  - t: "00:06:08"
+    role: candidate
+    text: Oh no sir, I am wrong, I am wrong.
+
+  - t: "00:06:10"
+    role: interviewer
+    text: No problem, no problem. Yeah, yeah, please go ahead.
+
+  - t: "00:06:15"
+    role: candidate
+    text: >-
+      Undefined is predefined, sir, which is in JavaScript from the side of
+      JavaScript only. It won't get concatenated. So other than that, it may be
+      any data type and it gets concatenated, but when it comes to undefined it
+      won't get concatenated.
+
+  - t: "00:06:29"
+    role: interviewer
+    restitched: true
+    text: >-
+      Got it. "But when it comes to undefined it won't get concatenated." Got it.
+      Now cut the thing from line number five and paste it in line number seven
+      itself. Okay. Six. Then now do z plus a. Line number seven, z plus a. Small
+      a, do small a. Now, what should be the output?
+
+  - t: "00:07:10"
+    role: candidate
+    text: Here a is a character. It may be six-a, I think. Or a is not defined.
+
+  - t: "00:07:21"
+    role: interviewer
+    text: What do you think then?
+
+  - t: "00:07:25"
+    role: candidate
+    text: I think the same answer which we got before — an error, I think. Empty.
+
+  - t: "00:07:32"
+    role: interviewer
+    text: Nothing, nothing printed basically, correct?
+
+  - t: "00:07:44"
+    role: candidate
+    text: >-
+      It got a line, somewhat — Uncaught ReferenceError, a is not defined.
+
+  - t: "00:07:52"
+    role: interviewer
+    restitched: true
+    text: >-
+      Hmm, correct. Okay, we can check it later, okay — exactly how all these will
+      behave. I am sharing another snippet with you now, okay? Maybe slightly
+      complicated but not difficult. Okay. Slightly complicated, take two to three
+      minutes, okay? But not difficult. Take two to three minutes, read the
+      question carefully and tell me what is the output, okay? Are you clear,
+      Ranjit? What do you think?
+
+  - t: "00:09:29"
+    role: candidate
+    text: It was a totally different thing, sir.
+
+  - t: "00:09:33"
+    role: interviewer
+    restitched: true
+    text: >-
+      Sure. Let us break it. Let's break it for simple understanding, okay? So in
+      line number one you have a function, a map function, okay? Map is a function
+      which is taking two arguments, okay? The first argument is the function
+      itself. The first argument is the function itself. And the second argument
+      is an array, which I am naming as a, okay? So in line number fourteen, if
+      you see, the cube function is passing map f comma numbers, where f is in
+      line number nine, okay? f is in line number nine. And numbers is an array
+      which is defined above. So if you see now line number five, in line number
+      five you are running a loop, correct? Running a loop to the length of the
+      numbers, correct, whatever you have passed. And in line number six, result is
+      an array which is equal to f of a of i, correct? a of i is whatever is there
+      in line number thirteen, the numbers array basically, correct? And function
+      is the function which is defined in line number nine. You want to guess the
+      output now? It is slightly clear to you. There is no problem, okay? We'll go
+      to some other question and then we'll come back to this. Okay? Let's do one
+      thing. Let's go to the React project that I've asked you to create. Hope you
+      have an empty project, correct? Yeah, at the end probably we'll discuss all
+      the conceptual questions, okay? So, I have a small request, okay? What I want
+      you to do is create a simple state, okay, and create one variable called
+      something like x. I want to see how you will create useState. Okay, sure.
+      Fine. I'm not much interested in looking at the UI, okay? So now, in line
+      number five, you have created a variable called content and setContent and
+      used useState. Correct? So now, what will useState return?
+
+  - t: "00:11:58"
+    role: candidate
+    restitched: true
+    text: >-
+      useState will return a new — it is empty, I have passed an empty string,
+      sir. Right now it will return an empty string as a result, if we use that.
+
+  - t: "00:12:10"
+    role: interviewer
+    text: >-
+      Good. Sure. Tell me, what is useState in programming constructs? Is it a
+      class, a variable, an object? What is useState?
+
+  - t: "00:12:20"
+    role: candidate
+    text: >-
+      Sir, useState is a hook — one hook concept, sir — which we use to make the
+      function based component stateful. Actually, at the beginning only, the
+      function based component is stateless. To make it stateful, we use useState.
+
+  - t: "00:12:39"
+    role: interviewer
+    text: Got it. Majorly for that condition.
+
+  - t: "00:12:41"
+    role: candidate
+    text: >-
+      Majorly for that condition. And the main other thing is, to change the value
+      of the content on a particular event, a particular operation, then we use
+      useState.
+
+  - t: "00:12:51"
+    role: interviewer
+    text: >-
+      Yeah. So Ranjit, what you're saying is right. You are telling the use case
+      of useState, which is correct. My question is, what is useState? Is it a
+      class, an object, a variable — what is it?
+
+  - t: "00:13:03"
+    role: candidate
+    romanized: true
+    text: Sir, in the beginning it is an object.
+
+  - t: "00:13:06"
+    role: interviewer
+    text: >-
+      useState is an object. Okay. Okay, sure. So in line number three you have
+      const app, correct? Yeah, const app is what? Is it a class, an object — what
+      is it?
+
+  - t: "00:13:21"
+    role: candidate
+    text: >-
+      Const is a variable, sir, where app is the variable name, which we have
+      given for this complete thing — the way we wrap the thing, by using all
+      these.
+
+  - t: "00:13:35"
+    role: interviewer
+    text: >-
+      App is a variable — correct. See, see, app is a variable, which is right.
+      Okay. Now what is app holding actually? So if I ask you what is app, will
+      you say it is a class now or a variable now?
+
+  - t: "00:13:51"
+    role: candidate
+    text: App is holding a function, sir.
+
+  - t: "00:13:54"
+    role: interviewer
+    text: >-
+      Correct. So then app is a function. Const app is a function, correct? It's a
+      constant function, correct? How do you determine it is a function?
+
+  - t: "00:14:03"
+    role: candidate
+    text: >-
+      We have passed the callback function, the arrow function — this is the total
+      arrow function which we passed to this, exactly.
+
+  - t: "00:14:10"
+    role: interviewer
+    text: >-
+      Exactly, exactly. Now come back again to line number five. What do you think
+      useState is now?
+
+  - t: "00:14:20"
+    role: candidate
+    text: useState is also a function, I think.
+
+  - t: "00:14:24"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      Absolutely. So useState is also a function. What is the simplest way to
+      determine whether it's a function or not? You are opening and closing a
+      curly bracket — sorry, a normal bracket. Correct? So that's a function call
+      in all programming languages, correct? So useState is a function. Yes, what
+      you said is right. Okay. So if it is a function then it should return
+      something, correct? If not anything, at least void has to be returned by a
+      function. So now this function is returning what? You said it once, but I'm
+      asking again. Now you can think and tell. Okay, it is returning just a
+      string. So inside, after let, right, you have two variables, two things you
+      have done. One is content and setContent. Right? So what is content? The
+      difference between the two — what is the difference?
+
+  - t: "00:15:06"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      Sir, content is a variable, sir, which we give for the useState. setContent
+      is a temporary function, we can say — where at the beginning we perform an
+      action and we store it in setContent, and the setContent will get stored
+      into the content afterwards.
+
+  - t: "00:15:29"
+    role: interviewer
+    restitched: true
+    text: >-
+      Okay. So in simple words, setContent is a function that is used to set and
+      reset whatever the value of content is — to update and set the value of the
+      content. Correct? So do you know what is the notation it indicates? You have
+      put content and setContent inside an angular bracket, correct? An array kind
+      of bracket. Do you know what that means? Why have you kept it inside that
+      only, why have you not kept it in a flower bracket, right? Okay, if you don't
+      know, not a problem. Okay, one last question, a popular question of mine that
+      I ask everyone. So you said earlier that function components were not
+      stateful, correct, and after adding the hooks they became stateful,
+      basically, correct? So can you write in line number four a variable called
+      const x — line number four, yeah, const x equal to ten. Okay. Yeah, now tell
+      me, what is state?
+
+  - t: "00:16:29"
+    role: candidate
+    restitched: true
+    text: >-
+      State is a particular thing, we can say — the action which is given. In
+      normal words, if I can say, the state keeps on changing, sir; it won't be
+      constant. In simple words, that's it.
+
+  - t: "00:16:49"
+    role: interviewer
+    text: >-
+      Okay. Okay. So I'll tell the more simple definition of state, okay? So state
+      is nothing but the memory of a component. Correct? Whenever the component is
+      live, the value of those variables also, all the state variables also, will
+      have a life. Correct? As soon as we navigate from page X to page Y, every
+      variable of page X is lost. So that is state. Correct? So it's very simple:
+      memory of a component. Okay? So now in line number four, where you have
+      written const x equal to ten, is it a state or not?
+
+  - t: "00:17:18"
+    role: candidate
+    text: It's not a state.
+
+  - t: "00:17:19"
+    role: interviewer
+    text: >-
+      It's not a state. So why is it not? It's also memory of a component. As long
+      as the component is alive, this value is also alive. Correct?
+
+  - t: "00:17:28"
+    role: candidate
+    text: Because we did not assign any task to it, sir, until now.
+
+  - t: "00:17:32"
+    role: interviewer
+    text: >-
+      Okay. So that is why you are thinking it is not a state variable basically,
+      correct?
+
+  - t: "00:17:38"
+    role: candidate
+    text: Yeah, yeah, yes, okay.
+
+  - t: "00:17:39"
+    role: interviewer
+    restitched: true
+    text: >-
+      Okay, okay. Sure, sure. So let's go back to the JavaScript code which you
+      were already showing me. I want to go to the first question that we were
+      discussing, right, that A B C question. Yes, yes, yeah, hold here, okay? So
+      here, see, in line number seven, x plus y plus z, yes, okay? So function C
+      basically is able to access the arguments of function A and function B,
+      correct? In simple words, function C is able to access the arguments of
+      function A and B. What is that called in JavaScript? Because of which
+      property of JavaScript is this? Closure, correct. So tell me, what is
+      currying in JavaScript? C U double R Y I N G, currying.
+
+  - t: "00:18:40"
+    role: candidate
+    text: >-
+      I don't know about currying. Yes sir, I can hear, but I don't know the
+      concept of currying. But I know the concept of closure. So at least it's
+      more familiar to me.
+
+  - t: "00:18:49"
+    role: interviewer
+    romanized: true
+    text: Okay, so please.
+
+  - t: "00:18:52"
+    role: candidate
+    restitched: true
+    text: >-
+      Sir, the closure acts as a mediator, sir, in between the parent function and
+      the child function. Whenever the parent function gets executed and completes
+      the task, the reference of the parent function gets copied inside the
+      closure, sir. After that, for the child function, if you require any members
+      of the parent, the closure will help, sir. So the child — every data member
+      which the parent function consists of, it will be able to access with the
+      help of the closure.
+
+  - t: "00:19:34"
+    role: interviewer
+    restitched: true
+    text: >-
+      Okay. So basically what you're saying is everything that is accessible to
+      the parent is also accessible to the child, in simple words. Correct? That's
+      the property of closure. But good, what you're saying is correct. Have you
+      ever thought of a practical use case for a closure, why closures are there in
+      JavaScript? Like, see, you might have learnt any other language, C, C plus
+      plus, Java, in your diploma days, correct? There you might have not heard of
+      closure. JavaScript has closure, correct? Yeah, have you ever given a thought
+      why only JavaScript has closures?
+
+  - t: "00:20:05"
+    role: candidate
+    text: >-
+      No sir, not like that, but with the help of the closure, whatever content
+      its parent function has, that can be accessed by the child function. It
+      makes it more easy to work on some situations where we can inherit the
+      properties of a parent to a child, where it can be accessed and the task
+      gets completed.
+
+  - t: "00:20:30"
+    role: interviewer
+    text: >-
+      Got it. See, you might have done some mini projects as a part of your
+      course, correct? Have you ever used a closure for any such reason?
+
+  - t: "00:20:38"
+    role: candidate
+    text: No sir, no.
+
+  - t: "00:20:39"
+    role: interviewer
+    restitched: true
+    text: >-
+      The reason why I'm asking is, most people do this thing. See, closure is
+      beautiful, okay? A lot of the time people do not use it, except whatever the
+      built-in cases, right? Closures — people are not using closures, okay? Now
+      let's get into some React fundamental concepts. Have you heard the term
+      higher order components in React? Yeah, have you heard the term higher order
+      component, H O C, H O C in React?
+
+  - t: "00:21:13"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      Yes sir. Sir, higher order components are the components which take the
+      value, another value as a — sorry, sorry, sorry for the interruption. I know
+      about higher order functions, sir. I got confused. I don't know about higher
+      order components.
+
+  - t: "00:21:29"
+    role: interviewer
+    text: So Ranjit, are you getting nervous? No, right?
+
+  - t: "00:21:37"
+    role: candidate
+    text: No, no sir, not about that sir. I am a bit confused.
+
+  - t: "00:21:38"
+    role: interviewer
+    text: >-
+      No problem. Tell me then. Higher order functions only, tell me. What are
+      higher order functions?
+
+  - t: "00:21:44"
+    role: candidate
+    text: >-
+      A function which accepts another function as an argument is known as a
+      higher order function — that's what I know.
+
+  - t: "00:21:51"
+    role: interviewer
+    text: >-
+      No. What you're saying is half right. Okay? There is a little more to it,
+      because any function can accept a function as an input. Correct? The one
+      example that I gave you, the map one which you saw — that is not a higher
+      order function. Correct? So, now, have you heard the term higher order
+      components in React?
+
+  - t: "00:22:08"
+    role: candidate
+    text: No sir.
+
+  - t: "00:22:09"
+    role: interviewer
+    text: >-
+      No problem, no problem. Have you heard the term reconciliation in React?
+      Reconciliation, reconciliation in React? No, no problem. No problem. Okay.
+      So you're talking about hooks. What all hooks do you know in React? Tell me.
+
+  - t: "00:22:26"
+    role: candidate
+    restitched: true
+    text: >-
+      useContext, useEffect and useState. And another thing was useRef. I think, I
+      mean, useParams — there are params also, no? Apart from this, useNavigate.
+      These are all the things I know, sir.
+
+  - t: "00:22:51"
+    role: interviewer
+    text: >-
+      Good, thank you. There is one fundamental difference between useState and
+      useRef. Okay, there could be, there are multiple differences, but one
+      fundamental difference between the two. Do you know what that is? The
+      difference between useState and useRef?
+
+  - t: "00:23:04"
+    role: candidate
+    restitched: true
+    text: >-
+      Yes sir. So there is a major difference, one thing I can notice. useState is
+      to make the complete component stateful. Where it comes to useRef, sir,
+      useRef is to change the value of the particular, to target the content, to
+      target the tag, whatever we write inside as XML; in that, if we write any h1
+      tag, to target that particular tag we use useRef, sir, to perform any task
+      above. But where it comes to useState, we can perform a totally different
+      thing. So where it is used to change the content of the state, it will change
+      the state of that content.
+
+  - t: "00:23:50"
+    role: interviewer
+    text: >-
+      Okay, okay. This is not wrong, but the fundamental difference is different.
+      Okay, please read after the interview: what is the fundamental difference
+      between useState and useRef? Okay. Do you know what is the difference between
+      synchronous execution and asynchronous execution? Yeah, please tell me. What
+      is the difference between synchronous and asynchronous?
+
+  - t: "00:24:10"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay sir. Where it comes to synchronous — after the execution of one line,
+      where JavaScript is a line by line execution, after the completion of the
+      first line only the second line should get executed. That we call
+      synchronous. I can explain in detail. If the first line gets executed in ten
+      seconds and the second line takes an execution time of one second, in
+      synchronous the second line should wait for a minimum of ten seconds. After
+      the first line's execution only, the second line gets a chance to execute.
+      Where it comes to asynchronous, whichever has a shorter time, which is
+      executed in limited time, that will be executed first and another chance will
+      be given to the next one.
+
+  - t: "00:24:57"
+    role: interviewer
+    restitched: true
+    text: >-
+      So more than one process can be executed in parallel, Ranjit, in simple
+      words, correct? That's called asynchronous. Synchronous means it has to be
+      processed at once; there is no parallel processing, correct? So useState,
+      whatever we have — what do you think, is it a synchronous execution or an
+      asynchronous execution? I'll make it a little simple. Whenever you write
+      useState you're passing something, and it is actually returning two values,
+      which you did not answer correctly — that also you write. useState basically
+      returns two things. One is a value and another one is a function to set that
+      particular variable. Okay. Now whenever you write this statement, will
+      useState immediately assign the values to whatever I said, or will it take
+      some time and later assign it? So synchronous means whenever that particular
+      statement is encountered, useState should immediately assign before control
+      goes to the next line. Will it happen that way, or will it go to the next
+      line and sometime later useState will actually assign the values? That's what
+      I'm asking, whether it's synchronous or asynchronous.
+
+  - t: "00:26:06"
+    role: candidate
+    romanized: true
+    text: Yes sir. I think it is completely asynchronous, sir.
+
+  - t: "00:26:08"
+    role: interviewer
+    text: Okay. Why do you think it is asynchronous?
+
+  - t: "00:26:12"
+    role: candidate
+    text: >-
+      Whenever we use useState, sir, there we use two things — one is a variable,
+      another is a function. After the performance of the function only will it get
+      stored in the content, meaning the variable, and it gets executed where the
+      variable is used. So it will take some time there, sir.
+
+  - t: "00:26:33"
+    role: interviewer
+    text: >-
+      Okay. Sure. So I think asynchronous. It's asynchronous, right, but the
+      explanation can be a little better. Okay. So last question I'll ask, Ranjit.
+      Let's come to the concept of useEffect. Okay. Tell me now, what is useEffect?
+      Is it a class, a function, an object — what is it?
+
+  - t: "00:26:49"
+    role: candidate
+    romanized: true
+    text: It's a function, sir.
+
+  - t: "00:26:50"
+    role: interviewer
+    text: >-
+      Wonderful. Now you got the trick, correct? So what arguments does useEffect
+      take? Tell me.
+
+  - t: "00:26:58"
+    role: candidate
+    romanized: true
+    text: >-
+      Sir, it will take two arguments, sir. One is a callback function, another one
+      is dependencies.
+
+  - t: "00:27:03"
+    role: interviewer
+    text: >-
+      Wonderful. So basically the dependencies are what? What is the responsibility
+      of the dependencies?
+
+  - t: "00:27:11"
+    role: candidate
+    text: >-
+      Dependency, sir — on which dependency the function should work, on which
+      dependency the first argument, which is the callback function, should work.
+      It will tell, sir; the dependency will tell that.
+
+  - t: "00:27:24"
+    role: interviewer
+    text: >-
+      Rather than saying "work", it is which thing should kind of re-render,
+      correct? Depending on what condition it should re-render — that is what the
+      useEffect is. Sure, Ranjit. Basically I'm done from my end, okay? So whatever
+      the questions I asked, I have my basic feedback for you which I'll give now.
+      So before that, do you have any questions on the interview that happened so
+      far?
+
+  - t: "00:27:44"
+    role: candidate
+    text: I'm literally waiting for yours. Okay, sure.
+
+  - t: "00:27:46"
+    role: interviewer
+    restitched: true
+    text: >-
+      Okay, sure. Ranjit, see, here is whatever I am feeling about the overall
+      interview that has happened, okay? So to begin with, one, you're confident in
+      the interview, you're not becoming very nervous or something, which is a good
+      quality. Second, the communication skills are good. I mean, whatever we would
+      expect from a fresher, that much communication skill you have. Third, the
+      basics of both JavaScript and React are at a satisfactory level; it's not
+      good, it's at a very moderate to satisfactory level. And the concepts that
+      you know, you know in one way, okay? Whatever the way it was taught to you,
+      you know it that way. What I say is, you should think about it from an
+      outsider's point of view. Whatever your lecturer knows, he has taught it that
+      way and you have learnt it. What will happen is, let's say the closure
+      explanation you were giving, correct, so I asked, when will you use a
+      closure? So this is the thought process that you should get. If teachers say
+      it, it's wonderful, okay; if teachers are not saying this, you should spend
+      some time. It applies to everyone. Any concept you learn — for example
+      hoisting. You learnt that hoisting is not there in any other language except
+      JavaScript and Python. So why does hoisting exist only in JavaScript? First,
+      that you need to think. And what are the advantages that it gives to
+      JavaScript? Putting it another way, what will happen if it is not there,
+      correct? So when you start becoming inquisitive about concepts like that,
+      then only will you get a chance to understand things in depth. So that's what
+      I say, always have a why. Don't stop like, yeah, this is the explanation. So
+      you know var is hoisted; let and const are hoisted but they are in the
+      temporal dead zone, dead zone, temporal dead zone. So of the three ways of
+      creating a variable, why is only one way hoisted? Why are the other two not
+      hoisted? Correct? Your teacher would say only that var is hoisted, let and
+      const are not hoisted, or are hoisted but they're in the temporal dead zone.
+      Correct? That's what the teacher will say. But you should ask why var is not
+      hoisted. So what I'm saying is, unless you get into that particular mindset,
+      a lot of things will become — I mean, clearing a lot of product company
+      interviews becomes a little difficult. Okay? So get into that and read more.
+      Okay? So that it will be definitely helpful for you. And coming to React
+      concepts, right? So you were not able to tell that useState is a function,
+      which is a very, very basic thing. But I know it's not like you don't know.
+      What I want to tell you is, you know how things work, but you don't know why,
+      for some reasons — why it is working that way. If I ask you to build a form
+      using useState, you would build it now. You will also create a button, and on
+      click of it something will happen. But you are not able to fully know how the
+      process is working. Correct? So spend some time understanding that. That is
+      what is lacking, Ranjit. If you can master that, then you will be a good fit
+      for any interview. Okay, Ranjit. So nice talking to you, Ranjit. I guess you
+      also learned something from the interview. Thank you.
+
+  - t: "00:30:27"
+    role: candidate
+    text: Final one question please. How much would you rate me?
+
+  - t: "00:30:33"
+    role: interviewer
+    text: >-
+      See, out of five, if I have to rate it, it is around two to two point five.
+      Okay? So if I have to select you in the interview, at least you should become
+      three to three point five. So if you adopt whatever I am saying, there is a
+      high chance you will reach that number. Okay? Fine. So thank you.

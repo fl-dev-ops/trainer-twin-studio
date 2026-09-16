@@ -1,0 +1,615 @@
+id: "04"
+title: Fresher Frontend Mock Interview
+source: 04 - Fresher Frontend Mock Interview
+duration: "00:25:57"
+track: frontend
+topics: [web-fundamentals, http-https, css, inline-vs-external-css, specificity,
+  important, javascript, var-let-const, hoisting, dom-manipulation]
+seniority: fresher
+participants:
+  interviewer: Vasanth
+  candidate: Nikita
+  candidate_experience_years: 0
+
+# Ids are inverted relative to most recordings in this set: Speaker 2 is Vasanth
+# and Speaker 1 is Nikita. Speaker 0 is a phantom id that carries fragments of
+# both voices, including the whole like-and-subscribe appeal at 00:10:44 which
+# is clearly Vasanth. Every turn below was attributed by content.
+raw_speaker_ids:
+  interviewer: [2, 0]
+  candidate: [1, 0]
+
+invariants:
+  - Turns strictly alternate interviewer -> candidate. No two consecutive same-role turns.
+  - No reference to a YouTube channel, video, subscriber, audience or viewer.
+  - No screen-sharing, editor or tool-operation instructions.
+  - Text is English in Latin script only.
+
+counts:
+  raw_entries: 213
+  clean_turns: 58
+
+removed:
+  monologue:
+    - span: "00:00:00-00:00:21"
+      what: Channel welcome and third-person framing of the candidate to viewers. Only the thank-you addressed to Nikita was kept.
+    - span: "00:10:44-00:11:15"
+      what: Mid-interview like/subscribe/bell-icon appeal, split across Speaker 0 and Speaker 2.
+  self_promotion:
+    - "00:03:20 - 'this is an advice for you also and also to the audience'"
+    - "00:24:17 - 'I've said this multiple times in my other videos in my YouTube channel'"
+  logistics:
+    - "00:13:18 - 'share your screen and open Visual Studio Code if you already have it handy'"
+    - "00:13:30-00:13:39 - 'I didn't share my screen', 'let me give you permission to share, in the middle of the screen you see a share option'"
+    - "00:14:00-00:14:05 - 'screen is visible' / 'yes, your screen is visible'"
+    - "00:14:46 - 'you can stop sharing'"
+    - "00:19:07-00:19:20 - 'is my screen visible' / 'please start with coding'"
+    - "00:21:00-00:21:13 - 'you can stop sharing' (twice)"
+  backchannels: 42
+  asr_noise: 44
+
+corrections:
+  hosting: hoisting
+  Vennla: vanilla
+  STP: HTTP
+  "inline HTML": inline CSS
+  "external HTML": external CSS
+  late: let
+  "but is a global": var is a global
+  "what is a bar": what is var
+  "two faces": two phases
+  "in head attack": in the head tag
+  real: rel
+  "how you create a variable in Java": how do you create a variable in JavaScript
+  "in a state forward array": in a straightforward way
+  "write a small blog": write a small block
+
+uncertain:
+  - "00:16:53 - the candidate's only response to the hoisting question is
+    rendered by Sarvam as 'listener hosting, I, listener hosting' and is
+    unrecoverable. It was dropped; the interviewer's follow-up makes clear she
+    had not heard of the concept."
+  - "00:03:53-00:04:32 - the candidate's HTTP/HTTPS answer is heavily garbled in
+    the source. It has been cleaned as literally as possible rather than
+    reconstructed."
+
+romanized: 4
+
+turns:
+  - t: "00:00:00"
+    role: interviewer
+    restitched: true
+    text: >-
+      First of all, Nikita, thank you so much for joining the interview. So
+      Nikita, let us start with your introduction. Please introduce yourself,
+      then let us start with the questions.
+
+  - t: "00:00:31"
+    role: candidate
+    restitched: true
+    text: >-
+      My name is Nikita Kumari. I am from Bihar. I am currently in Bengaluru. I
+      am doing training as a front end developer. Now I have good knowledge in
+      HTML, CSS and JavaScript.
+
+  - t: "00:00:47"
+    role: interviewer
+    text: >-
+      Wonderful. So you are a twenty twenty two pass-out and currently doing a
+      course. Am I right, Nikita?
+
+  - t: "00:00:53"
+    role: candidate
+    text: Yes, yes, yes.
+
+  - t: "00:00:54"
+    role: interviewer
+    text: >-
+      Got it. So Nikita, before we start with the interview, I'll ask you one
+      question. Why did you decide to pick web development as a course, or as
+      your career? Is there any particular reason for that?
+
+  - t: "00:01:07"
+    role: candidate
+    text: >-
+      Yeah. In college time, I just worked in front of the computer and I just
+      liked the coding. That's why I chose to be a front end developer.
+
+  - t: "00:01:19"
+    role: interviewer
+    restitched: true
+    text: >-
+      Good, good. The coding part is fine, because there are mainly two broad
+      categories, right? Front end and the back end. So you liked building the
+      user interface — that is the reason you picked front end. Sure. So Nikita,
+      let us start with the extreme basics. Okay? I'll ask you very basic
+      questions of the web, then we'll gradually move into some in-depth
+      questions. Okay? So the first question, Nikita, is: let's say you are
+      having a browser, correct? As you know, in very plain HTML and JavaScript
+      — let's say you have a basic vanilla JavaScript application — you will be
+      including a .css file, a .js file, correct, as resources from where you
+      will be fetching it. So whenever you open a website, correct, it's a
+      combination of HTML, CSS, JavaScript, etcetera, correct? Can you tell me
+      the order in which the client will download this content from the web?
+      Will HTML come first, JavaScript come second, CSS come at the end, or will
+      all of them come together? Do you know how it works? You got my question
+      right, Nikita?
+
+  - t: "00:02:23"
+    role: candidate
+    text: Sorry, can you say it again?
+
+  - t: "00:02:26"
+    role: interviewer
+    text: >-
+      Yeah. So I'll just quickly summarize. A web page is a combination of
+      multiple things — a JavaScript file, an HTML file, a CSS file, there'll be
+      images, the fonts, etcetera, correct? So whenever you hit a website like
+      google.com or facebook.com, which content will be loaded first? Will the
+      HTML come first from the server, or will the JavaScript come first from
+      the server? Because basically you are a client, correct, and there's a
+      server where the actual content is. Which will come first, or which will
+      come next?
+
+  - t: "00:02:58"
+    role: candidate
+    text: At a time, everything comes.
+
+  - t: "00:03:01"
+    role: interviewer
+    text: >-
+      Got it. So for example you're opening facebook.com. Okay? You haven't
+      logged in, so there'll be something like the image of Facebook, the input
+      text box and all of that, correct? Which, as you know, was basically
+      JavaScript, HTML and CSS, all of that. So you're telling me the client
+      makes a request and all the data comes at once. Correct?
+
+  - t: "00:03:19"
+    role: candidate
+    text: Yes sir.
+
+  - t: "00:03:20"
+    role: interviewer
+    restitched: true
+    text: >-
+      Okay. It's not like that. Okay? There is a little bit of a way in which
+      the data comes from the server. It's not like all the content comes at
+      once. Okay? Read a little more on that — how the content will flow in.
+      Okay? So, one more thing I'll ask. Can you tell me the difference between
+      HTTP and HTTPS? You might have seen some websites like google.com with
+      HTTPS, correct? https google.com, correct. So what do you think is the
+      main difference?
+
+  - t: "00:03:53"
+    role: candidate
+    restitched: true
+    text: >-
+      One is a protocol, HTTP. While calling any website, or any web page, that
+      is the protocol we have to use. When we are clicking, there is some API
+      address inside it, and that is going and first matching that address, that
+      API address. At that time, whatever you want, it comes out.
+
+  - t: "00:04:33"
+    role: interviewer
+    restitched: true
+    text: >-
+      Got it, got it, Nikita. So it's not fully right. I'll just give you some
+      differences. So basically there are a lot of websites like google.com per
+      se — https colon google.com will be there, correct? There are a lot of
+      other websites which have just HTTP, there is no HTTPS. So the primary
+      difference between both is security. HTTPS stands for hypertext transfer
+      protocol with security. HTTP basically is not that secure. So should all
+      the websites be HTTPS? No. There could be some websites which just render
+      blogs and other things — there is no payment involved, there is no video
+      or anything involved. Such websites can just be HTTP, okay? Wherever money
+      is involved, or video streaming is involved, or something that is
+      confidential data is involved, such kind of website is better to have
+      HTTPS. Correct?
+
+  - t: "00:05:21"
+    role: candidate
+    text: Yeah. Got it.
+
+  - t: "00:05:22"
+    role: interviewer
+    text: >-
+      Sure, sure. Nikita, let me ask you again some basic questions of HTML,
+      JavaScript, like that. Okay? So, there is something called inline styling
+      in CSS. Okay? Inline styling. Can you tell me what is inline styling,
+      Nikita?
+
+  - t: "00:05:39"
+    role: candidate
+    text: >-
+      When we are using a style in a tag in HTML and giving some background
+      colour, all these things — so that is called inline CSS.
+
+  - t: "00:05:53"
+    role: interviewer
+    text: >-
+      Absolutely, absolutely. Perfectly right, Nikita. There is something called
+      external CSS. What is external CSS?
+
+  - t: "00:06:00"
+    role: candidate
+    restitched: true
+    text: >-
+      In external CSS we are creating an external file for styling, and for
+      linking it in HTML, in the head tag, we link there using link and rel — we
+      are using rel for stylesheet and the link of the file name inside. Inside
+      the hyperlink we paste that file name, and then the HTML part is a
+      different file and the CSS file is a different file. By using id and class
+      name, we are styling in the CSS file.
+
+  - t: "00:06:45"
+    role: interviewer
+    text: >-
+      Absolutely, absolutely, Nikita. Nikita, are you feeling nervous about the
+      interview?
+
+  - t: "00:06:51"
+    role: candidate
+    text: Little bit.
+
+  - t: "00:06:53"
+    role: interviewer
+    restitched: true
+    text: >-
+      Sure. No, I asked this question — this is a mock interview, but even in a
+      real interview such scenarios will happen, correct? And I'm personally a
+      joyful person; I'll try to keep the interviews mindful even when I take
+      real interviews also. Everyone will not be like that, okay? So don't be
+      nervous. It's not an interrogation at the end of the day, okay? It's just
+      an interview. You know something that I might not know, correct? I know
+      something that you might not know. It's only that if we both are on the
+      same page on that day — like, I ask you something that you know — that is
+      all the interview is, correct? That's a good thing, that we can clear the
+      interview. It is not about showing the interviewer's brilliance, correct?
+      So whatever you know, Nikita, confidently answer. If it is wrong, I'll
+      correct you; if it is right, then I'll appreciate you. Okay? Don't be
+      nervous. Okay, now whatever you said is correct. Inline CSS is what you
+      said, also correct; external CSS is what you said, also correct. Now I
+      have one small question for you. So what if there is a property in the
+      inline CSS also and the external CSS also — which one will you pick? Not
+      which one you pick — which one will the browser pick is the question. For
+      example, now there is a background colour red that you have given for a
+      header tag in the inline. You have also given a background colour in the
+      external CSS also. So inline CSS also has some style, external CSS also
+      has some style, okay, for the same background colour property. Just to make
+      it a little proper question, let's say inline style has a background colour
+      red and external CSS has a background colour of blue. Okay? Both are added
+      to the same element. So which colour will be printed, red or blue?
+
+  - t: "00:08:31"
+    role: candidate
+    text: Inline CSS.
+
+  - t: "00:08:32"
+    role: interviewer
+    text: Why?
+
+  - t: "00:08:37"
+    role: candidate
+    romanized: true
+    text: The preference of inline CSS is greater than the external one.
+
+  - t: "00:08:43"
+    role: interviewer
+    restitched: true
+    text: >-
+      Absolutely. Good, Nikita. I think you have studied these concepts very
+      clearly, correct? Now I'll ask you a little extension to what you said,
+      which is right. I'll ask a little extension to the current question only.
+      So now we have inline CSS and external CSS, okay? But due to some reason,
+      you want the external CSS to take preference over the inline CSS. Like,
+      you want the background colour that is set in the external CSS only, not
+      the inline one, okay? Because let's say that class is used everywhere and
+      you want that class only to be taken. In such a scenario, how will you give
+      more priority to the external CSS? Any idea? You got my question?
+
+  - t: "00:09:22"
+    role: candidate
+    text: Can I... okay, ask the same question again.
+
+  - t: "00:09:30"
+    role: interviewer
+    restitched: true
+    text: >-
+      Sure, sure. So basically you have an inline CSS, you also have an external
+      CSS — sure, no worries. Both have the same property: one has background
+      colour red in the inline CSS, and the external CSS has background colour
+      blue. Okay? Now the external CSS, which is background colour blue, will not
+      be taken, correct? By default, because inline CSS has a higher priority.
+      Correct? Now there is a scenario where external CSS has to be given more
+      priority than the inline CSS. Okay? So how will you make that external CSS
+      colour be taken and not the inline CSS? What will you do?
+
+  - t: "00:10:09"
+    role: candidate
+    text: >-
+      One important is one tag, or what do you say, attribute. That name,
+      important, we give at the end; that will work.
+
+  - t: "00:10:23"
+    role: interviewer
+    restitched: true
+    text: >-
+      Correct. Absolutely. What you're saying is correct, Nikita. If you use
+      important, then whatever the style that is given in the external CSS will
+      be given as important. So now I'll ask you a small design kind of question.
+      Like, you are building a big web application — let's say some thirty, forty
+      or hundred page website, okay? Will you be extensively using important in
+      your application or not? Like, now you are someone who is an architect,
+      okay, who wants to build this application. Will you recommend using
+      important everywhere or not?
+
+  - t: "00:11:26"
+    role: candidate
+    text: "No."
+
+  - t: "00:11:27"
+    role: interviewer
+    text: Why?
+
+  - t: "00:11:29"
+    role: candidate
+    text: Because important is like forcefully we are doing this one.
+
+  - t: "00:11:35"
+    role: interviewer
+    restitched: true
+    text: >-
+      Correct, correct. What you're saying is right, Nikita. So from the
+      architectural point of view also your viewpoint is correct. So whenever
+      you are building a system you don't have to use important. You can be very
+      wise, correct, and don't use important kind of thing. But even in the worst
+      case, if you have ended up in a scenario where you have to get into it,
+      only then use the important. It is not the recommended way. Okay? Now let's
+      talk something about JavaScript. Okay? Can you tell me what are the three
+      different ways of creating variables in JavaScript? Yeah, how do you create
+      a variable in JavaScript?
+
+  - t: "00:12:11"
+    role: candidate
+    restitched: true
+    text: By using, like, let, const and var.
+
+  - t: "00:12:20"
+    role: interviewer
+    restitched: true
+    text: >-
+      Correct. Absolutely correct. Any other way you know other than these
+      three? I think there is no other way. I also don't know.
+
+  - t: "00:12:32"
+    role: candidate
+    text: Boolean — I think Boolean is a different thing.
+
+  - t: "00:12:36"
+    role: interviewer
+    text: >-
+      I know, but there are basically only three ways of creating a variable.
+      Whatever you said is right. There are no other ways to create variables.
+      Okay? I mean, in a straightforward way, there are only three ways. You
+      already said them. Tell me the difference between let, var and const.
+
+  - t: "00:12:50"
+    role: candidate
+    restitched: true
+    text: >-
+      let, var and const. var is a global — we can use it everywhere. And let is
+      like, if I create and initialize one variable using let, we can use it one
+      time. There is one example. Can I use an example?
+
+  - t: "00:13:18"
+    role: interviewer
+    restitched: true
+    text: >-
+      Sure. You don't have to fully explain, you can write a small block and
+      explain, okay? Like, not to get into it too much, because we have to solve
+      other things also.
+
+  - t: "00:14:38"
+    role: candidate
+    romanized: true
+    text: Okay, for that I can say it manually.
+
+  - t: "00:14:42"
+    role: interviewer
+    restitched: true
+    text: Sure, sure. Please tell me then. Tell me, what is var?
+
+  - t: "00:14:54"
+    role: candidate
+    restitched: true
+    text: >-
+      First I will start with const, okay? We use const — this is like, only one
+      time we can use const. And another time we are using like const name, name
+      is a variable; another time again we start with let name — that time it
+      will show an error. And using var we can use the same variable many times.
+      And using let we can use it two or three times, but inside a for loop — we
+      use let inside the for loop, that time it will work; but again, above the
+      for loop we use let and use it inside the for loop, that time the let
+      variable will not work.
+
+  - t: "00:15:55"
+    role: interviewer
+    restitched: true
+    text: >-
+      Got it, got it. So I'll just summarize whatever you are saying, Nikita,
+      okay? First is the variables created with the const keyword. So they cannot
+      be re-initialized. const x equal to ten — x cannot be re-initialized to
+      eleven, correct? So variables created with the let keyword, that is let i,
+      j and k: i is initialized to ten, and i can be initialized to eleven or
+      twelve later. That's allowed. Correct? So but you cannot create i another
+      time in the same block, correct? But wherever you create var x equal to
+      ten, you can make x twenty, thirty. You can also create x again in the same
+      block. Am I right?
+
+  - t: "00:16:31"
+    role: candidate
+    text: "Yes."
+
+  - t: "00:16:32"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      Okay. Sure, sure, Nikita. So whatever you are explaining is right, a little
+      bit of clarity is required. Okay? Now, one last question I'll ask in
+      JavaScript, then let's go to problem solving. Tell me, what is hoisting in
+      JavaScript? H O I S T I N G, hoisting. Have you heard the term? There's a
+      concept called hoisting in JavaScript. Have you heard the concept? No, no
+      worries. So now let us start with the problem solving, Nikita. I'll give
+      you a simple problem. If you wish to solve it, we can solve it in Angular,
+      or just with HTML and CSS and JavaScript, vanilla JavaScript also. So
+      basically you will have four squares. One, two, three, four. One square,
+      second square, third square and fourth square, okay? And they all will have
+      a default background colour of white colour. Every time whenever you tap on
+      the button, the button colour changes to green. So you tapped on one, so
+      from white it becomes green. You tap on the button four, from white it will
+      become green. So second time if you tap, if it is green, then it should turn
+      white. Basically, whatever the colour it is, it will turn back to the
+      previous one. White to green, green to white. Every time whenever you click,
+      the flip of the colour happens. Am I clear with the question, Nikita?
+
+  - t: "00:17:54"
+    role: candidate
+    text: >-
+      If I click on one box, then it will go to green. If I click on the second
+      box, it will also go to green. Like that.
+
+  - t: "00:18:04"
+    role: interviewer
+    text: >-
+      Correct. Like that. Correct. Okay. So two phases here. Just to simplify,
+      Nikita, I'll divide the problem into two phases. First phase, four boxes
+      are there, all with white colour. Any box you tap, that turns into green
+      colour. One, it turns into green. Two, it turns into green. Three, turns
+      into green. Four, turns into green. Are you clear with this? Anywhere you
+      tap, it turns into green basically. Okay. The second part of the problem...
+
+  - t: "00:18:33"
+    role: candidate
+    text: >-
+      If I click on one box, do the left three boxes go to green, or only one
+      box?
+
+  - t: "00:18:39"
+    role: interviewer
+    text: >-
+      No, no. Only where you tap, the colour gets changed. Okay. Do one thing —
+      I'll not confuse you by saying the second part. Finish this first. Okay?
+      Four buttons. Any button that you tap, that turns from white to green.
+      Okay? Implement this, then I'll tell you the second part of the problem.
+      You have around fifteen minutes to solve this. Okay? Get started. I'll
+      interrupt you in the middle if I have to suggest you something, or you can
+      keep explaining what you are doing, okay, in the middle whenever you are
+      coding.
+
+  - t: "00:18:42"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay, yeah, yeah, understood. I'm using the same file for HTML, CSS and
+      JavaScript.
+
+  - t: "00:21:00"
+    role: interviewer
+    restitched: true
+    text: >-
+      One thing, Nikita. We are almost just eight minutes away from the
+      completion. Okay? So we'll discuss the overall. Okay? Whatever you started
+      is fine. I'll consider only so far. Okay? Yeah Nikita, before I give my
+      feedback regarding the interview, tell me if you have any questions. Do you
+      have any questions?
+
+  - t: "00:21:23"
+    role: candidate
+    restitched: true
+    text: >-
+      My first question is, this coding that I am doing — why is it not working?
+
+  - t: "00:21:32"
+    role: interviewer
+    restitched: true
+    text: >-
+      Yeah, why it's not working — you'll be able to figure it out. It's not some
+      big mistake. You'll be able to figure it out after the interview. Okay? So,
+      Nikita, I'll just pass on my honest feedback towards the entire interview
+      that has happened. Okay? So, a few things that I would suggest — and it's
+      not just you, basically everyone who is just starting with the web, doing
+      some course, will be at a similar stage. First thing, the main thing that
+      you all have to focus on, is the fundamental concepts. Okay? So, starting
+      from the fundamental concepts: the web doesn't start with building the web.
+      Like HTML, CSS, JavaScript — no. The fundamental part of the web starts
+      from the browser. Like how you're going to make a request, how you're going
+      to get the data, how you're going to show the data on the screen, which
+      protocol is used, why, when to use which protocol. So these are all a very
+      essential part of web development, not just the development, correct? So my
+      first observation is you have to focus a little more on those basic
+      concepts, then come to the actual web development. That is point number
+      one. Point number two, it looks very naive but it's very important to type
+      a little fast. Okay? Not just you — as I'm mentioning, anyone who is like
+      you. Why? Because typing will save a lot of time whenever you are solving
+      something online, correct? So have a little more than this typing speed so
+      that you can solve a lot of problems, okay? Third thing that I would suggest
+      is there are a lot of shortcuts that are available in Visual Studio Code
+      whenever you are coding, okay? You can use multiple cursors, multiple
+      selections and modify things quickly, okay? By using that, the overall time
+      that you take for the coding will reduce. Follow that also, I would suggest.
+      Okay? Then coming to the fourth part is how you are going to approach a
+      problem, correct? See, I said I can give you a maximum of fifteen minutes.
+      So some interviews may give you thirty minutes, some may give you just ten
+      minutes. So have a plan in your mind regarding the problem. Given this much
+      time, how do I approach this problem and what all can I solve, correct? So
+      in that particular time, split the milestones. Like, first I'll build the
+      UI, UI part done. Second, I'll build at least the functionality for one
+      button, like one button I'll change the colour, I'll do that, then I'll
+      extend it to the others. So that whenever the time is elapsed, you have
+      something to show, rather than not showing anything. Okay? These are all my
+      honest feedback regarding the overall interview process. Ask me if you have
+      any questions, Nikita.
+
+  - t: "00:23:52"
+    role: candidate
+    restitched: true
+    text: >-
+      How do I start right now, as someone learning to be a front end developer?
+      What is the starting — how do I start my learning process, so that I become
+      a good developer?
+
+  - t: "00:24:17"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      Yeah, that's what — all the things I've already mentioned, Nikita. Start
+      with the extreme fundamentals. Go to developer.mozilla.org, that's the
+      official website for the entire web development. Go there and read a lot of
+      concepts from the basics. Like, why JavaScript, how JavaScript works, why
+      JavaScript is single threaded, how the web loading happens, how the
+      JavaScript code actually executes. So learn all these things first, before
+      starting the web development itself, okay? Understand how the web works.
+      Then start with the web development, okay? Like, whatever you're doing is
+      good. HTML, CSS, JavaScript, the coding, all those things are very good. So
+      those you have to extend and make much faster. So solve so many small
+      puzzles, like the one that I gave you, right? There are many websites where
+      you can get such puzzles; solve as many as possible so that your coding
+      skill becomes very, very fast. Then learn the concepts of JavaScript, like
+      one question that I asked was hoisting. There are many fundamental concepts
+      of JavaScript, okay, which are not there in any other language. Learn them
+      also, then you'll be able to face a lot of practical interviews; otherwise
+      it will be a little difficult. So, understanding how the web works,
+      understanding about the coding that you are doing, correct — the HTML, CSS
+      and JavaScript, Angular, React. Then understand the core concepts of
+      JavaScript. Hoisting, currying, closures, a lot more JavaScript fundamental
+      concepts. Learn all of that, then you will be ready for the actual
+      interview, Nikita. Okay? Nice talking to you, Nikita, have a good day.
+      Okay? Please keep the things that I said to you and practise in that
+      direction so that you can clear the next upcoming interviews. Okay? Thank
+      you. Thank you, Nikita. Nice talking to you. Have a good day. Bye.
+
+  - t: "00:25:56"
+    role: candidate
+    text: Have a good day.

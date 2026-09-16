@@ -1,0 +1,753 @@
+id: "13"
+title: React Mock Interview - 3 Years Experience
+source: 13 - React Mock Interview - 3 Years Experience
+duration: "00:30:38"
+track: frontend
+topics: [javascript, polyfills, array-methods, event-loop, hoisting, closures, promises, higher-order-functions]
+seniority: mid
+participants:
+  interviewer: Vasanth
+  candidate: Madan
+  candidate_experience_years: 3.5
+
+# Sarvam gave only two ids here and they are mostly stable - Speaker 1 is
+# Vasanth, Speaker 2 is Madan. There is heavy cross-talk bleed though, where a
+# one or two word fragment of one speaker's sentence is emitted under the other
+# speaker's id a second before or after. Every turn below was attributed by
+# content, not by id.
+raw_speaker_ids:
+  interviewer: [1]
+  candidate: [2]
+
+invariants:
+  - Turns strictly alternate interviewer -> candidate. No two consecutive same-role turns.
+  - No reference to a YouTube channel, video, subscriber, audience or viewer.
+  - No screen-sharing, editor or tool-operation instructions.
+  - Text is English in Latin script only.
+
+counts:
+  raw_entries: 229
+  clean_turns: 87
+
+removed:
+  monologue:
+    - span: "00:00:00-00:00:48"
+      what: >-
+        Channel intro, old channel name, series framing, "pause the video and
+        answer", subscribe-and-like appeal.
+    - span: "00:25:22-00:30:38"
+      what: >-
+        Outro plus the entire post-interview solo explainer segment, which is
+        addressed only to viewers (re-running the snippets on camera, playlist
+        and description-section links, "catch you in the next video").
+  self_promotion:
+    - "00:01:30 - 'if any audience watching and they are from Tamil Nadu, please comment'"
+    - "00:01:51 - 'it will be easy for audience to see'"
+    - "00:06:51 - 'for even the audience whoever is watching, pause the video and try to guess the output'"
+    - "00:09:17 - 'even the audience also look at the snippet'"
+    - "00:13:44 - 'for you and audience also I'm saying'"
+    - "00:15:16 - 'you and the audience whoever is watching'"
+    - "00:19:24 - 'there is a series of mine dedicated for writing polyfills, I'll put the link in the description section'"
+    - "00:19:46 - 'even I have written implementation for map method also'"
+    - "00:20:36 - 'this might be applicable for even the audience who are watching'"
+    - "00:22:06 - 'the way you start debugging I've told multiple times in my videos'"
+    - "00:23:35 - 'a framework to actually read, to you and again to the audience also'"
+  logistics:
+    - "00:01:30 - 'open that link, close any other tabs, just open this tab and present your screen'"
+    - "00:01:44-00:01:50 - 'is my screen accessible' / 'yes, now it's visible'"
+    - "00:01:51 - 'maybe let the zoom be there, give one control plus'"
+    - "00:06:37-00:07:01 - 'I'll share a small code snippet in the chat section, copy the code, put it in the chat section'"
+    - "00:08:17 - 'can you please run the code, we will check'"
+    - "00:09:00 - 'copy paste the snippet, you can comment the snippet or even remove the snippet'"
+    - "00:10:47 - 'run the code, let us see'"
+    - "00:13:53 - 'you can stop sharing, Madan'"
+    - "00:19:24 - 'now present your screen'"
+    - "00:20:06-00:20:07 - 'do you want to refresh the browser?' (a mishearing of the candidate)"
+    - "00:20:10 - 'you can stop sharing, Madan'"
+  backchannels: 58
+  asr_noise: 26
+
+corrections:
+  polyphiles: polyfills
+  polyphills: polyfills
+  polythene: polyfill
+  "South Africa": South India
+  hosting: hoisting
+  holstered: hoisted
+  undesigned: undefined
+  "I'm defined": undefined
+  "global face": global scope
+  "where keyword": var keyword
+  "global horseshoe": globally hoisted
+  "Variable due to const": "var, let and const"
+  forage: forEach
+  "multiply by three": multiply by two
+  "hierarchy of functions": higher order functions
+  "by Indermadan": "bind, Madan"
+  "MD and": MDN
+  MDM: MDN
+  promissors: promises
+  "call back help": callback hell
+  "refresh the quantum": refresh the concepts
+  "rephrase the concept": revise the concept
+uncertain:
+  - >-
+    00:18:36 - the candidate's reply to the prototype question is rendered by
+    Sarvam as "No problem", which is a bleed of Vasanth's next line. Read as a
+    plain "No".
+name_note: >-
+  Sarvam writes the candidate as both "Madan" and (once) "Mudan". Normalised to
+  Madan throughout, which is how he introduces himself.
+romanized: 6
+
+turns:
+  - t: "00:00:48"
+    role: interviewer
+    text: "Let's start now. Madan, can you please introduce yourself?"
+
+  - t: "00:00:55"
+    role: candidate
+    text: >-
+      Yeah, hi everyone. So my name is Madan. I graduated in twenty twenty. I am
+      from a computer science background. So I have totally three and a half
+      years of experience working in JavaScript. I have experience working in
+      full stack applications as well, and currently I am working as a front end
+      developer.
+
+  - t: "00:01:19"
+    role: interviewer
+    text: "Wonderful, wonderful, Madan. So Madan, which place are you from?"
+
+  - t: "00:01:24"
+    role: candidate
+    text: "I am from Trichy, Vasanth."
+
+  - t: "00:01:27"
+    role: interviewer
+    text: "Trichy is in Tamil Nadu, correct?"
+
+  - t: "00:01:29"
+    role: candidate
+    text: "Yeah, yeah, South India."
+
+  - t: "00:01:45"
+    role: interviewer
+    text: >-
+      Okay, sure. So Madan, let's start with some extreme basics. Tell me, what
+      are polyfills, Madan? Have you heard the term polyfill? P-O-L-Y-F-I-L-L-S,
+      polyfills. You might not have heard it also. Okay, see —
+
+  - t: "00:02:17"
+    role: candidate
+    text: I have heard about it.
+
+  - t: "00:02:19"
+    role: interviewer
+    text: >-
+      Yes, yes, sure. See, another way to put that — the most common term that I
+      use also is the custom implementation of the built-in methods. Okay? For
+      example, in an interview they'll ask you to write a polyfill for array.map,
+      array.reduce, array.forEach. Have you ever encountered those questions, or
+      have you practiced them?
+
+  - t: "00:02:38"
+    role: candidate
+    text: >-
+      Yeah, Vasanth, got it. So mainly, I have written a few polyfills for array
+      methods actually.
+
+  - t: "00:02:47"
+    role: interviewer
+    text: "Wonderful, wonderful. If I ask you to write, will you be able to write, Madan?"
+
+  - t: "00:02:52"
+    role: candidate
+    text: Yes, some basic ones I can.
+
+  - t: "00:02:54"
+    role: interviewer
+    restitched: true
+    text: >-
+      Sure, sure. Now, we'll go to the writing part in a while, but you tell me —
+      definitely a concept itself cannot be created for the interview, correct?
+      The polyfill as a concept is definitely not introduced for somebody to ask
+      in the interview, correct? It might have some other significance. So where
+      I'm coming from is, can you tell me why polyfills are essential? Why is
+      writing a custom implementation for a built-in method necessary?
+
+  - t: "00:03:20"
+    role: candidate
+    restitched: true
+    text: >-
+      So yeah, got it. Right now the array methods which we have may not actually
+      match with our business logic, sometimes. So when we are working on our
+      projects, everything has some standards, right? Every software. So maybe
+      some developers might have implemented array methods — I mean a custom
+      implementation for this — and they might use it there.
+
+  - t: "00:03:57"
+    role: interviewer
+    text: >-
+      I agree. So one reason could be that whatever you want may not exist
+      already, so you build your own. Correct? Definitely that is a use case. But
+      in my experience it has never happened. Has it happened to you — where you
+      wanted something and it never existed in the built-in library? Has it ever
+      happened?
+
+  - t: "00:04:14"
+    role: candidate
+    text: Yeah, yeah, I have not encountered it.
+
+  - t: "00:04:18"
+    role: interviewer
+    restitched: true
+    text: >-
+      Yes, sure. I mean, you are telling me you also never encountered the
+      scenario, correct? Where you wanted a built-in function and that doesn't
+      exist. Anyway, it may not be that way. All of us try to achieve what we
+      want using the built-in methods. That's the usual tendency, correct? So
+      that could be one reason, an obvious reason, okay? Any other reason that
+      you can think of, Madan? Okay, let's start with a very extreme simple
+      example, Madan, okay? Like array.map. First write array.map and give me a
+      small example, not a polyfill — just array.map. Sure.
+
+  - t: "00:04:48"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      Sure, sure. So let me create a dummy array. For now I will use this map
+      method, and inside this I will have one array element. I have used this as
+      an arrow function. Here I will return this array element into two, so I
+      will multiply by two. So if I log this, I will be getting an output of two,
+      four and six. So basically this is creating a new array, keeping this one
+      as it is.
+
+  - t: "00:05:44"
+    role: interviewer
+    text: >-
+      Absolutely. Yeah, then I'm sure you are aware of the difference between map
+      and forEach. What is the difference?
+
+  - t: "00:05:50"
+    role: candidate
+    text: >-
+      Yeah, forEach doesn't actually create a new array; map actually creates one
+      new array.
+
+  - t: "00:05:55"
+    role: interviewer
+    text: >-
+      Absolutely. Tell me a scenario — when will we use forEach and when will you
+      use map? Try to come up with some practical scenario, just to
+      differentiate.
+
+  - t: "00:06:04"
+    role: candidate
+    text: "So, yeah, forEach — okay, you need some practical examples, right?"
+
+  - t: "00:06:09"
+    role: interviewer
+    text: "Yes. So yeah, if you know, please tell me."
+
+  - t: "00:06:15"
+    role: candidate
+    text: >-
+      Yes, I don't have one practical example, but the ideal scenario is, when we
+      just want to iterate over the array and do some calculations, we will go
+      with forEach. But when we need to get a new array out of that array, then
+      we will be going with map.
+
+  - t: "00:06:37"
+    role: interviewer
+    restitched: true
+    text: >-
+      Okay, sure, sure. We'll get into these polyfills in a while, okay? I'll
+      share a small code snippet with you, and I want you to look at the snippet
+      and guess the output, okay? Look at it carefully. Take one to two minutes.
+      And at the end of the day I'm not expecting the right answer, I'm expecting
+      a right explanation. So you tell me the output — I will not give you a
+      hundred marks just for that. I want you to give a right explanation for
+      that, okay?
+
+  - t: "00:07:21"
+    role: candidate
+    text: >-
+      Yeah, sure. So, setTimeout — it is actually an asynchronous browser API.
+      Then we have a Promise.resolve.
+
+  - t: "00:07:37"
+    role: interviewer
+    text: "Yeah, tell me, what is the output?"
+
+  - t: "00:07:40"
+    role: candidate
+    restitched: true
+    text: >-
+      So the output will be — first this start log will be printed. Then we have
+      setTimeout; this will be going into the macro task, and the control will be
+      reaching line number five. So here the promise is resolved immediately, so
+      "inside promise" will be logged. Then "end" will be printed, and then this
+      log inside setTimeout will be printed.
+
+  - t: "00:08:11"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      Good. So start, inside promise and end, followed by inside setTimeout,
+      correct? Yeah, yeah. Start, inside promise, end and inside timeout,
+      correct? We will check. It is start, end, inside promise and inside
+      setTimeout. It's no problem. You tell me, why do you think this output is
+      coming?
+
+  - t: "00:08:34"
+    role: candidate
+    text: >-
+      Yeah, okay. So one thing for sure, setTimeout — this will be moving to the
+      macro task. And this promise also, I think, is actually an asynchronous
+      operation. So that's why it's getting logged after all the synchronous
+      tasks are over.
+
+  - t: "00:08:51"
+    role: interviewer
+    text: >-
+      Exactly. So it may not be giving the answers early — it is not processed
+      synchronously, correct?
+
+  - t: "00:08:58"
+    role: candidate
+    text: "Yeah, correct."
+
+  - t: "00:09:00"
+    role: interviewer
+    text: >-
+      Okay, sure. Let me share another snippet with you. Look at the snippet and
+      try to guess the output for this.
+
+  - t: "00:09:21"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay, so I think this is kind of a closure. So the control will be reaching
+      into this — first the outer function is called. Inside the outer function
+      we are logging one, and then we have another function called inner. So we
+      are calling this inner function. The inner function will also be logging
+      one, and then we are setting this variable x to two. We already have a
+      variable named x equal to one. So I think there is a possibility this might
+      error on line eight, but if it is not the error case, the output will be
+      one and one.
+
+  - t: "00:10:09"
+    role: interviewer
+    text: >-
+      Okay. So we have two console.logs. I'm calling the outer function, and
+      inside the outer function, in line number three, we are logging it. And
+      then the control would come to line number seven where we are calling the
+      inner function. In both the places we are logging the value of x only,
+      correct? So in line number three, you are saying what will be the output?
+
+  - t: "00:10:28"
+    role: candidate
+    restitched: true
+    text: >-
+      Line number three, the output will be one. And here as well the output will
+      be one. Then only we are logging — actually x equal to two. But if this
+      seven is called after line number eight, this could have been two.
+
+  - t: "00:10:47"
+    role: interviewer
+    text: "Okay, let us see."
+
+  - t: "00:10:53"
+    role: candidate
+    text: Undefined.
+
+  - t: "00:10:55"
+    role: interviewer
+    text: "Okay, again like I told, you can still check why it is undefined."
+
+  - t: "00:10:58"
+    role: candidate
+    restitched: true
+    text: >-
+      The outer function is called. This actually has the global scope. So I
+      don't have a clear explanation for this.
+
+  - t: "00:11:12"
+    role: interviewer
+    text: >-
+      Yeah, this is something to do with hoisting, okay, the concept of hoisting.
+      So you tell me, explain more about hoisting. Let's just stick to variable
+      hoisting — tell me how variable hoisting works.
+
+  - t: "00:11:24"
+    role: candidate
+    restitched: true
+    text: >-
+      So there are actually three parts. A variable can be hoisted at the global
+      scope of one particular script, at the function level, and then at the
+      block level. So yeah, and also there are —
+
+  - t: "00:11:41"
+    role: interviewer
+    text: >-
+      Where I'm coming from is, explain to me hoisting with respect to variables,
+      right? var, let and const — whether they are hoisted, where, and how they
+      are hoisted. Please explain.
+
+  - t: "00:11:52"
+    role: candidate
+    text: >-
+      Okay. So let and const have block scope. So if we declare a variable inside
+      a block with let or const and we try to access it outside that block, we
+      will be getting an undefined or it will error out. But var is actually
+      globally hoisted and it can be accessed anywhere.
+
+  - t: "00:12:20"
+    role: interviewer
+    text: >-
+      Correct. So var is globally hoisted, so you can access it from anywhere,
+      you are saying, Madan? Am I right?
+
+  - t: "00:12:24"
+    role: candidate
+    text: "Yeah, correct. Very, very right."
+
+  - t: "00:12:25"
+    role: interviewer
+    text: >-
+      So let's say there is a function block, like line number two to line number
+      nine, okay? And there is a var keyword inside that block. So is that
+      variable accessible throughout the block?
+
+  - t: "00:12:38"
+    role: candidate
+    text: >-
+      Got it, right. So the function is also hoisted. Functions are also actually
+      hoisted. By the time of the declaration of this outer function, this var
+      keyword is not actually declared. That's why we are getting the error,
+      undefined.
+
+  - t: "00:12:56"
+    role: interviewer
+    text: >-
+      You are not getting an error, you are not getting an error, okay? So you
+      told me about let and const hoisting, right? Tell me about var hoisting — a
+      variable created with the var keyword, is it hoisted or not?
+
+  - t: "00:13:06"
+    role: candidate
+    text: "So yeah, a variable with the var keyword is hoisted."
+
+  - t: "00:13:10"
+    role: interviewer
+    romanized: true
+    text: >-
+      OK, a variable created with the var keyword is hoisted, correct? And what
+      is the difference then between let, const and var hoisting?
+
+  - t: "00:13:17"
+    role: candidate
+    text: >-
+      So yeah, as I mentioned, let and const have block scope, whereas var has
+      global scope.
+
+  - t: "00:13:25"
+    role: interviewer
+    text: >-
+      I'll tell you another difference. Along with that, a variable created with
+      the var keyword is hoisted and initialized with the value of undefined. Is
+      that true or not?
+
+  - t: "00:13:36"
+    role: candidate
+    romanized: true
+    text: "So that is — by analysing this function, I think you are right."
+
+  - t: "00:13:44"
+    role: interviewer
+    restitched: true
+    text: >-
+      Correct, correct. See, undefined is not an error. Undefined is a value, the
+      expected value in this case. Okay. So now let us understand some
+      fundamentals of JavaScript. Let's say now I want you to tell me how the
+      JavaScript engine works fundamentally. Let's say you wrote a code — the
+      same code whatever we wrote just now — and we want to execute that code.
+      Tell me step by step, what all happens behind the scenes to execute the
+      code.
+
+  - t: "00:14:17"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay. So if we consider one script, a main.js script or something, the
+      functions will actually be declared. So there will be a few functions and
+      variables, let's say. So the variables and functions will be declared. Upon
+      calling one of the functions, the control will go to that function and do
+      that operation. So it will be executed line by line and synchronously,
+      JavaScript code.
+
+  - t: "00:14:54"
+    role: interviewer
+    restitched: true
+    text: >-
+      No, correct. This is at a very, very high level. So I just wanted to
+      understand a little bit in depth. I'll give you some hints, probably, on
+      where I'm going, Madan, okay? So whenever we have JavaScript code, first it
+      goes to a parser. A parser will generate an abstract syntax tree, and then
+      the further execution goes on. Any chance you are aware of this flow? Okay,
+      please read it. You can read more about this particular concept by going to
+      the MDN official documentation. Okay. So tell me, what is callback hell,
+      Madan?
+
+  - t: "00:15:29"
+    role: candidate
+    text: >-
+      Callback hell, okay. Yeah. So the problem with callback hell is that the
+      code will be a little bit messier to read actually, and adding any features
+      or changes on top of it will be a bit difficult. And it is actually used to
+      perform some asynchronous operations.
+
+  - t: "00:15:54"
+    role: interviewer
+    text: >-
+      Correct. So give me an example for callback — what is it, can you give me
+      one simple example for callback hell? No problem, no problem. I'll ask you
+      another simple question, okay? Tell me, what are promises in JavaScript?
+
+  - t: "00:16:13"
+    role: candidate
+    text: >-
+      So yeah, promises in JavaScript are actually used to handle asynchronous
+      operations. So that's why we use promises.
+
+  - t: "00:16:24"
+    role: interviewer
+    text: >-
+      Correct. I don't want a bookish definition, but give a very basic
+      definition that you have understood. What are promises?
+
+  - t: "00:16:30"
+    role: candidate
+    text: >-
+      Okay. So promises are generally used to fetch any server data, HTTP calls.
+      One main common use case may be this one.
+
+  - t: "00:16:44"
+    role: interviewer
+    text: >-
+      That's not the exact definition. Go and read after the interview, okay? So,
+      are you aware of something called Promise.all in JavaScript?
+
+  - t: "00:16:53"
+    role: candidate
+    text: "Promise.all — I know, I have —"
+
+  - t: "00:16:55"
+    role: interviewer
+    text: "Sure. Are you aware of what are called higher order functions in JavaScript?"
+
+  - t: "00:16:59"
+    role: candidate
+    text: "Higher order functions — yeah, I have heard of them."
+
+  - t: "00:17:03"
+    role: interviewer
+    text: "Tell me, what are higher order functions?"
+
+  - t: "00:17:06"
+    role: candidate
+    restitched: true
+    text: >-
+      So, there can be a few functions actually. Let's say some inner functions.
+      But we want to do some modifications to functions. Maybe I can put it this
+      way — we have YouTube, right, the YouTube application. In the YouTube
+      application there will be grids; many grids will be present, video grids.
+      But in that ads section alone we will be having a few additional changes
+      added on top of it. That might have been created with higher order
+      functions.
+
+  - t: "00:17:48"
+    role: interviewer
+    text: >-
+      Yeah, I mean what you're saying is not fully wrong, Madan. All I want is a
+      somewhat basic definition. What do you think higher order functions are?
+      One basic definition, not a bookish one. You can give anything that you
+      have understood, right? That way only you can narrate. Tell me, what are
+      higher order functions?
+
+  - t: "00:18:05"
+    role: candidate
+    text: >-
+      Adding some special capabilities or additional features to one common
+      function is what I mean by higher order functions. And similar to higher
+      order components as well.
+
+  - t: "00:18:22"
+    role: interviewer
+    romanized: true
+    text: >-
+      OK. No, not fully correct. Again, this also you can go and check after the
+      interview. OK. So do you know what a prototype chain is in JavaScript? Or
+      prototypes in general — do you know what prototypes or prototypal
+      inheritance are?
+
+  - t: "00:18:36"
+    role: candidate
+    flags: [uncertain_attribution]
+    text: No.
+
+  - t: "00:18:38"
+    role: interviewer
+    text: "No problem, no problem. I hope you are aware of call, apply and bind, Madan."
+
+  - t: "00:18:41"
+    role: candidate
+    text: "Yeah, it comes under prototyping."
+
+  - t: "00:18:44"
+    role: interviewer
+    text: >-
+      Yeah, correct. In general also it's a very common interview topic. Will you
+      be able to write an example for call, apply and bind?
+
+  - t: "00:18:53"
+    role: candidate
+    text: "No, sometimes I need to refer to it."
+
+  - t: "00:18:54"
+    role: interviewer
+    restitched: true
+    text: >-
+      No problem. No problem. Okay. Like I always say, an interview is just a
+      game. There are things that you know, there are things that I know. If you
+      are lucky, then you will know what I know. That's all, correct? Let's say
+      you start taking my interview — I'll also not be able to answer some
+      questions, correct? So from my understanding, and from what the commonly
+      asked interview questions are, I'm trying to ask some questions primarily.
+      Okay? Now let's go back to the same question that I asked. Write a polyfill
+      for the array.map method and we'll end the interview, then I'll give my
+      feedback. Polyfills basically are, like you told, creating the custom
+      implementation for built-in methods, okay?
+
+  - t: "00:19:59"
+    role: candidate
+    text: "I think I need to actually refresh on these topics."
+
+  - t: "00:20:10"
+    role: interviewer
+    text: >-
+      You want to revise the concept, is it? Sure. Yeah, yeah. Let's get — I'll
+      give my review for whatever we have had so far. But just before I give my
+      honest feedback about whatever I interacted with you so far, if you have
+      any questions in your mind, please tell me, Madan.
+
+  - t: "00:20:25"
+    role: candidate
+    text: >-
+      No, I think this is actually good. I got to know where I stand. So I think
+      I need to refresh the concepts.
+
+  - t: "00:20:36"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      Sure. No problem, Madan. Like I told, there are different levels in the
+      interview preparation. Whatever level you know, you can clear some
+      interviews, but there are some levels that you need to prepare for to clear
+      some other interviews, correct? So my honest opinion is like this, Madan.
+      Fundamental concepts — whatever you know, Madan, you know it well. Whatever
+      concepts you know, to a large extent you know them well. But there are some
+      concepts which you don't know, or you barely know. Like for example the
+      hoisting question that I asked. You know what hoisting is, but you barely
+      know it, you don't know it completely. That's why you are not able to
+      predict the output for the given snippet, correct? And even the array.map
+      polyfill that I asked, right? So don't make this mistake in the interview.
+      Whenever you're not so comfortable writing something, pick up those
+      questions where you have a probability of answering at least seventy
+      percent, where you think you will be able to solve it. Otherwise there will
+      definitely be a negative mark for you. Not opting for a question is one
+      thing, but if you opt and don't answer, then it's going to be fully
+      negative. Instead you can say, "probably I don't know at the moment;
+      roughly I know, and if you want me to write the skeleton I'll be able to
+      write it, but I'll not be able to write it fully." Okay? That way you can
+      put it, instead of accepting a problem and not solving it. And also, do not
+      debug live like this. The way you start debugging, it creates an impression
+      that you are not confident about your code. I mean, I'm not saying we will
+      not make mistakes — in day to day activity everybody does the debugging
+      like this only. In an interview, instead of debugging this way, try to do
+      mental debugging. Let's say you go to one level of logging, not a problem,
+      but don't go into multiple levels of logging and debug points etcetera. Try
+      to do that in mind mapping and try to get to where you are going wrong,
+      correct? So that gives more confidence to the interviewer, like "Madan is
+      really aware of the concepts, maybe he did a small mistake, so he's able to
+      come up with a resolution to that by getting a couple of log statements."
+      Okay? Don't get into too much of debugging in the interviews, okay? And
+      yeah, these are all at a very, very high level, Madan. And some concepts
+      like I asked you, right — for example prototypal inheritance, call apply
+      bind, callback hell and the promise definition — see, all of these are
+      extremely basic questions, Madan, and I don't think you are going to get
+      away without answering these questions in the interview. So you have to
+      learn, and there is no escape for this. So please read these questions
+      carefully before going to the next interview. OK. Any other closing notes,
+      Madan? Do you have any questions?
+
+  - t: "00:23:14"
+    role: candidate
+    text: >-
+      Yeah, only one question. So even if I learn the real-time implementation —
+      you asked about promises and prototypes, call apply bind as well, right?
+      Even though I know the concepts and know how to code that, I also need to
+      know the real definition of that, right? The bookish one.
+
+  - t: "00:23:35"
+    role: interviewer
+    restitched: true
+    text: >-
+      Correct. Yes. I'll give you a framework to actually read. The framework of
+      reading every concept is very simple. Read the concept and understand the
+      basic definition. This basic definition is very essential, because — see,
+      what is hoisting? People give a lot of definitions, like moving the
+      declaration to the top of the block, etcetera. But the ideal definition is
+      that the JavaScript engine, because of this concept of two-part execution,
+      right, it appears to move the declaration to the top of the block. See,
+      there is a difference between "appears to move the declaration" and "moves
+      the declaration to the top of the block", correct? So people say, why a
+      definition — sorry, we are not graduate students. It is necessary, because
+      then you understand the concept very clearly. So first is the definition,
+      second is a bookish example. A bookish example means the one on MDN, the
+      very basic one; you understand that. The third one is a practical example.
+      For your experience of around three to three point five years, practical
+      examples are not very critical, but somebody who's having five plus years,
+      they should be able to give a practical example. Somebody will ask you
+      hoisting, like you create a variable x and try to do console.log and tell x
+      — that is not an example for five plus years. You know the concepts; where
+      did you use it? Correct? For example, closure. Everybody knows an inner
+      function has access to the outer function's variables — that is not the
+      use, right? So you are not learning for the interview; where did you use it
+      in your project? So one definition, one bookish example, one practical
+      example. If you learn these three for every topic that you are studying,
+      you should be good for the interview as well as your day to day work,
+      Madan.
+
+  - t: "00:25:04"
+    role: candidate
+    text: "Yeah, sure."
+
+  - t: "00:25:05"
+    role: interviewer
+    text: >-
+      Okay. Sure. So it was very nice talking to you, Madan. I got to know a lot
+      about you, and whatever interview questions I asked — every interview, I
+      feel there is a lot of learning for me also. I assume you also liked the
+      session, Madan.
+
+  - t: "00:25:18"
+    role: candidate
+    text: "Yeah, it's helpful. I got to know where I stand, actually."
+
+  - t: "00:25:22"
+    role: interviewer
+    text: "Yes, thank you so much, Madan."

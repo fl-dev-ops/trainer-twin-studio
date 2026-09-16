@@ -1,0 +1,596 @@
+id: "03"
+title: Fresher React and JavaScript Mock Interview
+source: 03 - Fresher React and JavaScript Mock Interview
+duration: "00:33:40"
+track: frontend
+topics: [networking, dns, tcp-udp, javascript, closures, react, jsx, form-validation]
+seniority: fresher
+participants:
+  interviewer: Vasanth
+  candidate: Saurabh
+  candidate_experience_years: 0
+
+# Speaker 1 is Vasanth throughout, Speaker 2 is Saurabh. Speaker 0 appears once
+# as noise. Cleaner diarization than most recordings in this set.
+raw_speaker_ids:
+  interviewer: [1]
+  candidate: [2]
+
+invariants:
+  - Turns strictly alternate interviewer -> candidate. No two consecutive same-role turns.
+  - No reference to a YouTube channel, video, subscriber, audience or viewer.
+  - No screen-sharing, editor or tool-operation instructions.
+  - Text is English in Latin script only.
+
+counts:
+  raw_entries: 136
+  clean_turns: 58
+
+removed:
+  monologue:
+    - span: "00:00:00-00:00:37"
+      what: LinkedIn post framing, channel welcome, "watch the video till the end".
+    - span: "00:17:10-00:17:40"
+      what: Mid-interview like/subscribe/bell-icon appeal.
+  self_promotion:
+    - "00:04:33 - 'there are a lot of videos on this'"
+    - "00:06:40 - 'considering you yourself in the audience... help you and the candidates'"
+    - "00:13:27 - 'please read, you and the audience, both I'm telling'"
+    - "00:14:52 - 'I'm telling to Saurabh and all the audience who are watching'"
+    - "00:16:15 - 'I'm not telling what is reconciliation to you or the audience'"
+    - "00:31:22 - 'this will help you or also and the audience'"
+  logistics:
+    - "00:16:45 - share a link in the chat, open in a fresh window, present your screen, present that tab"
+    - "00:17:39-00:17:44 - 'my screen is visible' / 'yes sir, your screen is visible'"
+    - "00:31:08-00:31:21 - 'you can stop sharing' (twice)"
+  backchannels: 24
+  asr_noise: 12
+
+corrections:
+  TPC: TCP
+  "and you send for": and UDP stands for
+  "weekly typed": weakly typed
+  expansive: expensive
+  "in text": int x
+  deconciliation: reconciliation
+  "close the UI": show the UI
+  "achieve our teaching": achieve our caching
+name_note: >-
+  Sarvam alternates between "Sourav", "Saurabh" and "Saurav". The candidate
+  introduces himself as "Saurabh Sen", so the name is normalised to Saurabh.
+romanized: 4
+
+turns:
+  - t: "00:00:39"
+    role: interviewer
+    text: >-
+      Let us start by your introduction. Tell me about yourself, because this is
+      also another important interview question. So introduce yourself and then
+      we can get started with the questions and answers.
+
+  - t: "00:00:50"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay. So hi. I am Saurabh Sen, an undergraduate in computer science and
+      engineering from Gyan Ganga Institute of Technology and Science. Currently
+      I'm in my fourth year, and I started my web development journey with basic
+      technologies like HTML, CSS and JavaScript, and later on moved toward the
+      JavaScript libraries and frameworks which are like React JS and Next JS. I
+      also have some hands-on experience on React and Next and also did a couple
+      of internships using all these, and also worked on some live projects.
+      Currently I'm looking for internships and full time roles.
+
+  - t: "00:01:30"
+    role: interviewer
+    text: >-
+      Great, great, Saurabh. And Saurabh is already actually interning at
+      Reliance Jio, which I'm very happy about, because people in pre-final year
+      and final year getting internships is a good sign. So Saurabh, now without
+      wasting further time let's get started. Let's start with the extreme basics
+      of web development. I'll ask you one very basic question. So let's say you
+      are opening a website — for example, google.com. You entered google.com in
+      the search bar of the browser and hit enter. Can you tell me what all
+      happens in the background to get that content and show it on the screen?
+
+  - t: "00:02:02"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay. So initially, if we talk about what is Google — Google is a search
+      engine which is used to rank the websites. So when we are typing something
+      like, for example, Apple or something, our search query gets to the Google
+      server, and then Google processes our query and generates some results and
+      then sends those results to our browser, and then our browser parses it and
+      shows the UI.
+
+  - t: "00:02:36"
+    role: interviewer
+    text: >-
+      Got it. So there are two parts to it. What you said is how the Google
+      search engine would take the input and give the result. My question is,
+      it's not google.com — any website that you search in that search bar and
+      hit enter, right? After that what would happen? It's not just Google, any
+      website for that matter, you hit enter. What will the browser do to get the
+      data?
+
+  - t: "00:02:56"
+    role: candidate
+    text: >-
+      Okay, so imagine ourselves as a client, and when we search something at the
+      URL, it sends its request to the server, and then the server processes the
+      request and then responds back to our client.
+
+  - t: "00:03:08"
+    role: interviewer
+    text: >-
+      Correct. So this is a very high level, Saurabh. This is not wrong. But do
+      you know in depth — as soon as you enter, what will happen, where the
+      request will go, what it will do, like that?
+
+  - t: "00:03:21"
+    role: candidate
+    text: >-
+      I think the browser first parses the request and query, and then it sends a
+      request, like an HTTP request, to the server, and then the response.
+
+  - t: "00:03:33"
+    role: interviewer
+    restitched: true
+    text: >-
+      Correct, correct. Now I'll give you just an overview. Maybe a little bit of
+      a hint I'll give you. See, the first thing that happens is DNS, domain name
+      system, correct? I think you might have studied this in your final year,
+      that computer networks one or two — where basically we humans will
+      understand the string, or alphabetically English kind of domains, correct?
+      Google.com. On a system there is nothing called google.com, correct? There
+      are just the IP addresses which are there. So first the request goes from a
+      browser to a server, where this name-to-IP-address mapping happens. Then
+      whatever your experience is currently, it goes to a dedicated server, gets
+      the result, etcetera. But there are a lot of concepts involved in this. It's
+      not that straightforward. There is a concept of a resolver, there is a
+      concept of authentication, private IP, public IP. So all may not be asked at
+      a fresher level, but if you are a web developer, this is one of the primary
+      things to know in depth. You can check how HTTP works, how HTTPS works, how
+      a request gets processed. Just spend some time on all of that. I'll ask you
+      just one question on the networking aspect, as entire web development
+      actually happens between the connection between client and server. Correct?
+      Do you know what is TCP and what is UDP?
+
+  - t: "00:04:47"
+    role: candidate
+    text: Yes, these are the protocols for request and response.
+
+  - t: "00:04:51"
+    role: interviewer
+    text: Correct. So do you know the abbreviation of TCP?
+
+  - t: "00:04:54"
+    role: candidate
+    text: "Yeah, it's transmission control protocol. And UDP stands for..."
+
+  - t: "00:05:02"
+    role: interviewer
+    romanized: true
+    text: I'll give you a hint. P stands for protocol.
+
+  - t: "00:05:06"
+    role: candidate
+    romanized: true
+    text: OK, it's something like datagram protocol.
+
+  - t: "00:05:10"
+    role: interviewer
+    text: >-
+      Correct. It's user datagram protocol. Do you know the difference between
+      TCP and UDP?
+
+  - t: "00:05:16"
+    role: candidate
+    text: >-
+      Actually, the main difference is the connection — TCP definitely
+      establishes a connection, and UDP is connectionless.
+
+  - t: "00:05:27"
+    role: interviewer
+    text: >-
+      Correct. Absolutely, absolutely. So now, I am not sure whether you worked on
+      any application, but there's a common sense kind of question that I'm
+      asking. You know what is TCP and you know what is UDP. You also know the
+      basic difference, connection oriented and connectionless. So given an
+      application they ask you to build, when would you use TCP and when would you
+      use UDP?
+
+  - t: "00:05:47"
+    role: candidate
+    text: >-
+      Okay. So basically when we want some kind of real time feature, like a real
+      time video call, then in that case we use UDP. And when we want some kind of
+      messaging or another kind of transmission, then we use TCP — where we don't
+      care about loss of packets.
+
+  - t: "00:06:15"
+    role: interviewer
+    text: >-
+      Yeah, I mean your answer and your explanation are quite contradictory. See,
+      you said TCP is connection oriented, UDP is connectionless. So now you will
+      use UDP for a video call, correct? That's what you said. TCP, where will you
+      use it? Any example you know where exactly you would use TCP?
+
+  - t: "00:06:36"
+    role: candidate
+    text: "The uh... I can't remember."
+
+  - t: "00:06:40"
+    role: interviewer
+    restitched: true
+    text: >-
+      No worries, no problem. See, in an interview every question that you answer
+      wrongly will not be corrected. But I am just using this opportunity to help
+      you. Generally it is at the end, if you have any doubts you can ask and that
+      will get answered. See, TCP and UDP — what you said is correct. TCP is
+      connection oriented, UDP is connectionless. And the example that you gave
+      for UDP is also very right. So where basically things like video calling,
+      correct? Like now we both are connected over Zoom. So in this particular
+      video call, let's say some amount of packets are lost — there's a small
+      microsecond when whatever I spoke is not heard by you, still there is no
+      problem. The video and the recording would go on, correct? So that's what we
+      call UDP. You can use UDP there, where some packet loss is not so important.
+      For example, you're doing a WhatsApp video call — there also, if some
+      packets are lost, there is no problem, correct? But when do you use TCP is
+      when it is connection oriented and no packet loss is allowed, correct? For
+      example, you are uploading a video to a server — that time some packets
+      cannot be lost. You want all of your video to go there, correct? Or for
+      example, you are using file upload, file download protocols, file transfer
+      protocols. Like in Gmail you are sending a video to somebody else, some
+      portion of the video cannot be lost, correct? So in those scenarios you will
+      use TCP. See, these are very essential — why I am asking is a lot of front
+      end developers just start with HTML and CSS. It's not like that. The
+      fundamentals are actually from the protocol, correct? TCP, UDP, the
+      transportation, the computer networks and all of that. Now I'll ask you a
+      few basic questions on the web, then we'll go to a small implementation in
+      React also. So let's start with the extreme basics of JavaScript. JavaScript
+      is a single threaded interpreted programming language. Am I right or wrong?
+
+  - t: "00:08:31"
+    role: candidate
+    text: Yeah, right.
+
+  - t: "00:08:32"
+    role: interviewer
+    text: >-
+      Correct, correct. See, there are a lot of languages which are in the market
+      like Java, C#, C++ etcetera. They're all multi-threaded programming
+      languages. JavaScript on the other hand is a single-threaded programming
+      language, correct? So whether you worked on those languages or not, Java or
+      C#, everyone would know multi-threading gives a lot of advantages — parallel
+      processing would happen, a lot of things become parallelised and the system
+      processes things much quicker, correct? So do you have any idea why
+      JavaScript is single-threaded and not multi-threaded?
+
+  - t: "00:09:06"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay. So basically, JavaScript is single threaded. What single threaded
+      means is it executes one task at a time. It's not parallel processing. So
+      the advantage, we can say, is that our tasks execute one by one and the
+      developer who is working gets the exposure of that code, that okay, so this
+      is working. I think that's one reason. And another reason can be — there's
+      something called, what we say, the task is scheduled one by one and
+      everything happens one after the other. I think that could be another
+      reason.
+
+  - t: "00:09:51"
+    role: interviewer
+    text: >-
+      Sure, sure. What you're saying is not wrong, but read more about it. This is
+      the fundamentals. Now, as I said, JavaScript is also an interpreted
+      programming language, correct? Do you know what is an interpreted
+      programming language in general?
+
+  - t: "00:10:06"
+    role: candidate
+    text: >-
+      Okay, so an interpreted programming language is like one line executes and
+      then the other. The whole code can't get compiled and then run.
+
+  - t: "00:10:16"
+    role: interviewer
+    text: >-
+      Absolutely. I have actually asked this question to people with five, six
+      years of experience and they wouldn't know. Good that you are aware of it.
+      And also JavaScript is a loosely typed language, not a strongly typed
+      language. C, C++ are strongly typed languages. JavaScript is a loosely typed
+      programming language, or a weakly typed programming language. Do you know
+      what is the difference between a strongly typed and a weakly typed
+      programming language?
+
+  - t: "00:10:37"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay, so let's say we want something called variable declaration in another
+      language or in JavaScript. In JavaScript, what we do is we don't define the
+      type. Let's say we have some string or number or anything, boolean — so we
+      can store it in a single variable. And in other languages like C++ or C#,
+      they include type checking also. Like if you want to store an integer then
+      we need to use that int keyword. So loosely typed language means there are
+      no restrictions of type.
+
+  - t: "00:11:18"
+    role: interviewer
+    text: >-
+      Absolutely. Absolutely right, Saurabh. Actually, I sense that you have very
+      good fundamentals. What you're saying is absolutely right. Loosely typed are
+      those programming languages where the type is not defined — like the data
+      type is not defined. So let x can be anything, correct? It can become int,
+      string or anything. Whereas in a strongly typed language, it's int x. X is
+      only int now. X cannot become float or anything at runtime. It is always
+      int, correct? So, good. But do you have any idea why JavaScript is weakly
+      typed and not strongly typed? What you said about weakly typed is right. My
+      question is why it is weakly typed and not strongly typed.
+
+  - t: "00:11:55"
+    role: candidate
+    text: >-
+      I think the reason can be to give more power to the developer, like a more
+      flexible kind of thing.
+
+  - t: "00:12:03"
+    role: interviewer
+    text: >-
+      Correct. That could be one. While creating a language, what you are saying
+      is definitely considered — how we can make it easy for the developer.
+      Correct. But there is also another very important aspect from the
+      architecture point of view. Do you see why, from the architectural point of
+      view, JavaScript is a weakly typed language?
+
+  - t: "00:12:26"
+    role: candidate
+    text: I can't remember.
+
+  - t: "00:12:27"
+    role: interviewer
+    restitched: true
+    text: >-
+      No worries. I'll tell you why it is a weakly typed language. See, JavaScript
+      doesn't run on a system like C, C++ or Java, correct? JavaScript is
+      technically built for running on a browser. So it doesn't directly interact
+      with the system hardware, correct? So whenever a language like that is
+      created, which is not directly interacting with the hardware — and these are
+      all running in the browser — they don't have direct access to the memory. So
+      if it is strongly typed, int x, then whenever you write int x in the browser
+      there is no guarantee that much memory is allocated to it from the hardware,
+      because it's running on the browser. So because of this dynamic type
+      allocation, the JavaScript engine can make sure whatever kind of memory is
+      available right at that point in time can be picked and allotted, and later
+      it can be cleared also. That's one of the main reasons why JavaScript is
+      weakly typed. There are a lot of other reasons also why it is weakly typed —
+      please read more about it. Now let's get into a little more depth of the
+      JavaScript concepts. So tell me, what are closures in JavaScript?
+
+  - t: "00:13:38"
+    role: candidate
+    text: >-
+      Okay. So closures — closure means a function bound to its outer scope or a
+      lexical environment. So when we call the inside function, it remembers the
+      outer variables and methods.
+
+  - t: "00:13:54"
+    role: interviewer
+    text: >-
+      Correct, correct. So a function having access to the lexical environment of
+      the outer function can be called a closure. Correct? This is the right
+      definition. What you're saying is not wrong. Try to have a proper definition
+      so that there are no cross questions to that. So that's one. So now give me
+      one practical example why or where you can use closures.
+
+  - t: "00:14:15"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      Okay, so imagine we want some DOM manipulation and we have something called
+      a paragraph, and we want that paragraph to change according to our
+      conditions. So whenever some condition changes, we want the paragraph to
+      change. And we have a function and it has some expensive calculation. So
+      when we call that function with the DOM manipulation feature, it executes
+      that expensive calculation every time. If we create a closure with that
+      function, then we can avoid that expensive calculation and we can achieve
+      our caching.
+
+  - t: "00:14:52"
+    role: interviewer
+    text: >-
+      Got it. Sure. There are more examples that can be given. You can read up on
+      it definitely. Now let's get slowly into some of the React concepts. If
+      you're a fresher, so much in-depth React would not be asked. Some basics
+      they would touch on, and just some small puzzle can be asked, in most of the
+      product and the service based companies also. So why do you think React has
+      an advantage over basic JavaScript, Saurabh? Basic vanilla JavaScript, HTML.
+      What are the advantages of React JS? Why should somebody use it?
+
+  - t: "00:15:23"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay. So let's compare with the basic thing. Let's say we want to build some
+      application. In JavaScript we have to write some extra code for a feature —
+      imagine we are building a cart, so we want some state management. For that
+      state management we need to write code in vanilla JavaScript to achieve that
+      functionality. Whereas if someone uses React, he gets these kinds of
+      pre-built features, like we can use Context API or Redux for state
+      management. And there are other advantages also, like component based
+      architecture, and they also provide routing and other kinds of stuff.
+
+  - t: "00:16:15"
+    role: interviewer
+    restitched: true
+    text: >-
+      Great, great, Saurabh. So these are all true. But the very basic quality of
+      React that makes React choosable — whatever you are saying, all those things
+      can be done in vanilla JavaScript also, correct? Because ultimately
+      everything is actually done in vanilla JavaScript only, correct? See, one
+      main concept that everyone, you and the freshers, need to know is
+      reconciliation. That's the core difference, because that is what makes React
+      faster. Please go ahead and read about reconciliation. It's a very, very
+      important concept. That's the main foundation of React, why somebody should
+      use React. So now let us start with a puzzle. But before starting, let me
+      ask you very basic questions on React. So which component is currently used
+      in this example, Saurabh?
+
+  - t: "00:17:58"
+    role: candidate
+    text: Okay, so we are using the app component.
+
+  - t: "00:18:01"
+    role: interviewer
+    text: Yes, so it's a function component, correct?
+
+  - t: "00:18:03"
+    role: candidate
+    romanized: true
+    text: Yeah, function based.
+
+  - t: "00:18:04"
+    role: interviewer
+    text: >-
+      Yes, correct. So do you know what is the main difference between a
+      functional component and a class based component?
+
+  - t: "00:18:11"
+    role: candidate
+    text: >-
+      Okay, so a class-based component basically uses class-based things like
+      constructors, and setting state also has a different syntax in them.
+
+  - t: "00:18:25"
+    role: interviewer
+    text: >-
+      Correct, correct. There are a lot of differences, and eventually we are
+      reaching a state where a lot of people have not used class components.
+      Somebody like you who is just starting, right, they might have started
+      itself with a functional component, and this question is not so usual now,
+      to ask the difference. So, React uses something called JSX, correct? So can
+      you tell me what is JSX in React?
+
+  - t: "00:18:46"
+    role: candidate
+    text: >-
+      Okay. So JSX basically stands for JavaScript XML. So if you want to explain
+      it to beginners, we can say that we are using JavaScript inside HTML.
+
+  - t: "00:19:01"
+    role: interviewer
+    text: >-
+      Correct. So do you see any advantage of using JSX over plain HTML or
+      something like that?
+
+  - t: "00:19:09"
+    role: candidate
+    text: >-
+      I think we can do certain things like, without changing the whole DOM, we
+      can use some variables and keywords. Let's say we want something here — we
+      can use some kind of variable here.
+
+  - t: "00:19:28"
+    role: interviewer
+    restitched: true
+    text: >-
+      Correct. I think it can be an ID. Correct. What you're saying is correct.
+      Otherwise you would actually have to fetch an ID and append or change the
+      values, etcetera. Correct? That is one, but there are a little more
+      advantages of JSX — please read that. Now see, I'm not asking so many
+      questions on React, but I just want to know how fundamentally strong you are
+      in building UI in React. The question is very simple, Saurabh. Basically you
+      need to create four input fields — the first name, the last name, email ID
+      and the phone number. And just one submit button. So now, to start off, let
+      us keep it this way: you have to validate this form. First name and last
+      name cannot be empty. Phone number has to be ten digits. Email should
+      actually meet the regular expression of an email. Whenever the user clicks
+      submit, you get all the values that the user has entered and you will
+      validate, and if any error is there, let us just alert it, like "invalid
+      email ID". If there is more than one error — like first name is also not
+      entered and email ID is also invalid — then let us show whatever the first
+      alert is. If only first name is not there then let us show that and stop.
+      After they enter and hit submit, let us show the second error. This is what I
+      wanted to build. We have around ten to fifteen minutes to solve this
+      completely, Saurabh. Please get started. Let's just validate for the first
+      name, Saurabh, considering the time constraint. Let's see how you'll do. If
+      first name is not there, you have to show the alert. It's triggering even
+      before you click, right?
+
+  - t: "00:30:45"
+    role: candidate
+    text: Yes, we can do that.
+
+  - t: "00:30:50"
+    role: interviewer
+    text: Exactly. Good. You figured it out.
+
+  - t: "00:30:54"
+    role: candidate
+    text: Now if it has nothing, then it is safe.
+
+  - t: "00:30:58"
+    role: interviewer
+    text: Good. Very good, very good.
+
+  - t: "00:31:02"
+    role: candidate
+    text: It will reload, because we haven't set that event.preventDefault.
+
+  - t: "00:31:08"
+    role: interviewer
+    restitched: true
+    text: >-
+      Exactly. Sure, sure, Saurabh. As we have almost five minutes left now, we'll
+      spend some more time on the overall feedback that I want to pass on to you.
+      I'll also tell you whether you are a select or a reject from my end. So
+      Saurabh, like I mentioned, I'll just tell you the mistakes that you made in
+      the problem solving. This will help you. First thing, get a little more
+      clarity regarding the requirement. Interviewers themselves may not tell
+      everything to start off — whether there is importance for the styling or
+      not. Like, you coded a very basic and very neat UI, but you did not ask
+      whether that was the interviewer's expectation or not, correct? For example,
+      they may want a more stylish kind of UI, but you did not ask, and the
+      interviewer may not say this. And whenever you say that was the expectation,
+      then he would say you did not ask what is the requirement. Correct? That's
+      one. Second — maybe you know this, but some people may not know what is the
+      regular expression to validate email. That's quite common, and not all
+      interviewers expect a candidate to know that. So be vocal. Don't think the
+      interviewer will feel bad or will reject you if you ask him, "can I search
+      the email ID regular expression on the internet?" Most interviewers will be
+      fine with that. Regular expressions do not define you, correct? Ask in such
+      scenarios. Then coming to the functionality, whatever you did was good. So
+      plan for the duration that you have. Like for example, you have ten minutes,
+      right? So divide the deliverables into modules so that at least one module
+      can be delivered. That's the only reason I asked you to stop at the first
+      name, correct? Every interviewer will not tell you that. So you decide the
+      code in such a way that at least one module can be catered for in the given
+      time. If something is not catered for, we can still say this is what we are
+      able to give. An interviewer is happier having at least something, rather
+      than not having anything, right? So plan in that way in practical coding
+      interviews. Done from my end. So tell me, how was the overall interview
+      experience?
+
+  - t: "00:33:08"
+    role: candidate
+    text: >-
+      It was quite good. I learned tons of new things — like how to prepare and
+      how to organise myself.
+
+  - t: "00:33:16"
+    role: interviewer
+    text: >-
+      Correct, correct, Saurabh. So I always say this to all the freshers: don't
+      start web development at the front end just from the point of view of
+      development. Start from the extreme fundamentals of network protocols and
+      understanding the language, so that you can build anything on top of it
+      whenever it is required. Sure, Saurabh. That's all from my end. Nice talking
+      to you. Have a good day. Bye.
+
+  - t: "00:33:40"
+    role: candidate
+    text: Yeah, thank you.

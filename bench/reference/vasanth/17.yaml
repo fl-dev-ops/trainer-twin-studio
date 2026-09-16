@@ -1,0 +1,527 @@
+id: "17"
+title: BCA Graduate React Mock Interview - 10 Months Experience
+source: 17 - BCA Graduate React Mock Interview - 10 Months Experience
+duration: "00:22:04"
+track: frontend
+topics: [react, hooks, useeffect, setinterval, scoping, machine-coding, system-design]
+seniority: fresher
+participants:
+  interviewer: Vasanth
+  candidate: Vinay
+  candidate_experience_years: 0   # BCA graduate, ~10 months on a MERN course
+problem: >-
+  Build a traffic light in React where the light switches green -> yellow -> red
+  on fixed intervals and loops indefinitely (red four seconds, yellow five,
+  green three). Not completed within the time box; only the approach was
+  discussed.
+
+# Speaker 1 is Vasanth and Speaker 2 is Vinay for almost the whole recording.
+# Speaker 0 appears once (00:01:53) and is Vinay. Attribution below is by
+# content, not by id.
+raw_speaker_ids:
+  interviewer: [1]
+  candidate: [2, 0]
+
+# Note: the words "video", "comment section" and "YouTube" survive in the turns
+# below only because the system-design question is literally "build the YouTube
+# watch page". No channel/audience/subscribe framing remains.
+invariants:
+  - Turns strictly alternate interviewer -> candidate. No two consecutive same-role turns.
+  - No reference to a YouTube channel, video, subscriber, audience or viewer.
+  - No screen-sharing, editor or tool-operation instructions.
+  - Text is English in Latin script only.
+
+counts:
+  raw_entries: 201
+  clean_turns: 41
+
+removed:
+  monologue:
+    - span: "00:00:00-00:00:38"
+      what: >-
+        Channel intro, subscribe appeal, "I'm going to answer them at the end of
+        the video so please watch till the end".
+    - span: "00:21:52-00:22:04"
+      what: Outro - like the video, share with friends, subscribe, catch you in the next video.
+  self_promotion:
+    - "00:08:13 - 'many would comment like fresher you are asking how to build YouTube'"
+    - "00:15:18 - 'I'm not saying this is an easy snippet to answer for you or the audience' -> 'for you'"
+    - "00:15:48-00:16:33 - 'so that audience first understand the question', 'you and the audience both can take fifteen minutes', 'if audience who are watching solve the problem please mention your github url or gist url, comment there, I'm gonna personally review the code'"
+    - "00:20:07 - 'that is first feedback, you and everybody who is watching' -> 'that is the first feedback'"
+    - "00:21:31 - 'and audience whoever is watching, I recommend everybody' -> 'I recommend everybody'"
+  logistics:
+    - "00:01:35 - 'so, let me draw' (whiteboard)"
+    - "00:07:43 - 'let me stop the whiteboard'"
+    - "00:08:26 - 'please share your screen, Vinay'"
+    - "00:14:15 - 'go back to the code sandbox' / 'put the value of count here' / 'put the count here'"
+    - "00:15:48-00:16:18 - 'I'm sharing the question in the chat section', 'you could stop sharing and copy and add it again', 'first copy paste and you can share', 'can you do little zoom in Vinay? Control plus a couple of times'"
+    - "00:18:39 - 'you can stop sharing Vinay'"
+  backchannels: 85
+  asr_noise: 20
+
+corrections:
+  "Mon stack": MERN stack
+  "Mons stack": MERN stack
+  "monetization development": MERN development
+  "Crowdbase projects": CRUD based projects
+  "FM package": FFmpeg package
+  "live secret methods": lifecycle methods
+  "component done mode": componentDidUnmount
+  "nugget your answer": negate your answer
+  "silly take": silly mistake
+  "in A": Vinay
+  "clear the time interval": clear the interval
+uncertain:
+  - "00:00:42 - employer name rendered by Sarvam as 'Interlipath'; kept verbatim, unverified."
+  - "00:02:50 - 'FM package' read as FFmpeg from context (video quality/resolution ladder); unverified."
+  - "00:12:17 - 'to cut the three together' was unrecoverable; rendered as 'to club these together'."
+name_note: >-
+  Sarvam renders the candidate as "Vinay" throughout except once at 00:18:10,
+  where it becomes "in A". Normalised to Vinay.
+romanized: 5
+
+turns:
+  - t: "00:00:38"
+    role: interviewer
+    text: >-
+      So without wasting further time, let's get started. Vinay, can you please
+      introduce yourself?
+
+  - t: "00:00:42"
+    role: candidate
+    restitched: true
+    text: >-
+      Yes sir. Good morning, good afternoon sir. My name is Vinay. I am from
+      Ballari. I graduated in BCA in twenty twenty three. Previously I have done
+      an internship in Interlipath as a technical research analyst, where I
+      worked on Python, NumPy, Pandas and Matplotlib as a data analyst, and I
+      have also tutored as a TA. Apart from that, I have been learning the MERN
+      stack for the past eight months. I have built a lot of projects, CRUD based
+      projects. And apart from that, in college I have been the head of the
+      coding club, I organised events, and from that my interest in coding
+      actually picked up.
+
+  - t: "00:01:21"
+    role: interviewer
+    restitched: true
+    text: >-
+      Wonderful. Wonderful, Vinay. See, as you told me, you have been doing the
+      MERN stack course, right? So let us start with a simple scenario driven
+      question, Vinay. Let's name this as the comment section. This is the video
+      section, correct? This is the video section. And here, if you have to
+      compress it a little bit, here we will have all the suggestions, correct?
+      Suggestions and other things — suggested videos. Okay. So now I'll ask some
+      very basic questions, Vinay, as you have done MERN development end to end.
+      Let's say we have to build this screen, right? Let's start by answering
+      question by question. Let's say you have to build this video player. How are
+      you going to do that, Vinay?
+
+  - t: "00:02:25"
+    role: candidate
+    text: >-
+      This is a video player — the video section is a video player, right? Okay,
+      now comments is fine, suggestions okay fine. So firstly I'll break it down
+      into components.
+
+  - t: "00:02:34"
+    role: interviewer
+    text: >-
+      Let's get to it question by question. Let's stick to the video section,
+      where you have to build a video player. In simple words, how are you going
+      to build a video player? Please tell me.
+
+  - t: "00:02:46"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay. So firstly I think I know the FFmpeg package, which allows us to
+      render in different quality pixels, which we actually get in YouTube. Even
+      in YouTube that is the package that is used. 480 pixel, 720 pixel — we can
+      choose the quality section. So using that, that will render us the quality
+      of the video which we want. That's the first thing. And apart from that,
+      for the player I think we can build a player as normal — we can create a
+      different component, and since a video is also ultimately a set of images,
+      we can use setTimeout and render the particular component for a particular
+      section. Ultimately, if I would build it from scratch, I think the first
+      thing that will come to my mind is breaking down the images into many
+      parts, right?
+
+  - t: "00:03:47"
+    role: interviewer
+    text: >-
+      Let's not get into that depth, Vinay. Let's say the video is readily
+      available on the server. Now we have to just play the video on the browser,
+      right? How are you going to play it? You told me you are going to build the
+      video player on your own, correct? Let's say you have to build the video
+      player on your own — what is the first thing that you are going to use?
+      Which component, or what is the thing that you will use to build the video
+      player?
+
+  - t: "00:04:09"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay. First I will just set up the utility file, because it will be more
+      reusable for me. Quality and the play and pause buttons which we get — I'll
+      be working on that. And apart from that, if this looks very gruesome to me,
+      I'll be importing a package particularly. But if it comes to building it
+      myself, I think I'll break it down into utilities and finally use a
+      particular useState component which will actually break down each video for
+      a particular second — maybe setTimeout, not setTimeout, I think it will be
+      setInterval, which will help me to do that.
+
+  - t: "00:04:48"
+    role: interviewer
+    text: >-
+      Okay, sure. See, maybe I'm not sure whether I did not put it in the right
+      way or not. If I have to build a video player, Vinay, I would have been
+      using the basic video tag of HTML five. Will you not use it? You'll be
+      using it, correct?
+
+  - t: "00:04:59"
+    role: candidate
+    text: Yeah, yeah, yeah. Yes, yes, of course.
+
+  - t: "00:05:02"
+    role: interviewer
+    text: >-
+      Yeah, because most of the things whatever you told me come by default with
+      that particular video player.
+
+  - t: "00:05:07"
+    role: candidate
+    text: Yeah, yeah, I thought like, to build it from scratch, how I'll go about it.
+
+  - t: "00:05:13"
+    role: interviewer
+    restitched: true
+    text: >-
+      Okay, sure. Yeah, no problem. But let's say we have to build it — the
+      obvious thing is we all will be using the video tag itself, correct? So
+      pause, play and whatever the quality and the other things you told me,
+      fine. So now we'll get into an actually full stack question, Vinay, okay?
+      As you see we have the comment section here, correct? So in the comment
+      section we will have one master comment, and to one master comment there
+      will be some replies, correct? There will be a reply here and it goes
+      forward, correct? Let's say somebody else can again respond to this
+      particular comment, correct? See, there is an important thing that happens
+      for very popular videos, right? Let's say whenever you are reading the
+      comments itself, somebody else from the world can add a comment to that,
+      correct? Let's say we have comments one to ten. Let's consider we have
+      comments from one to ten. So now we were reading the comments, let's say
+      ten comments I read. By then a new comment got added by someone, correct?
+      The newly added comment — where to show it? On top or bottom? Let's say you
+      have to implement this feature, because we have guaranteed to the user that
+      we are going to show all the comments, correct? That's the expectation.
+      Whenever a user comes to the comment section, they should be able to see
+      everything, they should not miss any, correct? So if you have to architect
+      this as a full stack developer, Vinay, how are you going to handle this
+      comment section? Can you please tell me?
+
+  - t: "00:06:40"
+    role: candidate
+    restitched: true
+    text: >-
+      Basically the first thing that can be used for a comment section — useState
+      is common, but to call that useState continuously on its own whenever there
+      is a new comment added, either I'll use recursion, which will help me to do
+      that. Apart from that, that will be set for the comment section, because
+      it's a simple function where we write a particular comment, just an input
+      tag, and it will be calling itself. But showing the comments on the top or
+      at the bottom — I think I'll be showing it at the bottom, because generally,
+      as much as I have seen in YouTube, the list always comes from the older
+      comments or the most liked comments. So there is a particular filter for
+      everything. So if there is no filter, I'll be showing the most recent
+      comment at the bottom. But as per the filters, the user can select the most
+      liked, the most disliked, whatever. So based on the filters it can be shown.
+
+  - t: "00:07:43"
+    role: interviewer
+    restitched: true
+    text: >-
+      Sure, sure, Vinay. See, I know you're just starting your career, Vinay,
+      you're not having so much experience. The whole point of asking such
+      questions to you, or to all the freshers who are just starting their
+      career, is to give you perspective, correct? So whenever you look at a
+      system after this interview, you should not look at a system like a user,
+      you should look at a system like a developer, correct? Probably how they
+      might have built it. So every question may not have an answer, because
+      neither I nor you have built YouTube, correct? But definitely there will be
+      something that we could think of. We can come up with our own version of
+      YouTube, right, if you have to build it. That is the whole point of asking
+      such questions. So, Vinay, this is the snippet, a very simple and
+      straightforward snippet. As you know this is just a JS file, we cannot run
+      it. But I want you to go through the snippet carefully and guess what the
+      output is. Take a minute, look at the snippet carefully and guess the
+      output.
+
+  - t: "00:08:40"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      So useState is declared, the default value is zero. And in useEffect there
+      is an empty dependency array, so it will run for the first time. And in
+      useEffect — okay, ID, setInterval, setCount, okay fine. So it will take the
+      previous count every time and it will add plus one. So the timer will be
+      repeating — every one second it will be incrementing. So yeah, fine. But
+      return — so the interval is returned, so it will cancel out itself, I think,
+      after one second. So mostly the answer should be one. Here I'll get one, I
+      guess. And then useEffect, if count is equal to five, clear interval ID,
+      dependent on count. Okay, if count equals five, clear interval, okay, fine,
+      fine, this is all fine. So, yes sir. So I think the first thing is, from
+      here the default value is zero in count. But in useEffect there is an empty
+      dependency array and there's a setInterval. So setInterval repeats the same,
+      prints the same value which is inside the block. So setCount will be
+      repeated every one second, obviously. So the previous count is zero, so zero
+      plus one, it will count up. But return a clearInterval — this will end the
+      interval, I think, after completion of this. Yeah, if count equals five,
+      clear interval, I believe that this should not make any effect, because
+      after one second it will print the value like count and it will end up
+      clearing the interval. So count will be only one. So I don't think this
+      statement will actually get executed.
+
+  - t: "00:10:48"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      Okay. We'll dig a little deeper, Vinay, okay? So we have a function App; in
+      line number three we have created count and setCount and you have
+      initialised it to zero, correct? We have two useEffects, and the second
+      useEffect in line number eleven has a dependency array of count. Okay? So
+      every time whenever the count is changing in line number six, the second
+      useEffect should be triggered, correct? So obviously it is coming into this
+      block, correct? It may not be able to do something, but the control comes
+      in.
+
+  - t: "00:11:20"
+    role: candidate
+    text: It will come to this block, but count will never be five, so I thought that.
+
+  - t: "00:11:24"
+    role: interviewer
+    romanized: true
+    text: >-
+      You are saying after the setInterval is done, it will go to line number
+      eight and it will clear the interval, correct?
+
+  - t: "00:11:30"
+    role: candidate
+    text: Exactly, yes.
+
+  - t: "00:11:32"
+    role: interviewer
+    restitched: true
+    text: >-
+      So I'll ask a very fundamental question, Vinay. What is actually written
+      here, what is it doing? You're clearing that timeout immediately after the
+      setInterval is initialised? Or we'll go back to the more basics. The whole
+      purpose of introducing useEffect was so that we could combine the lifecycle
+      methods into one block, correct? For example, componentDidMount and
+      componentDidUnmount, when we had the class component, correct? Let's say
+      you have to subscribe to an event, you would have done that in
+      componentDidMount, correct? The unsubscribing part of it was happening in
+      componentDidUnmount. So though both are actually related to each other, we
+      are keeping them in two different blocks, correct? componentDidMount,
+      componentDidUnmount. So to overcome that problem actually, useEffect was
+      one of the reasons, to club these together. So now you are saying line
+      number eight, the return, if it executes immediately after the ID — then how
+      do I execute something like the unsubscribing part in useEffect? Where can I
+      do that? Or you are free to negate your answer and tell me what the answer
+      is.
+
+  - t: "00:12:44"
+    role: candidate
+    restitched: true
+    text: >-
+      I think this setInterval will actually continuously execute this statement
+      every one second. But yeah, it will — since there is an update of value in
+      count, the count value is updated. When it comes to five, this clearInterval
+      will actually clear this interval. And finally the value of clearInterval
+      is returned.
+
+  - t: "00:13:11"
+    role: interviewer
+    text: >-
+      See, according to me, that line number eight return whatever we have,
+      right? That is executed whenever the user leaves the current page.
+      componentDidUnmount — whenever unmount is happening, right, that is the time
+      when line number eight gets executed. You can correct me if I'm wrong. What
+      do you think?
+
+  - t: "00:13:26"
+    role: candidate
+    text: Yeah, yeah, yeah, yes sir. Okay, yes.
+
+  - t: "00:13:28"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      Putting it the other way, in our case where we have only one five, line
+      number eight almost has no effect. Okay. So now first the counter starts
+      getting incremented, correct? In line number thirteen you have a
+      clearTimeout of ID, correct? So the actual output for this, according to
+      you, Vinay, is what? What will be the value?
+
+  - t: "00:14:06"
+    role: candidate
+    text: I think it will be zero, one, two, three, four.
+
+  - t: "00:14:10"
+    role: interviewer
+    text: >-
+      Okay, then you are clearing the timer and it stopped, correct? See, snippets
+      like this are intentionally given, to an extent, to confuse the candidate.
+      What is the output we are getting?
+
+  - t: "00:14:40"
+    role: candidate
+    text: Okay, the thing is, yeah, it will update the value, obviously. But I said all the values.
+
+  - t: "00:14:48"
+    role: interviewer
+    text: >-
+      Not that way. In line number thirteen, the expectation from you was that you
+      are able to tell it is an error. Why is it an error?
+
+  - t: "00:15:03"
+    role: candidate
+    text: >-
+      The ID — okay, it got incremented. The ID reference which is passed to the
+      ID variable, I think that was not generated actually, so that is why it is
+      saying ID is not defined.
+
+  - t: "00:15:18"
+    role: interviewer
+    restitched: true
+    text: >-
+      Not that way. It is a simple JavaScript concept of scoping, right? const is
+      available only in the scope. So between line four and nine, const ID is
+      available. In line number thirteen it is not available, correct? I'm not
+      saying this is an easy snippet for you to answer, but I want you to answer
+      it in the next interview, okay? We should not make a silly mistake like
+      this. Okay? So that is the reason I gave you this snippet. Now we'll solve a
+      very interesting problem in React JS, okay? So this is a problem where I'll
+      give you fifteen minutes, Vinay. I want you to solve it end to end. Read the
+      question, understand the question. Read the question carefully, understand
+      it. You can take fifteen minutes to solve the problem. Please read the
+      question, Vinay.
+
+  - t: "00:16:34"
+    role: candidate
+    restitched: true
+    text: >-
+      Build a traffic light where the light switches from green to yellow to red
+      after predetermined intervals and loops indefinitely. Each light should be
+      lit for the following durations. Red light four milliseconds, yellow light
+      five, okay, green light three seconds. You are free to decide the appearance
+      of the traffic light. Fine. So we'll be building a traffic light where the
+      light switches from green to yellow to red after set intervals, just like
+      they are mentioned. After every four seconds the red light will be shown.
+      Each light should be lit for the following duration: red light will be
+      shown for four seconds, yellow will be shown for five milliseconds, and
+      green light will be shown for three seconds.
+
+  - t: "00:17:48"
+    role: interviewer
+    text: >-
+      That's the last five minutes, I mean. We have two more minutes, Vinay. Do
+      you think you'll be able to solve it? If not, at least we could discuss the
+      solution.
+
+  - t: "00:18:08"
+    role: candidate
+    text: We'll discuss the solution, sir.
+
+  - t: "00:18:10"
+    role: interviewer
+    text: >-
+      Sure. See, considering the problem whatever you wanted to solve, Vinay,
+      correct? The problem is to an extent straightforward. We have three
+      different lights. They show that particular light for a given duration of
+      time, correct? So you have created multiple setTimeouts with different
+      durations, correct? What would have been the ideal approach? You might not
+      have implemented it — not a problem, in the time constraint. If you have to
+      implement it from the idealistic point of view, what would be your
+      implementation, Vinay?
+
+  - t: "00:18:36"
+    role: candidate
+    text: >-
+      Actually I was able to only think of this, to be honest. I didn't even get
+      any other perspective as well.
+
+  - t: "00:18:46"
+    role: interviewer
+    text: >-
+      No problem, no problem. Considering whatever the interview that happened so
+      far, Vinay, I'm going to give my feedback. But before I give feedback, if
+      you have any questions you can ask me.
+
+  - t: "00:18:57"
+    role: candidate
+    text: No, I just want to know the review of the entire thing.
+
+  - t: "00:18:59"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      See, Vinay, the first question was around guessing the output on the
+      useEffect, right? Such questions are intentionally asked from a fresher up
+      to a mid-level experienced engineer, correct? Probably after a point it may
+      not be very relevant; at your experience level it will be relevant, because
+      of how you basically interpret the code, correct? So where the ID is
+      undefined, or the number of intervals, the number of times the count is
+      shown, etcetera, correct? So where I'm coming from is, look at the snippets
+      and try to analyse as much as possible before giving an answer, okay? So
+      putting it the other way, if the interviewer is like me, where the answer
+      does not matter a lot, the explanation matters a lot. Let's say you would
+      have told me the right answer. Some snippets will give you an exact output,
+      right, like three or four. You tell three and not four. Let's say three is
+      the answer, you told three — I'm not happy. I'm happy only if you give the
+      right explanation for why it is three. Correct? It's not like a common
+      probability where you guess the answer and I'll give you money. Correct? The
+      explanation has more value. There are times where people tell the wrong
+      answer, but after looking at the right answer they amend the answer and
+      explain why it is so. Even that is also fine, because they are able to
+      interpret after looking at the output, correct? Though it is a little
+      subsidised compared to guessing the output the first time, it is still
+      better, correct? That is the first feedback; at your level please consider
+      this. And another very important thing, Vinay, is especially whenever a
+      machine coding question is given, like the one I asked, the traffic timer,
+      correct? Don't jump into solving the problem. This is not just you — even I
+      used to make the same mistake whenever I started solving, right? Instead,
+      break down the core logic in your mind, only then approach the problem.
+      Okay, for example, in this particular case, how do we show a timer for a
+      specific duration of time and do that indefinitely? That is the ask,
+      correct? If you are able to solve that problem, UI is secondary. If you do
+      UI very well, you get more marks. Even if you are not solving UI, still if
+      you are able to solve this problem accurately, you are going to get good
+      marks. You will clear the interview, correct? So solve the crux of the
+      problem somewhere on paper and pen, or in your mind, only then start the
+      implementation. Don't get busy building the basic UI which you can anyhow
+      do. Got my point, right? So focus on this. These are my candid feedback,
+      Vinay. If you have any other question, you are free to ask. And overall, how
+      was the session? Did you feel it was useful?
+
+  - t: "00:21:20"
+    role: candidate
+    text: >-
+      Yes sir, of course. Actually, I just wanted to know right now how I am
+      doing, because I will be giving further interviews. So I wanted to know the
+      negatives where I can work on, to be honest. That was the whole point of the
+      interview.
+
+  - t: "00:21:31"
+    role: interviewer
+    text: >-
+      Exactly. Sure, Vinay. Thank you so much for that. I recommend everybody,
+      especially if you are a fresher and you want to get started, find somebody
+      who is at your experience level and try to give as many mock interviews as
+      possible. Definitely you can approach people like me or somebody else on
+      various different paid and free mentoring platforms. But try to pair up with
+      someone during the interview preparation — that will be very helpful for
+      you.

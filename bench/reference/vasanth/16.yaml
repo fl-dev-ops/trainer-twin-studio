@@ -1,0 +1,784 @@
+id: "16"
+title: React Mock Interview - 10 Months Experience
+source: 16 - React Mock Interview - 10 Months Experience
+duration: "00:28:14"
+track: frontend
+topics: [react, hooks, useeffect, usestate, closures, settimeout, setinterval, infinite-scroll]
+seniority: junior
+participants:
+  interviewer: Vasanth
+  candidate: Shreni
+  candidate_experience_years: 0.8   # candidate says "nine to ten months"
+
+# Sarvam gives only two ids here, but they are not clean: Speaker 2 repeatedly
+# echoes Vasanth's own words back (cross-talk bleed), e.g. 00:15:30, 00:18:25,
+# 00:20:39. Every turn below was attributed by content, not by id.
+raw_speaker_ids:
+  interviewer: [1]
+  candidate: [2]
+
+invariants:
+  - Turns strictly alternate interviewer -> candidate. No two consecutive same-role turns.
+  - No reference to a YouTube channel, video, subscriber, audience or viewer.
+  - No screen-sharing, editor or tool-operation instructions.
+  - Text is English in Latin script only.
+
+counts:
+  raw_entries: 278
+  clean_turns: 89
+
+removed:
+  monologue:
+    - span: "00:00:00-00:00:44"
+      what: >-
+        Channel intro, "pause the video and answer yourself", promise to answer
+        everything at the end, "watch the video till the end".
+    - span: "00:27:34-00:28:14"
+      what: >-
+        Plug for the "top ten React JS questions" video plus the closing
+        subscribe/like/share outro.
+  self_promotion:
+    - "00:01:17 - 'for audience who have not subscribed to my channel, I request you to subscribe'"
+    - "00:03:26 - 'you and the audience if you don't know what is use layout effect' -> 'if you don't know'"
+    - "00:06:06 - 'I'm uploading a video today, first June around one PM the video is gonna live... I myself discovered a lot of things about useEffect in the video'"
+    - "00:06:36 - 'you and the candidates' / 'I will also try to explain in the end'"
+    - "00:08:48 - 'most of audience might have want to experience this' -> 'we all might have tried'"
+    - "00:25:31 - 'one thing that I ask you and most of the audience to look at'"
+    - "00:26:31 - 'you and everybody who's watching, spend time as a developer'"
+    - "00:27:17 - 'these are all my very basic feedback for you and whoever the audience watch'"
+    - "00:27:56 - 'hope you like the video'"
+  logistics:
+    - "00:01:17 - 'can you share the screen, Shreni'"
+    - "00:02:12 - 'please do it, line number nine, remove hello world and put the count' / 'I think you can refresh'"
+    - "00:03:40-00:03:53 - 'remove the count and keep hello world', 'copy paste the useEffect line five to seven, paste it again', 'save it'"
+    - "00:04:06-00:04:16 - 'comment it and keep', 'refresh only right side'"
+    - "00:09:23 - 'copy the snippet and try to paste, carefully copy only what is required'"
+    - "00:09:50 - 'let's click the button once, only click the button once'"
+    - "00:10:31 - 'you can close the alert, click on okay, go back check again'"
+    - "00:12:53 - 'let's click three times'"
+    - "00:17:52-00:18:07 - 'I'll share a snippet in the chat section, copy and paste it in the JavaScript editor, remove everything that's here', 'don't click on run'"
+    - "00:19:33 - 'please run, top centre run button'"
+    - "00:20:36-00:20:47 - 'you can stop sharing, Shreni' (twice)"
+    - "00:20:53 - 'let me present a whiteboard'"
+    - "00:23:44 - 'I've stopped the whiteboard'"
+  backchannels: 88
+  asr_noise: 22
+
+corrections:
+  hosting: hoisting
+  "use date": useState
+  "my primary tech stack is learn": my primary tech stack is MERN
+  "youvak on both front end and back end": you work on both front end and back end
+  "let's depress hello world": let's replace hello world
+  "put the account": put the count
+  "embedded braces": the alert
+  "unless zero was there": when zero was there
+  "rendering the colors": rendering the cards
+  "kim zero one two": it's zero, one, two
+  "the closure property of the another screen": the closure property of the other one
+  "master that streaming": master that, Shreni
+uncertain:
+  - "00:07:43 - candidate's reply rendered as 'testing covered in Javas with that'; unintelligible, dropped, and the two surrounding interviewer turns merged."
+  - "00:25:19 - 'people do not take so much time because of Jani and so many other things'; the tool name was unrecoverable and has been dropped from the sentence."
+name_note: >-
+  Sarvam renders the candidate's name as Shrini, Shini, Srini, Srinivas,
+  Ashwini and even "streaming". He introduces himself as "Shreni", so the name
+  is normalised to Shreni throughout.
+romanized: 13
+
+turns:
+  - t: "00:00:44"
+    role: interviewer
+    text: Now Shreni, if you can introduce yourself, we can get started.
+
+  - t: "00:00:47"
+    role: candidate
+    text: >-
+      Okay, yeah. So hi, my name is Shreni and I'm currently working as a front
+      end developer at a mid-sized startup, and I have around nine to ten months
+      of experience in front end development.
+
+  - t: "00:01:00"
+    role: interviewer
+    text: Wonderful, wonderful, Shreni. What is your primary tech stack?
+
+  - t: "00:01:03"
+    role: candidate
+    text: My primary tech stack is MERN.
+
+  - t: "00:01:07"
+    role: interviewer
+    romanized: true
+    text: So you work on both front end and back end, Shreni?
+
+  - t: "00:01:11"
+    role: candidate
+    text: >-
+      Mostly front end, sometimes it's back end, which consists of Node and
+      Express.
+
+  - t: "00:01:17"
+    role: interviewer
+    restitched: true
+    text: >-
+      Yes, wonderful, wonderful, Shreni. We can get started immediately, okay?
+      This is a very simple snippet, and my question is also very simple. Let's
+      say in line number nine you remove the hello world and you put the count —
+      what is going to be the output? Line number nine. First you tell me, then
+      we will make the change.
+
+  - t: "00:01:44"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      Okay. So if I replace count here, first of all it would be zero when the
+      page loads initially, and after rendering it will become one.
+
+  - t: "00:02:00"
+    role: interviewer
+    text: >-
+      Okay. Yeah, I got it — behind the scenes, how it worked. Let's say I run
+      the code, I'm not going to get to know a lot of differences. Zero, one — it
+      will not become that. When I run the code I'm going to see some value on
+      the screen. What is that value?
+
+  - t: "00:02:11"
+    role: candidate
+    text: One.
+
+  - t: "00:02:22"
+    role: interviewer
+    text: >-
+      So we are seeing one. Correct, Shreni? So now you explain to me what
+      happens behind the scenes. You had started explaining, right? Please
+      continue with that.
+
+  - t: "00:02:32"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay, so behind the scenes, how useEffect and useState work is: first of
+      all the initial value was zero. The page got rendered with that zero value,
+      and it got rendered for a very little time when zero was there, and after
+      that useEffect got called, as soon as it got rendered. So useEffect made it
+      one, and that's why we can see one. And since in useEffect there is a
+      dependency array which is empty, that means this will only run once after
+      the page is rendered — that's why we only see one.
+
+  - t: "00:03:05"
+    role: interviewer
+    text: >-
+      Absolutely. Correct. So there is a hook, if you know it, that gets executed
+      before the useEffect. Do you know which hook that is? I'll tell you the
+      hook name, you tell me whether that is right or not — useLayoutEffect. Have
+      you heard of the hook useLayoutEffect?
+
+  - t: "00:03:24"
+    role: candidate
+    text: No, honestly, no, I haven't heard of this.
+
+  - t: "00:03:26"
+    role: interviewer
+    text: >-
+      Yeah, if you don't know what useLayoutEffect is, please go ahead and read
+      about it after the session. So now let's do a small update to this, Shreni.
+      We now have the same useEffect twice. Now tell me what will be the output.
+
+  - t: "00:03:59"
+    role: candidate
+    text: >-
+      Nothing will change. See, both useEffects will run, so probably the output
+      should be two.
+
+  - t: "00:04:06"
+    role: interviewer
+    text: >-
+      Okay, let's replace hello world with count again. So we are still getting
+      one, Shreni. Can you tell me why it is still one?
+
+  - t: "00:04:25"
+    role: candidate
+    restitched: true
+    text: >-
+      I suspect that as soon as the useEffect is called, both useEffects will be
+      called for sure — this is for sure. But I think the problem is with this
+      setCount: even though we are doing it on line nine, it does not immediately
+      update the state, it takes some time. That's why it's coming as one. So
+      suppose we are at line number six — even though it updates to one, when it
+      comes to line ten it's still not updated to one. It will think it's still
+      zero, that's why it is making it one. So the problem is with the state
+      updating delay.
+
+  - t: "00:05:04"
+    role: interviewer
+    text: >-
+      Got it, got it, got it. Let's understand a little bit in depth, Shreni,
+      okay? So we have two useEffects now, correct? useEffect one and useEffect
+      two. And will both the useEffects run synchronously or asynchronously? You
+      tell me. Got my question right?
+
+  - t: "00:05:26"
+    role: candidate
+    text: Yeah, I got your question. It will run synchronously, like one after the other.
+
+  - t: "00:05:36"
+    role: interviewer
+    text: >-
+      Okay. So you're saying line number five, whatever useEffect we have, that
+      is executed first, followed by the useEffect in line number nine, correct?
+      One after another. If execution is synchronous, one after another, then
+      definitely the count value should be two, right, in line number ten?
+      Because the execution of that useEffect is completed, because we are not
+      doing any asynchronous operation, correct? So in line number ten when it
+      comes, the value of count should be one, so it should become two — the
+      output of line number ten. Correct?
+
+  - t: "00:06:02"
+    role: candidate
+    text: Yeah, right.
+
+  - t: "00:06:06"
+    role: interviewer
+    restitched: true
+    text: >-
+      Anyway, see, the whole purpose of asking this question is not to catch you
+      out. It's not like if you don't know the answer to this you cannot build a
+      good app, correct? It's just that we all understand things to a level which
+      is comfortable enough. Sometimes you don't dig deeper and understand — that
+      is the reason. So after the interview, please go ahead and understand it in
+      depth. Now, that is how the useEffect works. But only one extension to this
+      question I asked, and then probably we'll go to the next question. Let's
+      say I want two now. Like, by the execution of two useEffects, the value of
+      count should be two. Do you think you can do some modification to make it
+      two? Because right now it is becoming one. Any modification you think of
+      doing?
+
+  - t: "00:07:08"
+    role: candidate
+    text: >-
+      Like, here it should become one and then here it should be two. If I do it
+      as two, then also it can be on the screen, it will appear as two, but
+      that's not a good way, right? That's not what you're expecting. You want me
+      to change something in this function, five, six, seven.
+
+  - t: "00:07:25"
+    role: interviewer
+    text: >-
+      Yeah, either of the functions — you make some correct change so that the
+      count actually becomes two.
+
+  - t: "00:07:32"
+    role: candidate
+    romanized: true
+    text: What if I stop the flow at line number six and force it to become one?
+
+  - t: "00:07:38"
+    role: interviewer
+    text: >-
+      How are you going to stop the execution at line number six? Okay — you want
+      to make the setCount operation await until the setTimeout is done, right?
+
+  - t: "00:07:53"
+    role: candidate
+    text: Yes. Yes, yes.
+
+  - t: "00:07:54"
+    role: interviewer
+    text: >-
+      Actually we came into a good segue. You tell me now, how does setState work
+      behind the scenes? Is it a synchronous operation or an asynchronous
+      operation? How is it going to work behind the scenes?
+
+  - t: "00:08:07"
+    role: candidate
+    romanized: true
+    text: >-
+      I think it is an asynchronous operation, as we saw it was not updating the
+      count immediately, it was taking some time.
+
+  - t: "00:08:14"
+    role: interviewer
+    text: >-
+      Correct. So let's get into a little bit of the practical questions, Shreni.
+      Okay, why do you think the setState operation is asynchronous and not
+      synchronous? In line number six we have that, right? Line number six,
+      count. Let's say you put a console.log there after line number six and try
+      to log the value of count — what is it going to be?
+
+  - t: "00:08:40"
+    role: candidate
+    text: Zero.
+
+  - t: "00:08:42"
+    role: interviewer
+    text: Correct. Why is it zero?
+
+  - t: "00:08:43"
+    role: candidate
+    text: It won't update it directly, because setState is an asynchronous function.
+
+  - t: "00:08:48"
+    role: interviewer
+    text: >-
+      Correct. Exactly. So what you're trying to do is hundred percent right,
+      Shreni. We all might have tried accessing the value of something
+      immediately after it is set, correct? And we would not have got the updated
+      value, then we would have used useEffect and updated it, correct? You tell
+      me now, what is the problem? Why do you think React updates the state in an
+      asynchronous way and not in a synchronous way?
+
+  - t: "00:09:10"
+    role: candidate
+    text: >-
+      Obviously because React does not want to block the main thread. If it keeps
+      on doing all the operations synchronously, the main thread will be blocked,
+      it will become slow. That's why asynchronous operations are done, I guess.
+
+  - t: "00:09:23"
+    role: interviewer
+    text: Okay. Sure, sure. I'll share another small snippet with you. Very interesting snippet.
+
+  - t: "00:09:36"
+    role: candidate
+    text: >-
+      Okay, so if I click on the click me button, the zero is there, it will
+      become one. And after three seconds we'll get an alert which will say one.
+
+  - t: "00:09:55"
+    role: interviewer
+    text: >-
+      So we are getting the alert, and the value is coming as zero, correct? The
+      count is one on screen but on the alert it is zero. And it's okay — you look
+      at the snippet and tell me. The end goal is not getting the right answer,
+      the end goal is giving the right explanation for the output. Just look
+      again and tell me why zero is coming.
+
+  - t: "00:10:17"
+    role: candidate
+    text: >-
+      Maybe it's because it is probably referencing the old state. Why is it not
+      updating it?
+
+  - t: "00:10:26"
+    role: interviewer
+    text: Yeah. So look at the snippet again and tell me why that is happening.
+
+  - t: "00:10:43"
+    role: candidate
+    romanized: true
+    text: >-
+      Okay, so as we know this is an async function, so after some time it will
+      update the state. So when it entered the setTimeout, it was still zero.
+
+  - t: "00:10:54"
+    role: interviewer
+    text: >-
+      Correct. Which famous property of JavaScript is used here? Or JavaScript
+      concept. Tell me a few JavaScript concepts that you know. One example I'll
+      give — like hoisting, promises. Give me some more examples.
+
+  - t: "00:11:19"
+    role: candidate
+    text: Closure.
+
+  - t: "00:11:20"
+    role: interviewer
+    text: >-
+      See, correct, so you are able to guess. So what is happening now? Now you
+      got to know it is happening because of closure and the previous value. Can
+      you please elaborate, Shreni?
+
+  - t: "00:11:29"
+    role: candidate
+    restitched: true
+    text: >-
+      What's happening is, it is entering this setTimeout, and this alert is
+      forming a closure with the count value of the parent, which is still zero,
+      which is still not updated. That is why it was giving us zero.
+
+  - t: "00:11:47"
+    role: interviewer
+    restitched: true
+    text: >-
+      Sure. See, whenever the closure starts the execution, right? Closure is
+      nothing but what? We are forming an execution context and keeping it aside,
+      correct? So whenever that time is done, whatever is the callback function
+      inside that block, that's actually executing, correct? So no matter what
+      now, by the time those three seconds are over, even if you make count from
+      zero to one million, that block does not know what happened, correct? This
+      is the same as the popular for loop and setTimeout example, correct? The
+      same happens this way, where the count value is only whatever it was known
+      to be at that time. Because of which we are getting the previous value.
+      Okay? Now, just as a little bit of tickling the brain, I'll ask again.
+      Let's say you click the button three times now. Tell me what will happen.
+
+  - t: "00:12:30"
+    role: candidate
+    text: >-
+      If I click it three times, instead of zero it will be three. But that
+      timeout, I guess it's forming a closure with zero. That timeout will
+      probably, you know, give us zero three times in the alert.
+
+  - t: "00:12:50"
+    role: interviewer
+    text: >-
+      Okay, let's do it. It's zero, one, two, right? Not zero. Now you can look
+      back again and explain what is happening.
+
+  - t: "00:13:11"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      Okay, so I clicked the button, the value was zero, it entered here. So
+      setTimeout is somewhere running in the background to make it one. We
+      entered setTimeout, the alert was shown with zero. In the meanwhile
+      setCount made it one. Yes, count made it one in the meanwhile, and then
+      again the button was pressed. So it formed the closure now with the value
+      one of the count.
+
+  - t: "00:13:39"
+    role: interviewer
+    romanized: true
+    text: >-
+      Correct. Correct. So basically every time whenever I'm pressing
+      handleClick, multiple closures are getting formed — not multiple, every
+      time one new closure is getting formed. Correct? The number of times you
+      click, that many times the closure has formed. Correct? As simple as that.
+      So, one practical question again I'll ask. What is the value that is
+      returned from setTimeout? setTimeout is a function, right? At the end of the
+      day setTimeout is a function. setTimeout, setInterval, useState, useEffect
+      — they're all functions, correct? What is the value returned from
+      setTimeout?
+
+  - t: "00:14:11"
+    role: candidate
+    text: This alert is returned from it.
+
+  - t: "00:14:13"
+    role: interviewer
+    text: >-
+      Alert is the callback function — that's not returned, that is happening
+      after three seconds, right?
+
+  - t: "00:14:19"
+    role: candidate
+    text: setTimeout — okay, I think it returns a timer, something, a timer ID.
+
+  - t: "00:14:27"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      Okay. So I'll ask one last question on this particular topic and we'll move
+      forward. Every time whenever you are clicking the button, like you told me,
+      it's going to be just zero, right? I want to basically clear the timeout if
+      the timer already exists, and then go forward. How do you do that? Let's say
+      you click the button once. There is a setTimeout, as you could see in line
+      number seven to nine, correct? That timer I have to clear. And the second
+      time whenever I click, if that timer is already there — only when the timer
+      is not there am I going to set the timer. If the timer is already there I'm
+      just going to clear it. How can we do that?
+
+  - t: "00:15:05"
+    role: candidate
+    romanized: true
+    text: >-
+      So basically, if the timer is there, clear it and then again set up the
+      timer. Is that what you want me to do?
+
+  - t: "00:15:09"
+    role: interviewer
+    text: >-
+      Yes, yes. So every time — put it the other way — you click like five times,
+      you are actually going to get only one alert, because all the four you have
+      cleared now; only the fifth alert is going to actually persist, correct?
+      All the four timeouts have been cleared. How can we do that?
+
+  - t: "00:15:27"
+    role: candidate
+    text: Again we'll need closures here.
+
+  - t: "00:15:29"
+    role: interviewer
+    text: >-
+      The closure is already there. The setTimeout closure is already there. How
+      are we going to do it?
+
+  - t: "00:15:35"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      So what I'll do is, first of all I'll make a timer, which will be empty for
+      now. And this setTimeout is returning us a timer every time. And before
+      this we need to see if the timer exists — correct — just clear the interval
+      timer. But there's a catch: we need to wrap this inside a function.
+
+  - t: "00:16:11"
+    role: interviewer
+    text: Why?
+
+  - t: "00:16:11"
+    role: candidate
+    text: Because this timer — we need to keep the count of that timer, right?
+
+  - t: "00:16:19"
+    role: interviewer
+    text: >-
+      No, we need to maintain only one instance, right? We need only one instance
+      of the timer. We don't need multiple instances.
+
+  - t: "00:16:25"
+    role: candidate
+    text: So maybe we can make it global here. I've made it global.
+
+  - t: "00:16:28"
+    role: interviewer
+    romanized: true
+    text: >-
+      Okay, sure. So now you made it global. You called the handleClick function
+      now, correct? You're checking whether the timer exists. If the timer
+      exists, you are clearing the interval. Why — for what reason is the
+      clearInterval function used in line number nine?
+
+  - t: "00:16:48"
+    role: candidate
+    text: >-
+      So if a timer is already set, this function helps us to clear it. It is a
+      cleanup function for that timer, it clears all the side effects of that
+      timer.
+
+  - t: "00:16:58"
+    role: interviewer
+    text: Is it clearInterval or clearTimeout?
+
+  - t: "00:17:01"
+    role: candidate
+    text: >-
+      I think it should be clearTimeout. clearInterval will probably be used for
+      setInterval. We have another function in the context of setInterval.
+
+  - t: "00:17:12"
+    role: interviewer
+    text: >-
+      Okay. Sure. So now one last question I'll ask. What you did not answer
+      correctly was, what is the return value of setTimeout, right? It's not a
+      timer or anything as such, it's actually a numeric identifier.
+
+  - t: "00:17:26"
+    role: candidate
+    text: An ID, a unique ID, the ID of that timer.
+
+  - t: "00:17:28"
+    role: interviewer
+    text: >-
+      A numeric identifier. It returns zero, one, two, three, etcetera. And
+      clearTimeout will clear only that particular number. If you want to clear
+      all, you can just clear all the timeouts — then it will clear all the
+      numerical identifiers. Okay? Fine, I'll share a small JavaScript snippet
+      with you.
+
+  - t: "00:18:00"
+    role: candidate
+    text: createCounter — counter one, right?
+
+  - t: "00:18:02"
+    role: interviewer
+    text: Exactly. Yes. Analyse the code carefully and I want you to guess the output.
+
+  - t: "00:18:18"
+    role: candidate
+    text: The output would be one, two, one.
+
+  - t: "00:18:25"
+    role: interviewer
+    text: One, two, one. And the reason would be?
+
+  - t: "00:18:25"
+    role: candidate
+    romanized: true
+    restitched: true
+    text: >-
+      So the reason would be — let's just consider line number eleven. We called
+      a function createCounter which is returning a function. So counter one has
+      a function there. And now we are calling counter one two times. So
+      initially the count value was zero. For line number fourteen we came inside
+      line number six, made it one, and one was returned. So this line will print
+      one. Now this count value will have one, because this count value, you know,
+      is forming a closure here. Again closure is used in this thing.
+
+  - t: "00:19:12"
+    role: interviewer
+    text: >-
+      So here it's one. The second time you are invoking the same function where
+      the count value is already incremented, so you are saying two. Correct? And
+      from counter two, whenever you are trying it?
+
+  - t: "00:19:23"
+    role: candidate
+    text: >-
+      It's one, because again we are creating a new instance of that counter
+      which will not have a reference to the old values of count. Because a new
+      instance is created, so it will be one.
+
+  - t: "00:19:43"
+    role: interviewer
+    restitched: true
+    text: >-
+      Yeah, whatever you told me is correct, Shreni. Okay? So let's dig a little
+      deeper and understand. In line number eleven and line number twelve we are
+      forming two variables, counter one and counter two, correct? Both having a
+      reference to the createCounter function itself. But in line number
+      fourteen, whenever you call it, counter one is basically nothing but
+      returning the function — line number five returning a function which has
+      access to the outer scope because of the property of closure, correct? Whose
+      value is actually initially zero. And it is returning the updated count, as
+      it's a post increment and not a pre increment, correct? So we will be
+      incrementing and we will be getting the value as one. And then whenever we
+      invoke it the second time, we still have access to the count that was
+      declared in the outer scope, which is already incremented, correct? So
+      putting it the other way, the closure of one is not affecting the closure
+      property of the other one, correct? Okay, now let's discuss some practical
+      questions, Shreni. See, the question here would be — let's take a practical
+      example, Shreni. You might not have worked on it directly, but one of the
+      common interview questions is, how do you basically maintain an infinite
+      scrolling list in a typical social media application? Let's say you have to
+      build a list where the list can be continuously scrolled. Tell me what all
+      things come to your mind, what are all the problems that come to your mind,
+      and how you're going to solve the problems.
+
+  - t: "00:21:24"
+    role: candidate
+    text: >-
+      Okay. Infinite scrolling means infinite content. Infinite content means
+      infinite calls to the server, right? This is what comes to my mind right
+      now. Obviously we cannot just make it in the first go, we have to do it at
+      runtime. The user scrolls and at runtime we'll probably try to make calls
+      and bring data and display data. This is what I'm thinking of.
+
+  - t: "00:21:55"
+    role: interviewer
+    restitched: true
+    text: >-
+      Okay. So just to unlock it, as a basic UI I'm drawing this. Let's say this
+      is your website, where this is the segment. Let's take a typical example of
+      Facebook where we have this entire portion, correct? So this is the portion
+      where we will be basically just rendering the cards, correct? This is the
+      centre portion, this is the portion basically where we will be showing the
+      content, correct? So now let's say we have multiple cards here, right?
+      Let's say there is one image, one video and one textual content, and users
+      keep scrolling, correct? So we will have a lot of data that should be
+      flowing in. Tell me, if you have to store so much data, what all things
+      come to your mind, Shreni? How are you going to actually store the data
+      efficiently? Because you might know a typical Instagram scroll happens for
+      about at least ten to fifteen minutes. By that time we might have looked at
+      easily forty, fifty of them, correct? If you start storing all the
+      information in an array, the array becomes bulkier. What do you think should
+      be the right way, Shreni, to store the information?
+
+  - t: "00:23:01"
+    role: candidate
+    text: First of all, your question is — are we getting the whole data, are we getting all of it?
+
+  - t: "00:23:05"
+    role: interviewer
+    romanized: true
+    text: >-
+      You tell me. I am telling you I have to build a social media application.
+      You should tell me what is the right way to store the data.
+
+  - t: "00:23:11"
+    role: candidate
+    restitched: true
+    text: >-
+      Right. So array we cannot use — it will take continuous memory space and we
+      don't know how much memory we'll use, because it's at runtime. So one thing
+      coming to my mind is if we can use a linked list, where at least continuous
+      memory space will not be used. And we can have nodes which will help us to
+      backtrack also, so if we scroll down you can go back to the previous reel
+      which you were watching. A linked list would be, I think, the ideal thing
+      here.
+
+  - t: "00:23:44"
+    role: interviewer
+    text: >-
+      Sure, sure, Shreni. I'm mostly done from my end. Before I give feedback, if
+      you have any question, Shreni, regarding the interview, you can ask me.
+
+  - t: "00:23:57"
+    role: candidate
+    text: >-
+      No major questions as such for the interview, but can you tell me any one
+      of the most interesting things you worked on in React, or maybe something
+      that just mind-boggled you, like "oh, this exists in React"?
+
+  - t: "00:24:12"
+    role: interviewer
+    restitched: true
+    text: >-
+      So in the past I worked on a project where it was a mobile application
+      using React Native which had a video call feature. So building a video call
+      feature is very easy, because nobody builds it from scratch. There are so
+      many open source libraries or paid libraries where they give you step by
+      step instructions to integrate it. So that portion of integrating a video
+      call is very easy, but mobile has a lot of modes. Mobile has a state when
+      the app is in the foreground, when the app is in the background, when the
+      app is killed, okay? And all the three states should happen for both
+      Android and iOS. So whenever you have to handle so many states — let's say
+      your screen is locked, you cannot open your video call things because
+      somebody needs to unlock the screen, correct? So background, foreground,
+      killed and screen locked, four states are there. And all the four states
+      need to be handled in the same way in case of both Android and iOS. Okay?
+      So this is around twenty sixteen and twenty seventeen, when React Native
+      did not have so much documentation and not many were using it. So we had to
+      undergo a lot of things to understand how it probably works under the hood.
+      We wrote a lot of native mobile code as well to unblock this. It took a
+      good amount of time but the end result was good, we were able to achieve
+      it. But probably if you do it now, people do not take so much time because
+      of so many other things, it's much more straightforward. But back then it
+      was something very major. Okay. Considering the time, I'll give my honest
+      feedback, Shreni, whatever I felt regarding the interview, right? Some you
+      might already know. One thing that I ask you to look at is, from the system
+      design point of view — I know you just have nine months of experience, it's
+      not too much. But don't look at any system as a consumer; as you are a
+      developer, look at every system as a developer. Let's say we are using
+      Facebook or we are using Instagram, right? Let's look at it sometimes like
+      how they might have solved this problem. I gave a very common example of
+      BookMyShow, where BookMyShow renders the different screen layouts. For
+      example, one theatre has more seats on the left, no seats on the right —
+      they have given just the walking path. Or all the seats on the right, or
+      there's a gap somewhere in the middle, and there are sections like lower,
+      premium, super premium, and there are some gaps in the middle. So to render
+      this dynamic layout on the screen is a very tedious task, correct? But
+      BookMyShow has solved it in a very simple way. Only when you think from that
+      point of view do you probably go and inspect the response and see how they
+      are sending the data, correct? The same happened with the social media
+      question I asked. So spend time as a developer whenever you look at a
+      product like that. Okay, that's one simple feedback. Another feedback,
+      Shreni: don't jump to answer, especially when the question looks simple.
+      This is a trick that is used by most of the interviewers, to keep a very
+      simple snippet. The second snippet where I extended the useEffect, right?
+      That snippet looks very simple and the most obvious answer is two. Our mind
+      also says we should not say two, but we will not get a right justification
+      for not saying it as two, correct? The two useEffects that you used. So my
+      advice is, whenever you think the snippet is simple and the answer is most
+      obvious, right, try to just think what is the unobvious thing, because the
+      interviewer is also not that dumb. He might not have given a very simple
+      question, correct? Even if you get some simple question, there could be some
+      trick in that. So try to decipher that and try to give the answer. Okay?
+      Another small feedback could be a little bit on the analytical thinking,
+      like setInterval, setTimeout, all of this, right? So probably working more
+      towards it will help you to master that, Shreni. These are all my very basic
+      feedback for you. Any closing thoughts, Shreni?
+
+  - t: "00:27:57"
+    role: candidate
+    text: >-
+      Yeah, I just enjoyed it. I got to know so many things, like certain terms.
+      Thank you so much.
+
+  - t: "00:28:03"
+    role: interviewer
+    text: Yeah. Thank you so much.
