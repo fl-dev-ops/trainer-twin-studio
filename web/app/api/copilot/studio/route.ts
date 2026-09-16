@@ -10,6 +10,7 @@ import { redactLearnerNames } from "@/lib/persona-voice";
 export const runtime = "nodejs";
 
 const slug = z.string().regex(/^[a-z0-9][a-z0-9._-]*$/i);
+const SHARED_KNOWLEDGE_BASE_SLUG = "acme-knowledge";
 const requestSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("inventory") }).strict(),
   z.object({ action: z.literal("readSpec"), type: z.enum(["persona", "agent", "domain"]), slug }).strict(),
@@ -125,13 +126,21 @@ export async function POST(request: Request) {
     const agentSlug = session?.agentSlug ?? input.agentSlug;
     const personaSlug = session?.personaSlug ?? input.personaSlug;
 
-    const [agent, persona] = await Promise.all([
+    const [agent, persona, sharedKnowledgeBase] = await Promise.all([
       agentSlug
         ? db.agent.findFirst({ where: { slug: { equals: agentSlug, mode: "insensitive" }, orgId }, select: { slug: true, version: true, data: true } })
         : null,
       personaSlug
         ? db.persona.findFirst({ where: { slug: { equals: personaSlug, mode: "insensitive" }, orgId }, select: { slug: true, version: true, data: true } })
         : null,
+      db.knowledgeBase.findFirst({
+        where: {
+          slug: SHARED_KNOWLEDGE_BASE_SLUG,
+          orgId,
+          documents: { some: { status: "indexed" } },
+        },
+        select: { slug: true, name: true },
+      }),
     ]);
 
     const docMap = new Map<string, {
@@ -255,6 +264,7 @@ export async function POST(request: Request) {
       sessionId: session?.id ?? input.sessionId ?? null,
       agent: agent ?? null,
       persona: persona ?? null,
+      knowledgeBases: sharedKnowledgeBase ? [sharedKnowledgeBase] : [],
       documents: Array.from(docMap.values()),
       learnerName,
       learnerHistory: {
@@ -387,7 +397,17 @@ export async function POST(request: Request) {
     return Response.json({
       query: input.query,
       knowledgeBase: input.knowledgeBase,
-      results: results.map(({ docId, source, text, score }) => ({ docId, source, text, score })),
+      results: results.map(({ id, docId, kbId, source, title, chunkIndex, topic, text, score }) => ({
+        chunkId: id,
+        docId,
+        kbId: kbId ?? knowledgeBase.id,
+        source,
+        title,
+        chunkIndex,
+        topic,
+        text,
+        score,
+      })),
     });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Copilot request failed" }, { status: 500 });

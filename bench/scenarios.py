@@ -66,7 +66,8 @@ def load_scenarios() -> list[dict]:
         cursor.execute(
             """
             SELECT a.id, a."orgId", a.slug, a.name, a.data,
-                   p.id, p.slug, p.name, p.data, d.slug, d.version, m."userId"
+                   p.id, p.slug, p.name, p.data, d.slug, d.version, m."userId",
+                   a.version, p.version
             FROM "Agent" a
             JOIN "Persona" p ON p.id = a."personaId"
             JOIN "Domain" d ON d.slug = a."domainSlug" AND d."orgId" = a."orgId"
@@ -147,6 +148,8 @@ def load_scenarios() -> list[dict]:
                     "domain_slug": row[9],
                     "domain_version": row[10],
                     "user_id": row[11],
+                    "agent_version": row[12],
+                    "persona_version": row[13],
                     "reference_persona_slug": reference_persona_slug,
                     "reference_persona_name": reference_persona_name,
                     "sources": sources,

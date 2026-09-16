@@ -64,17 +64,31 @@ export function chunkMarkdown(text: string, targetChars = 1200, maxChars = 2000)
 
 export async function embedTexts(texts: string[]): Promise<number[][]> {
   const key = getAiGatewayKey();
+  const endpoints = [{ baseUrl: AI_GATEWAY_BASE_URL, key }];
+  const openRouterKey = process.env.OPENROUTER_API_KEY;
+  const openRouterBaseUrl = (process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1").replace(/\/$/, "");
+  if (openRouterKey && (openRouterKey !== key || openRouterBaseUrl !== AI_GATEWAY_BASE_URL)) {
+    endpoints.push({ baseUrl: openRouterBaseUrl, key: openRouterKey });
+  }
   const out: number[][] = [];
   for (let i = 0; i < texts.length; i += 100) {
     const batch = texts.slice(i, i + 100);
-    const res = await fetch(`${AI_GATEWAY_BASE_URL}/embeddings`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-      body: JSON.stringify({ model: EMBEDDING_MODEL, input: batch }),
-      signal: AbortSignal.timeout(120_000),
-    });
-    if (!res.ok) throw new Error(`Embedding API returned ${res.status}: ${await res.text()}`);
-    const body = (await res.json()) as { data: { embedding: number[]; index: number }[] };
+    let body: { data: { embedding: number[]; index: number }[] } | undefined;
+    let lastError = "";
+    for (const endpoint of endpoints) {
+      const res = await fetch(`${endpoint.baseUrl}/embeddings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${endpoint.key}` },
+        body: JSON.stringify({ model: EMBEDDING_MODEL, input: batch }),
+        signal: AbortSignal.timeout(120_000),
+      });
+      if (res.ok) {
+        body = (await res.json()) as { data: { embedding: number[]; index: number }[] };
+        break;
+      }
+      lastError = `Embedding API returned ${res.status}: ${await res.text()}`;
+    }
+    if (!body) throw new Error(lastError);
     // API returns batches sorted by index; be defensive anyway
     out.push(...[...body.data].sort((a, b) => a.index - b.index).map((d) => d.embedding));
   }
@@ -251,7 +265,17 @@ export function rrf(a: string[], b: string[], k = 60): Map<string, number> {
   return scores;
 }
 
-type Hit = { id: string; docId: string; source: string; text: string; score: number };
+export type KnowledgeHit = {
+  id: string;
+  docId: string;
+  kbId?: string;
+  source: string;
+  title?: string;
+  chunkIndex?: number;
+  topic?: string;
+  text: string;
+  score: number;
+};
 
 /** Hybrid retrieval: vector top-50 + BM25 top-50 -> RRF -> optional reranker. */
 export async function searchKnowledge(
@@ -260,7 +284,7 @@ export async function searchKnowledge(
   topK = 5,
   orgId?: string,
   topics?: string[],
-): Promise<Hit[]> {
+): Promise<KnowledgeHit[]> {
   let targetOrgId = orgId;
   if (!targetOrgId) {
     const kb = await db.knowledgeBase.findUnique({ where: { id: knowledgeBaseId }, select: { orgId: true } });
@@ -268,29 +292,42 @@ export async function searchKnowledge(
   }
   if (targetOrgId) {
     const reranking = process.env.RERANK_ENABLED === "1";
-    const mainHits = await MainCollectionService.searchKnowledge(targetOrgId, query, {
+    let mainHits = await MainCollectionService.searchKnowledge(targetOrgId, query, {
       kbIds: [knowledgeBaseId],
       limit: reranking ? Math.max(topK * 4, 20) : topK,
       ...(topics && topics.length ? { topics } : {}),
     });
+    // Model-supplied topics are hints. Retry the approved KB without them when
+    // its indexed topic metadata uses a different taxonomy.
+    if (mainHits.length === 0 && topics?.length) {
+      mainHits = await MainCollectionService.searchKnowledge(targetOrgId, query, {
+        kbIds: [knowledgeBaseId],
+        limit: reranking ? Math.max(topK * 4, 20) : topK,
+      });
+    }
     if (mainHits.length > 0) {
       return rerank(
         query,
         mainHits.map((h) => ({
           id: h.id,
           docId: h.docId,
+          kbId: h.kbId,
           source: h.source,
+          title: h.title,
+          chunkIndex: h.chunkIndex,
+          topic: h.topic,
           text: h.text,
           score: h.score,
         })),
         topK,
       );
     }
+    return [];
   }
   return searchCollection(knowledgeCollectionName(knowledgeBaseId), query, topK);
 }
 
-export async function searchCollection(collectionName: string, query: string, topK = 5): Promise<Hit[]> {
+export async function searchCollection(collectionName: string, query: string, topK = 5): Promise<KnowledgeHit[]> {
   const collection = await getCollection(collectionName);
 
   const [queryEmbedding] = await embedTexts([query]);
@@ -327,7 +364,7 @@ export async function searchCollection(collectionName: string, query: string, to
     if (!textById.has(id)) textById.set(id, ((vec.documents?.[0] ?? []) as string[])[i] ?? "");
   }
 
-  const candidates: Hit[] = [...fused.entries()]
+  const candidates: KnowledgeHit[] = [...fused.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, Math.max(topK * 4, 20))
     .map(([id, score]) => ({
@@ -344,7 +381,7 @@ export async function searchCollection(collectionName: string, query: string, to
 // ---- reranking ----------------------------------------------------------
 
 /** Cross-encoder rerank via Vercel AI Gateway when configured; otherwise pass through RRF order. */
-async function rerank(query: string, hits: Hit[], topK: number): Promise<Hit[]> {
+async function rerank(query: string, hits: KnowledgeHit[], topK: number): Promise<KnowledgeHit[]> {
   // ponytail: off by default — the rerank round trip costs seconds of voice silence;
   // RRF ordering is fine for top-3 prompt context. Set RERANK_ENABLED=1 to re-enable.
   if (process.env.RERANK_ENABLED !== "1") return hits.slice(0, topK);

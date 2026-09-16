@@ -44,6 +44,12 @@ export function recordingKey(orgId: string, sessionId: string) {
   return `${orgPrefix(orgId)}/recordings/${sessionId}.wav`;
 }
 
+export function fidelityReportKey(orgId: string, reportId = "latest") {
+  return reportId === "latest"
+    ? `${orgPrefix(orgId)}/fidelity/latest.json`
+    : `${orgPrefix(orgId)}/fidelity/runs/${reportId}.json`;
+}
+
 export function personaSourcePrefix(orgId: string, personaId: string, sourceId?: string) {
   return sourceId
     ? `${orgPrefix(orgId)}/personas/${personaId}/sources/${sourceId}`
@@ -97,4 +103,3 @@ export async function deletePrefix(prefix: string) {
     continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;
   } while (continuationToken);
 }
-

@@ -445,7 +445,7 @@ export class MainCollectionService {
     orgId: string,
     query: string,
     options: { kbIds?: string[]; limit?: number; topics?: string[] } = {},
-  ): Promise<{ id: string; docId: string; kbId: string; source: string; text: string; score: number }[]> {
+  ): Promise<{ id: string; docId: string; kbId: string; source: string; title?: string; chunkIndex?: number; topic?: string; text: string; score: number }[]> {
     return runOnChromaLane(async () => {
       const collection = await this.getCollection(orgId);
       const limit = options.limit ?? 5;
@@ -473,7 +473,7 @@ export class MainCollectionService {
         include: ["documents", "metadatas", "distances"],
       });
 
-      const hits: { id: string; docId: string; kbId: string; source: string; text: string; score: number }[] = [];
+      const hits: { id: string; docId: string; kbId: string; source: string; title?: string; chunkIndex?: number; topic?: string; text: string; score: number }[] = [];
       const ids = res.ids?.[0] ?? [];
       const docs = res.documents?.[0] ?? [];
       const metadatas = (res.metadatas?.[0] ?? []) as Record<string, unknown>[];
@@ -487,6 +487,9 @@ export class MainCollectionService {
           docId: String(meta.docId ?? ids[i]),
           kbId: String(meta.kbId ?? ""),
           source: String(meta.source ?? ""),
+          ...(typeof meta.title === "string" ? { title: meta.title } : {}),
+          ...(typeof meta.chunkIndex === "number" ? { chunkIndex: meta.chunkIndex } : {}),
+          ...(typeof meta.topic === "string" ? { topic: meta.topic } : {}),
           text: docs[i] ?? "",
           score: dist !== null && dist !== undefined ? 1 - dist : 0,
         });

@@ -3,7 +3,7 @@ import unittest
 from checks import conversation_likeness, conversation_quality_issues
 from learners import all_learners, create_synthetic_learner_persona
 from scenarios import build_reference_context
-from simulate import build_golden
+from simulate import build_golden, evaluate_decisions, knowledge_searches
 
 
 class BenchmarkDataTest(unittest.TestCase):
@@ -84,6 +84,16 @@ class BenchmarkDataTest(unittest.TestCase):
         }, learners[1])
         self.assertEqual(golden.name, "fundamentals--deepak")
 
+    def test_knowledge_searches_filters_internal_tool_calls(self):
+        calls = [
+            {"name": "search_style", "input": {"query": "hesitation"}},
+            {"name": "search_knowledge", "input": {"query": "event loop", "topics": ["javascript"]}},
+        ]
+
+        self.assertEqual(knowledge_searches(calls), [calls[1]])
+
+    def test_decision_evaluation_skips_missing_policy(self):
+        self.assertEqual(evaluate_decisions([], {}, None), [])
 
 if __name__ == "__main__":
     unittest.main()

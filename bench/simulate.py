@@ -21,12 +21,14 @@ from deepeval.models import DeepEvalBaseLLM
 from deepeval.simulator import ConversationSimulator
 from deepeval.simulator.controller import end, proceed
 from deepeval.test_case import Turn
+from pydantic import BaseModel
 
 from bridge import DEFAULT_TOOLS, Bridge
 from checks import conversation_likeness, conversation_quality_issues
 from conf import API_URL, RESULTS_DIR
 from learners import all_learners, build_synthetic_golden
 from metrics import conversation_metrics
+from report import build_fidelity_report
 from scenarios import build_reference_context, load_scenarios
 
 MAX_TURNS = int(os.getenv("BENCH_MAX_TURNS", "12"))
@@ -42,6 +44,47 @@ def report_path() -> Path:
 
 def build_golden(scenario: dict, learner: dict | None = None) -> ConversationalGolden:
     return build_synthetic_golden(scenario, learner)
+
+
+def knowledge_searches(tool_calls: list[dict]) -> list[dict]:
+    return [call for call in tool_calls if call.get("name") == "search_knowledge"]
+
+
+class DecisionRecord(BaseModel):
+    turnIndex: int | None = None
+    learnerState: str
+    move: str
+    reason: str
+
+
+class DecisionEvaluation(BaseModel):
+    decisions: list[DecisionRecord]
+
+
+def evaluate_decisions(turns: list[dict], policy: dict, llm: "OpenRouterLLM") -> list[dict]:
+    if not policy:
+        return []
+    pairs = [
+        {"turnIndex": index, "learner": turn["content"], "trainer": turns[index + 1]["content"]}
+        for index, turn in enumerate(turns[:-1])
+        if turn["role"] == "user" and turns[index + 1]["role"] == "assistant"
+    ]
+    if not pairs:
+        return []
+    prompt = f"""Evaluate each transcript pair against this trainer decision policy.
+
+Decision policy (learner state -> preferred move):
+{json.dumps(policy, ensure_ascii=False)}
+
+Transcript pairs:
+{json.dumps(pairs, ensure_ascii=False)}
+
+For every pair, return exactly one decision. learnerState must be the closest exact key from the policy. move must be the exact value from the policy's move vocabulary that best describes the trainer's observed response. Judge what the trainer actually did, not what the policy recommends. Include a brief evidence-based reason. Return JSON as {{"decisions": [...]}}."""
+    evaluation = llm.generate(prompt, schema=DecisionEvaluation)
+    return [
+        {**decision.model_dump(), "turnIndex": decision.turnIndex if decision.turnIndex is not None else pairs[index]["turnIndex"]}
+        for index, decision in enumerate(evaluation.decisions[:len(pairs)])
+    ]
 
 
 class OpenRouterLLM(DeepEvalBaseLLM):
@@ -103,6 +146,8 @@ class Runtime:
     def __init__(self, scenario: dict):
         self.scenario = scenario
         self.session_id = f"bench-fidelity-{uuid4()}"
+        self.tool_calls: list[dict] = []
+        self.retrieval_traces: list[dict] = []
         self.bridge = Bridge(
             session_id=self.session_id,
             agent_slug=scenario["slug"],
@@ -114,6 +159,8 @@ class Runtime:
 
     def complete(self, user_text: str) -> str:
         response = self.bridge.send(user_text, tools=DEFAULT_TOOLS)
+        self.tool_calls.extend(response["tools_called"])
+        self.retrieval_traces.extend(response["retrieval_traces"])
         text = response["text"]
         if not text:
             raise RuntimeError(f"Unexpected completion: no content (tools={response['tools_called']})")
@@ -155,6 +202,9 @@ def simulate_one(scenario: dict, llm: OpenRouterLLM, learner: dict | None = None
         case.name = label
         case.chatbot_role = f'{scenario["persona_name"]}, the trainer running {scenario["name"]}'
         turns = [{"role": turn.role, "content": turn.content} for turn in case.turns]
+        persona = scenario.get("persona") if isinstance(scenario.get("persona"), dict) else {}
+        policy = persona.get("decision_preferences") if isinstance(persona.get("decision_preferences"), dict) else {}
+        decisions = evaluate_decisions(turns, policy, llm)
         likeness = conversation_likeness(turns)
         issues = conversation_quality_issues(turns)
         print(f"likeness {likeness}")
@@ -170,13 +220,17 @@ def simulate_one(scenario: dict, llm: OpenRouterLLM, learner: dict | None = None
             "reference_sources": [source["name"] for source in scenario["sources"]],
             "likeness": likeness,
             "quality_issues": issues,
+            "knowledge_retrieval_invoked": bool(knowledge_searches(runtime.tool_calls)),
+            "knowledge_searches": knowledge_searches(runtime.tool_calls),
+            "knowledge_retrievals": runtime.retrieval_traces,
+            "decision_records": decisions,
         }
         return case
     finally:
         pass  # bridge sessions are durable; no DB rows to clean up
 
 
-def save_report(result, cases: list, llm: OpenRouterLLM, path: Path) -> None:
+def save_report(result, cases: list, scenarios: list[dict], llm: OpenRouterLLM, path: Path) -> Path:
     report = result.model_dump(mode="json", by_alias=True)
     report["benchmark"] = {
         "created_at": datetime.now(UTC).isoformat(),
@@ -195,6 +249,29 @@ def save_report(result, cases: list, llm: OpenRouterLLM, path: Path) -> None:
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    fidelity_path = path.with_suffix(".fidelity.json")
+    fidelity = build_fidelity_report(
+        report,
+        cases,
+        scenarios,
+        org_id=os.environ["BENCH_ORG_ID"],
+        evaluation_model=llm.get_model_name(),
+        threshold=FIDELITY_THRESHOLD,
+    )
+    fidelity_path.write_text(json.dumps(fidelity, ensure_ascii=False, indent=2) + "\n")
+    if os.getenv("BENCH_PUBLISH_FIDELITY") == "1":
+        response = httpx.post(
+            f'{os.getenv("BENCH_STUDIO_URL", "http://localhost:3000").rstrip("/")}/api/internal/fidelity',
+            headers={
+                "authorization": f'Bearer {os.environ["COPILOT_SERVICE_SECRET"]}',
+                "content-type": "application/json",
+                "x-trainertwin-org-id": os.environ["BENCH_ORG_ID"],
+            },
+            json=fidelity,
+            timeout=120,
+        )
+        response.raise_for_status()
+    return fidelity_path
 
 
 def main() -> None:
@@ -212,8 +289,8 @@ def main() -> None:
         identifier="trainer-fidelity",
     )
     path = report_path()
-    save_report(result, cases, llm, path)
-    print(f"\nReport: {path}")
+    fidelity_path = save_report(result, cases, scenarios, llm, path)
+    print(f"\nReport: {path}\nFidelity report: {fidelity_path}")
 
 
 if __name__ == "__main__":

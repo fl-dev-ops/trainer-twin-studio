@@ -39,6 +39,7 @@ export type SessionSpecs = {
   personaName?: string;
   personaSlug?: string;
   personaVoice?: string;
+  knowledgeBases: { slug: string; name: string }[];
   documents: AttachedDocument[];
   resume?: {
     documentId: string;
@@ -65,6 +66,7 @@ export async function loadSessionContext(
     sessionId: string | null;
     agent: SpecRow | null;
     persona: SpecRow | null;
+    knowledgeBases: { slug: string; name: string }[];
     documents: AttachedDocument[];
     resume?: {
       documentId: string;
@@ -126,6 +128,7 @@ export async function loadSessionContext(
     personaName: personaData.name ?? result.persona?.slug ?? personaSlug,
     personaSlug: result.persona?.slug ?? personaSlug,
     personaVoice,
+    knowledgeBases: result.knowledgeBases ?? [],
     documents: result.documents ?? [],
     resume: result.resume ?? null,
     learnerName: result.learnerName,
@@ -153,6 +156,10 @@ export function formatSessionSpec(specs: SessionSpecs): string {
         .join("\n") +
       "\nDOCUMENT ACCESS RULE: Call the `read_document(documentId, query)` tool whenever the candidate refers to a past company, timeframe, or system from their resume that you need exact details on. Do not guess dates or company details.\nSHOW-AND-TELL ARTIFACT RULE: At session start (or when discussing a document), call surface with action 'open_pdf' and payload { fileId: '<doc_id>' } while speaking. If conducting system design, call surface with action 'open_whiteboard' or use 'highlight_whiteboard'. Open it directly without asking permission."
     : "None attached. Do not claim documents are available on screen.";
+
+  const knowledgeBlock = specs.knowledgeBases.length > 0
+    ? `Approved knowledge retrieval is available from: ${specs.knowledgeBases.map((kb) => kb.name).join(", ")}. Call search_knowledge(query, limit, topics) only when a substantive domain claim needs grounding.`
+    : "No approved knowledge base is available. Do not call search_knowledge.";
 
   let resumeBlock = "";
   if (specs.resume) {
@@ -199,6 +206,9 @@ SAME-TURN CONTINUATION: multiple spoken messages within one turn are fine, but t
 
 INTERVIEW PROGRESSION (guidance, not a script — bridge topics naturally):
 ${phases}
+
+APPROVED KNOWLEDGE:
+${knowledgeBlock}
 
 PERSONA: ${specs.personaName ?? specs.personaSlug ?? "Trainer"} (slug: ${specs.personaSlug ?? "trainer"})
 ${specs.personaVoice ? `How this trainer behaves and decides (from their indexed records): ${specs.personaVoice}` : ""}

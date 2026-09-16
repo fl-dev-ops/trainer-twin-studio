@@ -58,6 +58,7 @@ class Bridge:
         start = time.time()
         text = ""
         tools_called: list = []
+        retrieval_traces: list = []
         ttft_ms = wall_ms = 0
         usage: dict = {}
         with urllib.request.urlopen(request, timeout=timeout) as response:
@@ -71,6 +72,8 @@ class Bridge:
                     text += delta["content"]
                 if chunk.get("tools_called"):
                     tools_called = chunk["tools_called"]
+                if chunk.get("retrieval_traces"):
+                    retrieval_traces = chunk["retrieval_traces"]
                 if chunk.get("ttft_ms"):
                     ttft_ms = chunk["ttft_ms"]
                 if chunk.get("wall_ms"):
@@ -81,6 +84,7 @@ class Bridge:
         return {
             "text": text,
             "tools_called": tools_called,
+            "retrieval_traces": retrieval_traces,
             "ttft_ms": ttft_ms or client_wall,
             "wall_ms": wall_ms or client_wall,
             "usage": usage,

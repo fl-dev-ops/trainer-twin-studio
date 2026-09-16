@@ -114,6 +114,13 @@ type StreamEvent = {
   data: Record<string, unknown> & {
     messageDelta?: string;
     actions?: { kind: string; callId: string; toolName: string; input: unknown }[];
+    result?: {
+      kind?: string;
+      callId?: string;
+      toolName?: string;
+      isError?: boolean;
+      output?: unknown;
+    };
     usage?: { inputTokens?: number; outputTokens?: number };
   };
 };
@@ -251,6 +258,7 @@ export default defineChannel({
         let tFirstEvent = 0;
         let usage: { inputTokens?: number; outputTokens?: number } | null = null;
         const allToolsCalled: { name: string; callId: string; input: unknown }[] = [];
+        const retrievalTraces: { callId: string; input: unknown; output: unknown }[] = [];
         const finishReason = () => (sawToolCall ? "tool_calls" : "stop");
 
         try {
@@ -314,6 +322,22 @@ export default defineChannel({
               continue;
             }
 
+            if (ev.type === "action.result") {
+              const result = ev.data.result;
+              if (
+                result?.kind === "tool-result" &&
+                result.toolName === "search_knowledge" &&
+                !result.isError
+              ) {
+                retrievalTraces.push({
+                  callId: result.callId ?? "",
+                  input: allToolsCalled.find((call) => call.callId === result.callId)?.input ?? {},
+                  output: result.output,
+                });
+              }
+              continue;
+            }
+
             if (ev.type === "step.completed" && ev.data.usage) {
               usage = ev.data.usage;
               continue;
@@ -334,6 +358,7 @@ export default defineChannel({
                 model,
                 choices: [{ index: 0, delta: {}, finish_reason: finishReason() }],
                 tools_called: allToolsCalled,
+                retrieval_traces: retrievalTraces,
                 ttft_ms: ttftMs ?? wallMs,
                 wall_ms: wallMs,
                 timing_breakdown: {

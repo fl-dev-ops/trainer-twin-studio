@@ -23,6 +23,7 @@ import { seedCopilot } from "@/lib/copilot-handoff";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PersonaBaselinePanel } from "@/components/persona-baseline-panel";
+import { ScenarioSectionNav } from "@/components/scenario-section-nav";
 import type { PersonaBaseline } from "@/lib/persona-baseline";
 import {
   Card,
@@ -364,6 +365,8 @@ export function SpecResourceIndex({ type, specs }: { type: ResourceType; specs: 
             </>
           }
         />
+
+        {type === "agents" && <ScenarioSectionNav active="scenarios" />}
 
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {specs.map((spec) => (
