@@ -104,7 +104,7 @@ function renderEmailLayout({
       font-size: 18px;
       font-weight: 700;
       letter-spacing: -0.5px;
-      color: #4648D4;
+      color: #EC3013;
       text-decoration: none;
     }
     .content {
@@ -126,7 +126,7 @@ function renderEmailLayout({
     }
     .btn {
       display: inline-block;
-      background-color: #4648D4;
+      background-color: #EC3013;
       color: #ffffff !important;
       font-size: 15px;
       font-weight: 600;
@@ -330,7 +330,7 @@ export async function sendRolePlayAssignmentEmail({
       </p>
       ${
         rolePlayObjective
-          ? `<div style="background: #f8fafc; border-left: 4px solid #4648D4; padding: 16px; border-radius: 8px; margin: 20px 0;">
+          ? `<div style="background: #f8fafc; border-left: 4px solid #EC3013; padding: 16px; border-radius: 8px; margin: 20px 0;">
               <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin: 0 0 6px;">Objective</p>
               <p style="font-size: 14px; font-style: italic; margin: 0; color: #1e293b;">&ldquo;${rolePlayObjective}&rdquo;</p>
             </div>`

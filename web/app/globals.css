@@ -55,9 +55,9 @@
 :root {
   --font-sans: var(--font-geist-sans);
   --font-heading: var(--font-geist-sans);
-  /* Backup previous default brand color: #ec3013 (brand), #c9270f (brand-strong) */
-  --brand: #4648d4;
-  --brand-strong: #4648d4;
+  /* Brand matches the trainertwin-mark logo: #EC3013 with a darker strong variant for hover. */
+  --brand: #ec3013;
+  --brand-strong: #c9270f;
   /* Three-tone palette: canvas → content surface → interactive control. */
   --tone-canvas: #f4f4f4;
   --tone-surface: #ffffff;
@@ -133,7 +133,8 @@
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: var(--brand);
   --highlight: oklch(0.852 0.199 91.936);
-  --brand: oklch(0.707 0.165 254.624);
+  /* Dark mode: lighten the logo red for contrast on the dark canvas. */
+  --brand: #f4603c;
 }
 
 @layer base {

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { LoaderCircle, Play, Upload as UploadIcon, Volume2 } from "lucide-react";
+import { Check, LoaderCircle, Play, Upload as UploadIcon, Volume2 } from "lucide-react";
 import "@livekit/components-styles";
 import {
   RoomAudioRenderer,
@@ -43,6 +43,7 @@ import { CodeEditor } from "@/components/session/code-editor";
 import { CodeViewer } from "@/components/session/code-viewer";
 import { Whiteboard } from "@/components/session/whiteboard";
 import { PresentationViewer } from "@/components/session/presentation-viewer";
+import { PreJoin, type PreJoinMediaSettings } from "@/components/session/prejoin";
 import { PdfViewerSurface } from "@/components/session/pdf-viewer";
 import { ImageViewerSurface } from "@/components/session/image-viewer";
 import { LiveKitWorkspaceProvider } from "@/lib/livekit-workspaces";
@@ -70,6 +71,10 @@ type Props = {
   agentPersonas?: Record<string, string>;
   agentContextRequired?: Record<string, boolean>;
   sessionCode?: string;
+  scenarioName?: string;
+  userName?: string;
+  organizationName?: string;
+  organizationLogo?: string | null;
   /** Playable intro video per scenario slug. */
   introVideos?: Record<string, string | null>;
   /** Learner-facing entries: no start button, the session starts on page load. */
@@ -89,6 +94,10 @@ export function SessionView({
   agentPersonas = {},
   agentContextRequired = {},
   sessionCode,
+  scenarioName,
+  userName,
+  organizationName,
+  organizationLogo = null,
   introVideos = {},
   autoStart = false,
 }: Props) {
@@ -115,6 +124,11 @@ export function SessionView({
   const contextInput = useRef<HTMLInputElement>(null);
 
   const [launched, setLaunched] = useState(false);
+  const [prejoinComplete, setPrejoinComplete] = useState(!sessionCode);
+  const [prejoinMedia, setPrejoinMedia] = useState<PreJoinMediaSettings>({
+    microphoneEnabled: true,
+    cameraEnabled: false,
+  });
   const [connection, setConnection] = useState<SessionConnection | null>(null);
   const [connected, setConnected] = useState(false);
   const [agentInRoom, setAgentInRoom] = useState(false);
@@ -259,14 +273,14 @@ export function SessionView({
   }, [introSrc, introPrefetchDone]);
 
   useEffect(() => {
-    if (!autoStart || ended || !agent || !persona || launched) return;
+    if (!autoStart || !prejoinComplete || ended || !agent || !persona || launched) return;
     if (isContextRequired && contextIds.length === 0) return;
     if (introSrc && !introPrefetchDone) return;
     void Promise.resolve().then(() => {
       setLaunched(true);
       void handleStartSession();
     });
-  }, [autoStart, ended, agent, persona, launched, isContextRequired, contextIds, handleStartSession, introSrc, introPrefetchDone]);
+  }, [autoStart, prejoinComplete, ended, agent, persona, launched, isContextRequired, contextIds, handleStartSession, introSrc, introPrefetchDone]);
 
   useEffect(() => {
     if (!connection || connected) return;
@@ -285,6 +299,13 @@ export function SessionView({
       cancelled = true;
     };
   }, [room, connection, connected]);
+
+  useEffect(() => {
+    if (!connected || !prejoinMedia.speakerDeviceId) return;
+    void room
+      .switchActiveDevice("audiooutput", prejoinMedia.speakerDeviceId)
+      .catch((speakerError) => console.error("Could not apply speaker choice:", speakerError));
+  }, [room, connected, prejoinMedia.speakerDeviceId]);
 
   useEffect(() => {
     if (!connected) return;
@@ -306,9 +327,20 @@ export function SessionView({
     releasedRef.current = true;
     void (async () => {
       try {
-        await room.localParticipant.setMicrophoneEnabled(true);
+        await room.localParticipant.setMicrophoneEnabled(
+          prejoinMedia.microphoneEnabled,
+          prejoinMedia.microphoneDeviceId ? { deviceId: prejoinMedia.microphoneDeviceId } : undefined,
+        );
       } catch (micError) {
-        console.error("Could not enable microphone:", micError);
+        console.error("Could not apply microphone choice:", micError);
+      }
+      try {
+        await room.localParticipant.setCameraEnabled(
+          prejoinMedia.cameraEnabled,
+          prejoinMedia.cameraDeviceId ? { deviceId: prejoinMedia.cameraDeviceId } : undefined,
+        );
+      } catch (cameraError) {
+        console.error("Could not apply camera choice:", cameraError);
       }
       try {
         await room.localParticipant.publishData(
@@ -319,7 +351,7 @@ export function SessionView({
         console.error("Could not release agent opening:", dataError);
       }
     })();
-  }, [room, connected, agentInRoom, ended, introSrc, introDone]);
+  }, [room, connected, agentInRoom, ended, introSrc, introDone, prejoinMedia]);
 
   const finalizeSession = useCallback(
     (status: "completed" | "abandoned") => {
@@ -633,38 +665,72 @@ export function SessionView({
     };
   }, [room]);
 
+  if (sessionCode && !prejoinComplete) {
+    return (
+      <PreJoin
+        scenarioName={scenarioName ?? agent.replaceAll("-", " ")}
+        userName={userName ?? "You"}
+        organizationName={organizationName ?? "TrainerTwin"}
+        organizationLogo={organizationLogo}
+        contexts={contextList}
+        contextRequired={isContextRequired}
+        onJoin={(settings, contextId) => {
+          setPrejoinMedia(settings);
+          setContextIds(contextId ? [contextId] : []);
+          setPrejoinComplete(true);
+        }}
+      />
+    );
+  }
+
   if (ended) {
     return (
       <div className="dark flex h-dvh w-dvw items-center justify-center bg-[#14161a] p-6 text-foreground">
         <Card className="w-full max-w-md border border-white/[0.06] bg-[#1c1f26] text-center shadow-2xl">
-          <CardHeader>
-            <CardTitle>{endReason === "completed" ? "Session complete" : "Session ended"}</CardTitle>
-            <CardDescription>
-              {sessionCode
-                ? endReason === "disconnected"
-                  ? "The connection closed unexpectedly. Any captured session data has been saved. You may close this tab."
-                  : "Your responses have been saved. You may close this tab."
-                : endReason === "disconnected"
-                  ? "The connection closed unexpectedly. Any captured session data has been saved."
-                  : "Your transcript and recording are being saved in Sessions."}
-            </CardDescription>
-          </CardHeader>
-          {!sessionCode && (
-            <CardContent className="flex justify-center gap-2">
-              <Button variant="outline" nativeButton={false} render={<Link href="/sessions" />}>
-                View sessions
-              </Button>
-              <Button
-                onClick={() => {
-                  resetSessionState();
-                  setEnded(false);
-                }}
-              >
-                <Play data-icon="inline-start" /> New session
-              </Button>
-            </CardContent>
+          {sessionCode && endReason !== "disconnected" ? (
+            <SessionFeedback scenarioName={scenarioName} />
+          ) : (
+            <>
+              <CardHeader>
+                <CardTitle>{endReason === "completed" ? "Session complete" : "Session ended"}</CardTitle>
+                <CardDescription>
+                  {sessionCode
+                    ? endReason === "disconnected"
+                      ? "The connection closed unexpectedly. Any captured session data has been saved. You may close this tab."
+                      : "Your responses have been saved. You may close this tab."
+                    : endReason === "disconnected"
+                      ? "The connection closed unexpectedly. Any captured session data has been saved."
+                      : "Your transcript and recording are being saved in Sessions."}
+                </CardDescription>
+              </CardHeader>
+              {!sessionCode && (
+                <CardContent className="flex justify-center gap-2">
+                  <Button variant="outline" nativeButton={false} render={<Link href="/sessions" />}>
+                    View sessions
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      resetSessionState();
+                      setEnded(false);
+                    }}
+                  >
+                    <Play data-icon="inline-start" /> New session
+                  </Button>
+                </CardContent>
+              )}
+            </>
           )}
         </Card>
+      </div>
+    );
+  }
+
+  if (sessionCode && prejoinComplete && !launched && (!isContextRequired || contextIds.length > 0)) {
+    return (
+      <div className="grid min-h-svh place-items-center bg-[#14161a] text-white">
+        <div className="flex items-center gap-3 text-sm text-white/75">
+          <LoaderCircle className="size-5 animate-spin" /> Preparing your session…
+        </div>
       </div>
     );
   }
@@ -1092,6 +1158,89 @@ export function SessionView({
         <RoomAudioRenderer />
       </RoomContext.Provider>
     </div>
+  );
+}
+
+/** UI-only feedback form shown on the end screen of assigned sessions. */
+function SessionFeedback({ scenarioName }: { scenarioName?: string }) {
+  const [rating, setRating] = useState<number | null>(null);
+  const [note, setNote] = useState("");
+  const [sent, setSent] = useState(false);
+
+  if (sent) {
+    return (
+      <>
+        <CardHeader>
+          <span className="mx-auto grid size-12 place-items-center rounded-full bg-brand/15 text-brand">
+            <Check className="size-6" aria-hidden="true" />
+          </span>
+          <CardTitle>Thanks for your feedback</CardTitle>
+          <CardDescription>You may close this tab.</CardDescription>
+        </CardHeader>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <CardHeader>
+        <CardTitle>{scenarioName ? `${scenarioName} ended` : "Session ended"}</CardTitle>
+        <CardDescription>Your responses have been saved. You may close this tab.</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <fieldset>
+          <legend className="mb-2 text-sm font-medium text-foreground">How was this session?</legend>
+          <div className="flex justify-center gap-2">
+            {[
+              "Frustrating",
+              "Struggled",
+              "Okay",
+              "Good",
+              "Great",
+            ].map((label, index) => {
+              const value = index + 1;
+              const selected = rating === value;
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => setRating(value)}
+                  className={cn(
+                    "h-10 w-10 rounded-full border text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand",
+                    selected
+                      ? "border-brand bg-brand text-white"
+                      : "border-white/10 bg-white/[0.04] text-muted-foreground hover:border-white/25 hover:text-foreground",
+                  )}
+                >
+                  {value}
+                </button>
+              );
+            })}
+          </div>
+          {rating ? (
+            <p aria-live="polite" className="mt-2 text-center text-xs text-muted-foreground">
+              {rating <= 2
+                ? "Rough one — what tripped you up?"
+                : rating === 3
+                  ? "Fair enough — anything to improve?"
+                  : "Great to hear!"}
+            </p>
+          ) : null}
+        </fieldset>
+        <textarea
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          rows={3}
+          maxLength={500}
+          placeholder="Anything else you'd like to share? (optional)"
+          className="w-full resize-none rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-brand"
+        />
+        <Button disabled={rating === null} onClick={() => setSent(true)} className="w-full">
+          Send feedback
+        </Button>
+      </CardContent>
+    </>
   );
 }
 

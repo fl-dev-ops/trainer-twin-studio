@@ -103,7 +103,8 @@ export function OrganizationForm({
   const [websiteError, setWebsiteError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   // Backup previous default brand color: #ec3013
-  const DEFAULT_ACCENT = "#4648D4";
+  // Matches the TrainerTwin logo brand color (globals.css --brand).
+  const DEFAULT_ACCENT = "#EC3013";
   const [accent, setAccent] = useState(organization.accentColor ?? DEFAULT_ACCENT);
 
   async function saveOrganization(event: React.FormEvent<HTMLFormElement>) {

@@ -21,7 +21,8 @@ export default async function SharedSessionPage({ params }: { params: Promise<{ 
       orgId: true,
       userId: true,
       status: true,
-      agent: { select: { slug: true, persona: { select: { slug: true } } } },
+      agent: { select: { slug: true, name: true, persona: { select: { slug: true } } } },
+      organization: { select: { name: true, logo: true } },
     },
   }) : null;
   if (!session || session.orgId !== org?.id || session.userId !== user.id || session.status !== "assigned") {
@@ -45,6 +46,10 @@ export default async function SharedSessionPage({ params }: { params: Promise<{ 
     <SessionView
       personas={[session.agent.persona.slug]}
       agents={[session.agent.slug]}
+      scenarioName={session.agent.name}
+      userName={user.name}
+      organizationName={session.organization.name}
+      organizationLogo={/^data:image\/(?:png|jpeg|webp);base64,/.test(session.organization.logo ?? "") ? session.organization.logo : null}
       agentPersonas={{ [session.agent.slug]: session.agent.persona.slug }}
       agentContextRequired={agentContextRequired}
       introVideos={introVideos}
