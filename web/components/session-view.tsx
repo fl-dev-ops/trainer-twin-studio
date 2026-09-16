@@ -159,6 +159,7 @@ export function SessionView({
   const entriesRef = useRef<Entry[]>([]);
   const coverageRef = useRef<Coverage>({});
   const finalizedRef = useRef(false);
+  const surfaceKeyRef = useRef<string | null>(null);
   const whiteboardAcknowledgementsRef = useRef(
     new Map<string, (acknowledgement: WhiteboardAcknowledgement) => void>(),
   );
@@ -209,7 +210,11 @@ export function SessionView({
     setIntroDone(false);
     setEntries([]);
     setCoverage({});
+    surfaceKeyRef.current = null;
     setSurface(null);
+    setSelectedChoiceId(null);
+    setChoiceSubmitting(false);
+    setChoiceSubmitted(false);
     setLatestSpokenText("");
     setElapsed(0);
   }, []);
@@ -400,6 +405,17 @@ export function SessionView({
     [room],
   );
 
+  const handleSurface = useCallback((nextSurface: AgentSurface) => {
+    const nextKey = nextSurface?.key ?? null;
+    if (surfaceKeyRef.current !== nextKey) {
+      surfaceKeyRef.current = nextKey;
+      setSelectedChoiceId(null);
+      setChoiceSubmitting(false);
+      setChoiceSubmitted(false);
+    }
+    setSurface(nextSurface);
+  }, []);
+
   const handleChoiceSubmission = useCallback(async () => {
     if (surface?.tool !== "choice" || !selectedChoiceId || choiceSubmitting || choiceSubmitted) return;
     const option = surface.options.find(({ id }) => id === selectedChoiceId);
@@ -424,12 +440,6 @@ export function SessionView({
       setChoiceSubmitting(false);
     }
   }, [choiceSubmitted, choiceSubmitting, room, selectedChoiceId, surface]);
-
-  useEffect(() => {
-    setSelectedChoiceId(null);
-    setChoiceSubmitting(false);
-    setChoiceSubmitted(false);
-  }, [surface?.key]);
 
   const handleCodeSubmission = useCallback(async (questionId: string, language: string, code: string) => {
     const submissionId = crypto.randomUUID();
@@ -910,7 +920,7 @@ export function SessionView({
       <RoomContext.Provider value={room}>
         <LiveKitWorkspaceProvider
           room={room}
-          onSurface={setSurface}
+          onSurface={handleSurface}
           onEndSession={() => void handleDisconnect("completed")}
         >
           {/* Topbar Navigation: Clean Logo Left, Live Badge Right */}
