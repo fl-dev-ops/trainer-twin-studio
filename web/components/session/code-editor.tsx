@@ -4,7 +4,6 @@ import Editor from "@monaco-editor/react";
 import { LoaderCircle, Play } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { useTheme } from "next-themes";
 import type { editor } from "monaco-editor";
 import type {
   CodeExecutionResult,
@@ -124,7 +123,6 @@ export function CodeEditor({
   readOnly?: boolean;
   onSubmit?: (language: SupportedCodeExecutionLanguage, code: string) => Promise<void>;
 }) {
-  const { resolvedTheme } = useTheme();
   const registerWorkspaceHandler = useWorkspaceHandlers();
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const decorationIdsRef = useRef<string[]>([]);
@@ -349,7 +347,7 @@ export function CodeEditor({
     language === "html" || language === "react" ? (runResult?.previewUrl ?? null) : null;
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-card">
       {instructions ? (
         <div className="max-h-32 shrink-0 overflow-y-auto border-b border-white/[0.05] px-4 py-3 text-sm text-foreground/85">
           {instructions}
@@ -373,7 +371,7 @@ export function CodeEditor({
         >
           Code
         </button>
-        {!readOnly && <button
+        <button
           type="button"
           role="tab"
           aria-selected={activeTab === "output"}
@@ -385,14 +383,14 @@ export function CodeEditor({
           }`}
         >
           Output
-        </button>}
+        </button>
       </div>
 
       <div className="min-h-0 flex-1">
         <div role="tabpanel" hidden={activeTab !== "code"} className="h-full">
           <Editor
             height="100%"
-            theme={resolvedTheme === "light" ? "light" : "vs-dark"}
+            theme="vs-dark"
             language={monacoLanguage(language)}
             value={code}
             onMount={applyInitialHighlight}
@@ -419,14 +417,15 @@ export function CodeEditor({
               scrollBeyondLastLine: false,
               automaticLayout: true,
               readOnly,
+              domReadOnly: readOnly,
             }}
             loading={<p className="p-4 text-sm text-muted-foreground">Loading editor…</p>}
           />
         </div>
-        {!readOnly && <div
+        <div
           role="tabpanel"
           hidden={activeTab !== "output"}
-          className="h-full overflow-auto p-4"
+          className="h-full overflow-auto bg-background/45 p-4"
         >
           {isRunning ? (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -453,31 +452,33 @@ export function CodeEditor({
               Run your code to see its output here.
             </div>
           )}
-        </div>}
+        </div>
       </div>
 
-      {!readOnly && <div className="flex shrink-0 items-center justify-between gap-3 border-t border-white/[0.05] px-4 py-3">
-        <select
-          value={language}
-          onChange={(event) => {
-            runAbortControllerRef.current?.abort();
-            runAbortControllerRef.current = null;
-            setIsRunning(false);
-            const nextLanguage = event.target.value as SupportedCodeExecutionLanguage;
-            setLanguage(nextLanguage);
-            setRunResult(null);
-            previewConsoleTargetRef.current = null;
-            setBrowserConsoleEntries([]);
-            setActiveTab("code");
-          }}
-          className="rounded-lg border border-white/10 bg-[#1a1d23] px-3 py-1.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring/15"
-        >
-          {(Object.keys(LANGUAGE_LABELS) as SupportedCodeExecutionLanguage[]).map((lang) => (
-            <option key={lang} value={lang}>
-              {LANGUAGE_LABELS[lang]}
-            </option>
-          ))}
-        </select>
+      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-white/[0.05] px-4 py-3">
+        {!readOnly ? (
+          <select
+            value={language}
+            onChange={(event) => {
+              runAbortControllerRef.current?.abort();
+              runAbortControllerRef.current = null;
+              setIsRunning(false);
+              const nextLanguage = event.target.value as SupportedCodeExecutionLanguage;
+              setLanguage(nextLanguage);
+              setRunResult(null);
+              previewConsoleTargetRef.current = null;
+              setBrowserConsoleEntries([]);
+              setActiveTab("code");
+            }}
+            className="rounded-lg border border-white/10 bg-[#1a1d23] px-3 py-1.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring/15"
+          >
+            {(Object.keys(LANGUAGE_LABELS) as SupportedCodeExecutionLanguage[]).map((lang) => (
+              <option key={lang} value={lang}>
+                {LANGUAGE_LABELS[lang]}
+              </option>
+            ))}
+          </select>
+        ) : <span />}
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -492,7 +493,7 @@ export function CodeEditor({
             )}
             {isRunning ? "Running…" : "Run"}
           </button>
-          {onSubmit ? (
+          {!readOnly && onSubmit ? (
             <button
               type="button"
               onClick={async () => {
@@ -513,7 +514,7 @@ export function CodeEditor({
             </button>
           ) : null}
         </div>
-      </div>}
+      </div>
     </div>
   );
 }

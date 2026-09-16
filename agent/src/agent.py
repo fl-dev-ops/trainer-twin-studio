@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
 import json
 import logging
 import os
 import sys
+import time
 from typing import Any
 
 from dotenv import load_dotenv
@@ -86,6 +89,9 @@ def parse_metadata(raw: str | None) -> dict[str, Any]:
 # 60s cap keeps dead clients (refresh loops, broken video) from stalling sessions; keep
 # intro clips comfortably under it.
 OPENING_RELEASE_TIMEOUT = 60.0
+MCQ_SUBMISSION_PREFIX = "__TRAINERTWIN_MCQ_SUBMISSION__:"
+CODE_SUBMISSION_PREFIX = "__TRAINERTWIN_CODE_SUBMISSION__:"
+WHITEBOARD_SUBMISSION_PREFIX = "__TRAINERTWIN_WHITEBOARD_SUBMISSION__:"
 # The common voice prompt lives in prompt.md next to this file and is loaded
 # at import time (see COMMON_VOICE_INSTRUCTIONS above).
 
@@ -164,6 +170,8 @@ async def entrypoint(ctx: agents.JobContext) -> None:
     active_session: Any = None
     pending_chat_messages: list[str] = []
     pending_code_submissions: dict[str, dict[str, Any]] = {}
+    accepted_whiteboard_signatures: set[str] = set()
+    participant_identity: str | None = None
 
     def submit_user_input(text: str) -> None:
         if active_session is not None:
@@ -186,12 +194,80 @@ async def entrypoint(ctx: agents.JobContext) -> None:
             if text:
                 logger.info("Received chat message from participant: %s", text[:80])
                 submit_user_input(text)
-        elif msg_type == "mcq-selection":
+        elif msg_type == "mcq-submission" and msg.get("submitted") is True:
             option_id = str(msg.get("optionId") or "").strip()
+            option_text = str(msg.get("optionText") or "").strip()
             question_id = str(msg.get("questionId") or "").strip()
-            if option_id:
-                logger.info("Received MCQ selection question_id=%s", question_id[:80])
-                submit_user_input(f"I selected option {option_id}.")
+            if question_id and option_id and option_text and len(option_text) <= 2_000:
+                logger.info("Received MCQ submission question_id=%s option_id=%s", question_id[:80], option_id[:20])
+                submit_user_input(
+                    MCQ_SUBMISSION_PREFIX
+                    + json.dumps(
+                        {
+                            "questionId": question_id,
+                            "optionId": option_id,
+                            "optionText": option_text,
+                        },
+                        separators=(",", ":"),
+                    )
+                )
+        elif msg_type == "whiteboard-evaluation":
+            payload = msg.get("payload")
+            signature = msg.get("signature")
+            if not isinstance(payload, str) or not isinstance(signature, str):
+                return
+            signing_secret = (
+                os.getenv("WHITEBOARD_EVALUATION_SIGNING_SECRET", "").strip()
+                or os.getenv("LIVEKIT_API_SECRET", "").strip()
+            )
+            expected_signature = hmac.new(
+                signing_secret.encode("utf-8"),
+                payload.encode("utf-8"),
+                hashlib.sha256,
+            ).hexdigest()
+            try:
+                assessment = json.loads(payload)
+            except Exception:
+                return
+            if not isinstance(assessment, dict):
+                return
+            question_id = str(assessment.get("questionId") or "").strip()
+            revision = assessment.get("revision")
+            evaluated_at = assessment.get("evaluatedAt")
+            accepted = (
+                bool(signing_secret)
+                and hmac.compare_digest(expected_signature, signature)
+                and signature not in accepted_whiteboard_signatures
+                and assessment.get("version") == 1
+                and assessment.get("roomName") == ctx.room.name
+                and assessment.get("participantIdentity") == participant_identity
+                and bool(question_id)
+                and isinstance(revision, int)
+                and isinstance(evaluated_at, int)
+                and abs(int(time.time() * 1000) - evaluated_at) <= 10 * 60 * 1000
+                and assessment.get("evaluationStatus") == "completed"
+            )
+            if accepted:
+                accepted_whiteboard_signatures.add(signature)
+
+            async def acknowledge_whiteboard() -> None:
+                await ctx.room.local_participant.publish_data(
+                    json.dumps(
+                        {
+                            "type": "whiteboard_answer_status",
+                            "questionId": question_id,
+                            "revision": revision if isinstance(revision, int) else 0,
+                            "status": "accepted" if accepted else "rejected",
+                            **({} if accepted else {"message": "The whiteboard assessment could not be verified."}),
+                        }
+                    ).encode("utf-8"),
+                    reliable=True,
+                )
+                if accepted:
+                    logger.info("Received verified whiteboard assessment question_id=%s", question_id[:80])
+                    submit_user_input(WHITEBOARD_SUBMISSION_PREFIX + payload)
+
+            asyncio.create_task(acknowledge_whiteboard())
         elif msg_type == "code-submission":
             submission_id = str(msg.get("submissionId") or "").strip()
             question_id = str(msg.get("questionId") or "").strip()
@@ -226,14 +302,23 @@ async def entrypoint(ctx: agents.JobContext) -> None:
                 if len(code) > 20000:
                     return
                 logger.info("Received code submission question_id=%s language=%s chars=%s", question_id[:80], language, len(code))
-                submit_user_input(f"I submitted this {language} code:\n```{language}\n{code}\n```")
+                submit_user_input(
+                    CODE_SUBMISSION_PREFIX
+                    + json.dumps(
+                        {
+                            "questionId": question_id,
+                            "language": language,
+                            "code": code,
+                        },
+                        separators=(",", ":"),
+                    )
+                )
 
     ctx.room.on("data_received", on_data_received)
 
     await ctx.connect()
     logger.info("Agent connected to room %s for session %s", ctx.room.name, session_id)
 
-    participant_identity: str | None = None
     for _ in range(60):
         for p in ctx.room.remote_participants.values():
             participant_identity = p.identity

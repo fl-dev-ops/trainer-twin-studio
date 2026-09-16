@@ -57,6 +57,71 @@ const AI_GATEWAY_BASE_URL = (
   "https://ai-gateway.vercel.sh/v1"
 ).replace(/\/$/, "");
 const RUNTIME_MODEL = env.INTERVIEW_LLM_MODEL;
+const MCQ_SUBMISSION_PREFIX = "__TRAINERTWIN_MCQ_SUBMISSION__:";
+const CODE_SUBMISSION_PREFIX = "__TRAINERTWIN_CODE_SUBMISSION__:";
+const WHITEBOARD_SUBMISSION_PREFIX = "__TRAINERTWIN_WHITEBOARD_SUBMISSION__:";
+
+type TechnicalSubmission =
+  | { kind: "mcq"; questionId: string; optionId: string; optionText: string }
+  | { kind: "code"; questionId: string; language: string; code: string }
+  | {
+      kind: "whiteboard";
+      questionId: string;
+      drawingSummary: unknown;
+      visualEvaluation: unknown;
+    };
+
+function parseTechnicalSubmission(value: string): TechnicalSubmission | null {
+  try {
+    if (value.startsWith(MCQ_SUBMISSION_PREFIX)) {
+      const parsed = JSON.parse(value.slice(MCQ_SUBMISSION_PREFIX.length)) as Record<string, unknown>;
+      return typeof parsed.questionId === "string" && typeof parsed.optionId === "string" && typeof parsed.optionText === "string"
+        ? { kind: "mcq", questionId: parsed.questionId, optionId: parsed.optionId, optionText: parsed.optionText }
+        : null;
+    }
+    if (value.startsWith(CODE_SUBMISSION_PREFIX)) {
+      const parsed = JSON.parse(value.slice(CODE_SUBMISSION_PREFIX.length)) as Record<string, unknown>;
+      return typeof parsed.questionId === "string" && typeof parsed.language === "string" && typeof parsed.code === "string"
+        ? { kind: "code", questionId: parsed.questionId, language: parsed.language, code: parsed.code }
+        : null;
+    }
+    if (value.startsWith(WHITEBOARD_SUBMISSION_PREFIX)) {
+      const parsed = JSON.parse(value.slice(WHITEBOARD_SUBMISSION_PREFIX.length)) as Record<string, unknown>;
+      return typeof parsed.questionId === "string"
+        ? {
+            kind: "whiteboard",
+            questionId: parsed.questionId,
+            drawingSummary: parsed.drawingSummary,
+            visualEvaluation: parsed.visualEvaluation,
+          }
+        : null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function submissionTranscriptText(submission: TechnicalSubmission): string {
+  if (submission.kind === "mcq") {
+    return `Selected option ${submission.optionId}: ${submission.optionText}`;
+  }
+  if (submission.kind === "code") {
+    return `Submitted ${submission.language} code:\n\`\`\`${submission.language}\n${submission.code}\n\`\`\``;
+  }
+  return `Submitted a system-design whiteboard. Vision assessment: ${JSON.stringify({
+    drawingSummary: submission.drawingSummary,
+    visualEvaluation: submission.visualEvaluation,
+  })}`;
+}
+
+function technicalQuestionSpeech(question: {
+  questionType: QuestionType;
+  text: string;
+  spokenText: string;
+}): string {
+  return question.questionType === "mcq" ? question.text : question.spokenText;
+}
 
 export interface CompletionUsage {
   prompt_tokens: number;
@@ -2038,8 +2103,11 @@ async function runCompletionPipeline(
         technicalIntroMeta = intro.meta;
       }
     }
+    const openingTechnicalSpeech = openingTechnicalQuestion
+      ? technicalQuestionSpeech(openingTechnicalQuestion)
+      : null;
     const technicalOpeningText = openingTechnicalQuestion
-      ? [technicalIntroText?.trim(), openingTechnicalQuestion.spokenText.trim()].filter(Boolean).join(" ")
+      ? [technicalIntroText?.trim(), openingTechnicalSpeech?.trim()].filter(Boolean).join(" ")
       : null;
     if (openingTechnicalSelection && "kind" in openingTechnicalSelection) {
       state.operational_end_reason = `question_inventory_insufficient:${openingTechnicalSelection.requiredType}`;
@@ -2057,7 +2125,10 @@ async function runCompletionPipeline(
           readOnly: openingTechnicalPresentation.readOnly === true,
         } }
       : openingTechnicalPresentation?.surface === "whiteboard"
-        ? { action: "open_whiteboard", payload: {} }
+        ? { action: "open_whiteboard", payload: {
+            questionId: openingTechnicalPresentation.id,
+            question: openingTechnicalPresentation.text,
+          } }
       : openingTechnicalPresentation?.surface === "choice"
           ? { action: "open_choice", payload: {
               questionId: openingTechnicalPresentation.id,
@@ -2139,11 +2210,28 @@ async function runCompletionPipeline(
     } else if (openingSurface && advertisedToolNames.has("surface") && state.current_surface !== openingSurface.action) {
       state.current_surface = openingSurface.action;
       state.actions.push("surface");
+      const openingSurfaceSpeech = openingTechnicalQuestion ? technicalOpeningText : null;
       if (openingTechnicalQuestion) {
-        state.pending_surface_request = openingSurface.action as RuntimeState["pending_surface_request"];
-        state.pending_question = openingTechnicalQuestion.spokenText;
-        state.pending_opening_text = technicalIntroText;
+        state.pending_surface_request = null;
+        state.pending_question = openingTechnicalSpeech;
+        state.pending_opening_text = null;
+        state.actions.push("opening");
+        recordAskedQuestion(state, openingAction, openingTechnicalSpeech ?? "", false);
+        turnSpokenText = openingSurfaceSpeech;
+        turnSpeechMeta = {
+          attempts: technicalIntroMeta?.attempts ?? 0,
+          flags: technicalIntroMeta?.flags ?? [],
+          fallback: technicalIntroMeta?.fallback ?? false,
+          rendererFallback: technicalIntroMeta?.rendererFallback ?? false,
+          draftWords: wordCount(openingSurfaceSpeech ?? ""),
+          finalWords: wordCount(openingSurfaceSpeech ?? ""),
+        };
       }
+      const openingSurfaceArguments = {
+        ...openingSurface,
+        ...(openingTechnicalQuestion ? { eventId: openingTechnicalQuestion.id } : {}),
+        ...(openingSurfaceSpeech ? { spoken_text: openingSurfaceSpeech } : {}),
+      };
 
       sseChunks = [
         {
@@ -2164,7 +2252,7 @@ async function runCompletionPipeline(
                     type: "function",
                     function: {
                       name: "surface",
-                      arguments: JSON.stringify(openingTechnicalQuestion ? { ...openingSurface, eventId: openingTechnicalQuestion.id } : openingSurface),
+                      arguments: JSON.stringify(openingSurfaceArguments),
                     },
                   },
                 ],
@@ -2199,7 +2287,7 @@ async function runCompletionPipeline(
                   type: "function",
                   function: {
                     name: "surface",
-                    arguments: JSON.stringify(openingTechnicalQuestion ? { ...openingSurface, eventId: openingTechnicalQuestion.id } : openingSurface),
+                    arguments: JSON.stringify(openingSurfaceArguments),
                   },
                 },
               ],
@@ -2258,7 +2346,7 @@ async function runCompletionPipeline(
       recordAskedQuestion(
         state,
         openingAction,
-        openingTechnicalQuestion?.spokenText ?? openingText,
+        openingTechnicalSpeech ?? openingText,
         !openingTechnicalQuestion
       );
       turnSpokenText = openingText;
@@ -2505,7 +2593,23 @@ async function runCompletionPipeline(
     // targeted style retrieval from the trainer's own index → single styled
     // generation. Knowledge RAG, rubric analysis, and phase transitions are
     // deferred to the background analyzer follow-up.
-    const latestUserText = String(userMessages[userMessages.length - 1]?.content ?? "");
+    const rawLatestUserText = String(userMessages[userMessages.length - 1]?.content ?? "");
+    const parsedTechnicalSubmission = parseTechnicalSubmission(rawLatestUserText);
+    const currentQuestionType = state.current_main_question?.type;
+    const submissionMatchesQuestion = parsedTechnicalSubmission && (
+      (parsedTechnicalSubmission.kind === "mcq" && currentQuestionType === "mcq") ||
+      (parsedTechnicalSubmission.kind === "code" && ["coding", "machine-coding"].includes(currentQuestionType ?? "")) ||
+      (parsedTechnicalSubmission.kind === "whiteboard" && currentQuestionType === "system-design")
+    );
+    const technicalSubmission = parsedTechnicalSubmission &&
+      specs.agent.interview.type === "technical" &&
+      submissionMatchesQuestion &&
+      state.current_main_question?.id === parsedTechnicalSubmission.questionId
+        ? parsedTechnicalSubmission
+        : null;
+    const latestUserText = technicalSubmission
+      ? submissionTranscriptText(technicalSubmission)
+      : rawLatestUserText;
     turnUserText = latestUserText;
     const fullTranscript = [...currentTranscript, { role: "user" as const, text: latestUserText }];
     for (const m of messages) {
@@ -2529,7 +2633,7 @@ async function runCompletionPipeline(
 
     // Mechanical identity lock: the learner's name comes only from their speech,
     // never from documents or retrieved examples.
-    if (!state.learner_name && latestUserText.trim()) {
+    if (!technicalSubmission && !state.learner_name && latestUserText.trim()) {
       state.learner_name = extractLearnerName(latestUserText);
     }
     const learnerName = state.learner_name ?? null;
@@ -2544,7 +2648,11 @@ async function runCompletionPipeline(
     let retrievalQuery: string;
     let knowledgeLookup: KnowledgeLookup = { needed: false, query: "" };
     let classifiedDocumentLookup: DocumentLookup | null = null;
-    if (requestedSurface) {
+    if (technicalSubmission) {
+      intent = "answer";
+      move = "acknowledge_advance";
+      retrievalQuery = `candidate submitted a ${technicalSubmission.kind} answer; acknowledge and advance`;
+    } else if (requestedSurface) {
       intent = "question";
       move = "clarify";
       retrievalQuery = `learner requests ${requestedSurface}`;
@@ -3002,7 +3110,9 @@ async function runCompletionPipeline(
               config: specs.agent.interview,
               state,
               stageObjective: phaseForGrounding?.objective ?? specs.agent.objective,
-              latestCandidateAnswer: latestUserText,
+              latestCandidateAnswer: technicalSubmission
+                ? `${technicalSubmission.kind} answer submitted`
+                : latestUserText,
             })
           : null;
         const technicalQuotaComplete = specs.agent.interview.type === "technical" &&
@@ -3010,6 +3120,11 @@ async function runCompletionPipeline(
             (state.asked_question_counts?.[type as QuestionType] ?? 0) >= (count ?? 0));
         const selectedTechnicalQuestion = technicalSelection && !("kind" in technicalSelection) ? technicalSelection : null;
         const technicalPresentation = selectedTechnicalQuestion ? toCandidateQuestion(selectedTechnicalQuestion) : null;
+        const selectedTechnicalSpeech = selectedTechnicalQuestion
+          ? technicalQuestionSpeech(selectedTechnicalQuestion)
+          : null;
+        const acknowledgement = technicalSubmission ? "Okay, got it." : null;
+        const acknowledge = (text: string) => [acknowledgement, text].filter(Boolean).join(" ");
         const technicalSurface = technicalPresentation?.surface === "code"
           ? { action: "open_code_editor" as const, payload: {
               questionId: technicalPresentation.id,
@@ -3020,7 +3135,10 @@ async function runCompletionPipeline(
               readOnly: technicalPresentation.readOnly === true,
             } }
           : technicalPresentation?.surface === "whiteboard"
-            ? { action: "open_whiteboard" as const, payload: {} }
+            ? { action: "open_whiteboard" as const, payload: {
+                questionId: technicalPresentation.id,
+                question: technicalPresentation.text,
+              } }
           : technicalPresentation?.surface === "choice"
               ? { action: "open_choice" as const, payload: {
                   questionId: technicalPresentation.id,
@@ -3029,16 +3147,41 @@ async function runCompletionPipeline(
                   code: technicalPresentation.code,
                 } }
               : null;
+        const technicalSurfaceTransition = technicalSurface ??
+          (selectedTechnicalQuestion && state.current_surface
+            ? { action: "close_surface" as const, payload: {} }
+            : null);
 
-        if (technicalSurface && selectedTechnicalQuestion && advertisedToolNames.has("surface")) {
-          state.pending_surface_request = technicalSurface.action;
-          state.pending_question = selectedTechnicalQuestion.spokenText;
-          state.current_surface = technicalSurface.action;
+        if (technicalSurfaceTransition && selectedTechnicalQuestion && advertisedToolNames.has("surface")) {
+          const surfaceSpeech = acknowledge(selectedTechnicalSpeech ?? selectedTechnicalQuestion.spokenText);
+          state.pending_surface_request = null;
+          state.pending_question = selectedTechnicalSpeech;
+          state.pending_opening_text = null;
+          state.current_surface = technicalSurfaceTransition.action === "close_surface"
+            ? null
+            : technicalSurfaceTransition.action;
           state.actions.push("surface");
+          recordAskedQuestion(state, actionForSpeech, selectedTechnicalSpeech ?? selectedTechnicalQuestion.spokenText, false);
+          turnSpokenText = surfaceSpeech;
+          turnSpeechMeta = {
+            attempts: 0,
+            flags: [],
+            fallback: false,
+            rendererFallback: false,
+            draftWords: wordCount(surfaceSpeech),
+            finalWords: wordCount(surfaceSpeech),
+          };
           const surfaceToolCall = {
             id: `call_surface_${selectedTechnicalQuestion.id}`,
             type: "function" as const,
-            function: { name: "surface", arguments: JSON.stringify({ ...technicalSurface, eventId: selectedTechnicalQuestion.id }) },
+            function: {
+              name: "surface",
+              arguments: JSON.stringify({
+                ...technicalSurfaceTransition,
+                eventId: selectedTechnicalQuestion.id,
+                spoken_text: surfaceSpeech,
+              }),
+            },
           };
           sseChunks = [
             { id: completionId, object: "chat.completion.chunk", created: timestamp, model, choices: [{ index: 0, delta: { role: "assistant", content: null, tool_calls: [surfaceToolCall] }, finish_reason: null }] },
@@ -3053,15 +3196,15 @@ async function runCompletionPipeline(
           };
         } else {
         const technicalTerminal = technicalQuotaComplete && !technicalFollowUp && !selectedTechnicalQuestion
-          ? { text: "That completes the configured questions for this interview. Thank you for your time." }
+          ? { text: acknowledge("That completes the configured questions for this interview. Thank you for your time.") }
           : technicalSelection && "kind" in technicalSelection
-            ? { text: "I don't have another validated question of the required type for this round, so we'll stop here." }
+            ? { text: acknowledge("I don't have another validated question of the required type for this round, so we'll stop here.") }
             : null;
         if (technicalQuotaComplete && !technicalFollowUp && !selectedTechnicalQuestion) {
           state.end_reason = "completed";
           state.actions.push("close_session");
           spoken = {
-            text: "That completes the configured questions for this interview. Thank you for your time.",
+            text: technicalTerminal?.text ?? "That completes the configured questions for this interview. Thank you for your time.",
             meta: { attempts: 0, flags: [], fallback: false, rendererFallback: false, draftWords: 12, finalWords: 12 },
           };
         } else if (technicalSelection && "kind" in technicalSelection) {
@@ -3069,13 +3212,14 @@ async function runCompletionPipeline(
           state.end_reason = "completed";
           state.actions.push("close_session");
           spoken = {
-            text: "I don't have another validated question of the required type for this round, so we'll stop here.",
+            text: technicalTerminal?.text ?? "I don't have another validated question of the required type for this round, so we'll stop here.",
             meta: { attempts: 0, flags: ["question_inventory_insufficient"], fallback: true, rendererFallback: false, draftWords: 16, finalWords: 16 },
           };
         } else if (technicalSelection) {
+          const questionSpeech = selectedTechnicalSpeech ?? technicalSelection.spokenText;
           spoken = {
-            text: technicalSelection.spokenText,
-            meta: { attempts: 0, flags: [], fallback: false, rendererFallback: false, draftWords: wordCount(technicalSelection.spokenText), finalWords: wordCount(technicalSelection.spokenText) },
+            text: acknowledge(questionSpeech),
+            meta: { attempts: 0, flags: [], fallback: false, rendererFallback: false, draftWords: wordCount(questionSpeech), finalWords: wordCount(questionSpeech) },
           };
         } else try {
           spoken = await generateStyledSpeech({
@@ -3109,12 +3253,15 @@ async function runCompletionPipeline(
         if (technicalFollowUp) {
           state.follow_ups_used_for_main = (state.follow_ups_used_for_main ?? 0) + 1;
         }
+        if (technicalSubmission && !technicalSelection && !technicalTerminal) {
+          spoken = { ...spoken, text: acknowledge(spoken.text) };
+        }
         const spokenText = spoken.text;
         turnSpeechMeta = spoken.meta;
         recordAskedQuestion(state, actionForSpeech, spokenText, intent === "answer");
         refreshCurrentTopic(state, spokenText, latestUserText);
         if (move !== "clarify" && move !== "hint") {
-          state.pending_question = spokenText;
+          state.pending_question = selectedTechnicalSpeech ?? spokenText;
         }
         turnSpokenText = spokenText;
 

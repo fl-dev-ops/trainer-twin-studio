@@ -22,7 +22,8 @@ def build_surface_tools(*, room: Any, participant_identity: str) -> list[Any]:
         context: RunContext,
         action: str,
         payload: dict[str, Any] | None = None,
-    ) -> dict[str, str]:
+        spoken_text: str | None = None,
+    ) -> dict[str, str] | None:
         actual_payload = payload or {}
         # A stable event id per file keeps the learner's viewer mounted: re-opening or re-highlighting
         # the same document then reuses one PDF viewer and only refreshes the search highlight.
@@ -40,6 +41,12 @@ def build_surface_tools(*, room: Any, participant_identity: str) -> list[Any]:
             "payload": actual_payload,
             **actual_payload,
         }
+        # Technical interview questions are selected deterministically by the web
+        # runtime. Speak that exact opening/question in the same tool execution so
+        # voice does not depend on a provider issuing a second post-tool LLM turn.
+        if spoken_text and spoken_text.strip():
+            logger.info("surface speech queued action=%s chars=%s", action, len(spoken_text.strip()))
+            context.session.say(spoken_text.strip())
         try:
             await room.local_participant.perform_rpc(
                 destination_identity=participant_identity,
@@ -53,8 +60,12 @@ def build_surface_tools(*, room: Any, participant_identity: str) -> list[Any]:
                 json.dumps(msg).encode("utf-8"),
                 reliable=True,
             )
-        # LiveKit only requests the post-tool LLM turn when a tool returns a value.
-        # That turn speaks the pending question after the browser surface is visible.
+        # Returning nothing suppresses the automatic post-tool reply because the
+        # deterministic technical speech above has already been queued for TTS.
+        if spoken_text and spoken_text.strip():
+            return None
+
+        # Resume/document surfaces still use the existing post-tool continuation.
         return {"status": "ready", "action": action}
 
     @function_tool(

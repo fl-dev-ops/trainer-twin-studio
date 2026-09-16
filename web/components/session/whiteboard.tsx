@@ -3,7 +3,8 @@
 import "@excalidraw/excalidraw/index.css";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import dynamic from "next/dynamic";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { useWorkspaceHandlers } from "@/lib/livekit-workspaces";
 
 /**
@@ -27,9 +28,17 @@ const Excalidraw = dynamic(
   },
 );
 
-export function Whiteboard() {
+export function Whiteboard({
+  question,
+  onSubmit,
+}: {
+  question: string;
+  onSubmit: (submission: { blob: Blob; imageSha256: string }) => Promise<boolean>;
+}) {
   const registerWorkspaceHandler = useWorkspaceHandlers();
   const api = useRef<ExcalidrawImperativeAPI | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
   useEffect(() =>
     registerWorkspaceHandler(WHITEBOARD_RPC_METHOD, async (request) => {
@@ -74,14 +83,71 @@ export function Whiteboard() {
       return JSON.stringify({ ok: true, componentLabel: textElement.text });
     }));
 
+  async function handleDone() {
+    if (!api.current || isExporting || submitted) return;
+    const elements = api.current.getSceneElements();
+    if (!elements.length) {
+      toast.warning("Draw something on the whiteboard first.");
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const { exportToBlob } = await import("@excalidraw/excalidraw");
+      const blob = await exportToBlob({
+        elements,
+        appState: {
+          ...api.current.getAppState(),
+          exportBackground: true,
+          exportEmbedScene: false,
+          exportWithDarkMode: false,
+          viewBackgroundColor: "#ffffff",
+        },
+        files: api.current.getFiles(),
+        maxWidthOrHeight: 2048,
+        mimeType: "image/png",
+      });
+      if (blob.size > 4 * 1024 * 1024) {
+        toast.error("The whiteboard image is over 4 MB. Simplify it and try again.");
+        return;
+      }
+      const imageSha256 = Array.from(
+        new Uint8Array(await crypto.subtle.digest("SHA-256", await blob.arrayBuffer())),
+      ).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+      if (await onSubmit({ blob, imageSha256 })) {
+        setSubmitted(true);
+        toast.success("Drawing submitted.");
+      }
+    } catch (error) {
+      console.error("Failed to submit whiteboard:", error);
+      toast.error("Could not submit the whiteboard. Please try again.");
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
   return (
-    <div className="h-full overflow-hidden bg-[#121212] p-2">
-      <Excalidraw
-        excalidrawAPI={(instance: ExcalidrawImperativeAPI) => {
-          api.current = instance;
-        }}
-        theme="dark"
-      />
+    <div className="flex h-full flex-col overflow-hidden bg-[#121212]">
+      <p className="shrink-0 border-b border-white/10 px-4 py-3 text-sm text-foreground">{question}</p>
+      <div className="min-h-0 flex-1 p-2">
+        <Excalidraw
+          excalidrawAPI={(instance: ExcalidrawImperativeAPI) => {
+            api.current = instance;
+          }}
+          theme="dark"
+          viewModeEnabled={submitted}
+        />
+      </div>
+      <div className="flex shrink-0 justify-end border-t border-white/10 px-4 py-3">
+        <button
+          type="button"
+          onClick={() => void handleDone()}
+          disabled={isExporting || submitted}
+          className="rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {submitted ? "Submitted" : isExporting ? "Preparing…" : "Done"}
+        </button>
+      </div>
     </div>
   );
 }

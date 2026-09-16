@@ -30,6 +30,8 @@ export type AgentSurface =
   | {
       key: string;
       tool: "canvas";
+      questionId: string;
+      question: string;
       highlightElements?: string[];
       scrollToElements?: string[];
     }
@@ -113,6 +115,8 @@ export function parseAgentSurfaceMessage(value: unknown):
         surface: {
           key: `agent-canvas-${String(event.eventId ?? event.questionId ?? "current")}`,
           tool: "canvas",
+          questionId: String(event.questionId ?? event.eventId ?? "current"),
+          question: typeof event.question === "string" ? event.question : "Show your design on the whiteboard.",
           highlightElements,
           scrollToElements,
         },
@@ -218,7 +222,14 @@ export function parseAgentSurfaceMessage(value: unknown):
       return { surface: codeSurface(question, question.id) };
     }
     if (question.surface === "whiteboard") {
-      return { surface: { key: question.id, tool: "canvas" } };
+      return {
+        surface: {
+          key: question.id,
+          tool: "canvas",
+          questionId: question.id,
+          question: typeof question.text === "string" ? question.text : "Show your design on the whiteboard.",
+        },
+      };
     }
     if (question.surface === "choice") {
       const options = Array.isArray(question.options)

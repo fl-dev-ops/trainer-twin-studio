@@ -11,8 +11,10 @@ import {
   RoomContext,
 } from "@livekit/components-react";
 import {
+  ParticipantKind,
   Room,
   RoomEvent,
+  type RemoteParticipant,
   type TranscriptionSegment,
 } from "livekit-client";
 import { Button } from "@/components/ui/button";
@@ -38,6 +40,7 @@ import { SessionControlBar } from "@/components/session/session-control-bar";
 import { SessionSidebar } from "@/components/session/session-sidebar";
 import { LiveSubtitles } from "@/components/session/live-subtitles";
 import { CodeEditor } from "@/components/session/code-editor";
+import { CodeViewer } from "@/components/session/code-viewer";
 import { Whiteboard } from "@/components/session/whiteboard";
 import { PresentationViewer } from "@/components/session/presentation-viewer";
 import { PdfViewerSurface } from "@/components/session/pdf-viewer";
@@ -50,10 +53,12 @@ import { cn } from "@/lib/utils";
 
 type Coverage = Record<string, string>;
 type EndReason = "completed" | "manual" | "disconnected";
+type WhiteboardAcknowledgement = { accepted: boolean; message?: string };
 
 type SessionConnection = {
   url: string;
   token: string;
+  roomName: string;
   sessionId: string;
   runtimeToken: string;
 };
@@ -124,6 +129,9 @@ export function SessionView({
   const [entries, setEntries] = useState<Entry[]>([]);
   const [coverage, setCoverage] = useState<Coverage>({});
   const [surface, setSurface] = useState<AgentSurface>(null);
+  const [selectedChoiceId, setSelectedChoiceId] = useState<string | null>(null);
+  const [choiceSubmitting, setChoiceSubmitting] = useState(false);
+  const [choiceSubmitted, setChoiceSubmitted] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [subtitlesActive, setSubtitlesActive] = useState(true);
   const [latestSpokenText, setLatestSpokenText] = useState("");
@@ -137,6 +145,9 @@ export function SessionView({
   const entriesRef = useRef<Entry[]>([]);
   const coverageRef = useRef<Coverage>({});
   const finalizedRef = useRef(false);
+  const whiteboardAcknowledgementsRef = useRef(
+    new Map<string, (acknowledgement: WhiteboardAcknowledgement) => void>(),
+  );
 
   useEffect(() => {
     entriesRef.current = entries;
@@ -214,6 +225,7 @@ export function SessionView({
       setConnection({
         url: launch.livekit.url,
         token: launch.livekit.token,
+        roomName: launch.livekit.room,
         sessionId: launch.session.id,
         runtimeToken: launch.session.runtimeToken,
       });
@@ -356,17 +368,36 @@ export function SessionView({
     [room],
   );
 
-  const handleChoiceSelection = useCallback(async (questionId: string, optionId: string) => {
+  const handleChoiceSubmission = useCallback(async () => {
+    if (surface?.tool !== "choice" || !selectedChoiceId || choiceSubmitting || choiceSubmitted) return;
+    const option = surface.options.find(({ id }) => id === selectedChoiceId);
+    if (!option) return;
+
+    setChoiceSubmitting(true);
     try {
       await room.localParticipant.publishData(
-        new TextEncoder().encode(JSON.stringify({ type: "mcq-selection", questionId, optionId })),
+        new TextEncoder().encode(JSON.stringify({
+          type: "mcq-submission",
+          questionId: surface.questionId,
+          optionId: option.id,
+          optionText: option.text,
+          submitted: true,
+        })),
         { reliable: true },
       );
-      setEntries((previous) => [...previous, { role: "user" as const, text: `Selected option ${optionId}.` }]);
+      setChoiceSubmitted(true);
     } catch (error) {
-      console.error("Could not send MCQ selection:", error);
+      console.error("Could not submit MCQ answer:", error);
+    } finally {
+      setChoiceSubmitting(false);
     }
-  }, [room]);
+  }, [choiceSubmitted, choiceSubmitting, room, selectedChoiceId, surface]);
+
+  useEffect(() => {
+    setSelectedChoiceId(null);
+    setChoiceSubmitting(false);
+    setChoiceSubmitted(false);
+  }, [surface?.key]);
 
   const handleCodeSubmission = useCallback(async (questionId: string, language: string, code: string) => {
     const submissionId = crypto.randomUUID();
@@ -382,12 +413,112 @@ export function SessionView({
           index,
           total: chunks.length,
           chunk,
+          submitted: true,
         })),
         { reliable: true },
       );
     }
-    setEntries((previous) => [...previous, { role: "user" as const, text: `Submitted ${language} code.` }]);
   }, [room]);
+
+  const handleWhiteboardSubmission = useCallback(async (
+    questionId: string,
+    question: string,
+    submission: { blob: Blob; imageSha256: string },
+  ): Promise<boolean> => {
+    if (!connection || !room.localParticipant.identity) return false;
+    const revision = 0;
+    const acknowledgementKey = `${questionId}:${revision}`;
+    let acknowledgementTimeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const authorization = { Authorization: `Bearer ${connection.token}` };
+      const uploadResponse = await fetch("/api/whiteboard-upload", {
+        method: "POST",
+        headers: { ...authorization, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomName: connection.roomName,
+          participantIdentity: room.localParticipant.identity,
+          questionId,
+          revision,
+          imageSha256: submission.imageSha256,
+          imageBytes: submission.blob.size,
+        }),
+      });
+      if (!uploadResponse.ok) throw new Error(`Whiteboard upload setup failed with ${uploadResponse.status}`);
+      const upload = await uploadResponse.json() as {
+        uploadUrl?: unknown;
+        s3Key?: unknown;
+        headers?: unknown;
+      };
+      if (
+        typeof upload.uploadUrl !== "string" ||
+        typeof upload.s3Key !== "string" ||
+        !upload.headers ||
+        typeof upload.headers !== "object"
+      ) {
+        throw new Error("Whiteboard upload setup returned an invalid response");
+      }
+
+      const uploadStartedAt = Date.now();
+      console.info(`[EXT-API:s3-whiteboard] upload_started question_id=${questionId} bytes=${submission.blob.size}`);
+      const s3Response = await fetch(upload.uploadUrl, {
+        method: "PUT",
+        headers: upload.headers as Record<string, string>,
+        body: submission.blob,
+      });
+      if (!s3Response.ok) throw new Error(`Whiteboard S3 upload failed with ${s3Response.status}`);
+      console.info(
+        `[EXT-API:s3-whiteboard] upload_completed question_id=${questionId} bytes=${submission.blob.size} elapsed_ms=${Date.now() - uploadStartedAt}`,
+      );
+
+      const evaluationResponse = await fetch("/api/evaluate", {
+        method: "POST",
+        headers: { ...authorization, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question,
+          roomName: connection.roomName,
+          participantIdentity: room.localParticipant.identity,
+          questionId,
+          revision,
+          imageSha256: submission.imageSha256,
+          imageBytes: submission.blob.size,
+          s3Key: upload.s3Key,
+        }),
+      });
+      if (!evaluationResponse.ok) throw new Error(`Whiteboard evaluation failed with ${evaluationResponse.status}`);
+      const signedAssessment = await evaluationResponse.json() as { payload?: unknown; signature?: unknown };
+      if (typeof signedAssessment.payload !== "string" || typeof signedAssessment.signature !== "string") {
+        throw new Error("Whiteboard evaluation returned an invalid response");
+      }
+
+      const acknowledgement = new Promise<WhiteboardAcknowledgement>((resolve) => {
+        whiteboardAcknowledgementsRef.current.set(acknowledgementKey, resolve);
+      });
+      acknowledgementTimeout = setTimeout(() => {
+        const resolve = whiteboardAcknowledgementsRef.current.get(acknowledgementKey);
+        if (resolve) {
+          whiteboardAcknowledgementsRef.current.delete(acknowledgementKey);
+          resolve({ accepted: false, message: "The interviewer did not acknowledge the drawing." });
+        }
+      }, 15_000);
+      await room.localParticipant.publishData(
+        new TextEncoder().encode(JSON.stringify({
+          type: "whiteboard-evaluation",
+          payload: signedAssessment.payload,
+          signature: signedAssessment.signature,
+        })),
+        { reliable: true },
+      );
+      const accepted = await acknowledgement;
+      if (!accepted.accepted) throw new Error(accepted.message ?? "The whiteboard was rejected");
+      return true;
+    } catch (error) {
+      whiteboardAcknowledgementsRef.current.delete(acknowledgementKey);
+      console.error("Could not submit whiteboard:", error);
+      return false;
+    } finally {
+      if (acknowledgementTimeout) clearTimeout(acknowledgementTimeout);
+    }
+  }, [connection, room]);
 
   useEffect(() => {
     if (!connection) return;
@@ -436,7 +567,7 @@ export function SessionView({
       }
     }
 
-    function handleData(payload: Uint8Array) {
+    function handleData(payload: Uint8Array, participant?: RemoteParticipant) {
       try {
         const text = new TextDecoder().decode(payload);
         const data = JSON.parse(text) as Record<string, unknown>;
@@ -453,6 +584,18 @@ export function SessionView({
               const next = [...prev, { role: "trainer" as const, text: spoken }];
               entriesRef.current = next;
               return next;
+            });
+          }
+        } else if (data.type === "whiteboard_answer_status") {
+          if (participant?.kind !== ParticipantKind.AGENT) return;
+          const questionId = typeof data.questionId === "string" ? data.questionId : "";
+          const revision = typeof data.revision === "number" ? data.revision : -1;
+          const resolve = whiteboardAcknowledgementsRef.current.get(`${questionId}:${revision}`);
+          if (resolve) {
+            whiteboardAcknowledgementsRef.current.delete(`${questionId}:${revision}`);
+            resolve({
+              accepted: data.status === "accepted",
+              message: typeof data.message === "string" ? data.message : undefined,
             });
           }
         }
@@ -747,14 +890,10 @@ export function SessionView({
                         <div className="space-y-4 overflow-y-auto p-6">
                           <p className="text-sm font-medium">{surface.question}</p>
                           {surface.code ? (
-                            <div className="overflow-hidden rounded-lg border border-white/10 bg-[#101216]">
-                              <div className="border-b border-white/10 px-3 py-2 text-xs text-muted-foreground">
-                                {surface.code.language}
-                              </div>
-                              <pre className="max-h-80 overflow-auto whitespace-pre p-3 font-mono text-xs leading-relaxed text-foreground/90">
-                                {surface.code.content}
-                              </pre>
-                            </div>
+                            <CodeViewer
+                              language={surface.code.language}
+                              code={surface.code.content}
+                            />
                           ) : null}
                           <div className="space-y-2">
                             {surface.options.map((option) => (
@@ -764,16 +903,40 @@ export function SessionView({
                                   name={`question-${surface.key}`}
                                   value={option.id}
                                   className="mt-0.5"
-                                  onChange={() => void handleChoiceSelection(surface.questionId, option.id)}
+                                  checked={selectedChoiceId === option.id}
+                                  disabled={choiceSubmitting || choiceSubmitted}
+                                  onChange={() => setSelectedChoiceId(option.id)}
                                 />
                                 <span><span className="font-medium">{option.id}.</span> {option.text}</span>
                               </label>
                             ))}
                           </div>
-                          <p className="text-xs text-muted-foreground">Select an option, then explain your answer verbally.</p>
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-xs text-muted-foreground">
+                              {choiceSubmitted ? "Answer submitted. Waiting for the next question." : "Select one option, then submit your answer."}
+                            </p>
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={!selectedChoiceId || choiceSubmitting || choiceSubmitted}
+                              onClick={() => void handleChoiceSubmission()}
+                            >
+                              {choiceSubmitting ? "Submitting…" : choiceSubmitted ? "Submitted" : "Submit answer"}
+                            </Button>
+                          </div>
                         </div>
                       )}
-                      {surface.tool === "canvas" && <Whiteboard key={surface.key} />}
+                      {surface.tool === "canvas" && (
+                        <Whiteboard
+                          key={surface.key}
+                          question={surface.question}
+                          onSubmit={(submission) => handleWhiteboardSubmission(
+                            surface.questionId,
+                            surface.question,
+                            submission,
+                          )}
+                        />
+                      )}
                       {surface.tool === "pdf" && (
                         <PdfViewerSurface
                           key={surface.key}

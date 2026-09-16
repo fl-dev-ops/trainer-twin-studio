@@ -24,6 +24,7 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       S3_BASE_PREFIX: ${S3_BASE_PREFIX:-trainertwin-dev}
+      WHITEBOARD_EVALUATION_SIGNING_SECRET: ${WHITEBOARD_EVALUATION_SIGNING_SECRET:-}
     networks:
       - hostnet
     stop_grace_period: 30s
