@@ -7,6 +7,17 @@ import { getTrainerOrg } from "@/lib/org";
 import { readSpecDraft } from "@/lib/spec-drafts";
 import { listSpecs, listVersions, readSpec, readVersion } from "@/lib/specs";
 import { getPersonaBaseline } from "@/lib/persona-baseline";
+import {
+  DEFAULT_RESUME_INTERVIEW_CONFIG,
+  interviewConfigSchema,
+  type InterviewConfig,
+} from "@/lib/interview-config-schema";
+
+function interviewConfigOf(agent: Record<string, unknown>): InterviewConfig {
+  const config = agent.config && typeof agent.config === "object" ? agent.config as Record<string, unknown> : {};
+  const configured = interviewConfigSchema.safeParse(config.interview);
+  return configured.success ? configured.data : DEFAULT_RESUME_INTERVIEW_CONFIG;
+}
 
 export async function SpecResourcePage({
   type,
@@ -33,11 +44,12 @@ export async function SpecResourcePage({
     if (requestedVersion !== undefined && !current && !historical) notFound();
     if (requestedVersion !== undefined && current && version !== current.version && !historical) notFound();
 
-    const [personas, versions] = await Promise.all([
+    const [personas, versions, topics] = await Promise.all([
       listSpecs("personas", org.id).then((slugs) =>
         db.persona.findMany({ where: { orgId: org.id, slug: { in: slugs.length ? slugs : ["__none__"] } }, orderBy: { slug: "asc" }, select: { slug: true, name: true } }),
       ),
       current ? listVersions(type, slug, org.id) : Promise.resolve([]),
+      db.topic.findMany({ where: { status: "approved" }, orderBy: { slug: "asc" }, select: { slug: true, description: true } }),
     ]);
 
     if (!current) {
@@ -59,6 +71,8 @@ export async function SpecResourcePage({
           revision={draft?.revision}
           versions={[]}
           personas={personas}
+          topics={topics}
+          interviewConfig={interviewConfigOf(agent)}
         />
       );
     }
@@ -96,6 +110,8 @@ export async function SpecResourcePage({
         publishedVersion={current.version}
         versions={versions}
         personas={personas}
+        topics={topics}
+        interviewConfig={interviewConfigOf(working)}
       />
     );
   }

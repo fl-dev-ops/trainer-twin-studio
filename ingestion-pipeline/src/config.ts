@@ -15,6 +15,7 @@ export type PipelineConfig = {
   openRouterApiKey: string;
   embeddingModel: string;
   topicModel: string;
+  questionModel: string;
   topicChunkBatchSize: number;
   maxReceiveCount: number;
   youtubeOAuthClientId: string;
@@ -55,6 +56,7 @@ export function loadConfig(): PipelineConfig {
     openRouterApiKey: process.env.OPENROUTER_API_KEY?.trim() || required("LLM_API_KEY"),
     embeddingModel: process.env.EMBEDDING_MODEL?.trim() || "openai/text-embedding-3-small",
     topicModel: process.env.TOPIC_MODEL?.trim() || "openai/gpt-5.6-luna",
+    questionModel: process.env.QUESTION_MODEL?.trim() || process.env.TOPIC_MODEL?.trim() || "openai/gpt-5.6-luna",
     topicChunkBatchSize: positiveInt("TOPIC_CHUNK_BATCH_SIZE", 10),
     maxReceiveCount: positiveInt("INGESTION_MAX_RECEIVE_COUNT", 5),
     youtubeOAuthClientId: process.env.YOUTUBE_OAUTH_CLIENT_ID?.trim() || "",

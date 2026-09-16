@@ -112,11 +112,17 @@ function ExecutionConsole({
 export function CodeEditor({
   initialLanguage = "javascript",
   initialCode,
+  instructions,
   highlightLines,
+  readOnly = false,
+  onSubmit,
 }: {
   initialLanguage?: SupportedCodeExecutionLanguage;
   initialCode?: string;
+  instructions?: string;
   highlightLines?: [number, number];
+  readOnly?: boolean;
+  onSubmit?: (language: SupportedCodeExecutionLanguage, code: string) => Promise<void>;
 }) {
   const { resolvedTheme } = useTheme();
   const registerWorkspaceHandler = useWorkspaceHandlers();
@@ -131,6 +137,7 @@ export function CodeEditor({
   const [code, setCode] = useState(initialCode ?? "");
   const [activeTab, setActiveTab] = useState<"code" | "output">("code");
   const [isRunning, setIsRunning] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [runResult, setRunResult] = useState<CodeExecutionResult | null>(null);
   const [browserConsoleEntries, setBrowserConsoleEntries] = useState<
     BrowserConsoleEntry[]
@@ -343,6 +350,11 @@ export function CodeEditor({
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      {instructions ? (
+        <div className="max-h-32 shrink-0 overflow-y-auto border-b border-white/[0.05] px-4 py-3 text-sm text-foreground/85">
+          {instructions}
+        </div>
+      ) : null}
       <div
         role="tablist"
         aria-label="Code editor views"
@@ -361,7 +373,7 @@ export function CodeEditor({
         >
           Code
         </button>
-        <button
+        {!readOnly && <button
           type="button"
           role="tab"
           aria-selected={activeTab === "output"}
@@ -373,7 +385,7 @@ export function CodeEditor({
           }`}
         >
           Output
-        </button>
+        </button>}
       </div>
 
       <div className="min-h-0 flex-1">
@@ -385,6 +397,7 @@ export function CodeEditor({
             value={code}
             onMount={applyInitialHighlight}
             onChange={(value) => {
+              if (readOnly) return;
               const nextCode = value ?? "";
               if (nextCode.length > MAX_CODE_ANSWER_CHARS) {
                 toast.error("Code answers are limited to 20,000 characters.");
@@ -405,11 +418,12 @@ export function CodeEditor({
               wordWrap: "on",
               scrollBeyondLastLine: false,
               automaticLayout: true,
+              readOnly,
             }}
             loading={<p className="p-4 text-sm text-muted-foreground">Loading editor…</p>}
           />
         </div>
-        <div
+        {!readOnly && <div
           role="tabpanel"
           hidden={activeTab !== "output"}
           className="h-full overflow-auto p-4"
@@ -439,10 +453,10 @@ export function CodeEditor({
               Run your code to see its output here.
             </div>
           )}
-        </div>
+        </div>}
       </div>
 
-      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-white/[0.05] px-4 py-3">
+      {!readOnly && <div className="flex shrink-0 items-center justify-between gap-3 border-t border-white/[0.05] px-4 py-3">
         <select
           value={language}
           onChange={(event) => {
@@ -464,20 +478,42 @@ export function CodeEditor({
             </option>
           ))}
         </select>
-        <button
-          type="button"
-          onClick={handleRun}
-          disabled={!code.trim() || isRunning}
-          className="flex items-center gap-2 rounded-lg border border-white/10 bg-[#1a1d23] px-4 py-1.5 text-sm font-medium text-foreground transition-[background-color,scale] hover:bg-[#232733] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {isRunning ? (
-            <LoaderCircle className="size-4 animate-spin" />
-          ) : (
-            <Play className="size-4" />
-          )}
-          {isRunning ? "Running…" : "Run"}
-        </button>
-      </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleRun}
+            disabled={!code.trim() || isRunning || isSubmitting}
+            className="flex items-center gap-2 rounded-lg border border-white/10 bg-[#1a1d23] px-4 py-1.5 text-sm font-medium text-foreground transition-[background-color,scale] hover:bg-[#232733] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isRunning ? (
+              <LoaderCircle className="size-4 animate-spin" />
+            ) : (
+              <Play className="size-4" />
+            )}
+            {isRunning ? "Running…" : "Run"}
+          </button>
+          {onSubmit ? (
+            <button
+              type="button"
+              onClick={async () => {
+                setIsSubmitting(true);
+                try {
+                  await onSubmit(language, code);
+                  toast.success("Code submitted.");
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "Code submission failed.");
+                } finally {
+                  setIsSubmitting(false);
+                }
+              }}
+              disabled={!code.trim() || isRunning || isSubmitting}
+              className="rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground transition-[opacity,scale] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSubmitting ? "Submitting…" : "Submit"}
+            </button>
+          ) : null}
+        </div>
+      </div>}
     </div>
   );
 }

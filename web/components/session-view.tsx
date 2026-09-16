@@ -356,6 +356,39 @@ export function SessionView({
     [room],
   );
 
+  const handleChoiceSelection = useCallback(async (questionId: string, optionId: string) => {
+    try {
+      await room.localParticipant.publishData(
+        new TextEncoder().encode(JSON.stringify({ type: "mcq-selection", questionId, optionId })),
+        { reliable: true },
+      );
+      setEntries((previous) => [...previous, { role: "user" as const, text: `Selected option ${optionId}.` }]);
+    } catch (error) {
+      console.error("Could not send MCQ selection:", error);
+    }
+  }, [room]);
+
+  const handleCodeSubmission = useCallback(async (questionId: string, language: string, code: string) => {
+    const submissionId = crypto.randomUUID();
+    const chunks = code.match(/[\s\S]{1,10000}/g) ?? [];
+    if (!chunks.length) throw new Error("Enter code before submitting.");
+    for (const [index, chunk] of chunks.entries()) {
+      await room.localParticipant.publishData(
+        new TextEncoder().encode(JSON.stringify({
+          type: "code-submission",
+          submissionId,
+          questionId,
+          language,
+          index,
+          total: chunks.length,
+          chunk,
+        })),
+        { reliable: true },
+      );
+    }
+    setEntries((previous) => [...previous, { role: "user" as const, text: `Submitted ${language} code.` }]);
+  }, [room]);
+
   useEffect(() => {
     if (!connection) return;
     const activeConnection = connection;
@@ -691,6 +724,7 @@ export function SessionView({
                     <div className="flex h-10 shrink-0 items-center justify-between border-b border-white/[0.035] bg-white/[0.02] px-4">
                       <span className="text-xs font-semibold text-foreground/90">
                         {surface.tool === "code" && "Code Workspace"}
+                        {surface.tool === "choice" && "Multiple choice"}
                         {surface.tool === "canvas" && "Whiteboard"}
                         {surface.tool === "pdf" && "PDF Document"}
                         {surface.tool === "image" && "Image Viewer"}
@@ -703,8 +737,41 @@ export function SessionView({
                           key={surface.key}
                           initialLanguage={surface.language}
                           initialCode={surface.starterCode || undefined}
+                          instructions={surface.instructions}
                           highlightLines={surface.highlightLines}
+                          readOnly={surface.readOnly}
+                          onSubmit={surface.readOnly ? undefined : (language, code) => handleCodeSubmission(surface.questionId, language, code)}
                         />
+                      )}
+                      {surface.tool === "choice" && (
+                        <div className="space-y-4 overflow-y-auto p-6">
+                          <p className="text-sm font-medium">{surface.question}</p>
+                          {surface.code ? (
+                            <div className="overflow-hidden rounded-lg border border-white/10 bg-[#101216]">
+                              <div className="border-b border-white/10 px-3 py-2 text-xs text-muted-foreground">
+                                {surface.code.language}
+                              </div>
+                              <pre className="max-h-80 overflow-auto whitespace-pre p-3 font-mono text-xs leading-relaxed text-foreground/90">
+                                {surface.code.content}
+                              </pre>
+                            </div>
+                          ) : null}
+                          <div className="space-y-2">
+                            {surface.options.map((option) => (
+                              <label key={option.id} className="flex items-start gap-3 rounded-xl border border-white/10 p-3 text-sm">
+                                <input
+                                  type="radio"
+                                  name={`question-${surface.key}`}
+                                  value={option.id}
+                                  className="mt-0.5"
+                                  onChange={() => void handleChoiceSelection(surface.questionId, option.id)}
+                                />
+                                <span><span className="font-medium">{option.id}.</span> {option.text}</span>
+                              </label>
+                            ))}
+                          </div>
+                          <p className="text-xs text-muted-foreground">Select an option, then explain your answer verbally.</p>
+                        </div>
                       )}
                       {surface.tool === "canvas" && <Whiteboard key={surface.key} />}
                       {surface.tool === "pdf" && (

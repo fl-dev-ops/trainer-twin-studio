@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import yaml from "js-yaml";
 import { specDraftBundleSchema, type SpecDraftBundle } from "@/lib/spec-draft-schema";
+import type { InterviewConfig } from "@/lib/interview-config-schema";
 
 const AI_GATEWAY_BASE_URL = (
   process.env.AI_GATEWAY_BASE_URL ??
@@ -17,6 +18,7 @@ export type GenerationInput = {
   opening: string;
   personaName?: string;
   knowledgeBase?: string;
+  interviewConfig: InterviewConfig;
   previous: { instruction?: string; agent: unknown; domain: unknown } | null;
 };
 
@@ -280,7 +282,9 @@ export async function generateSpecBundle(input: GenerationInput): Promise<SpecDr
       lastError = error;
       continue;
     }
-    const result = specDraftBundleSchema.safeParse({ ...(parsed as object), slug: input.slug, name: input.name, gaps: [] });
+    const modelBundle = parsed as { agent?: { config?: Record<string, unknown> } };
+    if (modelBundle.agent?.config) modelBundle.agent.config.interview = input.interviewConfig;
+    const result = specDraftBundleSchema.safeParse({ ...modelBundle, slug: input.slug, name: input.name, gaps: [] });
     if (result.success) return result.data;
     lastError = result.error;
     messages.push({

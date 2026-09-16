@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseInterviewQuestionRecord, type InterviewQuestionRecord } from "@shared/interview-question";
 import { parseYouTubeVideoId } from "@shared/youtube/url";
 
 export { parseYouTubeVideoId };
@@ -79,22 +80,18 @@ export type YouTubeImportInput = z.infer<typeof youtubeImportSchema>;
 export type YouTubePreview = z.infer<typeof youtubePreviewSchema>;
 export type YouTubeState = z.infer<typeof youtubeStateSchema>;
 
-export const youtubeExtractedQuestionSchema = z
-  .object({
-    text: z.string().trim().min(1),
-    startSeconds: z.number().finite().nonnegative(),
-    endSeconds: z.number().finite().nonnegative(),
-    topics: z.array(z.string()),
-    proposedTopics: z.array(z.string()),
-  })
-  .strict()
-  .refine((question) => question.endSeconds >= question.startSeconds, {
-    message: "Question endSeconds must not precede startSeconds",
-  });
+export const youtubeExtractedQuestionSchema = z.custom<InterviewQuestionRecord>((value) => {
+  try {
+    parseInterviewQuestionRecord(value);
+    return true;
+  } catch {
+    return false;
+  }
+});
 
 export const youtubeQuestionsArtifactSchema = z
   .object({
-    version: z.literal(1),
+    version: z.literal(2),
     videoId: z.string().min(1),
     title: z.string(),
     sourceUrl: z.string().url(),

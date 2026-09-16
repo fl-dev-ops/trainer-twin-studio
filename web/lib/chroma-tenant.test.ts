@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { orgDatabaseName, parseChromaUrl } from "./chroma-tenant";
-import { MainCollectionService } from "./main-collection";
 import { LearnerMemoryService } from "./learner-memory";
 
 test("organization databases use immutable IDs", () => {
@@ -9,37 +8,13 @@ test("organization databases use immutable IDs", () => {
   assert.equal(orgDatabaseName("unsafe/id"), "org_unsafe_id");
 });
 
-test("ChromaTenantService parses and resolves tenant metadata", async () => {
-  const orgNameA = "test-org-123";
-  const orgNameB = "test-org-456";
-
-  const collectionA = MainCollectionService.getCollectionName(orgNameA, false);
-  const collectionB = MainCollectionService.getCollectionName(orgNameB, false);
-  assert.equal(collectionA, "main");
-  assert.equal(collectionB, "main");
-
-  const sharedA = MainCollectionService.getCollectionName(orgNameA, true);
-  const sharedB = MainCollectionService.getCollectionName(orgNameB, true);
-  assert.equal(sharedA, "org_test-org-123_main");
-  assert.equal(sharedB, "org_test-org-456_main");
-  assert.notEqual(sharedA, sharedB);
-});
-
 test("LearnerMemoryService generates isolated learner collection names", () => {
-  const orgId = "org-xyz";
-  const user1 = "user-1";
-  const user2 = "user-2";
-
-  const col1 = LearnerMemoryService.getCollectionName(orgId, user1, false);
-  const col2 = LearnerMemoryService.getCollectionName(orgId, user2, false);
+  const col1 = LearnerMemoryService.getCollectionName("user-1");
+  const col2 = LearnerMemoryService.getCollectionName("user-2");
   assert.equal(col1, "learner_user-1");
   assert.equal(col2, "learner_user-2");
   assert.notEqual(col1, col2);
-
-  const shared1 = LearnerMemoryService.getCollectionName(orgId, user1, true);
-  const shared2 = LearnerMemoryService.getCollectionName(orgId, user2, true);
-  assert.equal(shared1, "org_org-xyz_learner_user-1");
-  assert.equal(shared2, "org_org-xyz_learner_user-2");
+  assert.equal(LearnerMemoryService.getCollectionName("unsafe/id"), "learner_unsafe_id");
 });
 
 test("parseChromaUrl correctly extracts host, port, and ssl flags", () => {

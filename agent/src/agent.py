@@ -163,6 +163,13 @@ async def entrypoint(ctx: agents.JobContext) -> None:
     opening_release = asyncio.Event()
     active_session: Any = None
     pending_chat_messages: list[str] = []
+    pending_code_submissions: dict[str, dict[str, Any]] = {}
+
+    def submit_user_input(text: str) -> None:
+        if active_session is not None:
+            asyncio.create_task(active_session.generate_reply(user_input=text))
+        else:
+            pending_chat_messages.append(text)
 
     def on_data_received(packet: rtc.DataPacket) -> None:
         try:
@@ -177,11 +184,49 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         elif msg_type == "chat-message":
             text = str(msg.get("text") or "").strip()
             if text:
-                if active_session is not None:
-                    logger.info("Received chat message from participant: %s", text[:80])
-                    asyncio.create_task(active_session.generate_reply(user_input=text))
-                else:
-                    pending_chat_messages.append(text)
+                logger.info("Received chat message from participant: %s", text[:80])
+                submit_user_input(text)
+        elif msg_type == "mcq-selection":
+            option_id = str(msg.get("optionId") or "").strip()
+            question_id = str(msg.get("questionId") or "").strip()
+            if option_id:
+                logger.info("Received MCQ selection question_id=%s", question_id[:80])
+                submit_user_input(f"I selected option {option_id}.")
+        elif msg_type == "code-submission":
+            submission_id = str(msg.get("submissionId") or "").strip()
+            question_id = str(msg.get("questionId") or "").strip()
+            language = str(msg.get("language") or "text").strip()[:40]
+            index = msg.get("index")
+            total = msg.get("total")
+            chunk = msg.get("chunk")
+            if (
+                not submission_id
+                or not isinstance(index, int)
+                or not isinstance(total, int)
+                or total < 1
+                or total > 10
+                or index < 0
+                or index >= total
+                or not isinstance(chunk, str)
+            ):
+                return
+            if submission_id not in pending_code_submissions and len(pending_code_submissions) >= 20:
+                return
+            pending = pending_code_submissions.setdefault(
+                submission_id,
+                {"question_id": question_id, "language": language, "total": total, "chunks": {}},
+            )
+            if pending["total"] != total or pending["question_id"] != question_id:
+                pending_code_submissions.pop(submission_id, None)
+                return
+            pending["chunks"][index] = chunk
+            if len(pending["chunks"]) == total:
+                code = "".join(pending["chunks"][part] for part in range(total))
+                pending_code_submissions.pop(submission_id, None)
+                if len(code) > 20000:
+                    return
+                logger.info("Received code submission question_id=%s language=%s chars=%s", question_id[:80], language, len(code))
+                submit_user_input(f"I submitted this {language} code:\n```{language}\n{code}\n```")
 
     ctx.room.on("data_received", on_data_received)
 

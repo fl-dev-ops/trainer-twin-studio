@@ -9,6 +9,8 @@ import type { IngestionAdapter, JobContext, WorkItemContext } from "../types";
 import { decryptNotionToken, getNotionMarkdown, getNotionPage, listNotionChildPageIds, type NotionPage } from "./acquisition";
 import { NotionCleaner } from "./cleaner";
 import { getPublicNotionPage } from "./public-acquisition";
+import { generateInterviewQuestions } from "../../questions/generate";
+import { indexInterviewQuestions } from "../../questions/publication";
 
 type StoredDocument = { id: string; slug: string };
 
@@ -99,8 +101,23 @@ export const notionAdapter: IngestionAdapter = {
     await pool.query(`UPDATE "KnowledgeDocument" SET status = 'digesting', error = NULL, "updatedAt" = NOW() WHERE id = $1`, [document.id]);
     const prepared = await new ChunkingService().prepare("notion", { text: markdown, pageTitle: page.title });
     const chunks = await classifySections(pool, config, prepared.sourceText, prepared);
-    const chunkCount = await indexDocument(config, job, document.id, document.slug, chunks,
-      { pageId: page.id, pageTitle: prepared.pageTitle, chunkingVersion: prepared.chunkingVersion });
+    const questions = await generateInterviewQuestions({
+      pool,
+      config,
+      source: {
+        connector: job.sourceConnector === "notion_public" ? "notion_public" : "notion",
+        documentId: document.id,
+        externalId: workItem.workKey,
+        title: page.title,
+        url: `https://www.notion.so/${page.id.replaceAll("-", "")}`,
+      },
+      chunks: chunks.map((chunk, index) => ({ id: `chunk-${index}`, text: chunk.text, topicSlugs: chunk.topics })),
+    });
+    const [chunkCount] = await Promise.all([
+      indexDocument(config, job, document.id, document.slug, chunks,
+        { pageId: page.id, pageTitle: prepared.pageTitle, chunkingVersion: prepared.chunkingVersion }),
+      indexInterviewQuestions(config, job, document.id, questions),
+    ]);
     await pool.query(`UPDATE "KnowledgeDocument" SET status = $2, error = $3, "indexedAt" = $4, "updatedAt" = NOW() WHERE id = $1`,
       [document.id, chunkCount ? "indexed" : "failed", chunkCount ? null : "No content indexed", chunkCount ? new Date() : null]);
   },

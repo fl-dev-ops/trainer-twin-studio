@@ -4,6 +4,8 @@ import { getTrainerOrg } from "@/lib/org";
 import { readSpecDraft, saveSpecDraft, publishSpecDraft } from "@/lib/spec-drafts";
 import { generateSpecBundle } from "@/lib/spec-generation";
 import { validSlug } from "@/lib/specs";
+import { interviewConfigSchema } from "@/lib/interview-config-schema";
+import { QuestionBank } from "@/lib/question-bank";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -17,6 +19,7 @@ const inputSchema = z.object({
   knowledgeBase: slug.optional(),
   voiceId: z.string().optional(),
   publish: z.boolean().optional(),
+  interviewConfig: interviewConfigSchema,
 });
 
 const GENERIC_SAVE_ERROR = "Failed to save the change, try again in a few seconds";
@@ -31,7 +34,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
   if (!input.success) {
     return Response.json({ error: input.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
   }
-  const { instruction, name, opening, personaSlug, knowledgeBase, voiceId, publish } = input.data;
+  const { instruction, name, opening, personaSlug, knowledgeBase, voiceId, publish, interviewConfig } = input.data;
+
+  if (interviewConfig.type === "technical" && !knowledgeBase) {
+    return Response.json({ error: "Technical scenarios require a knowledge base" }, { status: 400 });
+  }
+  if (publish && interviewConfig.type === "technical" && !interviewConfig.topic_slugs.length) {
+    return Response.json({ error: "Select at least one generated question topic before publishing" }, { status: 400 });
+  }
 
   const persona = await db.persona.findUnique({
     where: { orgId_slug: { orgId: org.id, slug: personaSlug } },
@@ -49,6 +59,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
   ]);
   if (voiceId && !voice) return Response.json({ error: "Voice is not available" }, { status: 400 });
   if (knowledgeBase && !knowledge) return Response.json({ error: "Knowledge base is not available" }, { status: 400 });
+  if (interviewConfig.type === "technical") {
+    const approvedTopics = await db.topic.findMany({
+      where: { status: "approved", slug: { in: interviewConfig.topic_slugs } },
+      select: { slug: true },
+    });
+    if (approvedTopics.length !== new Set(interviewConfig.topic_slugs).size) {
+      return Response.json({ error: "One or more selected topics are not approved" }, { status: 400 });
+    }
+    const availableTopics = new Set(await QuestionBank.listTopicSlugs(org.id, [knowledgeBase!]));
+    if (interviewConfig.topic_slugs.some((topic) => !availableTopics.has(topic))) {
+      return Response.json({ error: "One or more selected topics have no generated questions in this knowledge base" }, { status: 400 });
+    }
+  }
 
   try {
     const [published, draft] = await Promise.all([
@@ -69,6 +92,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       opening,
       personaName: persona.name,
       knowledgeBase,
+      interviewConfig,
       previous: draft
         ? { instruction: draft.agent.instruction, agent: draft.agent, domain: draft.domain }
         : published

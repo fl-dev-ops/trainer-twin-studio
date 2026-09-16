@@ -12,6 +12,7 @@ import {
   type PersonaSpec,
   type PhaseSpec,
 } from "./compiler";
+import type { QuestionType } from "@shared/interview-question-types";
 
 export const INCIDENT_LANES = new Set(["challenges", "failure_behavior"]);
 
@@ -62,9 +63,6 @@ export type PrewarmedOpening = {
   claim?: { anchor: string; section: string | null; line: string } | null;
 };
 
-/** Reference contract (resume_mastery.v1): at most one follow-up per main question. */
-export const MAX_FOLLOW_UPS_PER_MAIN = 1;
-
 export interface RuntimeState {
   phase_index: number;
   phase_turns: number;
@@ -74,12 +72,15 @@ export interface RuntimeState {
   evidence_probe_counts: Record<string, number>;
   pending_evidence_key: string | null;
   pending_question: string | null;
+  /** Scenario-configured introduction waiting for the first technical question surface to open. */
+  pending_opening_text?: string | null;
   current_topic: string | null;
   latest_learner_intent: string | null;
   actions: string[];
   grounding_probes: string[];
   grounding_probe_counts: Record<string, number>;
   end_reason?: string;
+  operational_end_reason?: string;
   current_surface?: string | null;
   learner_name?: string | null;
   primer?: { statistics: CorpusStyleStats } | null;
@@ -118,12 +119,16 @@ export interface RuntimeState {
   } | null;
   /** Follow-ups already spent on the current claim's latest main question. */
   claim_follow_ups_used?: number;
-  pending_surface_request?: "open_code_editor" | "open_whiteboard" | "open_pdf" | "close_surface" | null;
+  pending_surface_request?: "open_code_editor" | "open_whiteboard" | "open_choice" | "open_pdf" | "close_surface" | null;
   /** Full markdown text of the session's resume, injected into the speech prompts. */
   resume_text?: string | null;
   prewarmed_opening?: PrewarmedOpening | null;
   /** Main questions asked across the session (drives bridge wording and angle rotation). */
   main_questions_asked?: number;
+  used_question_ids?: string[];
+  asked_question_counts?: Partial<Record<QuestionType, number>>;
+  current_main_question?: { id: string; type: QuestionType; topicSlugs: string[] } | null;
+  follow_ups_used_for_main?: number;
 }
 
 export function initRuntimeState(): RuntimeState {
@@ -136,6 +141,7 @@ export function initRuntimeState(): RuntimeState {
     evidence_probe_counts: {},
     pending_evidence_key: null,
     pending_question: null,
+    pending_opening_text: null,
     grounding_probes: [],
     grounding_probe_counts: {},
     current_topic: null,
@@ -153,6 +159,10 @@ export function initRuntimeState(): RuntimeState {
     current_claim: null,
     claim_follow_ups_used: 0,
     main_questions_asked: 0,
+    used_question_ids: [],
+    asked_question_counts: {},
+    current_main_question: null,
+    follow_ups_used_for_main: 0,
   };
 }
 

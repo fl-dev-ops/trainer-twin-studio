@@ -1,6 +1,6 @@
 import type { Collection, EmbeddingFunction, Where } from "chromadb";
 import { unstable_cache, revalidateTag } from "next/cache";
-import { ChromaTenantService, isSharedScope } from "@/lib/chroma-tenant";
+import { ChromaTenantService } from "@/lib/chroma-tenant";
 import { embedTexts } from "@/lib/knowledge";
 import type { PersonaVoiceMoment } from "@/lib/persona-voice";
 
@@ -215,14 +215,8 @@ function runOnChromaLane<T>(task: () => Promise<T>): Promise<T> {
 }
 
 export class MainCollectionService {
-  /**
-   * Resolves collection name for the org.
-   * - In dedicated mode (self-hosted or enterprise Chroma): "main" (isolated by tenant/database).
-   * - In shared mode (standard Chroma Cloud): `org_<orgId>_main` to prevent inter-org collision.
-   */
-  static getCollectionName(orgId: string, isSharedFallback = false): string {
-    return isSharedFallback ? `org_${orgId.replace(/[^a-zA-Z0-9_-]/g, "_")}_main` : "main";
-  }
+  /** Physical collection holding general knowledge chunks; isolation comes from the per-org database. */
+  static readonly COLLECTION_NAME = "main";
 
   /**
    * Gets or creates the `main` collection for an organization.
@@ -234,11 +228,9 @@ export class MainCollectionService {
     const cached = collectionCache.get(orgId);
     if (cached) return cached;
     const client = await ChromaTenantService.getClient(orgId);
-    const isSharedFallback = isSharedScope(client.database);
-    const name = this.getCollectionName(orgId, isSharedFallback);
 
     const collection = await client.getOrCreateCollection({
-      name,
+      name: this.COLLECTION_NAME,
       embeddingFunction: openRouterEmbeddings,
       configuration: {
         hnsw: { space: "cosine", ef_construction: 200, ef_search: 200, max_neighbors: 24 },

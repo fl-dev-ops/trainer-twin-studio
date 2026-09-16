@@ -155,7 +155,7 @@ export function documentAnchor(
   chunkText: string,
   preferQuantified = false
 ): string | null {
-  const lines = chunkText
+  const cleaned = chunkText
     .split("\n")
     .map((line) =>
       line
@@ -165,14 +165,21 @@ export function documentAnchor(
         // Markdown bullets are not in the rendered PDF text layer, so an anchor must never start
         // with the marker: the viewer's literal search would find nothing to highlight.
         .replace(/^[-•·]\s+/, "")
-    )
-    .filter((line) => line.length > 3 && line.length <= 110);
-  const entryLine = lines[0] ?? "";
+    );
+  const lines = cleaned.filter((line) => line.length > 3 && line.length <= 110);
+  // Claim extraction and claim-line lookups pass a SINGLE claim line as the whole input. Such a line
+  // can exceed the chunk-line cap, and dropping it would degrade the highlight to the bare section
+  // heading ("Experience") instead of the claim. The anchor is truncated to MAX_ANCHOR_WORDS, so an
+  // over-long line is a valid candidate — it must anchor on itself, matching the anchor backfill.
+  const entryLine = lines[0] ?? cleaned.find((line) => line.length > 3) ?? "";
   const quantifiedLine = lines.find((line) => /\d/.test(line) && line.split(" ").length <= 14) ?? "";
   const candidates = (preferQuantified ? [quantifiedLine, entryLine, heading] : [entryLine, heading, quantifiedLine])
     .map((candidate) => candidate.split(" ").slice(0, MAX_ANCHOR_WORDS).join(" ").trim())
     .filter((candidate) => candidate.length > 3);
-  const haystack = documentText.toLowerCase();
+  const haystack = documentText
+    .replace(/[*_`#>]/g, " ")
+    .replace(/\s+/g, " ")
+    .toLowerCase();
   const occurrences = (candidate: string) => haystack.split(candidate.toLowerCase()).length - 1;
   return (
     candidates.find((candidate) => occurrences(candidate) === 1) ??

@@ -1,19 +1,14 @@
 import type { Collection } from "chromadb";
-import { ChromaTenantService, isSharedScope } from "@/lib/chroma-tenant";
+import { ChromaTenantService } from "@/lib/chroma-tenant";
 import { openRouterEmbeddings } from "@/lib/main-collection";
 import { embedTexts } from "@/lib/knowledge";
 
 export class LearnerMemoryService {
   /**
-   * Resolves collection name for a learner in the org.
-   * - In dedicated mode: `learner_<userId>`.
-   * - In shared fallback mode: `org_<orgId>_learner_<userId>`.
+   * Resolves the learner's collection name inside the organization database.
    */
-  static getCollectionName(orgId: string, userId: string, isSharedFallback = false): string {
-    const cleanUser = userId.replace(/[^a-zA-Z0-9_-]/g, "_");
-    return isSharedFallback
-      ? `org_${orgId.replace(/[^a-zA-Z0-9_-]/g, "_")}_learner_${cleanUser}`
-      : `learner_${cleanUser}`;
+  static getCollectionName(userId: string): string {
+    return `learner_${userId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
   }
 
   /**
@@ -21,8 +16,7 @@ export class LearnerMemoryService {
    */
   static async getCollection(orgId: string, userId: string): Promise<Collection> {
     const client = await ChromaTenantService.getClient(orgId);
-    const isSharedFallback = isSharedScope(client.database);
-    const name = this.getCollectionName(orgId, userId, isSharedFallback);
+    const name = this.getCollectionName(userId);
 
     return client.getOrCreateCollection({
       name,
@@ -96,9 +90,7 @@ export class LearnerMemoryService {
    */
   static async deleteCollection(orgId: string, userId: string): Promise<void> {
     const client = await ChromaTenantService.getClient(orgId);
-    const configuredDb = process.env.CHROMA_DATABASE ?? "default_database";
-    const isSharedFallback = client.database === configuredDb && !process.env.CHROMA_URL;
-    const name = this.getCollectionName(orgId, userId, isSharedFallback);
+    const name = this.getCollectionName(userId);
 
     try {
       await client.deleteCollection({ name });

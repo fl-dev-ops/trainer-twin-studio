@@ -11,6 +11,7 @@ import {
   uploadKnowledgeFile,
 } from "@/lib/specs";
 import { OrganizationKnowledgeService } from "@/lib/org-knowledge";
+import { QuestionBank } from "@/lib/question-bank";
 
 type Params = { params: Promise<{ kb?: string[] }> };
 
@@ -24,8 +25,11 @@ export async function GET(_req: Request, { params }: Params) {
       OrganizationKnowledgeService.getAllDocuments(org.id),
       OrganizationKnowledgeService.getStats(org.id),
     ]);
+    const topicSlugsByKnowledgeBase = Object.fromEntries(await Promise.all(
+      bases.map(async (base) => [base.slug, await QuestionBank.listTopicSlugs(org.id, [base.slug])] as const),
+    ));
     return NextResponse.json({
-      knowledgeBases: bases.map((b) => ({ slug: b.slug, name: b.name })),
+      knowledgeBases: bases.map((b) => ({ slug: b.slug, name: b.name, topicSlugs: topicSlugsByKnowledgeBase[b.slug] ?? [] })),
       documents,
       stats,
     });

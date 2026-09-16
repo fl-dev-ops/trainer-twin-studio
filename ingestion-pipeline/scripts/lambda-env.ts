@@ -30,6 +30,7 @@ const Variables = {
   OPENROUTER_API_KEY: config.openRouterApiKey,
   EMBEDDING_MODEL: config.embeddingModel,
   TOPIC_MODEL: config.topicModel,
+  QUESTION_MODEL: config.questionModel,
   TOPIC_CHUNK_BATCH_SIZE: String(config.topicChunkBatchSize),
   INGESTION_MAX_RECEIVE_COUNT: String(config.maxReceiveCount),
   YOUTUBE_OAUTH_CLIENT_ID: config.youtubeOAuthClientId,

@@ -22,7 +22,7 @@ def build_surface_tools(*, room: Any, participant_identity: str) -> list[Any]:
         context: RunContext,
         action: str,
         payload: dict[str, Any] | None = None,
-    ) -> None:
+    ) -> dict[str, str]:
         actual_payload = payload or {}
         # A stable event id per file keeps the learner's viewer mounted: re-opening or re-highlighting
         # the same document then reuses one PDF viewer and only refreshes the search highlight.
@@ -53,7 +53,9 @@ def build_surface_tools(*, room: Any, participant_identity: str) -> list[Any]:
                 json.dumps(msg).encode("utf-8"),
                 reliable=True,
             )
-        return None
+        # LiveKit only requests the post-tool LLM turn when a tool returns a value.
+        # That turn speaks the pending question after the browser surface is visible.
+        return {"status": "ready", "action": action}
 
     @function_tool(
         name="finish_session",

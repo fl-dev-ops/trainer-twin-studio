@@ -1,5 +1,5 @@
 import type { TranscriptSegment } from "./chunking/youtube";
-import type { ExtractedQuestion } from "./questions";
+import { parseInterviewQuestionRecord, type InterviewQuestionRecord } from "../../questions/contract";
 
 export type TranscriptArtifact = { version: 1; segments: TranscriptSegment[] };
 export type SegmentPayload = {
@@ -15,19 +15,19 @@ export type SegmentPayload = {
 };
 export type PublishPayload = { documentId: string; title: string; slug: string; segmentCount: number };
 export type QuestionSegmentArtifact = {
-  version: 2;
+  version: 3;
   batchIndex: number;
-  questions: ExtractedQuestion[];
+  questions: InterviewQuestionRecord[];
   vectors: number[][];
 };
 export type YouTubeQuestionsArtifact = {
-  version: 1;
+  version: 2;
   videoId: string;
   title: string;
   sourceUrl: string;
   extractionVersion: string;
   chunkingVersion: string;
-  questions: ExtractedQuestion[];
+  questions: InterviewQuestionRecord[];
 };
 
 function object(value: unknown): Record<string, unknown> {
@@ -45,50 +45,6 @@ function integerField(value: Record<string, unknown>, key: string) {
   return Number(value[key]);
 }
 
-function stringArray(value: unknown) {
-  if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) throw new Error("Invalid question topic list");
-  return [...new Set(value as string[])];
-}
-
-function question(value: unknown): ExtractedQuestion {
-  const data = object(value);
-  if (typeof data.text !== "string" || !data.text.trim() || !Number.isFinite(data.startSeconds)
-    || !Number.isFinite(data.endSeconds) || Number(data.startSeconds) < 0
-    || Number(data.endSeconds) < Number(data.startSeconds)) {
-    throw new Error("Invalid stored YouTube question");
-  }
-  const rawType = String(data.questionType || "verbal").toLowerCase();
-  const questionType = (["verbal", "code-output", "coding", "machine-coding", "system-design", "mcq"].includes(rawType)
-    ? rawType
-    : "verbal") as ExtractedQuestion["questionType"];
-  const rawDiff = String(data.difficulty || "medium").toLowerCase();
-  const difficulty = (["easy", "medium", "hard"].includes(rawDiff)
-    ? rawDiff
-    : "medium") as "easy" | "medium" | "hard";
-  let code: { language: string; content: string } | undefined;
-  if (data.code && typeof data.code === "object") {
-    const c = data.code as { language?: unknown; content?: unknown };
-    if (typeof c.content === "string" && c.content.trim()) {
-      code = {
-        language: typeof c.language === "string" && c.language.trim() ? c.language.trim() : "javascript",
-        content: c.content.trim(),
-      };
-    }
-  }
-  const context = typeof data.context === "string" && data.context.trim() ? data.context.trim() : undefined;
-
-  return {
-    text: data.text,
-    startSeconds: Number(data.startSeconds),
-    endSeconds: Number(data.endSeconds),
-    topics: stringArray(data.topics),
-    proposedTopics: stringArray(data.proposedTopics),
-    questionType,
-    difficulty,
-    ...(code ? { code } : {}),
-    ...(context ? { context } : {}),
-  };
-}
 
 export function parseSegmentPayload(value: unknown): SegmentPayload {
   const data = object(value);
@@ -135,13 +91,13 @@ export function parseTranscriptArtifact(value: unknown): TranscriptArtifact {
 
 export function parseQuestionSegmentArtifact(value: unknown): QuestionSegmentArtifact {
   const data = object(value);
-  if (data.version !== 2 || !Array.isArray(data.questions) || !Array.isArray(data.vectors)) {
+  if (data.version !== 3 || !Array.isArray(data.questions) || !Array.isArray(data.vectors)) {
     throw new Error("Invalid stored YouTube question segment artifact");
   }
-  const questions = data.questions.map(question);
+  const questions = data.questions.map(parseInterviewQuestionRecord);
   const vectors = data.vectors as number[][];
   if (questions.length !== vectors.length || vectors.some((vector) => !Array.isArray(vector))) {
     throw new Error("Stored YouTube question/vector alignment is invalid");
   }
-  return { version: 2, batchIndex: integerField(data, "batchIndex"), questions, vectors };
+  return { version: 3, batchIndex: integerField(data, "batchIndex"), questions, vectors };
 }

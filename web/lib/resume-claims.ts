@@ -1,6 +1,8 @@
 import { db } from "@/lib/db";
 import { after } from "next/server";
 import { callOpenRouter } from "@/lib/runtime/openai";
+import { documentAnchor } from "@/lib/runtime/claims";
+import { locateClaimAnchors } from "@/lib/pdf-claim-anchors";
 
 /**
  * Resume claim store (Resume Mastery v1, reference behavior without PDF
@@ -82,7 +84,6 @@ Example: candidates "L12: Built a Redis cache serving 50k requests per second." 
 type CandidateLine = {
   id: string;
   section: string | null;
-  page: number | null;
   text: string;
 };
 
@@ -102,6 +103,25 @@ async function classifyLines(candidates: CandidateLine[]): Promise<Array<{ id: s
 }
 
 /**
+ * Anchors read from the PDF's own text layer, which is what the learner's viewer searches. Returns
+ * an empty list for anything but a PDF, or when the layer cannot be read, so the caller's computed
+ * anchors take over and an upload never fails because of the highlighter.
+ */
+async function layerClaimAnchors(
+  doc: { name: string; mimeType: string; content: Uint8Array },
+  texts: string[]
+): Promise<Array<string | null>> {
+  if (doc.mimeType !== "application/pdf" && !/\.pdf$/i.test(doc.name)) return [];
+  try {
+    const bytes = new Uint8Array(doc.content.buffer, doc.content.byteOffset, doc.content.byteLength);
+    return await locateClaimAnchors(bytes, texts);
+  } catch (error) {
+    console.warn("[resume-claims] PDF text layer unreadable, falling back to computed anchors:", error);
+    return [];
+  }
+}
+
+/**
  * Extracts and stores claims for one resume document. Idempotent: a document
  * with existing claims is left untouched. Returns the stored claim count.
  */
@@ -109,8 +129,11 @@ export async function extractResumeClaims(documentId: string): Promise<number> {
   const doc = await db.contextDocument.findUnique({
     where: { id: documentId },
     select: {
+      name: true,
+      mimeType: true,
+      content: true,
       extractedText: true,
-      chunks: { orderBy: { chunkIndex: "asc" }, select: { chunkIndex: true, heading: true, text: true, pageNumber: true } },
+      chunks: { orderBy: { chunkIndex: "asc" }, select: { chunkIndex: true, heading: true, text: true } },
     },
   });
   if (!doc?.extractedText || doc.chunks.length === 0) return 0;
@@ -119,33 +142,25 @@ export async function extractResumeClaims(documentId: string): Promise<number> {
   if (existing > 0) return existing;
 
   // Deterministic verbatim candidate inventory: one numbered candidate per cleaned
-  // source line, carrying its section heading and page. The model only returns
+  // source line, carrying its section heading. The model only returns
   // ids — the stored text is copied verbatim from this inventory by construction.
   const candidates: CandidateLine[] = [];
   for (const chunk of doc.chunks) {
     for (const rawLine of chunk.text.split("\n")) {
       const line = rawLine.replace(/[*_`#>]/g, " ").trim().replace(/^(?:[-–—•·]\s*)+/, "").replace(/\s+/g, " ").trim();
       if (line.length < 12 || line.length > MAX_TEXT_CHARACTERS) continue;
-      candidates.push({ id: `L${candidates.length}`, section: chunk.heading, page: chunk.pageNumber, text: line });
+      candidates.push({ id: `L${candidates.length}`, section: chunk.heading, text: line });
     }
   }
   if (!candidates.length) return 0;
 
   const picks = await classifyLines(candidates);
   const byId = new Map(candidates.map((candidate) => [candidate.id, candidate]));
-  const rows: Array<{
-    claimNo: number;
-    section: string;
-    kind: string;
-    text: string;
-    anchor: string;
-    metric: string | null;
-    page: number | null;
-  }> = [];
+  const chosen: Array<{ section: string; kind: string; text: string; metric: string | null }> = [];
   const seenIds = new Set<string>();
 
   for (const pick of picks) {
-    if (rows.length >= MAX_CLAIMS) break;
+    if (chosen.length >= MAX_CLAIMS) break;
     const candidate = byId.get(pick.id);
     if (!candidate) continue;
     const kind = pick.kind;
@@ -161,21 +176,62 @@ export async function extractResumeClaims(documentId: string): Promise<number> {
     if (seenIds.has(candidate.id)) continue;
     seenIds.add(candidate.id);
 
-    rows.push({
-      claimNo: rows.length,
+    chosen.push({
       section: (candidate.section ?? "Resume").slice(0, MAX_SECTION_CHARACTERS),
       kind,
       text,
-      // Full verbatim line is the viewer-search highlight — no length cap.
-      anchor: text,
       metric,
-      page: candidate.page,
     });
   }
+  if (!chosen.length) return 0;
+
+  const anchors = await layerClaimAnchors(doc, chosen.map((entry) => entry.text));
+  const rows: Array<{
+    claimNo: number;
+    section: string;
+    kind: string;
+    text: string;
+    anchor: string;
+    metric: string | null;
+  }> = [];
+  chosen.forEach((entry, index) => {
+    const anchor = anchors[index] ?? documentAnchor(doc.extractedText!, entry.section, entry.text, Boolean(entry.metric));
+    if (!anchor) return;
+    rows.push({ claimNo: rows.length, ...entry, anchor });
+  });
 
   if (!rows.length) return 0;
   await db.resumeClaim.createMany({ data: rows.map((row) => ({ ...row, documentId })) });
   return rows.length;
+}
+
+/**
+ * Recomputes the stored anchors of an already-extracted document from the PDF text layer, for rows
+ * written before anchors were read from the layer. Returns the number of anchors that changed.
+ */
+export async function refreshResumeClaimAnchors(documentId: string): Promise<number> {
+  const doc = await db.contextDocument.findUnique({
+    where: { id: documentId },
+    select: { name: true, mimeType: true, content: true, extractedText: true },
+  });
+  if (!doc) return 0;
+  const claims = await db.resumeClaim.findMany({
+    where: { documentId },
+    orderBy: { claimNo: "asc" },
+    select: { id: true, section: true, text: true, metric: true, anchor: true },
+  });
+  if (!claims.length) return 0;
+
+  const anchors = await layerClaimAnchors(doc, claims.map((claim) => claim.text));
+  let changed = 0;
+  for (let index = 0; index < claims.length; index++) {
+    // Only a layer anchor is an upgrade: a fallback would replace a good anchor with a cut-down one.
+    const anchor = anchors[index];
+    if (!anchor || anchor === claims[index].anchor) continue;
+    await db.resumeClaim.update({ where: { id: claims[index].id }, data: { anchor } });
+    changed++;
+  }
+  return changed;
 }
 
 /** Fire-and-forget extraction after an upload persists, request-scoped safe. */
@@ -206,7 +262,6 @@ export type StoredResumeClaim = {
   text: string;
   anchor: string;
   metric: string | null;
-  page: number | null;
 };
 
 /**

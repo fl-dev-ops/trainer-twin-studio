@@ -227,7 +227,7 @@ model ContextDocumentChunk {
 
 /// A questionable statement extracted from an uploaded resume (Resume Mastery v1).
 /// Extraction happens once per document at ingestion; sessions reuse the stored
-/// claims. `anchor` is the literal verbatim claim text the learner's PDF viewer
+/// claims. `anchor` is a short literal excerpt the learner's PDF viewer
 /// highlights by text search — no PDF coordinates are stored.
 model ResumeClaim {
   id         String          @id @default(cuid())
@@ -239,7 +239,6 @@ model ResumeClaim {
   text       String // verbatim claim text from the resume
   anchor     String // literal viewer-search anchor for the highlight
   metric     String? // exact substring of text, when the claim quantifies impact
-  page       Int? // page the claim appears on, for direct viewer jumps
   createdAt  DateTime        @default(now())
 
   @@unique([documentId, claimNo])

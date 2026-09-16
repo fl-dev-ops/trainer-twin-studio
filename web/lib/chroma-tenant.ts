@@ -1,6 +1,7 @@
 import { AdminClient, AdminCloudClient, ChromaClient, CloudClient } from "chromadb";
 import { db } from "@/lib/db";
 import { invalidateCollectionCache } from "@/lib/main-collection";
+import { interviewQuestionOrgDatabaseName } from "@shared/interview-question";
 
 export { AdminClient as ChromaAdminClient };
 
@@ -9,25 +10,6 @@ const clientCache = new Map<string, ChromaClient>();
 const CHROMA_URL = process.env.CHROMA_URL;
 const CHROMA_API_KEY = process.env.CHROMA_API_KEY ?? "";
 const CHROMA_TENANT = process.env.CHROMA_TENANT ?? "default_tenant";
-const CHROMA_DATABASE = process.env.CHROMA_DATABASE ?? "default_database";
-
-/**
- * Controls whether Chroma operates with dedicated per-org tenant/database isolation
- * (e.g. self-hosted Chroma or Chroma Cloud Enterprise with tenant admin credentials)
- * vs. shared database scope with collection-level namespacing (e.g. standard Chroma Cloud).
- */
-export const USE_DEDICATED_TENANT = Boolean(
-  process.env.CHROMA_URL || process.env.CHROMA_CLOUD_MODE === "dedicated"
-);
-
-/**
- * Checks if the given Chroma client is operating inside a shared database fallback.
- */
-export function isSharedScope(clientDatabase?: string): boolean {
-  if (USE_DEDICATED_TENANT) return false;
-  const configuredDb = process.env.CHROMA_DATABASE ?? "default_database";
-  return !clientDatabase || clientDatabase === configuredDb;
-}
 
 export function parseChromaUrl(url: string) {
   const u = new URL(url);
@@ -49,7 +31,7 @@ export function getAdminClient(): AdminClient {
 }
 
 export function orgDatabaseName(orgId: string): string {
-  return `org_${orgId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+  return interviewQuestionOrgDatabaseName(orgId);
 }
 
 export class ChromaTenantService {
@@ -100,7 +82,7 @@ export class ChromaTenantService {
 
     await db.organization.update({
       where: { id: orgId },
-      data: { chromaTenantId: null, chromaDatabase: CHROMA_DATABASE },
+      data: { chromaTenantId: null, chromaDatabase: database },
     });
   }
 
@@ -123,7 +105,7 @@ export class ChromaTenantService {
     }
 
     const tenant = org.chromaTenantId ?? CHROMA_TENANT;
-    const database = org.chromaDatabase ?? CHROMA_DATABASE;
+    const database = org.chromaDatabase ?? expectedDatabase;
 
     let client: ChromaClient;
     if (CHROMA_URL) {

@@ -7,6 +7,7 @@ import { createTopicResolver, normalizeTopicSlug, normalizeTopicToken, parseTopi
 import { TOPIC_DISCOVERY_SYSTEM_PROMPT, TOPIC_ASSIGNMENT_SYSTEM_PROMPT, buildTopicDiscoveryPrompt, buildTopicAssignmentPrompt } from "./topics/prompts";
 import type { PreparedChunk, PreparedDocument } from "./chunking/markdown";
 import { applySectionTopics, buildClassificationUnits, parseUnitTopicResults } from "./topics/sections";
+import { INTERVIEW_QUESTION_COLLECTION, interviewQuestionOrgDatabaseName } from "../../shared/interview-question";
 
 const TOPIC_EXAMPLE_LIMIT = 20;
 
@@ -41,19 +42,11 @@ function chromaConnection(url: string) {
 }
 
 export function orgDatabaseName(orgId: string): string {
-  return `org_${orgId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+  return interviewQuestionOrgDatabaseName(orgId);
 }
 
-export function isSharedScope(clientDatabase?: string | null): boolean {
-  if (process.env.CHROMA_URL || process.env.CHROMA_CLOUD_MODE === "dedicated") return false;
-  const configuredDb = process.env.CHROMA_DATABASE ?? "default_database";
-  return !clientDatabase || clientDatabase === configuredDb;
-}
-
-export function getMainCollectionName(orgId: string, database?: string | null): string {
-  const isShared = isSharedScope(database);
-  return isShared ? `org_${orgId.replace(/[^a-zA-Z0-9_-]/g, "_")}_main` : "main";
-}
+/** Physical collection holding general knowledge chunks; isolation comes from the per-org database. */
+export const MAIN_COLLECTION_NAME = "main";
 
 function getAdminClient(config: PipelineConfig): AdminClient | AdminCloudClient {
   if (config.chromaCloud) {
@@ -114,7 +107,7 @@ export async function getMainCollection(
   await ensureOrgDatabase(config, assignedTenant, assignedDatabase);
 
   const client = createChromaClient(config, assignedTenant, assignedDatabase);
-  const name = getMainCollectionName(orgId, assignedDatabase);
+  const name = MAIN_COLLECTION_NAME;
 
   const embeddingFunction: EmbeddingFunction = {
     generate: (texts) => embedTexts(config, texts),
@@ -129,6 +122,29 @@ export async function getMainCollection(
     name,
     embeddingFunction,
     configuration,
+  });
+}
+
+type QuestionCollectionScope = Pick<JobContext, "orgId" | "chromaTenantId" | "chromaDatabase">;
+
+export async function getQuestionsCollection(config: PipelineConfig, job: QuestionCollectionScope): Promise<Collection> {
+  const assignedTenant = job.chromaTenantId || config.chromaCloud?.tenant || "default_tenant";
+  const assignedDatabase = job.chromaDatabase && job.chromaDatabase !== "default" && job.chromaDatabase !== "default_database"
+    ? job.chromaDatabase
+    : orgDatabaseName(job.orgId);
+  await ensureOrgDatabase(config, assignedTenant, assignedDatabase);
+  const embeddingFunction: EmbeddingFunction = {
+    generate: (texts) => embedTexts(config, texts),
+    generateForQueries: (texts) => embedTexts(config, texts),
+    defaultSpace: () => "cosine",
+    supportedSpaces: () => ["cosine"],
+  };
+  return createChromaClient(config, assignedTenant, assignedDatabase).getOrCreateCollection({
+    name: INTERVIEW_QUESTION_COLLECTION,
+    embeddingFunction,
+    configuration: config.chromaCloud
+      ? { spann: { space: "cosine" as const } }
+      : { hnsw: { space: "cosine" as const, ef_construction: 200, ef_search: 200, max_neighbors: 24 } },
   });
 }
 
@@ -328,85 +344,79 @@ export type PreparedQuestionRecord = {
   id: string;
   document: string;
   metadata: {
-    id: string;
-    question: string;
     question_type: string;
-    difficulty: string;
     topics: string[];
-    has_code: boolean;
-    has_options: boolean;
-    has_answer: boolean;
-    source_platform: string;
-    source_url?: string;
     record_json: string;
-    docId?: string;
+    generation_version: string;
+    orgId: string;
+    kbId: string;
+    docId: string;
   };
 };
 
-/** Replaces one document's question records in the organization's main collection as type=knowledge, kind=youtube_question. */
+/** Publishes first, verifies the replacement, then removes stale records from the dedicated question collection. */
 export async function replaceQuestionVectors(
   config: PipelineConfig,
   job: JobContext,
   docId: string,
-  source: string,
   questions: PreparedQuestionRecord[],
   vectors: number[][],
 ): Promise<number> {
   if (vectors.length !== questions.length) throw new Error("Incomplete question vectors");
+  if (questions.some((question) => question.metadata.orgId !== job.orgId
+    || question.metadata.kbId !== job.kbId || question.metadata.docId !== docId)) {
+    throw new Error("Question metadata scope mismatch");
+  }
   const startedAt = Date.now();
   console.info(`[DB:questions-publish] start orgId=${job.orgId} kbId=${job.kbId} docId=${docId} count=${questions.length}`);
-  const collection = await getMainCollection(config, job.orgId, job.chromaTenantId, job.chromaDatabase);
+  const dimensions = vectors[0]?.length;
+  if (questions.length && (!dimensions || vectors.some((vector) => vector.length !== dimensions || vector.some((value) => !Number.isFinite(value))))) {
+    throw new Error("Invalid question vectors");
+  }
   try {
-    await collection.delete({
-      where: {
-        $and: [
-          { type: "knowledge" },
-          { kind: "youtube_question" },
-          { docId },
-        ],
-      } as any,
-    });
-  } catch {
-    // collection may be empty
-  }
+    const collection = await getQuestionsCollection(config, job);
+    const documentFilter = { $and: [{ orgId: job.orgId }, { kbId: job.kbId }, { docId }] } as any;
+    const previous = await collection.get({ where: documentFilter });
 
-  for (let start = 0; start < questions.length; start += 250) {
-    const end = Math.min(start + 250, questions.length);
-    const batchQuestions = questions.slice(start, end);
-    const batchVectors = vectors.slice(start, end);
-    await collection.upsert({
-      ids: batchQuestions.map((q) => `yt_q_${q.id}`),
-      embeddings: batchVectors,
-      documents: batchQuestions.map((q) => q.document),
-      metadatas: batchQuestions.map((q, offset) => ({
-        type: "knowledge",
-        kind: "youtube_question",
-        orgId: job.orgId,
-        kbId: job.kbId,
-        docId,
-        source,
-        title: q.metadata.question,
-        chunkIndex: start + offset,
-        question_id: q.metadata.id,
-        question_type: q.metadata.question_type,
-        difficulty: q.metadata.difficulty,
-        topics: q.metadata.topics,
-        has_code: q.metadata.has_code,
-        has_options: q.metadata.has_options,
-        has_answer: q.metadata.has_answer,
-        source_platform: q.metadata.source_platform,
-        ...(q.metadata.source_url ? { source_url: q.metadata.source_url } : {}),
-      })),
-    });
+    for (let start = 0; start < questions.length; start += 250) {
+      const end = Math.min(start + 250, questions.length);
+      const batchQuestions = questions.slice(start, end);
+      const batchVectors = vectors.slice(start, end);
+      await collection.upsert({
+        ids: batchQuestions.map((q) => q.id),
+        embeddings: batchVectors,
+        documents: batchQuestions.map((q) => q.document),
+        metadatas: batchQuestions.map((q) => ({
+          orgId: job.orgId,
+          kbId: job.kbId,
+          docId,
+          question_type: q.metadata.question_type,
+          topics: q.metadata.topics,
+          record_json: q.metadata.record_json,
+          generation_version: q.metadata.generation_version,
+        })),
+      });
+    }
+    const expectedIds = questions.map(({ id }) => id);
+    const verified = expectedIds.length
+      ? await collection.get({ ids: expectedIds, where: documentFilter })
+      : { ids: [] as string[] };
+    if ((verified.ids ?? []).length !== expectedIds.length) throw new Error("Question publication verification failed");
+    const expected = new Set(expectedIds);
+    const staleIds = (previous.ids ?? []).filter((id) => !expected.has(id));
+    if (staleIds.length) await collection.delete({ ids: staleIds });
+    console.info(`[DB:questions-publish] complete orgId=${job.orgId} docId=${docId} previous=${previous.ids?.length ?? 0} new=${questions.length} stale=${staleIds.length} elapsedMs=${Date.now() - startedAt}`);
+    return expectedIds.length;
+  } catch (error) {
+    console.error(`[DB:questions-publish] failed orgId=${job.orgId} docId=${docId} count=${questions.length} elapsedMs=${Date.now() - startedAt} error=${error instanceof Error ? error.name : "UnknownError"}`);
+    throw error;
   }
-  console.info(`[DB:questions-publish] complete orgId=${job.orgId} docId=${docId} count=${questions.length} elapsedMs=${Date.now() - startedAt}`);
-  return questions.length;
 }
 
 /** Matches the prototype's best-effort vector removal for a deleted/empty page. */
 export async function removeDocument(
   config: PipelineConfig,
-  job: { orgId: string; chromaTenantId?: string | null; chromaDatabase?: string | null },
+  job: { orgId: string; kbId: string; chromaTenantId?: string | null; chromaDatabase?: string | null },
   docId: string,
 ): Promise<void> {
   try {
@@ -422,7 +432,7 @@ export async function removeDocument(
 /** Privacy cleanup must fail and retry if vector deletion is not confirmed. Rejected Chroma deletions propagate. */
 export async function removeDocumentStrict(
   config: PipelineConfig,
-  job: { orgId: string; chromaTenantId?: string | null; chromaDatabase?: string | null },
+  job: { orgId: string; kbId: string; chromaTenantId?: string | null; chromaDatabase?: string | null },
   docId: string,
 ): Promise<void> {
   const collection = await getMainCollection(config, job.orgId, job.chromaTenantId, job.chromaDatabase);
@@ -434,4 +444,10 @@ export async function removeDocumentStrict(
       ],
     } as any,
   });
+  const questions = await getQuestionsCollection(config, {
+    orgId: job.orgId,
+    chromaTenantId: job.chromaTenantId ?? null,
+    chromaDatabase: job.chromaDatabase ?? null,
+  });
+  await questions.delete({ where: { $and: [{ orgId: job.orgId }, { kbId: job.kbId }, { docId }] } as any });
 }

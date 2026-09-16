@@ -14,7 +14,18 @@ export type AgentSurface =
       tool: "code";
       language: SupportedCodeExecutionLanguage;
       starterCode: string;
+      questionId: string;
+      instructions?: string;
       highlightLines?: [number, number];
+      readOnly?: boolean;
+    }
+  | {
+      key: string;
+      tool: "choice";
+      questionId: string;
+      question: string;
+      options: Array<{ id: string; text: string }>;
+      code?: { language: string; content: string };
     }
   | {
       key: string;
@@ -31,6 +42,13 @@ function record(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+function questionCode(value: unknown): { language: string; content: string } | undefined {
+  const code = record(value);
+  return code && typeof code.language === "string" && typeof code.content === "string"
+    ? { language: code.language, content: code.content }
+    : undefined;
 }
 
 function codeSurface(source: Record<string, unknown>, key: string): AgentSurface {
@@ -50,9 +68,22 @@ function codeSurface(source: Record<string, unknown>, key: string): AgentSurface
   return {
     key,
     tool: "code",
+    questionId: typeof source.questionId === "string"
+      ? source.questionId
+      : typeof source.eventId === "string"
+        ? source.eventId
+        : key,
     language,
     starterCode: typeof starterCode === "string" ? starterCode : "",
+    instructions: typeof source.instructions === "string"
+      ? source.instructions
+      : typeof source.context === "string"
+        ? source.context
+        : typeof source.question === "string"
+          ? source.question
+          : undefined,
     highlightLines,
+    readOnly: source.readOnly === true || source.read_only === true,
   };
 }
 
@@ -86,6 +117,18 @@ export function parseAgentSurfaceMessage(value: unknown):
           scrollToElements,
         },
       };
+    }
+    if (event.type === "open_choice") {
+      const options = Array.isArray(event.options)
+        ? event.options.flatMap((value) => {
+            const option = record(value);
+            return option && typeof option.id === "string" && typeof option.text === "string"
+              ? [{ id: option.id, text: option.text }]
+              : [];
+          })
+        : [];
+      const questionId = String(event.questionId ?? event.eventId ?? "current");
+      return { surface: { key: `agent-choice-${questionId}`, questionId, tool: "choice", question: typeof event.question === "string" ? event.question : "Choose an answer", options, code: questionCode(event.code) } };
     }
     if (event.type === "open_pdf") {
       const sourceUrl = typeof event.sourceUrl === "string" ? event.sourceUrl : undefined;
@@ -177,7 +220,18 @@ export function parseAgentSurfaceMessage(value: unknown):
     if (question.surface === "whiteboard") {
       return { surface: { key: question.id, tool: "canvas" } };
     }
-    if (question.surface === "verbal" || question.surface === "choice") {
+    if (question.surface === "choice") {
+      const options = Array.isArray(question.options)
+        ? question.options.flatMap((value) => {
+            const option = record(value);
+            return option && typeof option.id === "string" && typeof option.text === "string"
+              ? [{ id: option.id, text: option.text }]
+              : [];
+          })
+        : [];
+      return { surface: { key: question.id, questionId: question.id, tool: "choice", question: typeof question.text === "string" ? question.text : "Choose an answer", options, code: questionCode(question.code) } };
+    }
+    if (question.surface === "verbal") {
       return { surface: null };
     }
     return null;

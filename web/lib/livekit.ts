@@ -58,6 +58,7 @@ export async function createLiveKitSessionToken({
     interview: {
       type: "mock_interview",
       version: "v1",
+      config: {},
     },
     hold_opening: holdOpening,
     ...(voice ? { voice } : {}),

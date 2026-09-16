@@ -37,7 +37,7 @@ async function cleanupConnection(pool: Pool, config: PipelineConfig, connection:
     } catch (error) { revocationError = error; }
   }
   const documents = await pool.query<Document>(`
-    SELECT document.id, document."kbId", kb.slug AS "kbSlug", org."chromaTenantId", org."chromaDatabase",
+    SELECT document.id, document."kbId", org."chromaTenantId", org."chromaDatabase",
       document."s3SourceKey", document."s3MarkdownKey", document."s3QuestionsKey"
     FROM "KnowledgeDocument" document JOIN "KnowledgeSource" source ON source.id = document."sourceId"
     JOIN "KnowledgeBase" kb ON kb.id = document."kbId" AND kb."orgId" = source."orgId"
@@ -59,7 +59,6 @@ async function cleanupConnection(pool: Pool, config: PipelineConfig, connection:
 type Document = {
   id: string;
   kbId: string;
-  kbSlug: string;
   chromaTenantId: string | null;
   chromaDatabase: string | null;
   s3SourceKey: string | null;
@@ -73,7 +72,7 @@ async function deleteStoredDocuments(pool: Pool, config: PipelineConfig, orgId: 
   const s3 = new S3Client({ region: config.awsRegion });
   for (const document of documents) {
     if (Date.now() > deadline) return false;
-    await removeDocumentStrict(config, { orgId, chromaTenantId: document.chromaTenantId, chromaDatabase: document.chromaDatabase }, document.id);
+    await removeDocumentStrict(config, { orgId, kbId: document.kbId, chromaTenantId: document.chromaTenantId, chromaDatabase: document.chromaDatabase }, document.id);
     const prefix = `${config.s3BasePrefix}/${orgId}/knowledge/${document.kbId}/${document.id}/`;
     if (![document.s3SourceKey, document.s3MarkdownKey, document.s3QuestionsKey].every((key) => !key || key === "pending" || key.startsWith(prefix))) {
       throw new Error("YouTube cleanup refused a key outside the document prefix");
@@ -110,7 +109,7 @@ async function expireTranscripts(pool: Pool, config: PipelineConfig, deadline: n
     const running = await pool.query(`SELECT item.id FROM "IngestionWorkItem" item JOIN "IngestionJob" job ON job.id = item."jobId"
       WHERE job."sourceId" = $1 AND item.status = 'running' AND item."leaseExpiresAt" > NOW() LIMIT 1`, [source.id]);
     if (running.rowCount) continue;
-    const documents = await pool.query<Document>(`SELECT document.id, document."kbId", kb.slug AS "kbSlug",
+    const documents = await pool.query<Document>(`SELECT document.id, document."kbId",
       org."chromaTenantId", org."chromaDatabase", document."s3SourceKey", document."s3MarkdownKey", document."s3QuestionsKey"
       FROM "KnowledgeDocument" document JOIN "KnowledgeBase" kb ON kb.id = document."kbId"
       JOIN "Organization" org ON org.id = kb."orgId"

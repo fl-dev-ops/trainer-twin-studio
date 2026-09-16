@@ -8,7 +8,7 @@ import {
   type InterviewAction,
   type RuntimeState,
 } from "./runtime";
-import { adaptOpeningWithoutContext, generateSpeech, recordClaimMain, resumeTurnGuidance, selectNextClaimEvidence, stripPickOneInstructions, type ClaimTurn } from "./openai";
+import { adaptOpeningWithoutContext, generateSpeech, recordClaimMain, resumeTurnGuidance, selectNextClaimEvidence, stripPickOneInstructions, technicalOpeningIntroContract, type ClaimTurn } from "./openai";
 import type { Prisma } from "@/lib/generated/prisma/client";
 
 /**
@@ -81,7 +81,7 @@ export async function prewarmSessionOpening(sessionId: string): Promise<boolean>
       reason: "Start the configured interview after preparing its surface.",
       intent: specs.agent.phases[0]?.opening ?? specs.agent.objective,
       close: false,
-      expects_answer: true,
+      expects_answer: specs.agent.interview.type !== "technical",
     };
 
     const rawOpening = specs.agent.opening || "Welcome to the interview session. Let's begin.";
@@ -116,7 +116,9 @@ export async function prewarmSessionOpening(sessionId: string): Promise<boolean>
       : specs.documentManifests?.length
         ? rawOpening
         : adaptOpeningWithoutContext(rawOpening);
-    const openingContract = claimTurn
+    const openingContract = specs.agent.interview.type === "technical"
+      ? technicalOpeningIntroContract(rawOpening)
+      : claimTurn
       ? `${baseOpening}\n${resumeTurnGuidance(specs, state, {
           kind: "new_main",
           angle: claimTurn.angle,
@@ -159,7 +161,12 @@ export async function prewarmSessionOpening(sessionId: string): Promise<boolean>
       select: { runtimeState: true },
     });
     const freshState = { ...state, ...((fresh?.runtimeState as Partial<RuntimeState> | null) ?? {}) };
-    if (freshState.actions.includes("opening") || (freshState.used_claims?.length ?? 0) > 0) {
+    if (
+      freshState.actions.includes("opening") ||
+      (freshState.used_claims?.length ?? 0) > 0 ||
+      Boolean(freshState.current_main_question) ||
+      Boolean(freshState.pending_opening_text)
+    ) {
       return true;
     }
     await db.interviewSession.update({

@@ -4,6 +4,7 @@
  */
 
 import type { DocumentManifest } from "@/lib/context-document-service";
+import { interviewConfigSchema, type InterviewConfig } from "@/lib/interview-config-schema";
 
 export type ClaimProvenance =
   | "context_declared"
@@ -83,6 +84,7 @@ export interface AgentSpec {
   knowledge_grounding: Array<Record<string, unknown>>;
   knowledge_query_guidance: string;
   completion: string;
+  interview: InterviewConfig;
 }
 
 export interface DomainSpec {
@@ -146,6 +148,12 @@ export function buildSpecs(config: Record<string, any>): CompiledSpecs {
 
   const agentData = config.agent?.data ?? {};
   const defaults = agentData.config ?? {};
+  const hasInterviewConfig = defaults.interview !== undefined && defaults.interview !== null;
+  const interview = interviewConfigSchema.parse(hasInterviewConfig ? defaults.interview : {
+    schema_version: 1,
+    type: "resume",
+    follow_ups_per_main_question: 1,
+  });
   const domainData = structuredClone(config.domain?.data ?? {});
   domainData.version = config.domain?.version ?? 1;
 
@@ -181,17 +189,17 @@ export function buildSpecs(config: Record<string, any>): CompiledSpecs {
 
     const sc = stage.config ?? {};
     const merged = deepMerge(defaults, sc);
-    const evidence = sc.evidence ?? {};
-    const keys: string[] = evidence.keys ?? [];
-    const completion: string[] = evidence.completion_keys ?? [];
+    const evidence = interview.type === "technical" ? {} : sc.evidence ?? {};
+    const keys: string[] = interview.type === "technical" ? [] : evidence.keys ?? [];
+    const completion: string[] = interview.type === "technical" ? [] : evidence.completion_keys ?? [];
 
-    if (!keys.length || !completion.length || keys.length !== new Set(keys).size) {
+    if (interview.type === "resume" && (!keys.length || !completion.length || keys.length !== new Set(keys).size)) {
       throw new Error(`Stage ${sid} requires unique evidence keys and completion keys`);
     }
 
     const keySet = new Set(keys);
     const defKeys = new Set(Object.keys(evidence.definitions ?? {}));
-    if (!completion.every((k) => keySet.has(k)) || !keys.every((k) => defKeys.has(k))) {
+    if (interview.type === "resume" && (!completion.every((k) => keySet.has(k)) || !keys.every((k) => defKeys.has(k)))) {
       throw new Error(`Stage ${sid} references undefined evidence`);
     }
 
@@ -297,6 +305,10 @@ export function buildSpecs(config: Record<string, any>): CompiledSpecs {
     throw new Error("Session maximum turns must be a positive integer");
   }
 
+  if (interview.type === "technical" && (!kbs.length || !interview.topic_slugs.length)) {
+    throw new Error("Technical interview requires a knowledge base and approved topics");
+  }
+
   const agent: AgentSpec = {
     id: agentData.id,
     name: agentData.name,
@@ -316,7 +328,10 @@ export function buildSpecs(config: Record<string, any>): CompiledSpecs {
     rendering: defaults.rendering ?? {},
     knowledge_grounding: agentData.knowledge_grounding ?? [],
     knowledge_query_guidance: agentData.objective,
-    completion: "Configured completion keys or turn limits.",
+    completion: interview.type === "technical"
+      ? "Configured technical question quotas and follow-up limits."
+      : "Configured completion keys or turn limits.",
+    interview,
   };
 
   const rawContext = config.context;

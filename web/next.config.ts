@@ -15,6 +15,7 @@ const nextConfig: NextConfig = {
     "chromadb",
     "@chroma-core/default-embed",
     "@chroma-core/ai-embeddings-common",
+    "@embedpdf/pdfium",
   ],
   webpack: (config) => {
     config.resolve.alias = {

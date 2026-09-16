@@ -42,13 +42,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { QUESTION_TYPES, type QuestionType } from "@shared/interview-question-types";
+import {
+  DEFAULT_TECHNICAL_QUESTION_COUNTS,
+  interviewConfigSchema,
+  type InterviewConfig,
+} from "@/lib/interview-config-schema";
 
 const GENERIC_SAVE_ERROR =
   "Failed to save the change, try again in a few seconds";
 
 type VoiceOption = { id: string; name: string; status: string };
-type KnowledgeOption = { slug: string; name: string };
+type KnowledgeOption = { slug: string; name: string; topicSlugs?: string[] };
 type PersonaOption = { slug: string; name: string };
+type TopicOption = { slug: string; description: string };
 type VersionInfo = { version: number; createdAt: string; label: string };
 
 export type AgentEditorProps = {
@@ -64,6 +71,8 @@ export type AgentEditorProps = {
   publishedVersion?: number;
   versions: VersionInfo[];
   personas: PersonaOption[];
+  topics: TopicOption[];
+  interviewConfig: InterviewConfig;
 };
 
 export function AgentEditor(initial: AgentEditorProps) {
@@ -73,6 +82,7 @@ export function AgentEditor(initial: AgentEditorProps) {
   const [opening, setOpening] = useState(initial.opening);
   const [personaSlug, setPersonaSlug] = useState(initial.personaSlug);
   const [knowledgeBase, setKnowledgeBase] = useState(initial.knowledgeBase);
+  const [interviewConfig, setInterviewConfig] = useState<InterviewConfig>(initial.interviewConfig);
   const [voiceId, setVoiceId] = useState(initial.voiceId);
   const [specYaml, setSpecYaml] = useState(initial.specYaml);
   const [revision, setRevision] = useState(initial.revision);
@@ -85,6 +95,10 @@ export function AgentEditor(initial: AgentEditorProps) {
   const showSpec = useSearchParams().get("debug") === "true";
   const [voices, setVoices] = useState<VoiceOption[]>([]);
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeOption[]>([]);
+  const availableTopicSlugs = new Set(
+    knowledgeBases.find((base) => base.slug === knowledgeBase)?.topicSlugs ?? [],
+  );
+  const availableTopics = initial.topics.filter((topic) => availableTopicSlugs.has(topic.slug));
 
   useEffect(() => {
     if (!dirty) return;
@@ -110,8 +124,9 @@ export function AgentEditor(initial: AgentEditorProps) {
       .catch(() => setKnowledgeBases([]));
   }, []);
 
-  const ready =
-    instruction.trim() && name.trim() && opening.trim() && personaSlug;
+  const ready = instruction.trim() && name.trim() && opening.trim() && personaSlug &&
+    interviewConfigSchema.safeParse(interviewConfig).success &&
+    (interviewConfig.type !== "technical" || Boolean(knowledgeBase));
 
   async function generate(publish: boolean) {
     if (!ready || busy) return;
@@ -130,6 +145,7 @@ export function AgentEditor(initial: AgentEditorProps) {
             knowledgeBase: knowledgeBase || undefined,
             voiceId: voiceId || undefined,
             publish,
+            interviewConfig,
           }),
         },
       );
@@ -364,11 +380,15 @@ export function AgentEditor(initial: AgentEditorProps) {
               <FieldLabel>Knowledge base</FieldLabel>
               <Select
                 value={knowledgeBase || "none"}
-                onValueChange={(value) =>
-                  value !== null &&
-                  (setKnowledgeBase(value === "none" ? "" : value),
-                  setDirty(true))
-                }
+                onValueChange={(value) => {
+                  if (value === null) return;
+                  const nextKnowledgeBase = value === "none" ? "" : value;
+                  if (nextKnowledgeBase !== knowledgeBase && interviewConfig.type === "technical") {
+                    setInterviewConfig({ ...interviewConfig, topic_slugs: [] });
+                  }
+                  setKnowledgeBase(nextKnowledgeBase);
+                  setDirty(true);
+                }}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Choose a knowledge base" />
@@ -390,6 +410,104 @@ export function AgentEditor(initial: AgentEditorProps) {
                 <Link href="/knowledge">Manage knowledge</Link>.
               </FieldDescription>
             </Field>
+            <Field>
+              <FieldLabel>Interview type</FieldLabel>
+              <Select
+                value={interviewConfig.type}
+                onValueChange={(value) => {
+                  if (value === "resume") {
+                    setInterviewConfig({ schema_version: 1, type: "resume", follow_ups_per_main_question: interviewConfig.follow_ups_per_main_question });
+                  } else if (value === "technical") {
+                    setInterviewConfig({
+                      schema_version: 1,
+                      type: "technical",
+                      follow_ups_per_main_question: interviewConfig.follow_ups_per_main_question,
+                      topic_slugs: [],
+                      question_counts: { ...DEFAULT_TECHNICAL_QUESTION_COUNTS },
+                    });
+                  }
+                  setDirty(true);
+                }}
+              >
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="resume">Resume</SelectItem>
+                  <SelectItem value="technical">Technical</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="follow-up-limit">Maximum follow-ups per main question</FieldLabel>
+              <Input
+                id="follow-up-limit"
+                type="number"
+                min={0}
+                max={3}
+                value={interviewConfig.follow_ups_per_main_question}
+                onChange={(event) => {
+                  setInterviewConfig({ ...interviewConfig, follow_ups_per_main_question: Math.max(0, Math.min(3, Number(event.target.value) || 0)) });
+                  setDirty(true);
+                }}
+              />
+              <FieldDescription className="text-xs">Follow-ups are adaptive; this is only the cap.</FieldDescription>
+            </Field>
+            {interviewConfig.type === "technical" ? (
+              <>
+                <Field data-invalid={interviewConfig.topic_slugs.length === 0}>
+                  <FieldLabel>Approved topics</FieldLabel>
+                  <div className="max-h-48 space-y-2 overflow-y-auto rounded-xl border bg-background p-3">
+                    {availableTopics.map((topic) => (
+                      <label key={topic.slug} className="flex items-start gap-2 text-xs">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5"
+                          checked={interviewConfig.topic_slugs.includes(topic.slug)}
+                          onChange={(event) => {
+                            const topic_slugs = event.target.checked
+                              ? [...interviewConfig.topic_slugs, topic.slug]
+                              : interviewConfig.topic_slugs.filter((slug) => slug !== topic.slug);
+                            setInterviewConfig({ ...interviewConfig, topic_slugs });
+                            setDirty(true);
+                          }}
+                        />
+                        <span><span className="font-medium">{topic.slug}</span>{topic.description ? ` — ${topic.description}` : ""}</span>
+                      </label>
+                    ))}
+                    {!availableTopics.length ? (
+                      <p className="text-xs text-muted-foreground">No generated question topics are available for this knowledge base yet.</p>
+                    ) : null}
+                  </div>
+                  {interviewConfig.topic_slugs.length === 0 ? <FieldError>Select at least one approved topic.</FieldError> : null}
+                </Field>
+                <Field>
+                  <FieldLabel>Main questions</FieldLabel>
+                  <div className="space-y-2 rounded-xl border bg-background p-3">
+                    {QUESTION_TYPES.map((type) => (
+                      <label key={type} className="flex items-center justify-between gap-3 text-xs">
+                        <span>{type}</span>
+                        <Input
+                          className="h-8 w-20"
+                          type="number"
+                          min={0}
+                          value={interviewConfig.question_counts[type] ?? 0}
+                          onChange={(event) => {
+                            const count = Math.max(0, Number(event.target.value) || 0);
+                            const question_counts = { ...interviewConfig.question_counts };
+                            if (count) question_counts[type as QuestionType] = count;
+                            else delete question_counts[type as QuestionType];
+                            setInterviewConfig({ ...interviewConfig, question_counts });
+                            setDirty(true);
+                          }}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  <FieldDescription className="text-xs">
+                    Total: {Object.values(interviewConfig.question_counts).reduce((sum, count) => sum + count, 0)}
+                  </FieldDescription>
+                </Field>
+              </>
+            ) : null}
             <Field>
               <FieldLabel>Voice</FieldLabel>
               <Select

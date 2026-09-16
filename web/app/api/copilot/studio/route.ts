@@ -222,7 +222,6 @@ export async function POST(request: Request) {
         text: string;
         anchor: string;
         metric: string | null;
-        page: number | null;
       }>;
     } | null = null;
 
@@ -243,7 +242,6 @@ export async function POST(request: Request) {
             text: true,
             anchor: true,
             metric: true,
-            page: true,
           },
         }),
       ]);

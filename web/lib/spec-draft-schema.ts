@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEFAULT_RESUME_INTERVIEW_CONFIG, interviewConfigSchema } from "@/lib/interview-config-schema";
 
 const slug = z.string().regex(/^[a-z0-9][a-z0-9._-]*$/i);
 const nonEmpty = z.string().trim().min(1);
@@ -119,6 +120,7 @@ export const agentSpecSchema = z.object({
   // The trainer's instruction/requirements this spec was generated from.
   instruction: z.string().optional(),
   config: z.object({
+    interview: interviewConfigSchema.default(DEFAULT_RESUME_INTERVIEW_CONFIG),
     claim_handling: claimHandling,
     context: z.object({
       mode: contextMode,
@@ -146,6 +148,18 @@ export const agentSpecSchema = z.object({
     if (ids.has(stage.id)) ctx.addIssue({ code: "custom", message: `Duplicate stage: ${stage.id}`, path: ["stages", index, "id"] });
     ids.add(stage.id);
   });
+
+  const interview = agent.config.interview;
+  if (interview.type === "technical") {
+    const totalMainQuestions = Object.values(interview.question_counts).reduce((sum, count) => sum + (count ?? 0), 0);
+    if (totalMainQuestions > agent.config.turns.maximum) {
+      ctx.addIssue({
+        code: "custom",
+        message: `Technical interview configures ${totalMainQuestions} main questions but the session budget is ${agent.config.turns.maximum} turns`,
+        path: ["config", "interview", "question_counts"],
+      });
+    }
+  }
 });
 
 export const domainSpecSchema = z.object({
