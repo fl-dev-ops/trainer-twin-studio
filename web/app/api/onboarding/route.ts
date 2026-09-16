@@ -44,6 +44,14 @@ export async function GET(request: Request) {
 const bodySchema = z.object({
   token: z.string().min(10),
   orgName: z.string().trim().min(1).max(80),
+  websiteUrl: z.string().trim().max(2048).refine((value) => {
+    if (!value) return true;
+    try {
+      return new URL(value).protocol === "https:";
+    } catch {
+      return false;
+    }
+  }).optional().default(""),
   slug: z.string().trim().toLowerCase(),
   knowledgeConnector: z.enum(["none", "notion", "youtube"]).default("none"),
 });
@@ -78,6 +86,9 @@ export async function POST(request: Request) {
   }
 
   const { orgName, slug } = parsed.data;
+  const websiteUrl = parsed.data.websiteUrl
+    ? new URL(parsed.data.websiteUrl).toString()
+    : null;
   const problem = validateOrgSlug(slug);
   if (problem) return NextResponse.json({ error: problem }, { status: 400 });
   if (
@@ -101,6 +112,7 @@ export async function POST(request: Request) {
           id: randomUUID(),
           name: orgName,
           slug,
+          websiteUrl,
           createdAt: new Date(),
           members: {
             create: {

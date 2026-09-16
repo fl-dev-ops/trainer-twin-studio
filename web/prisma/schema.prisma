@@ -433,6 +433,7 @@ model Organization {
   name               String
   slug               String
   logo               String?
+  websiteUrl         String?
   chromaTenantId     String?
   chromaDatabase     String               @default("default")
   createdAt          DateTime

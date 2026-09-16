@@ -15,7 +15,7 @@ export default async function ProfilePage() {
   const membership = await db.member.findFirst({
     where: { userId: session.user.id },
     select: {
-      organization: { select: { id: true, name: true, slug: true, logo: true, metadata: true } },
+      organization: { select: { id: true, name: true, slug: true, logo: true, websiteUrl: true, metadata: true } },
     },
   });
   if (!membership) redirect("/auth/no-org");

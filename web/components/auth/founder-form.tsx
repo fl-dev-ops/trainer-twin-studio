@@ -103,6 +103,7 @@ export function FounderForm({
 
   const initialCompany = inferCompanyFromEmail(email);
   const [orgName, setOrgName] = useState(defaultOrgName || initialCompany.name);
+  const [websiteUrl, setWebsiteUrl] = useState("");
   const [slug, setSlug] = useState(defaultSlug || initialCompany.slug);
   const [slugState, setSlugState] = useState<{
     available: boolean;
@@ -192,12 +193,20 @@ export function FounderForm({
       setError("Please enter your company name");
       return;
     }
+    if (websiteUrl) {
+      try {
+        if (new URL(websiteUrl).protocol !== "https:") throw new Error();
+      } catch {
+        setError("Enter a valid HTTPS company website");
+        return;
+      }
+    }
     if (!slug || slug.length < 3) {
-      setError("Domain must be at least 3 characters");
+      setError("Subdomain must be at least 3 characters");
       return;
     }
     if (slugState && !slugState.available) {
-      setError(slugState.reason ?? "That domain is taken");
+      setError(slugState.reason ?? "That subdomain is taken");
       return;
     }
 
@@ -222,6 +231,7 @@ export function FounderForm({
           body: JSON.stringify({
             token,
             orgName: orgName.trim(),
+            websiteUrl: websiteUrl.trim(),
             slug,
             knowledgeConnector: "none",
           }),
@@ -452,10 +462,10 @@ export function FounderForm({
           <div className="space-y-6 animate-fade-in font-sans">
             <div>
               <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-                Name your workspace & domain
+                Set up your workspace
               </h1>
               <p className="mt-1.5 text-sm text-muted-foreground">
-                Define your company workspace and public training portal.
+                Configure your company and learner session subdomain.
               </p>
             </div>
 
@@ -475,11 +485,32 @@ export function FounderForm({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1.5">
-                  Domain
+                <label htmlFor="company-website" className="block text-sm font-medium text-foreground mb-1.5">
+                  Company website <span className="text-muted-foreground font-normal">(optional)</span>
+                </label>
+                <input
+                  id="company-website"
+                  type="url"
+                  inputMode="url"
+                  autoComplete="url"
+                  value={websiteUrl}
+                  disabled={isBusy}
+                  onChange={(e) => setWebsiteUrl(e.target.value)}
+                  placeholder="https://example.com"
+                  className="w-full h-10 px-3.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-sm text-foreground shadow-2xs focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground disabled:opacity-60"
+                />
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  Your workspace root redirects here. Leave blank to use www.trainertwin.com.
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="trainertwin-subdomain" className="block text-sm font-medium text-foreground mb-1.5">
+                  TrainerTwin subdomain
                 </label>
                 <div className="flex items-center rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 pr-3 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary shadow-2xs">
                   <input
+                    id="trainertwin-subdomain"
                     type="text"
                     value={slug}
                     disabled={isBusy}
@@ -513,13 +544,13 @@ export function FounderForm({
                       </p>
                     ) : (
                       <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">
-                        {slugState.reason ?? "That domain is taken"}
+                        {slugState.reason ?? "That subdomain is taken"}
                       </p>
                     )
                   ) : (
                     <p className="text-xs text-muted-foreground">
-                      Learners will visit https://{slug || "your-company"}.
-                      {BASE_DOMAIN}
+                      Assignment links use https://{slug || "your-company"}.
+                      {BASE_DOMAIN}/s/...
                     </p>
                   )}
                 </div>

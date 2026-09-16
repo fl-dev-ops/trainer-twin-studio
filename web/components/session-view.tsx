@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { LoaderCircle, Play, Upload as UploadIcon, Volume2, X } from "lucide-react";
+import { LoaderCircle, Play, Upload as UploadIcon, Volume2 } from "lucide-react";
 import "@livekit/components-styles";
 import {
   RoomAudioRenderer,
@@ -640,24 +640,30 @@ export function SessionView({
           <CardHeader>
             <CardTitle>{endReason === "completed" ? "Session complete" : "Session ended"}</CardTitle>
             <CardDescription>
-              {endReason === "disconnected"
-                ? "The connection closed unexpectedly. Any captured session data has been saved."
-                : "Your transcript and recording are being saved in Sessions."}
+              {sessionCode
+                ? endReason === "disconnected"
+                  ? "The connection closed unexpectedly. Any captured session data has been saved. You may close this tab."
+                  : "Your responses have been saved. You may close this tab."
+                : endReason === "disconnected"
+                  ? "The connection closed unexpectedly. Any captured session data has been saved."
+                  : "Your transcript and recording are being saved in Sessions."}
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex justify-center gap-2">
-            <Button variant="outline" nativeButton={false} render={<Link href="/sessions" />}>
-              View sessions
-            </Button>
-            <Button
-              onClick={() => {
-                resetSessionState();
-                setEnded(false);
-              }}
-            >
-              <Play data-icon="inline-start" /> New session
-            </Button>
-          </CardContent>
+          {!sessionCode && (
+            <CardContent className="flex justify-center gap-2">
+              <Button variant="outline" nativeButton={false} render={<Link href="/sessions" />}>
+                View sessions
+              </Button>
+              <Button
+                onClick={() => {
+                  resetSessionState();
+                  setEnded(false);
+                }}
+              >
+                <Play data-icon="inline-start" /> New session
+              </Button>
+            </CardContent>
+          )}
         </Card>
       </div>
     );
@@ -667,10 +673,17 @@ export function SessionView({
     return (
       <div className="dark flex h-dvh w-dvw flex-col overflow-hidden bg-[#14161a] text-foreground">
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/[0.035] bg-[#14161a]/85 px-6 backdrop-blur-xl">
-          <Link href="/" className="flex items-center gap-2.5">
-            <Image src="/trainertwin-mark.svg" alt="" width={22} height={17} priority />
-            <span className="font-bold text-lg tracking-tight text-white">TrainerTwin</span>
-          </Link>
+          {sessionCode ? (
+            <div className="flex items-center gap-2.5">
+              <Image src="/trainertwin-mark.svg" alt="" width={22} height={17} priority />
+              <span className="font-bold text-lg tracking-tight text-white">TrainerTwin</span>
+            </div>
+          ) : (
+            <Link href="/" className="flex items-center gap-2.5">
+              <Image src="/trainertwin-mark.svg" alt="" width={22} height={17} priority />
+              <span className="font-bold text-lg tracking-tight text-white">TrainerTwin</span>
+            </Link>
+          )}
         </header>
 
         <main className="relative flex min-h-0 flex-1 overflow-hidden p-4 sm:p-6">
@@ -836,10 +849,17 @@ export function SessionView({
         >
           {/* Topbar Navigation: Clean Logo Left, Live Badge Right */}
           <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/[0.035] bg-[#14161a]/85 px-6 backdrop-blur-xl">
-            <Link href="/" className="flex items-center gap-2.5">
-              <Image src="/trainertwin-mark.svg" alt="" width={22} height={17} priority />
-              <span className="font-bold text-lg tracking-tight text-white">TrainerTwin</span>
-            </Link>
+            {sessionCode ? (
+              <div className="flex items-center gap-2.5">
+                <Image src="/trainertwin-mark.svg" alt="" width={22} height={17} priority />
+                <span className="font-bold text-lg tracking-tight text-white">TrainerTwin</span>
+              </div>
+            ) : (
+              <Link href="/" className="flex items-center gap-2.5">
+                <Image src="/trainertwin-mark.svg" alt="" width={22} height={17} priority />
+                <span className="font-bold text-lg tracking-tight text-white">TrainerTwin</span>
+              </Link>
+            )}
 
             <div className="flex items-center gap-2 rounded-full bg-[#e03b3b] px-3 py-1 font-semibold text-white text-xs shadow-sm">
               <span className="size-1.5 animate-pulse rounded-full bg-white" />

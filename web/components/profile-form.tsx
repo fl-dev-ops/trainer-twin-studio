@@ -84,7 +84,14 @@ export function ProfileForm({
 export function OrganizationForm({
   organization,
 }: {
-  organization: { id: string; name: string; slug: string; logo?: string | null; accentColor?: string | null };
+  organization: {
+    id: string;
+    name: string;
+    slug: string;
+    logo?: string | null;
+    accentColor?: string | null;
+    websiteUrl?: string | null;
+  };
 }) {
   const logoInput = useRef<HTMLInputElement>(null);
   const [logo, setLogo] = useState(organization.logo ?? null);
@@ -93,6 +100,7 @@ export function OrganizationForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [logoError, setLogoError] = useState<string | null>(null);
+  const [websiteError, setWebsiteError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   // Backup previous default brand color: #ec3013
   const DEFAULT_ACCENT = "#4648D4";
@@ -100,14 +108,25 @@ export function OrganizationForm({
 
   async function saveOrganization(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const name = String(new FormData(event.currentTarget).get("organizationName") ?? "").trim();
+    const form = new FormData(event.currentTarget);
+    const name = String(form.get("organizationName") ?? "").trim();
+    const websiteUrl = String(form.get("websiteUrl") ?? "").trim();
     if (!name) {
       setError("Enter an organization name.");
       return;
     }
+    if (websiteUrl) {
+      try {
+        if (new URL(websiteUrl).protocol !== "https:") throw new Error();
+      } catch {
+        setWebsiteError("Enter a valid HTTPS website URL.");
+        return;
+      }
+    }
 
     setSaving(true);
     setError(null);
+    setWebsiteError(null);
     setSaved(false);
     const result = await authClient.organization.update({
       organizationId: organization.id,
@@ -119,12 +138,17 @@ export function OrganizationForm({
       return;
     }
 
-    // ponytail PT-4: accent color saved in a separate fetch, not atomic with org.update(); unify when settings grow.
-    await fetch("/api/org/accent", {
+    const settingsResponse = await fetch("/api/org/settings", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ accentColor: accent }),
-    });
+      body: JSON.stringify({ accentColor: accent, websiteUrl }),
+    }).catch(() => null);
+    if (!settingsResponse?.ok) {
+      const response = await settingsResponse?.json().catch(() => null);
+      setSaving(false);
+      setWebsiteError(response?.error ?? "Could not update organization settings.");
+      return;
+    }
 
     // ponytail PT-5: full reload so the server layout re-fetches accentColor and OrgAccentProvider updates.
     // Swap for router.refresh() once the prop-threading is stable.
@@ -221,6 +245,23 @@ export function OrganizationForm({
             <Field>
               <FieldLabel>Workspace</FieldLabel>
               <p className="text-sm font-medium">{organization.slug}</p>
+            </Field>
+            <Field data-invalid={Boolean(websiteError)}>
+              <FieldLabel htmlFor="organization-website">Company website</FieldLabel>
+              <Input
+                id="organization-website"
+                name="websiteUrl"
+                type="url"
+                inputMode="url"
+                defaultValue={organization.websiteUrl ?? ""}
+                placeholder="https://example.com"
+                autoComplete="url"
+                aria-invalid={Boolean(websiteError)}
+              />
+              <FieldDescription>
+                The organization subdomain redirects here. Leave blank to use www.trainertwin.com.
+              </FieldDescription>
+              <FieldError>{websiteError}</FieldError>
             </Field>
             <Field>
               <FieldLabel htmlFor="accent-color">Accent color</FieldLabel>
