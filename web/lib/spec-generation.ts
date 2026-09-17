@@ -3,6 +3,7 @@ import path from "node:path";
 import yaml from "js-yaml";
 import { specDraftBundleSchema, type SpecDraftBundle } from "@/lib/spec-draft-schema";
 import type { InterviewConfig } from "@/lib/interview-config-schema";
+import { applyLearnerUpload } from "@/lib/context-upload";
 
 const AI_GATEWAY_BASE_URL = (
   process.env.AI_GATEWAY_BASE_URL ??
@@ -19,6 +20,7 @@ export type GenerationInput = {
   personaName?: string;
   knowledgeBase?: string;
   interviewConfig: InterviewConfig;
+  contextPrompt?: string;
   previous: { instruction?: string; agent: unknown; domain: unknown } | null;
 };
 
@@ -53,6 +55,8 @@ const responseSchema = {
               properties: {
                 mode: { type: "string", enum: ["none", "resume_grounding", "resume_topics_only", "scenario_only", "session_evidence"] },
                 required: { type: "boolean", description: "True only when the scenario cannot run without the learner's document." },
+                prompt: { type: "string", description: "Learner-facing instruction for what document to upload." },
+                label: { type: "string", description: "Short title for the upload card, e.g. Résumé or Document." },
               },
             },
             scenario: { type: "object", additionalProperties: false, description: "Empty object unless the trainer defines a simulated environment." },
@@ -105,7 +109,12 @@ const responseSchema = {
                   claim_handling: { type: "string", enum: ["resume_evidence", "conceptual", "hypothetical_design", "coding_execution", "session_feedback"] },
                   context: {
                     type: "object", additionalProperties: false, required: ["mode"],
-                    properties: { mode: { type: "string", enum: ["none", "resume_grounding", "resume_topics_only", "scenario_only", "session_evidence"] }, required: { type: "boolean" } },
+                    properties: {
+                      mode: { type: "string", enum: ["none", "resume_grounding", "resume_topics_only", "scenario_only", "session_evidence"] },
+                      required: { type: "boolean" },
+                      prompt: { type: "string" },
+                      label: { type: "string" },
+                    },
                   },
                   evidence: {
                     type: "object", additionalProperties: false, required: ["definitions", "keys", "completion_keys"],
@@ -283,7 +292,13 @@ export async function generateSpecBundle(input: GenerationInput): Promise<SpecDr
       continue;
     }
     const modelBundle = parsed as { agent?: { config?: Record<string, unknown> } };
-    if (modelBundle.agent?.config) modelBundle.agent.config.interview = input.interviewConfig;
+    if (modelBundle.agent?.config) {
+      modelBundle.agent.config.interview = input.interviewConfig;
+      modelBundle.agent.config.context = applyLearnerUpload(
+        modelBundle.agent.config.context as Record<string, unknown> | undefined,
+        { interviewType: input.interviewConfig.type },
+      );
+    }
     const result = specDraftBundleSchema.safeParse({ ...modelBundle, slug: input.slug, name: input.name, gaps: [] });
     if (result.success) return result.data;
     lastError = result.error;

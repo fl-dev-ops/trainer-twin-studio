@@ -4,6 +4,7 @@ import { assignmentExpiresAt, newAssignmentShareCode } from "@/lib/assignments";
 import { db } from "@/lib/db";
 import { ensureDeployment } from "@/lib/deployments";
 import { sendRolePlayAssignmentEmail } from "@/lib/email";
+import { contextUploadFromAgentData } from "@/lib/context-upload";
 import { isApiError, requireExternalApi } from "@/lib/external-api";
 
 const createSchema = z.object({
@@ -108,6 +109,10 @@ export async function POST(request: Request) {
   });
   const url = practiceUrl(api.org.slug, assignment.shareCode);
   const data = agent.data as { objective?: unknown } | null;
+  const upload = contextUploadFromAgentData(agent.data);
+  const requiredArtifact = upload.required && upload.prompt
+    ? { label: upload.label, prompt: upload.prompt }
+    : null;
   const delivery = await sendRolePlayAssignmentEmail({
     to: member.user.email,
     userName: member.user.name,
@@ -115,6 +120,7 @@ export async function POST(request: Request) {
     rolePlayObjective: typeof data?.objective === "string" ? data.objective : undefined,
     practiceUrl: url,
     trainerName: trainer.user.name,
+    requiredArtifact,
   });
   return Response.json({
     assignment: { id: assignment.id, assignedAt: assignment.assignedAt, userId: parsed.data.userId, scenario: agent.slug },

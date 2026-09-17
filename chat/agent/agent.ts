@@ -42,9 +42,20 @@ export default defineAgent({
             },
           };
         } else if (requestedModel.startsWith("openai/gpt-5")) {
-          // OpenAI 5.x reasoning models: no effort = no thinking. Without this
-          // they burn hundreds of hidden tokens (~7s TTFT) per chat turn.
-          options = { providerOptions: { openai: { reasoningEffort: "none" } } };
+          // OpenAI 5.x reasoning models: minimal effort caps hidden thinking.
+          // (gpt-5-mini rejects "none"; newer gens accept it but "minimal" is
+          // valid across the family and near-free.)
+          // Azure BYOK: if AZURE_OPENAI_* env is set, requests bill against the
+          // Azure subscription instead of gateway credits.
+          const azureKey = process.env.AZURE_OPENAI_API_KEY;
+          const azureResource = process.env.AZURE_OPENAI_RESOURCE;
+          const providerOptions: AgentModelOptionsDefinition["providerOptions"] = {
+            openai: { reasoningEffort: "minimal" },
+          };
+          if (azureKey && azureResource) {
+            providerOptions!.gateway = { byok: { azure: [{ apiKey: azureKey, resourceName: azureResource }] } };
+          }
+          options = { providerOptions };
         }
         if (options) return { model: requestedModel, modelOptions: options };
         return requestedModel;

@@ -19,6 +19,12 @@ function interviewConfigOf(agent: Record<string, unknown>): InterviewConfig {
   return configured.success ? configured.data : DEFAULT_RESUME_INTERVIEW_CONFIG;
 }
 
+function contextPromptOf(agent: Record<string, unknown>): string {
+  const config = agent.config && typeof agent.config === "object" ? agent.config as Record<string, unknown> : {};
+  const ctx = config.context && typeof config.context === "object" ? config.context as Record<string, unknown> : {};
+  return typeof ctx.prompt === "string" ? ctx.prompt : "";
+}
+
 export async function SpecResourcePage({
   type,
   slug,
@@ -73,6 +79,7 @@ export async function SpecResourcePage({
           personas={personas}
           topics={topics}
           interviewConfig={interviewConfigOf(agent)}
+          contextPrompt={contextPromptOf(agent)}
         />
       );
     }
@@ -112,6 +119,7 @@ export async function SpecResourcePage({
         personas={personas}
         topics={topics}
         interviewConfig={interviewConfigOf(working)}
+        contextPrompt={contextPromptOf(working)}
       />
     );
   }

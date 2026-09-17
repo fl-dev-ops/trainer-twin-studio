@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Check, LoaderCircle, Play, Upload as UploadIcon, Volume2, X } from "lucide-react";
+import { type AgentContextUpload } from "@/lib/context-upload";
 import "@livekit/components-styles";
 import {
   RoomAudioRenderer,
@@ -70,6 +71,7 @@ type Props = {
   contexts: { id: string; name: string; size?: number }[];
   agentPersonas?: Record<string, string>;
   agentContextRequired?: Record<string, boolean>;
+  agentContextUploads?: Record<string, AgentContextUpload>;
   sessionCode?: string;
   scenarioName?: string;
   userName?: string;
@@ -93,6 +95,7 @@ export function SessionView({
   contexts,
   agentPersonas = {},
   agentContextRequired = {},
+  agentContextUploads = {},
   sessionCode,
   scenarioName,
   userName,
@@ -262,7 +265,12 @@ export function SessionView({
     void handleStartSession();
   }, [handleStartSession]);
 
-  const isContextRequired = Boolean(agentContextRequired[agent]);
+  const contextUpload = agentContextUploads[agent] ?? (
+    agentContextRequired[agent]
+      ? { required: true, prompt: "", label: "Context document", accept: "" }
+      : null
+  );
+  const isContextRequired = Boolean(contextUpload?.required ?? agentContextRequired[agent]);
 
   /** Resolves once the intro download finishes (or falls back to streaming). */
   const awaitIntroReady = useCallback(async () => {
@@ -707,6 +715,9 @@ export function SessionView({
         organizationLogo={organizationLogo}
         contexts={contextList}
         contextRequired={isContextRequired}
+        contextPrompt={contextUpload?.prompt}
+        contextLabel={contextUpload?.label}
+        contextAccept={contextUpload?.accept}
         onJoin={(settings, contextId) => {
           setPrejoinMedia(settings);
           setContextIds(contextId ? [contextId] : []);
@@ -814,13 +825,16 @@ export function SessionView({
 
                 <label className="flex flex-col gap-1.5 text-sm">
                   <div className="flex items-center justify-between">
-                    <span className="font-medium">Context document</span>
+                    <span className="font-medium">{contextUpload?.label || "Context document"}</span>
                     {isContextRequired && (
                       <span className="text-[11px] font-medium text-amber-500">
                         Required for this scenario
                       </span>
                     )}
                   </div>
+                  {contextUpload?.prompt && (
+                    <p className="text-xs text-muted-foreground">{contextUpload.prompt}</p>
+                  )}
                   <div className="flex items-center gap-2">
                     <Select
                       value={contextId || "none"}
@@ -847,7 +861,7 @@ export function SessionView({
                     <input
                       ref={contextInput}
                       type="file"
-                      accept=".md,.txt,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.csv,.json,.png,.jpg,.jpeg,.webp"
+                      accept={contextUpload?.accept || ".md,.txt,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.csv,.json,.png,.jpg,.jpeg,.webp"}
                       hidden
                       onChange={async (e) => {
                         const file = e.target.files?.[0];

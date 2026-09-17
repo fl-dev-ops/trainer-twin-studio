@@ -310,6 +310,7 @@ export async function sendRolePlayAssignmentEmail({
   rolePlayObjective,
   practiceUrl,
   trainerName = "Vasanth",
+  requiredArtifact,
 }: {
   to: string;
   userName?: string;
@@ -317,6 +318,7 @@ export async function sendRolePlayAssignmentEmail({
   rolePlayObjective?: string;
   practiceUrl: string;
   trainerName?: string;
+  requiredArtifact?: { label: string; prompt: string } | null;
 }) {
   const subject = `New Role Play Assigned: ${rolePlayName}`;
   const html = renderEmailLayout({
@@ -336,6 +338,14 @@ export async function sendRolePlayAssignmentEmail({
             </div>`
           : ""
       }
+      ${
+        requiredArtifact?.prompt
+          ? `<div style="background: #f8fafc; border-left: 4px solid #EC3013; padding: 16px; border-radius: 8px; margin: 20px 0;">
+              <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin: 0 0 6px;">What to bring</p>
+              <p style="font-size: 14px; margin: 0; color: #1e293b;">${requiredArtifact.prompt}</p>
+            </div>`
+          : ""
+      }
       <p>When you're ready, click the button below to start your guided practice session:</p>
       <div style="text-align: center; margin: 28px 0;">
         <a href="${practiceUrl}" class="btn" target="_blank">Start Practice Session</a>
@@ -351,6 +361,6 @@ export async function sendRolePlayAssignmentEmail({
     to,
     subject,
     html,
-    text: `You have been assigned to practice "${rolePlayName}" on TrainerTwin. Start your practice here: ${practiceUrl}`,
+    text: `You have been assigned to practice "${rolePlayName}" on TrainerTwin.${requiredArtifact?.prompt ? ` What to bring: ${requiredArtifact.prompt}.` : ""} Start your practice here: ${practiceUrl}`,
   });
 }

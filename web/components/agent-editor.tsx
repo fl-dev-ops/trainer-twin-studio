@@ -73,6 +73,7 @@ export type AgentEditorProps = {
   personas: PersonaOption[];
   topics: TopicOption[];
   interviewConfig: InterviewConfig;
+  contextPrompt?: string;
 };
 
 export function AgentEditor(initial: AgentEditorProps) {
@@ -83,6 +84,7 @@ export function AgentEditor(initial: AgentEditorProps) {
   const [personaSlug, setPersonaSlug] = useState(initial.personaSlug);
   const [knowledgeBase, setKnowledgeBase] = useState(initial.knowledgeBase);
   const [interviewConfig, setInterviewConfig] = useState<InterviewConfig>(initial.interviewConfig);
+  const [contextPrompt, setContextPrompt] = useState(initial.contextPrompt ?? "");
   const [voiceId, setVoiceId] = useState(initial.voiceId);
   const [specYaml, setSpecYaml] = useState(initial.specYaml);
   const [revision, setRevision] = useState(initial.revision);
@@ -146,6 +148,7 @@ export function AgentEditor(initial: AgentEditorProps) {
             voiceId: voiceId || undefined,
             publish,
             interviewConfig,
+            contextPrompt: contextPrompt.trim() || undefined,
           }),
         },
       );
@@ -450,6 +453,25 @@ export function AgentEditor(initial: AgentEditorProps) {
                 }}
               />
               <FieldDescription className="text-xs">Follow-ups are adaptive; this is only the cap.</FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="learner-prompt">Learner upload instruction</FieldLabel>
+              <Input
+                id="learner-prompt"
+                value={contextPrompt}
+                placeholder={
+                  interviewConfig.type === "resume"
+                    ? "Upload your current résumé as a PDF."
+                    : "e.g. Upload the document you will discuss."
+                }
+                onChange={(event) => {
+                  setContextPrompt(event.target.value);
+                  setDirty(true);
+                }}
+              />
+              <FieldDescription className="text-xs">
+                Shown to the learner on the prejoin screen before the session begins.
+              </FieldDescription>
             </Field>
             {interviewConfig.type === "technical" ? (
               <>

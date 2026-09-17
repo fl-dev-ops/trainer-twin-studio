@@ -97,7 +97,12 @@ const stageSchema = z.object({
       maximum_topics: z.number().int().min(1).max(10).optional(),
     }).strict(),
     claim_handling: claimHandling,
-    context: z.object({ mode: contextMode, required: z.boolean().optional() }).strict(),
+    context: z.object({
+      mode: contextMode,
+      required: z.boolean().optional(),
+      prompt: z.string().optional(),
+      label: z.string().optional(),
+    }).strict(),
     evidence: evidenceSchema,
     turns: z.object({ minimum: z.number().int().min(0), maximum: z.number().int().min(1) }).strict(),
     actions: stageActionsSchema.optional(),
@@ -125,6 +130,8 @@ export const agentSpecSchema = z.object({
     context: z.object({
       mode: contextMode,
       required: z.boolean(),
+      prompt: z.string().optional(),
+      label: z.string().optional(),
       available_sources: z.array(nonEmpty).optional(),
     }).strict(),
     scenario: z.record(z.string(), z.unknown()),

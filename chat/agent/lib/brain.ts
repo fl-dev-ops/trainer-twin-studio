@@ -46,6 +46,11 @@ export type SessionSpecs = {
   personaVersion?: number;
   personaVoice?: string;
   documents: AttachedDocument[];
+  expectedArtifact?: {
+    label: string;
+    prompt: string;
+    required: boolean;
+  } | null;
   resume?: {
     documentId: string;
     extractedText: string;
@@ -173,6 +178,21 @@ export async function loadSessionContext(
     personaVersion: result.persona?.version,
     personaVoice: hasPersonaProfile ? JSON.stringify(personaProfile).slice(0, 4000) : undefined,
     documents: result.documents ?? [],
+    expectedArtifact: (() => {
+      const rawCtx = (agentData.config as { context?: unknown } | null)?.context as {
+        mode?: string;
+        required?: boolean;
+        prompt?: string;
+        label?: string;
+      } | undefined;
+      const isResume = Boolean(rawCtx?.mode?.includes("resume") || phases.some((p) => p.policy?.includes("resume")));
+      if (!rawCtx?.required && !rawCtx?.prompt) return null;
+      return {
+        label: rawCtx.label || (isResume ? "Résumé" : "Document"),
+        prompt: rawCtx.prompt || (isResume ? "Upload your current résumé as a PDF." : "Upload the document this session needs."),
+        required: Boolean(rawCtx.required),
+      };
+    })(),
     resume: result.resume ?? null,
     learnerName: result.learnerName,
     learnerHistory: result.learnerHistory,
@@ -276,7 +296,7 @@ ${knowledgeBlock}
 ${uiStateBlock || "WORKSPACE STATE: not reported"}
 
 ATTACHED ARTIFACTS
-${docsBlock}
+${specs.expectedArtifact ? `- Expected: ${specs.expectedArtifact.label} (${specs.expectedArtifact.required ? "required" : "optional"})${specs.expectedArtifact.prompt ? ` — "${specs.expectedArtifact.prompt}"` : ""}\n` : ""}${docsBlock}
 ${resumeBlock}
 OPERATING MODE: ${specs.mode === "voice" ? "voice" : "text chat"}
 CLIENT-EXECUTED TOOLS ADVERTISED FOR THIS SESSION

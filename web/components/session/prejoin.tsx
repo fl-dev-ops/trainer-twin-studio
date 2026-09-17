@@ -54,6 +54,9 @@ export function PreJoin({
   organizationLogo,
   contexts: _contexts = [],
   contextRequired = false,
+  contextPrompt,
+  contextLabel,
+  contextAccept,
   onJoin,
 }: {
   scenarioName: string;
@@ -64,6 +67,9 @@ export function PreJoin({
   contexts?: PreJoinDocument[];
   /** Scenario cannot run without an attached document. */
   contextRequired?: boolean;
+  contextPrompt?: string;
+  contextLabel?: string;
+  contextAccept?: string;
   onJoin: (settings: PreJoinMediaSettings, contextId?: string) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -488,12 +494,12 @@ export function PreJoin({
 
         {contextRequired && (
           <section
-            aria-label="Context document"
+            aria-label={contextLabel || "Context document"}
             className="min-w-0 rounded-xl border border-[#e4e6e8] bg-white p-4 shadow-[0_8px_24px_rgba(32,33,36,0.08)] lg:col-start-2 lg:row-start-1 lg:mt-56 lg:self-start"
           >
             <div className="mb-2 flex items-center justify-between px-1">
               <span className="text-sm font-medium text-[#202124]">
-                Context document
+                {contextLabel || "Context document"}
               </span>
               {contextRequired ? (
                 <span className="text-xs font-medium text-amber-700">
@@ -503,6 +509,11 @@ export function PreJoin({
                 <span className="text-xs text-[#5f6368]">Optional</span>
               )}
             </div>
+            {contextPrompt ? (
+              <p className="mb-3 px-1 text-xs leading-5 text-[#5f6368]">
+                {contextPrompt}
+              </p>
+            ) : null}
             {selectedDoc ? (
               <div className="flex items-center gap-3 rounded-xl border-2 border-gray-100 bg-white px-4 py-3 text-left">
                 <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand/10 text-brand">
@@ -588,17 +599,19 @@ export function PreJoin({
                       <span className="text-brand underline-offset-2">
                         Upload
                       </span>{" "}
-                      or drag your document here
+                      or drag your {contextLabel ? contextLabel.toLowerCase() : "document"} here
                     </p>
                     <p className="text-xs text-[#5f6368]">
-                      PDF, Word, slides, images, and text files
+                      {contextAccept && contextAccept.includes(".pdf") && !contextAccept.includes(".png")
+                        ? "PDF, Word, or text files (.pdf preferred)"
+                        : "PDF, Word, slides, images, and text files"}
                     </p>
                   </>
                 )}
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept={CONTEXT_ACCEPT}
+                  accept={contextAccept || CONTEXT_ACCEPT}
                   hidden
                   onChange={(event) => {
                     const file = event.target.files?.[0];

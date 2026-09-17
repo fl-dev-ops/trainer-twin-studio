@@ -4,6 +4,7 @@ import { assignmentChanges, assignmentExpiresAt, MAX_ASSIGNMENT_RECIPIENTS, newA
 import { db } from "@/lib/db";
 import { ensureDeployment } from "@/lib/deployments";
 import { sendRolePlayAssignmentEmail } from "@/lib/email";
+import { contextUploadFromAgentData } from "@/lib/context-upload";
 import { getTrainerOrg } from "@/lib/org";
 
 const bodySchema = z.object({
@@ -75,6 +76,10 @@ export async function PUT(
 
   const data = agent.data as { objective?: unknown } | null;
   const objective = typeof data?.objective === "string" ? data.objective : undefined;
+  const upload = contextUploadFromAgentData(agent.data);
+  const requiredArtifact = upload.required && upload.prompt
+    ? { label: upload.label, prompt: upload.prompt }
+    : null;
   const emailResults = await Promise.all(
     recipients.map(({ id, user }) => sendRolePlayAssignmentEmail({
       to: user.email,
@@ -83,6 +88,7 @@ export async function PUT(
       rolePlayObjective: objective,
       practiceUrl: launches.get(id)!,
       trainerName: trainer.user.name,
+      requiredArtifact,
     })),
   );
   const emailsSent = emailResults.filter(({ success }) => success).length;
