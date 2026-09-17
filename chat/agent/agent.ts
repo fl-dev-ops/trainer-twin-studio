@@ -25,7 +25,22 @@ export default defineAgent({
           };
         }
 
-        // Native Vercel AI Gateway (0% markup, direct Vertex/Azure peering, 400+ tps)
+        // Native Vercel AI Gateway (0% markup, direct peering, 400+ tps).
+        // Pin google/* models to the Google provider (Vertex is ~2x slower on
+        // tok/s) and cap Gemini 3.x thinking, which otherwise burns ~1k tokens
+        // and 1-8s of TTFT even on simple prompts. Other providers: default
+        // routing so failover keeps working.
+        if (requestedModel.startsWith("google/")) {
+          return {
+            model: requestedModel,
+            modelOptions: {
+              providerOptions: {
+                gateway: { only: ["google"] },
+                google: { thinkingConfig: { thinkingBudget: 512 } },
+              },
+            },
+          };
+        }
         return requestedModel;
       },
     },
