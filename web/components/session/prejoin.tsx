@@ -310,8 +310,8 @@ export function PreJoin({
       .toUpperCase() || "U";
 
   return (
-    <main className="min-h-svh bg-[#fafafa] text-[#202124]">
-      <header className="flex h-20 items-center justify-between px-5 sm:px-8 lg:px-10">
+    <main className="flex min-h-svh flex-col bg-[#fafafa] text-[#202124]">
+      <header className="flex h-20 shrink-0 items-center justify-between px-5 sm:px-8 lg:px-10">
         <div className="flex min-w-0 items-center gap-3">
           {organizationLogo ? (
             <Image
@@ -353,21 +353,22 @@ export function PreJoin({
         </div>
       </header>
 
-      <div className="mx-auto w-full max-w-5xl px-5 pb-24 pt-6 sm:px-8">
-        <h1 className="mb-8 text-center text-2xl font-bold tracking-tight text-[#202124] sm:text-3xl">
-          {scenarioName}
-        </h1>
+      <div className="flex flex-1 items-center justify-center px-5 py-6 sm:px-8">
+        <div className="w-full max-w-5xl">
+          <h1 className="mb-8 text-center text-2xl font-bold tracking-tight text-[#202124] sm:text-3xl">
+            {scenarioName}
+          </h1>
 
         <div
           className={cn(
             "grid gap-6 items-stretch",
-            contextRequired ? "lg:grid-cols-2" : "max-w-xl mx-auto"
+            contextRequired ? "lg:grid-cols-5" : "max-w-xl mx-auto"
           )}
         >
           {/* Card 1: Camera and microphone preview */}
           <section
-            aria-label="Camera and microphone preview"
-            className="relative flex min-h-[340px] items-center justify-center overflow-hidden rounded-2xl bg-[#202124] shadow-[0_12px_32px_rgba(32,33,36,0.12)]"
+            aria-label="Camera and microphone preview "
+            className="col-span-3 relative flex min-h-85 items-center justify-center overflow-hidden rounded-2xl bg-[#202124] shadow-[0_12px_32px_rgba(32,33,36,0.12)]"
           >
             <video
               ref={videoRef}
@@ -456,7 +457,7 @@ export function PreJoin({
           {contextRequired && (
             <section
               aria-label={contextLabel || "Context document"}
-              className="flex min-h-[340px] flex-col justify-between rounded-2xl border border-[#e4e6e8] bg-white p-6 shadow-sm"
+              className="flex min-h-85 flex-col justify-between rounded-2xl border border-[#e4e6e8] bg-white p-4 shadow-sm col-span-2 gap-3"
             >
               <div>
                 <div className="flex items-center justify-between">
@@ -701,6 +702,7 @@ export function PreJoin({
             </p>
           ) : null}
         </section>
+        </div>
       </div>
 
       <div className="fixed bottom-5 right-5 flex items-center gap-2 text-[11px] font-medium text-[#777b80] sm:bottom-7 sm:right-8">
