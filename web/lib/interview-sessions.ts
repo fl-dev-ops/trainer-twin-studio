@@ -1,12 +1,17 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
 import { Prisma } from "@/lib/generated/prisma/client";
+import { ensureDeployment, type DeliveryMode } from "@/lib/deployments";
 import { initRuntimeState } from "@/lib/runtime/runtime";
 import { getAgentConfigForAgent } from "@/lib/specs";
 
-const shareCode = () => randomBytes(9).toString("base64url");
-const runtimeToken = () => randomBytes(24).toString("base64url");
+const shareCode = () => randomBytes(18).toString("base64url");
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
+const runtimeToken = (sessionId: string) => {
+  const secret = process.env.COPILOT_SERVICE_SECRET;
+  if (!secret) throw new Error("COPILOT_SERVICE_SECRET is not configured");
+  return createHmac("sha256", secret).update(`session:${sessionId}`).digest("base64url");
+};
 
 export type SessionEndStatus = "completed" | "abandoned";
 
@@ -14,26 +19,47 @@ export function resolveSessionEndStatus(current: string, requested: SessionEndSt
   return current === "completed" ? "completed" : requested;
 }
 
-async function sessionSnapshot(orgId: string, agentId: string, contextId?: string | null) {
-  const [agent, context] = await Promise.all([
+async function sessionSnapshot(orgId: string, agentId: string, contextId?: string | null, contextIds: string[] = []) {
+  const docIds = Array.from(new Set([...contextIds, ...(contextId ? [contextId] : [])]));
+  const [agent, documents] = await Promise.all([
     db.agent.findFirst({
       where: { id: agentId, orgId },
       include: { persona: { select: { slug: true, version: true } } },
     }),
-    contextId
-      ? db.contextDocument.findFirst({ where: { id: contextId, orgId }, select: { id: true, name: true } })
-      : Promise.resolve(null),
+    docIds.length
+      ? db.contextDocument.findMany({
+          where: { id: { in: docIds }, orgId },
+          select: { id: true, name: true, ownerUserId: true },
+        })
+      : Promise.resolve([]),
   ]);
   if (!agent) throw new Error("Agent not found");
-  if (contextId && !context) throw new Error("Context not found");
+  if (documents.length !== docIds.length) throw new Error("Context not found");
   const domain = await db.domain.findFirst({
     where: { slug: agent.domainSlug, orgId },
     select: { slug: true, version: true },
   });
   if (!domain) throw new Error("Agent domain not found");
-  return { agent, domain, context };
+  return { agent, domain, documents, docIds };
 }
 
+async function initializeChatSession(input: { sessionId: string; orgId: string; mode: DeliveryMode }) {
+  const secret = process.env.COPILOT_SERVICE_SECRET;
+  if (!secret) throw new Error("COPILOT_SERVICE_SECRET is not configured");
+  const url = new URL("/internal/sessions", process.env.CHAT_URL ?? "http://localhost:2000");
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${secret}`,
+      "content-type": "application/json",
+      "x-trainertwin-org-id": input.orgId,
+    },
+    body: JSON.stringify({ sessionId: input.sessionId, mode: input.mode, contextVersion: 1 }),
+  });
+  if (!response.ok) throw new Error(`Chat runtime initialization failed (${response.status})`);
+}
+
+/** Legacy direct invitation helper retained for local scripts; assignments never call it. */
 export async function createAssignedSession(input: {
   orgId: string;
   userId: string;
@@ -41,68 +67,34 @@ export async function createAssignedSession(input: {
   contextId?: string | null;
   contextIds?: string[] | null;
 }) {
-  const docIds = Array.from(new Set([...(input.contextIds ?? []), ...(input.contextId ? [input.contextId] : [])])).filter(Boolean);
-  if (docIds.length) {
-    const accessibleCount = await db.contextDocument.count({
-      where: {
-        id: { in: docIds },
-        orgId: input.orgId,
-        ownerUserId: input.userId,
-      },
-    });
-    if (accessibleCount !== docIds.length) throw new Error("Context not found");
-  }
-  const primaryId = docIds[0] ?? input.contextId;
-  const { agent, domain, context } = await sessionSnapshot(input.orgId, input.agentId, primaryId);
+  const snapshot = await sessionSnapshot(input.orgId, input.agentId, input.contextId, input.contextIds ?? []);
+  const primary = snapshot.documents.find((document) => document.id === snapshot.docIds[0]);
   return db.$transaction(async (tx) => {
     const created = await tx.interviewSession.create({
       data: {
         orgId: input.orgId,
         userId: input.userId,
-        agentId: agent.id,
+        agentId: snapshot.agent.id,
         shareCode: shareCode(),
-        personaSlug: agent.persona.slug,
-        personaVersion: agent.persona.version,
-        agentSlug: agent.slug,
-        agentVersion: agent.version,
-        domainSlug: domain.slug,
-        domainVersion: domain.version,
-        contextId: context?.id,
-        contextName: context?.name,
+        personaSlug: snapshot.agent.persona.slug,
+        personaVersion: snapshot.agent.persona.version,
+        agentSlug: snapshot.agent.slug,
+        agentVersion: snapshot.agent.version,
+        domainSlug: snapshot.domain.slug,
+        domainVersion: snapshot.domain.version,
+        contextId: primary?.id,
+        contextName: primary?.name,
         status: "assigned",
       },
       select: { id: true, shareCode: true, agentSlug: true, status: true },
     });
-    if (docIds.length) {
+    if (snapshot.docIds.length) {
       await tx.interviewSessionDocument.createMany({
-        data: docIds.map((documentId) => ({ sessionId: created.id, documentId })),
+        data: snapshot.docIds.map((documentId) => ({ sessionId: created.id, documentId })),
         skipDuplicates: true,
       });
     }
     return created;
-  });
-}
-
-export async function attachAssignmentSession(assignmentId: string, input: {
-  orgId: string;
-  userId: string;
-  agentId: string;
-}) {
-  const session = await createAssignedSession(input);
-  try {
-    await db.rolePlayAssignment.update({ where: { id: assignmentId }, data: { sessionId: session.id } });
-    return session;
-  } catch (error) {
-    await db.interviewSession.delete({ where: { id: session.id } });
-    throw error;
-  }
-}
-
-export async function revokeAssignedSession(sessionId: string | null | undefined) {
-  if (!sessionId) return;
-  await db.interviewSession.updateMany({
-    where: { id: sessionId, status: "assigned" },
-    data: { status: "revoked", endedAt: new Date(), runtimeTokenHash: null },
   });
 }
 
@@ -111,121 +103,148 @@ export async function activateSession(input: {
   userId: string;
   shareCode?: string;
   agentSlug?: string;
+  deploymentKey?: string;
   contextId?: string | null;
   contextIds?: string[] | null;
+  mode?: DeliveryMode;
+  idempotencyKey?: string;
 }) {
-  const docIds = Array.from(new Set([...(input.contextIds ?? []), ...(input.contextId ? [input.contextId] : [])])).filter(Boolean);
-  const primaryId = docIds[0] ?? input.contextId;
-  let sessionId: string;
-  let code: string;
+  const mode = input.mode ?? "voice";
+  const requestedDocs = Array.from(new Set([...(input.contextIds ?? []), ...(input.contextId ? [input.contextId] : [])]));
+  let assignmentId: string | null = null;
+  let deploymentId: string;
+  let agentId: string;
+  let activationKey: string;
+
   if (input.shareCode) {
-    const existing = await db.interviewSession.findUnique({
-      where: { shareCode: input.shareCode },
-      select: { id: true, orgId: true, userId: true, agentId: true, contextId: true, status: true, shareCode: true },
+    const found = await db.rolePlayAssignment.findFirst({
+      where: { shareCode: input.shareCode, orgId: input.orgId },
+      include: {
+        member: { select: { userId: true } },
+        deployment: { include: { agent: { select: { id: true } } } },
+      },
     });
-    if (!existing || existing.orgId !== input.orgId || existing.userId !== input.userId || existing.status !== "assigned") {
+    if (!found || found.member.userId !== input.userId || found.status === "cancelled") return null;
+    if (found.expiresAt <= new Date() && found.status === "pending") {
+      await db.rolePlayAssignment.update({ where: { id: found.id }, data: { status: "expired" } });
       return null;
     }
-    if (docIds.length) {
-      const validDocs = await db.contextDocument.findMany({
-        where: {
-          id: { in: docIds },
-          orgId: input.orgId,
-          ownerUserId: input.userId,
-        },
-        select: { id: true, name: true },
-      });
-      if (validDocs.length !== docIds.length) throw new Error("Context not found");
-      await db.$transaction([
-        db.interviewSessionDocument.createMany({
-          data: docIds.map((documentId) => ({ sessionId: existing.id, documentId })),
-          skipDuplicates: true,
-        }),
-        db.interviewSession.update({
-          where: { id: existing.id },
-          data: { contextId: validDocs[0].id, contextName: validDocs[0].name },
-        }),
-      ]);
-    }
-    sessionId = existing.id;
-    code = existing.shareCode;
+    if (!found.deployment.allowedModes.split(",").includes(mode)) throw new Error(`Deployment does not allow ${mode} sessions`);
+    assignmentId = found.id;
+    deploymentId = found.deployment.id;
+    agentId = found.deployment.agent.id;
+    activationKey = `assignment:${found.id}`;
   } else {
-    if (!input.agentSlug) throw new Error("Agent is required");
-    const agent = await db.agent.findFirst({
-      where: { slug: input.agentSlug, orgId: input.orgId },
-      select: { id: true },
-    });
-    if (!agent) throw new Error("Agent not found");
-    await db.interviewSession.updateMany({
-      where: { orgId: input.orgId, userId: input.userId, agentId: agent.id, status: "active" },
-      data: { status: "abandoned", endedAt: new Date(), runtimeTokenHash: null },
-    });
-    const created = await createAssignedSession({
-      orgId: input.orgId,
-      userId: input.userId,
-      agentId: agent.id,
-      contextId: primaryId,
-      contextIds: docIds,
-    });
-    sessionId = created.id;
-    code = created.shareCode;
+    const found = input.deploymentKey
+      ? await db.deployment.findFirst({ where: { publicKey: input.deploymentKey, orgId: input.orgId, status: "active" } })
+      : null;
+    if (found) {
+      deploymentId = found.id;
+      agentId = found.agentId;
+    } else {
+      if (!input.agentSlug) throw new Error("Agent is required");
+      const agent = await db.agent.findFirst({ where: { slug: input.agentSlug, orgId: input.orgId }, select: { id: true } });
+      if (!agent) throw new Error("Agent not found");
+      deploymentId = (await ensureDeployment(input.orgId, agent.id)).id;
+      agentId = agent.id;
+    }
+    activationKey = input.idempotencyKey
+      ? `deployment:${deploymentId}:${input.idempotencyKey}`
+      : `direct:${randomBytes(18).toString("base64url")}`;
   }
 
-  const current = await db.interviewSession.findUniqueOrThrow({
-    where: { id: sessionId },
-    select: {
-      agentId: true,
-      contextId: true,
-      documents: { select: { documentId: true } },
-    },
-  });
-  const attachedIds = Array.from(new Set([
-    ...docIds,
-    ...(current.contextId ? [current.contextId] : []),
-    ...current.documents.map((d) => d.documentId),
-  ])).filter(Boolean);
-  const activePrimaryId = attachedIds[0] ?? undefined;
-  const snapshot = await sessionSnapshot(input.orgId, current.agentId, activePrimaryId);
-  const compiledConfig = await getAgentConfigForAgent(current.agentId, input.orgId, activePrimaryId, attachedIds);
-  const token = runtimeToken();
-  const initialRuntimeState = initRuntimeState();
-  const claimed = await db.interviewSession.updateMany({
-    where: { id: sessionId, status: "assigned" },
-    data: {
-      status: "active",
-      startedAt: new Date(),
-      runtimeTokenHash: tokenHash(token),
-      personaSlug: snapshot.agent.persona.slug,
-      personaVersion: snapshot.agent.persona.version,
-      agentSlug: snapshot.agent.slug,
-      agentVersion: snapshot.agent.version,
-      domainSlug: snapshot.domain.slug,
-      domainVersion: snapshot.domain.version,
-      compiledSnapshot: compiledConfig ? JSON.parse(JSON.stringify(compiledConfig)) : undefined,
-      runtimeState: JSON.parse(JSON.stringify(initialRuntimeState)),
-      runtimeRevision: 0,
-      lastCompletion: Prisma.DbNull,
-    },
-  });
-  if (claimed.count === 0) return null;
+  const existing = await db.interviewSession.findUnique({ where: { activationKey } });
+  if (existing && ["activating", "active"].includes(existing.status)) {
+    const token = runtimeToken(existing.id);
+    await db.interviewSession.update({ where: { id: existing.id }, data: { runtimeTokenHash: tokenHash(token) } });
+    return { id: existing.id, agentSlug: existing.agentSlug, status: existing.status, mode: existing.mode as DeliveryMode, runtimeToken: token };
+  }
+  if (existing?.status === "failed") {
+    await db.interviewSession.delete({ where: { id: existing.id } });
+  } else if (existing) {
+    return null;
+  }
 
-  return {
-    id: sessionId,
-    shareCode: code,
-    agentSlug: snapshot.agent.slug,
-    status: "active",
-    runtimeToken: token,
-  };
+  const snapshot = await sessionSnapshot(input.orgId, agentId, input.contextId, requestedDocs);
+  for (const document of snapshot.documents) {
+    if (document.ownerUserId && document.ownerUserId !== input.userId) throw new Error("Context not found");
+  }
+  const primaryId = snapshot.docIds[0];
+  const primary = snapshot.documents.find((document) => document.id === primaryId);
+  const compiledConfig = await getAgentConfigForAgent(agentId, input.orgId, primaryId, snapshot.docIds);
+  const session = await db.$transaction(async (tx) => {
+    if (!assignmentId) {
+      await tx.interviewSession.updateMany({
+        where: { orgId: input.orgId, userId: input.userId, agentId, status: "active" },
+        data: { status: "abandoned", endedAt: new Date(), runtimeTokenHash: null },
+      });
+    }
+    const created = await tx.interviewSession.create({
+      data: {
+        orgId: input.orgId,
+        userId: input.userId,
+        agentId,
+        deploymentId,
+        assignmentId,
+        shareCode: shareCode(),
+        activationKey,
+        mode,
+        personaSlug: snapshot.agent.persona.slug,
+        personaVersion: snapshot.agent.persona.version,
+        agentSlug: snapshot.agent.slug,
+        agentVersion: snapshot.agent.version,
+        domainSlug: snapshot.domain.slug,
+        domainVersion: snapshot.domain.version,
+        contextId: primary?.id,
+        contextName: primary?.name,
+        status: "activating",
+        compiledSnapshot: compiledConfig ? JSON.parse(JSON.stringify(compiledConfig)) : undefined,
+        runtimeState: JSON.parse(JSON.stringify(initRuntimeState())),
+        lastCompletion: Prisma.DbNull,
+      },
+    });
+    if (snapshot.docIds.length) {
+      await tx.interviewSessionDocument.createMany({
+        data: snapshot.docIds.map((documentId) => ({ sessionId: created.id, documentId })),
+      });
+    }
+    return created;
+  });
+
+  const token = runtimeToken(session.id);
+  try {
+    await initializeChatSession({ sessionId: session.id, orgId: input.orgId, mode });
+    await db.$transaction([
+      db.interviewSession.update({
+        where: { id: session.id },
+        data: { status: "active", startedAt: new Date(), runtimeTokenHash: tokenHash(token) },
+      }),
+      ...(assignmentId
+        ? [db.rolePlayAssignment.update({
+            where: { id: assignmentId },
+            data: { status: "used", usedAt: new Date() },
+          })]
+        : []),
+    ]);
+  } catch (error) {
+    await db.interviewSession.update({
+      where: { id: session.id },
+      data: { status: "failed", endedAt: new Date(), runtimeTokenHash: null },
+    });
+    throw error;
+  }
+
+  return { id: session.id, agentSlug: session.agentSlug, status: "active", mode, runtimeToken: token };
 }
 
 export async function authorizeRuntimeSession(idOrToken: string, tokenParam?: string) {
-  const token = tokenParam ? tokenParam : idOrToken;
+  const token = tokenParam || idOrToken;
   if (!token) return null;
-  const hash = tokenHash(token);
-  const session = await db.interviewSession.findFirst({
+  return db.interviewSession.findFirst({
     where: {
-      runtimeTokenHash: hash,
+      runtimeTokenHash: tokenHash(token),
       ...(tokenParam && idOrToken ? { id: idOrToken } : {}),
+      status: { in: ["activating", "active", "closing"] },
     },
     select: {
       id: true,
@@ -234,6 +253,7 @@ export async function authorizeRuntimeSession(idOrToken: string, tokenParam?: st
       agentId: true,
       contextId: true,
       status: true,
+      mode: true,
       runtimeTokenHash: true,
       compiledSnapshot: true,
       runtimeState: true,
@@ -241,8 +261,10 @@ export async function authorizeRuntimeSession(idOrToken: string, tokenParam?: st
       lastCompletion: true,
       evidence: true,
       transcript: true,
+      livekitRoom: true,
+      livekitDispatchId: true,
+      audioEgressId: true,
+      videoEgressId: true,
     },
   });
-  if (!session?.runtimeTokenHash || !["assigned", "active"].includes(session.status)) return null;
-  return session;
 }

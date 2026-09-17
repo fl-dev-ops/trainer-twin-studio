@@ -5,7 +5,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import { signInUrl } from "@/lib/base-domain";
 import { db } from "@/lib/db";
 import { resolveSessionUser } from "@/lib/session-user";
-import { listAgentContextRequired, listScenarioIntroVideos, listUploads } from "@/lib/specs";
+import { listAgentContextRequired, listScenarioIntroVideos } from "@/lib/specs";
 
 export const dynamic = "force-dynamic";
 
@@ -15,17 +15,27 @@ export default async function SharedSessionPage({ params }: { params: Promise<{ 
   const { org, user } = await resolveSessionUser();
   if (!user) redirect(signInUrl(host, `/s/${encodeURIComponent(code)}`));
 
-  const session = org ? await db.interviewSession.findUnique({
+  const assignment = org ? await db.rolePlayAssignment.findUnique({
     where: { shareCode: code },
     select: {
       orgId: true,
-      userId: true,
       status: true,
-      agent: { select: { slug: true, name: true, persona: { select: { slug: true } } } },
+      expiresAt: true,
+      member: { select: { userId: true } },
+      deployment: {
+        select: {
+          agent: { select: { slug: true, name: true, persona: { select: { slug: true } } } },
+        },
+      },
       organization: { select: { name: true, logo: true } },
     },
   }) : null;
-  if (!session || session.orgId !== org?.id || session.userId !== user.id || session.status !== "assigned") {
+  const usable = assignment
+    && assignment.orgId === org?.id
+    && assignment.member.userId === user.id
+    && assignment.status === "pending"
+    && assignment.expiresAt > new Date();
+  if (!usable) {
     return (
       <main className="grid min-h-svh place-items-center p-4">
         <Card className="max-w-md">
@@ -37,24 +47,24 @@ export default async function SharedSessionPage({ params }: { params: Promise<{ 
       </main>
     );
   }
-  const [contexts, introVideos, agentContextRequired] = await Promise.all([
-    listUploads(org.id, user.id),
-    listScenarioIntroVideos(org.id, [session.agent.slug]),
-    listAgentContextRequired(org.id, [session.agent.slug]),
+  const agent = assignment.deployment.agent;
+  const [introVideos, agentContextRequired] = await Promise.all([
+    listScenarioIntroVideos(org.id, [agent.slug]),
+    listAgentContextRequired(org.id, [agent.slug]),
   ]);
   return (
     <SessionView
-      personas={[session.agent.persona.slug]}
-      agents={[session.agent.slug]}
-      scenarioName={session.agent.name}
+      personas={[agent.persona.slug]}
+      agents={[agent.slug]}
+      scenarioName={agent.name}
       userName={user.name}
-      organizationName={session.organization.name}
-      organizationLogo={/^data:image\/(?:png|jpeg|webp);base64,/.test(session.organization.logo ?? "") ? session.organization.logo : null}
-      agentPersonas={{ [session.agent.slug]: session.agent.persona.slug }}
+      organizationName={assignment.organization.name}
+      organizationLogo={/^data:image\/(?:png|jpeg|webp);base64,/.test(assignment.organization.logo ?? "") ? assignment.organization.logo : null}
+      agentPersonas={{ [agent.slug]: agent.persona.slug }}
       agentContextRequired={agentContextRequired}
       introVideos={introVideos}
       autoStart
-      contexts={contexts.map((context) => ({ id: context.id, name: context.name, size: context.size }))}
+      contexts={[]}
       sessionCode={code}
     />
   );

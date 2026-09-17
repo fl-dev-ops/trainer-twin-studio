@@ -52,7 +52,7 @@ export function PreJoin({
   userName,
   organizationName,
   organizationLogo,
-  contexts = [],
+  contexts: _contexts = [],
   contextRequired = false,
   onJoin,
 }: {
@@ -87,11 +87,7 @@ export function PreJoin({
   const [cameraDeviceId, setCameraDeviceId] = useState("");
   const [speakerDeviceId, setSpeakerDeviceId] = useState("");
 
-  const [availableDocs, setAvailableDocs] =
-    useState<PreJoinDocument[]>(contexts);
-  const [selectedDoc, setSelectedDoc] = useState<PreJoinDocument | null>(
-    contexts[0] ?? null,
-  );
+  const [selectedDoc, setSelectedDoc] = useState<PreJoinDocument | null>(null);
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [docError, setDocError] = useState("");
   const [dragOver, setDragOver] = useState(false);
@@ -260,7 +256,6 @@ export function PreJoin({
         name: data.name,
         size: file.size,
       };
-      setAvailableDocs((prev) => [...prev, doc]);
       setSelectedDoc(doc);
     } catch (error) {
       setDocError(
@@ -620,41 +615,7 @@ export function PreJoin({
               </p>
             ) : null}
 
-            {!selectedDoc && availableDocs.length > 0 ? (
-              <div className="relative mt-2.5">
-                <span
-                  className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#5f6368]"
-                  aria-hidden="true"
-                >
-                  <FileUp className="size-4" />
-                </span>
-                <select
-                  value=""
-                  onChange={(event) => {
-                    const doc = availableDocs.find(
-                      (candidate) => candidate.id === event.target.value,
-                    );
-                    setSelectedDoc(doc ?? null);
-                  }}
-                  aria-label="Choose a previously uploaded document"
-                  className="h-10 w-full appearance-none truncate rounded-full border border-[#dadce0] bg-white pl-10 pr-9 text-sm text-[#3c4043] shadow-[0_1px_2px_rgba(60,64,67,0.08)] outline-none transition-colors focus:border-brand focus:ring-1 focus:ring-brand/30"
-                >
-                  <option value="">Or choose a past upload</option>
-                  {availableDocs.map((doc) => (
-                    <option key={doc.id} value={doc.id}>
-                      {doc.name}
-                      {typeof doc.size === "number"
-                        ? ` · ${formatBytes(doc.size)}`
-                        : ""}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  className="pointer-events-none absolute right-3.5 top-1/2 size-3.5 -translate-y-1/2 text-[#5f6368]"
-                  aria-hidden="true"
-                />
-              </div>
-            ) : null}
+
           </section>
         )}
 

@@ -19,13 +19,8 @@ from livekit.plugins import noise_cancellation
 
 from pathlib import Path
 
-from recording import (
-    post_completion_webhook,
-    start_session_egress,
-    stop_and_poll_egress,
-)
+from recording import post_completion_webhook
 from session import build_agent_session
-from tools import build_interview_tools
 
 load_dotenv(override=True)
 
@@ -329,11 +324,6 @@ async def entrypoint(ctx: agents.JobContext) -> None:
     if not participant_identity:
         participant_identity = f"candidate-{session_id}"
 
-    # Start optional S3 recording egress
-    egress_data = await start_session_egress(lk_api=ctx.api, org_id=org_id, room_name=ctx.room.name)
-
-    tools = build_interview_tools(room=ctx.room, participant_identity=participant_identity)
-
     agent_slug = str(metadata.get("agent_id") or metadata.get("agentSlug") or "").strip()
     extra_headers: dict[str, str] = {
         "x-trainertwin-session-id": session_id,
@@ -362,17 +352,11 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         "runtime_token": runtime_token,
         "webhook_url": webhook_url,
         "participant_identity": participant_identity,
-        "audio_egress_id": egress_data.get("audio_egress_id"),
-        "video_egress_id": egress_data.get("video_egress_id"),
-        "audio_url": egress_data.get("audio_url"),
-        "video_url": egress_data.get("video_url"),
-        "audio_s3_key": egress_data.get("audio_s3_key"),
-        "video_s3_key": egress_data.get("video_s3_key"),
-        "session": session,  # kept in-memory so on_session_end can dump the transcript
+        "session": session,
     }
 
     agent = TrainerAgent(
-        tools=tools,
+        tools=[],
         room_name=ctx.room.name,
         opening_release=opening_release,
         hold_opening=bool(metadata.get("hold_opening")),
@@ -421,14 +405,6 @@ async def entrypoint(ctx: agents.JobContext) -> None:
 async def on_session_end(ctx: agents.JobContext) -> None:
     logger.info("Session ending for room %s", ctx.room.name)
     state = _sessions.pop(ctx.room.name, None) or {}
-
-    audio_egress_id = state.get("audio_egress_id")
-    video_egress_id = state.get("video_egress_id")
-
-    if audio_egress_id:
-        await stop_and_poll_egress(ctx.api, audio_egress_id)
-    if video_egress_id:
-        await stop_and_poll_egress(ctx.api, video_egress_id)
 
     transcript = []
     session_obj = state.get("session")

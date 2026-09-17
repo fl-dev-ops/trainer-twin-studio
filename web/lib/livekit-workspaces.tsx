@@ -1,13 +1,6 @@
 "use client";
 
 import {
-  ParticipantKind,
-  Room,
-  RoomEvent,
-  type RemoteParticipant,
-  type RpcInvocationData,
-} from "livekit-client";
-import {
   createContext,
   type ReactNode,
   useCallback,
@@ -17,7 +10,6 @@ import {
   useRef,
 } from "react";
 import {
-  parseAgentSurfaceEvent,
   parseAgentSurfaceMessage,
   type AgentSurface,
 } from "@/lib/agent-surface-events";
@@ -50,27 +42,45 @@ export function useWorkspaceHandlers() {
   return register;
 }
 
+function workspaceMethodFor(tool: string, input: Record<string, unknown>): { method: WorkspaceMethod; action: string; payload: Record<string, unknown> } | null {
+  if (tool === "read_code_range") return { method: "workspace.code", action: "get_range", payload: { fromLine: input.from_line, toLine: input.to_line } };
+  if (tool === "highlight_code") return { method: "workspace.code", action: "highlight_range", payload: { fromLine: input.from_line, toLine: input.to_line } };
+  if (tool === "get_code_state") return { method: "workspace.code", action: "get_state", payload: {} };
+  if (tool === "run_code") return { method: "workspace.code", action: "run", payload: {} };
+  if (tool === "highlight_whiteboard") return { method: "workspace.whiteboard", action: "highlight_component", payload: { componentLabel: input.component_label ?? input.componentLabel } };
+  if (tool === "read_canvas_scene") return { method: "workspace.canvas", action: "get_scene", payload: {} };
+  if (tool === "highlight_canvas_element") return { method: "workspace.canvas", action: "highlight", payload: input };
+  if (tool === "add_canvas_component") return { method: "workspace.canvas", action: "add_component", payload: input };
+  if (tool === "clear_canvas") return { method: "workspace.canvas", action: "clear", payload: {} };
+  if (tool === "get_presentation_state") return { method: "workspace.presentation", action: "get_state", payload: {} };
+  if (tool === "set_presentation_slide") return { method: "workspace.presentation", action: "go_to_slide", payload: { slideIndex: input.slide_index } };
+  if (tool === "next_presentation_slide") return { method: "workspace.presentation", action: "next", payload: {} };
+  if (tool === "previous_presentation_slide") return { method: "workspace.presentation", action: "previous", payload: {} };
+  if (tool === "workspace_request" && typeof input.method === "string") {
+    return { method: input.method as WorkspaceMethod, action: String(input.action ?? ""), payload: (input.payload as Record<string, unknown>) ?? {} };
+  }
+  return null;
+}
+
 export function LiveKitWorkspaceProvider({
   children,
-  room,
+  sessionId,
+  runtimeToken,
   onSurface,
   onEndSession,
 }: {
   children: ReactNode;
-  room: Room | null;
+  sessionId?: string;
+  runtimeToken?: string;
   onSurface: (surface: AgentSurface) => void;
   onEndSession?: () => void;
 }) {
   const handlers = useRef(new Map<WorkspaceMethod, WorkspaceHandler>());
-  const waiters = useRef(
-    new Map<WorkspaceMethod, Set<(handler: WorkspaceHandler) => void>>(),
-  );
+  const seen = useRef(new Set<string>());
 
   const register = useCallback(
     (method: WorkspaceMethod, handler: WorkspaceHandler) => {
       handlers.current.set(method, handler);
-      waiters.current.get(method)?.forEach((resolve) => resolve(handler));
-      waiters.current.delete(method);
       return () => {
         if (handlers.current.get(method) === handler) handlers.current.delete(method);
       };
@@ -78,142 +88,81 @@ export function LiveKitWorkspaceProvider({
     [],
   );
 
-  const waitForHandler = useCallback((method: WorkspaceMethod) => {
-    // Map whiteboard alias to canvas if canvas is registered
-    const effectiveMethod =
-      method === "workspace.whiteboard" && !handlers.current.has("workspace.whiteboard") && handlers.current.has("workspace.canvas")
-        ? "workspace.canvas"
-        : method;
-
-    const current = handlers.current.get(effectiveMethod);
-    if (current) return Promise.resolve(current);
-    return new Promise<WorkspaceHandler>((resolve, reject) => {
-      const pending = waiters.current.get(effectiveMethod) ?? new Set();
-      pending.add(resolve);
-      waiters.current.set(effectiveMethod, pending);
-      setTimeout(() => {
-        pending.delete(resolve);
-        reject(new Error(`${method} is not open`));
-      }, 2_500);
-    });
-  }, []);
-
-  // Trust boundary: only the session agent may drive the browser workspace
-  // (code editor, whiteboard, presentation, surface, session.end). A participant
-  // publishing on behalf of the agent is a relay, never the workspace controller.
-  function guardAgentCaller(callerIdentity: string): string | null {
-    const caller = room?.remoteParticipants.get(callerIdentity);
-    if (
-      caller?.kind === ParticipantKind.AGENT &&
-      !caller.attributes["lk.publish_on_behalf"]
-    ) {
-      return null;
-    }
-    return JSON.stringify({ ok: false, error: "Only the session agent may control the workspace" });
-  }
-
   useEffect(() => {
-    if (!room) return;
+    if (!sessionId || !runtimeToken) return;
+    let cancelled = false;
+    const headers = { Authorization: `Bearer ${runtimeToken}` };
 
-    // Handle surface changes from data packets (fallback when RPC is unavailable)
-    function handleDataReceived(payload: Uint8Array, participant?: RemoteParticipant) {
-      if (participant?.kind !== ParticipantKind.AGENT) return;
+    async function run(command: { id: string; tool: string; input: unknown }) {
+      if (seen.current.has(command.id)) return;
+      seen.current.add(command.id);
+      const input = command.input && typeof command.input === "object" && !Array.isArray(command.input)
+        ? command.input as Record<string, unknown>
+        : {};
       try {
-        // 1. Try parseAgentSurfaceEvent (handles open_code_editor, open_whiteboard, etc.)
-        const parsed = parseAgentSurfaceEvent(payload);
-        if (parsed) {
-          onSurface(parsed.surface);
+        if (command.tool === "finish_session") {
+          onEndSession?.();
+          await fetch(`/api/sessions/${sessionId}/commands/${command.id}`, {
+            method: "POST",
+            headers: { ...headers, "Content-Type": "application/json" },
+            body: JSON.stringify({ result: { ok: true } }),
+          });
           return;
         }
-
-        // 2. Try JSON message with type or action
-        const text = new TextDecoder().decode(payload);
-        const data = JSON.parse(text);
-        if (data && typeof data === "object") {
-          const directParsed = parseAgentSurfaceMessage(data);
-          if (directParsed) {
-            onSurface(directParsed.surface);
-          }
+        if (command.tool === "surface") {
+          const action = String(input.action ?? input.type ?? "");
+          const payload = (input.payload as Record<string, unknown>) ?? input;
+          const parsed = parseAgentSurfaceMessage({ ...payload, type: action });
+          if (parsed) onSurface(parsed.surface);
+          await fetch(`/api/sessions/${sessionId}/commands/${command.id}`, {
+            method: "POST",
+            headers: { ...headers, "Content-Type": "application/json" },
+            body: JSON.stringify({ result: { ok: true, action } }),
+          });
+          return;
         }
-      } catch (err) {
-        console.warn("Error processing agent data packet:", err);
+        const routed = workspaceMethodFor(command.tool, input);
+        if (!routed) throw new Error(`Unsupported workspace tool ${command.tool}`);
+        const handler = handlers.current.get(routed.method)
+          ?? (routed.method === "workspace.canvas" ? handlers.current.get("workspace.whiteboard") : undefined);
+        if (!handler) throw new Error(`${routed.method} is not open`);
+        const raw = await handler(JSON.stringify({ action: routed.action, payload: routed.payload }));
+        let result: unknown = raw;
+        try { result = JSON.parse(raw); } catch { /* keep string */ }
+        await fetch(`/api/sessions/${sessionId}/commands/${command.id}`, {
+          method: "POST",
+          headers: { ...headers, "Content-Type": "application/json" },
+          body: JSON.stringify({ result }),
+        });
+      } catch (error) {
+        await fetch(`/api/sessions/${sessionId}/commands/${command.id}`, {
+          method: "POST",
+          headers: { ...headers, "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "failed", result: { ok: false, error: error instanceof Error ? error.message : String(error) } }),
+        }).catch(() => {});
       }
     }
 
-    room.on(RoomEvent.DataReceived, handleDataReceived);
-
-    // Register RPC methods on the local participant
-    const rpcMethods: WorkspaceMethod[] = [
-      "workspace.code",
-      "workspace.whiteboard",
-      "workspace.canvas",
-      "workspace.presentation",
-    ];
-
-    rpcMethods.forEach((method) => {
-      room.localParticipant.registerRpcMethod(method, async (data: RpcInvocationData) => {
-        const denied = guardAgentCaller(data.callerIdentity);
-        if (denied) return denied;
+    async function poll() {
+      while (!cancelled) {
         try {
-          const handler = await waitForHandler(method);
-          const response = await handler(data.payload);
-          return response;
-        } catch (error) {
-          return JSON.stringify({
-            ok: false,
-            error: error instanceof Error ? error.message : "RPC call failed",
-          });
+          const response = await fetch(`/api/sessions/${sessionId}/commands`, { headers });
+          if (response.ok) {
+            const body = await response.json() as { commands?: Array<{ id: string; tool: string; input: unknown }> };
+            for (const command of body.commands ?? []) await run(command);
+          }
+        } catch {
+          // retry
         }
-      });
-    });
-
-    const handleSurfaceRpc = async (data: RpcInvocationData) => {
-      const denied = guardAgentCaller(data.callerIdentity);
-      if (denied) return denied;
-      try {
-        const req = JSON.parse(data.payload) as Record<string, unknown>;
-        const action = String(req.action || req.type || "");
-        const payload = (req.payload as Record<string, unknown>) || req;
-        const event = parseAgentSurfaceMessage({
-          ...payload,
-          type: action,
-          eventId: req.eventId,
-        });
-        if (event) {
-          onSurface(event.surface);
-        }
-        return JSON.stringify({ ok: true, action });
-      } catch (error) {
-        return JSON.stringify({ ok: false, error: String(error) });
+        await new Promise((resolve) => setTimeout(resolve, 500));
       }
-    };
-
-    room.localParticipant.registerRpcMethod("workspace.surface", handleSurfaceRpc);
-    room.localParticipant.registerRpcMethod("surface", handleSurfaceRpc);
-
-    room.localParticipant.registerRpcMethod("session.end", async (data: RpcInvocationData) => {
-      const denied = guardAgentCaller(data.callerIdentity);
-      if (denied) return denied;
-      if (onEndSession) {
-        onEndSession();
-      }
-      return JSON.stringify({ ok: true });
-    });
-
-    return () => {
-      room.off(RoomEvent.DataReceived, handleDataReceived);
-      rpcMethods.forEach((method) => {
-        room.localParticipant.unregisterRpcMethod(method);
-      });
-      room.localParticipant.unregisterRpcMethod("workspace.surface");
-      room.localParticipant.unregisterRpcMethod("surface");
-      room.localParticipant.unregisterRpcMethod("session.end");
-    };
-  }, [room, onSurface, waitForHandler]);
+    }
+    void poll();
+    return () => { cancelled = true; };
+  }, [sessionId, runtimeToken, onSurface, onEndSession]);
 
   const value = useMemo(() => register, [register]);
   return <WorkspaceContext value={value}>{children}</WorkspaceContext>;
 }
 
-// Backward compatibility alias for PipecatWorkspaceProvider
 export const PipecatWorkspaceProvider = LiveKitWorkspaceProvider;

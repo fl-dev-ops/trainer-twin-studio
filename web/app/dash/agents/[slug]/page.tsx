@@ -32,7 +32,7 @@ export default async function RolePlayPreviewPage({
       },
     }),
     db.rolePlayAssignment.findMany({
-      where: { orgId: org.id, agent: { slug } },
+      where: { orgId: org.id, deployment: { agent: { slug } }, status: { not: "cancelled" } },
       select: { memberId: true },
     }),
   ]);

@@ -237,14 +237,15 @@ export function SessionView({
       if (!launchResponse.ok || !launch.session?.id || !launch.session?.runtimeToken) {
         throw new Error(launch.error ?? "Could not create session");
       }
-      if (!launch.livekit?.url || !launch.livekit?.token) {
-        throw new Error(launch.livekitError ?? "LiveKit credentials not returned by server");
+      const livekitUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL;
+      if (!launch.participantToken || !livekitUrl) {
+        throw new Error("Voice session credentials were not returned");
       }
 
       setConnection({
-        url: launch.livekit.url,
-        token: launch.livekit.token,
-        roomName: launch.livekit.room,
+        url: livekitUrl,
+        token: launch.participantToken,
+        roomName: launch.room ?? launch.session.id,
         sessionId: launch.session.id,
         runtimeToken: launch.session.runtimeToken,
       });
@@ -941,7 +942,8 @@ export function SessionView({
     <div className="dark flex h-dvh w-dvw flex-col overflow-hidden bg-[#14161a] text-foreground">
       <RoomContext.Provider value={room}>
         <LiveKitWorkspaceProvider
-          room={room}
+          sessionId={connection?.sessionId}
+          runtimeToken={connection?.runtimeToken}
           onSurface={handleSurface}
           onEndSession={() => void handleDisconnect("completed")}
         >

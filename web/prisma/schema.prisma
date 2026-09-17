@@ -39,7 +39,7 @@ model Agent {
   order       Int                  @default(0)
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
-  assignments RolePlayAssignment[]
+  deployments Deployment[]
   sessions    InterviewSession[]
 
   @@index([orgId])
@@ -318,11 +318,24 @@ model InterviewSession {
   user         User                       @relation(fields: [userId], references: [id], onDelete: Restrict)
   agent        Agent                      @relation(fields: [agentId], references: [id], onDelete: Restrict)
   context      ContextDocument?           @relation(fields: [contextId], references: [id], onDelete: SetNull)
-  documents    InterviewSessionDocument[]
-  assignment   RolePlayAssignment?
+  documents         InterviewSessionDocument[]
+  commands          WorkspaceCommand[]
+  deploymentId      String?
+  assignmentId      String?
+  mode              String    @default("voice") // voice | chat
+  activationKey     String?   @unique
+  livekitRoom       String?
+  livekitDispatchId String?
+  audioEgressId     String?
+  videoEgressId     String?
+
+  deployment Deployment?         @relation(fields: [deploymentId], references: [id], onDelete: SetNull)
+  assignment RolePlayAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
 
   @@index([orgId, userId])
   @@index([agentId])
+  @@index([deploymentId])
+  @@index([assignmentId])
 }
 
 model User {
@@ -441,6 +454,7 @@ model Organization {
   members            Member[]
   invitations        Invitation[]
   assignments        RolePlayAssignment[]
+  deployments        Deployment[]
   interviewSessions  InterviewSession[]
   knowledgeBases     KnowledgeBase[]
   knowledgeSources   KnowledgeSource[]
@@ -468,22 +482,64 @@ model Member {
   @@map("member")
 }
 
+model Deployment {
+  id                 String   @id @default(cuid())
+  orgId              String
+  agentId             String
+  publicKey           String   @unique
+  secretKeyHash       String?  @unique
+  allowedModes        String   @default("chat,voice")
+  allowedOrigins      Json?
+  status              String   @default("active") // active | disabled
+  rateLimitPerMinute  Int      @default(30)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  organization Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  agent        Agent                @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  assignments  RolePlayAssignment[]
+  sessions     InterviewSession[]
+
+  @@unique([orgId, agentId])
+  @@index([orgId, status])
+}
+
 model RolePlayAssignment {
-  id               String   @id @default(cuid())
+  id               String    @id @default(cuid())
   orgId            String
-  agentId          String
+  deploymentId     String
   memberId         String
   assignedByUserId String
-  assignedAt       DateTime @default(now())
-  sessionId        String?  @unique
+  shareCode        String    @unique
+  mode             String    @default("voice") // voice | chat
+  status           String    @default("pending") // pending | used | expired | cancelled
+  assignedAt       DateTime  @default(now())
+  expiresAt        DateTime
+  usedAt           DateTime?
 
-  organization Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  agent        Agent             @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  member       Member            @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  session      InterviewSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  organization Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  deployment   Deployment         @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+  member       Member             @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  sessions     InterviewSession[]
 
-  @@unique([agentId, memberId])
+  @@unique([deploymentId, memberId])
   @@index([orgId, memberId])
+  @@index([shareCode, status])
+}
+
+model WorkspaceCommand {
+  id          String   @id
+  sessionId   String
+  tool        String
+  input       Json
+  status      String   @default("pending") // pending | completed | failed
+  result      Json?
+  createdAt   DateTime @default(now())
+  completedAt DateTime?
+
+  session InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, status, createdAt])
 }
 
 model Invitation {

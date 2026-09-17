@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveSessionEndStatus } from "@/lib/interview-sessions";
+import { closeInterviewSession } from "@/lib/session-lifecycle";
 import { db } from "@/lib/db";
 
 /**
@@ -59,22 +60,15 @@ export async function POST(req: Request) {
   const newTranscript =
     !hasCanonicalTranscript && Array.isArray(body.transcript) ? body.transcript : undefined;
 
-  await db.$transaction([
-    db.interviewSession.update({
-      where: { id: session.id },
-      data: {
-        status,
-        endedAt: new Date(),
-        runtimeTokenHash: null,
-        ...(body.audio_s3_key || body.audio_url
-          ? { s3AudioKey: String(body.audio_s3_key || body.audio_url) }
-          : {}),
-        evidence: updatedEvidence,
-        ...(newTranscript ? { transcript: newTranscript } : {}),
-      },
-    }),
-    db.rolePlayAssignment.deleteMany({ where: { sessionId: session.id } }),
-  ]);
+  await closeInterviewSession(
+    session.id,
+    status === "completed" || status === "abandoned" ? status : resolveSessionEndStatus(session.status, "abandoned"),
+    {
+      evidence: updatedEvidence,
+      ...(newTranscript ? { transcript: newTranscript } : {}),
+      ...(body.audio_s3_key || body.audio_url ? { s3AudioKey: String(body.audio_s3_key || body.audio_url) } : {}),
+    },
+  );
 
   return NextResponse.json({ ok: true, sessionId: session.id, status });
 }

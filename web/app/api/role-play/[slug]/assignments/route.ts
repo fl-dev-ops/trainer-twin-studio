@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { BASE_DOMAIN } from "@/lib/base-domain";
-import { assignmentChanges, MAX_ASSIGNMENT_RECIPIENTS } from "@/lib/assignments";
+import { assignmentChanges, assignmentExpiresAt, MAX_ASSIGNMENT_RECIPIENTS, newAssignmentShareCode } from "@/lib/assignments";
 import { db } from "@/lib/db";
+import { ensureDeployment } from "@/lib/deployments";
 import { sendRolePlayAssignmentEmail } from "@/lib/email";
-import { attachAssignmentSession, revokeAssignedSession } from "@/lib/interview-sessions";
 import { getTrainerOrg } from "@/lib/org";
 
 const bodySchema = z.object({
@@ -32,8 +32,8 @@ export async function PUT(
       select: { id: true, user: { select: { id: true, name: true, email: true } } },
     }),
     db.rolePlayAssignment.findMany({
-      where: { orgId: trainer.id, agent: { slug } },
-      select: { id: true, memberId: true, sessionId: true },
+      where: { orgId: trainer.id, deployment: { agent: { slug } } },
+      select: { id: true, memberId: true, status: true },
     }),
   ]);
 
@@ -42,11 +42,17 @@ export async function PUT(
     return Response.json({ error: "One or more learners are not members of this organization" }, { status: 400 });
   }
 
+  const deployment = await ensureDeployment(trainer.id, agent.id);
   const changes = assignmentChanges(existing.map(({ memberId }) => memberId), requestedIds);
   const removed = existing.filter(({ memberId }) => changes.removed.includes(memberId));
-  await Promise.all(removed.map(({ sessionId }) => revokeAssignedSession(sessionId)));
-  if (changes.removed.length) {
-    await db.rolePlayAssignment.deleteMany({ where: { agentId: agent.id, memberId: { in: changes.removed } } });
+  if (removed.length) {
+    await db.rolePlayAssignment.updateMany({
+      where: { id: { in: removed.map(({ id }) => id) }, status: "pending" },
+      data: { status: "cancelled" },
+    });
+    await db.rolePlayAssignment.deleteMany({
+      where: { id: { in: removed.map(({ id }) => id) }, status: { in: ["pending", "cancelled", "expired"] } },
+    });
   }
 
   const added = new Set(changes.added);
@@ -54,18 +60,17 @@ export async function PUT(
   const launches = new Map<string, string>();
   for (const member of recipients) {
     const assignment = await db.rolePlayAssignment.create({
-      data: { orgId: trainer.id, agentId: agent.id, memberId: member.id, assignedByUserId: trainer.user.id },
-      select: { id: true },
+      data: {
+        orgId: trainer.id,
+        deploymentId: deployment.id,
+        memberId: member.id,
+        assignedByUserId: trainer.user.id,
+        shareCode: newAssignmentShareCode(),
+        expiresAt: assignmentExpiresAt(),
+      },
+      select: { shareCode: true },
     });
-    try {
-      const session = await attachAssignmentSession(assignment.id, {
-        orgId: trainer.id, userId: member.user.id, agentId: agent.id,
-      });
-      launches.set(member.id, `https://${trainer.slug}.${BASE_DOMAIN}/s/${session.shareCode}`);
-    } catch (error) {
-      await db.rolePlayAssignment.delete({ where: { id: assignment.id } });
-      throw error;
-    }
+    launches.set(member.id, `https://${trainer.slug}.${BASE_DOMAIN}/s/${assignment.shareCode}`);
   }
 
   const data = agent.data as { objective?: unknown } | null;

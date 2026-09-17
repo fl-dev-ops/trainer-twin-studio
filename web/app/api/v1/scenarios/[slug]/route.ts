@@ -22,11 +22,11 @@ export async function GET(request: Request, { params }: Params) {
       data: true,
       createdAt: true,
       updatedAt: true,
-      _count: { select: { assignments: true } },
+      deployments: { select: { _count: { select: { assignments: true } } } },
     },
   });
   if (!scenario) return Response.json({ error: "Scenario not found" }, { status: 404 });
 
-  const { _count, ...rest } = scenario;
-  return Response.json({ scenario: { ...rest, assignmentCount: _count.assignments } });
+  const { deployments, ...rest } = scenario;
+  return Response.json({ scenario: { ...rest, assignmentCount: deployments[0]?._count.assignments ?? 0 } });
 }

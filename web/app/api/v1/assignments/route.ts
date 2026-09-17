@@ -1,14 +1,19 @@
 import { z } from "zod";
 import { BASE_DOMAIN } from "@/lib/base-domain";
+import { assignmentExpiresAt, newAssignmentShareCode } from "@/lib/assignments";
 import { db } from "@/lib/db";
+import { ensureDeployment } from "@/lib/deployments";
 import { sendRolePlayAssignmentEmail } from "@/lib/email";
-import { attachAssignmentSession } from "@/lib/interview-sessions";
 import { isApiError, requireExternalApi } from "@/lib/external-api";
 
 const createSchema = z.object({
   userId: z.string().min(1),
   scenario: z.string().regex(/^[a-z0-9][a-z0-9._-]*$/i),
 }).strict();
+
+function practiceUrl(orgSlug: string, shareCode: string) {
+  return `https://${orgSlug}.${BASE_DOMAIN}/s/${shareCode}`;
+}
 
 export async function GET(request: Request) {
   const api = await requireExternalApi(request, "assignments", "read");
@@ -21,7 +26,7 @@ export async function GET(request: Request) {
   const where = {
     orgId: api.org.id,
     ...(userId ? { member: { userId } } : {}),
-    ...(scenario ? { agent: { slug: scenario } } : {}),
+    ...(scenario ? { deployment: { agent: { slug: scenario } } } : {}),
   };
   const [assignments, total] = await Promise.all([
     db.rolePlayAssignment.findMany({
@@ -32,19 +37,20 @@ export async function GET(request: Request) {
       select: {
         id: true,
         assignedAt: true,
+        shareCode: true,
+        status: true,
         member: { select: { user: { select: { id: true, name: true, email: true } } } },
-        agent: { select: { slug: true, name: true, version: true, visibility: true } },
-        session: { select: { shareCode: true } },
+        deployment: { select: { agent: { select: { slug: true, name: true, version: true, visibility: true } } } },
       },
     }),
     db.rolePlayAssignment.count({ where }),
   ]);
   return Response.json({
-    assignments: assignments.map(({ member, agent, session, ...assignment }) => ({
+    assignments: assignments.map(({ member, deployment, shareCode, ...assignment }) => ({
       ...assignment,
       user: member.user,
-      scenario: agent,
-      practiceUrl: session ? `https://${api.org.slug}.${BASE_DOMAIN}/s/${session.shareCode}` : null,
+      scenario: deployment.agent,
+      practiceUrl: practiceUrl(api.org.slug, shareCode),
     })),
     pagination: { limit, offset, total },
   });
@@ -78,48 +84,42 @@ export async function POST(request: Request) {
   if (!agent) return Response.json({ error: "Scenario not found" }, { status: 404 });
   if (!trainer) return Response.json({ error: "API key creator is no longer an organization trainer" }, { status: 403 });
 
+  const deployment = await ensureDeployment(api.org.id, agent.id);
   const existing = await db.rolePlayAssignment.findUnique({
-    where: { agentId_memberId: { agentId: agent.id, memberId: member.id } },
-    select: { id: true, assignedAt: true, session: { select: { shareCode: true } } },
+    where: { deploymentId_memberId: { deploymentId: deployment.id, memberId: member.id } },
+    select: { id: true, assignedAt: true, shareCode: true, status: true },
   });
   if (existing) return Response.json({
     assignment: { ...existing, userId: parsed.data.userId, scenario: agent.slug },
-    practiceUrl: existing.session ? `https://${api.org.slug}.${BASE_DOMAIN}/s/${existing.session.shareCode}` : null,
+    practiceUrl: practiceUrl(api.org.slug, existing.shareCode),
     created: false,
   });
 
   const assignment = await db.rolePlayAssignment.create({
     data: {
       orgId: api.org.id,
-      agentId: agent.id,
+      deploymentId: deployment.id,
       memberId: member.id,
       assignedByUserId: trainer.userId,
+      shareCode: newAssignmentShareCode(),
+      expiresAt: assignmentExpiresAt(),
     },
-    select: { id: true, assignedAt: true },
+    select: { id: true, assignedAt: true, shareCode: true },
   });
-  let session;
-  try {
-    session = await attachAssignmentSession(assignment.id, {
-      orgId: api.org.id, userId: parsed.data.userId, agentId: agent.id,
-    });
-  } catch (error) {
-    await db.rolePlayAssignment.delete({ where: { id: assignment.id } });
-    throw error;
-  }
-  const practiceUrl = `https://${api.org.slug}.${BASE_DOMAIN}/s/${session.shareCode}`;
+  const url = practiceUrl(api.org.slug, assignment.shareCode);
   const data = agent.data as { objective?: unknown } | null;
   const delivery = await sendRolePlayAssignmentEmail({
     to: member.user.email,
     userName: member.user.name,
     rolePlayName: agent.name,
     rolePlayObjective: typeof data?.objective === "string" ? data.objective : undefined,
-    practiceUrl,
+    practiceUrl: url,
     trainerName: trainer.user.name,
   });
   return Response.json({
-    assignment: { ...assignment, userId: parsed.data.userId, scenario: agent.slug },
+    assignment: { id: assignment.id, assignedAt: assignment.assignedAt, userId: parsed.data.userId, scenario: agent.slug },
     created: true,
-    practiceUrl,
+    practiceUrl: url,
     emailSent: delivery.success,
   }, { status: 201 });
 }

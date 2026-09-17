@@ -6,6 +6,7 @@ import { specDraftBundleSchema } from "@/lib/spec-draft-schema";
 import { publishSpecDraft, readSpecDraft, saveSpecDraft } from "@/lib/spec-drafts";
 import { MainCollectionService } from "@/lib/main-collection";
 import { redactLearnerNames } from "@/lib/persona-voice";
+import { enqueueWorkspaceCommand } from "@/lib/workspace-commands";
 
 export const runtime = "nodejs";
 
@@ -51,6 +52,17 @@ const requestSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("getPersonaStyleMoments"),
     personaSlug: slug,
+  }).strict(),
+  z.object({
+    action: z.literal("enqueueWorkspaceCommand"),
+    sessionId: z.string().trim().min(1),
+    callId: z.string().trim().min(1),
+    tool: z.string().trim().min(1).max(80),
+    input: z.unknown().optional(),
+  }).strict(),
+  z.object({
+    action: z.literal("finishSession"),
+    sessionId: z.string().trim().min(1),
   }).strict(),
 ]);
 
@@ -278,6 +290,16 @@ export async function POST(request: Request) {
       resume: resumePayload,
       uiState: (session?.runtimeState as Record<string, unknown> | null)?.uiState ?? null,
     });
+  }
+
+  if (input.action === "enqueueWorkspaceCommand" || input.action === "finishSession") {
+    return Response.json(await enqueueWorkspaceCommand({
+      orgId,
+      sessionId: input.sessionId,
+      callId: input.action === "finishSession" ? `finish-${input.sessionId}` : input.callId,
+      tool: input.action === "finishSession" ? "finish_session" : input.tool,
+      payload: input.action === "finishSession" ? {} : input.input,
+    }));
   }
 
   if (input.action === "getPersonaStyleMoments") {

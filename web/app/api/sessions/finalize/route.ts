@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { resolveSessionEndStatus, type SessionEndStatus } from "@/lib/interview-sessions";
+import { type SessionEndStatus } from "@/lib/interview-sessions";
+import { closeInterviewSession } from "@/lib/session-lifecycle";
 import { resolveSessionUser } from "@/lib/session-user";
 import { LearnerMemoryService } from "@/lib/learner-memory";
 
@@ -41,19 +42,10 @@ export async function POST(request: Request) {
   const hasCanonicalEvidence =
     existing.evidence && typeof existing.evidence === "object" && Object.keys(existing.evidence).length > 0;
 
-  await db.$transaction([
-    db.interviewSession.update({
-      where: { id: String(body.sessionId) },
-      data: {
-        status: resolveSessionEndStatus(existing.status, requestedStatus),
-        endedAt: new Date(),
-        runtimeTokenHash: null,
-        ...(!hasCanonicalTranscript && transcript ? { transcript } : {}),
-        ...(!hasCanonicalEvidence && evidence ? { evidence } : {}),
-      },
-    }),
-    db.rolePlayAssignment.deleteMany({ where: { sessionId: String(body.sessionId) } }),
-  ]);
+  await closeInterviewSession(String(body.sessionId), requestedStatus, {
+    ...(!hasCanonicalTranscript && transcript ? { transcript } : {}),
+    ...(!hasCanonicalEvidence && evidence ? { evidence } : {}),
+  });
 
   const effectiveTranscript = (hasCanonicalTranscript ? existing.transcript : transcript) as
     | Array<{ speaker?: string; role?: string; text?: string }>

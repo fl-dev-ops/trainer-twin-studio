@@ -1,6 +1,6 @@
 # Scenario Deployment and Unified Session Runtime Plan
 
-**Status:** Planning only — implementation intentionally deferred  
+**Status:** Core runtime implemented on `feat/unified-session-runtime`; widget SDK and extra close-eval coverage still open
 **Integration branch:** `feat/unified-session-runtime`  
 **Baseline merge:** current `main` + `feat/agent-ui-state`  
 
