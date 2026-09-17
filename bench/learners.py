@@ -122,6 +122,28 @@ def all_learners() -> list[dict]:
     return LEARNERS
 
 
+def document_grounded_learner(name: str, document_name: str, document_text: str) -> dict:
+    return {
+        "id": "uploaded-document",
+        "name": name,
+        "source": document_name,
+        "scenario": (
+            "Answer as the candidate described in the attached document. Ground experience claims in it, "
+            "do not adopt unrelated synthetic projects, and honestly qualify anything the document does not establish."
+        ),
+        "characteristics": f"""You are {name}, participating in a mock interview about your own attached document.
+
+ATTACHED DOCUMENT:
+{document_text}
+
+STYLE:
+- Answer naturally in 25-70 words.
+- Use only experiences supported by the document; do not invent ownership or metrics.
+- When pressed beyond the document, state the uncertainty and answer from reasonable personal recollection.
+""",
+    }
+
+
 def create_synthetic_learner_persona(name: str | None = None) -> Persona:
     spec = next((item for item in LEARNERS if item["name"] == name), LEARNERS[0])
     return Persona(name=spec["name"], characteristics=spec["characteristics"].strip())

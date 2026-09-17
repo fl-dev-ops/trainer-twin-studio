@@ -1,25 +1,32 @@
 import { defineTool, type ToolDefinition } from "eve/tools";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
+import { studioFetch } from "./studio";
 
 /**
- * Factory for TRANSPORT-EXECUTED tools. These declare the exact tools the
- * LiveKit transport (Python agent) owns and executes over room RPC to drive
- * the browser workspace. Inside eve they resolve to a marker result so the
- * model can keep speaking in the same turn; the openai-compat channel streams
- * the tool call to the transport, which performs the real work and returns
- * results that arrive as [TOOL RESULT] user messages.
+ * Browser-executed workspace tools. Chat records a durable command, the page
+ * executes it, then this waiter returns the confirmed result to the tool loop.
  */
 export function transportTool(
   description: string,
   inputSchema: StandardSchemaV1<Record<string, unknown>>,
-  execute?: (input: Record<string, unknown>) => unknown,
 ): ToolDefinition<never, unknown> {
   return defineTool({
     description,
     inputSchema: inputSchema as never,
-    async execute(input) {
-      if (execute) return execute(input as Record<string, unknown>);
-      return { status: "ok", transport: "livekit" };
+    async execute(input, ctx) {
+      const orgId = ctx.session.auth.initiator?.principalId ?? ctx.session.auth.current?.principalId;
+      const sessionId = String(ctx.session.auth.current?.attributes?.sessionId ?? "");
+      if (!orgId || !sessionId) throw new Error("No session attached to this conversation");
+      if (ctx.toolName === "finish_session") {
+        return studioFetch(orgId, { action: "finishSession", sessionId });
+      }
+      return studioFetch(orgId, {
+        action: "enqueueWorkspaceCommand",
+        sessionId,
+        callId: ctx.callId,
+        tool: ctx.toolName,
+        input,
+      });
     },
   });
 }

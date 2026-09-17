@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { defineChannel, POST, type Session } from "eve/channels";
 import { studioPrincipal } from "../lib/auth";
 
@@ -11,27 +12,7 @@ import { studioPrincipal } from "../lib/auth";
  * - On HTTP abort (learner barge-in), triggers cooperative session cancellation.
  */
 
-/** Tools executed by the transport (Python) over room RPC — forwarded as tool_calls. */
-const TRANSPORT_TOOLS = new Set([
-  "surface",
-  "finish_session",
-  "workspace_request",
-  "read_canvas_scene",
-  "highlight_canvas_element",
-  "add_canvas_component",
-  "clear_canvas",
-  "read_code_range",
-  "highlight_code",
-  "highlight_whiteboard",
-  "get_code_state",
-  "run_code",
-  "get_presentation_state",
-  "set_presentation_slide",
-  "next_presentation_slide",
-  "previous_presentation_slide",
-]);
-
-/** Pure side-effect transport tools that do not require conversational follow-up speech. */
+/** Pure side-effect tools that do not require conversational follow-up speech. */
 const PURE_SIDE_EFFECT_TOOLS = new Set([
   "surface",
   "finish_session",
@@ -125,8 +106,27 @@ type StreamEvent = {
   };
 };
 
+function serviceAuthorized(request: Request) {
+  const expected = process.env.COPILOT_SERVICE_SECRET;
+  const actual = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  if (!expected || !actual) return false;
+  const left = Buffer.from(actual);
+  const right = Buffer.from(expected);
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
 export default defineChannel({
   routes: [
+    POST("/internal/sessions", async (request, { resolveSession }) => {
+      if (!serviceAuthorized(request)) return Response.json({ error: "Unauthorized" }, { status: 401 });
+      const orgId = request.headers.get("x-trainertwin-org-id")?.trim();
+      const body = await request.json().catch(() => null) as { sessionId?: unknown; mode?: unknown } | null;
+      const sessionId = typeof body?.sessionId === "string" ? body.sessionId.trim() : "";
+      if (!orgId || !sessionId || !["chat", "voice"].includes(String(body?.mode))) {
+        return Response.json({ error: "orgId, sessionId, and mode are required" }, { status: 400 });
+      }
+      return Response.json({ ready: true, sessionId, existing: Boolean(await resolveSession(sessionId)) });
+    }),
     POST("/v1/chat/completions", async (request, { from, resolveSession }) => {
       const principal = studioPrincipal(request);
       const orgHeader = request.headers.get("x-trainertwin-org-id")?.trim();
@@ -202,6 +202,7 @@ export default defineChannel({
         orgId,
         sessionId,
         mode,
+        clientTools: [...advertisedTools].sort().join(","),
         ...(requestedModel ? { model: requestedModel } : {}),
       };
       const agentSlug = request.headers.get("x-trainertwin-agent-slug")?.trim();
@@ -250,16 +251,14 @@ export default defineChannel({
       const writeChunk = (payload: unknown) => writer.write(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
 
       void (async () => {
-        let sawToolCall = false;
         let sawActivity = false;
         let sawTurnStarted = false;
-        let toolIndex = 0;
         let ttftMs: number | null = null;
         let tFirstEvent = 0;
         let usage: { inputTokens?: number; outputTokens?: number } | null = null;
         const allToolsCalled: { name: string; callId: string; input: unknown }[] = [];
         const retrievalTraces: { callId: string; input: unknown; output: unknown }[] = [];
-        const finishReason = () => (sawToolCall ? "tool_calls" : "stop");
+        const finishReason = () => "stop";
 
         try {
           while (true) {
@@ -288,36 +287,11 @@ export default defineChannel({
               continue;
             }
 
-            // Tool execution requests
             if (ev.type === "actions.requested" && Array.isArray(ev.data.actions)) {
               for (const action of ev.data.actions) {
-                if (action.kind !== "tool-call") continue;
-                allToolsCalled.push({ name: action.toolName, callId: action.callId, input: action.input });
-
-                if (!TRANSPORT_TOOLS.has(action.toolName)) continue;
-                // If client advertised tools, only forward tools the client advertised
-                if (advertisedTools.size > 0 && !advertisedTools.has(action.toolName)) continue;
-
-                sawActivity = true;
-                sawToolCall = true;
-                await writeChunk({
-                  id: completionId,
-                  object: "chat.completion.chunk",
-                  created,
-                  model,
-                  choices: [{
-                    index: 0,
-                    delta: {
-                      tool_calls: [{
-                        index: toolIndex++,
-                        id: action.callId,
-                        type: "function",
-                        function: { name: action.toolName, arguments: JSON.stringify(action.input ?? {}) },
-                      }],
-                    },
-                    finish_reason: null,
-                  }],
-                });
+                if (action.kind === "tool-call") {
+                  allToolsCalled.push({ name: action.toolName, callId: action.callId, input: action.input });
+                }
               }
               continue;
             }
@@ -351,6 +325,17 @@ export default defineChannel({
 
             if (terminal && (sawActivity || sawTurnStarted)) {
               const wallMs = Date.now() - t_start;
+              console.info("[openai-compat] turn timing", {
+                sessionId,
+                mode,
+                resolve_session_ms: t_resolved - t_start,
+                get_tail_ms: t_tail - t_resolved,
+                session_send_ms: t_sent - t_tail,
+                stream_attach_ms: t_stream - t_sent,
+                first_event_ms: tFirstEvent,
+                first_token_ms: ttftMs,
+                total_turn_ms: wallMs,
+              });
               await writeChunk({
                 id: completionId,
                 object: "chat.completion.chunk",

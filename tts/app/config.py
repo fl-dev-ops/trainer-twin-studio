@@ -35,4 +35,8 @@ TTS_CHUNK_TARGET_SECONDS = _float("TTS_CHUNK_TARGET_SECONDS", 11.0)
 TTS_CHUNK_MAX_SECONDS = _float("TTS_CHUNK_MAX_SECONDS", 15.0)
 TTS_WORDS_PER_SECOND = _float("TTS_WORDS_PER_SECOND", 2.5)
 
+# In-memory voice metadata cache TTL (seconds). Eliminates Next.js roundtrip on every turn
+# and stabilizes the S3 presigned URL so vLLM internal ref_audio cache hits.
+VOICE_CACHE_TTL_SECONDS = _float("VOICE_CACHE_TTL_SECONDS", 300.0)
+
 API_KEY = os.environ.get("TTS_API_KEY")  # bearer check on OUR endpoints; unset = open

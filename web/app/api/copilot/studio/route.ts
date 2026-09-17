@@ -6,6 +6,7 @@ import { specDraftBundleSchema } from "@/lib/spec-draft-schema";
 import { publishSpecDraft, readSpecDraft, saveSpecDraft } from "@/lib/spec-drafts";
 import { MainCollectionService } from "@/lib/main-collection";
 import { redactLearnerNames } from "@/lib/persona-voice";
+import { enqueueWorkspaceCommand } from "@/lib/workspace-commands";
 
 export const runtime = "nodejs";
 
@@ -51,6 +52,17 @@ const requestSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("getPersonaStyleMoments"),
     personaSlug: slug,
+  }).strict(),
+  z.object({
+    action: z.literal("enqueueWorkspaceCommand"),
+    sessionId: z.string().trim().min(1),
+    callId: z.string().trim().min(1),
+    tool: z.string().trim().min(1).max(80),
+    input: z.unknown().optional(),
+  }).strict(),
+  z.object({
+    action: z.literal("finishSession"),
+    sessionId: z.string().trim().min(1),
   }).strict(),
 ]);
 
@@ -125,13 +137,17 @@ export async function POST(request: Request) {
 
     const agentSlug = session?.agentSlug ?? input.agentSlug;
     const personaSlug = session?.personaSlug ?? input.personaSlug;
+    const domainSlug = session?.domainSlug;
 
-    const [agent, persona, sharedKnowledgeBase] = await Promise.all([
+    const [agent, persona, domain, sharedKnowledgeBase] = await Promise.all([
       agentSlug
         ? db.agent.findFirst({ where: { slug: { equals: agentSlug, mode: "insensitive" }, orgId }, select: { slug: true, version: true, data: true } })
         : null,
       personaSlug
         ? db.persona.findFirst({ where: { slug: { equals: personaSlug, mode: "insensitive" }, orgId }, select: { slug: true, version: true, data: true } })
+        : null,
+      domainSlug
+        ? db.domain.findFirst({ where: { slug: domainSlug, orgId }, select: { slug: true, version: true, data: true } })
         : null,
       db.knowledgeBase.findFirst({
         where: {
@@ -241,11 +257,23 @@ export async function POST(request: Request) {
       sessionId: session?.id ?? input.sessionId ?? null,
       agent: agent ?? null,
       persona: persona ?? null,
+      domain: domain ?? null,
       knowledgeBases: sharedKnowledgeBase ? [sharedKnowledgeBase] : [],
       documents: Array.from(docMap.values()),
       learnerName,
       resume: resumePayload,
+      uiState: (session?.runtimeState as Record<string, unknown> | null)?.uiState ?? null,
     });
+  }
+
+  if (input.action === "enqueueWorkspaceCommand" || input.action === "finishSession") {
+    return Response.json(await enqueueWorkspaceCommand({
+      orgId,
+      sessionId: input.sessionId,
+      callId: input.action === "finishSession" ? `finish-${input.sessionId}` : input.callId,
+      tool: input.action === "finishSession" ? "finish_session" : input.tool,
+      payload: input.action === "finishSession" ? {} : input.input,
+    }));
   }
 
   if (input.action === "getPersonaStyleMoments") {

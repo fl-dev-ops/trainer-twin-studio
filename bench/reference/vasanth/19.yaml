@@ -1,0 +1,513 @@
+id: "19"
+title: React Problem-Solving Interview - 2 Years Experience
+source: 19 - React Problem-Solving Interview - 2 Years Experience
+duration: "00:19:10"
+track: frontend
+topics: [system-design, video-calling, tcp-udp, websockets, react, machine-coding, setinterval, usememo, react-memo]
+seniority: mid
+participants:
+  interviewer: Vasanth
+  candidate: Chandrashekhar
+  candidate_experience_years: 2
+
+problem: >-
+  Build a React UI with four buttons A, B, C and D. Clicking a button appends
+  that character plus an arrow to a chain shown on screen. Variation two - if
+  the clicked character is already present in the chain, remove it from its
+  current position and move it to the front of the chain.
+
+# Sarvam gave 3 speaker ids for 2 people. Speaker 2 is Vasanth throughout.
+# Speaker 1 is Chandrashekhar, and Speaker 3 is also Chandrashekhar (it appears
+# only during the screen-share segment, mostly as noise and short replies).
+# Every turn below was attributed by content, not by id.
+raw_speaker_ids:
+  interviewer: [2]
+  candidate: [1, 3]
+
+invariants:
+  - Turns strictly alternate interviewer -> candidate. No two consecutive same-role turns.
+  - No reference to a YouTube channel, video, subscriber, audience or viewer.
+  - No screen-sharing, editor or tool-operation instructions.
+  - Text is English in Latin script only.
+
+counts:
+  raw_entries: 184
+  clean_turns: 56
+
+removed:
+  monologue:
+    - span: "00:00:00-00:00:30"
+      what: Channel intro, series framing, "watch the video till the end" twice.
+    - span: "00:02:15-00:03:41"
+      what: >-
+        Sponsored ad read for a video-calling SDK - plug and play, UI kits,
+        free trial seconds, "I would suggest you and all the fellow developers
+        to use it". Not interview content.
+    - span: "00:19:03-00:19:10"
+      what: Outro - like the video, comment, share with your friends.
+  self_promotion:
+    - "00:10:51 - 'if audience who are watching the video feel there is a better approach, post it in the comment section'"
+    - "00:15:07 - 'yeah, audience also it increases'"
+    - "00:15:09 - 'audience also if you know the answers to this, please mention that in the comment section'"
+  logistics:
+    - "00:06:11 - 'can you please present your screen, Chandrashekhar'"
+    - "00:10:51 - 'I'm sharing a snippet with you in the chat section, please copy this'"
+    - "00:11:49 - 'can you try running the code, will it run, have you exported, please export it'"
+    - "00:15:39 - 'no, no, don't run, don't run'"
+    - "00:15:55 - 'now click on the button'"
+    - "00:16:08 - 'can we go back to the code now'"
+    - "00:16:54 - 'you can stop sharing, Chandrashekhar'"
+  backchannels: 62
+  asr_noise: 21
+
+corrections:
+  "index wrap": indexOf
+  "the account": the count
+  "it does get redone": it does get re-rendered
+  memoist: memoised
+  "your component handle will be printed": your "component rendered" will be printed
+  "at a few will do it": that will do it
+  "interviewer friendly approach": ask the interviewer whether he is comfortable with the approach
+  "Rest all the things whatever you did, look with me": the rest of what you did looks good to me
+name_note: >-
+  Sarvam alternates between "Chandrashekhar", "Chandrasekhar" and
+  "Chandrasekar". Normalised to Chandrashekhar throughout.
+uncertain:
+  - >-
+    00:07:43-00:08:21 - the coding stretch is almost entirely cross-talk noise
+    ("Oxford", "Book", "S is good"); only the two substantive lines survive.
+  - >-
+    00:10:24-00:10:48 - the UI walkthrough is a run of single letters and
+    "Hmm"s; compressed to one short interviewer turn.
+romanized: 0
+
+turns:
+  - t: "00:00:30"
+    role: interviewer
+    text: Chandrashekhar, if you can introduce yourself, we can get started.
+
+  - t: "00:00:33"
+    role: candidate
+    text: >-
+      Hi, my name is Chandrashekhar. On the education side of it, I've done my
+      engineering in computer science. And on the experience side of it, I've
+      been working as a front end developer using tools like React, Next.js,
+      HTML and CSS for the past two years.
+
+  - t: "00:00:54"
+    role: interviewer
+    text: >-
+      Wonderful. Wonderful. Let's get started immediately. Let's say,
+      Chandrashekhar, you have a scenario where you have to build a video
+      calling application, something like Google Meet. Okay? What are all the
+      challenges that come to your mind in that situation, building a video
+      calling application like that?
+
+  - t: "00:01:10"
+    role: candidate
+    restitched: true
+    text: >-
+      So, building a video calling application, let's say the first thing would
+      be security — as to how we are going to maintain the security of the
+      application, so that anyone who wants to join the call wouldn't be
+      allowed; just authorised persons would be allowed to join the call. The
+      other would be how we maintain the network. Maybe there is a different
+      bandwidth, or there is a switch between networks, as to how we handle
+      that. And another would be, if it is browser based video calling, then
+      there will be things like cross browser compatibility — the different
+      browsers, so how do we handle that. And there are other edge cases,
+      something like if the user has exited, or maybe there is some network
+      issue, so how do we handle it. We should have some hard exit or something
+      like that. And there would be providing access — how to integrate it with
+      your application.
+
+  - t: "00:02:15"
+    role: interviewer
+    restitched: true
+    text: >-
+      Correct. So as you rightly told, Chandrashekhar, along with that there
+      are multiple other problems whenever we are integrating video calling. So
+      now, getting back into the further questions on video calling,
+      Chandrashekhar. Okay? I'm sure — have you ever got a chance to work with
+      video calling in the past, Chandrashekhar?
+
+  - t: "00:03:42"
+    role: candidate
+    text: Yeah, I've had the opportunity to work with it.
+
+  - t: "00:03:45"
+    role: interviewer
+    text: >-
+      So my question is, see, we have to transfer video from person X to person
+      Y, correct? So video — at the end of the day there is nothing called media
+      that exists in reality; we have to convert it into some form that is
+      transferable, correct? So tell me which protocol we should use if we have
+      to transfer the video data between one user and another user.
+
+  - t: "00:04:07"
+    role: candidate
+    text: >-
+      Though we have — yeah, network protocols. We can use TCP or UDP. So based
+      on our preference, we can move.
+
+  - t: "00:04:15"
+    role: interviewer
+    text: >-
+      The primary difference — if you go with TCP and UDP, what do you think is
+      the primary difference, Chandrashekhar?
+
+  - t: "00:04:22"
+    role: candidate
+    restitched: true
+    text: >-
+      TCP would be trans— I think the security, and the two way communication,
+      and the other parameters like, let's say, bandwidth. Not very sure, but.
+
+  - t: "00:04:39"
+    role: interviewer
+    text: >-
+      Yeah, yeah, I mean, what you're saying is correct. TCP is very secure, no
+      data loss, all data is basically safely transferred. Whereas in the case
+      of UDP, some packet loss is possible. Okay? For a video calling
+      application I would suggest it's always good to use UDP rather than TCP,
+      because even if we find some packets are lost — for example, when we are
+      speaking, a couple of packets lost will not create a lot of problem. So
+      it's always good to use that.
+
+  - t: "00:05:01"
+    role: candidate
+    text: Live streaming.
+
+  - t: "00:05:02"
+    role: interviewer
+    text: >-
+      Yes, exactly. Correct? So let me ask you one fundamental question around
+      the same again, the video call interface. Let's say video has to be
+      transmitted from you to me — like Zoom, which we are using right now, or
+      Google Meet. Just explain to me the architecture: how is it going to
+      transfer from you and come to me? What are all the things that would
+      happen behind the scenes, at a high level?
+
+  - t: "00:05:25"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay, so let's say there are two people connected in the call. So first
+      there has to be a network connection, a socket has to be created, so both
+      are connected. And we have to use one form of, let's say, transmission
+      protocol — let's say if we are using UDP, we use UDP to transfer data from
+      one to another in a secure way. And maybe if it is very secure then it has
+      to be encrypted and decrypted or something, and the data has to be
+      converted and displayed.
+
+  - t: "00:05:59"
+    role: interviewer
+    text: Got it. Sure, sure. Anything else you want to add? Let me see.
+
+  - t: "00:06:04"
+    role: candidate
+    text: >-
+      So, something like a chat application — we can use something like
+      Socket.IO where we can...
+
+  - t: "00:06:11"
+    role: interviewer
+    restitched: true
+    text: >-
+      Yeah, that will do it, but some more interfaces can be added —
+      probably when you're building it, some more things can be added. Let's
+      solve a few problems. The problem is very simple, Chandrashekhar. Listen
+      to me very carefully, okay? The problem is you have to have four
+      characters, A, B, C, D. Consider this A, B, C, D as buttons. A is a
+      button, B is a button, C is a button, D is a button. Every time you click
+      a character — let's say you click on A — below you will be printing A and
+      an arrow mark.
+
+  - t: "00:06:47"
+    role: candidate
+    text: A and an arrow.
+
+  - t: "00:06:48"
+    role: interviewer
+    restitched: true
+    text: >-
+      Arrow. Okay, this arrow. You click on B, you're going to put B and an
+      arrow mark. You click on C, you're going to put C and an arrow mark. You
+      click on D, you put D and an arrow mark. Okay. So let's say you click the
+      same character a second time — like, for example, A B C D, and then you
+      click A again. Just add A to the end of the list. Am I clear on this?
+      Basically keep making it more like a train. You're making a train of all
+      of it. Can we start in this way? You have around ten to fifteen minutes to
+      solve it, as it's very straightforward.
+
+  - t: "00:08:02"
+    role: candidate
+    text: >-
+      But we can see the difference in the next one, because I put the console
+      inside this.
+
+  - t: "00:08:21"
+    role: interviewer
+    restitched: true
+    text: >-
+      Yeah, instead of logging, can you put it on the screen? Like, I want to
+      see the data — can you render it? Chandrashekhar, it's working, okay? So
+      let's slightly extend it now, Chandrashekhar. The ask is, let's say you
+      already have a character in the chain. For example, you have clicked on A
+      B C D, okay? Let's say you click on C again. C is already part of this
+      train, okay? So what we have to do is we have to remove that C and its
+      arrow mark, and put that C at the beginning of the list. For example, we
+      had A B C D. If you click on C again, it will become C A B D. C is
+      removed. Okay.
+
+  - t: "00:09:17"
+    role: candidate
+    text: >-
+      Okay, so if we have A B C D and if I click on C again, it has to be C A B
+      D.
+
+  - t: "00:09:24"
+    role: interviewer
+    restitched: true
+    text: >-
+      Correct. So whichever position it is in currently, that position has to be
+      sliced and it should be kept at the beginning. If for some reason it is
+      already at the beginning, okay? If it is already at the beginning, then
+      you don't have to do anything, you can just skip it. Get my point? Please
+      continue. You have five to seven minutes to implement this,
+      Chandrashekhar. If you want to know about some syntax, let me know.
+
+  - t: "00:09:47"
+    role: candidate
+    text: Yeah — to check the position of, let's say, a value.
+
+  - t: "00:09:51"
+    role: interviewer
+    restitched: true
+    text: >-
+      You want to know where that particular character is present? Then you can
+      use indexOf, right? Which one are you using? We have the last two to three
+      minutes, okay.
+
+  - t: "00:10:23"
+    role: candidate
+    text: Yeah, this works.
+
+  - t: "00:10:27"
+    role: interviewer
+    restitched: true
+    text: Click on D. No, not B D. Yeah, yeah, D, D. Okay, that's good.
+
+  - t: "00:11:20"
+    role: candidate
+    restitched: true
+    text: >-
+      So every second the value changes. So initially it's zero, then one, two,
+      three, four, five, six. So it will print — like, increase the value of...
+      No, it will print — no, no, it will print. Wait, just a second.
+
+  - t: "00:11:39"
+    role: interviewer
+    text: Please, please.
+
+  - t: "00:11:41"
+    role: candidate
+    text: >-
+      Yeah, so it will start from zero. For every second it will add a number —
+      it will be like zero, one, two, three, four, five, six.
+
+  - t: "00:12:17"
+    role: interviewer
+    text: >-
+      Okay. So every time it is basically incrementing the value of count.
+      Initially the value of count was zero, and we have an interval that is
+      running every one second. So because of which the value of the count keeps
+      incrementing. Correct? But if you observe, do you feel like the value of
+      count is changing every time, or the count value is always one? What is
+      it?
+
+  - t: "00:12:40"
+    role: candidate
+    text: So the value of count...
+
+  - t: "00:12:43"
+    role: interviewer
+    text: Is it always changing, right? Or is it always...
+
+  - t: "00:12:45"
+    role: candidate
+    text: That's strange.
+
+  - t: "00:12:46"
+    role: interviewer
+    text: >-
+      In line number twelve — line number twelve, if you remove the count, what
+      will happen? Don't remove it.
+
+  - t: "00:12:52"
+    role: candidate
+    text: >-
+      So if you remove the count and we refresh this one, then it will be zero,
+      it will not change.
+
+  - t: "00:13:01"
+    role: interviewer
+    text: Okay, please do that.
+
+  - t: "00:13:11"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay, one minute, sorry. So the first time it increases the value and it
+      remains there.
+
+  - t: "00:13:16"
+    role: interviewer
+    restitched: true
+    text: >-
+      Correct, correct. So here is another snippet, Chandrashekhar. Tell me, how
+      many times will the console.log be printed in this case? The question is
+      simple — how many times will the console.log be printed? Okay? Let that
+      error be there on line number nineteen so that you can guess. Actually,
+      that should be my...
+
+  - t: "00:13:53"
+    role: candidate
+    text: Okay, this should have a different name, right? MyComponent, okay.
+
+  - t: "00:13:56"
+    role: interviewer
+    restitched: true
+    text: >-
+      Don't give that. For a while, let's imagine whether the code would run.
+      Okay, let's imagine line number three is a different name. Okay? The ask
+      would be, how many times will the console.log be printed? Let's assume
+      line number three is MyComponent actually. Okay? Or else we can do another
+      thing — like in the export default, right, instead of App you make it
+      something else, so that anyhow you'll get an error. Yeah. And line number
+      three you make as MyComponent. Now, yes, the output. Basically I want to
+      know how many times the console.log is printed. That's my question.
+
+  - t: "00:14:38"
+    role: candidate
+    text: >-
+      Is it like the first time when it renders, or every time we click on
+      increment — how many times? First time when the component renders?
+
+  - t: "00:14:47"
+    role: interviewer
+    text: >-
+      So let's see. Okay, I'll tell you. Let's say you run the code, okay, and
+      then you keep clicking on the button. Let's imagine. You can tell it that
+      way. Like, let's say for example, first it will be shown once, then every
+      time you click on the button it will keep incrementing. Like that you can
+      tell, okay?
+
+  - t: "00:15:08"
+    role: candidate
+    text: So it increases every...
+
+  - t: "00:15:09"
+    role: interviewer
+    text: Yeah, yeah, very, very exactly.
+
+  - t: "00:15:20"
+    role: candidate
+    restitched: true
+    text: >-
+      Yeah. So every time we click on increment, we will have a console log. We
+      use memo here and we are changing the props value, so it does get
+      re-rendered every time we change the value.
+
+  - t: "00:15:33"
+    role: interviewer
+    restitched: true
+    text: >-
+      So, yeah, let's say you run the code — the first time, "component
+      rendered" will be printed. Correct? Your "component rendered" will be
+      printed once. Then every time you click on the increment button, it's
+      going to be printed. Am I right, Chandrashekhar?
+
+  - t: "00:15:50"
+    role: candidate
+    text: Yeah, yes.
+
+  - t: "00:15:55"
+    role: interviewer
+    restitched: true
+    text: >-
+      Okay, "component rendered" — I am able to see it once. Yes, please. So
+      let's check once again. We have a memoised component, correct, in line
+      number three. Can you briefly talk about what a memoised component is?
+
+  - t: "00:16:25"
+    role: candidate
+    restitched: true
+    text: >-
+      Sorry — what is a memoised component? So memoised components are the ones
+      where we can avoid re-rendering if the prop that we have passed to it has
+      not changed.
+
+  - t: "00:16:41"
+    role: interviewer
+    restitched: true
+    text: >-
+      Okay, carry on. So because of this reason, what is happening is, every
+      time you click increment, as the value of count is changing the child
+      component is also changing. Correct? For example, if instead of count you
+      would have passed some other prop to the child component, it would not
+      have re-rendered. Correct, Chandrashekhar? Okay. We are at the last — I
+      think we have just two more minutes left. I'm done from my end,
+      Chandrashekhar. I have noted down my feedback. Before I share my feedback,
+      do you have any questions for me, Chandrashekhar?
+
+  - t: "00:17:11"
+    role: candidate
+    text: No, I have no questions.
+
+  - t: "00:17:12"
+    role: interviewer
+    restitched: true
+    text: >-
+      See, Chandrashekhar, I'll tell you. First, the way you are able to solve a
+      problem — that A B C D problem, right? So you are able to think through a
+      problem very quickly and solve it, which is good. Okay? And even the
+      guess-the-output type of questions as well. I know they are not very hard,
+      they are more like easy to medium sort of questions, but still you are
+      able to guess how the program would execute and guess the output almost
+      accurately, Chandrashekhar, which is good. A couple of suggestions that I
+      wanted you to improve on, Chandrashekhar, are — especially in the machine
+      coding problem, right? Let's take the first variation: very clearly, from
+      A B C D we keep forming the chain, right? You did not ask me how long the
+      chain would keep continuing, right? So always make sure whenever such
+      questions come, you ask the extremities. The reason why I'm saying this is
+      that you cannot keep doing that, right? Somewhere it should end. Otherwise
+      you end up taking all the memory, right? Ask those questions — that's one.
+      Point number two, do not start debugging all of a sudden whenever such
+      problems come. Even if you have to debug, take the interviewer's
+      permission. Point number three, before running the code always ask the
+      interviewer. Don't run by yourself. Also, point number four I would want
+      to suggest is, get a buy-in on the approach. Like, ask the interviewer, are
+      you comfortable with this approach? Because if you're stuck somewhere, he
+      should help. Correct? This is at a very high level. The rest of the things,
+      whatever you did, look good to me. If I were interviewing you with the
+      questions that I asked, I would definitely select you, correct? Okay. Any
+      closing thoughts?
+
+  - t: "00:18:46"
+    role: candidate
+    restitched: true
+    text: >-
+      The interview was really good — the questions and all of that. So I look
+      forward to maybe taking another interview, if it's possible, something a
+      level up.
+
+  - t: "00:18:59"
+    role: interviewer
+    text: >-
+      Sure, sure, sure, sure. Thank you so much. Yeah, thank you so much for
+      your feedback. Thank you.
+
+  - t: "00:19:00"
+    role: candidate
+    text: Thank you so much. Thank you.

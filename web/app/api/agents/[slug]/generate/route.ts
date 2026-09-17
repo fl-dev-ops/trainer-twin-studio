@@ -20,6 +20,7 @@ const inputSchema = z.object({
   voiceId: z.string().optional(),
   publish: z.boolean().optional(),
   interviewConfig: interviewConfigSchema,
+  contextPrompt: z.string().trim().max(500).optional(),
 });
 
 const GENERIC_SAVE_ERROR = "Failed to save the change, try again in a few seconds";
@@ -93,6 +94,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       personaName: persona.name,
       knowledgeBase,
       interviewConfig,
+      contextPrompt: input.data.contextPrompt,
       previous: draft
         ? { instruction: draft.agent.instruction, agent: draft.agent, domain: draft.domain }
         : published

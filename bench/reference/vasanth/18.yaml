@@ -1,0 +1,633 @@
+id: "18"
+title: Angular to React Mock Interview - 2 Years Experience
+source: 18 - Angular to React Mock Interview - 2 Years Experience
+duration: "00:24:18"
+track: frontend
+topics: [javascript, expression-evaluation, stack, undo-redo, react, useeffect, setinterval, machine-coding]
+seniority: junior
+participants:
+  interviewer: Vasanth
+  candidate: Vishal
+  candidate_experience_years: 2
+problem: >-
+  Implement a password strength checker in React - a function that accepts a
+  password string and reports whether it is strong (must contain a lowercase
+  letter, an uppercase letter and a digit), then wire it up to an input box.
+
+# Sarvam gives three ids for two people. Vasanth is mostly id 3 but also
+# surfaces as id 1 (00:12:16, 00:12:19); Vishal is mostly id 2 but also surfaces
+# as id 1 (00:02:51, 00:11:04, 00:13:26). Every turn below was attributed by
+# content, not by id.
+raw_speaker_ids:
+  interviewer: [3, 1]
+  candidate: [2, 1]
+
+invariants:
+  - Turns strictly alternate interviewer -> candidate. No two consecutive same-role turns.
+  - No reference to a YouTube channel, video, subscriber, audience or viewer.
+  - No screen-sharing, editor or tool-operation instructions.
+  - Text is English in Latin script only.
+
+counts:
+  raw_entries: 204
+  clean_turns: 67
+
+removed:
+  monologue:
+    - span: "00:00:00-00:00:44"
+      what: >-
+        Channel intro, "watch the video till the end", promise to give the right
+        answers at the end of the video.
+    - span: "00:24:09-00:24:18"
+      what: Outro - like the video, subscribe to the channel, see you in the next video.
+  self_promotion:
+    - "00:01:24-00:02:51 - sponsored read for a third-party video-calling SDK: brand name, 'I've told about this product in the past as well', 'ten thousand free seconds', sign-up pitch. The genuine technical content (complexity of video calling, protocol choice, cross-browser support, group vs one-to-one chat, in-room messages, use a ready-made UI kit) is kept; the advertisement is removed."
+    - "00:09:52 - 'for audience who are watching the right answer is stack' -> 'the right answer is stack'"
+    - "00:11:22 - 'even the audience should not get confused' / 'Audience also I'm saying again'"
+    - "00:12:25 - entire turn addressed to viewers explaining how far along Vishal is with React"
+    - "00:13:36 - 'just advice to you and everyone who is watching the video' -> 'just advice to you'"
+    - "00:14:34 - 'audience watching the video you guys can also practice this in parallel... put your code in the comment section or create a gist... I will verify it'"
+    - "00:18:36 - 'if audience know the answer you can pause the video... mention question number two and your answer in the comment section'"
+    - "00:21:16 - 'let me give my feedback to you and audience whoever has watched the video... if you enjoyed please like and comment' and 'I'm not gonna explain anything that Vishal has given a wrong answer'"
+    - "00:23:29 - 'you are watching my video on YouTube, tomorrow if you have to implement this' -> neutral 'when you use an application'"
+  logistics:
+    - "00:02:52 - 'I'm presenting a whiteboard' / 'I'm drawing on the screen' / 'I'm quickly drawing few things'"
+    - "00:10:22 - 'stop sharing this Vishal, can you please open code sandbox and search for React JS'"
+    - "00:13:12 - 'you can hold and drag down that widget, you can expand it, drag it somewhere on the screen'"
+    - "00:15:54-00:16:00 - 'how to view the console here' / 'you see a console in the bottom right'"
+    - "00:16:32 - 'you can refresh it'"
+    - "00:17:29 - 'can you go to the same snippet again, hold left'"
+    - "00:18:36 - 'copy the snippet, I'll put it in the chat section, you can replace your code with this code, I don't have to run it'"
+    - "00:21:07 - 'you can stop sharing'"
+  backchannels: 68
+  asr_noise: 22
+
+corrections:
+  "Google Calendar, sorry, Google Calculator": Google Calculator
+  "one plus two square three": one plus two star three
+  "unknown redo": undo, redo
+  "if the user list like want to undo it": if the user wants to redo it
+  "press it this function": pass it to this function
+  "task of function": it's a function
+  "Rapid Passing Stream": directly passing a string
+  "save it for re-entry": save it for re-render
+  "this whole dot clock": console.log
+  "line number fifty twenty five": line number twenty five
+  "this is an ASCII thing": this is an async thing
+  "it won't draw": it won't run
+uncertain:
+  - "00:08:02 - Vasanth states the candidate is from a mechanical background; Vishal never says this himself in the recording. Kept as spoken."
+  - "00:16:52 - 'one one five' is the char-code output being logged; kept verbatim."
+# Tamil appears three times (00:01:20 'antha', 00:02:51 'yes ok', 00:11:04
+# 'vanakkam'); all three are backchannels or stray noise and were deleted, so no
+# turn below carries a Tamil source. The two romanized turns are Devanagari.
+romanized: 2
+
+turns:
+  - t: "00:00:44"
+    role: interviewer
+    text: Vishal, if you can introduce yourself, we can get started.
+
+  - t: "00:00:48"
+    role: candidate
+    text: >-
+      Sure, Vasanth. Hey Vasanth, good afternoon. I am Vishal. I'm a front end
+      engineer. I'm working as a front end engineer for the last two years, in a
+      startup. That's it about me.
+
+  - t: "00:01:00"
+    role: interviewer
+    text: Sure, sure Vishal. Shall we start the interview now, Vishal?
+
+  - t: "00:01:03"
+    role: candidate
+    text: >-
+      Yes. Before that I have a doubt. I have been interested in a project which
+      is used for video call recording. I am facing some problems in that
+      regarding group chat building, and reducing the screen size, like styling
+      for different screen sizes. And many more problems as well. Can you give me
+      a solution for that?
+
+  - t: "00:01:24"
+    role: interviewer
+    restitched: true
+    text: >-
+      Good that you brought this question up. See, video calling is one of the
+      most complex features to build. Though tools like Zoom and Google Meet look
+      very simple, it's not very easy to build if you are given such a project,
+      okay? One of the primary challenges is to build the product end to end,
+      right? So we have to go and decide which protocol to use, how to handle
+      cross browser support, how to handle group chat, how to handle one-on-one
+      chat. And it's not just about the video calling — there is audio calling,
+      there is any other multimedia sort of calling involved. And the questions
+      you asked: how do we handle the dynamic layouts, how do we handle the
+      beautification of the face, how do we handle in-room messages, whenever you
+      are on a call and you have to send some messages. My suggestion is to take
+      a ready-made SDK with UI kits for all of that rather than building it
+      yourself. Hope that clarifies your doubt, Vishal. Okay? Sure, now let us
+      start with a very interesting question, Vishal. Recently I've asked this
+      question multiple times in the interviews. Let's say we have to build a
+      tool similar to Google Calculator. For example, a typical example of how a
+      Google Calculator would look. The Google Calculator is, whenever you type
+      something like two plus two on the Google search and you hit enter, right,
+      you'll be prompted with a calculator, correct? I think this is the area
+      where usually the user would type something. For example, you type one plus
+      two here and you click on equal to, and you will get the answer, correct?
+      Or you can use one plus, you can click on this button, and you are going to
+      get the output. So now my question is, let's say you have to build a
+      feature like this in the browser, Vishal, okay? The UI I have already built
+      — building UI is not a great challenge. Now, after building the UI, you have
+      to basically process the equation to give answers, right? Let's start from
+      there. How is it that you are going to solve the problem? Let's say one plus
+      two star three is there. You have to process this equation to give the
+      results, right? What all things come to your mind as a part of building
+      this? Please tell me.
+
+  - t: "00:04:20"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay, we can use reusable functions — like we can create functions, one for
+      addition and one for multiplication and one for division. What you will do
+      is, when the user clicks on equal to, you will store the value in some
+      variable, a local variable. What you will do is you will first get the
+      inputs from it. So while the user clicks on plus, in the back end what we
+      will do is we will just add the function name and the argument as two. So
+      one plus one and that argument. I mean sorry, one comma that argument, and
+      then after that the next thing will come, like with this value and
+      multiplication with three — that multiply function we will call.
+
+  - t: "00:05:02"
+    role: interviewer
+    text: >-
+      So Vishal, tell me one thing. Is this something you're going to do in the
+      back end, or does all of this processing happen only on the front end, the
+      client side?
+
+  - t: "00:05:10"
+    role: candidate
+    text: Client side I'm going to do.
+
+  - t: "00:05:11"
+    role: interviewer
+    romanized: true
+    text: Complete processing happens on the client side, correct? No back end is involved.
+
+  - t: "00:05:14"
+    role: candidate
+    text: Simple thing, okay. We don't need to do anything in the back end for this.
+
+  - t: "00:05:17"
+    role: interviewer
+    text: >-
+      So now, as you told me, we have one plus two star three, correct? So you
+      have to process the equation. Will you start processing after the user hits
+      equal to, or before that?
+
+  - t: "00:05:27"
+    role: candidate
+    text: After the user clicks equal to.
+
+  - t: "00:05:28"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      Okay. After the user clicks on equal to, you have one plus two star three,
+      which is typically in a string format. It's in a string. You cannot put it
+      as a number, because we have the expression plus and star. So it's in a
+      string format. So copying that entire string, one plus two star three,
+      okay? And you are basically processing that, correct? So you told me you're
+      going to create multiple methods for plus, addition, subtraction,
+      multiplication. So how are you going to process this one plus two star
+      three? Can you please quickly tell me?
+
+  - t: "00:05:57"
+    role: candidate
+    text: >-
+      We can store those separate characters, like the plus and the
+      multiplication and the division, in a separate string, and you will check
+      if the current element of the string is present in that.
+
+  - t: "00:06:10"
+    role: interviewer
+    text: >-
+      No, no, not that. For example, I have given you one plus two star three and
+      you have a function like calculate. What is the first thing that you are
+      going to do? Can you please tell me?
+
+  - t: "00:06:19"
+    role: candidate
+    text: When the user clicks equal to, right?
+
+  - t: "00:06:20"
+    role: interviewer
+    text: >-
+      Yes. So when you use a function, you called a function called calculate. The
+      calculate function has the expression one plus two star three. What is the
+      first thing that you are going to do in that function? Please tell me.
+
+  - t: "00:06:33"
+    role: candidate
+    restitched: true
+    text: >-
+      I'll run a loop using that string. What I'll do is, when the first element
+      comes in, I'll check if any of the symbols is present in that first element.
+      If it's not, it should be a number, because we can't type anything directly
+      other than a number. So I'll just parse it and I'll add it to a separate
+      number thing. And then I'll check the next one, the next one. Since it is a
+      symbol here — even if it's another number, then you will have a number
+      followed by another number. So it should be like one plus one and one, it's
+      eleven. So what we will do is we will multiply that number into ten and plus
+      that number, so it becomes one number. Then we check that symbol. So since
+      this is a plus symbol, for that plus we will be allocating that one
+      function, right? So we have that one separately, and we pass it to this
+      function. So we will send that next argument as the next number or symbol —
+      the next one should be a number, because we can't give two symbols
+      continuously. Next we will check that number, and then we will check if
+      continuously we are getting any number like twenty two or something. If
+      there is nothing, then followed by only a symbol, we will just pass the
+      value to that number. And whatever value we are getting, we will return it
+      and add it to that term.
+
+  - t: "00:08:02"
+    role: interviewer
+    restitched: true
+    text: >-
+      Sure, sure. Sounds good, Vishal. See, I think while introducing yourself you
+      did not say this — basically you are from a mechanical background, correct?
+      And you are turning to IT because of interest. I think in the second, third
+      or fourth semester most universities will have this thing of evaluating an
+      expression. There are different ways to evaluate an expression, like infix,
+      postfix and different ways. How do they evaluate an expression? That is
+      where this is actually taught. So it's correct, but there is a more formal
+      approach to solve it. Only one last question I'll ask regarding this and
+      then probably we'll go to the other problem. As you are doing this in the
+      Google Calculator, or anywhere else you might have seen, there is an undo
+      and redo operation, correct? So you have star three — I mentioned one plus
+      two, then I entered star and three. Now if I do control plus Z, right, the
+      star three vanished, correct? I did control shift Z, star three appeared
+      again. Getting my point, right? It was removed and star three reappeared
+      again. If you have to create this feature, the undo and redo operation,
+      okay, which data structure will you use, Vishal? That is my question. Which
+      data structure will you use, and why?
+
+  - t: "00:09:15"
+    role: candidate
+    text: Undo, redo — okay, correct. I will use, most probably, an object data structure.
+
+  - t: "00:09:24"
+    role: interviewer
+    text: >-
+      So why? Basically you can take any data structure, but the question will be
+      why — why you are using that particular data structure.
+
+  - t: "00:09:30"
+    role: candidate
+    text: >-
+      Object or array, we can use both. We can store every single option, like
+      symbol and number, as a separate element, and when the user clicks control
+      Z you will just remove it, and usually you will catch it in a different
+      variable, because if the user wants to redo it, we can push it back to the
+      array.
+
+  - t: "00:09:52"
+    role: interviewer
+    restitched: true
+    text: >-
+      Got it. Got it. It's not a wrong answer, but the right answer is stack,
+      actually. Okay? The stack is where you're going to keep pushing the
+      operations. Like for example, one you entered — the first value is one; then
+      you entered one plus, that is the next entry; then one plus two is the next
+      entry; one plus two star three is the next expression. Okay, you do control
+      Z. You're going to pop the top value, and whatever is at the top at that
+      point in time, that we are going to show on the UI. The same thing we are
+      going to keep doing. Redo is also very simple. Whatever you removed from the
+      undo stack, you're going to put it in the redo stack. When you do redo,
+      whatever is at the top of the redo, you're going to pick it and put it on
+      the stack of the undo operation. So you're going to use two stacks, one to
+      perform undo, one to perform the redo, okay? So the question, Vishal, is
+      very simple, okay? The question is you have to implement a password strength
+      checker, where you will have a function. Okay? Let's break it into two
+      things. First thing is, you have an input text box. Whatever the user enters
+      in the input text box, that's going to be passed into a function, correct?
+      And within that function you need to check whatever the password strength
+      is. You need to render out that password strength on the UI — whether it's
+      weak, medium or strong. Three things you need to represent. Okay? Let me
+      tell you the conditions. Or else we can make it even more simplified. If a
+      password has a capital case, a small case and a number, it's a strong
+      password. Getting my point? If a password has a small case, a capital case
+      and a number, then it is a strong password. You write a function which
+      accepts a password and tells whether that particular password is strong or
+      not. So we are not taking weak, strong and all, we are just only checking
+      whether a password is strong or not. Okay? If a password has only a small
+      character and a capital character, it should tell it's not a strong
+      password. Only when there's a small character, a capital character and a
+      number, then it should tell it's a strong password. First implement that
+      function. Okay? And you could just log the output. Once after you complete
+      it successfully, then we will try to integrate that into an input box. You
+      have around ten to twelve minutes to implement this. Okay. Please go ahead
+      and start writing that function.
+
+  - t: "00:12:52"
+    role: candidate
+    restitched: true
+    text: >-
+      So for this, I think the solution I will be thinking of is checking the
+      character code for this. Character code is like, for capital letters there
+      will be a range of character code, and for numbers there will be a range of
+      character code, and for small characters there will be a range of character
+      code. I am not aware of that syntax as of now. Can I use Google for
+      searching?
+
+  - t: "00:13:12"
+    role: interviewer
+    restitched: true
+    text: >-
+      Yeah, yeah, please, please, you can search that. Yeah, now continue. Just
+      advice to you: any time you want some syntax to be known, right, that you
+      don't know and you want to search — always ask the interviewer, like Vishal
+      did. Most interviewers will be fine with you searching the syntax, but don't
+      consider it implicit and search immediately, because some companies do have
+      rules where if you search something from outside they would have strict
+      rules of rejecting the candidate. So don't give that chance. Be explicit and
+      ask, so that if the interviewer says okay, you search. I think line number
+      seven, it should be const — I assume it's a spelling mistake, Vishal. How do
+      you plan to handle the numbers, whether a number is present in the string or
+      not?
+
+  - t: "00:14:19"
+    role: candidate
+    text: >-
+      This one, code zero and code eight. The number is starting from zero, so we
+      are checking till nine, so till eight.
+
+  - t: "00:14:29"
+    role: interviewer
+    text: >-
+      Sure. You can remove that event parameter for a while. You can just directly
+      read the value in line number five.
+
+  - t: "00:15:01"
+    role: candidate
+    text: Line number five, okay.
+
+  - t: "00:15:04"
+    role: interviewer
+    text: Let's consider that as an argument. You're directly passing a string. Okay.
+
+  - t: "00:15:08"
+    role: candidate
+    text: Okay, directly passing a string, okay. Still we need to get that argument, right?
+
+  - t: "00:15:15"
+    role: interviewer
+    text: >-
+      Yeah, yeah, you should have E — that's itself the value. You're not
+      basically extracting anything.
+
+  - t: "00:15:23"
+    role: candidate
+    restitched: true
+    text: >-
+      Password check with some string. Let me finish this first. I'll give
+      something random — I'll give one character, one small letter and one number.
+
+  - t: "00:15:51"
+    role: interviewer
+    text: Sure. Let's check. It should be weak.
+
+  - t: "00:16:06"
+    role: candidate
+    text: It should be strong. Is it going as weak?
+
+  - t: "00:16:11"
+    role: interviewer
+    text: >-
+      You have only one or two more minutes. We have to go to other sections as
+      well. See if you can debug it. Try giving a different argument and see. For
+      example, you can give all small letters and see what is happening.
+
+  - t: "00:16:30"
+    role: candidate
+    text: We need to save it for re-render.
+
+  - t: "00:16:32"
+    role: interviewer
+    text: >-
+      Yeah, yeah, it should re-render. All small is also coming as weak, correct?
+      If you wish to log whatever is in line number eleven, the code, you can try
+      logging it to get some idea.
+
+  - t: "00:16:43"
+    role: candidate
+    text: console.log. Okay, I think it will come as...
+
+  - t: "00:16:52"
+    role: interviewer
+    text: What is coming as one one five, correct? Because you're passing S S S.
+
+  - t: "00:16:59"
+    role: candidate
+    text: Same thing.
+
+  - t: "00:16:59"
+    role: interviewer
+    text: >-
+      Same thing. But try passing a different string. Instead of S S S, you pass
+      something else and see whether you're getting different values or not. No,
+      not the same — like different characters, like one small, one capital, one
+      number.
+
+  - t: "00:17:13"
+    role: candidate
+    text: Okay, I will see once.
+
+  - t: "00:17:18"
+    role: interviewer
+    text: Pass number two, pass number...
+
+  - t: "00:17:23"
+    role: candidate
+    text: Four.
+
+  - t: "00:17:25"
+    role: interviewer
+    text: Is it as per the expectation?
+
+  - t: "00:17:26"
+    role: candidate
+    text: Four is different.
+
+  - t: "00:17:29"
+    role: interviewer
+    text: >-
+      So that is a problem, correct? Maybe after the interview you can check this,
+      Vishal. Okay? Now let me ask you some questions about React. So, we have a
+      useEffect in line number twenty five, correct?
+
+  - t: "00:17:45"
+    role: candidate
+    text: Mm, yes.
+
+  - t: "00:17:45"
+    role: interviewer
+    text: At the end of the day, what is it? It's a function, correct?
+
+  - t: "00:17:49"
+    role: candidate
+    text: It's a function, yes.
+
+  - t: "00:17:50"
+    role: interviewer
+    text: >-
+      Yeah. Have we ever given a thought to what useEffect returns? As it's a
+      function, it has to return something, correct? What does it return?
+
+  - t: "00:17:56"
+    role: candidate
+    text: A function. I don't think useEffect returns something, as per my knowledge.
+
+  - t: "00:18:03"
+    role: interviewer
+    text: Then it's something like undefined or null.
+
+  - t: "00:18:05"
+    role: candidate
+    text: It will be undefined, I guess.
+
+  - t: "00:18:07"
+    role: interviewer
+    text: Okay. Tell me the difference between undefined and null.
+
+  - t: "00:18:10"
+    role: candidate
+    text: >-
+      Undefined is like it's no value, because if we declare a variable and we
+      don't give any value, the value will be undefined by default. Null we can
+      set as an initial value, like not leaving it empty.
+
+  - t: "00:18:26"
+    role: interviewer
+    text: >-
+      So you are saying null is something, a value to represent nothing, correct?
+      Undefined is when you have not defined anything. That's the difference,
+      Vishal. Okay. Sure. So let me share a snippet with you. First I want you to
+      go through the code and guess the output basically, okay?
+
+  - t: "00:19:04"
+    role: candidate
+    restitched: true
+    text: >-
+      I don't think any... The zero will be count, because this is an async thing
+      and it won't run — before that we have a synchronous section here, and in
+      this synchronous section we are clearing that thing.
+
+  - t: "00:19:21"
+    role: interviewer
+    text: >-
+      Okay. As you told me, you're just starting with React, so I'll give you some
+      context. In line number eight, whatever the return that we are doing, right,
+      that would execute on the component unmount. Like for example, you are on
+      page A, you are going to page B. Whenever the transition happens, right,
+      that return will be executed. So it's not going to execute as long as you
+      are on screen A, okay? Now I've given you that hint. Now if you wish to
+      re-guess your answer, you can tell me, Vishal.
+
+  - t: "00:19:43"
+    role: candidate
+    text: The return is not going to run before we are changing to the next one.
+
+  - t: "00:19:46"
+    role: interviewer
+    text: >-
+      So you can assume that throughout the execution of this file it's not going
+      to be called, basically. Okay.
+
+  - t: "00:19:51"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay, then randomly, for every thousand milliseconds, it will change to one
+      and minus one based on the returned value. Okay, previous count — okay,
+      okay, not previous count, I didn't see this section. Previous count, we are
+      adding it. So randomly it will add to zero, like one and minus one randomly.
+
+  - t: "00:20:13"
+    role: interviewer
+    restitched: true
+    text: >-
+      Correct. What you are saying is correct, Vishal. So basically it's hard to
+      predict what the output is, but the output will keep changing basically,
+      correct? For example, the value of count is zero initially and we would come
+      and set the setInterval. Every time, whatever the previous count value you
+      have, you are adding the previous count plus whatever random value is
+      generated, correct? If it is greater than point five, you are going to add
+      one, otherwise you are going to subtract one. But there is a catch. There is
+      a catch here. See, let's say initially the count was zero. You set it as zero
+      plus — let's assume it was greater than point five. So zero plus one, so it
+      became one. Correct? So the value of count became one. So next time what
+      will be the value of count? Is it going to be one or zero?
+
+  - t: "00:21:02"
+    role: candidate
+    text: >-
+      It will be one. It will be available in this previous count callback,
+      because you're using it as a callback, right?
+
+  - t: "00:21:07"
+    role: interviewer
+    restitched: true
+    text: >-
+      Correct, correct, correct, Vishal. So that's the right answer. I'm done from
+      my end, Vishal. We are reaching the last four minutes of the interview.
+      Mostly Vishal has given approximately right answers to all. The password
+      checker, that could have been improved a bit, but that solution you can get
+      somewhere online as well. Now, my feedback to you, Vishal — I've noted down a
+      couple of feedbacks. Let's start with the machine coding thing. This is to
+      you and everyone: almost ninety percent of the people I ask a machine coding
+      problem make the mistake where the approach is not finalised in their mind
+      itself. You're getting my point, right? See, whenever you solve — this
+      applies to machine coding and also whenever you're doing your day to day
+      coding — first you be firm, your mind is the first computer, then it is
+      actually whatever you are typing, correct? I'm not saying a hundred percent
+      you will be able to do it, but largely, first have a solid approach in your
+      mind, then you start implementing. Okay? And with that you will be able to
+      solve the problem quickly. The coding can happen in two minutes; you might
+      end up spending the remaining eight minutes thinking towards it. So you can
+      do that. Second, it happens to everyone, some syntax is unknown. So we have
+      to search online, nothing wrong with that also. But be clear, have a concise
+      list of everything that you want to search. Like for example, four things I
+      don't know, four things I'll search. It shouldn't happen that you go to and
+      fro — like you start coding, again you feel like something you don't know,
+      again you go and search. It's not day to day coding, right? It's an
+      interview. So try to have that list of things that you want to search, and
+      ask the interviewer, these are the things that I don't know. Some
+      interviewers will be willing to help you, then you don't even have to
+      search — they'll tell you which function will give you that. In some, they'll
+      allow you to search, so do it once and come back and continue the coding.
+      Okay? And another thing, this scenario driven question that I asked, the
+      Google Calculator, right? It's not a very straightforward question, it's not
+      a very hard question also. The suggestion to you is, you are a front end
+      developer, don't look at the front end systems like a user, look at the
+      front end systems like a developer. Like for example, when you use an
+      application, tomorrow if you have to implement it, you'll not be able to
+      know a hundred percent how to build it. But to some degree you should know
+      what are the things that you are going to use to build this. Okay, look at a
+      system like a developer going forward. That's the right way to learn front
+      end system design, where whenever you have a doubt you keep searching and
+      you start consolidating, getting more and more information. Okay. These are
+      all the feedback that I feel, Vishal. I feel like, as you have still started
+      learning React and you want to transition into React roles, there is
+      definitely some scope where you can master React. I feel like it's not like
+      a hundred percent you are there yet. Spend some more time mastering React
+      and then you'll be good to give the interview, Vishal, okay? How was the
+      interview experience otherwise, Vishal?
+
+  - t: "00:24:05"
+    role: candidate
+    text: Yeah, it is wonderful. Thank you, thank you.
+
+  - t: "00:24:07"
+    role: interviewer
+    text: Thank you. Thank you. Wonderful. Thank you so much, Vishal.

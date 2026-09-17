@@ -17,9 +17,10 @@ export default defineDynamic({
       const agentSlug = typeof attributes.agentSlug === "string" ? attributes.agentSlug : undefined;
       const personaSlug = typeof attributes.personaSlug === "string" ? attributes.personaSlug : undefined;
       const mode = (attributes.mode === "chat" ? "chat" : "voice") as "voice" | "chat";
+      const clientTools = (attributes.clientTools ?? "").split(",").filter(Boolean);
 
       try {
-        const specs = await loadSessionContext(orgId, sessionId, agentSlug, personaSlug, mode);
+        const specs = await loadSessionContext(orgId, sessionId, agentSlug, personaSlug, mode, clientTools);
         return defineInstructions({ content: formatSessionSpec(specs) });
       } catch (err) {
         console.error("Failed to load session context for brain grounding:", err);

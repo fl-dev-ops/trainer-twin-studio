@@ -1,0 +1,676 @@
+id: "22"
+title: Angular Mock Interview - 3 Years Experience
+source: 22 - Angular Mock Interview - 3 Years Experience
+duration: "00:25:21"
+track: frontend
+topics: [angular, change-detection, zonejs, two-way-binding, arrays, two-pointer, time-complexity, machine-coding, dsa-preparation]
+seniority: mid
+participants:
+  interviewer: Vasanth
+  candidate: Aditi
+  candidate_experience_years: 3
+
+problem: >-
+  Two parts. First, a warm-up DSA question - reverse a given array, discussing
+  the built-in reverse, the extra-array loop, and finally the in-place two
+  pointer approach with its space and time complexity. Second, a machine coding
+  task - implement a timer in Angular showing minutes and seconds with start and
+  stop/reset buttons, incrementing every second and rolling seconds over into
+  minutes.
+
+# Speaker 1 is Vasanth and Speaker 2 is Aditi throughout, but the ids are not
+# trustworthy at boundaries - Sarvam repeatedly emits the same phrase under both
+# ids a second apart ("Correct. Good catch." at 00:18:39, "So you can use a
+# clear" at 00:18:44). Every turn below was attributed by content.
+raw_speaker_ids:
+  interviewer: [1]
+  candidate: [2]
+
+invariants:
+  - Turns strictly alternate interviewer -> candidate. No two consecutive same-role turns.
+  - No reference to a YouTube channel, video, subscriber, audience or viewer.
+  - No screen-sharing, editor or tool-operation instructions.
+  - Text is English in Latin script only.
+
+counts:
+  raw_entries: 202
+  clean_turns: 61
+
+removed:
+  monologue:
+    - span: "00:00:00-00:00:30"
+      what: Channel intro, video series framing, agenda pitched to viewers.
+    - span: "00:00:30-00:00:50"
+      what: >-
+        Post-video promise if answers are missed, "please watch the video till
+        the end".
+    - span: "00:25:02-00:25:21"
+      what: >-
+        Outro - like the video, share it with friends, add comments, subscribe
+        to the channel, catch you in the next video.
+  self_promotion:
+    - "00:02:33 - 'I'm more like wanting to explore this even for the audience also'"
+    - "00:08:00 - 'so always remember, you and the audience, the two pointer approach'"
+    - "00:04:16 - 'especially to you and other audience who are watching'"
+    - "00:20:44 - 'communication I usually divide in most of my videos'"
+    - "00:23:53 - 'in fact I've made a video on how much DSA is more DSA, I can put the link somewhere on the screen in the description section'"
+    - "00:24:31 - 'and everybody who is learning DSA from our content'"
+  logistics:
+    - "00:02:06 - 'can you share your screen'"
+    - "00:02:06 - 'I even sent it in the chat as well'"
+    - "00:02:28 - 'can you please type it, you can type it, const A R R'"
+    - "00:09:06 - 'maybe you can stop sharing as well in the meantime'"
+    - "00:13:55 - 'can you present the screen back, Aditi'"
+    - "00:19:42 - 'on UI, can we go to the HTML page'"
+    - "00:19:58 - 'can you stop sharing, Aditi'"
+  backchannels: 74
+  asr_noise: 26
+
+corrections:
+  "UI and BE": UI and back end
+  "REIT hiring": React hiring
+  "reverse function in J.A.": reverse function in JavaScript
+  snapping: swapping
+  "cost issues and excesses ones": CORS issues and XSS ones
+  "it maintains multiple disk": it maintains multiple DOMs
+  "zone j": Zone.js
+  "cdr.detect changes": cdr.detectChanges
+  "manual triggeration": manual triggering
+  "the DOMINO efficient way": the DOM in an efficient way
+  DIGSTROW: Dijkstra
+  "tag queue and link list": stack, queue and linked list
+  "dash structures": data structures
+  "one medium is two hard problem, one hard is two medium problem": >-
+    one medium is two easy problems, one hard is two medium problems (the
+    arithmetic that follows - one hard equals four easy - only works this way)
+name_note: >-
+  Sarvam writes the candidate's name as "Aditi" and her surname as "Khedkar",
+  and renders Vasanth's name variously as "Vasanth", "Vasant" and "Vasanth".
+  Normalised to Aditi and Vasanth. Note the removed intro refers to Aditi as
+  "he"; the candidate is female and is addressed as Aditi throughout.
+uncertain:
+  - >-
+    00:09:57 - "cross cross site uh cost issues and excesses ones" is heavily
+    garbled; read as cross-site, CORS and XSS. Rendered conservatively.
+  - >-
+    00:12:58 - the candidate's change-detection list ("if I may see if I may if
+    I may say") is disfluent; the enumeration of triggers is preserved as given.
+romanized: 3
+
+turns:
+  - t: "00:00:30"
+    role: interviewer
+    text: Aditi, if you can introduce yourself, we can get started.
+
+  - t: "00:00:52"
+    role: candidate
+    text: >-
+      Yes, hello. My name is Aditi Khedkar and I have three years of experience
+      in Angular. I currently work both in UI and back end. The full stack is
+      Angular and Java.
+
+  - t: "00:01:05"
+    role: interviewer
+    text: >-
+      Wonderful, wonderful, Aditi. So Aditi, you have three years of experience
+      in front end development using Angular. One of the primary questions a lot
+      of people out there have is that Angular does not have so many
+      opportunities, so everybody is turning towards React. As you have spent
+      three years there, what is your opinion about it?
+
+  - t: "00:01:22"
+    role: candidate
+    text: >-
+      My opinion is, actually, React based hiring — I've observed they are
+      mostly for small scale and mid scale companies. I still feel hopeful about
+      Angular being used in legacy and banking related domains especially. Since
+      I belong to the banking domain, it is time and time again revisited how
+      much Angular is security-wise better than React. In the end it is a
+      framework, so it's very difficult to compare both of them. But as a job
+      market situation, I can see definitely React hiring is more.
+
+  - t: "00:01:51"
+    role: interviewer
+    text: >-
+      Got it. See, you say React hiring is more, but Angular opportunities are
+      not less. So if you're sticking to something more like B2B sort of
+      businesses, you continue to have opportunities. That's what you're saying,
+      correct?
+
+  - t: "00:02:01"
+    role: candidate
+    text: Yes, yes. Almost all big companies, all big firms, usually have Angular as a stack.
+
+  - t: "00:02:06"
+    role: interviewer
+    restitched: true
+    text: >-
+      Correct. So Aditi, now let's discuss a simple problem, okay? The question
+      is very simple, Aditi, okay? So let's say I give you an array. How do you
+      reverse the given array? Any array you can take — for example, const arr
+      is equal to one, two, three, four, okay? Let's say this array needs to be
+      reversed, Aditi. Okay? Tell me the different approaches that come to your
+      mind. It's not that this question is very hard. There are multiple
+      approaches, so how a candidate would think — that will be the ask from the
+      interviewer. Always remember, when the question looks simple, then the
+      expectation is how well you react to the problem, or what are the
+      different possibilities that you can think of. Same applies to you, Aditi.
+      Please tell me.
+
+  - t: "00:03:05"
+    role: candidate
+    text: >-
+      Okay, Vasanth, one thing I can right now think of, off the top of my head,
+      is using the reverse function in JavaScript — that's already predefined.
+      Another way I can also think of is using loops, a for loop.
+
+  - t: "00:03:23"
+    role: interviewer
+    text: If you just follow up — how are you going to do it?
+
+  - t: "00:03:27"
+    role: candidate
+    text: >-
+      I'll be setting the number of the length first and then start decrementing
+      it periodically. And I will also try to use another array. So there is an
+      array, so I'll try to use a reverse array and try to push it and then print
+      it.
+
+  - t: "00:03:46"
+    role: interviewer
+    restitched: true
+    text: >-
+      Got it. So I could not — I cannot call it a time-space complexity, but
+      using this approach, where you iterate from the end, basically you're using
+      another array, correct? So, especially to you: in the interview, always ask
+      whether they consider the output array as space complexity or not. Getting
+      my point, right? So sometimes the output need not be a space complexity
+      thing, because that might be something that we are doing here, but in a
+      company, or whenever we are doing the actual project, we may not consider
+      it, because we might just process it — we are trying to log here or
+      something like that. But in case they consider that also as space
+      complexity, then the space complexity is actually n. Correct, because we are
+      using another array in that case, Aditi. Correct? Let's say you don't have
+      to use another array — in the given array only you need to reverse it. Can
+      you think of something?
+
+  - t: "00:04:38"
+    role: candidate
+    restitched: true
+    text: >-
+      I'm not sure exactly about the technical approach, Vasanth, but I think
+      swapping can also be considered in such cases. Let's imagine I am trying to
+      iterate through the array, and instead of, this time, the length, I will use
+      length by half. My approach is very similar to binary sort, just like that.
+      What I am trying to do is I will declare a variable this time, not an array,
+      and that variable will try to swap in the runtime. I'm not sure how to
+      explain this, but the approach is very similar to a binary sort.
+
+  - t: "00:05:17"
+    role: interviewer
+    text: Binary sort, or binary search? Binary search, correct?
+
+  - t: "00:05:21"
+    role: candidate
+    text: >-
+      Yeah, yeah, yeah. I'm just trying to reverse through half — that's what the
+      approach is. That is the only way I can think of.
+
+  - t: "00:05:32"
+    role: interviewer
+    text: >-
+      Sure. See, binary search works — binary search sort of works if it is
+      sorted, correct? But as you know the problem statement, according to the
+      problem statement we do not consider it as sorted. Even if you consider it
+      as sorted, correct? Even a binary search sort of approach — you're heading
+      in the right direction, but that's not the approach. If you wish to take one
+      more minute in this direction, if you want to think, you can think. I can
+      give you a hint.
+
+  - t: "00:05:55"
+    role: candidate
+    text: I would like it if we go to the next question. I'm just out of ideas, sorry.
+
+  - t: "00:05:59"
+    role: interviewer
+    restitched: true
+    text: >-
+      I'll give you a hint, Aditi. Okay? So let's see how you use the hint. See,
+      most of the time whenever we look at such problems, fundamentally we have to
+      iterate the array. That is unavoidable, correct? This cannot be done without
+      a complexity of at least n or n by two. Like, we have to iterate the array.
+      Without that we cannot do it, correct? And whenever the iteration comes, we
+      always think from one point, like the origin of the array. How about we
+      think of it from multiple points?
+
+  - t: "00:06:31"
+    role: candidate
+    text: >-
+      To think of it, Vasanth, I also realised there is another way, a popular
+      way, where we use the two pointer method — where the first pointer is
+      supposedly at one and the last pointer is at four. And accordingly, as we
+      iterate — you're right, in the end it is O of n only — but since there are
+      two pointers, similar swapping logic starts happening.
+
+  - t: "00:06:59"
+    role: interviewer
+    restitched: true
+    text: >-
+      Correct. So basically we have two pointers. Let's say the first and the
+      last, the pointers named that way, correct? The first points to array of
+      zero and the last points to array of n minus one, correct? And we iterate
+      the array only till both pointers point to the same value, correct? But here
+      also there are two possibilities. If you observe, arrays with an even number
+      of elements behave in a different way, and arrays with an odd number of
+      elements will behave in a different way. Got my point? Okay, so those
+      scenarios we need to handle, but we have to iterate the array. We do not even
+      iterate the array till n. We can just complete it in n by two. Correct? Close
+      to half of the array length we could iterate. But from the complexity point of
+      view, time complexity point of view, whether you say n by two, two n or three
+      n, they are all always n. So the time complexity is n. Okay? Good, good that
+      you could come up with this approach. So always remember the two pointer
+      approach — a lot of problems can be solved using this. I've seen Google also
+      asking questions around this, and many were able to solve them with the help
+      of the two pointer approach, which is one of the approaches. So now, Aditi,
+      let us discuss one of the common questions that comes up whenever people are
+      using Angular or React sort of thing and they are not using plain HTML and
+      JavaScript. Why should somebody use Angular? There are a lot of advantages,
+      but let's stick to the one primary thing of performance, correct? Do you
+      think Angular works better than a website built using HTML, CSS and
+      JavaScript? If so, how?
+
+  - t: "00:08:25"
+    role: candidate
+    restitched: true
+    text: >-
+      Okay. For me Angular is like an ecosystem, Vasanth, where one big advantage
+      I have seen instead of vanilla HTML and CSS is the single page application
+      approach. React is also similar in that way. So the overall organisation is
+      very systematic — that is developer experience. But technically speaking,
+      single page applications can be built very well and fast with Angular. The
+      same approach can be done with HTML and CSS, but it is just code lines and
+      the logic is too much. Even the bundling, right from route calls,
+      everything — it's like an ecosystem. That's why I feel it's an ecosystem.
+
+  - t: "00:09:06"
+    role: interviewer
+    restitched: true
+    text: >-
+      I agree. The ecosystem part, the ecosystem part I agree, Aditi. Okay?
+      Because unlike even React, Angular basically gives you all the folders where
+      the services need to be kept, correct? All the folder structure that a
+      particular project wants — everything comes along with the basic template
+      itself, correct? Very organised. But the problem is, what is the advantage
+      where it stands, except the ecosystem? As you know, in a basic HTML
+      JavaScript application also — in the plain HTML, CSS and JavaScript website
+      as well — we could make a very structured sort of thing. Though it's not
+      built in like in Angular, but we can make it happen, correct? So that's not
+      a core advantage. Basically, folder structure is not a core advantage,
+      correct? Except from the performance point of view, correct? From the
+      performance point of view, do you see any advantage, Aditi?
+
+  - t: "00:09:57"
+    role: candidate
+    text: >-
+      Performance wise, for example, we can implement — I can also add a security
+      point, if that's okay. I have seen security concerns like cross-site issues,
+      CORS issues and XSS ones are being handled better in Angular, as well as the
+      lazy loading concept can be implemented. Angular just provides a seamless
+      way. So it's easier — I think things are easier when it comes to a
+      framework.
+
+  - t: "00:10:27"
+    role: interviewer
+    text: >-
+      Sure. See, React uses the concept of reconciliation for re-rendering the
+      DOM, okay? That is one of the ways where it maintains multiple DOMs. What
+      does Angular use for re-rendering? How does Angular basically re-render the
+      DOM, Aditi?
+
+  - t: "00:10:41"
+    role: candidate
+    text: Through change detection, I'm not sure.
+
+  - t: "00:10:44"
+    role: interviewer
+    restitched: true
+    text: >-
+      Yeah, if it is change detection, would you like to explain how it is better
+      than the typical DOM re-rendering that happens in vanilla JavaScript? How is
+      that better? Because this is the crux, Aditi. The folder and everything, they
+      are all superficial. How do you re-render a DOM? That's what makes a
+      framework or a library special. You also agree, I assume, correct? If you can
+      re-render efficiently, then that is when somebody has an advantage of it,
+      otherwise no. Correct? Tell me, how does Angular do re-rendering in an
+      efficient way compared to vanilla JavaScript?
+
+  - t: "00:11:19"
+    role: candidate
+    text: >-
+      I can think of one way where Angular is special in terms of change
+      detection. One of the simplest yet most powerful is two way binding, right,
+      where it's easy to keep up with the UI, and also we get the freedom to choose
+      the strategy as well — for example, if we have multiple components I can
+      choose...
+
+  - t: "00:11:41"
+    role: interviewer
+    restitched: true
+    text: >-
+      Let me be very precise. What technique does Angular use for re-rendering?
+      I'm only interested in that. And what is the technique name, and how is it
+      better than typical DOM re-rendering? See, the biggest advantage of both
+      Angular and React is the DOM re-rendering, correct? Whereas in the case of
+      plain vanilla JavaScript the complete DOM is re-rendered, or people at least
+      think that way. And React and Angular have a superior way of doing it. What
+      do you think Angular uses to render in the most efficient way? If you think
+      you need some more time you can tell me, or if you wish to skip we could go
+      to the next question.
+
+  - t: "00:12:17"
+    role: candidate
+    text: >-
+      I can think of Zone.js. It uses Zone.js for change detection. Yes, I know
+      change detection can occur when there are events, and as I mentioned, two way
+      binding. But is this aligned to the question? I am not sure now. When you
+      ask, I first answer...
+
+  - t: "00:12:33"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      Change detection. See, change detection is what will make Angular re-render
+      the DOM in an efficient way, Aditi, correct? So please, if you wish to
+      elaborate, please elaborate on change detection. How does change detection
+      work? Let's say you have an array of ten elements rendered on the screen. The
+      ninth element is updated, correct? That needs to be re-rendered on the screen
+      now. How does change detection make that happen?
+
+  - t: "00:12:58"
+    role: candidate
+    restitched: true
+    text: >-
+      There are some ways where change detection happens seamlessly. Suppose if
+      there are any events, any click events, any change events; then, if there are
+      any HTTP requests, if I have used async as an operator; even when there are
+      lifecycle hooks, if I may say; and then there is input-output communication.
+      That is when this happens seamlessly, and Zone.js is responsible for that.
+      When it comes to manual triggering, I think we can use cdr.detectChanges —
+      that is how we trigger it manually. Especially whenever there is a change in
+      input — as you mentioned, that I changed the array, how did it detect? I feel
+      if that array is used as an input to another component and if the parent
+      component makes changes, then the input property automatically keeps up with
+      that. So overall I think Zone.js is the real hero in Angular.
+
+  - t: "00:13:55"
+    role: interviewer
+    restitched: true
+    text: >-
+      Got it. Got it. Sure. We'll solve a question for around fifteen minutes and
+      then probably we'll come back to some more discussion. See, the question is
+      very simple, Aditi, and we have around fifteen minutes to solve this problem.
+      We should implement a timer. This is one of the most common interview
+      questions that is asked in Angular, React and in HTML, CSS and JavaScript
+      also, where we will have a timer. We will show seconds and minutes. Okay?
+      Like, first it will be zero zero seconds, zero zero minutes. You click on
+      start, the timer gets started. Okay? It will start ticking — one second, two
+      seconds; it will become fifty nine seconds, then sixty seconds, and it
+      becomes one minute zero seconds. Got my point, Aditi? And it keeps going,
+      basically. And if you click on stop, or if you stop or reset, it will be
+      reset back to zero. So we have start and reset. Please implement this. I want
+      you to implement pause and resume, but that we could do later. Is the question
+      clear to you, Aditi?
+
+  - t: "00:14:53"
+    role: candidate
+    restitched: true
+    text: >-
+      Uh, yes. So when I start — just one question — when I use start, it will
+      keep on incrementing until I use stop, right? And it will be in the format of
+      zero seconds and zero minutes?
+
+  - t: "00:15:07"
+    role: interviewer
+    restitched: true
+    text: >-
+      Correct. We'll have seconds colon minutes — zero zero seconds, zero zero
+      minutes is what we'll have by default. Whenever you click on start, the timer
+      starts, where the first second starts ticking. And then whenever it becomes
+      sixty seconds, it becomes one minute zero seconds. Then one minute fifty nine
+      seconds, then it becomes two minutes zero seconds. It keeps on happening,
+      Aditi. Okay? Yeah. So, I mean, the UI is up to you. I'm not too concerned
+      about the look and feel. I'm primarily focused on the functionality. We have
+      fifteen minutes to solve this, Aditi, okay? Get started. If you have any
+      questions you can ask me in the middle as well. How efficiently you solve it,
+      that's what I'm looking for. You are iterating on an approach in your mind,
+      Aditi, correct?
+
+  - t: "00:15:49"
+    role: candidate
+    restitched: true
+    text: >-
+      Yes. What my idea is — earlier I was trying to create a new component
+      altogether, but I thought, since the time is less, I will just integrate it
+      into this. I will be declaring seconds and minutes as variables and I will
+      initialise them with zero. And then I will also call functions here, start and
+      stop. I am thinking — I'm not sure — to use interval, an interval where I keep
+      on incrementing the seconds. And minutes. For stop, I'm not sure how to use
+      the approach. I'm still thinking.
+
+  - t: "00:16:35"
+    role: interviewer
+    text: >-
+      Let's do one thing. You start the implementation, where at least let it start
+      updating the time. The stop part will come — like, how do we solve it?
+      Probably by the time you start solving it you might get some idea. If not,
+      I'll help you. You can get started.
+
+  - t: "00:17:06"
+    role: candidate
+    text: >-
+      Oh, so okay — so in terms of stop, should I flush both these values to zero?
+      I'm thinking, or...
+
+  - t: "00:17:15"
+    role: interviewer
+    restitched: true
+    text: >-
+      No, you are doing the right thing. You have to just swap the position. First
+      it should be minutes and then it should be seconds. Correct? It's happening
+      right, correct only — like now it became three minutes, three minutes one
+      second, three minutes two seconds, three minutes three seconds. It's happening
+      correctly.
+
+  - t: "00:17:31"
+    role: candidate
+    text: Yes. And in terms of stop, what do you think?
+
+  - t: "00:17:35"
+    role: interviewer
+    text: What do you think?
+
+  - t: "00:17:37"
+    role: candidate
+    text: To make both these values zero.
+
+  - t: "00:17:40"
+    role: interviewer
+    restitched: true
+    text: Please try. Yeah, yeah, please try that. Let's see. We have another two to three minutes.
+
+  - t: "00:17:45"
+    role: candidate
+    text: >-
+      No, no, no, sorry, I'll say sorry — that is not stop. Stop is actually
+      storing those values. Reset — oh, what I was talking about was reset. Yeah,
+      let's consider it for the time being.
+
+  - t: "00:17:53"
+    role: interviewer
+    text: >-
+      Yeah, let's consider, for the time being, stop as reset only. If you click on
+      stop, it will go back to zero. Okay. How do we do that?
+
+  - t: "00:18:01"
+    role: candidate
+    text: Yes, we will do it like this.
+
+  - t: "00:18:06"
+    role: interviewer
+    text: >-
+      Just before you save it, think — what is the problem with this? Or will it
+      work perfectly fine?
+
+  - t: "00:18:28"
+    role: candidate
+    text: >-
+      Oh, I have started the interval, I have not stopped it. So even if I stop, it
+      will temporarily be zero zero, then once again it will start, because it's an
+      interval.
+
+  - t: "00:18:39"
+    role: interviewer
+    text: Correct. Good catch.
+
+  - t: "00:18:41"
+    role: candidate
+    text: But I don't know the function, Vasanth. First I...
+
+  - t: "00:18:44"
+    role: interviewer
+    text: So you can use a clearInterval to clear the interval. Okay.
+
+  - t: "00:18:49"
+    role: candidate
+    text: Clear — okay, we use clearInterval, okay.
+
+  - t: "00:19:04"
+    role: interviewer
+    restitched: true
+    text: >-
+      You can start again. So let's quickly reiterate the code. We have two
+      functions, start and stop, correct? So in start you're basically creating a
+      variable called this.interval, that you're clearing whenever they click on
+      stop. You're running an interval for one second, correct? And in every one
+      second you're incrementing the counter, and whenever that particular counter
+      reaches a specified value — for simplicity we're taking it as ten, but ideally
+      it should be sixty; sixty seconds is one minute — so when it becomes sixty, you
+      reset seconds to zero and increment the minutes, correct? On stop, you're
+      basically resetting the value to the initial value. So the UI is again very
+      simple, where we are rendering the seconds, minutes and the start and stop
+      buttons. Correct, Aditi?
+
+  - t: "00:19:57"
+    role: candidate
+    text: Yes, yes.
+
+  - t: "00:19:58"
+    role: interviewer
+    restitched: true
+    text: >-
+      Sure. So Aditi, I'm done from my end. I have my feedback in my mind and I've
+      written down a few things. If you have any questions before I share my
+      feedback, please let me know.
+
+  - t: "00:20:11"
+    role: candidate
+    text: I can't think of one right now. Immediately.
+
+  - t: "00:20:14"
+    role: interviewer
+    restitched: true
+    text: >-
+      Sure, Aditi. Aditi, let me give you what I feel about the overall interview
+      process, right. At three years of experience, you are somewhere in the
+      mid-range category. Whatever is expected from a senior is not expected from
+      you, but whatever is expected from a junior is also not expected from you. You
+      are somewhere in the middle, correct? A full-fledged system design question
+      will not be asked of you, but there are certain things that they expect you
+      should know very much in depth. On that note, the positive points, Aditi, are
+      communication skills, one. Communication I usually divide into two —
+      communication skills are of two types. One is English communication skill,
+      another is technical communication skill. People who are very good at English
+      cannot articulate technical concepts very well unless they know the technical
+      concepts. Correct? So I feel that to a large degree both the communication
+      skills are very good, Aditi. Whatever the concepts that you know, you are able
+      to explain them very well. Okay? Even when it comes to coding, though the
+      problem is quite simple, you were able to solve it without any auto
+      suggestions for the syntax, which is good. A lot of people do not do that now.
+      They expect a lot of external help for writing the syntax. Where do I see
+      primarily the areas of improvement, Aditi? How Angular re-renders the screen.
+      See, that is one of the most basic questions that you can expect in an
+      interview, correct? So that is something — I mean, whenever you are not sure
+      of those questions... You might be able to build a website like YouTube in a
+      matter of a month; that caliber you could be. But whenever the fundamental
+      concepts are unknown, the interviewer gets a little bit of a negative
+      impression, because in an interview, right, fundamental concepts matter a lot.
+      So my only suggestion is, focus more on understanding these fundamentals very
+      well, Aditi, okay? Good thing about even the small DSA question that I asked —
+      it was a very easy question, and eventually you could come up to the two
+      pointer approach. So my suggestion is, solve a decent number of problems so
+      that your mind starts thinking analytically, so that it helps you both in DSA
+      problem solving as well as in the problem solving of anything typical, whether
+      it's React or Angular or DSA. Everything — the analytical thing is very
+      important. Solving more DSA problems will help you to do that, Aditi. The rest
+      looks good to me. This is my honest feedback. Do you have any closing thoughts
+      or any questions?
+
+  - t: "00:22:32"
+    role: candidate
+    text: >-
+      I have one, honestly, Vasanth. What is your take on front end developers
+      doing extensive LeetCode? Like, very extensive — hard, medium, I'm talking
+      about.
+
+  - t: "00:22:43"
+    role: interviewer
+    romanized: true
+    restitched: true
+    text: >-
+      So, it's a very good question, Aditi. So I myself have solved a good number
+      of problems on LeetCode. So my suggestion to all is, unless you are targeting
+      companies like Google — there are hardly a few countable companies whose
+      interview process is purely driven by DSA. Like, if you go for Google, I've
+      given interviews where three rounds were pure DSA; they did not ask any front
+      end questions. Okay? So if you are targeting that kind of company, then I
+      would advise you to solve as many problems as possible, because how many to
+      solve, nobody knows. So it's good to solve any number of problems. If not,
+      even if you are targeting very premium product based companies also, most
+      companies for a front end role do not ask very, very complicated DSA. They ask
+      DSA, but it is usually in array, string, stack, queue and linked list — five
+      data structures. So I suggest everyone the same thing: try to solve a hundred
+      problems collectively, where you solve sixty easy problems, twenty medium
+      problems and twenty hard problems. Start by easy problems. So twenty medium
+      problems means — one medium is two easy problems, one hard is two medium
+      problems. So when you solve one hard problem, you are solving four easy
+      problems, correct? So start by solving as many as possible easy problems,
+      spread across the five data structures — array, strings, stack, queue and
+      linked list. So beyond the five data structures, is it required to learn from
+      the learning point of view? Yes. From the interview point of view, the
+      probability of asking questions beyond this is less. So you end up spending so
+      much time on learning them without any return. That's what my take is, Aditi.
+
+  - t: "00:24:26"
+    role: candidate
+    romanized: true
+    text: Okay, okay. So it's expected, and it's always good to have knowledge.
+
+  - t: "00:24:31"
+    role: interviewer
+    text: >-
+      Uh, yes. I suggest, if you are interested in learning DSA, go beyond linked
+      lists — like trees or graphs, or very specific algorithms like Dijkstra to
+      find the shortest node. You could extend and learn. From the interview point
+      of view, for most companies I suggest you stick to five data structures:
+      array, string, stack, queue and linked list. Solve collectively a hundred
+      problems from these five data structures on LeetCode. That's going to be most
+      helpful for you, Aditi. Yeah.
+
+  - t: "00:24:59"
+    role: candidate
+    text: That's great, thank you. It really helps me.
+
+  - t: "00:25:02"
+    role: interviewer
+    text: Thank you. Thank you, Aditi.

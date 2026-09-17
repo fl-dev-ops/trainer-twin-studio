@@ -10,7 +10,7 @@ const listSelect = {
   order: true,
   createdAt: true,
   updatedAt: true,
-  _count: { select: { assignments: true } },
+  deployments: { select: { _count: { select: { assignments: true } } } },
 } as const;
 
 /** List the organization's published role-play scenarios. Read-only: scenario
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
   ]);
 
   return Response.json({
-    scenarios: scenarios.map(({ _count, ...scenario }) => ({ ...scenario, assignmentCount: _count.assignments })),
+    scenarios: scenarios.map(({ deployments, ...scenario }) => ({ ...scenario, assignmentCount: deployments[0]?._count.assignments ?? 0 })),
     pagination: { limit, offset, total },
   });
 }

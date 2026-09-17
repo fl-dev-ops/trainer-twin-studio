@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { Check, LoaderCircle, Play, Upload as UploadIcon, Volume2 } from "lucide-react";
+import { Check, LoaderCircle, Play, Upload as UploadIcon, Volume2, X } from "lucide-react";
+import { type AgentContextUpload } from "@/lib/context-upload";
 import "@livekit/components-styles";
 import {
   RoomAudioRenderer,
@@ -70,6 +71,7 @@ type Props = {
   contexts: { id: string; name: string; size?: number }[];
   agentPersonas?: Record<string, string>;
   agentContextRequired?: Record<string, boolean>;
+  agentContextUploads?: Record<string, AgentContextUpload>;
   sessionCode?: string;
   scenarioName?: string;
   userName?: string;
@@ -93,6 +95,7 @@ export function SessionView({
   contexts,
   agentPersonas = {},
   agentContextRequired = {},
+  agentContextUploads = {},
   sessionCode,
   scenarioName,
   userName,
@@ -237,14 +240,15 @@ export function SessionView({
       if (!launchResponse.ok || !launch.session?.id || !launch.session?.runtimeToken) {
         throw new Error(launch.error ?? "Could not create session");
       }
-      if (!launch.livekit?.url || !launch.livekit?.token) {
-        throw new Error(launch.livekitError ?? "LiveKit credentials not returned by server");
+      const livekitUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL;
+      if (!launch.participantToken || !livekitUrl) {
+        throw new Error("Voice session credentials were not returned");
       }
 
       setConnection({
-        url: launch.livekit.url,
-        token: launch.livekit.token,
-        roomName: launch.livekit.room,
+        url: livekitUrl,
+        token: launch.participantToken,
+        roomName: launch.room ?? launch.session.id,
         sessionId: launch.session.id,
         runtimeToken: launch.session.runtimeToken,
       });
@@ -261,7 +265,12 @@ export function SessionView({
     void handleStartSession();
   }, [handleStartSession]);
 
-  const isContextRequired = Boolean(agentContextRequired[agent]);
+  const contextUpload = agentContextUploads[agent] ?? (
+    agentContextRequired[agent]
+      ? { required: true, prompt: "", label: "Context document", accept: "" }
+      : null
+  );
+  const isContextRequired = Boolean(contextUpload?.required ?? agentContextRequired[agent]);
 
   /** Resolves once the intro download finishes (or falls back to streaming). */
   const awaitIntroReady = useCallback(async () => {
@@ -415,6 +424,28 @@ export function SessionView({
     }
     setSurface(nextSurface);
   }, []);
+
+  // Browser-confirmed screen state is durable session truth; the brain reads it
+  // through getSessionContext instead of inferring it from LiveKit RPC history.
+  useEffect(() => {
+    if (!connection || ended) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      fetch(`/api/sessions/${connection.sessionId}/ui-state`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${connection.runtimeToken}`,
+        },
+        body: JSON.stringify(surface ? { active: surface.tool, key: surface.key } : { active: null }),
+        signal: controller.signal,
+      }).catch(() => {});
+    }, 400);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [connection, ended, surface]);
 
   const handleChoiceSubmission = useCallback(async () => {
     if (surface?.tool !== "choice" || !selectedChoiceId || choiceSubmitting || choiceSubmitted) return;
@@ -684,6 +715,9 @@ export function SessionView({
         organizationLogo={organizationLogo}
         contexts={contextList}
         contextRequired={isContextRequired}
+        contextPrompt={contextUpload?.prompt}
+        contextLabel={contextUpload?.label}
+        contextAccept={contextUpload?.accept}
         onJoin={(settings, contextId) => {
           setPrejoinMedia(settings);
           setContextIds(contextId ? [contextId] : []);
@@ -791,13 +825,16 @@ export function SessionView({
 
                 <label className="flex flex-col gap-1.5 text-sm">
                   <div className="flex items-center justify-between">
-                    <span className="font-medium">Context document</span>
+                    <span className="font-medium">{contextUpload?.label || "Context document"}</span>
                     {isContextRequired && (
                       <span className="text-[11px] font-medium text-amber-500">
                         Required for this scenario
                       </span>
                     )}
                   </div>
+                  {contextUpload?.prompt && (
+                    <p className="text-xs text-muted-foreground">{contextUpload.prompt}</p>
+                  )}
                   <div className="flex items-center gap-2">
                     <Select
                       value={contextId || "none"}
@@ -824,7 +861,7 @@ export function SessionView({
                     <input
                       ref={contextInput}
                       type="file"
-                      accept=".md,.txt,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.csv,.json,.png,.jpg,.jpeg,.webp"
+                      accept={contextUpload?.accept || ".md,.txt,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.csv,.json,.png,.jpg,.jpeg,.webp"}
                       hidden
                       onChange={async (e) => {
                         const file = e.target.files?.[0];
@@ -919,7 +956,8 @@ export function SessionView({
     <div className="dark flex h-dvh w-dvw flex-col overflow-hidden bg-[#14161a] text-foreground">
       <RoomContext.Provider value={room}>
         <LiveKitWorkspaceProvider
-          room={room}
+          sessionId={connection?.sessionId}
+          runtimeToken={connection?.runtimeToken}
           onSurface={handleSurface}
           onEndSession={() => void handleDisconnect("completed")}
         >
@@ -969,6 +1007,15 @@ export function SessionView({
                         {surface.tool === "image" && "Image Viewer"}
                         {surface.tool === "presentation" && "Presentation"}
                       </span>
+                      <button
+                        type="button"
+                        aria-label="Close workspace panel"
+                        title="Close panel"
+                        onClick={() => handleSurface(null)}
+                        className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+                      >
+                        <X className="size-3.5" />
+                      </button>
                     </div>
                     <div className="min-h-0 flex-1">
                       {surface.tool === "code" && (

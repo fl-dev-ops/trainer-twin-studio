@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { finalizeInterviewSession, type SessionEndStatus } from "@/lib/interview-sessions";
+import { closeInterviewSession } from "@/lib/session-lifecycle";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { db } from "@/lib/db";
 import { scheduleSessionReport } from "@/lib/session-report-jobs";
@@ -51,15 +52,16 @@ export async function POST(req: Request) {
     ...(body.metrics ? { metrics: body.metrics } : {}),
   };
 
-  const finalized = await finalizeInterviewSession({
-    sessionId: session.id,
-    requestedStatus,
+  const payload = {
     transcript: Array.isArray(body.transcript) ? body.transcript as Prisma.InputJsonValue : undefined,
     evidence: updatedEvidence as Prisma.InputJsonValue,
     s3AudioKey: body.audio_s3_key || body.audio_url
       ? String(body.audio_s3_key || body.audio_url)
       : undefined,
-  });
+  };
+  const finalized = requestedStatus
+    ? await closeInterviewSession(session.id, requestedStatus, payload)
+    : await finalizeInterviewSession({ sessionId: session.id, ...payload });
   if (!finalized) return NextResponse.json({ error: "Session not found" }, { status: 404 });
   if (finalized.finalStatus === "completed") {
     await scheduleSessionReport(finalized.id).catch((error) => {

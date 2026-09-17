@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { after } from "next/server";
-import { activateSession, authorizeRuntimeSession, finalizeInterviewSession, type SessionEndStatus } from "@/lib/interview-sessions";
-import { createLiveKitSessionToken } from "@/lib/livekit";
-import { prewarmSessionOpening } from "@/lib/runtime/warmup";
+import { authorizeRuntimeSession, type SessionEndStatus } from "@/lib/interview-sessions";
+import { closeInterviewSession } from "@/lib/session-lifecycle";
+import { activateInterviewRuntime } from "@/lib/session-activation";
 import { getSessionOrg } from "@/lib/org";
 import { resolveSessionUser } from "@/lib/session-user";
 import { db } from "@/lib/db";
@@ -15,13 +14,13 @@ export async function GET() {
   return NextResponse.json({ sessions: await listSessions(org.id) });
 }
 
-/** Authenticated learner activation. The DB record always exists before WebRTC starts. */
+/** Learner-triggered activation. No runtime or LiveKit resources exist before this call. */
 export async function POST(req: Request) {
   const { org, user } = await resolveSessionUser();
   if (!org || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await req.json().catch(() => null);
-  if (!body || (!body.shareCode && !body.agentSlug)) {
-    return NextResponse.json({ error: "shareCode or agentSlug is required" }, { status: 400 });
+  if (!body || (!body.shareCode && !body.agentSlug && !body.deploymentKey)) {
+    return NextResponse.json({ error: "shareCode, agentSlug, or deploymentKey is required" }, { status: 400 });
   }
   const member = await db.member.findFirst({
     where: { organizationId: org.id, userId: user.id },
@@ -30,73 +29,21 @@ export async function POST(req: Request) {
   if (!member) return NextResponse.json({ error: "Invalid session URL" }, { status: 403 });
 
   try {
-    const session = await activateSession({
+    const activation = await activateInterviewRuntime({
       orgId: org.id,
       userId: user.id,
+      userName: user.name,
       shareCode: typeof body.shareCode === "string" ? body.shareCode : undefined,
       agentSlug: typeof body.agentSlug === "string" ? body.agentSlug : undefined,
+      deploymentKey: typeof body.deploymentKey === "string" ? body.deploymentKey : undefined,
       contextId: typeof body.contextId === "string" ? body.contextId : undefined,
-      contextIds: Array.isArray(body.contextIds)
-        ? body.contextIds.filter((id: unknown): id is string => typeof id === "string")
-        : undefined,
+      mode: body.mode === "chat" ? "chat" : "voice",
+      idempotencyKey: typeof body.idempotencyKey === "string" ? body.idempotencyKey : undefined,
     });
-    if (!session) return NextResponse.json({ error: "Invalid session URL" }, { status: 403 });
-
-    // Use Next.js after() to keep serverless execution alive in the background
-    // while the client connects to LiveKit.
-    after(async () => {
-      await prewarmSessionOpening(session.id);
-    });
-
-    let livekit = null;
-    let livekitError: string | undefined;
-    try {
-      // The agent holds its greeting only when the scenario ships an intro clip; the
-      // flag rides in room metadata so the agent worker can honor it per-session.
-      const agentRow = session.agentSlug
-        ? await db.agent.findFirst({
-            where: { orgId: org.id, slug: session.agentSlug },
-            select: { data: true },
-          })
-        : null;
-      const agentData = agentRow?.data as { introVideo?: unknown; voiceId?: unknown } | null;
-      const holdOpening = Boolean(agentData?.introVideo);
-      // Agent Studio configuration is authoritative. Custom voices are used only
-      // by agents explicitly configured with their voiceId; otherwise use a
-      // shared sample voice, never another org/custom voice.
-      const configuredVoiceId = typeof agentData?.voiceId === "string" ? agentData.voiceId : "";
-      const configuredVoice = configuredVoiceId
-        ? await db.voice.findFirst({
-            where: { id: configuredVoiceId, status: "ready", OR: [{ orgId: org.id }, { orgId: null }] },
-            select: { id: true },
-          })
-        : null;
-      const sharedDefault = configuredVoice
-        ? null
-        : await db.voice.findFirst({
-            where: { status: "ready", orgId: null },
-            orderBy: { name: "asc" },
-            select: { id: true },
-          });
-      const voiceId = configuredVoice?.id ?? sharedDefault?.id;
-      livekit = await createLiveKitSessionToken({
-        sessionId: session.id,
-        userId: user.id,
-        userName: user.name,
-        runtimeToken: session.runtimeToken,
-        orgId: org.id,
-        agentSlug: session.agentSlug,
-        holdOpening,
-        voice: voiceId,
-      });
-    } catch (tokenErr) {
-      console.error("Failed to start LiveKit session:", tokenErr);
-      livekitError = "Voice service unavailable. Check the LiveKit configuration and agent deployment.";
-    }
-
-    return NextResponse.json({ session, livekit, livekitError });
+    if (!activation) return NextResponse.json({ error: "Invalid or already used session URL" }, { status: 403 });
+    return NextResponse.json(activation);
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Session creation failed" }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Session activation failed" }, { status: 400 });
   }
 }
 
@@ -109,10 +56,8 @@ export async function PATCH(req: Request) {
   const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
   const session = await authorizeRuntimeSession(String(body.id), token);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const finalized = await finalizeInterviewSession({
-    sessionId: session.id,
-    requestedStatus: body.status as SessionEndStatus,
-    s3AudioKey: typeof body.s3AudioKey === "string" ? body.s3AudioKey : undefined,
+  const finalized = await closeInterviewSession(session.id, body.status as SessionEndStatus, {
+    ...(typeof body.s3AudioKey === "string" ? { s3AudioKey: body.s3AudioKey } : {}),
   });
   if (finalized?.finalStatus === "completed") {
     await scheduleSessionReport(finalized.id).catch((error) => {

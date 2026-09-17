@@ -1,9 +1,11 @@
 import unittest
 
+import httpx
+
 from checks import conversation_likeness, conversation_quality_issues
-from learners import all_learners, create_synthetic_learner_persona
+from learners import all_learners, create_synthetic_learner_persona, document_grounded_learner
 from scenarios import build_reference_context
-from simulate import build_golden, evaluate_decisions, knowledge_searches
+from simulate import OpenRouterLLM, build_golden, evaluate_decisions, knowledge_searches, trainer_closed
 
 
 class BenchmarkDataTest(unittest.TestCase):
@@ -68,6 +70,26 @@ class BenchmarkDataTest(unittest.TestCase):
         self.assertGreater(vasanth["filler_rate"], 0.3)
         self.assertGreater(vasanth["restate_rate"], 0.3)
         self.assertEqual(vasanth["label_leaks"], 0)
+
+    def test_trainer_closing_stops_goodbye_loops(self):
+        self.assertTrue(trainer_closed("Thank you. Have a great day ahead!"))
+        self.assertTrue(trainer_closed("Goodbye, take care!"))
+        self.assertFalse(trainer_closed("Overall, how was your interview experience today?"))
+
+    def test_file_session_learner_uses_document_identity(self):
+        learner = document_grounded_learner("Surya", "resume.pdf", "Built TrainerTwin.")
+        self.assertEqual(learner["name"], "Surya")
+        self.assertIn("Built TrainerTwin", learner["characteristics"])
+        self.assertNotIn("Anubhav", learner["characteristics"])
+
+    def test_empty_openrouter_content_is_rejected_for_retry(self):
+        response = httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": None}}]},
+            request=httpx.Request("POST", "https://openrouter.ai/api/v1/chat/completions"),
+        )
+        with self.assertRaises(ValueError):
+            OpenRouterLLM._parse(response)
 
     def test_synthetic_learner_persona_avoids_static_overfitting(self):
         learners = all_learners()

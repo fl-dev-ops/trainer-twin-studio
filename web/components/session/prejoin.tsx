@@ -10,13 +10,13 @@ import {
 } from "react";
 import {
   Camera,
+  Check,
   ChevronDown,
   FileUp,
   LoaderCircle,
   Mic,
   MicOff,
   RotateCcw,
-  Trash,
   Video,
   VideoOff,
   Volume2,
@@ -24,6 +24,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "../ui/button";
+import { FileThumbnail } from "@/components/extend/file-thumbnail";
 
 export type PreJoinMediaSettings = {
   microphoneEnabled: boolean;
@@ -52,8 +53,11 @@ export function PreJoin({
   userName,
   organizationName,
   organizationLogo,
-  contexts = [],
+  contexts: _contexts = [],
   contextRequired = false,
+  contextPrompt,
+  contextLabel,
+  contextAccept,
   onJoin,
 }: {
   scenarioName: string;
@@ -64,6 +68,9 @@ export function PreJoin({
   contexts?: PreJoinDocument[];
   /** Scenario cannot run without an attached document. */
   contextRequired?: boolean;
+  contextPrompt?: string;
+  contextLabel?: string;
+  contextAccept?: string;
   onJoin: (settings: PreJoinMediaSettings, contextId?: string) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -87,11 +94,9 @@ export function PreJoin({
   const [cameraDeviceId, setCameraDeviceId] = useState("");
   const [speakerDeviceId, setSpeakerDeviceId] = useState("");
 
-  const [availableDocs, setAvailableDocs] =
-    useState<PreJoinDocument[]>(contexts);
-  const [selectedDoc, setSelectedDoc] = useState<PreJoinDocument | null>(
-    contexts[0] ?? null,
-  );
+  const [selectedDoc, setSelectedDoc] = useState<PreJoinDocument | null>(null);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [docError, setDocError] = useState("");
   const [dragOver, setDragOver] = useState(false);
@@ -228,6 +233,12 @@ export function PreJoin({
     return stopPreview;
   }, [startPreview, stopPreview]);
 
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
   function toggleMicrophone() {
     const enabled = !microphoneEnabled;
     setMicrophoneEnabled(enabled);
@@ -260,8 +271,11 @@ export function PreJoin({
         name: data.name,
         size: file.size,
       };
-      setAvailableDocs((prev) => [...prev, doc]);
       setSelectedDoc(doc);
+      setUploadedFile(file);
+      if (file.type.startsWith("image/")) {
+        setPreviewUrl(URL.createObjectURL(file));
+      }
     } catch (error) {
       setDocError(
         error instanceof Error ? error.message : "Upload failed. Try again.",
@@ -296,8 +310,8 @@ export function PreJoin({
       .toUpperCase() || "U";
 
   return (
-    <main className="min-h-svh bg-[#fafafa] text-[#202124]">
-      <header className="flex h-20 items-center justify-between px-5 sm:px-8 lg:px-10">
+    <main className="flex min-h-svh flex-col bg-[#fafafa] text-[#202124]">
+      <header className="flex h-20 shrink-0 items-center justify-between px-5 sm:px-8 lg:px-10">
         <div className="flex min-w-0 items-center gap-3">
           {organizationLogo ? (
             <Image
@@ -339,26 +353,23 @@ export function PreJoin({
         </div>
       </header>
 
-      <div className="mx-auto grid w-full max-w-[1240px] gap-5 px-5 pb-24 pt-8 sm:px-8 lg:h-[calc(100vh-5rem)] lg:content-center lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] lg:grid-rows-[auto_auto] lg:items-start lg:gap-x-16 lg:gap-y-5 lg:py-0">
-        <section
-          className={cn(
-            "flex flex-col items-center text-center lg:col-start-2 lg:row-start-1 lg:self-start lg:items-start lg:text-left",
-            contextRequired ? "lg:mt-8" : "lg:translate-y-20",
-          )}
-        >
-          <h1 className="max-w-md text-balance text-3xl font-semibold leading-[1.12] tracking-[-0.035em] text-[#202124] sm:text-4xl lg:text-[2.5rem]">
+      <div className="flex flex-1 items-center justify-center px-5 py-6 sm:px-8">
+        <div className="w-full max-w-5xl">
+          <h1 className="mb-8 text-center text-2xl font-bold tracking-tight text-[#202124] sm:text-3xl">
             {scenarioName}
           </h1>
-          <p className="mt-5 max-w-sm text-pretty text-base leading-7 text-[#5f6368]">
-            Check your camera and microphone, then join when you’re ready.
-          </p>
-        </section>
 
-        <section
-          aria-label="Camera and microphone preview"
-          className="min-w-0 lg:col-start-1 lg:row-start-1"
+        <div
+          className={cn(
+            "grid gap-6 items-stretch",
+            contextRequired ? "lg:grid-cols-5" : "max-w-xl mx-auto"
+          )}
         >
-          <div className="relative aspect-video overflow-hidden rounded-[1.25rem] bg-[#202124] shadow-[0_18px_48px_rgba(32,33,36,0.18)]">
+          {/* Card 1: Camera and microphone preview */}
+          <section
+            aria-label="Camera and microphone preview "
+            className="col-span-3 relative flex min-h-85 items-center justify-center overflow-hidden rounded-2xl bg-[#202124] shadow-[0_12px_32px_rgba(32,33,36,0.12)]"
+          >
             <video
               ref={videoRef}
               autoPlay
@@ -384,7 +395,7 @@ export function PreJoin({
                     className="mx-auto mb-3 size-7 text-white/70"
                     aria-hidden="true"
                   />
-                  <p className="text-xl font-normal">Camera is off</p>
+                  <p className="text-lg font-normal text-white">Camera is off</p>
                   {permissionError ? (
                     <p className="mt-2 text-sm text-white/65">
                       {permissionError}
@@ -394,7 +405,7 @@ export function PreJoin({
               </div>
             ) : null}
 
-            <div className="absolute inset-x-0 bottom-5 z-20 flex justify-center gap-3">
+            <div className="absolute inset-x-0 bottom-4 z-20 flex justify-center gap-3">
               <button
                 type="button"
                 onClick={toggleMicrophone}
@@ -406,7 +417,7 @@ export function PreJoin({
                 }
                 aria-pressed={microphoneEnabled}
                 className={cn(
-                  "grid size-14 place-items-center rounded-full text-white shadow-[0_5px_16px_rgba(0,0,0,0.3)] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-45",
+                  "grid size-12 place-items-center rounded-full text-white shadow-[0_4px_12px_rgba(0,0,0,0.3)] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-45",
                   microphoneEnabled
                     ? "bg-[#3c4043] hover:bg-[#4b4f52]"
                     : "bg-[#d93025] hover:bg-[#c5221f]",
@@ -427,7 +438,7 @@ export function PreJoin({
                 }
                 aria-pressed={cameraEnabled}
                 className={cn(
-                  "grid size-14 place-items-center rounded-full text-white shadow-[0_5px_16px_rgba(0,0,0,0.3)] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-45",
+                  "grid size-12 place-items-center rounded-full text-white shadow-[0_4px_12px_rgba(0,0,0,0.3)] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-45",
                   cameraEnabled
                     ? "bg-[#3c4043] hover:bg-[#4b4f52]"
                     : "bg-[#d93025] hover:bg-[#c5221f]",
@@ -440,26 +451,203 @@ export function PreJoin({
                 )}
               </button>
             </div>
-          </div>
-        </section>
+          </section>
 
+          {/* Card 2: Context Document */}
+          {contextRequired && (
+            <section
+              aria-label={contextLabel || "Context document"}
+              className="flex min-h-85 flex-col justify-between rounded-2xl border border-[#e4e6e8] bg-white p-4 shadow-sm col-span-2 gap-3"
+            >
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-base font-semibold text-[#202124]">
+                    {contextLabel || "Context document"}
+                  </span>
+                  {contextRequired ? (
+                    <span className="text-xs font-semibold text-[#b45309]">
+                      Required
+                    </span>
+                  ) : (
+                    <span className="text-xs text-[#5f6368]">Optional</span>
+                  )}
+                </div>
+                {contextPrompt ? (
+                  <p className="mt-1 text-sm text-[#5f6368]">
+                    {contextPrompt}
+                  </p>
+                ) : null}
+              </div>
+
+              {selectedDoc ? (
+                <div className="my-auto flex items-center justify-center rounded-xl border border-[#e4e6e8] bg-[#fafafa] p-4">
+                  <div className="flex w-full max-w-sm items-center gap-4">
+                    <FileThumbnail
+                      file={
+                        uploadedFile ?? {
+                          name: selectedDoc.name,
+                          type: selectedDoc.name.endsWith(".pdf")
+                            ? "application/pdf"
+                            : "application/octet-stream",
+                        }
+                      }
+                      previewImageUrl={previewUrl}
+                      previewAspectRatio={3 / 4}
+                      className="w-20 shrink-0 overflow-hidden rounded-lg border border-[#dadce0] bg-white shadow-xs"
+                      previewContent={
+                        !previewUrl ? (
+                          <div className="flex size-full flex-col items-center justify-center bg-white p-2 text-center">
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-brand">
+                              {selectedDoc.name.split(".").pop() || "DOC"}
+                            </span>
+                            <div className="mt-1.5 w-full space-y-1">
+                              <div className="h-1 w-full rounded-full bg-muted-foreground/20" />
+                              <div className="h-1 w-3/4 rounded-full bg-muted-foreground/20" />
+                              <div className="h-1 w-5/6 rounded-full bg-muted-foreground/20" />
+                            </div>
+                          </div>
+                        ) : undefined
+                      }
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-[#202124]">
+                        {selectedDoc.name}
+                      </p>
+                      {typeof selectedDoc.size === "number" ? (
+                        <p className="mt-0.5 text-xs text-[#5f6368]">
+                          {formatBytes(selectedDoc.size)}
+                        </p>
+                      ) : null}
+                      <div className="mt-2.5 flex items-center gap-3">
+                        <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-600">
+                          <Check className="size-3" /> Attached
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (previewUrl) URL.revokeObjectURL(previewUrl);
+                            setSelectedDoc(null);
+                            setPreviewUrl(null);
+                            setUploadedFile(null);
+                          }}
+                          className="cursor-pointer text-xs font-medium text-red-600 hover:text-red-700 hover:underline"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  onDragEnter={(event) => {
+                    event.preventDefault();
+                    dragCounterRef.current += 1;
+                    setDragOver(true);
+                  }}
+                  onDragLeave={(event) => {
+                    event.preventDefault();
+                    dragCounterRef.current -= 1;
+                    if (dragCounterRef.current === 0) setDragOver(false);
+                  }}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    dragCounterRef.current = 0;
+                    setDragOver(false);
+                    const file = event.dataTransfer.files?.[0];
+                    if (file) void uploadFile(file);
+                  }}
+                  onClick={() => fileInputRef.current?.click()}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      fileInputRef.current?.click();
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Upload context document"
+                  className={cn(
+                    "my-auto flex flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed px-6 py-8 text-center transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand",
+                    dragOver
+                      ? "border-brand bg-brand/10"
+                      : "border-[#c7c9cc] bg-[#fafafa] hover:border-brand hover:bg-brand/5",
+                  )}
+                >
+                  {uploadingDoc ? (
+                    <>
+                      <LoaderCircle
+                        className="size-6 animate-spin text-brand"
+                        aria-hidden="true"
+                      />
+                      <p className="mt-2 text-sm font-medium text-[#202124]">
+                        Uploading…
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <FileUp
+                        className={cn(
+                          "size-6",
+                          dragOver ? "text-brand" : "text-[#5f6368]",
+                        )}
+                        aria-hidden="true"
+                      />
+                      <p className="mt-2 text-sm text-[#202124]">
+                        <span className="font-semibold text-brand underline underline-offset-2">
+                          Upload
+                        </span>{" "}
+                        or drag your {contextLabel ? contextLabel.toLowerCase() : "document"} here
+                      </p>
+                      <p className="mt-1 text-xs text-[#5f6368]">
+                        {contextAccept && contextAccept.includes(".pdf") && !contextAccept.includes(".png")
+                          ? "PDF, Word, or text files (.pdf preferred)"
+                          : "PDF, Word, slides, images, and text files"}
+                      </p>
+                    </>
+                  )}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={contextAccept || CONTEXT_ACCEPT}
+                    hidden
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.currentTarget.value = "";
+                      if (file) void uploadFile(file);
+                    }}
+                  />
+                </div>
+              )}
+
+              {docError ? (
+                <p role="alert" className="mt-2 text-xs text-[#b3261e]">
+                  {docError}
+                </p>
+              ) : null}
+            </section>
+          )}
+        </div>
+
+        {/* Device selects centered below cards */}
         <section
           aria-label="Microphone and camera selection"
-          className="min-w-0 lg:col-start-1 lg:row-start-2"
+          className="mt-8 flex flex-wrap items-center justify-center gap-3"
         >
           {permission === "denied" || permission === "unsupported" ? (
             <button
               type="button"
               onClick={() => void startPreview()}
-              className="mx-auto mt-4 flex items-center gap-2 rounded-full border border-[#dadce0] bg-white px-4 py-2 text-sm font-medium text-[#3c4043] transition-colors hover:bg-[#f1f3f4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              className="flex items-center gap-2 rounded-full border border-[#dadce0] bg-white px-4 py-2 text-sm font-medium text-[#3c4043] transition-colors hover:bg-[#f1f3f4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
             >
               <RotateCcw className="size-4" /> Try device check again
             </button>
           ) : (
-            <div className="grid gap-2 sm:grid-cols-3">
+            <>
               <DeviceSelect
                 label="Microphone"
-                icon={<Mic className="size-4" />}
+                icon={<Mic className="size-4 text-[#5f6368]" />}
                 value={microphoneDeviceId}
                 options={microphones}
                 fallback="Default microphone"
@@ -470,7 +658,7 @@ export function PreJoin({
               />
               <DeviceSelect
                 label="Speaker"
-                icon={<Volume2 className="size-4" />}
+                icon={<Volume2 className="size-4 text-[#5f6368]" />}
                 value={speakerDeviceId}
                 options={speakers}
                 fallback="System default"
@@ -478,7 +666,7 @@ export function PreJoin({
               />
               <DeviceSelect
                 label="Camera"
-                icon={<Camera className="size-4" />}
+                icon={<Camera className="size-4 text-[#5f6368]" />}
                 value={cameraDeviceId}
                 options={cameras}
                 fallback="Default camera"
@@ -487,206 +675,34 @@ export function PreJoin({
                   void startPreview(microphoneDeviceId || undefined, value);
                 }}
               />
-            </div>
+            </>
           )}
         </section>
 
-        {contextRequired && (
-          <section
-            aria-label="Context document"
-            className="min-w-0 rounded-xl border border-[#e4e6e8] bg-white p-4 shadow-[0_8px_24px_rgba(32,33,36,0.08)] lg:col-start-2 lg:row-start-1 lg:mt-56 lg:self-start"
-          >
-            <div className="mb-2 flex items-center justify-between px-1">
-              <span className="text-sm font-medium text-[#202124]">
-                Context document
-              </span>
-              {contextRequired ? (
-                <span className="text-xs font-medium text-amber-700">
-                  Required
-                </span>
-              ) : (
-                <span className="text-xs text-[#5f6368]">Optional</span>
-              )}
-            </div>
-            {selectedDoc ? (
-              <div className="flex items-center gap-3 rounded-xl border-2 border-gray-100 bg-white px-4 py-3 text-left">
-                <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand/10 text-brand">
-                  <FileUp className="size-4.5" aria-hidden="true" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-[#202124]">
-                    {selectedDoc.name}
-                  </p>
-                  {typeof selectedDoc.size === "number" ? (
-                    <p className="text-xs text-[#5f6368]">
-                      {formatBytes(selectedDoc.size)}
-                    </p>
-                  ) : null}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setSelectedDoc(null)}
-                  aria-label={`Remove ${selectedDoc.name}`}
-                  className="cursor-pointer grid size-7 shrink-0 place-items-center rounded-full text-[#5f6368] transition-colors hover:bg-red-100 hover:text-[#202124] focus-visible:outline-2 focus-visible:outline-offset-2 "
-                >
-                  <Trash className="size-4 text-red-500" aria-hidden="true" />
-                </button>
-              </div>
-            ) : (
-              <div
-                onDragEnter={(event) => {
-                  event.preventDefault();
-                  dragCounterRef.current += 1;
-                  setDragOver(true);
-                }}
-                onDragLeave={(event) => {
-                  event.preventDefault();
-                  dragCounterRef.current -= 1;
-                  if (dragCounterRef.current === 0) setDragOver(false);
-                }}
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  dragCounterRef.current = 0;
-                  setDragOver(false);
-                  const file = event.dataTransfer.files?.[0];
-                  if (file) void uploadFile(file);
-                }}
-                onClick={() => fileInputRef.current?.click()}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    fileInputRef.current?.click();
-                  }
-                }}
-                role="button"
-                tabIndex={0}
-                aria-label="Upload context document"
-                className={cn(
-                  "flex cursor-pointer flex-col items-center gap-1 rounded-lg border border-dashed px-5 py-4 text-center transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand",
-                  dragOver
-                    ? "border-brand bg-brand/10"
-                    : "border-[#c7c9cc] bg-[#fafafa] hover:border-brand hover:bg-brand/5",
-                )}
-              >
-                {uploadingDoc ? (
-                  <>
-                    <LoaderCircle
-                      className="size-5 animate-spin text-brand"
-                      aria-hidden="true"
-                    />
-                    <p className="text-sm font-medium text-[#202124]">
-                      Uploading…
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <FileUp
-                      className={cn(
-                        "size-5",
-                        dragOver ? "text-brand" : "text-[#5f6368]",
-                      )}
-                      aria-hidden="true"
-                    />
-                    <p className="text-sm font-medium text-[#202124]">
-                      <span className="text-brand underline-offset-2">
-                        Upload
-                      </span>{" "}
-                      or drag your document here
-                    </p>
-                    <p className="text-xs text-[#5f6368]">
-                      PDF, Word, slides, images, and text files
-                    </p>
-                  </>
-                )}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept={CONTEXT_ACCEPT}
-                  hidden
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    event.currentTarget.value = "";
-                    if (file) void uploadFile(file);
-                  }}
-                />
-              </div>
-            )}
-
-            {docError ? (
-              <p role="alert" className="mt-2 text-sm text-[#b3261e]">
-                {docError}
-              </p>
-            ) : null}
-
-            {!selectedDoc && availableDocs.length > 0 ? (
-              <div className="relative mt-2.5">
-                <span
-                  className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#5f6368]"
-                  aria-hidden="true"
-                >
-                  <FileUp className="size-4" />
-                </span>
-                <select
-                  value=""
-                  onChange={(event) => {
-                    const doc = availableDocs.find(
-                      (candidate) => candidate.id === event.target.value,
-                    );
-                    setSelectedDoc(doc ?? null);
-                  }}
-                  aria-label="Choose a previously uploaded document"
-                  className="h-10 w-full appearance-none truncate rounded-full border border-[#dadce0] bg-white pl-10 pr-9 text-sm text-[#3c4043] shadow-[0_1px_2px_rgba(60,64,67,0.08)] outline-none transition-colors focus:border-brand focus:ring-1 focus:ring-brand/30"
-                >
-                  <option value="">Or choose a past upload</option>
-                  {availableDocs.map((doc) => (
-                    <option key={doc.id} value={doc.id}>
-                      {doc.name}
-                      {typeof doc.size === "number"
-                        ? ` · ${formatBytes(doc.size)}`
-                        : ""}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  className="pointer-events-none absolute right-3.5 top-1/2 size-3.5 -translate-y-1/2 text-[#5f6368]"
-                  aria-hidden="true"
-                />
-              </div>
-            ) : null}
-          </section>
-        )}
-
-        <section
-          className={cn(
-            "flex flex-col items-center text-center lg:col-start-2 lg:items-start lg:text-left",
-            contextRequired
-              ? "lg:row-start-2"
-              : "lg:row-start-1 lg:mb-10 lg:-translate-y-4 lg:self-end",
-          )}
-        >
+        {/* Join button centered below device selects */}
+        <section className="mt-6 flex flex-col items-center justify-center">
           <Button
             type="button"
             onClick={join}
             disabled={
               permission === "requesting" || (contextRequired && !docAttached)
             }
-            className="h-13 min-w-44 cursor-pointer items-center justify-center rounded-full bg-brand px-7 text-sm font-semibold text-white shadow-[0_7px_20px_color-mix(in_srgb,var(--brand)_24%,transparent)] hover:bg-brand-strong"
+            className="h-12 min-w-44 cursor-pointer items-center justify-center rounded-full bg-brand px-8 text-sm font-semibold text-white shadow-[0_7px_20px_color-mix(in_srgb,var(--brand)_24%,transparent)] hover:bg-brand-strong disabled:opacity-45 disabled:cursor-not-allowed"
           >
             {permission === "requesting" ? "Checking devices…" : "Join now"}
           </Button>
           {permission === "ready" && permissionError ? (
-            <p className="mt-4 max-w-xs text-sm leading-6 text-amber-700">
+            <p className="mt-3 max-w-sm text-center text-xs leading-5 text-amber-700">
               {permissionError}
             </p>
           ) : permission === "denied" ? (
-            <p className="mt-4 max-w-xs text-sm leading-6 text-[#b3261e]">
+            <p className="mt-3 max-w-sm text-center text-xs leading-5 text-[#b3261e]">
               You can still join with devices off, or update browser permissions
               and retry.
             </p>
           ) : null}
         </section>
+        </div>
       </div>
 
       <div className="fixed bottom-5 right-5 flex items-center gap-2 text-[11px] font-medium text-[#777b80] sm:bottom-7 sm:right-8">
@@ -714,15 +730,15 @@ function DeviceSelect({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="relative flex min-w-0 items-center gap-2 rounded-full border border-[#dadce0] bg-white px-3 text-[#3c4043] shadow-[0_1px_2px_rgba(60,64,67,0.08)] transition-colors focus-within:border-brand focus-within:ring-1 focus-within:ring-brand/30 hover:bg-[#f8f9fa]">
-      <span className="shrink-0" aria-hidden="true">
+    <label className="relative flex min-w-0 max-w-[260px] items-center gap-2 rounded-full border border-[#dadce0] bg-white px-3.5 text-[#3c4043] shadow-[0_1px_2px_rgba(60,64,67,0.06)] transition-colors focus-within:border-brand focus-within:ring-1 focus-within:ring-brand/30 hover:bg-[#f8f9fa]">
+      <span className="shrink-0 text-[#5f6368]" aria-hidden="true">
         {icon}
       </span>
       <span className="sr-only">{label}</span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-10 min-w-0 flex-1 appearance-none truncate bg-transparent pr-5 text-sm outline-none"
+        className="h-9 min-w-0 flex-1 appearance-none truncate bg-transparent pr-5 text-xs font-normal outline-none cursor-pointer"
       >
         {options.length === 0 ? <option value="">{fallback}</option> : null}
         {options.map((option) => (
@@ -732,7 +748,7 @@ function DeviceSelect({
         ))}
       </select>
       <ChevronDown
-        className="pointer-events-none absolute right-3 size-3.5"
+        className="pointer-events-none absolute right-3 size-3.5 text-[#5f6368]"
         aria-hidden="true"
       />
     </label>

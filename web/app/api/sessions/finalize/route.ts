@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { finalizeInterviewSession, type SessionEndStatus } from "@/lib/interview-sessions";
+import { type SessionEndStatus } from "@/lib/interview-sessions";
+import { closeInterviewSession } from "@/lib/session-lifecycle";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { resolveSessionUser } from "@/lib/session-user";
 import { LearnerMemoryService } from "@/lib/learner-memory";
@@ -39,9 +40,7 @@ export async function POST(request: Request) {
   });
   if (!existing) return NextResponse.json({ error: "Session not found" }, { status: 404 });
 
-  const finalized = await finalizeInterviewSession({
-    sessionId: existing.id,
-    requestedStatus,
+  const finalized = await closeInterviewSession(existing.id, requestedStatus, {
     transcript: transcript as Prisma.InputJsonValue | undefined,
     evidence: evidence as Prisma.InputJsonValue | undefined,
   });

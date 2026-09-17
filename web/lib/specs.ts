@@ -15,6 +15,7 @@ import { ChromaTenantService } from "@/lib/chroma-tenant";
 import { enqueueIngestionWork } from "@/lib/ingestion-queue";
 import { prepareContextDocument, type DocumentManifest } from "@/lib/context-document-service";
 import { scheduleResumeClaimExtraction } from "@/lib/resume-claims";
+import { contextUploadFromAgentData, type AgentContextUpload } from "@/lib/context-upload";
 
 export type SpecType = "personas" | "agents" | "domains";
 
@@ -127,18 +128,21 @@ export async function listAgentPersonas(orgId: string, slugs: string[]) {
   return Object.fromEntries(agents.map((agent) => [agent.slug, agent.persona.slug]));
 }
 
-export async function listAgentContextRequired(orgId: string, slugs: string[]): Promise<Record<string, boolean>> {
+export async function listAgentContextUploads(orgId: string, slugs: string[]): Promise<Record<string, AgentContextUpload>> {
   if (slugs.length === 0) return {};
   const agents = await db.agent.findMany({
     where: { orgId, slug: { in: slugs } },
     select: { slug: true, data: true },
   });
   return Object.fromEntries(
-    agents.map((agent) => {
-      const data = agent.data as Record<string, any> | null;
-      const required = Boolean(data?.config?.context?.required);
-      return [agent.slug, required];
-    }),
+    agents.map((agent) => [agent.slug, contextUploadFromAgentData(agent.data)]),
+  );
+}
+
+export async function listAgentContextRequired(orgId: string, slugs: string[]): Promise<Record<string, boolean>> {
+  const uploads = await listAgentContextUploads(orgId, slugs);
+  return Object.fromEntries(
+    Object.entries(uploads).map(([slug, u]) => [slug, u.required]),
   );
 }
 
