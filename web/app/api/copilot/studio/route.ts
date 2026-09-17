@@ -188,27 +188,6 @@ export async function POST(request: Request) {
       ? await db.user.findUnique({ where: { id: session.userId }, select: { id: true, name: true } })
       : null;
     const learnerName = (session?.runtimeState as Record<string, unknown> | null)?.learner_name ?? user?.name ?? null;
-    let isReturningLearner = false;
-    let pastSessionCount = 0;
-    let lastSessionDate: string | null = null;
-
-    if (session?.userId) {
-      const past = await db.interviewSession.findMany({
-        where: {
-          orgId,
-          userId: session.userId,
-          ...(session?.id ? { id: { not: session.id } } : {}),
-        },
-        orderBy: { createdAt: "desc" },
-        take: 5,
-        select: { id: true, createdAt: true, agentSlug: true },
-      });
-      if (past.length > 0) {
-        isReturningLearner = true;
-        pastSessionCount = past.length;
-        lastSessionDate = past[0].createdAt.toISOString();
-      }
-    }
 
     const primaryDocId = session?.context?.id ?? session?.documents?.[0]?.document?.id ?? Array.from(docMap.keys())[0];
     let resumePayload: {
@@ -265,11 +244,6 @@ export async function POST(request: Request) {
       knowledgeBases: sharedKnowledgeBase ? [sharedKnowledgeBase] : [],
       documents: Array.from(docMap.values()),
       learnerName,
-      learnerHistory: {
-        isReturning: isReturningLearner,
-        pastSessionCount,
-        lastSessionDate,
-      },
       resume: resumePayload,
     });
   }

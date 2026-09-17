@@ -47,11 +47,6 @@ export type SessionSpecs = {
     claims: ResumeClaim[];
   } | null;
   learnerName?: string | null;
-  learnerHistory?: {
-    isReturning: boolean;
-    pastSessionCount: number;
-    lastSessionDate?: string | null;
-  };
   mode?: "voice" | "chat";
 };
 
@@ -74,11 +69,6 @@ export async function loadSessionContext(
       claims: ResumeClaim[];
     } | null;
     learnerName?: string | null;
-    learnerHistory?: {
-      isReturning: boolean;
-      pastSessionCount: number;
-      lastSessionDate?: string | null;
-    };
   }>(orgId, {
     action: "getSessionContext",
     sessionId,
@@ -132,7 +122,6 @@ export async function loadSessionContext(
     documents: result.documents ?? [],
     resume: result.resume ?? null,
     learnerName: result.learnerName,
-    learnerHistory: result.learnerHistory,
     mode,
   };
 }
@@ -181,14 +170,9 @@ CLAIMS AVAILABLE TO PROBE:
 ${claimList}\n`;
   }
 
-  const icebreakerBlock = specs.learnerHistory?.isReturning
-    ? `LEARNER CONTEXT (RETURNING CANDIDATE):
-- This learner has met with you before (last session: ${specs.learnerHistory.lastSessionDate ? new Date(specs.learnerHistory.lastSessionDate).toLocaleDateString() : "earlier"}).
-- NEVER state a session number, session count, or invented history — your memory module surfaces real past exchanges; acknowledge familiarity naturally instead ("good to see you again").
-- Turn 1: Welcome them back warmly, then follow the SAME-TURN CONTINUATION contract: if a document is attached, announce it ("I see you've shared your resume — let me take a look."), run read_document + surface open_pdf, then react to what the tools returned and end with your first question. If no document, one greeting message ending with ONE rapport question.
-- Turn 2: Natural bridge right back into the scenario or their latest progress.
-- Turn 3+: Continue technical scenario progression.`
-    : `LEARNER CONTEXT (FIRST-TIME CANDIDATE):
+  const icebreakerBlock = `LEARNER CONTEXT:
+- Trusted learner name: ${specs.learnerName ?? "not available — omit the name"}
+- Every role-play session starts fresh. Do not imply that you remember or have met the learner before.
 - Spend the first 2-3 turns breaking the ice and establishing rapport before grilling with technical questions:
   * Turn 1 (Warm Greeting): Open their resume on screen (surface open_pdf) while greeting them warmly by name. Ask how their day is going or how they are feeling today. Vary your greeting phrasing naturally; NEVER repeat the same canned greeting across sessions.
   * Turn 2 (Rapport & Comfort): Respond genuinely to what they said, validate their feelings, normalize any interview nerves, and create a calm atmosphere.

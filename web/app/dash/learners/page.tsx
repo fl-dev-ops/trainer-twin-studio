@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { LearnersView, type LearnerData, type LearnerSessionItem } from "@/components/learners-view";
-import { isSessionReport, type KeyMoment, type SessionReport } from "@/lib/session-report";
+import { isSessionReport, normalizeSessionReportStatus, type SessionReport } from "@/lib/session-report";
 
 export const dynamic = "force-dynamic";
 
@@ -96,36 +96,7 @@ export default async function LearnersPage() {
         const attemptNumber = s.attempt || sessions.length - sIndex;
 
         const report = isSessionReport(s.report) ? (s.report as SessionReport) : undefined;
-
-        const evidenceObj =
-          typeof s.evidence === "object" && s.evidence !== null && !Array.isArray(s.evidence)
-            ? (s.evidence as Record<string, unknown>)
-            : {};
-
-        const fallbackTags = Object.keys(evidenceObj).map((k) =>
-          k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
-        );
-
-        const transcriptArray = Array.isArray(s.transcript) ? s.transcript : [];
-        const userTurns = transcriptArray.filter(
-          (t: unknown) =>
-            typeof t === "object" &&
-            t !== null &&
-            ((t as { role?: string }).role === "user" || (t as { speaker?: string }).speaker === "learner") &&
-            typeof (t as { text?: unknown }).text === "string"
-        ) as Array<{ text: string }>;
-
-        const moments: KeyMoment[] =
-          report?.keyMoments && report.keyMoments.length > 0
-            ? report.keyMoments
-            : userTurns.slice(0, 3).map((turn, i) => ({
-                id: `${s.id}-m${i + 1}`,
-                number: String(i + 1).padStart(2, "0"),
-                timestamp: `${i * 2 + 1}:15`,
-                title: `Key exchange ${i + 1}`,
-                quote: `“${turn.text}”`,
-                description: "Spoken contribution recorded during the scenario dialogue.",
-              }));
+        const reportStatus = normalizeSessionReportStatus(s.reportStatus, Boolean(report));
 
         return {
           id: s.id,
@@ -134,21 +105,11 @@ export default async function LearnersPage() {
           durationMinutes: durationMin,
           formattedDate: formatted,
           dateSubtitle: `${formatted} / Attempt ${attemptNumber} / ${durationMin} min`,
-          summary:
-            report?.summary ||
-            (typeof evidenceObj.summary === "string" && evidenceObj.summary) ||
-            `${userName} completed the scenario practice run.`,
-          summaryTags:
-            report?.summaryTags && report.summaryTags.length > 0
-              ? report.summaryTags
-              : fallbackTags.length > 0
-                ? fallbackTags.slice(0, 3)
-                : ["Completed", "Evaluated"],
-          keyMoments: moments,
-          focusNextTime:
-            report?.focusNextTime ||
-            (typeof evidenceObj.focusNextTime === "string" && evidenceObj.focusNextTime) ||
-            "Continue building problem decomposition depth in follow-up sessions.",
+          reportStatus,
+          summary: report?.summary ?? "",
+          summaryTags: report?.summaryTags ?? [],
+          keyMoments: report?.keyMoments ?? [],
+          focusNextTime: report?.focusNextTime ?? "",
           audioUrl: s.s3AudioKey ? `/api/sessions/${s.id}/audio` : undefined,
           report,
         };
