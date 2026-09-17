@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
-import { resolveSessionEndStatus } from "@/lib/interview-sessions";
+import { finalizeInterviewSession, type SessionEndStatus } from "@/lib/interview-sessions";
 import { closeInterviewSession } from "@/lib/session-lifecycle";
+import { Prisma } from "@/lib/generated/prisma/client";
 import { db } from "@/lib/db";
+import { scheduleSessionReport } from "@/lib/session-report-jobs";
 
 /**
  * Fixed webhook route for LiveKit agent recording & session finalization.
@@ -27,27 +29,21 @@ export async function POST(req: Request) {
     where: {
       OR: [{ id: rawSessionId }, { shareCode: rawSessionId }],
     },
-    select: { id: true, status: true, evidence: true, transcript: true },
+    select: { id: true },
   });
 
   if (!session) {
     return NextResponse.json({ error: `Session not found: ${rawSessionId}` }, { status: 404 });
   }
 
-  const status =
+  const requestedStatus: SessionEndStatus | undefined =
     body.status === "COMPLETED"
-      ? resolveSessionEndStatus(session.status, "completed")
+      ? "completed"
       : body.status === "FAILED" || body.status === "ABANDONED"
-        ? resolveSessionEndStatus(session.status, "abandoned")
-        : session.status;
-
-  const existingEvidence =
-    typeof session.evidence === "object" && session.evidence !== null
-      ? (session.evidence as Record<string, unknown>)
-      : {};
+        ? "abandoned"
+        : undefined;
 
   const updatedEvidence = {
-    ...existingEvidence,
     ...(typeof body.report === "object" && body.report !== null ? body.report : {}),
     ...(body.video_url ? { videoUrl: body.video_url } : {}),
     ...(body.video_s3_key ? { videoS3Key: body.video_s3_key } : {}),
@@ -56,19 +52,22 @@ export async function POST(req: Request) {
     ...(body.metrics ? { metrics: body.metrics } : {}),
   };
 
-  const hasCanonicalTranscript = Array.isArray(session.transcript) && session.transcript.length > 0;
-  const newTranscript =
-    !hasCanonicalTranscript && Array.isArray(body.transcript) ? body.transcript : undefined;
+  const payload = {
+    transcript: Array.isArray(body.transcript) ? body.transcript as Prisma.InputJsonValue : undefined,
+    evidence: updatedEvidence as Prisma.InputJsonValue,
+    s3AudioKey: body.audio_s3_key || body.audio_url
+      ? String(body.audio_s3_key || body.audio_url)
+      : undefined,
+  };
+  const finalized = requestedStatus
+    ? await closeInterviewSession(session.id, requestedStatus, payload)
+    : await finalizeInterviewSession({ sessionId: session.id, ...payload });
+  if (!finalized) return NextResponse.json({ error: "Session not found" }, { status: 404 });
+  if (finalized.finalStatus === "completed") {
+    await scheduleSessionReport(finalized.id).catch((error) => {
+      console.warn("Could not initiate session report generation:", error);
+    });
+  }
 
-  await closeInterviewSession(
-    session.id,
-    status === "completed" || status === "abandoned" ? status : resolveSessionEndStatus(session.status, "abandoned"),
-    {
-      evidence: updatedEvidence,
-      ...(newTranscript ? { transcript: newTranscript } : {}),
-      ...(body.audio_s3_key || body.audio_url ? { s3AudioKey: String(body.audio_s3_key || body.audio_url) } : {}),
-    },
-  );
-
-  return NextResponse.json({ ok: true, sessionId: session.id, status });
+  return NextResponse.json({ ok: true, sessionId: session.id, status: finalized.finalStatus });
 }

@@ -2301,13 +2301,28 @@ function PDFViewerInner({
     searchProvider.startSearch()
     searchProvider.searchAllPages(query).wait(
       (result) => {
-        if (result.results.length > 0) {
-          searchProvider.goToResult(0)
-        }
+        const firstResult = result.results[0]
+        if (!firstResult) return
+
+        searchProvider.goToResult(0)
+        const firstRect = firstResult.rects[0]
+        scroll?.scrollToPage({
+          pageNumber: firstResult.pageIndex + 1,
+          ...(firstRect
+            ? {
+                pageCoordinates: {
+                  x: firstRect.origin.x,
+                  y: firstRect.origin.y,
+                },
+                alignY: 30,
+              }
+            : {}),
+          behavior: "auto",
+        })
       },
       () => undefined
     )
-  }, [initialSearchQuery, searchProvider])
+  }, [initialSearchQuery, scroll, searchProvider])
 
   React.useImperativeHandle(
     viewerRef,

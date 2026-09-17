@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { authorizeRuntimeSession } from "@/lib/interview-sessions";
+import { authorizeRuntimeSession, type SessionEndStatus } from "@/lib/interview-sessions";
 import { closeInterviewSession } from "@/lib/session-lifecycle";
 import { activateInterviewRuntime } from "@/lib/session-activation";
 import { getSessionOrg } from "@/lib/org";
 import { resolveSessionUser } from "@/lib/session-user";
 import { db } from "@/lib/db";
 import { listSessions } from "@/lib/specs";
+import { scheduleSessionReport } from "@/lib/session-report-jobs";
 
 export async function GET() {
   const org = await getSessionOrg();
@@ -55,8 +56,13 @@ export async function PATCH(req: Request) {
   const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
   const session = await authorizeRuntimeSession(String(body.id), token);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  await closeInterviewSession(session.id, body.status, {
+  const finalized = await closeInterviewSession(session.id, body.status as SessionEndStatus, {
     ...(typeof body.s3AudioKey === "string" ? { s3AudioKey: body.s3AudioKey } : {}),
   });
+  if (finalized?.finalStatus === "completed") {
+    await scheduleSessionReport(finalized.id).catch((error) => {
+      console.warn("Could not initiate session report generation:", error);
+    });
+  }
   return NextResponse.json({ ok: true });
 }

@@ -19,6 +19,74 @@ export function resolveSessionEndStatus(current: string, requested: SessionEndSt
   return current === "completed" ? "completed" : requested;
 }
 
+function jsonRecord(value: Prisma.JsonValue | Prisma.InputJsonValue | undefined): Record<string, Prisma.InputJsonValue> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, Prisma.InputJsonValue>
+    : {};
+}
+
+export function shouldStoreSessionTranscript(current: Prisma.JsonValue, incoming: Prisma.InputJsonValue | undefined) {
+  return !(Array.isArray(current) && current.length > 0) && Array.isArray(incoming) && incoming.length > 0;
+}
+
+export function mergeSessionEvidence(
+  current: Prisma.JsonValue,
+  incoming: Prisma.InputJsonValue | undefined,
+): Prisma.InputJsonObject | undefined {
+  return incoming ? { ...jsonRecord(current), ...jsonRecord(incoming) } : undefined;
+}
+
+export async function finalizeInterviewSession(input: {
+  sessionId: string;
+  requestedStatus?: SessionEndStatus;
+  transcript?: Prisma.InputJsonValue;
+  evidence?: Prisma.InputJsonValue;
+  s3AudioKey?: string;
+}) {
+  return db.$transaction(async (tx) => {
+    const existing = await tx.interviewSession.findUnique({
+      where: { id: input.sessionId },
+      select: { status: true, endedAt: true, transcript: true, evidence: true, reportStatus: true },
+    });
+    if (!existing) return null;
+
+    let becameCompleted = false;
+    if (input.requestedStatus) {
+      const finalStatus = resolveSessionEndStatus(existing.status, input.requestedStatus);
+      const transitioned = await tx.interviewSession.updateMany({
+        where: {
+          id: input.sessionId,
+          status: { not: "completed" },
+        },
+        data: { status: finalStatus },
+      });
+      becameCompleted = finalStatus === "completed" && transitioned.count === 1;
+    }
+
+    const storeTranscript = shouldStoreSessionTranscript(existing.transcript, input.transcript);
+    const mergedEvidence = mergeSessionEvidence(existing.evidence, input.evidence);
+
+    const updated = await tx.interviewSession.update({
+      where: { id: input.sessionId },
+      data: {
+        ...(input.requestedStatus ? { endedAt: existing.endedAt ?? new Date(), runtimeTokenHash: null } : {}),
+        ...(storeTranscript ? { transcript: input.transcript } : {}),
+        ...(mergedEvidence ? { evidence: mergedEvidence } : {}),
+        ...(input.s3AudioKey ? { s3AudioKey: input.s3AudioKey } : {}),
+      },
+      select: { id: true, status: true, transcript: true, evidence: true, reportStatus: true },
+    });
+
+    return {
+      ...updated,
+      previousStatus: existing.status,
+      finalStatus: updated.status,
+      becameCompleted,
+      transcriptAvailable: Array.isArray(updated.transcript) && updated.transcript.length > 0,
+    };
+  });
+}
+
 async function sessionSnapshot(orgId: string, agentId: string, contextId?: string | null, contextIds: string[] = []) {
   const docIds = Array.from(new Set([...contextIds, ...(contextId ? [contextId] : [])]));
   const [agent, documents] = await Promise.all([

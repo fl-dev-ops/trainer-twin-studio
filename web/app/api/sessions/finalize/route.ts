@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { type SessionEndStatus } from "@/lib/interview-sessions";
 import { closeInterviewSession } from "@/lib/session-lifecycle";
+import { Prisma } from "@/lib/generated/prisma/client";
 import { resolveSessionUser } from "@/lib/session-user";
 import { LearnerMemoryService } from "@/lib/learner-memory";
+import { scheduleSessionReport } from "@/lib/session-report-jobs";
 
 /**
  * Finalizes a session: persists the transcript and evidence coverage captured
@@ -34,20 +36,17 @@ export async function POST(request: Request) {
 
   const existing = await db.interviewSession.findFirst({
     where: { id: String(body.sessionId), orgId: org.id, userId: user.id },
-    select: { status: true, transcript: true, evidence: true },
+    select: { id: true },
   });
   if (!existing) return NextResponse.json({ error: "Session not found" }, { status: 404 });
 
-  const hasCanonicalTranscript = Array.isArray(existing.transcript) && existing.transcript.length > 0;
-  const hasCanonicalEvidence =
-    existing.evidence && typeof existing.evidence === "object" && Object.keys(existing.evidence).length > 0;
-
-  await closeInterviewSession(String(body.sessionId), requestedStatus, {
-    ...(!hasCanonicalTranscript && transcript ? { transcript } : {}),
-    ...(!hasCanonicalEvidence && evidence ? { evidence } : {}),
+  const finalized = await closeInterviewSession(existing.id, requestedStatus, {
+    transcript: transcript as Prisma.InputJsonValue | undefined,
+    evidence: evidence as Prisma.InputJsonValue | undefined,
   });
+  if (!finalized) return NextResponse.json({ error: "Session not found" }, { status: 404 });
 
-  const effectiveTranscript = (hasCanonicalTranscript ? existing.transcript : transcript) as
+  const effectiveTranscript = finalized.transcript as
     | Array<{ speaker?: string; role?: string; text?: string }>
     | undefined;
 
@@ -78,14 +77,12 @@ export async function POST(request: Request) {
     console.warn("Learner collection hook notice:", err);
   }
 
-  // Trigger Gemini LLM evaluation report generation in the background
-  try {
-    const { generateSessionReport } = await import("@/lib/generate-session-report");
-    void generateSessionReport(String(body.sessionId)).catch((err) => {
-      console.warn("Session report generation notice:", err);
-    });
-  } catch (err) {
-    console.warn("Could not initiate session report generation:", err);
+  if (finalized.finalStatus === "completed") {
+    try {
+      await scheduleSessionReport(String(body.sessionId));
+    } catch (err) {
+      console.warn("Could not initiate session report generation:", err);
+    }
   }
 
   return NextResponse.json({ ok: true });

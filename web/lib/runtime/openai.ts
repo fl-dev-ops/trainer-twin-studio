@@ -861,6 +861,7 @@ export function resumeTurnGuidance(specs: CompiledSpecs, state: RuntimeState, di
         ? `NEW MAIN QUESTION: begin with exactly one short neutral bridge: "Okay." or "Got it." Then ask the question immediately. Never restate, paraphrase, summarize, praise, or evaluate the candidate's previous answer in this transition.`
         : `NEW MAIN QUESTION: ask your first question about the highlighted claim. Do not restate or summarize the resume.`
       : `FOLLOW-UP: base it on the candidate's latest answer and the active claim; deepen the thread or close a missing coverage item. Ask exactly one question, carry NO acknowledgement prefix, and never teach or provide a model answer.`,
+    `QUESTION PROGRESS: Section highlight (main question) ${Math.min(state.main_questions_asked ?? 1, specs.agent.interview.type === "resume" ? (specs.agent.interview.max_section_highlights ?? specs.agent.interview.main_questions ?? 4) : 4)} of ${specs.agent.interview.type === "resume" ? (specs.agent.interview.max_section_highlights ?? specs.agent.interview.main_questions ?? 4) : 4}.`,
     "HARD RULES: exactly one question, under 500 characters; no scoring language (never use good, great, excellent, or evaluate the candidate); never repeat or summarize resume text; never return to an already-completed claim; never invent a project, responsibility, metric, decision, or result.",
     `Example questions for this round (match the active claim, angle, and latest answer; never copy them verbatim): ${RESUME_ROUND_EXAMPLES[round]}`,
   ].filter(Boolean);
@@ -2948,6 +2949,10 @@ async function runCompletionPipeline(
           specs.agent.context_mode === "resume_grounding" ||
           specs.agent.context_mode === "resume_topics_only" ||
           specs.agent.claim_handling === "resume_evidence");
+      const resumeMaxMainQuestions = specs.agent.interview.type === "resume"
+        ? (specs.agent.interview.max_section_highlights ?? specs.agent.interview.main_questions ?? 4)
+        : 0;
+      const resumeQuotaComplete = isResumeScenario && (state.main_questions_asked ?? 0) >= resumeMaxMainQuestions;
 
       // Resume Mastery v1 turn shape: with follow-up budget left on a pending main, an
       // answer turn is a follow-up that stays on the current claim (no new highlight).
@@ -2963,7 +2968,7 @@ async function runCompletionPipeline(
         (state.claim_follow_ups_used ?? 0) < specs.agent.interview.follow_ups_per_main_question &&
         !(classifiedDocumentLookup?.needed && classifiedDocumentLookup.file_id);
       const claimTurn =
-        isResumeScenario && canAdvance && !isFollowUpTurn && primaryDocId && advertisedToolNames.has("surface")
+        isResumeScenario && canAdvance && !isFollowUpTurn && !resumeQuotaComplete && primaryDocId && advertisedToolNames.has("surface")
           ? await selectNextClaimEvidence(session, specs, state, primaryDocId, phaseForGrounding)
           : null;
 
@@ -3200,6 +3205,13 @@ async function runCompletionPipeline(
           : technicalSelection && "kind" in technicalSelection
             ? { text: acknowledge("I don't have another validated question of the required type for this round, so we'll stop here.") }
             : null;
+        const resumeTerminal = isResumeScenario && !isFollowUpTurn && !claimTurn && (
+          resumeQuotaComplete
+            ? { text: "That completes the configured questions for this interview. Thank you for your time." }
+            : (state.main_questions_asked ?? 0) > 0
+              ? { text: "That covers the available projects on your resume. Thank you for your time, we'll conclude here." }
+              : null
+        );
         if (technicalQuotaComplete && !technicalFollowUp && !selectedTechnicalQuestion) {
           state.end_reason = "completed";
           state.actions.push("close_session");
@@ -3214,6 +3226,13 @@ async function runCompletionPipeline(
           spoken = {
             text: technicalTerminal?.text ?? "I don't have another validated question of the required type for this round, so we'll stop here.",
             meta: { attempts: 0, flags: ["question_inventory_insufficient"], fallback: true, rendererFallback: false, draftWords: 16, finalWords: 16 },
+          };
+        } else if (resumeTerminal) {
+          state.end_reason = "completed";
+          state.actions.push("close_session");
+          spoken = {
+            text: resumeTerminal.text,
+            meta: { attempts: 0, flags: [], fallback: false, rendererFallback: false, draftWords: wordCount(resumeTerminal.text), finalWords: wordCount(resumeTerminal.text) },
           };
         } else if (technicalSelection) {
           const questionSpeech = selectedTechnicalSpeech ?? technicalSelection.spokenText;
@@ -3265,8 +3284,9 @@ async function runCompletionPipeline(
         }
         turnSpokenText = spokenText;
 
-        if (technicalTerminal && advertisedToolNames.has("finish_session")) {
-          const terminal = terminalToolCompletion({ completionId, timestamp, model, text: technicalTerminal.text });
+        const terminalResponse = technicalTerminal ?? resumeTerminal;
+        if (terminalResponse && advertisedToolNames.has("finish_session")) {
+          const terminal = terminalToolCompletion({ completionId, timestamp, model, text: terminalResponse.text });
           sseChunks = terminal.sseChunks;
           fullResponse = terminal.fullResponse;
         } else {

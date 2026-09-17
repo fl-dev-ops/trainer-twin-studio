@@ -13,6 +13,8 @@ const sharedFields = {
 export const resumeInterviewConfigSchema = z.object({
   ...sharedFields,
   type: z.literal("resume"),
+  main_questions: z.number().int().min(1).max(20).default(4),
+  max_section_highlights: z.number().int().min(1).max(20).optional(),
 }).strict();
 
 export const technicalInterviewConfigSchema = z.object({
@@ -33,12 +35,14 @@ export const interviewConfigSchema = z.discriminatedUnion("type", [
 ]);
 
 export type InterviewConfig = z.infer<typeof interviewConfigSchema>;
+export type ResumeInterviewConfig = z.infer<typeof resumeInterviewConfigSchema>;
 export type TechnicalInterviewConfig = z.infer<typeof technicalInterviewConfigSchema>;
 
 export const DEFAULT_RESUME_INTERVIEW_CONFIG: InterviewConfig = {
   schema_version: 1,
   type: "resume",
   follow_ups_per_main_question: 1,
+  main_questions: 4,
 };
 
 export const DEFAULT_TECHNICAL_QUESTION_COUNTS: TechnicalInterviewConfig["question_counts"] = {
