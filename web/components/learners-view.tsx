@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import {
+  AlertCircle,
   ChevronDown,
   ChevronUp,
+  Clock3,
   GraduationCap,
+  LoaderCircle,
   Pause,
   Play,
   UserPlus,
@@ -22,7 +25,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { cn } from "@/lib/utils";
-import type { KeyMoment, SessionReport } from "@/lib/session-report";
+import type { KeyMoment, SessionReport, SessionReportStatus } from "@/lib/session-report";
 
 export type LearnerSessionItem = {
   id: string;
@@ -31,12 +34,28 @@ export type LearnerSessionItem = {
   durationMinutes: number;
   formattedDate: string;
   dateSubtitle: string;
+  reportStatus: SessionReportStatus;
   summary: string;
   summaryTags: string[];
   keyMoments: KeyMoment[];
   focusNextTime: string;
   audioUrl?: string;
   report?: SessionReport;
+};
+
+const reportStatusCopy: Record<Exclude<SessionReportStatus, "completed">, { title: string; description: string }> = {
+  generating: {
+    title: "Evaluation in progress",
+    description: "The session was saved successfully. Performance feedback is still being generated.",
+  },
+  failed: {
+    title: "Evaluation failed",
+    description: "The session was saved, but performance feedback could not be generated.",
+  },
+  none: {
+    title: "Evaluation not available",
+    description: "This session was completed before an evaluation could be started.",
+  },
 };
 
 export type LearnerData = {
@@ -71,7 +90,6 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
     learners[0]?.sessions[0]?.id ?? ""
   );
 
-  const [playingMomentId, setPlayingMomentId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -87,30 +105,26 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
   const selectedSession =
     selectedLearner?.sessions.find((s) => s.id === selectedSessionId) ??
     selectedLearner?.sessions[0];
+  const hasCompletedReport = selectedSession?.reportStatus === "completed" && Boolean(selectedSession.report);
 
   const totalSessions = learners.reduce(
     (sum, l) => sum + (l.sessions?.length || l.completedSessionsCount || 0),
     0
   );
 
-  useEffect(() => {
-    setIsPlaying(false);
-    setCurrentTime(0);
-    setPlayingMomentId(null);
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-    }
-  }, [selectedSessionId]);
-
   const toggleLearnerExpand = (id: string) => {
     setExpandedLearnerIds((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
   const handleSelectSession = (learnerId: string, sessionId: string) => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    setIsPlaying(false);
+    setCurrentTime(0);
     setSelectedLearnerId(learnerId);
     setSelectedSessionId(sessionId);
-    setPlayingMomentId(null);
   };
 
   const handleTogglePlayPause = () => {
@@ -118,7 +132,6 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
     if (isPlaying) {
       audioRef.current.pause();
       setIsPlaying(false);
-      setPlayingMomentId(null);
     } else {
       audioRef.current.play().then(() => {
         setIsPlaying(true);
@@ -127,20 +140,6 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
         setIsPlaying(false);
       });
     }
-  };
-
-  const handlePlayMoment = (moment: KeyMoment) => {
-    if (!audioRef.current || !selectedSession?.audioUrl) return;
-
-    const targetSeconds = moment.seconds ?? 0;
-    audioRef.current.currentTime = targetSeconds;
-    audioRef.current.play().then(() => {
-      setIsPlaying(true);
-      setPlayingMomentId(moment.id);
-    }).catch((err) => {
-      console.warn("Could not play moment audio:", err);
-      setIsPlaying(false);
-    });
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -287,7 +286,7 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
                     <h4 className="text-sm font-semibold text-foreground">Session Audio</h4>
                     <p className="text-xs text-muted-foreground">
                       {selectedSession.audioUrl
-                        ? "Full dialogue recording · Select \"Play moment\" below to scrub to specific turns"
+                        ? "Full dialogue recording"
                         : "Recording unavailable for this session"}
                     </p>
                   </div>
@@ -349,10 +348,7 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
                     onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
                     onPlay={() => setIsPlaying(true)}
                     onPause={() => setIsPlaying(false)}
-                    onEnded={() => {
-                      setIsPlaying(false);
-                      setPlayingMomentId(null);
-                    }}
+                    onEnded={() => setIsPlaying(false)}
                     className="hidden"
                   />
                 </>
@@ -364,6 +360,27 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
               )}
             </section>
 
+            {!hasCompletedReport && selectedSession.reportStatus !== "completed" && (() => {
+              const status = reportStatusCopy[selectedSession.reportStatus];
+              const StatusIcon = selectedSession.reportStatus === "generating"
+                ? LoaderCircle
+                : selectedSession.reportStatus === "failed"
+                  ? AlertCircle
+                  : Clock3;
+              return (
+                <section className="rounded-2xl border bg-card p-5 sm:p-6">
+                  <div className="flex items-start gap-3">
+                    <StatusIcon className={cn("mt-0.5 size-5 text-muted-foreground", selectedSession.reportStatus === "generating" && "animate-spin")} />
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground">{status.title}</h3>
+                      <p className="mt-1 text-xs sm:text-[13px] leading-relaxed text-muted-foreground">{status.description}</p>
+                    </div>
+                  </div>
+                </section>
+              );
+            })()}
+
+            {hasCompletedReport && <>
             {/* SCENARIO SUMMARY Section: 14px Subheading, 12px Body */}
             <section>
               <h3 className="text-sm font-semibold text-foreground tracking-tight mb-2.5">
@@ -403,24 +420,18 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {selectedSession.keyMoments.map((moment) => {
-                  const isCurrentMoment = playingMomentId === moment.id;
                   return (
                     <div
                       key={moment.id}
-                      className={cn(
-                        "rounded-2xl border p-4 sm:p-5 flex flex-col justify-between shadow-2xs transition-all",
-                        isCurrentMoment
-                          ? "border-indigo-500 bg-indigo-50/20 dark:bg-indigo-950/30 ring-2 ring-indigo-500/20"
-                          : "bg-card hover:shadow-xs"
-                      )}
+                      className="rounded-2xl border bg-card p-4 sm:p-5 shadow-2xs transition-all hover:shadow-xs"
                     >
                       <div>
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
                             {moment.number}
                           </span>
-                          <span className="text-xs font-mono text-muted-foreground">
-                            {moment.timestamp}
+                          <span className="text-xs text-muted-foreground">
+                            Approx. {moment.timestamp}
                           </span>
                         </div>
 
@@ -440,32 +451,12 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
                         </p>
                       </div>
 
-                      {selectedSession.audioUrl ? (
-                        <div className="mt-4 pt-2.5 border-t border-border/40">
-                          <button
-                            type="button"
-                            onClick={() => handlePlayMoment(moment)}
-                            className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline transition-colors cursor-pointer"
-                          >
-                            {isCurrentMoment && isPlaying ? (
-                              <>
-                                <Volume2 className="size-3.5 animate-pulse text-indigo-600 dark:text-indigo-400" />
-                                <span>Playing at {moment.timestamp}...</span>
-                              </>
-                            ) : (
-                              <>
-                                <Play className="size-3 fill-current text-indigo-600 dark:text-indigo-400" />
-                                <span>Play moment</span>
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      ) : null}
                     </div>
                   );
                 })}
               </div>
             </section>
+            </>}
 
             {/* Next Conversation Brief Section: 14px Subheading, 12px Body */}
             <section className="mt-1">

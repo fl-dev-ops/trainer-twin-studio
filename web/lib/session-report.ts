@@ -18,6 +18,13 @@ export type SessionReport = {
   generatedAt: string;
 };
 
+export type SessionReportStatus = "none" | "generating" | "failed" | "completed";
+
+export function normalizeSessionReportStatus(value: unknown, hasValidReport: boolean): SessionReportStatus {
+  if (hasValidReport) return "completed";
+  return value === "generating" || value === "failed" ? value : "none";
+}
+
 export const SESSION_REPORT_JSON_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -47,7 +54,7 @@ export const SESSION_REPORT_JSON_SCHEMA = {
           description: { type: "string", description: "Why this moment was notable or what it demonstrated." },
         },
       },
-      description: "Exactly 3 distinct moments selected from the session conversation.",
+      description: "Up to 3 substantive learner moments selected from the body of the session; excludes procedural opening and closing exchanges.",
     },
     focusNextTime: {
       type: "string",

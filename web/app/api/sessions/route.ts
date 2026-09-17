@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { after } from "next/server";
-import { activateSession, authorizeRuntimeSession } from "@/lib/interview-sessions";
+import { activateSession, authorizeRuntimeSession, finalizeInterviewSession, type SessionEndStatus } from "@/lib/interview-sessions";
 import { createLiveKitSessionToken } from "@/lib/livekit";
 import { prewarmSessionOpening } from "@/lib/runtime/warmup";
 import { getSessionOrg } from "@/lib/org";
 import { resolveSessionUser } from "@/lib/session-user";
 import { db } from "@/lib/db";
 import { listSessions } from "@/lib/specs";
+import { scheduleSessionReport } from "@/lib/session-report-jobs";
 
 export async function GET() {
   const org = await getSessionOrg();
@@ -108,17 +109,15 @@ export async function PATCH(req: Request) {
   const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
   const session = await authorizeRuntimeSession(String(body.id), token);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  await db.$transaction([
-    db.interviewSession.update({
-      where: { id: session.id },
-      data: {
-        status: body.status,
-        endedAt: new Date(),
-        runtimeTokenHash: null,
-        ...(typeof body.s3AudioKey === "string" ? { s3AudioKey: body.s3AudioKey } : {}),
-      },
-    }),
-    db.rolePlayAssignment.deleteMany({ where: { sessionId: session.id } }),
-  ]);
+  const finalized = await finalizeInterviewSession({
+    sessionId: session.id,
+    requestedStatus: body.status as SessionEndStatus,
+    s3AudioKey: typeof body.s3AudioKey === "string" ? body.s3AudioKey : undefined,
+  });
+  if (finalized?.finalStatus === "completed") {
+    await scheduleSessionReport(finalized.id).catch((error) => {
+      console.warn("Could not initiate session report generation:", error);
+    });
+  }
   return NextResponse.json({ ok: true });
 }
