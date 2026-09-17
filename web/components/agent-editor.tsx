@@ -416,7 +416,12 @@ export function AgentEditor(initial: AgentEditorProps) {
                 value={interviewConfig.type}
                 onValueChange={(value) => {
                   if (value === "resume") {
-                    setInterviewConfig({ schema_version: 1, type: "resume", follow_ups_per_main_question: interviewConfig.follow_ups_per_main_question });
+                    setInterviewConfig({
+                      schema_version: 1,
+                      type: "resume",
+                      follow_ups_per_main_question: interviewConfig.follow_ups_per_main_question,
+                      main_questions: interviewConfig.type === "resume" ? interviewConfig.main_questions ?? 4 : 4,
+                    });
                   } else if (value === "technical") {
                     setInterviewConfig({
                       schema_version: 1,
@@ -451,6 +456,26 @@ export function AgentEditor(initial: AgentEditorProps) {
               />
               <FieldDescription className="text-xs">Follow-ups are adaptive; this is only the cap.</FieldDescription>
             </Field>
+            {interviewConfig.type === "resume" ? (
+              <Field>
+                <FieldLabel htmlFor="resume-main-questions">Main questions for the session</FieldLabel>
+                <Input
+                  id="resume-main-questions"
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={interviewConfig.main_questions ?? 4}
+                  onChange={(event) => {
+                    const count = Math.max(1, Math.min(20, Number(event.target.value) || 1));
+                    setInterviewConfig({ ...interviewConfig, main_questions: count });
+                    setDirty(true);
+                  }}
+                />
+                <FieldDescription className="text-xs">
+                  Maximum number of section highlights to question during the session.
+                </FieldDescription>
+              </Field>
+            ) : null}
             {interviewConfig.type === "technical" ? (
               <>
                 <Field data-invalid={interviewConfig.topic_slugs.length === 0}>
@@ -470,7 +495,7 @@ export function AgentEditor(initial: AgentEditorProps) {
                             setDirty(true);
                           }}
                         />
-                        <span><span className="font-medium">{topic.slug}</span>{topic.description ? ` — ${topic.description}` : ""}</span>
+                        <span className="font-medium">{topic.slug}</span>
                       </label>
                     ))}
                     {!availableTopics.length ? (

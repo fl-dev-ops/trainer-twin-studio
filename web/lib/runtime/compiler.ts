@@ -153,6 +153,7 @@ export function buildSpecs(config: Record<string, any>): CompiledSpecs {
     schema_version: 1,
     type: "resume",
     follow_ups_per_main_question: 1,
+    main_questions: 4,
   });
   const domainData = structuredClone(config.domain?.data ?? {});
   domainData.version = config.domain?.version ?? 1;
