@@ -57,3 +57,37 @@ def test_wav_header():
     assert h[:4] == b"RIFF" and h[8:12] == b"WAVE" and h[36:40] == b"data"
     assert struct.unpack("<I", h[40:44])[0] == 96000
     assert struct.unpack("<I", h[24:28])[0] == config.SAMPLE_RATE
+
+
+@pytest.mark.asyncio
+async def test_voice_store_caching():
+    import httpx
+    from app.voices import VoiceStore
+
+    calls = 0
+
+    def handler(request: httpx.Request):
+        nonlocal calls
+        calls += 1
+        if request.url.path == "/api/tts/voices/test-voice":
+            return httpx.Response(200, json={"audioUrl": "https://s3/test.wav", "transcript": "hi"})
+        return httpx.Response(404)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://app")
+    store = VoiceStore(client, cache_ttl=10.0)
+
+    # First call: hits HTTP
+    meta1 = await store.resolve("test-voice")
+    assert meta1["audioUrl"] == "https://s3/test.wav"
+    assert calls == 1
+
+    # Second call: hits in-memory cache, no HTTP call
+    meta2 = await store.resolve("test-voice")
+    assert meta2["audioUrl"] == "https://s3/test.wav"
+    assert calls == 1
+
+    # Invalidate cache
+    store.invalidate("test-voice")
+    meta3 = await store.resolve("test-voice")
+    assert calls == 2
+    await client.aclose()
