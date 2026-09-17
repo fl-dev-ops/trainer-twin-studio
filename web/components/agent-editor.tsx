@@ -95,6 +95,7 @@ export function AgentEditor(initial: AgentEditorProps) {
   const showSpec = useSearchParams().get("debug") === "true";
   const [voices, setVoices] = useState<VoiceOption[]>([]);
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeOption[]>([]);
+  const [topicsLoading, setTopicsLoading] = useState(true);
   const availableTopicSlugs = new Set(
     knowledgeBases.find((base) => base.slug === knowledgeBase)?.topicSlugs ?? [],
   );
@@ -121,7 +122,8 @@ export function AgentEditor(initial: AgentEditorProps) {
     fetch("/api/knowledge")
       .then((r) => r.json())
       .then((d) => setKnowledgeBases(d.knowledgeBases ?? []))
-      .catch(() => setKnowledgeBases([]));
+      .catch(() => setKnowledgeBases([]))
+      .finally(() => setTopicsLoading(false));
   }, []);
 
   const ready = instruction.trim() && name.trim() && opening.trim() && personaSlug &&
@@ -478,31 +480,40 @@ export function AgentEditor(initial: AgentEditorProps) {
             ) : null}
             {interviewConfig.type === "technical" ? (
               <>
-                <Field data-invalid={interviewConfig.topic_slugs.length === 0}>
+                <Field data-invalid={!topicsLoading && interviewConfig.topic_slugs.length === 0}>
                   <FieldLabel>Approved topics</FieldLabel>
-                  <div className="max-h-48 space-y-2 overflow-y-auto rounded-xl border bg-background p-3">
-                    {availableTopics.map((topic) => (
-                      <label key={topic.slug} className="flex items-start gap-2 text-xs">
-                        <input
-                          type="checkbox"
-                          className="mt-0.5"
-                          checked={interviewConfig.topic_slugs.includes(topic.slug)}
-                          onChange={(event) => {
-                            const topic_slugs = event.target.checked
-                              ? [...interviewConfig.topic_slugs, topic.slug]
-                              : interviewConfig.topic_slugs.filter((slug) => slug !== topic.slug);
-                            setInterviewConfig({ ...interviewConfig, topic_slugs });
-                            setDirty(true);
-                          }}
-                        />
-                        <span className="font-medium">{topic.slug}</span>
-                      </label>
-                    ))}
-                    {!availableTopics.length ? (
+                  <div
+                    className="max-h-48 space-y-2 overflow-y-auto rounded-xl border bg-background p-3"
+                    aria-busy={topicsLoading}
+                  >
+                    {topicsLoading ? (
+                      <div className="flex min-h-20 items-center justify-center gap-2 text-xs text-muted-foreground">
+                        <Spinner />
+                        <span>Loading topics…</span>
+                      </div>
+                    ) : availableTopics.length ? (
+                      availableTopics.map((topic) => (
+                        <label key={topic.slug} className="flex items-start gap-2 text-xs">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5"
+                            checked={interviewConfig.topic_slugs.includes(topic.slug)}
+                            onChange={(event) => {
+                              const topic_slugs = event.target.checked
+                                ? [...interviewConfig.topic_slugs, topic.slug]
+                                : interviewConfig.topic_slugs.filter((slug) => slug !== topic.slug);
+                              setInterviewConfig({ ...interviewConfig, topic_slugs });
+                              setDirty(true);
+                            }}
+                          />
+                          <span className="font-medium">{topic.slug}</span>
+                        </label>
+                      ))
+                    ) : (
                       <p className="text-xs text-muted-foreground">No generated question topics are available for this knowledge base yet.</p>
-                    ) : null}
+                    )}
                   </div>
-                  {interviewConfig.topic_slugs.length === 0 ? <FieldError>Select at least one approved topic.</FieldError> : null}
+                  {!topicsLoading && interviewConfig.topic_slugs.length === 0 ? <FieldError>Select at least one approved topic.</FieldError> : null}
                 </Field>
                 <Field>
                   <FieldLabel>Main questions</FieldLabel>
