@@ -1,5 +1,6 @@
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { defineAgent, defineDynamic } from "eve";
+import type { AgentModelOptionsDefinition } from "eve";
 
 export default defineAgent({
   model: defineDynamic({
@@ -31,19 +32,21 @@ export default defineAgent({
         // thought tokens (13s TTFT) even on simple turns unless budgeted.
         // Agent-level `reasoning` must stay unset for google/* because the AI
         // SDK forbids combining it with thinkingConfig ("only one of thinking
-        // budget and thinking level"); non-google providers keep native
-        // default behavior.
+        // budget and thinking level").
+        let options: AgentModelOptionsDefinition | undefined;
         if (requestedModel.startsWith("google/")) {
-          return {
-            model: requestedModel,
-            modelOptions: {
-              providerOptions: {
-                gateway: { only: ["google"] },
-                google: { thinkingConfig: { thinkingBudget: 512 } },
-              },
+          options = {
+            providerOptions: {
+              gateway: { only: ["google"] },
+              google: { thinkingConfig: { thinkingBudget: 512 } },
             },
           };
+        } else if (requestedModel.startsWith("openai/gpt-5")) {
+          // OpenAI 5.x reasoning models: no effort = no thinking. Without this
+          // they burn hundreds of hidden tokens (~7s TTFT) per chat turn.
+          options = { providerOptions: { openai: { reasoningEffort: "none" } } };
         }
+        if (options) return { model: requestedModel, modelOptions: options };
         return requestedModel;
       },
     },
