@@ -29,6 +29,22 @@ describe("TrainerTwin prompt contract", () => {
     contains(instructions, "machine-coding");
   });
 
+  test("tracks session progress with todo", () => {
+    contains(instructions, "Session Plan & Progress Tracking");
+    contains(instructions, "Initialization (on `[OPENING]`");
+    contains(instructions, "Mark that item `in_progress`");
+    contains(instructions, "pending: 0");
+    contains(instructions, "finish_session");
+    contains(instructions, "follow-ups: 0/");
+  });
+
+  test("renders behavioral rules from agent spec", () => {
+    contains(contextRenderer, "BEHAVIORAL RULES");
+    contains(contextRenderer, "Claim handling mode");
+    contains(contextRenderer, "Allowed interviewer actions");
+    contains(contextRenderer, "Evidence to probe");
+  });
+
   test("opens attached artifacts instead of asking", () => {
     contains(instructions, "Open, Don't Ask");
     contains(instructions, "NEVER ask: \"Would you like me to open your resume?\"");

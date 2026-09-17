@@ -72,6 +72,7 @@ export type SessionSpecs = {
   mode?: "voice" | "chat";
   knowledgeBases?: { slug: string; name: string }[];
   clientTools?: string[];
+  behavioralRules?: string;
 };
 
 const QUESTION_TYPES = ["verbal", "mcq", "coding", "code-output", "machine-coding", "system-design"] as const;
@@ -158,6 +159,65 @@ function formatInterviewSettings(
     }
   }
   return lines.join("\n");
+}
+
+const CLAIM_HANDLING_LABELS: Record<string, string> = {
+  resume_evidence: "Treat candidate claims as declared evidence from their resume; probe for proof, not hypotheticals.",
+  hypothetical_design: "Treat candidate proposals as design hypotheses; challenge feasibility, trade-offs, and edge cases.",
+  conceptual: "Treat candidate answers as conceptual explanations; probe for depth, mechanisms, and concrete examples.",
+};
+
+function formatBehavioralRules(agentData: Record<string, unknown>, phases: { knowledge_tags?: string[]; policy?: string }[]): string | undefined {
+  const config = agentData.config && typeof agentData.config === "object" && !Array.isArray(agentData.config)
+    ? agentData.config as Record<string, unknown>
+    : null;
+  if (!config) return undefined;
+
+  const lines: string[] = [];
+
+  // Claim handling
+  const claim = typeof config.claim_handling === "string" ? config.claim_handling : null;
+  if (claim) {
+    lines.push(`- Claim handling mode: ${claim} — ${CLAIM_HANDLING_LABELS[claim] ?? "follow the spec definition."}`);
+  }
+
+  // Rendering constraints
+  const rendering = config.rendering && typeof config.rendering === "object" && !Array.isArray(config.rendering)
+    ? config.rendering as Record<string, unknown>
+    : null;
+  if (rendering) {
+    const parts: string[] = [];
+    if (typeof rendering.maximum_words === "number") parts.push(`max ${rendering.maximum_words} spoken words per turn`);
+    if (rendering.one_focal_ask === true) parts.push(`exactly one focal question per turn`);
+    if (typeof rendering.maximum_question_marks === "number") parts.push(`max ${rendering.maximum_question_marks} question mark per turn`);
+    if (rendering.deterministic_closing === true) parts.push(`use deterministic closing when quotas complete`);
+    if (parts.length) lines.push(`- Rendering: ${parts.join(", ")}.`);
+  }
+
+  // Allowed actions
+  const actions = config.actions && typeof config.actions === "object" && !Array.isArray(config.actions)
+    ? config.actions as Record<string, unknown>
+    : null;
+  if (actions) {
+    const allowed = Array.isArray(actions.allowed) ? actions.allowed.filter((a): a is string => typeof a === "string") : [];
+    const def = typeof actions.default === "string" ? actions.default : null;
+    if (allowed.length) lines.push(`- Allowed interviewer actions: ${allowed.join(", ")}${def ? ` (default: ${def})` : ""}.`);
+  }
+
+  // Evidence keys and completion keys from first stage
+  const stages = (Array.isArray(agentData.stages) ? agentData.stages : Array.isArray(agentData.phases) ? agentData.phases : []) as Record<string, unknown>[];
+  for (const stage of stages) {
+    const sc = stage.config && typeof stage.config === "object" && !Array.isArray(stage.config) ? stage.config as Record<string, unknown> : null;
+    const ev = sc?.evidence && typeof sc.evidence === "object" && !Array.isArray(sc.evidence) ? sc.evidence as Record<string, unknown> : null;
+    if (!ev) continue;
+    const keys = Array.isArray(ev.keys) ? ev.keys.filter((k): k is string => typeof k === "string") : [];
+    const completionKeys = Array.isArray(ev.completion_keys) ? ev.completion_keys.filter((k): k is string => typeof k === "string") : [];
+    const stageName = typeof stage.name === "string" ? stage.name : typeof stage.id === "string" ? stage.id : "stage";
+    if (keys.length) lines.push(`- Evidence to probe (${stageName}): ${keys.join(", ")}.`);
+    if (completionKeys.length) lines.push(`- Session complete when covered (${stageName}): ${completionKeys.join(", ")}.`);
+  }
+
+  return lines.length ? lines.join("\n") : undefined;
 }
 
 export async function loadSessionContext(
@@ -260,6 +320,7 @@ export async function loadSessionContext(
     opening: typeof agentData.opening === "string" ? agentData.opening : undefined,
     instruction: typeof agentData.instruction === "string" ? agentData.instruction : undefined,
     interviewSettings: formatInterviewSettings(agentData, phases),
+    behavioralRules: formatBehavioralRules(agentData, phases),
     agentPolicy,
     domainName: typeof domainData.name === "string" ? domainData.name : result.domain?.slug,
     domainSlug: result.domain?.slug,
@@ -370,6 +431,9 @@ ${learnerBlock}
 
 INTERVIEW SETTINGS
 ${specs.interviewSettings ?? "- Not configured"}
+
+${specs.behavioralRules ? `BEHAVIORAL RULES (extracted from agent spec)
+${specs.behavioralRules}` : ""}
 
 AGENT AGENDA
 ${phases}
