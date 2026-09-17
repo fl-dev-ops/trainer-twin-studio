@@ -6,7 +6,7 @@ const SHARED_KNOWLEDGE_BASE_SLUG = "acme-knowledge";
 
 export default defineTool({
   description:
-    "Search the approved TrainerTwin knowledge base for technical domain references. MUST be called before stating that a substantive technical claim is correct, incorrect, or incomplete; teaching or extending a technical concept; recommending an approach; or making a technical judgment. A response with relevant=false, no results, or references that do not address the claim cannot support validation or rejection; ask a neutral evidence-seeking question or acknowledge uncertainty instead. Do NOT call for neutral evidence-gathering questions about implementation details, mechanisms, ownership, trade-offs, or metrics. Reuse relevant results across adjacent turns. Also skip greetings, acknowledgments, repetition, stop requests, workspace actions, and participant facts (use read_document for document facts). The query must stand alone, name the technical concept, and omit personal information.",
+    "MUST call before stating that a substantive technical claim is correct, incorrect, or incomplete; teaching or extending a technical concept; recommending an approach; or making a technical judgment. Searches the approved TrainerTwin knowledge base. Do NOT call for neutral evidence-gathering questions, acknowledgments, greetings, or participant facts (use read_document for document facts). Reuse relevant results across adjacent turns. If result is relevant=false or empty, ask a neutral question or acknowledge uncertainty instead of validating or rejecting. The query must name the technical concept and stand alone.",
   inputSchema: z.object({
     query: z.string().trim().min(2).max(500),
     limit: z.number().int().min(1).max(8).default(4),

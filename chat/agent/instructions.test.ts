@@ -49,6 +49,7 @@ describe("TrainerTwin prompt contract", () => {
     contains(contextRenderer, "- Spec:");
     contains(contextRenderer, "- Instruction:");
     contains(contextRenderer, "INTERVIEW SETTINGS");
+    contains(contextRenderer, "Session turn budget");
     assert.ok(!contextRenderer.includes(".slice(0, 5000)"));
     assert.ok(!contextRenderer.includes(".slice(0, 3000)"));
   });
@@ -67,8 +68,8 @@ describe("TrainerTwin retrieval policy", () => {
     contains(instructions, "consequential challenge, correction, rescue, feedback, or closing");
     contains(instructions, "Reuse relevant evidence across adjacent turns");
     contains(instructions, "Do not retrieve again");
-    contains(instructions, "MUST call `search_knowledge(query, limit, topics)` before stating that a substantive technical claim");
-    contains(instructions, "Do not call `search_knowledge` for a neutral evidence-gathering question");
+    contains(instructions, "MUST call before stating that a substantive technical claim");
+    contains(instructions, "Do not call `search_knowledge` for neutral evidence-gathering question");
   });
 
   test("waits for factual results and handles missing evidence", () => {

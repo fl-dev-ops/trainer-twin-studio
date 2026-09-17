@@ -83,6 +83,35 @@ function formatInterviewSettings(
   const config = agentData.config && typeof agentData.config === "object" && !Array.isArray(agentData.config)
     ? agentData.config as Record<string, unknown>
     : null;
+  const turns = (config?.turns ?? agentData.turns) && typeof (config?.turns ?? agentData.turns) === "object" && !Array.isArray(config?.turns ?? agentData.turns)
+    ? (config?.turns ?? agentData.turns) as Record<string, unknown>
+    : null;
+  const maxTurns = typeof turns?.maximum === "number" ? turns.maximum : null;
+  const minTurns = typeof turns?.minimum === "number" ? turns.minimum : null;
+  let turnBudget = "";
+  if (minTurns !== null && maxTurns !== null) {
+    turnBudget = `minimum ${minTurns}, maximum ${maxTurns}`;
+  } else if (maxTurns !== null) {
+    turnBudget = `maximum ${maxTurns}`;
+  } else if (minTurns !== null) {
+    turnBudget = `minimum ${minTurns}`;
+  }
+
+  const stages = (Array.isArray(agentData.stages) ? agentData.stages : Array.isArray(agentData.phases) ? agentData.phases : []) as Record<string, unknown>[];
+  const stageBudgets = stages
+    .map((s) => {
+      const sName = typeof s.name === "string" ? s.name : typeof s.id === "string" ? s.id : null;
+      const sConfig = s.config && typeof s.config === "object" && !Array.isArray(s.config) ? s.config as Record<string, unknown> : null;
+      const sTurns = sConfig?.turns && typeof sConfig.turns === "object" && !Array.isArray(sConfig.turns) ? sConfig.turns as Record<string, unknown> : null;
+      const sMin = typeof sTurns?.minimum === "number" ? sTurns.minimum : null;
+      const sMax = typeof sTurns?.maximum === "number" ? sTurns.maximum : null;
+      if (!sName || (sMin === null && sMax === null)) return null;
+      if (sMin !== null && sMax !== null) return `${sName}: ${sMin}-${sMax} turns`;
+      if (sMax !== null) return `${sName}: max ${sMax} turns`;
+      return `${sName}: min ${sMin} turns`;
+    })
+    .filter((b): b is string => Boolean(b));
+
   const interview = config?.interview && typeof config.interview === "object" && !Array.isArray(config.interview)
     ? config.interview as Record<string, unknown>
     : null;
@@ -91,7 +120,16 @@ function formatInterviewSettings(
     const topicLine = stageTopics.length
       ? `- Stage knowledge topics (${stageTopics.length}): ${stageTopics.join(", ")}`
       : "- Approved topics: not configured";
-    return `- Type: not configured\n- Follow-ups per main question: not configured\n${topicLine}`;
+    const turnLines = [
+      ...(turnBudget ? [`- Session turn budget: ${turnBudget}`] : []),
+      ...(stageBudgets.length ? [`- Stage turn budgets: ${stageBudgets.join(", ")}`] : []),
+    ];
+    return [
+      "- Type: not configured",
+      ...turnLines,
+      "- Follow-ups per main question: not configured",
+      topicLine,
+    ].join("\n");
   }
   const type = typeof interview.type === "string" ? interview.type : "unknown";
   const followUps = typeof interview.follow_ups_per_main_question === "number"
@@ -99,6 +137,8 @@ function formatInterviewSettings(
     : "not configured";
   const lines = [
     `- Type: ${type}`,
+    ...(turnBudget ? [`- Session turn budget: ${turnBudget}`] : []),
+    ...(stageBudgets.length ? [`- Stage turn budgets: ${stageBudgets.join(", ")}`] : []),
     `- Follow-ups per main question: ${followUps}`,
   ];
   if (type === "resume") {
