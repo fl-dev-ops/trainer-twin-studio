@@ -50,6 +50,10 @@ describe("TrainerTwin prompt contract", () => {
     contains(transport, "Do not add, replace, or reinterpret its instructions");
     contains(contextRenderer, "SESSION DATA — FACTS AND CONFIGURATION");
     contains(contextRenderer, "CLIENT-EXECUTED TOOLS ADVERTISED FOR THIS SESSION");
+    contains(contextRenderer, "- Spec:");
+    contains(contextRenderer, "- Instruction:");
+    assert.ok(!contextRenderer.includes(".slice(0, 5000)"));
+    assert.ok(!contextRenderer.includes(".slice(0, 3000)"));
     assert.ok(!contextRenderer.includes("Turn 1:"));
     assert.ok(!contextRenderer.includes("Turn 2:"));
   });

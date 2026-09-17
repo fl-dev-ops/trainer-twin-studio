@@ -36,6 +36,7 @@ export type SessionSpecs = {
   objective: string;
   phases: { name?: string; objective: string; knowledge_tags?: string[]; policy?: string }[];
   opening?: string;
+  instruction?: string;
   agentPolicy?: string;
   domainName?: string;
   domainSlug?: string;
@@ -114,6 +115,7 @@ export async function loadSessionContext(
     name?: string;
     objective?: string;
     opening?: string;
+    instruction?: string;
     domain?: string;
     config?: unknown;
     completion?: unknown;
@@ -137,7 +139,7 @@ export async function loadSessionContext(
         name,
         objective,
         knowledge_tags: knowledgeTags,
-        policy: Object.keys(policy).length > 0 ? JSON.stringify(policy).slice(0, 3000) : undefined,
+        policy: Object.keys(policy).length > 0 ? JSON.stringify(policy) : undefined,
       };
     })
     .filter((phase) => phase.objective);
@@ -153,10 +155,7 @@ export async function loadSessionContext(
   };
   const hasPersonaProfile = Object.values(personaProfile).some((value) => value !== undefined);
   const domainData = (result.domain?.data ?? {}) as Record<string, unknown>;
-  const agentPolicy = {
-    config: agentData.config,
-    completion: agentData.completion,
-  };
+  const agentPolicy = Object.keys(agentData).length > 0 ? JSON.stringify(agentData) : undefined;
 
   return {
     sessionId: result.sessionId ?? sessionId,
@@ -166,13 +165,12 @@ export async function loadSessionContext(
     objective: agentData.objective ?? "",
     phases,
     opening: typeof agentData.opening === "string" ? agentData.opening : undefined,
-    agentPolicy: Object.values(agentPolicy).some((value) => value !== undefined)
-      ? JSON.stringify(agentPolicy).slice(0, 5000)
-      : undefined,
+    instruction: typeof agentData.instruction === "string" ? agentData.instruction : undefined,
+    agentPolicy,
     domainName: typeof domainData.name === "string" ? domainData.name : result.domain?.slug,
     domainSlug: result.domain?.slug,
     domainVersion: result.domain?.version,
-    domainPolicy: Object.keys(domainData).length > 0 ? JSON.stringify(domainData).slice(0, 5000) : undefined,
+    domainPolicy: Object.keys(domainData).length > 0 ? JSON.stringify(domainData) : undefined,
     personaName: personaData.name ?? result.persona?.slug ?? personaSlug,
     personaSlug: result.persona?.slug ?? personaSlug,
     personaVersion: result.persona?.version,
@@ -271,7 +269,8 @@ AGENT
 - Version: ${specs.agentVersion ?? "not specified"}
 - Objective: ${specs.objective || "not specified"}
 - Opening brief: ${specs.opening ?? "not specified"}
-- Policy data: ${specs.agentPolicy ?? "none supplied"}
+- Instruction: ${specs.instruction ?? "none supplied"}
+- Spec: ${specs.agentPolicy ?? "none supplied"}
 
 ${learnerBlock}
 

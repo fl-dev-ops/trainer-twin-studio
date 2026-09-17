@@ -139,7 +139,12 @@ export async function POST(request: Request) {
     const personaSlug = session?.personaSlug ?? input.personaSlug;
     const domainSlug = session?.domainSlug;
 
-    const [agent, persona, domain, sharedKnowledgeBase] = await Promise.all([
+    const snapshot = session?.compiledSnapshot as {
+      agent?: { slug?: string; version?: number; data?: Record<string, unknown> };
+      persona?: { slug?: string; version?: number; data?: Record<string, unknown> };
+      domain?: { slug?: string; version?: number; data?: Record<string, unknown> };
+    } | null;
+    const [liveAgent, livePersona, liveDomain, sharedKnowledgeBase] = await Promise.all([
       agentSlug
         ? db.agent.findFirst({ where: { slug: { equals: agentSlug, mode: "insensitive" }, orgId }, select: { slug: true, version: true, data: true } })
         : null,
@@ -252,6 +257,16 @@ export async function POST(request: Request) {
         };
       }
     }
+
+    const agent = snapshot?.agent?.data
+      ? { slug: snapshot.agent.slug ?? liveAgent?.slug ?? agentSlug, version: snapshot.agent.version ?? liveAgent?.version ?? 0, data: snapshot.agent.data }
+      : liveAgent;
+    const persona = snapshot?.persona?.data
+      ? { slug: snapshot.persona.slug ?? livePersona?.slug ?? personaSlug, version: snapshot.persona.version ?? livePersona?.version ?? 0, data: snapshot.persona.data }
+      : livePersona;
+    const domain = snapshot?.domain?.data
+      ? { slug: snapshot.domain.slug ?? liveDomain?.slug ?? domainSlug, version: snapshot.domain.version ?? liveDomain?.version ?? 0, data: snapshot.domain.data }
+      : liveDomain;
 
     return Response.json({
       sessionId: session?.id ?? input.sessionId ?? null,
