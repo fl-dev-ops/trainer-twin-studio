@@ -83,7 +83,7 @@ async function main() {
   console.log(`Expires:      ${assignment.expiresAt.toISOString()}`);
   console.log("-------------------------------------------------------");
   console.log("Local URL (dev):");
-  console.log(`  http://${org.slug}.trainertwin.localhost:3000/s/${assignment.shareCode}`);
+  console.log(`  http://${org.slug}.trainertwin.localhost/s/${assignment.shareCode}`);
   console.log("Production URL:");
   console.log(`  https://${org.slug}.trainertwin.com/s/${assignment.shareCode}`);
   console.log("=======================================================\n");
