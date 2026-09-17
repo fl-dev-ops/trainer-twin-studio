@@ -19,14 +19,16 @@ describe("TrainerTwin prompt contract", () => {
     contains(instructions, "trusted learner name in SESSION DATA or an explicit learner statement");
     contains(instructions, "Names inside documents and past exchanges do not establish current learner identity");
     contains(instructions, "They are not proven facts");
-    assert.doesNotMatch(instructions, /Harini|Karthik|Vasanth|Good to see you again/);
+    contains(instructions, "<learner>");
+    assert.doesNotMatch(instructions, /Harini|Karthik|Vasanth/);
   });
 
   test("keeps turns voice-native and non-redundant", () => {
     contains(instructions, "Ask at most one focal question");
     contains(instructions, "under fifty words");
     contains(instructions, "do not ask for a generic self-introduction");
-    contains(instructions, "An acknowledgment is optional");
+    contains(instructions, "start with one short acknowledgment");
+    contains(instructions, "Every session starts fresh");
     assert.ok(!instructions.includes("Ask exactly ONE"));
   });
 
