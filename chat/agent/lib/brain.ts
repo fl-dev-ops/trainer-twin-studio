@@ -37,6 +37,7 @@ export type SessionSpecs = {
   phases: { name?: string; objective: string; knowledge_tags?: string[]; policy?: string }[];
   opening?: string;
   instruction?: string;
+  interviewSettings?: string;
   agentPolicy?: string;
   domainName?: string;
   domainSlug?: string;
@@ -72,6 +73,52 @@ export type SessionSpecs = {
   knowledgeBases?: { slug: string; name: string }[];
   clientTools?: string[];
 };
+
+const QUESTION_TYPES = ["verbal", "mcq", "coding", "code-output", "machine-coding", "system-design"] as const;
+
+function formatInterviewSettings(
+  agentData: Record<string, unknown>,
+  phases: { knowledge_tags?: string[] }[],
+): string {
+  const config = agentData.config && typeof agentData.config === "object" && !Array.isArray(agentData.config)
+    ? agentData.config as Record<string, unknown>
+    : null;
+  const interview = config?.interview && typeof config.interview === "object" && !Array.isArray(config.interview)
+    ? config.interview as Record<string, unknown>
+    : null;
+  const stageTopics = [...new Set(phases.flatMap((phase) => phase.knowledge_tags ?? []))];
+  if (!interview) {
+    const topicLine = stageTopics.length
+      ? `- Stage knowledge topics (${stageTopics.length}): ${stageTopics.join(", ")}`
+      : "- Approved topics: not configured";
+    return `- Type: not configured\n- Follow-ups per main question: not configured\n${topicLine}`;
+  }
+  const type = typeof interview.type === "string" ? interview.type : "unknown";
+  const followUps = typeof interview.follow_ups_per_main_question === "number"
+    ? String(interview.follow_ups_per_main_question)
+    : "not configured";
+  const lines = [
+    `- Type: ${type}`,
+    `- Follow-ups per main question: ${followUps}`,
+  ];
+  if (type === "resume") {
+    const main = typeof interview.main_questions === "number" ? interview.main_questions : "not configured";
+    lines.push(`- Main questions: ${main}`);
+  } else {
+    const topics = Array.isArray(interview.topic_slugs)
+      ? interview.topic_slugs.filter((tag): tag is string => typeof tag === "string")
+      : stageTopics;
+    lines.push(`- Approved topics (${topics.length}): ${topics.length ? topics.join(", ") : "none"}`);
+    const counts = interview.question_counts && typeof interview.question_counts === "object" && !Array.isArray(interview.question_counts)
+      ? interview.question_counts as Record<string, unknown>
+      : {};
+    for (const kind of QUESTION_TYPES) {
+      const value = counts[kind];
+      lines.push(`- ${kind} main questions: ${typeof value === "number" ? value : 0}`);
+    }
+  }
+  return lines.join("\n");
+}
 
 export async function loadSessionContext(
   orgId: string,
@@ -127,18 +174,24 @@ export async function loadSessionContext(
     .map((phase) => {
       const name = typeof phase.name === "string" ? phase.name : undefined;
       const objective = typeof phase.objective === "string" ? phase.objective : "";
-      const knowledgeTags = Array.isArray(phase.knowledge_tags)
-        ? phase.knowledge_tags.filter((tag): tag is string => typeof tag === "string")
-        : Array.isArray(phase.tags)
-          ? phase.tags.filter((tag): tag is string => typeof tag === "string")
-          : undefined;
+      const config = phase.config && typeof phase.config === "object" && !Array.isArray(phase.config)
+        ? phase.config as Record<string, unknown>
+        : null;
+      const knowledge = config?.knowledge && typeof config.knowledge === "object" && !Array.isArray(config.knowledge)
+        ? config.knowledge as Record<string, unknown>
+        : null;
+      const rawTags = Array.isArray(phase.knowledge_tags) ? phase.knowledge_tags
+        : Array.isArray(phase.tags) ? phase.tags
+        : Array.isArray(knowledge?.tags) ? knowledge.tags
+        : [];
+      const knowledgeTags = rawTags.filter((tag): tag is string => typeof tag === "string");
       const policy = Object.fromEntries(
         Object.entries(phase).filter(([key]) => !["name", "objective", "knowledge_tags", "tags"].includes(key)),
       );
       return {
         name,
         objective,
-        knowledge_tags: knowledgeTags,
+        knowledge_tags: knowledgeTags.length ? knowledgeTags : undefined,
         policy: Object.keys(policy).length > 0 ? JSON.stringify(policy) : undefined,
       };
     })
@@ -155,7 +208,7 @@ export async function loadSessionContext(
   };
   const hasPersonaProfile = Object.values(personaProfile).some((value) => value !== undefined);
   const domainData = (result.domain?.data ?? {}) as Record<string, unknown>;
-  const agentPolicy = Object.keys(agentData).length > 0 ? JSON.stringify(agentData) : undefined;
+  const agentPolicy = Object.keys(agentData).length > 0 ? JSON.stringify(agentData, null, 2) : undefined;
 
   return {
     sessionId: result.sessionId ?? sessionId,
@@ -166,6 +219,7 @@ export async function loadSessionContext(
     phases,
     opening: typeof agentData.opening === "string" ? agentData.opening : undefined,
     instruction: typeof agentData.instruction === "string" ? agentData.instruction : undefined,
+    interviewSettings: formatInterviewSettings(agentData, phases),
     agentPolicy,
     domainName: typeof domainData.name === "string" ? domainData.name : result.domain?.slug,
     domainSlug: result.domain?.slug,
@@ -273,6 +327,9 @@ AGENT
 - Spec: ${specs.agentPolicy ?? "none supplied"}
 
 ${learnerBlock}
+
+INTERVIEW SETTINGS
+${specs.interviewSettings ?? "- Not configured"}
 
 AGENT AGENDA
 ${phases}

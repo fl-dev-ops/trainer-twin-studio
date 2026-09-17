@@ -23,6 +23,12 @@ describe("TrainerTwin prompt contract", () => {
     assert.doesNotMatch(instructions, /Harini|Karthik|Vasanth/);
   });
 
+  test("binds interview quotas from SESSION DATA", () => {
+    contains(instructions, "INTERVIEW SETTINGS in SESSION DATA are binding");
+    contains(instructions, "follow_ups_per_main_question");
+    contains(instructions, "machine-coding");
+  });
+
   test("keeps turns voice-native and non-redundant", () => {
     contains(instructions, "Ask at most one focal question");
     contains(instructions, "under fifty words");
@@ -52,6 +58,7 @@ describe("TrainerTwin prompt contract", () => {
     contains(contextRenderer, "CLIENT-EXECUTED TOOLS ADVERTISED FOR THIS SESSION");
     contains(contextRenderer, "- Spec:");
     contains(contextRenderer, "- Instruction:");
+    contains(contextRenderer, "INTERVIEW SETTINGS");
     assert.ok(!contextRenderer.includes(".slice(0, 5000)"));
     assert.ok(!contextRenderer.includes(".slice(0, 3000)"));
     assert.ok(!contextRenderer.includes("Turn 1:"));
