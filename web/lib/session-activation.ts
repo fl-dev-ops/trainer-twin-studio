@@ -75,15 +75,16 @@ export async function activateInterviewRuntime(input: {
       audioEgressId: row.audioEgressId,
       videoEgressId: row.videoEgressId,
     }).catch(() => {});
-    await db.$transaction([
-      db.interviewSession.update({
-        where: { id: session.id },
-        data: { status: "failed", endedAt: new Date(), runtimeTokenHash: null },
-      }),
-      ...(row.assignmentId
-        ? [db.rolePlayAssignment.update({ where: { id: row.assignmentId }, data: { status: "pending", usedAt: null } })]
-        : []),
-    ]);
+    const failed = await db.interviewSession.updateMany({
+      where: { id: session.id, status: { notIn: ["completed", "abandoned"] } },
+      data: { status: "failed", endedAt: new Date(), runtimeTokenHash: null },
+    });
+    if (failed.count === 1 && row.assignmentId) {
+      await db.rolePlayAssignment.updateMany({
+        where: { id: row.assignmentId, status: "used" },
+        data: { status: "pending", usedAt: null },
+      });
+    }
     throw error;
   }
 }

@@ -18,6 +18,7 @@ export default async function SharedSessionPage({ params }: { params: Promise<{ 
   const assignment = org ? await db.rolePlayAssignment.findUnique({
     where: { shareCode: code },
     select: {
+      id: true,
       orgId: true,
       status: true,
       expiresAt: true,
@@ -30,10 +31,16 @@ export default async function SharedSessionPage({ params }: { params: Promise<{ 
       organization: { select: { name: true, logo: true } },
     },
   }) : null;
+  const spent = assignment
+    ? (await db.interviewSession.count({
+        where: { assignmentId: assignment.id, status: { in: ["completed", "abandoned"] } },
+      })) > 0
+    : false;
   const usable = assignment
     && assignment.orgId === org?.id
     && assignment.member.userId === user.id
     && assignment.status === "pending"
+    && !spent
     && assignment.expiresAt > new Date();
   if (!usable) {
     return (

@@ -46,7 +46,7 @@ export async function finalizeInterviewSession(input: {
   return db.$transaction(async (tx) => {
     const existing = await tx.interviewSession.findUnique({
       where: { id: input.sessionId },
-      select: { status: true, endedAt: true, transcript: true, evidence: true, reportStatus: true },
+      select: { status: true, endedAt: true, transcript: true, evidence: true, reportStatus: true, assignmentId: true },
     });
     if (!existing) return null;
 
@@ -74,8 +74,19 @@ export async function finalizeInterviewSession(input: {
         ...(mergedEvidence ? { evidence: mergedEvidence } : {}),
         ...(input.s3AudioKey ? { s3AudioKey: input.s3AudioKey } : {}),
       },
-      select: { id: true, status: true, transcript: true, evidence: true, reportStatus: true },
+      select: { id: true, status: true, transcript: true, evidence: true, reportStatus: true, assignmentId: true },
     });
+
+    if (
+      existing.assignmentId
+      && input.requestedStatus
+      && (updated.status === "completed" || updated.status === "abandoned")
+    ) {
+      await tx.rolePlayAssignment.updateMany({
+        where: { id: existing.assignmentId, status: "pending" },
+        data: { status: "used", usedAt: existing.endedAt ?? new Date() },
+      });
+    }
 
     return {
       ...updated,
@@ -201,7 +212,7 @@ export async function activateSession(input: {
     assignmentId = found.id;
     deploymentId = found.deployment.id;
     agentId = found.deployment.agent.id;
-    activationKey = `assignment:${found.id}`;
+    activationKey = `assignment:${found.id}:${found.shareCode}`;
   } else {
     const found = input.deploymentKey
       ? await db.deployment.findFirst({ where: { publicKey: input.deploymentKey, orgId: input.orgId, status: "active" } })
@@ -230,6 +241,12 @@ export async function activateSession(input: {
   if (existing?.status === "failed") {
     await db.interviewSession.delete({ where: { id: existing.id } });
   } else if (existing) {
+    if (assignmentId && (existing.status === "completed" || existing.status === "abandoned")) {
+      await db.rolePlayAssignment.updateMany({
+        where: { id: assignmentId, status: "pending" },
+        data: { status: "used", usedAt: existing.endedAt ?? new Date() },
+      });
+    }
     return null;
   }
 
