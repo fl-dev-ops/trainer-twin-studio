@@ -158,7 +158,7 @@ export function formatSessionSpec(specs: SessionSpecs): string {
     : "None attached. Do not claim documents are available on screen.";
 
   const knowledgeBlock = specs.knowledgeBases.length > 0
-    ? `Approved knowledge retrieval is available from: ${specs.knowledgeBases.map((kb) => kb.name).join(", ")}. Call search_knowledge(query, limit, topics) only when a substantive domain claim needs grounding.`
+    ? `Approved knowledge retrieval is available from: ${specs.knowledgeBases.map((kb) => kb.name).join(", ")}. You MUST call search_knowledge(query, limit, topics) before stating a technical claim is correct, incorrect, or incomplete; teaching or extending a concept; recommending an approach; or making a technical judgment. Do not call it for neutral evidence-gathering questions, and reuse relevant results across adjacent turns.`
     : "No approved knowledge base is available. Do not call search_knowledge.";
 
   let resumeBlock = "";

@@ -1,11 +1,36 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { MainCollectionService } from "./main-collection";
-import { knowledgeCollectionName, searchKnowledge } from "./knowledge";
+import {
+  filterRelevantKnowledgeHits,
+  knowledgeCollectionName,
+  MIN_KNOWLEDGE_SCORE,
+  searchKnowledge,
+  type KnowledgeHit,
+} from "./knowledge";
+
+const hit = (id: string, score: number): KnowledgeHit => ({
+  id,
+  docId: `doc-${id}`,
+  source: `source-${id}`,
+  text: `text-${id}`,
+  score,
+});
 
 test("knowledge storage uses immutable database IDs", () => {
   assert.equal(knowledgeCollectionName("kb-id-a"), "kb_kb-id-a");
   assert.notEqual(knowledgeCollectionName("kb-id-a"), knowledgeCollectionName("kb-id-b"));
+});
+
+test("knowledge relevance threshold removes weak matches", () => {
+  const results = filterRelevantKnowledgeHits([
+    hit("strong", MIN_KNOWLEDGE_SCORE + 0.1),
+    hit("boundary", MIN_KNOWLEDGE_SCORE),
+    hit("weak", MIN_KNOWLEDGE_SCORE - 0.01),
+  ]);
+
+  assert.deepEqual(results.map((result) => result.id), ["strong", "boundary"]);
+  assert.deepEqual(filterRelevantKnowledgeHits([hit("weak", 0.28)]), []);
 });
 
 test("reranking expands and reorders main-collection candidates", async () => {

@@ -392,9 +392,12 @@ export async function POST(request: Request) {
     });
     if (!knowledgeBase) return Response.json({ error: `No indexed knowledge base named "${input.knowledgeBase}"` });
     const results = await searchKnowledge(knowledgeBase.id, input.query, input.limit, orgId, input.topics);
+    const relevant = results.length > 0;
     return Response.json({
       query: input.query,
       knowledgeBase: input.knowledgeBase,
+      relevant,
+      ...(!relevant ? { reason: "No approved reference met the relevance threshold" } : {}),
       results: results.map(({ id, docId, kbId, source, title, chunkIndex, topic, text, score }) => ({
         chunkId: id,
         docId,

@@ -277,6 +277,15 @@ export type KnowledgeHit = {
   score: number;
 };
 
+export const MIN_KNOWLEDGE_SCORE = 0.35;
+
+export function filterRelevantKnowledgeHits(
+  hits: KnowledgeHit[],
+  threshold = MIN_KNOWLEDGE_SCORE,
+): KnowledgeHit[] {
+  return hits.filter((hit) => hit.score >= threshold);
+}
+
 /** Hybrid retrieval: vector top-50 + BM25 top-50 -> RRF -> optional reranker. */
 export async function searchKnowledge(
   knowledgeBaseId: string,
@@ -306,7 +315,7 @@ export async function searchKnowledge(
       });
     }
     if (mainHits.length > 0) {
-      return rerank(
+      const ranked = await rerank(
         query,
         mainHits.map((h) => ({
           id: h.id,
@@ -321,6 +330,16 @@ export async function searchKnowledge(
         })),
         topK,
       );
+      const relevant = filterRelevantKnowledgeHits(ranked);
+      console.info("[knowledge] relevance filter", {
+        query,
+        threshold: MIN_KNOWLEDGE_SCORE,
+        highestScore: ranked[0]?.score ?? null,
+        candidateCount: ranked.length,
+        returnedCount: relevant.length,
+        filteredCount: ranked.length - relevant.length,
+      });
+      return relevant;
     }
     return [];
   }
