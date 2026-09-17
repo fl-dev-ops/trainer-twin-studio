@@ -92,4 +92,4 @@ class Bridge:
 
     def open_session(self, timeout: int = 90) -> str:
         """Generate the session opening ("session-start" maps to [OPENING] in the bridge)."""
-        return self.send("session-start", timeout=timeout)["text"]
+        return self.send("session-start", tools=DEFAULT_TOOLS, timeout=timeout)["text"]

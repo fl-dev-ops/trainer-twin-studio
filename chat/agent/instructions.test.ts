@@ -29,13 +29,14 @@ describe("TrainerTwin prompt contract", () => {
     contains(instructions, "machine-coding");
   });
 
-  test("tracks session progress with todo", () => {
-    contains(instructions, "Session Plan & Progress Tracking");
+  test("tracks session progress with session_plan", () => {
+    contains(instructions, "Session Plan & Progress Tracking (`session_plan`)");
     contains(instructions, "Initialization (on `[OPENING]`");
-    contains(instructions, "Mark that item `in_progress`");
-    contains(instructions, "pending: 0");
-    contains(instructions, "finish_session");
-    contains(instructions, "follow-ups: 0/");
+    contains(instructions, "questionsAsked");
+    contains(instructions, "questionsTarget");
+    contains(instructions, "followUpsUsed");
+    contains(instructions, "followUpsMax");
+    contains(instructions, "finish_session()");
   });
 
   test("renders behavioral rules from agent spec", () => {
