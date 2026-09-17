@@ -296,7 +296,7 @@ model InterviewSession {
   agentVersion     Int
   domainSlug       String
   domainVersion    Int
-  status           String    @default("assigned") // assigned | active | completed | abandoned | revoked
+  status           String    @default("assigned") // assigned | activating | active | closing | completed | abandoned | revoked | failed
   contextId        String?
   contextName      String?
   transcript       Json?
