@@ -59,7 +59,7 @@ function codeSurface(source: Record<string, unknown>, key: string): AgentSurface
   )
     ? (source.language as SupportedCodeExecutionLanguage)
     : "javascript";
-  const starterCode = source.starterCode ?? source.starter_code ?? "";
+  const starterCode = source.starterCode ?? source.starter_code ?? source.code ?? "";
   const highlightLines =
     Array.isArray(source.highlightLines) &&
     source.highlightLines.length === 2 &&

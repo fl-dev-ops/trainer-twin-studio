@@ -54,6 +54,19 @@ describe("session document surfaces", () => {
     });
   });
 
+  it("accepts payload.code as starterCode", () => {
+    const parsed = parseAgentSurfaceMessage({
+      type: "open_code_editor",
+      language: "javascript",
+      code: "var rate = 10;",
+    });
+    expect(parsed?.surface).toMatchObject({
+      tool: "code",
+      language: "javascript",
+      starterCode: "var rate = 10;",
+    });
+  });
+
   it("opens code editor with targeted highlight lines", () => {
     expect(parseAgentSurfaceMessage({
       type: "open_code_editor",
