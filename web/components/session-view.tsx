@@ -143,8 +143,6 @@ export function SessionView({
   const [endReason, setEndReason] = useState<EndReason>("disconnected");
   const [introDone, setIntroDone] = useState(false);
   const [introPlaybackSrc, setIntroPlaybackSrc] = useState<string | null>(null);
-  const [introPrefetchDone, setIntroPrefetchDone] = useState(false);
-  const [introProgress, setIntroProgress] = useState<number | null>(null);
 
   const [entries, setEntries] = useState<Entry[]>([]);
   const [coverage, setCoverage] = useState<Coverage>({});
@@ -185,22 +183,14 @@ export function SessionView({
   useEffect(() => {
     if (!introSrc || prefetchRef.current === introSrc) return;
     prefetchRef.current = introSrc;
-    setIntroPrefetchDone(false);
-    setIntroProgress(0);
-    downloadIntroVideo(introSrc, (p) => {
-      if (typeof p.ratio === "number") setIntroProgress(p.ratio);
-    })
+    downloadIntroVideo(introSrc)
       .then((url) => {
         setIntroPlaybackSrc(url);
-        setIntroProgress(null);
-        setIntroPrefetchDone(true);
       })
       .catch((err) => {
         console.error("Intro video prefetch failed:", err);
         // Fall back to direct streaming; ScenarioIntro's own safeguards apply.
         setIntroPlaybackSrc(introSrc);
-        setIntroProgress(null);
-        setIntroPrefetchDone(true);
       });
   }, [introSrc]);
 
@@ -783,7 +773,6 @@ export function SessionView({
         contextPrompt={contextUpload?.prompt}
         contextLabel={contextUpload?.label}
         contextAccept={contextUpload?.accept}
-        introProgress={introSrc && !introPrefetchDone ? introProgress : null}
         onJoin={(settings, contextId) => {
           setPrejoinMedia(settings);
           setContextIds(contextId ? [contextId] : []);
@@ -972,26 +961,6 @@ export function SessionView({
 
                 {error && (
                   <p role="alert" className="text-sm text-destructive">{error}</p>
-                )}
-
-                {introProgress !== null && (
-                  <div aria-live="polite">
-                    <p className="text-xs text-muted-foreground">
-                      Preparing your introduction… {Math.round(introProgress * 100)}%
-                    </p>
-                    <div
-                      role="progressbar"
-                      aria-valuenow={Math.round(introProgress * 100)}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]"
-                    >
-                      <div
-                        className="h-full rounded-full bg-foreground transition-all duration-300"
-                        style={{ width: `${Math.round(introProgress * 100)}%` }}
-                      />
-                    </div>
-                  </div>
                 )}
 
                 <Button
