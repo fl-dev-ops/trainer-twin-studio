@@ -115,7 +115,7 @@ MUST call during the session as you progress:
 - When asking a new main question: session_plan({ action: "pose_main_question" })
 - When asking a follow-up: session_plan({ action: "ask_follow_up" })
 - When questionsAsked reaches questionsTarget and follow-ups are exhausted: session_plan({ action: "complete_round" })
-- When isComplete is true: all quotas are satisfied. Deliver closing remarks and call finish_session.
+- When isComplete is true: all quotas are satisfied and minimum turns are met. Deliver closing feedback on this turn (do NOT call finish_session yet). Wait for the candidate to respond, then call finish_session on the next turn with no speech.
 
 You can also pass { currentRound, rounds } at any time to directly update the full plan.`,
   inputSchema: SessionPlanInputSchema,
@@ -172,19 +172,32 @@ You can also pass { currentRound, rounds } at any time to directly update the fu
     const rounds = state.rounds;
     const current = rounds[state.currentRound] ?? null;
 
-    const totalQuestionsAsked = rounds.reduce((sum, r) => sum + r.questionsAsked, 0);
-    const totalQuestionsTarget = rounds.reduce((sum, r) => sum + r.questionsTarget, 0);
+    const totalTurnsUsed = rounds.reduce((sum, r) => sum + r.turnsUsed, 0);
     const roundsComplete = rounds.filter((r) => r.status === "done").length;
     const roundsTotal = rounds.length;
-    const isComplete = roundsTotal > 0 && roundsComplete === roundsTotal;
+    const allQuotasMet = roundsTotal > 0 && roundsComplete === roundsTotal;
+    // Minimum turn guard: do not report isComplete until the session has used
+    // a reasonable number of turns. Use 4 as an absolute floor (greeting + at
+    // least 3 substantive exchanges) to prevent ultra-short sessions.
+    const MIN_TURNS_FLOOR = 4;
+    const minTurnsRequired = Math.max(MIN_TURNS_FLOOR, rounds.reduce((sum, r) => {
+      // If the round has a known minimum from the spec, it will be reflected
+      // in turnsUsed naturally; use questionsTarget as a proxy for minimum
+      // substantive turns (each main question = at least 1 turn).
+      return sum + r.questionsTarget;
+    }, 0));
+    const minTurnsMet = totalTurnsUsed >= minTurnsRequired;
+    const isComplete = allQuotasMet && minTurnsMet;
     const followUpsRemaining = current ? Math.max(0, current.followUpsMax - current.followUpsUsed) : 0;
     const questionsRemainingInRound = current ? Math.max(0, current.questionsTarget - current.questionsAsked) : 0;
 
     let suggestedAction = "Continue active round: pose main question or follow-up";
     if (roundsTotal === 0) {
       suggestedAction = "Initialize rounds from AGENT AGENDA and INTERVIEW SETTINGS";
+    } else if (allQuotasMet && !minTurnsMet) {
+      suggestedAction = `Quotas met but only ${totalTurnsUsed} turns used (minimum ${minTurnsRequired}). Continue probing with follow-ups or deeper questions before closing.`;
     } else if (isComplete) {
-      suggestedAction = "All rounds completed. Deliver closing remarks and call finish_session()";
+      suggestedAction = "All rounds completed and minimum turns met. Deliver closing feedback (do NOT call finish_session yet — wait for candidate response on next turn).";
     } else if (current && questionsRemainingInRound === 0 && followUpsRemaining === 0) {
       suggestedAction = "Round questions and follow-ups complete. Call session_plan({ action: 'complete_round' })";
     } else if (current && current.questionsAsked === 0) {
@@ -202,9 +215,12 @@ You can also pass { currentRound, rounds } at any time to directly update the fu
       followUpsUsedOnCurrent: current?.followUpsUsed ?? 0,
       followUpsMaxOnCurrent: current?.followUpsMax ?? 0,
       followUpsRemainingOnCurrent: followUpsRemaining,
+      totalTurnsUsed,
+      minTurnsRequired,
+      minTurnsMet,
       summary: {
-        totalQuestionsAsked,
-        totalQuestionsTarget,
+        totalQuestionsAsked: rounds.reduce((sum, r) => sum + r.questionsAsked, 0),
+        totalQuestionsTarget: rounds.reduce((sum, r) => sum + r.questionsTarget, 0),
         roundsComplete,
         roundsTotal,
       },

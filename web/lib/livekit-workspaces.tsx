@@ -101,12 +101,16 @@ export function LiveKitWorkspaceProvider({
         : {};
       try {
         if (command.tool === "finish_session") {
-          onEndSession?.();
+          // Acknowledge the command immediately so the brain's tool loop resolves,
+          // then wait a grace period for any remaining TTS audio to finish playing
+          // before tearing down the WebRTC connection.
           await fetch(`/api/sessions/${sessionId}/commands/${command.id}`, {
             method: "POST",
             headers: { ...headers, "Content-Type": "application/json" },
             body: JSON.stringify({ result: { ok: true } }),
           });
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+          onEndSession?.();
           return;
         }
         if (command.tool === "surface") {
