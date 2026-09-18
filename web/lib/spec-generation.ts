@@ -94,7 +94,7 @@ const responseSchema = {
             type: "object", additionalProperties: false,
             required: ["id", "name", "objective", "opening", "config"],
             properties: {
-              id: { type: "string", description: "Unique kebab-case stage id." },
+              id: { type: "string", description: "Unique snake_case stage id." },
               name: { type: "string" },
               objective: { type: "string" },
               opening: { type: "string" },
@@ -117,11 +117,23 @@ const responseSchema = {
                     },
                   },
                   evidence: {
-                    type: "object", additionalProperties: false, required: ["definitions", "keys", "completion_keys"],
+                    type: "object", additionalProperties: false, required: ["definitions"],
                     properties: {
-                      definitions: { type: "object", additionalProperties: { type: "string" }, description: "Map of kebab-case key -> one-sentence definition of what counts as evidence." },
-                      keys: { type: "array", items: { type: "string" }, description: "Subset of definition keys." },
-                      completion_keys: { type: "array", items: { type: "string" }, description: "Subset of keys that must be sufficient before the stage ends." },
+                      definitions: {
+                        type: "array",
+                        minItems: 1,
+                        description: "Evidence definitions. Mark the items required for stage completion.",
+                        items: {
+                          type: "object",
+                          additionalProperties: false,
+                          required: ["key", "definition", "completion_required"],
+                          properties: {
+                            key: { type: "string", pattern: "^[a-z0-9][a-z0-9_]*$", description: "Unique snake_case evidence key." },
+                            definition: { type: "string", minLength: 1, description: "One sentence describing what counts as evidence." },
+                            completion_required: { type: "boolean", description: "Whether this evidence must be sufficient before the stage ends." },
+                          },
+                        },
+                      },
                     },
                   },
                   turns: {
@@ -153,8 +165,18 @@ const responseSchema = {
         knowledge_bases: { type: "array", items: { type: "string" } },
         principles: { type: "array", minItems: 3, maxItems: 6, items: { type: "string" } },
         classifications: {
-          type: "object", additionalProperties: { type: "string" },
+          type: "object",
+          additionalProperties: false,
           required: ["strong", "partial", "vague", "unsupported", "contradictory", "unknown", "role_violation"],
+          properties: {
+            strong: { type: "string" },
+            partial: { type: "string" },
+            vague: { type: "string" },
+            unsupported: { type: "string" },
+            contradictory: { type: "string" },
+            unknown: { type: "string" },
+            role_violation: { type: "string" },
+          },
           description: "Exactly these seven keys, each with a one-sentence meaning.",
         },
       },
@@ -167,7 +189,7 @@ const responseSchema = {
         properties: {
           knowledgeBase: { type: "string" },
           source: { type: "string" },
-          stageIds: { type: "array", items: { type: "string" } },
+          stageIds: { type: "array", minItems: 1, items: { type: "string" } },
           purpose: { type: "string" },
           queryGuidance: { type: "string" },
           tags: { type: "array", items: { type: "string" } },
@@ -194,10 +216,10 @@ Return ONLY a JSON object with keys: agent, domain, grounding, assumptions.
 - config.evidence.statuses: ["untested", "partial", "sufficient", "weak", "unresolved"]
 - config.turns.maximum: total learner turns budget (typically 8-24).
 - config.rendering: maximum_words 10-200 (voice answers stay short, ~45), maximum_question_marks 0-3 (typically 1), one_focal_ask true, deterministic_closing true.
-- stages: 1-4 phases. Each stage has unique kebab-case id, name, objective, opening, and config:
+- stages: 1-4 phases. Each stage has unique snake_case id, name, objective, opening, and config:
   - stage.config.knowledge.tags: topical retrieval tags.
   - stage.config.claim_handling and stage.config.context.mode: like above.
-  - stage.config.evidence: definitions (map of kebab-case key -> one-sentence definition of what counts as evidence), keys (subset of definitions), completion_keys (subset of keys that must be sufficient before the stage ends).
+  - stage.config.evidence.definitions: a list of {key, definition, completion_required}. Each key is unique snake_case. Mark at least one item completion_required=true.
   - stage.config.turns: {minimum, maximum} per stage, minimum <= maximum.
   - stage.config.actions: optional narrower allowed/default subset.
   - stage.config.tools: [] unless the scenario explicitly needs the coding sandbox.
@@ -214,6 +236,59 @@ Return ONLY a JSON object with keys: agent, domain, grounding, assumptions.
 - Conceptual and hypothetical reasoning counts as valid evidence unless the trainer says otherwise.
 - Respect the previous spec when iterating: keep its structure and evidence keys unless the new instruction requires changing them.`;
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function agentForGeneration(value: unknown): unknown {
+  const agent = structuredClone(value);
+  if (!isRecord(agent) || !Array.isArray(agent.stages)) return agent;
+
+  for (const stage of agent.stages) {
+    if (!isRecord(stage) || !isRecord(stage.config) || !isRecord(stage.config.evidence)) continue;
+    const evidence = stage.config.evidence;
+    if (!isRecord(evidence.definitions)) continue;
+    const completionKeys = new Set(Array.isArray(evidence.completion_keys) ? evidence.completion_keys : []);
+    evidence.definitions = Object.entries(evidence.definitions)
+      .filter((entry): entry is [string, string] => typeof entry[1] === "string")
+      .map(([key, definition]) => ({ key, definition, completion_required: completionKeys.has(key) }));
+    delete evidence.keys;
+    delete evidence.completion_keys;
+  }
+
+  return agent;
+}
+
+function normalizeGeneratedEvidence(
+  stages: Array<{ config?: Record<string, unknown> }> | undefined,
+  interviewType: InterviewConfig["type"],
+): void {
+  for (const stage of stages ?? []) {
+    if (!stage.config) continue;
+    if (interviewType === "technical") {
+      stage.config.evidence = { definitions: {}, keys: [], completion_keys: [] };
+      continue;
+    }
+
+    const evidence = stage.config.evidence;
+    if (!isRecord(evidence) || !Array.isArray(evidence.definitions)) continue;
+    const definitions: Record<string, string> = {};
+    const completionKeys: string[] = [];
+    for (const item of evidence.definitions) {
+      if (!isRecord(item) || typeof item.key !== "string" || typeof item.definition !== "string") continue;
+      if (definitions[item.key] !== undefined) continue;
+      definitions[item.key] = item.definition;
+      if (item.completion_required === true) completionKeys.push(item.key);
+    }
+    const keys = Object.keys(definitions);
+    stage.config.evidence = {
+      definitions,
+      keys,
+      completion_keys: completionKeys.length ? completionKeys : keys,
+    };
+  }
+}
+
 async function referenceExample(): Promise<string> {
   // A real published bundle grounds the format; fall back to prompt-only if missing.
   try {
@@ -223,7 +298,7 @@ async function referenceExample(): Promise<string> {
     ]);
     const agent = (yaml.load(agentRaw) as { agent: unknown }).agent;
     const domain = (yaml.load(domainRaw) as { domain: unknown }).domain;
-    return `## Format reference (real published bundle, abbreviated)\nAgent:\n${yaml.dump(agent, { lineWidth: 100 })}\nDomain:\n${yaml.dump(domain, { lineWidth: 100 })}\n`;
+    return `## Format reference (real published bundle, abbreviated)\nAgent:\n${yaml.dump(agentForGeneration(agent), { lineWidth: 100 })}\nDomain:\n${yaml.dump(domain, { lineWidth: 100 })}\n`;
   } catch {
     return "";
   }
@@ -272,7 +347,7 @@ export async function generateSpecBundle(input: GenerationInput): Promise<SpecDr
       "",
       "## Previous version (iterate from this; keep structure and evidence keys unless the instruction requires a change)",
       input.previous.instruction ? `Previous instruction:\n${input.previous.instruction}\n` : "",
-      yaml.dump({ agent: input.previous.agent, domain: input.previous.domain }, { lineWidth: 100, noRefs: true }),
+      yaml.dump({ agent: agentForGeneration(input.previous.agent), domain: input.previous.domain }, { lineWidth: 100, noRefs: true }),
     );
   }
 
@@ -291,7 +366,12 @@ export async function generateSpecBundle(input: GenerationInput): Promise<SpecDr
       lastError = error;
       continue;
     }
-    const modelBundle = parsed as { agent?: { config?: Record<string, unknown> } };
+    const modelBundle = parsed as {
+      agent?: {
+        config?: Record<string, unknown>;
+        stages?: Array<{ config?: Record<string, unknown> }>;
+      };
+    };
     if (modelBundle.agent?.config) {
       modelBundle.agent.config.interview = input.interviewConfig;
       modelBundle.agent.config.context = applyLearnerUpload(
@@ -299,9 +379,11 @@ export async function generateSpecBundle(input: GenerationInput): Promise<SpecDr
         { interviewType: input.interviewConfig.type },
       );
     }
+    normalizeGeneratedEvidence(modelBundle.agent?.stages, input.interviewConfig.type);
     const result = specDraftBundleSchema.safeParse({ ...modelBundle, slug: input.slug, name: input.name, gaps: [] });
     if (result.success) return result.data;
     lastError = result.error;
+    messages.push({ role: "assistant", content: JSON.stringify(parsed) });
     messages.push({
       role: "user",
       content: `Your previous JSON failed validation with these errors. Return the corrected full JSON object only:\n${result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("\n")}`,
