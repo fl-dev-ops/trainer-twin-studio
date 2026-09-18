@@ -400,13 +400,12 @@ export function SessionView({
 
   const handleSendMessage = useCallback(
     async (text: string) => {
-      if (!text.trim()) return;
-      setEntries((prev) => [...prev, { role: "user" as const, text }]);
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      setEntries((prev) => [...prev, { role: "user" as const, text: trimmed }]);
       try {
-        await room.localParticipant.publishData(
-          new TextEncoder().encode(JSON.stringify({ type: "chat-message", text })),
-          { reliable: true },
-        );
+        // RoomIO listens on lk.chat: interrupt STT wait, then generate_reply.
+        await room.localParticipant.sendText(trimmed, { topic: "lk.chat" });
       } catch (err) {
         console.error("Could not send chat message:", err);
       }
