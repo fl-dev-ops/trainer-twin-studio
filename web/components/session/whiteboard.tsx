@@ -49,16 +49,53 @@ export function Whiteboard({
       } catch {
         throw new Error("Invalid whiteboard command");
       }
-      if (parsed.action !== "highlight_component") {
+
+      if (parsed.action === "get_scene") {
+        const elements = api.current.getSceneElements().filter((el) => !el.isDeleted);
+        const textElements = elements
+          .filter((el) => el.type === "text")
+          .map((el: any) => ({
+            id: el.id,
+            label: (el.originalText || el.text || "").trim(),
+            x: Math.round(el.x),
+            y: Math.round(el.y),
+          }))
+          .filter((el) => el.label.length > 0);
+
+        const labels = textElements.map((el) => el.label);
+        const shapesCount = elements.filter((el) => el.type !== "text").length;
+
+        return JSON.stringify({
+          ok: true,
+          elementsCount: elements.length,
+          componentsCount: textElements.length,
+          shapesCount,
+          labels,
+          components: textElements,
+          summary: textElements.length > 0
+            ? `Whiteboard contains ${textElements.length} labeled components: ${labels.join(", ")}.`
+            : elements.length > 0
+            ? `Whiteboard contains ${elements.length} drawn shapes without text labels.`
+            : "Whiteboard is currently empty.",
+        });
+      }
+
+      if (parsed.action === "clear") {
+        api.current.updateScene({ elements: [] });
+        return JSON.stringify({ ok: true });
+      }
+
+      if (parsed.action !== "highlight_component" && parsed.action !== "highlight") {
         throw new Error(`Unsupported whiteboard action: ${String(parsed.action)}`);
       }
-      const componentLabel = parsed.payload?.componentLabel;
+      const componentLabel = (parsed.payload?.componentLabel ?? parsed.payload?.element_id ?? "") as string;
       if (typeof componentLabel !== "string" || !componentLabel.trim()) {
         throw new Error("Missing component label");
       }
       const requestedLabel = normalizeLabel(componentLabel);
       const elements = api.current.getSceneElements();
       const textElement = elements.find((element) => {
+        if (element.id === componentLabel) return true;
         if (element.type !== "text") return false;
         const visibleLabel = normalizeLabel(element.originalText || element.text);
         return (
@@ -67,11 +104,11 @@ export function Whiteboard({
           requestedLabel.includes(visibleLabel)
         );
       });
-      if (!textElement || textElement.type !== "text") {
+      if (!textElement) {
         throw new Error("Whiteboard component label was not found");
       }
       const selectedIds: Record<string, true> = { [textElement.id]: true };
-      if (textElement.containerId) selectedIds[textElement.containerId] = true;
+      if ((textElement as any).containerId) selectedIds[(textElement as any).containerId] = true;
       const selectedElements = elements.filter((element) => selectedIds[element.id]);
       api.current.updateScene({
         appState: { selectedElementIds: selectedIds },
@@ -80,7 +117,7 @@ export function Whiteboard({
         animate: true,
         fitToContent: true,
       });
-      return JSON.stringify({ ok: true, componentLabel: textElement.text });
+      return JSON.stringify({ ok: true, componentLabel: (textElement as any).text ?? textElement.id });
     }));
 
   async function handleDone() {
@@ -128,7 +165,17 @@ export function Whiteboard({
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[#121212]">
-      <p className="shrink-0 border-b border-white/10 px-4 py-3 text-sm text-foreground">{question}</p>
+      <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-2.5">
+        <p className="min-w-0 flex-1 truncate pr-3 text-sm text-foreground">{question}</p>
+        <button
+          type="button"
+          onClick={() => void handleDone()}
+          disabled={isExporting || submitted}
+          className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {submitted ? "Submitted ✓" : isExporting ? "Submitting…" : "Submit diagram"}
+        </button>
+      </div>
       <div className="min-h-0 flex-1 p-2">
         <Excalidraw
           excalidrawAPI={(instance: ExcalidrawImperativeAPI) => {
@@ -137,16 +184,6 @@ export function Whiteboard({
           theme="dark"
           viewModeEnabled={submitted}
         />
-      </div>
-      <div className="flex shrink-0 justify-end border-t border-white/10 px-4 py-3">
-        <button
-          type="button"
-          onClick={() => void handleDone()}
-          disabled={isExporting || submitted}
-          className="rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {submitted ? "Submitted" : isExporting ? "Preparing…" : "Done"}
-        </button>
       </div>
     </div>
   );
