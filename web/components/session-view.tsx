@@ -1006,11 +1006,7 @@ export function SessionView({
               </Link>
             )}
 
-            <div className="flex items-center gap-2 rounded-full bg-[#e03b3b] px-3 py-1 font-semibold text-white text-xs shadow-sm">
-              <span className="size-1.5 animate-pulse rounded-full bg-white" />
-              <span>Live</span>
-              <time className="font-mono text-xs font-semibold">{elapsedLabel}</time>
-            </div>
+            <time className="font-mono text-xs font-medium text-white">{elapsedLabel}</time>
           </header>
 
           {connected && (surface?.tool === "code" || surface?.tool === "canvas") && !isScreenSharing && (
