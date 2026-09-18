@@ -47,6 +47,7 @@ import { Whiteboard } from "@/components/session/whiteboard";
 import { PresentationViewer } from "@/components/session/presentation-viewer";
 import { PreJoin, type PreJoinMediaSettings } from "@/components/session/prejoin";
 import { PdfViewerSurface } from "@/components/session/pdf-viewer";
+import { HomeRedirect } from "@/components/session/home-redirect";
 import { ImageViewerSurface } from "@/components/session/image-viewer";
 import { LiveKitWorkspaceProvider } from "@/lib/livekit-workspaces";
 import { downloadIntroVideo } from "@/lib/intro-video-cache";
@@ -1247,7 +1248,9 @@ function SessionFeedback({ scenarioName }: { scenarioName?: string }) {
             <Check className="size-6" aria-hidden="true" />
           </span>
           <CardTitle>Thanks for your feedback</CardTitle>
-          <CardDescription>You may close this tab.</CardDescription>
+          <CardDescription>
+            <HomeRedirect />
+          </CardDescription>
         </CardHeader>
       </>
     );

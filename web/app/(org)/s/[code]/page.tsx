@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { HomeRedirect } from "@/components/session/home-redirect";
 import { SessionView } from "@/components/session-view";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { signInUrl } from "@/lib/base-domain";
@@ -48,7 +49,10 @@ export default async function SharedSessionPage({ params }: { params: Promise<{ 
         <Card className="w-full max-w-md text-center">
           <CardHeader>
             <CardTitle>Invalid session link</CardTitle>
-            <CardDescription>This practice link is not assigned to your account, has expired, or has already been completed.</CardDescription>
+            <CardDescription>
+              This practice link is not assigned to your account, has expired, or has already been completed.
+              <HomeRedirect />
+            </CardDescription>
           </CardHeader>
         </Card>
       </main>
