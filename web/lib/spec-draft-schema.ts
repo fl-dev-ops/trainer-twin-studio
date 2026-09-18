@@ -73,16 +73,9 @@ const stageActionsSchema = z.object({
 
 const evidenceSchema = z.object({
   definitions: z.record(slug, nonEmpty),
-  keys: z.array(slug).min(1),
-  completion_keys: z.array(slug).min(1),
-}).strict().superRefine((evidence, ctx) => {
-  const defined = new Set(Object.keys(evidence.definitions));
-  for (const [field, keys] of [["keys", evidence.keys], ["completion_keys", evidence.completion_keys]] as const) {
-    keys.forEach((key, index) => {
-      if (!defined.has(key)) ctx.addIssue({ code: "custom", message: `Unknown evidence key: ${key}`, path: [field, index] });
-    });
-  }
-});
+  keys: z.array(slug),
+  completion_keys: z.array(slug),
+}).strict();
 
 const stageSchema = z.object({
   id: slug,
@@ -157,7 +150,25 @@ export const agentSpecSchema = z.object({
   });
 
   const interview = agent.config.interview;
-  if (interview.type === "technical") {
+  if (interview.type === "resume") {
+    agent.stages.forEach((stage, stageIndex) => {
+      const evidence = stage.config.evidence;
+      if (!evidence.keys.length) {
+        ctx.addIssue({ code: "custom", message: "At least one evidence key is required", path: ["stages", stageIndex, "config", "evidence", "keys"] });
+      }
+      if (!evidence.completion_keys.length) {
+        ctx.addIssue({ code: "custom", message: "At least one completion key is required", path: ["stages", stageIndex, "config", "evidence", "completion_keys"] });
+      }
+      const defined = new Set(Object.keys(evidence.definitions));
+      for (const [field, keys] of [["keys", evidence.keys], ["completion_keys", evidence.completion_keys]] as const) {
+        keys.forEach((key, keyIndex) => {
+          if (!defined.has(key)) {
+            ctx.addIssue({ code: "custom", message: `Unknown evidence key: ${key}`, path: ["stages", stageIndex, "config", "evidence", field, keyIndex] });
+          }
+        });
+      }
+    });
+  } else {
     const totalMainQuestions = Object.values(interview.question_counts).reduce((sum, count) => sum + (count ?? 0), 0);
     if (totalMainQuestions > agent.config.turns.maximum) {
       ctx.addIssue({
