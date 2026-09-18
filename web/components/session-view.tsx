@@ -41,8 +41,8 @@ import { CandidateTile } from "@/components/session/candidate-tile";
 import { SessionControlBar } from "@/components/session/session-control-bar";
 import { SessionSidebar } from "@/components/session/session-sidebar";
 import { LiveSubtitles } from "@/components/session/live-subtitles";
+import { ChoicePanel } from "@/components/session/choice";
 import { CodeEditor } from "@/components/session/code-editor";
-import { CodeViewer } from "@/components/session/code-viewer";
 import { Whiteboard } from "@/components/session/whiteboard";
 import { PresentationViewer } from "@/components/session/presentation-viewer";
 import { PreJoin, type PreJoinMediaSettings } from "@/components/session/prejoin";
@@ -152,9 +152,6 @@ export function SessionView({
   const [surfaceRevision, setSurfaceRevision] = useState(0);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isScreenSharePending, setIsScreenSharePending] = useState(false);
-  const [selectedChoiceId, setSelectedChoiceId] = useState<string | null>(null);
-  const [choiceSubmitting, setChoiceSubmitting] = useState(false);
-  const [choiceSubmitted, setChoiceSubmitted] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [subtitlesActive, setSubtitlesActive] = useState(true);
   const [latestSpokenText, setLatestSpokenText] = useState("");
@@ -228,9 +225,6 @@ export function SessionView({
     setSurfaceRevision(0);
     setIsScreenSharing(false);
     setIsScreenSharePending(false);
-    setSelectedChoiceId(null);
-    setChoiceSubmitting(false);
-    setChoiceSubmitted(false);
     setLatestSpokenText("");
     setElapsed(0);
   }, []);
@@ -285,29 +279,17 @@ export function SessionView({
   );
   const isContextRequired = Boolean(contextUpload?.required ?? agentContextRequired[agent]);
 
-  /** Resolves once the intro download finishes (or falls back to streaming). */
-  const awaitIntroReady = useCallback(async () => {
-    if (!introSrc || introPrefetchDone) return;
-    try {
-      const url = await downloadIntroVideo(introSrc);
-      setIntroPlaybackSrc(url);
-    } catch {
-      setIntroPlaybackSrc(introSrc);
-    } finally {
-      setIntroPrefetchDone(true);
-      setIntroProgress(null);
-    }
-  }, [introSrc, introPrefetchDone]);
-
   useEffect(() => {
     if (!autoStart || !prejoinComplete || ended || !agent || !persona || launched) return;
     if (isContextRequired && contextIds.length === 0) return;
-    if (introSrc && !introPrefetchDone) return;
+    // Deliberately NOT waiting on the intro download: a ~100 MB clip would otherwise
+    // sit between "Join now" and the session. ScenarioIntro streams the presigned
+    // URL (S3 serves 206 range requests) and the prefetch blob is used if it lands first.
     void Promise.resolve().then(() => {
       setLaunched(true);
       void handleStartSession();
     });
-  }, [autoStart, prejoinComplete, ended, agent, persona, launched, isContextRequired, contextIds, handleStartSession, introSrc, introPrefetchDone]);
+  }, [autoStart, prejoinComplete, ended, agent, persona, launched, isContextRequired, contextIds, handleStartSession]);
 
   useEffect(() => {
     if (!connection || connected) return;
@@ -445,9 +427,6 @@ export function SessionView({
       surfaceKeyRef.current = nextKey;
       surfaceRevisionRef.current = 0;
       setSurfaceRevision(0);
-      setSelectedChoiceId(null);
-      setChoiceSubmitting(false);
-      setChoiceSubmitted(false);
     }
     setSurface(nextSurface);
   }, []);
@@ -530,30 +509,19 @@ export function SessionView({
     };
   }, [connection, ended, surface]);
 
-  const handleChoiceSubmission = useCallback(async () => {
-    if (surface?.tool !== "choice" || !selectedChoiceId || choiceSubmitting || choiceSubmitted) return;
-    const option = surface.options.find(({ id }) => id === selectedChoiceId);
-    if (!option) return;
-
-    setChoiceSubmitting(true);
-    try {
-      await room.localParticipant.publishData(
-        new TextEncoder().encode(JSON.stringify({
-          type: "mcq-submission",
-          questionId: surface.questionId,
-          optionId: option.id,
-          optionText: option.text,
-          submitted: true,
-        })),
-        { reliable: true },
-      );
-      setChoiceSubmitted(true);
-    } catch (error) {
-      console.error("Could not submit MCQ answer:", error);
-    } finally {
-      setChoiceSubmitting(false);
-    }
-  }, [choiceSubmitted, choiceSubmitting, room, selectedChoiceId, surface]);
+  const handleChoiceSubmission = useCallback(async (option: { id: string; text: string }) => {
+    if (surface?.tool !== "choice") return;
+    await room.localParticipant.publishData(
+      new TextEncoder().encode(JSON.stringify({
+        type: "mcq-submission",
+        questionId: surface.questionId,
+        optionId: option.id,
+        optionText: option.text,
+        submitted: true,
+      })),
+      { reliable: true },
+    );
+  }, [room, surface]);
 
   const handleCodeSubmission = useCallback(async (questionId: string, language: string, code: string) => {
     const submissionId = crypto.randomUUID();
@@ -815,6 +783,7 @@ export function SessionView({
         contextPrompt={contextUpload?.prompt}
         contextLabel={contextUpload?.label}
         contextAccept={contextUpload?.accept}
+        introProgress={introSrc && !introPrefetchDone ? introProgress : null}
         onJoin={(settings, contextId) => {
           setPrejoinMedia(settings);
           setContextIds(contextId ? [contextId] : []);
@@ -1008,7 +977,7 @@ export function SessionView({
                 {introProgress !== null && (
                   <div aria-live="polite">
                     <p className="text-xs text-muted-foreground">
-                      Loading your session context… {Math.round(introProgress * 100)}%
+                      Preparing your introduction… {Math.round(introProgress * 100)}%
                     </p>
                     <div
                       role="progressbar"
@@ -1026,13 +995,9 @@ export function SessionView({
                 )}
 
                 <Button
-                  onClick={async (event) => {
-                    const button = event.currentTarget;
-                    button.disabled = true;
-                    await awaitIntroReady();
+                  onClick={() => {
                     setLaunched(true);
                     void handleStartSession();
-                    button.disabled = false;
                   }}
                   disabled={!persona || !agent || (isContextRequired && contextIds.length === 0)}
                   className="w-full"
@@ -1144,44 +1109,14 @@ export function SessionView({
                         />
                       )}
                       {surface.tool === "choice" && (
-                        <div className="space-y-4 overflow-y-auto p-6">
-                          <p className="text-sm font-medium">{surface.question}</p>
-                          {surface.code ? (
-                            <CodeViewer
-                              language={surface.code.language}
-                              code={surface.code.content}
-                            />
-                          ) : null}
-                          <div className="space-y-2">
-                            {surface.options.map((option) => (
-                              <label key={option.id} className="flex items-start gap-3 rounded-xl border border-white/10 p-3 text-sm">
-                                <input
-                                  type="radio"
-                                  name={`question-${surface.key}`}
-                                  value={option.id}
-                                  className="mt-0.5"
-                                  checked={selectedChoiceId === option.id}
-                                  disabled={choiceSubmitting || choiceSubmitted}
-                                  onChange={() => setSelectedChoiceId(option.id)}
-                                />
-                                <span><span className="font-medium">{option.id}.</span> {option.text}</span>
-                              </label>
-                            ))}
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="text-xs text-muted-foreground">
-                              {choiceSubmitted ? "Answer submitted. Waiting for the next question." : "Select one option, then submit your answer."}
-                            </p>
-                            <Button
-                              type="button"
-                              size="sm"
-                              disabled={!selectedChoiceId || choiceSubmitting || choiceSubmitted}
-                              onClick={() => void handleChoiceSubmission()}
-                            >
-                              {choiceSubmitting ? "Submitting…" : choiceSubmitted ? "Submitted" : "Submit answer"}
-                            </Button>
-                          </div>
-                        </div>
+                        <ChoicePanel
+                          key={surface.key}
+                          questionId={surface.questionId}
+                          question={surface.question}
+                          options={surface.options}
+                          code={surface.code}
+                          onSubmit={handleChoiceSubmission}
+                        />
                       )}
                       {surface.tool === "canvas" && (
                         <Whiteboard

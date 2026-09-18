@@ -52,6 +52,13 @@ describe("TrainerTwin prompt contract", () => {
     contains(instructions, "[OPENING]");
   });
 
+  test("opens MCQ on screen instead of reading options aloud", () => {
+    contains(instructions, 'surface({ action: "open_choice"');
+    contains(instructions, "Do not read the options aloud");
+    contains(instructions, "get_choice_state");
+    contains(instructions, "highlight_choice");
+  });
+
   test("keeps turns voice-native", () => {
     contains(instructions, "Ask exactly ONE focal question");
     contains(instructions, "under 50 words");

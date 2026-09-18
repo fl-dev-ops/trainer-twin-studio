@@ -19,7 +19,8 @@ export type WorkspaceMethod =
   | "workspace.code"
   | "workspace.canvas"
   | "workspace.whiteboard"
-  | "workspace.presentation";
+  | "workspace.presentation"
+  | "workspace.choice";
 
 export function unwrapWorkspaceResult(raw: string): unknown {
   try {
@@ -56,6 +57,8 @@ function workspaceMethodFor(tool: string, input: Record<string, unknown>): { met
   if (tool === "set_presentation_slide") return { method: "workspace.presentation", action: "go_to_slide", payload: { slideIndex: input.slide_index } };
   if (tool === "next_presentation_slide") return { method: "workspace.presentation", action: "next", payload: {} };
   if (tool === "previous_presentation_slide") return { method: "workspace.presentation", action: "previous", payload: {} };
+  if (tool === "get_choice_state") return { method: "workspace.choice", action: "get_state", payload: {} };
+  if (tool === "highlight_choice") return { method: "workspace.choice", action: "highlight", payload: { optionId: input.option_id ?? input.optionId } };
   if (tool === "workspace_request" && typeof input.method === "string") {
     return { method: input.method as WorkspaceMethod, action: String(input.action ?? ""), payload: (input.payload as Record<string, unknown>) ?? {} };
   }
