@@ -79,6 +79,15 @@ describe("TrainerTwin prompt contract", () => {
     assert.ok(!contextRenderer.includes(".slice(0, 5000)"));
     assert.ok(!contextRenderer.includes(".slice(0, 3000)"));
   });
+
+  test("guards against off-topic whiteboard architectures and enforces question relevance", () => {
+    contains(instructions, "Whiteboard & Solution Relevance Guard");
+    contains(instructions, "Always evaluate whether the visible whiteboard diagram");
+    contains(instructions, "NEVER adopt the off-topic architecture as the discussion topic");
+    contains(instructions, "Do not ask follow-up questions exploring components of an irrelevant system");
+    contains(instructions, "steer the candidate back to designing the requested system");
+    contains(instructions, "Only call when the whiteboard diagram is relevant to the active system-design question");
+  });
 });
 
 describe("TrainerTwin retrieval policy", () => {

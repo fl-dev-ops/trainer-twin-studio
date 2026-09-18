@@ -1051,15 +1051,6 @@ export function SessionView({
                         {surface.tool === "image" && "Image Viewer"}
                         {surface.tool === "presentation" && "Presentation"}
                       </span>
-                      <button
-                        type="button"
-                        aria-label="Close workspace panel"
-                        title="Close panel"
-                        onClick={() => handleSurface(null)}
-                        className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
-                      >
-                        <X className="size-3.5" />
-                      </button>
                     </div>
                     <div className="min-h-0 flex-1">
                       {surface.tool === "code" && (

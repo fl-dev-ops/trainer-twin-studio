@@ -43,6 +43,12 @@ export function Whiteboard({
   const [isExporting, setIsExporting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
+  useEffect(() => {
+    if (api.current) {
+      api.current.updateScene({ elements: [] });
+    }
+  }, [question]);
+
   useEffect(() =>
     registerWorkspaceHandler(WHITEBOARD_RPC_METHOD, async (request) => {
       if (!api.current) throw new Error("Whiteboard is not ready");
@@ -183,7 +189,9 @@ export function Whiteboard({
         <Excalidraw
           excalidrawAPI={(instance: ExcalidrawImperativeAPI) => {
             api.current = instance;
+            instance.updateScene({ elements: [] });
           }}
+          initialData={{ elements: [] }}
           onChange={(elements) => {
             const revision = elements
               .map((element) => `${element.id}:${element.version}:${element.isDeleted}`)
