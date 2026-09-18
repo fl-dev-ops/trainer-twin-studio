@@ -64,6 +64,30 @@ function workspaceMethodFor(tool: string, input: Record<string, unknown>): { met
   }
   return null;
 }
+export function parseWorkspaceCommandSurface(command: {
+  id: string;
+  tool: string;
+  input: unknown;
+}): { surface: AgentSurface } | null {
+  if (command.tool !== "surface") return null;
+  const input = command.input && typeof command.input === "object" && !Array.isArray(command.input)
+    ? command.input as Record<string, unknown>
+    : {};
+  const action = String(input.action ?? input.type ?? "");
+  const payload = (input.payload as Record<string, unknown>) ?? input;
+  const hasId = Boolean(
+    (typeof payload.eventId === "string" && payload.eventId.trim().length > 0) ||
+    (typeof payload.questionId === "string" && payload.questionId.trim().length > 0),
+  );
+  return parseAgentSurfaceMessage({
+    ...payload,
+    type: action,
+    ...(action === "open_code_editor" && !hasId
+      ? { commandId: command.id }
+      : {}),
+  });
+}
+
 
 export function LiveKitWorkspaceProvider({
   children,
@@ -117,10 +141,9 @@ export function LiveKitWorkspaceProvider({
           return;
         }
         if (command.tool === "surface") {
-          const action = String(input.action ?? input.type ?? "");
-          const payload = (input.payload as Record<string, unknown>) ?? input;
-          const parsed = parseAgentSurfaceMessage({ ...payload, type: action });
+          const parsed = parseWorkspaceCommandSurface(command);
           if (parsed) onSurface(parsed.surface);
+          const action = String(input.action ?? input.type ?? "");
           await fetch(`/api/sessions/${sessionId}/commands/${command.id}`, {
             method: "POST",
             headers: { ...headers, "Content-Type": "application/json" },

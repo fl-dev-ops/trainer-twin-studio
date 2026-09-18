@@ -52,8 +52,16 @@ function questionCode(value: unknown): { language: string; content: string } | u
     ? { language: code.language, content: code.content }
     : undefined;
 }
+export function resolveCodeSurfaceId(source: Record<string, unknown>): string | undefined {
+  for (const candidate of [source.questionId, source.eventId, source.commandId]) {
+    if (typeof candidate === "string" && candidate.trim().length > 0) {
+      return candidate.trim();
+    }
+  }
+  return undefined;
+}
 
-function codeSurface(source: Record<string, unknown>, key: string): AgentSurface {
+function codeSurface(source: Record<string, unknown>, key: string, resolvedId?: string): AgentSurface {
   const language = languages.has(
     source.language as SupportedCodeExecutionLanguage,
   )
@@ -67,14 +75,11 @@ function codeSurface(source: Record<string, unknown>, key: string): AgentSurface
     typeof source.highlightLines[1] === "number"
       ? (source.highlightLines as [number, number])
       : undefined;
+  const questionId = resolvedId ?? resolveCodeSurfaceId(source) ?? key;
   return {
     key,
     tool: "code",
-    questionId: typeof source.questionId === "string"
-      ? source.questionId
-      : typeof source.eventId === "string"
-        ? source.eventId
-        : key,
+    questionId,
     language,
     starterCode: typeof starterCode === "string" ? starterCode : "",
     instructions: typeof source.instructions === "string"
@@ -97,10 +102,12 @@ export function parseAgentSurfaceMessage(value: unknown):
     if (!event || typeof event.type !== "string") return null;
 
     if (event.type === "open_code_editor") {
+      const codeId = resolveCodeSurfaceId(event) ?? "current";
       return {
         surface: codeSurface(
           event,
-          `agent-code-${String(event.eventId ?? event.questionId ?? "current")}`,
+          `agent-code-${codeId}`,
+          codeId,
         ),
       };
     }
