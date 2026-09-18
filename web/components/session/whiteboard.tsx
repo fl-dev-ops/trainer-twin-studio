@@ -30,13 +30,16 @@ const Excalidraw = dynamic(
 
 export function Whiteboard({
   question,
+  onContentChange,
   onSubmit,
 }: {
   question: string;
+  onContentChange?: () => void;
   onSubmit: (submission: { blob: Blob; imageSha256: string }) => Promise<boolean>;
 }) {
   const registerWorkspaceHandler = useWorkspaceHandlers();
   const api = useRef<ExcalidrawImperativeAPI | null>(null);
+  const sceneRevisionRef = useRef("");
   const [isExporting, setIsExporting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
@@ -180,6 +183,14 @@ export function Whiteboard({
         <Excalidraw
           excalidrawAPI={(instance: ExcalidrawImperativeAPI) => {
             api.current = instance;
+          }}
+          onChange={(elements) => {
+            const revision = elements
+              .map((element) => `${element.id}:${element.version}:${element.isDeleted}`)
+              .join("|");
+            if (revision === sceneRevisionRef.current) return;
+            sceneRevisionRef.current = revision;
+            onContentChange?.();
           }}
           theme="dark"
           viewModeEnabled={submitted}
