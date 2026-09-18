@@ -10,6 +10,7 @@ import logging
 import os
 import sys
 import time
+from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
@@ -17,9 +18,8 @@ from livekit import agents, api, rtc
 from livekit.agents import Agent, room_io
 from livekit.plugins import noise_cancellation
 
-from pathlib import Path
-
 from recording import post_completion_webhook
+from screen_feedback import ScreenFeedbackRuntime
 from session import build_agent_session
 
 load_dotenv(override=True)
@@ -54,6 +54,7 @@ REQUIRED_ENV_VARS = (
     "DEEPGRAM_API_KEY",
     "TTS_PROVIDER",
     "SARVAM_API_KEY",
+    "OPENROUTER_API_KEY",
     "AWS_REGION",
     "AWS_ACCESS_KEY_ID",
     "AWS_SECRET_ACCESS_KEY",
@@ -108,6 +109,16 @@ class TrainerAgent(Agent):
         self.room_name = room_name
         self.opening_release = opening_release
         self.hold_opening = hold_opening
+
+    async def inject_screen_note(self, text: str) -> None:
+        """Add observer context without triggering another model turn."""
+        chat_ctx = self.chat_ctx.copy()
+        chat_ctx.add_message(
+            role="developer",
+            content=text,
+            extra={"internal_screen_observer": True},
+        )
+        await self.update_chat_ctx(chat_ctx)
 
     async def on_enter(self) -> None:
         # When the scenario ships an intro clip (hold_opening room metadata), the client
@@ -361,6 +372,12 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         opening_release=opening_release,
         hold_opening=bool(metadata.get("hold_opening")),
     )
+    screen_feedback = ScreenFeedbackRuntime(
+        room=ctx.room,
+        participant_identity=participant_identity,
+        note_sink=agent.inject_screen_note,
+    )
+    _sessions[ctx.room.name]["screen_feedback"] = screen_feedback
 
     async def watch_empty_room() -> None:
         """Tab death skips finalize AND the job lingers (close_on_disconnect=False).
@@ -396,6 +413,7 @@ async def entrypoint(ctx: agents.JobContext) -> None:
             close_on_disconnect=False,
         ),
     )
+    await screen_feedback.start(session)
     for pending_text in pending_chat_messages:
         asyncio.create_task(session.generate_reply(user_input=pending_text))
     pending_chat_messages.clear()
@@ -405,6 +423,13 @@ async def entrypoint(ctx: agents.JobContext) -> None:
 async def on_session_end(ctx: agents.JobContext) -> None:
     logger.info("Session ending for room %s", ctx.room.name)
     state = _sessions.pop(ctx.room.name, None) or {}
+
+    screen_feedback = state.get("screen_feedback")
+    if screen_feedback is not None:
+        try:
+            await asyncio.wait_for(screen_feedback.close(), timeout=5)
+        except asyncio.TimeoutError:
+            logger.warning("Screen feedback shutdown timed out room=%s", ctx.room.name)
 
     transcript = []
     session_obj = state.get("session")

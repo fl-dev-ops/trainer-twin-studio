@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { toast } from "sonner";
 import { Check, LoaderCircle, Play, Upload as UploadIcon, Volume2, X } from "lucide-react";
 import { type AgentContextUpload } from "@/lib/context-upload";
 import "@livekit/components-styles";
@@ -56,6 +57,8 @@ import { cn } from "@/lib/utils";
 type Coverage = Record<string, string>;
 type EndReason = "completed" | "manual" | "disconnected";
 type WhiteboardAcknowledgement = { accepted: boolean; message?: string };
+
+const SURFACE_STATE_PUBLISH_INTERVAL_MS = 5_000;
 
 type SessionConnection = {
   url: string;
@@ -146,6 +149,9 @@ export function SessionView({
   const [entries, setEntries] = useState<Entry[]>([]);
   const [coverage, setCoverage] = useState<Coverage>({});
   const [surface, setSurface] = useState<AgentSurface>(null);
+  const [surfaceRevision, setSurfaceRevision] = useState(0);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [isScreenSharePending, setIsScreenSharePending] = useState(false);
   const [selectedChoiceId, setSelectedChoiceId] = useState<string | null>(null);
   const [choiceSubmitting, setChoiceSubmitting] = useState(false);
   const [choiceSubmitted, setChoiceSubmitted] = useState(false);
@@ -163,6 +169,8 @@ export function SessionView({
   const coverageRef = useRef<Coverage>({});
   const finalizedRef = useRef(false);
   const surfaceKeyRef = useRef<string | null>(null);
+  const surfaceRevisionRef = useRef(0);
+  const lastSurfaceStatePublishedAtRef = useRef(0);
   const whiteboardAcknowledgementsRef = useRef(
     new Map<string, (acknowledgement: WhiteboardAcknowledgement) => void>(),
   );
@@ -214,7 +222,12 @@ export function SessionView({
     setEntries([]);
     setCoverage({});
     surfaceKeyRef.current = null;
+    surfaceRevisionRef.current = 0;
+    lastSurfaceStatePublishedAtRef.current = 0;
     setSurface(null);
+    setSurfaceRevision(0);
+    setIsScreenSharing(false);
+    setIsScreenSharePending(false);
     setSelectedChoiceId(null);
     setChoiceSubmitting(false);
     setChoiceSubmitted(false);
@@ -322,6 +335,19 @@ export function SessionView({
   }, [room, connected, prejoinMedia.speakerDeviceId]);
 
   useEffect(() => {
+    const syncScreenShareState = () => {
+      setIsScreenSharing(room.localParticipant.isScreenShareEnabled);
+    };
+    syncScreenShareState();
+    room.on(RoomEvent.LocalTrackPublished, syncScreenShareState);
+    room.on(RoomEvent.LocalTrackUnpublished, syncScreenShareState);
+    return () => {
+      room.off(RoomEvent.LocalTrackPublished, syncScreenShareState);
+      room.off(RoomEvent.LocalTrackUnpublished, syncScreenShareState);
+    };
+  }, [room]);
+
+  useEffect(() => {
     if (!connected) return;
     const markAgent = () => setAgentInRoom(true);
     if (room.remoteParticipants.size > 0) {
@@ -417,12 +443,70 @@ export function SessionView({
     const nextKey = nextSurface?.key ?? null;
     if (surfaceKeyRef.current !== nextKey) {
       surfaceKeyRef.current = nextKey;
+      surfaceRevisionRef.current = 0;
+      setSurfaceRevision(0);
       setSelectedChoiceId(null);
       setChoiceSubmitting(false);
       setChoiceSubmitted(false);
     }
     setSurface(nextSurface);
   }, []);
+
+  const handleSurfaceContentChange = useCallback(() => {
+    surfaceRevisionRef.current += 1;
+    setSurfaceRevision(surfaceRevisionRef.current);
+  }, []);
+
+  useEffect(() => {
+    if (!connected) return;
+    const elapsed = Date.now() - lastSurfaceStatePublishedAtRef.current;
+    const delay = surfaceRevision === 0
+      ? 0
+      : Math.max(0, SURFACE_STATE_PUBLISH_INTERVAL_MS - elapsed);
+    const timeout = window.setTimeout(() => {
+      const visible = surface?.tool === "code" || surface?.tool === "canvas";
+      const question = surface?.tool === "code"
+        ? surface.instructions ?? "Complete the coding task shown in the editor."
+        : surface?.tool === "canvas"
+          ? surface.question
+          : "";
+      const payload = new TextEncoder().encode(JSON.stringify({
+        type: "candidate_surface_state",
+        visible,
+        surface: surface?.tool === "canvas" ? "whiteboard" : surface?.tool === "code" ? "code" : null,
+        question_id: visible ? surface.questionId : null,
+        question,
+        question_type: surface?.tool === "canvas" ? "system-design" : surface?.tool === "code" ? "coding" : null,
+        content_revision: surfaceRevision,
+      }));
+      lastSurfaceStatePublishedAtRef.current = Date.now();
+      room.localParticipant.publishData(payload, {
+        reliable: true,
+        topic: "candidate.surface_state",
+      }).catch((publishError) => {
+        lastSurfaceStatePublishedAtRef.current = 0;
+        console.error("Could not publish candidate surface state:", publishError);
+      });
+    }, delay);
+    return () => window.clearTimeout(timeout);
+  }, [connected, room, surface, surfaceRevision]);
+
+  const handleEnableScreenShare = useCallback(async () => {
+    if (isScreenSharePending) return;
+    setIsScreenSharePending(true);
+    try {
+      await room.localParticipant.setScreenShareEnabled(true);
+    } catch (shareError) {
+      console.error("Could not start screen sharing:", shareError);
+      toast.error(
+        shareError instanceof DOMException && shareError.name === "NotAllowedError"
+          ? "Screen sharing was cancelled or denied."
+          : "Could not start screen sharing on this device.",
+      );
+    } finally {
+      setIsScreenSharePending(false);
+    }
+  }, [isScreenSharePending, room]);
 
   // Browser-confirmed screen state is durable session truth; the brain reads it
   // through getSessionContext instead of inferring it from LiveKit RPC history.
@@ -669,6 +753,20 @@ export function SessionView({
               accepted: data.status === "accepted",
               message: typeof data.message === "string" ? data.message : undefined,
             });
+          }
+        } else if (data.type === "screen_feedback_highlight") {
+          if (participant?.kind !== ParticipantKind.AGENT) return;
+          const fromLine = Number(data.fromLine);
+          const toLine = Number(data.toLine);
+          if (
+            Number.isInteger(fromLine) &&
+            Number.isInteger(toLine) &&
+            fromLine >= 1 &&
+            toLine >= fromLine
+          ) {
+            setSurface((current) => current?.tool === "code"
+              ? { ...current, highlightLines: [fromLine, toLine] as [number, number] }
+              : current);
           }
         }
       } catch {}
@@ -981,6 +1079,22 @@ export function SessionView({
             </div>
           </header>
 
+          {connected && (surface?.tool === "code" || surface?.tool === "canvas") && !isScreenSharing && (
+            <div className="flex shrink-0 items-center justify-center gap-3 border-b border-white/[0.06] bg-amber-400/10 px-4 py-2 text-xs text-amber-100">
+              <span>
+                Share your entire screen so the trainer can review your live work and give timely feedback.
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                disabled={isScreenSharePending}
+                onClick={() => void handleEnableScreenShare()}
+              >
+                {isScreenSharePending ? "Starting…" : "Share screen"}
+              </Button>
+            </div>
+          )}
+
           {/* Main Body: Stage (Left) & Chat Sidebar (Right) — EQUAL HEIGHT */}
           <main className="flex min-h-0 flex-1 gap-4 p-4 pb-2">
             {/* Stage Section */}
@@ -1025,6 +1139,7 @@ export function SessionView({
                           instructions={surface.instructions}
                           highlightLines={surface.highlightLines}
                           readOnly={surface.readOnly}
+                          onContentChange={handleSurfaceContentChange}
                           onSubmit={surface.readOnly ? undefined : (language, code) => handleCodeSubmission(surface.questionId, language, code)}
                         />
                       )}
@@ -1072,6 +1187,7 @@ export function SessionView({
                         <Whiteboard
                           key={surface.key}
                           question={surface.question}
+                          onContentChange={handleSurfaceContentChange}
                           onSubmit={(submission) => handleWhiteboardSubmission(
                             surface.questionId,
                             surface.question,

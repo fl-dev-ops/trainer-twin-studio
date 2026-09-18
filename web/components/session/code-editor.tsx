@@ -114,6 +114,7 @@ export function CodeEditor({
   instructions,
   highlightLines,
   readOnly = false,
+  onContentChange,
   onSubmit,
 }: {
   initialLanguage?: SupportedCodeExecutionLanguage;
@@ -121,6 +122,7 @@ export function CodeEditor({
   instructions?: string;
   highlightLines?: [number, number];
   readOnly?: boolean;
+  onContentChange?: () => void;
   onSubmit?: (language: SupportedCodeExecutionLanguage, code: string) => Promise<void>;
 }) {
   const registerWorkspaceHandler = useWorkspaceHandlers();
@@ -162,6 +164,25 @@ export function CodeEditor({
         throw new Error("Invalid code command");
       }
       const payload = parsed.payload ?? {};
+
+      if (parsed.action === "get_state") {
+        const selection = mountedEditor.getSelection();
+        return JSON.stringify({
+          ok: true,
+          result: {
+            language,
+            code: model.getValue(),
+            selection: selection
+              ? {
+                  fromLine: selection.startLineNumber,
+                  fromColumn: selection.startColumn,
+                  toLine: selection.endLineNumber,
+                  toColumn: selection.endColumn,
+                }
+              : null,
+          },
+        });
+      }
 
       if (parsed.action === "get_range") {
         const fromLine = Number(payload.fromLine);
@@ -258,6 +279,25 @@ export function CodeEditor({
       }
     }
   }
+
+  useEffect(() => {
+    const instance = editorRef.current;
+    const model = instance?.getModel();
+    if (!instance || !model || !highlightLines) return;
+    const [fromLine, requestedToLine] = highlightLines;
+    if (fromLine < 1 || requestedToLine < fromLine || fromLine > model.getLineCount()) return;
+    const toLine = Math.min(requestedToLine, model.getLineCount());
+    const range = {
+      startLineNumber: fromLine,
+      startColumn: 1,
+      endLineNumber: toLine,
+      endColumn: model.getLineMaxColumn(toLine),
+    };
+    decorationIdsRef.current = instance.deltaDecorations(decorationIdsRef.current, [
+      { range, options: { isWholeLine: true, inlineClassName: "agent-code-highlight" } },
+    ]);
+    instance.revealRangeInCenter(range);
+  }, [highlightLines]);
 
   useEffect(() => {
     function handlePreviewMessage(event: MessageEvent) {
@@ -409,6 +449,7 @@ export function CodeEditor({
               previewConsoleTargetRef.current = null;
               setBrowserConsoleEntries([]);
               setActiveTab("code");
+              onContentChange?.();
             }}
             options={{
               minimap: { enabled: false },
@@ -469,6 +510,7 @@ export function CodeEditor({
               previewConsoleTargetRef.current = null;
               setBrowserConsoleEntries([]);
               setActiveTab("code");
+              onContentChange?.();
             }}
             className="rounded-lg border border-white/10 bg-[#1a1d23] px-3 py-1.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring/15"
           >

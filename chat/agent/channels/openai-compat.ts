@@ -23,7 +23,7 @@ const PURE_SIDE_EFFECT_TOOLS = new Set([
 ]);
 
 type ChatMessage = {
-  role: "system" | "user" | "assistant" | "tool";
+  role: "system" | "developer" | "user" | "assistant" | "tool";
   content?: unknown;
   tool_call_id?: string;
   name?: string;
@@ -72,14 +72,19 @@ function mapLatestMessage(messages: ChatMessage[]): string | null {
   // LiveKit's generate_reply(instructions="session-start") arrives as a SYSTEM
   // instructions message in chat ctx (not a user turn), so "session-start" is
   // matched on content regardless of role. The last relevant message wins.
-  const latest = [...(messages ?? [])]
-    .reverse()
-    .find(
-      (message) =>
-        message.role === "user" ||
-        message.role === "tool" ||
-        contentToText(message.content).trim() === "session-start",
-    );
+  let latestIndex = -1;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const candidate = messages[index];
+    if (
+      candidate.role === "user" ||
+      candidate.role === "tool" ||
+      contentToText(candidate.content).trim() === "session-start"
+    ) {
+      latestIndex = index;
+      break;
+    }
+  }
+  const latest = messages[latestIndex];
   if (!latest) return null;
   if (latest.role === "tool") {
     return `[TOOL RESULT] ${latest.tool_call_id ?? ""} ${latest.name ?? ""}\n${contentToText(latest.content)}`;
@@ -87,7 +92,22 @@ function mapLatestMessage(messages: ChatMessage[]): string | null {
   const text = contentToText(latest.content).trim();
   if (!text) return null;
   // LiveKit's generate_reply("session-start") maps to the opening brief.
-  return text === "session-start" ? "[OPENING] Generate the session opening." : text;
+  if (text === "session-start") return "[OPENING] Generate the session opening.";
+
+  let previousTurnIndex = -1;
+  for (let index = latestIndex - 1; index >= 0; index -= 1) {
+    if (messages[index].role === "user" || messages[index].role === "tool") {
+      previousTurnIndex = index;
+      break;
+    }
+  }
+  const observerNotes = messages
+    .slice(previousTurnIndex + 1, latestIndex)
+    .filter((message) => message.role === "developer")
+    .map((message) => contentToText(message.content).trim())
+    .filter((note) => note.startsWith("[SCREEN OBSERVER NOTE]"));
+  if (!observerNotes.length) return text;
+  return `[SCREEN OBSERVER CONTEXT]\n${observerNotes.join("\n")}\n[CANDIDATE]\n${text}`;
 }
 
 type StreamEvent = {
