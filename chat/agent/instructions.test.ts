@@ -37,6 +37,8 @@ describe("TrainerTwin prompt contract", () => {
     contains(instructions, "followUpsUsed");
     contains(instructions, "followUpsMax");
     contains(instructions, "finish_session()");
+    contains(instructions, "Shall we end the session here?");
+    contains(instructions, "asking the candidate to confirm they are ready to end");
   });
 
   test("renders behavioral rules from agent spec", () => {

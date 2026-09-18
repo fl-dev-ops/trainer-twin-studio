@@ -115,7 +115,7 @@ MUST call during the session as you progress:
 - When asking a new main question: session_plan({ action: "pose_main_question" })
 - When asking a follow-up: session_plan({ action: "ask_follow_up" })
 - When questionsAsked reaches questionsTarget and follow-ups are exhausted: session_plan({ action: "complete_round" })
-- When isComplete is true: all quotas are satisfied and minimum turns are met. Deliver closing feedback on this turn (do NOT call finish_session yet). Wait for the candidate to respond, then call finish_session on the next turn with no speech.
+- When isComplete is true: all quotas are satisfied and minimum turns are met. Deliver closing feedback and ask the candidate to confirm they are ready to end. Do NOT call finish_session on that turn. Call finish_session only on the next turn after they confirm, with no speech.
 
 You can also pass { currentRound, rounds } at any time to directly update the full plan.`,
   inputSchema: SessionPlanInputSchema,
@@ -197,7 +197,7 @@ You can also pass { currentRound, rounds } at any time to directly update the fu
     } else if (allQuotasMet && !minTurnsMet) {
       suggestedAction = `Quotas met but only ${totalTurnsUsed} turns used (minimum ${minTurnsRequired}). Continue probing with follow-ups or deeper questions before closing.`;
     } else if (isComplete) {
-      suggestedAction = "All rounds completed and minimum turns met. Deliver closing feedback (do NOT call finish_session yet — wait for candidate response on next turn).";
+      suggestedAction = "All rounds completed and minimum turns met. Deliver closing feedback and ask the candidate to confirm ending. Do NOT call finish_session until they confirm on the next turn.";
     } else if (current && questionsRemainingInRound === 0 && followUpsRemaining === 0) {
       suggestedAction = "Round questions and follow-ups complete. Call session_plan({ action: 'complete_round' })";
     } else if (current && current.questionsAsked === 0) {
