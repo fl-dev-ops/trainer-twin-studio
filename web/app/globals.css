@@ -323,4 +323,12 @@
     0%, 100% { transform: scale(0.9); opacity: 0.3; }
     50% { transform: scale(1.2); opacity: 0.75; }
   }
+
+  .monaco-editor .agent-code-highlight,
+  .monaco-editor .agent-highlight,
+  .agent-code-highlight,
+  .agent-highlight {
+    background: rgb(250 204 21 / 0.22) !important;
+    border-bottom: 1px solid rgb(250 204 21 / 0.8) !important;
+  }
 }

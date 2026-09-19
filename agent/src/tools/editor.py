@@ -53,9 +53,9 @@ def build_editor_tools(*, room: Any, participant_identity: str) -> list[Any]:
         description=(
             "Required before replying when a candidate is unsure, stuck, does not "
             "know, or requests help about an active Coding, Machine coding, or Code "
-            "output editor. Read inclusive one-based lines 1 through 200 and never "
-            "read the returned code aloud. Call highlight_code only when the candidate "
-            "has written meaningful code and a specific line range is relevant."
+            "output editor, or after an incorrect or unexplained code-output run. "
+            "Read inclusive one-based lines 1 through 200 and never "
+            "read the returned code aloud."
         ),
     )
     async def read_code_range(
@@ -74,11 +74,10 @@ def build_editor_tools(*, room: Any, participant_identity: str) -> list[Any]:
     @function_tool(
         name="highlight_code",
         description=(
-            "Use after read_code_range only when the candidate has written meaningful "
-            "code and a specific line range is relevant. Highlight the smallest "
+            "Use after read_code_range. Highlight the smallest "
             "relevant inclusive one-based whole-line range without "
             "changing the code, then ask one targeted question that leads the "
-            "candidate to the exact output or next implementation step."
+            "candidate to calculate the exact output or next implementation step."
         ),
     )
     async def highlight_code(

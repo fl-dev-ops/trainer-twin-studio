@@ -61,6 +61,20 @@ describe("TrainerTwin prompt contract", () => {
     contains(instructions, "highlight_choice");
   });
 
+  test("enforces predict-then-run sequence and highlighted recovery for code-output questions", () => {
+    contains(instructions, "Now run the code and tell me what output you get.");
+    contains(instructions, "read_code_range");
+    contains(instructions, "highlight_code");
+    contains(instructions, "While a question is active, the answer never comes from you unless a Code output question has exhausted its dedicated one-follow-up recovery path.");
+    contains(instructions, "The first highlighted question is the one recovery follow-up and consumes the question's full follow-up allowance.");
+  });
+
+  test("enforces read and highlight flow on coding submissions and walkthroughs", () => {
+    contains(instructions, "After submission, ask the candidate to walk through their approach aloud.");
+    contains(instructions, "When that uncertainty maps to visible code, use the same mandatory `read_code_range` (lines 1 through 200) then `highlight_code` sequence before asking it.");
+    contains(instructions, "the highlighted line");
+  });
+
   test("keeps turns voice-native", () => {
     contains(instructions, "Ask exactly ONE focal question");
     contains(instructions, "under 50 words");
