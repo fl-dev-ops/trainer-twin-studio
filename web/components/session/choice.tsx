@@ -82,7 +82,7 @@ export function ChoicePanel({
   }
 
   return (
-    <div className="space-y-4 overflow-y-auto p-6">
+    <div className="space-y-4 overflow-y-auto p-6 pb-20">
       <p className="text-sm font-medium">{question}</p>
       {code ? <CodeViewer language={code.language} code={code.content} /> : null}
       <div className="space-y-2">

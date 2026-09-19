@@ -396,34 +396,96 @@ export function CodeEditor({
       <div
         role="tablist"
         aria-label="Code editor views"
-        className="flex shrink-0 items-end gap-1 border-b border-white/[0.05] px-3"
+        className="flex shrink-0 items-center justify-between border-b border-white/[0.05] px-3 py-1.5"
       >
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "code"}
-          onClick={() => setActiveTab("code")}
-          className={`cursor-pointer border-b-2 border-transparent px-4 py-2 text-sm font-medium transition-colors ${
-            activeTab === "code"
-              ? "border-primary text-foreground"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Code
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "output"}
-          onClick={() => setActiveTab("output")}
-          className={`cursor-pointer border-b-2 border-transparent px-4 py-2 text-sm font-medium transition-colors ${
-            activeTab === "output"
-              ? "border-primary text-foreground"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Output
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "code"}
+            onClick={() => setActiveTab("code")}
+            className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+              activeTab === "code"
+                ? "bg-white/10 text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Code
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "output"}
+            onClick={() => setActiveTab("output")}
+            className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+              activeTab === "output"
+                ? "bg-white/10 text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Output
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {!readOnly ? (
+            <select
+              value={language}
+              onChange={(event) => {
+                runAbortControllerRef.current?.abort();
+                runAbortControllerRef.current = null;
+                setIsRunning(false);
+                const nextLanguage = event.target.value as SupportedCodeExecutionLanguage;
+                setLanguage(nextLanguage);
+                setRunResult(null);
+                previewConsoleTargetRef.current = null;
+                setBrowserConsoleEntries([]);
+                setActiveTab("code");
+                onContentChange?.();
+              }}
+              className="rounded-md border border-white/10 bg-[#1a1d23] px-2.5 py-1 text-xs text-foreground outline-none focus:ring-2 focus:ring-ring/15"
+            >
+              {(Object.keys(LANGUAGE_LABELS) as SupportedCodeExecutionLanguage[]).map((lang) => (
+                <option key={lang} value={lang}>
+                  {LANGUAGE_LABELS[lang]}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          <button
+            type="button"
+            onClick={handleRun}
+            disabled={!code.trim() || isRunning || isSubmitting}
+            className="flex items-center gap-1.5 rounded-md border border-white/10 bg-[#1a1d23] px-3 py-1 text-xs font-medium text-foreground transition-[background-color,scale] hover:bg-[#232733] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isRunning ? (
+              <LoaderCircle className="size-3.5 animate-spin" />
+            ) : (
+              <Play className="size-3.5" />
+            )}
+            {isRunning ? "Running…" : "Run"}
+          </button>
+          {!readOnly && onSubmit ? (
+            <button
+              type="button"
+              onClick={async () => {
+                setIsSubmitting(true);
+                try {
+                  await onSubmit(language, code);
+                  toast.success("Code submitted.");
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "Code submission failed.");
+                } finally {
+                  setIsSubmitting(false);
+                }
+              }}
+              disabled={!code.trim() || isRunning || isSubmitting}
+              className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground transition-[opacity,scale] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSubmitting ? "Submitting…" : "Submit"}
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <div className="min-h-0 flex-1">
@@ -459,6 +521,7 @@ export function CodeEditor({
               automaticLayout: true,
               readOnly,
               domReadOnly: readOnly,
+              padding: { top: 8, bottom: 40 },
             }}
             loading={<p className="p-4 text-sm text-muted-foreground">Loading editor…</p>}
           />
@@ -493,68 +556,6 @@ export function CodeEditor({
               Run your code to see its output here.
             </div>
           )}
-        </div>
-      </div>
-
-      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-white/[0.05] px-4 py-3">
-        {!readOnly ? (
-          <select
-            value={language}
-            onChange={(event) => {
-              runAbortControllerRef.current?.abort();
-              runAbortControllerRef.current = null;
-              setIsRunning(false);
-              const nextLanguage = event.target.value as SupportedCodeExecutionLanguage;
-              setLanguage(nextLanguage);
-              setRunResult(null);
-              previewConsoleTargetRef.current = null;
-              setBrowserConsoleEntries([]);
-              setActiveTab("code");
-              onContentChange?.();
-            }}
-            className="rounded-lg border border-white/10 bg-[#1a1d23] px-3 py-1.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring/15"
-          >
-            {(Object.keys(LANGUAGE_LABELS) as SupportedCodeExecutionLanguage[]).map((lang) => (
-              <option key={lang} value={lang}>
-                {LANGUAGE_LABELS[lang]}
-              </option>
-            ))}
-          </select>
-        ) : <span />}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleRun}
-            disabled={!code.trim() || isRunning || isSubmitting}
-            className="flex items-center gap-2 rounded-lg border border-white/10 bg-[#1a1d23] px-4 py-1.5 text-sm font-medium text-foreground transition-[background-color,scale] hover:bg-[#232733] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isRunning ? (
-              <LoaderCircle className="size-4 animate-spin" />
-            ) : (
-              <Play className="size-4" />
-            )}
-            {isRunning ? "Running…" : "Run"}
-          </button>
-          {!readOnly && onSubmit ? (
-            <button
-              type="button"
-              onClick={async () => {
-                setIsSubmitting(true);
-                try {
-                  await onSubmit(language, code);
-                  toast.success("Code submitted.");
-                } catch (error) {
-                  toast.error(error instanceof Error ? error.message : "Code submission failed.");
-                } finally {
-                  setIsSubmitting(false);
-                }
-              }}
-              disabled={!code.trim() || isRunning || isSubmitting}
-              className="rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground transition-[opacity,scale] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isSubmitting ? "Submitting…" : "Submit"}
-            </button>
-          ) : null}
         </div>
       </div>
     </div>

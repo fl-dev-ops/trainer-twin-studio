@@ -1042,16 +1042,6 @@ export function SessionView({
                     transition={reduceMotion ? { duration: 0 } : { duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
                     className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/[0.035] bg-[#15181f]"
                   >
-                    <div className="flex h-10 shrink-0 items-center justify-between border-b border-white/[0.035] bg-white/[0.02] px-4">
-                      <span className="text-xs font-semibold text-foreground/90">
-                        {surface.tool === "code" && "Code Workspace"}
-                        {surface.tool === "choice" && "Multiple choice"}
-                        {surface.tool === "canvas" && "Whiteboard"}
-                        {surface.tool === "pdf" && "PDF Document"}
-                        {surface.tool === "image" && "Image Viewer"}
-                        {surface.tool === "presentation" && "Presentation"}
-                      </span>
-                    </div>
                     <div className="min-h-0 flex-1">
                       {surface.tool === "code" && (
                         <CodeEditor
