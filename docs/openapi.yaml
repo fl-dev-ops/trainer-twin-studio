@@ -978,6 +978,9 @@ components:
             mode:
               type: string
               enum: [chat, voice]
+            runtimeToken:
+              description: Session-scoped token for runtime requests (commands, UI state, coverage).
+              type: string
         conversationToken:
           description: Chat-mode token for driving the session.
           type: string
