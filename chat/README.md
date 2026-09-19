@@ -59,6 +59,9 @@ SECRET=...; ORG=...; curl -N -X POST http://localhost:2001/v1/chat/completions \
 - `OPENROUTER_API_KEY` — the LLM (`CHAT_AGENT_MODEL`, default `openai/gpt-4.1-mini`)
 - `COPILOT_SERVICE_SECRET` — authenticates to the web studio
 - `STUDIO_URL` — web origin (default `http://localhost:3000`)
+- `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` — export Eve agent,
+  generation, usage, cost, and tool traces to Langfuse, grouped by TrainerTwin session.
+  Private interview prompt and response bodies are not exported.
 
 ## Run
 
@@ -72,6 +75,7 @@ bunx tsc --noEmit             # typecheck
 | Path | Role |
 |---|---|
 | `agent/agent.ts` | model wiring (OpenRouter) + session limits |
+| `agent/instrumentation.ts` | Eve OpenTelemetry export to Langfuse |
 | `agent/instructions.md` | trainer identity, move logic, persona fidelity, workspace conduct |
 | `agent/instructions/session-spec.ts` | dynamic per-session grounding from studio specs |
 | `agent/tools/search_style.ts` | trainer's real speech for the current move (studio) |
