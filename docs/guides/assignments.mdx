@@ -37,10 +37,13 @@ A new assignment returns `201`:
     "userId": "user_123",
     "scenario": "react-mock-interview"
   },
+  "practiceUrl": "https://your-org.trainertwin.com/s/AbC123",
   "created": true,
   "emailSent": true
 }
 ```
+
+`practiceUrl` is the learner's direct practice link — send it through your own channel instead of (or alongside) the TrainerTwin email.
 
 Creating the same learner-scenario pair again is safe. TrainerTwin returns the existing assignment with `created: false` and does not send another email.
 
@@ -60,7 +63,16 @@ curl "https://trainertwin.com/api/v1/assignments/assignment_123" \
   --data '{ "scenario": "system-design-interview" }'
 ```
 
-A changed assignment sends a notification to the target learner. A no-op update returns `changed: false` and sends no email.
+A changed assignment sends a notification to the target learner and returns a new `practiceUrl` (the old link stops working). A no-op update returns `changed: false`, the existing `practiceUrl`, and sends no email.
+
+## Inspect an assignment
+
+```bash
+curl "https://trainertwin.com/api/v1/assignments/assignment_123" \
+  --header "x-api-key: $TRAINERTWIN_API_KEY"
+```
+
+Returns the learner, scenario, current `status` (`pending`, `used`, `expired`, or `cancelled`), and `practiceUrl`.
 
 ## Remove an assignment
 

@@ -21,7 +21,7 @@ tags:
   - name: Scenarios
     description: Read the organization's published role-play scenarios.
   - name: Sessions
-    description: Read results and manage practice-session records.
+    description: Start, inspect, and manage practice sessions.
 paths:
   /scenarios:
     get:
@@ -362,6 +362,10 @@ paths:
                   emailSent:
                     type: boolean
                     description: Present when the assignment changed.
+                  practiceUrl:
+                    description: Learner's direct practice link for this assignment.
+                    type: string
+                    format: uri
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -423,6 +427,41 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    post:
+      operationId: createSession
+      tags: [Sessions]
+      summary: Start a session
+      description: |
+        Activates a practice session for a learner against a published scenario (or an
+        active deployment key). The session is created in `active` state; the response
+        carries the credentials needed to connect.
+
+        Chat mode returns `conversationToken`; voice mode returns a LiveKit
+        `participantToken` and `room`. Repeat calls with the same `idempotencyKey`
+        return the same active session with a fresh token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionCreate'
+      responses:
+        '201':
+          description: Session activated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionActivation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '429':
           $ref: '#/components/responses/RateLimited'
   /sessions/{sessionId}:
@@ -778,9 +817,13 @@ components:
         emailSent:
           type: boolean
           description: Present when a new assignment was created.
+        practiceUrl:
+          description: Learner's direct practice link for this assignment.
+          type: string
+          format: uri
     AssignmentDetail:
       type: object
-      required: [id, assignedAt, user, scenario]
+      required: [id, assignedAt, status, user, scenario, practiceUrl]
       properties:
         id:
           type: string
@@ -788,6 +831,8 @@ components:
         assignedAt:
           type: string
           format: date-time
+        status:
+          $ref: '#/components/schemas/AssignmentStatus'
         user:
           type: object
           required: [id, name, email]
@@ -801,9 +846,29 @@ components:
               format: email
         scenario:
           $ref: '#/components/schemas/Scenario'
+        practiceUrl:
+          description: Learner's direct practice link for this assignment.
+          type: string
+          format: uri
+    AssignmentStatus:
+      type: string
+      enum: [pending, used, expired, cancelled]
+      x-enum-descriptions:
+        pending: Assigned; the learner has not started yet.
+        used: The learner started a session from this assignment.
+        expired: The assignment link expired before use.
+        cancelled: The assignment was cancelled (for example by reassignment).
     SessionStatus:
       type: string
-      enum: [active, completed, abandoned]
+      enum: [assigned, activating, active, completed, abandoned, failed, revoked]
+      x-enum-descriptions:
+        assigned: Assignment created; the learner has not started practicing yet.
+        activating: Session is starting (transient).
+        active: Session is live.
+        completed: Learner finished the session.
+        abandoned: Learner left before completing; a later start abandons this one.
+        failed: Session activation or runtime failed.
+        revoked: Session was revoked through the dashboard.
     SessionSummary:
       type: object
       required:
@@ -838,8 +903,15 @@ components:
           type: integer
         status:
           $ref: '#/components/schemas/SessionStatus'
+        mode:
+          description: Delivery mode of the session.
+          type: string
+          enum: [chat, voice]
         contextName:
           type: [string, 'null']
+        createdAt:
+          type: string
+          format: date-time
         startedAt:
           type: string
           format: date-time
@@ -860,3 +932,58 @@ components:
             audioUrl:
               description: Presigned recording download URL, valid for one hour. Null when no recording exists.
               type: [string, 'null']
+    SessionCreate:
+      type: object
+      required: [userId]
+      additionalProperties: false
+      description: >-
+        `deploymentKey` or `scenario` is required; `deploymentKey` takes precedence.
+      properties:
+        userId:
+          type: string
+          example: user_123
+        scenario:
+          type: string
+          pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'
+          example: react-mock-interview
+        deploymentKey:
+          description: Public key of an active deployment; takes precedence over `scenario`.
+          type: string
+        mode:
+          type: string
+          enum: [chat, voice]
+          default: chat
+        documentId:
+          description: Optional context document to attach to the session (an organization document or one uploaded by the learner).
+          type: string
+        idempotencyKey:
+          description: Retry-safe key scoped to the deployment; reusing it returns the same active session instead of creating a new one.
+          type: string
+    SessionActivation:
+      type: object
+      required: [session]
+      properties:
+        session:
+          type: object
+          required: [id, agentSlug, status, mode]
+          properties:
+            id:
+              type: string
+              example: session_123
+            agentSlug:
+              type: string
+              example: react-mock-interview
+            status:
+              $ref: '#/components/schemas/SessionStatus'
+            mode:
+              type: string
+              enum: [chat, voice]
+        conversationToken:
+          description: Chat-mode token for driving the session.
+          type: string
+        participantToken:
+          description: Voice-mode LiveKit access token for joining `room`.
+          type: string
+        room:
+          description: Voice-mode LiveKit room name.
+          type: string

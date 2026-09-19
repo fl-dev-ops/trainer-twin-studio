@@ -1,6 +1,6 @@
 # TrainerTwin Application
 
-Full-stack interview-trainer studio built on the `synthesizer/poc` runtime.
+Full-stack interview-trainer studio.
 
 ## Architecture
 
@@ -15,9 +15,8 @@ application/
 │   └── prisma/              schema, migrations, seed
 ├── copilot/   Standalone Eve Spec Copilot — durable chat, tools, and draft workflow;
 │              calls the Studio through an authenticated internal API
-├── agent/     Pipecat voice agent — fetches compiled specs and hybrid knowledge search
-│              results from the studio API
-├── digest/    Chunking/retrieval experiments
+├── agent/     LiveKit voice agent — joins rooms dispatched by the Studio, fetches
+│              compiled specs and hybrid knowledge search results from the studio API
 └── web/data/  Legacy YAML/MD seed source (imported by web/prisma/seed.ts)
 ```
 
@@ -36,11 +35,14 @@ application/
 
 ### Sessions
 
-- The browser connects to the Pipecat agent over SmallWebRTC and sends `start-interview`
-  (`personaId`, `agentId`, `contextId`). The context document is uploaded right in the
-  session config — it belongs to a session, not to the dashboard.
-- Each learner utterance runs the POC runtime (analyze → deterministic policy → persona
-  render); responses are spoken via Sarvam TTS. Evidence coverage streams to the UI.
+- Learners open a practice link (`https://<org>.<domain>/s/<shareCode>`) or an integration
+  starts a session through `POST /api/v1/sessions`; the Studio dispatches the LiveKit agent
+  and returns a participant token (voice) or a runtime token (chat).
+- The voice agent joins the LiveKit room, streams the learner over Deepgram STT, and runs
+  the interview runtime in `web/lib/runtime` (analyze → deterministic policy → persona
+  render) over the Studio's `/api/v1` chat endpoint; responses are spoken through the
+  configured TTS provider (voxcpm2 or Sarvam).
+- Evidence coverage streams to the UI; audio egress lands in S3 as the session recording.
 - `InterviewSession` rows in Postgres pin the exact persona/agent/domain versions used.
 
 ## Run (four processes)
@@ -69,10 +71,9 @@ npm run dev               # :2000
 
 # 4. Voice agent
 cd ../agent
-cp .env.example .env      # LLM_API_KEY, SARVAM_API_KEY, WEB_URL
+cp .env.example .env      # LIVEKIT_URL/_KEY/_SECRET, DEEPGRAM_API_KEY, WEB_URL
 uv sync
-WEB_URL=http://localhost:3000 uv run python check.py
-uv run bot.py -t webrtc   # :7860
+uv run python src/agent.py dev
 ```
 
 ## Versioning model
@@ -90,6 +91,7 @@ Next.js proxies `/eve/v1/*` and never exposes the credential.
 
 ## Notes
 
-- Production chunking and retrieval live in `web/lib/knowledge.ts`; `digest/` holds experiments.
-- The agent imports the POC directly (`POC_PATH`, default `../../synthesizer/poc`).
+- Production chunking and retrieval live in `web/lib/knowledge.ts`.
+- The agent's LLM calls go through the Studio (`WEB_URL/api/v1`) authenticated with the
+  session's runtime token.
 - Auth/multi-user and billing are deliberately out of scope for this phase.

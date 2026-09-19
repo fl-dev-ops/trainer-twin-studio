@@ -16,8 +16,10 @@ export async function activateInterviewRuntime(input: {
 }) {
   const session = await activateSession(input);
   if (!session) return null;
+  // ponytail: runtimeToken is re-exposed as conversationToken/participantToken; drop it from the session object
+  const { runtimeToken, ...sessionView } = session;
   if (input.mode === "chat") {
-    return { session, conversationToken: session.runtimeToken };
+    return { session: sessionView, conversationToken: runtimeToken };
   }
 
   const row = await db.interviewSession.findUniqueOrThrow({
@@ -67,7 +69,7 @@ export async function activateInterviewRuntime(input: {
         s3AudioKey: livekit.audioS3Key,
       },
     });
-    return { session, participantToken: livekit.token, room: livekit.room };
+    return { session: sessionView, participantToken: livekit.token, room: livekit.room };
   } catch (error) {
     await closeLiveKitSession({
       room: row.livekitRoom,

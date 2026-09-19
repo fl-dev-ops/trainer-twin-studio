@@ -20,6 +20,7 @@ export async function GET(request: Request, { params }: Params) {
       domainSlug: true,
       domainVersion: true,
       status: true,
+      mode: true,
       contextName: true,
       createdAt: true,
       transcript: true,

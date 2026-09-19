@@ -1,9 +1,50 @@
 ---
 title: "Sessions"
-description: "Read practice results and manage session lifecycle records."
+description: "Start practice sessions, read results, and manage session lifecycle records."
 ---
 
-A session is a learner's practice run against a published scenario. TrainerTwin creates the record when practice begins, so the API does not create empty sessions.
+A session is a learner's practice run against a published scenario. Learners normally start practice themselves; integrations can also start a session server-to-server and receive the credentials to connect.
+
+## Start a session
+
+Activate a session for a learner against a published scenario slug:
+
+```bash
+curl "https://trainertwin.com/api/v1/sessions" \
+  --request POST \
+  --header "x-api-key: $TRAINERTWIN_API_KEY" \
+  --header "content-type: application/json" \
+  --data '{
+    "userId": "user_123",
+    "scenario": "react-mock-interview",
+    "mode": "chat"
+  }'
+```
+
+The session is created in `active` state and the response carries the credentials to connect:
+
+```json
+{
+  "session": {
+    "id": "session_123",
+    "agentSlug": "react-mock-interview",
+    "status": "active",
+    "mode": "chat"
+  },
+  "conversationToken": "…"
+}
+```
+
+| Field | Behavior |
+| --- | --- |
+| `mode` | `chat` (default) returns `conversationToken`; `voice` returns a LiveKit `participantToken` and `room` for the learner to join |
+| `scenario` | Published scenario slug — or send `deploymentKey` of an active deployment instead (takes precedence) |
+| `documentId` | Optional context document (an organization document or one the learner uploaded) |
+| `idempotencyKey` | Retry-safe: repeating a call with the same key returns the same active session with a fresh token instead of creating a duplicate |
+
+Errors: `404` for an unknown user, `400` for invalid filters or a deployment that does not allow the requested mode, and `409` when the learner's earlier session for the same assignment can no longer be reactivated.
+
+Starting a new direct session abandons the learner's other `active` sessions for the same scenario.
 
 ## List sessions
 
@@ -13,7 +54,7 @@ Combine any of these filters:
 | --- | --- |
 | `userId` | Sessions for one learner |
 | `scenario` | Sessions for one published scenario slug |
-| `status` | `active`, `completed`, or `abandoned` |
+| `status` | `assigned`, `activating`, `active`, `completed`, `abandoned`, `failed`, or `revoked` |
 | `from` | Started at or after this ISO 8601 timestamp |
 | `to` | Started at or before this ISO 8601 timestamp |
 | `limit` | Page size, `1`–`100` (default `50`) |
@@ -24,11 +65,28 @@ curl "https://trainertwin.com/api/v1/sessions?userId=user_123&status=completed&f
   --header "x-api-key: $TRAINERTWIN_API_KEY"
 ```
 
-Results are sorted by start time, newest first. The response includes pagination metadata — page through by increasing `offset` until `offset >= total`:
+Results are sorted by creation time, newest first. The response includes pagination metadata — page through by increasing `offset` until `offset >= total`:
 
 ```json
 {
-  "sessions": [],
+  "sessions": [
+    {
+      "id": "session_123",
+      "userId": "user_123",
+      "personaSlug": "…",
+      "personaVersion": 4,
+      "agentSlug": "react-mock-interview",
+      "agentVersion": 3,
+      "domainSlug": "…",
+      "domainVersion": 2,
+      "status": "completed",
+      "mode": "voice",
+      "contextName": "Resume.pdf",
+      "createdAt": "2026-09-02T10:00:00.000Z",
+      "startedAt": "2026-09-02T10:01:00.000Z",
+      "endedAt": "2026-09-02T10:30:00.000Z"
+    }
+  ],
   "pagination": {
     "limit": 25,
     "offset": 0,
@@ -49,7 +107,7 @@ curl "https://trainertwin.com/api/v1/sessions/session_123" \
 The detail response includes:
 
 - Pinned persona, scenario, and domain versions.
-- Session status and timestamps.
+- Session status, delivery mode, and timestamps.
 - Transcript data when available.
 - Evidence data when available.
 - `audioUrl` — a presigned download URL for the recording, valid for one hour (`null` when no recording exists).

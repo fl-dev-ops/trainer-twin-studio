@@ -1,9 +1,9 @@
 # TrainerTwin TTS
 
-VoxCPM2 zero-shot voice cloning behind an **OpenAI-compatible API**, built for Pipecat and browser clients.
+VoxCPM2 zero-shot voice cloning behind an **OpenAI-compatible API**, built for the TrainerTwin voice agent (LiveKit) and browser clients.
 
 ```
-Pipecat / Next.js client ── POST /v1/audio/speech {model, voice, input} ──► this service
+Voice agent (LiveKit) / Next.js ── POST /v1/audio/speech {model, voice, input} ──► this service
                           ◄──────── streamed PCM / complete WAV ──────────┘
                                           │
                                           │ resolve voice (id → presigned URL + transcript)
@@ -85,9 +85,10 @@ Extensions:
 
 Auth: if `TTS_API_KEY` is set, send `Authorization: Bearer <key>` on `/v1/*`.
 
-### Pipecat wiring
+### Agent wiring
 
-Point an OpenAI-compatible TTS client at this service:
+Point an OpenAI-compatible TTS client at this service (the agent's `VoxCPM2TTS`
+implementation hits the Studio's `/api/tts/speech`, which proxies here):
 
 ```python
 TTS(
