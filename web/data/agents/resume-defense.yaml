@@ -14,7 +14,7 @@ agent:
       mode: resume_grounding
       required: true
       prompt: Upload your current résumé as a PDF.
-      label: Résumé
+      label: Documents
       permitted_sources:
       - pdf
       - markdown

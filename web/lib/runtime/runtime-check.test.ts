@@ -72,6 +72,20 @@ describe("Interview Compiler", () => {
     });
   });
 
+  it("surfaceForPhase preserves the original document filename", () => {
+    const agent = {
+      context_mode: "resume_grounding",
+      phases: [{ tools: [], scenario: {} }],
+    };
+    const surface = surfaceForPhase(agent as never, 0, [
+      { id: "doc-123", kind: "document", name: "Vasanth Resume.pdf" },
+    ]);
+    expect(surface).toEqual({
+      action: "open_pdf",
+      payload: { fileId: "doc-123", fileName: "Vasanth Resume.pdf" },
+    });
+  });
+
   it("compiles standard Studio configurations from YAML", () => {
     const config = loadConfig("resume-mastery", "vasanth");
     const compiled = buildSpecs(config);

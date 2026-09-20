@@ -897,6 +897,7 @@ function documentSurfaceArguments(
     action,
     payload: {
       fileId,
+      ...(evidence?.fileName ? { fileName: evidence.fileName } : {}),
       ...(lookup.page && lookup.page > 0 ? { page: lookup.page } : {}),
       ...(highlightQuery ? { highlightQuery } : {}),
     },

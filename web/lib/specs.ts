@@ -53,6 +53,10 @@ export async function listSpecs(type: SpecType, orgId: string): Promise<string[]
   return rows.map((r) => r.slug);
 }
 
+export function agentDisplayName(slug: string, name: string) {
+  return slug === "full-mock-interview" ? "Internal Testing" : name;
+}
+
 export async function listSpecSummaries(type: "personas" | "agents", orgId: string) {
   if (type === "personas") {
     return db.persona.findMany({ where: { orgId }, orderBy: { slug: "asc" }, select: { slug: true, name: true, version: true } });
@@ -78,7 +82,7 @@ export async function listSpecSummaries(type: "personas" | "agents", orgId: stri
       const objective = typeof data?.objective === "string" ? data.objective : undefined;
       return {
         slug: agent.slug,
-        name: agent.name,
+        name: agentDisplayName(agent.slug, agent.name),
         version: agent.version,
         visibility: agent.visibility,
         objective,
@@ -93,7 +97,7 @@ export async function listSpecSummaries(type: "personas" | "agents", orgId: stri
       const objective = typeof agent?.objective === "string" ? agent.objective : undefined;
       return {
         slug: draft.slug,
-        name: draft.name,
+        name: agentDisplayName(draft.slug, draft.name),
         version: draft.revision,
         objective,
         status: "draft" as const,
@@ -110,7 +114,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export async function listRunnableSpecs(type: "personas" | "agents", orgId: string): Promise<string[]> {
   const rows = type === "personas"
     ? await db.persona.findMany({ where: { orgId }, orderBy: { slug: "asc" }, select: { slug: true, data: true } })
-    : await db.agent.findMany({ where: { orgId }, orderBy: { slug: "asc" }, select: { slug: true, data: true, personaId: true } });
+    : await db.agent.findMany({ where: { orgId }, orderBy: [{ order: "asc" }, { name: "asc" }], select: { slug: true, data: true, personaId: true } });
   return rows.filter((row) => {
     const { data } = row;
     if (!isRecord(data)) return false;
@@ -126,6 +130,16 @@ export async function listAgentPersonas(orgId: string, slugs: string[]) {
     select: { slug: true, persona: { select: { slug: true } } },
   });
   return Object.fromEntries(agents.map((agent) => [agent.slug, agent.persona.slug]));
+}
+
+export async function listAgentNames(orgId: string, slugs: string[]) {
+  const agents = await db.agent.findMany({
+    where: { orgId, slug: { in: slugs } },
+    select: { slug: true, name: true },
+  });
+  return Object.fromEntries(
+    agents.map((agent) => [agent.slug, agentDisplayName(agent.slug, agent.name)]),
+  );
 }
 
 export async function listAgentContextUploads(orgId: string, slugs: string[]): Promise<Record<string, AgentContextUpload>> {

@@ -7,7 +7,7 @@ import {
 import { db } from "@/lib/db";
 import { getTrainerOrg } from "@/lib/org";
 import { readSpecDraft } from "@/lib/spec-drafts";
-import { readSpec } from "@/lib/specs";
+import { agentDisplayName, readSpec } from "@/lib/specs";
 
 export const dynamic = "force-dynamic";
 
@@ -72,7 +72,7 @@ export default async function RolePlayPreviewPage({
 
     rolePlay = {
       slug,
-      name: typeof doc.name === "string" ? doc.name : slug,
+      name: agentDisplayName(slug, typeof doc.name === "string" ? doc.name : slug),
       objective: typeof doc.objective === "string" ? doc.objective : undefined,
       instruction: typeof doc.instruction === "string" ? doc.instruction : undefined,
       opening: typeof doc.opening === "string" ? doc.opening : undefined,
@@ -95,7 +95,7 @@ export default async function RolePlayPreviewPage({
 
     rolePlay = {
       slug: draft.slug,
-      name: draft.name,
+      name: agentDisplayName(draft.slug, draft.name),
       objective: typeof agent?.objective === "string" ? agent.objective : undefined,
       instruction: typeof agent?.instruction === "string" ? agent.instruction : undefined,
       opening: typeof agent?.opening === "string" ? agent.opening : undefined,

@@ -35,7 +35,7 @@ export type AgentSurface =
       highlightElements?: string[];
       scrollToElements?: string[];
     }
-  | { key: string; tool: "pdf"; sourceUrl?: string; fileId?: string; page?: number; highlightQuery?: string }
+  | { key: string; tool: "pdf"; sourceUrl?: string; fileId?: string; fileName?: string; page?: number; highlightQuery?: string }
   | { key: string; tool: "presentation"; sourceUrl?: string; slideNumber?: number }
   | { key: string; tool: "image"; sourceUrl?: string; fileId?: string }
   | null;
@@ -144,6 +144,7 @@ export function parseAgentSurfaceMessage(value: unknown):
     if (event.type === "open_pdf") {
       const sourceUrl = typeof event.sourceUrl === "string" ? event.sourceUrl : undefined;
       const fileId = typeof event.fileId === "string" ? event.fileId : undefined;
+      const fileName = typeof event.fileName === "string" ? event.fileName : undefined;
       const page = typeof event.page === "number" ? event.page : undefined;
       const highlightQuery =
         typeof event.highlightQuery === "string"
@@ -159,6 +160,7 @@ export function parseAgentSurfaceMessage(value: unknown):
           tool: "pdf",
           sourceUrl: sourceUrl || (fileId ? `/api/documents/${fileId}/raw` : undefined),
           fileId,
+          ...(fileName ? { fileName } : {}),
           page,
           highlightQuery,
         },
@@ -167,6 +169,7 @@ export function parseAgentSurfaceMessage(value: unknown):
     if (event.type === "highlight_pdf" || event.type === "highlight_document") {
       const sourceUrl = typeof event.sourceUrl === "string" ? event.sourceUrl : undefined;
       const fileId = typeof event.fileId === "string" ? event.fileId : undefined;
+      const fileName = typeof event.fileName === "string" ? event.fileName : undefined;
       const page = typeof event.page === "number" ? event.page : undefined;
       const highlightQuery =
         typeof event.highlightQuery === "string"
@@ -182,6 +185,7 @@ export function parseAgentSurfaceMessage(value: unknown):
           tool: "pdf",
           sourceUrl: sourceUrl || (fileId ? `/api/documents/${fileId}/raw` : undefined),
           fileId,
+          ...(fileName ? { fileName } : {}),
           page,
           highlightQuery,
         },

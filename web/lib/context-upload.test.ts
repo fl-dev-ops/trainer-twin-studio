@@ -6,10 +6,10 @@ import {
   resolveContextUpload,
 } from "./context-upload";
 
-test("resume mode required uses résumé copy", () => {
+test("resume mode uses the default documents label", () => {
   const upload = resolveContextUpload({ mode: "resume_grounding", required: true });
   assert.equal(upload.required, true);
-  assert.equal(upload.label, "Résumé");
+  assert.equal(upload.label, "Documents");
   assert.match(upload.prompt, /résumé/i);
   assert.match(upload.accept, /\.pdf/);
 });
@@ -25,6 +25,11 @@ test("custom prompt wins", () => {
   assert.equal(upload.label, "Take-home");
 });
 
+test("legacy generic labels normalize to documents", () => {
+  assert.equal(resolveContextUpload({ label: "Résumé" }).label, "Documents");
+  assert.equal(resolveContextUpload({ label: "Context document" }).label, "Documents");
+});
+
 test("not required hides the dropzone", () => {
   assert.equal(resolveContextUpload({ mode: "none", required: false }).required, false);
 });
@@ -35,7 +40,7 @@ test("stage-level required is enough for full-mock style specs", () => {
     stages: [{ config: { context: { mode: "resume_grounding", required: true } } }],
   });
   assert.equal(upload.required, true);
-  assert.equal(upload.label, "Résumé");
+  assert.equal(upload.label, "Documents");
   assert.match(upload.prompt, /résumé/i);
 });
 

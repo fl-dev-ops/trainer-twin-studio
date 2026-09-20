@@ -218,7 +218,7 @@ export function surfaceForPhase(
         documentManifests.find((m) => m.kind === "document" && m.name.toLowerCase().endsWith(".pdf")) ??
         documentManifests.find((m) => m.kind === "document");
       if (pdfDoc) {
-        return { action: "open_pdf", payload: { fileId: pdfDoc.id } };
+        return { action: "open_pdf", payload: { fileId: pdfDoc.id, fileName: pdfDoc.name } };
       }
     }
   }

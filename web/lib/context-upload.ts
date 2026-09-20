@@ -12,21 +12,21 @@ export const RESUME_CONTEXT_ACCEPT = ".pdf,.docx,.doc,.md,.txt";
 const MODE_DEFAULTS: Record<string, { prompt: string; label: string }> = {
   resume_grounding: {
     prompt: "Upload your current résumé as a PDF.",
-    label: "Résumé",
+    label: "Documents",
   },
   resume_topics_only: {
     prompt: "Upload your current résumé as a PDF.",
-    label: "Résumé",
+    label: "Documents",
   },
   session_evidence: {
     prompt: "Upload the document you’ll discuss in this session.",
-    label: "Document",
+    label: "Documents",
   },
 };
 
 const FALLBACK = {
   prompt: "Upload the document this session needs.",
-  label: "Document",
+  label: "Documents",
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -37,6 +37,13 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function documentLabel(value: unknown, fallback = "Documents") {
+  const label = text(value);
+  return ["résumé", "resume", "document", "context document"].includes(label.toLowerCase())
+    ? "Documents"
+    : label || fallback;
 }
 
 /** Agent-level context, or the first stage that requires an upload. */
@@ -68,7 +75,7 @@ export function resolveContextUpload(context: unknown): AgentContextUpload {
   return {
     required,
     prompt: required ? text(ctx?.prompt) || defaults.prompt : text(ctx?.prompt),
-    label: text(ctx?.label) || defaults.label,
+    label: documentLabel(ctx?.label, defaults.label),
     accept: resume ? RESUME_CONTEXT_ACCEPT : DEFAULT_CONTEXT_ACCEPT,
   };
 }
@@ -87,7 +94,7 @@ export function applyLearnerUpload(
     if (!text(next.mode) || next.mode === "none") next.mode = "resume_grounding";
     next.required = true;
     next.prompt = prompt || text(next.prompt) || MODE_DEFAULTS.resume_grounding.prompt;
-    next.label = text(next.label) || "Résumé";
+    next.label = documentLabel(next.label);
     return next;
   }
   if (prompt) {

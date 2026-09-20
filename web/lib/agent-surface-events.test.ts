@@ -8,6 +8,7 @@ describe("session document surfaces", () => {
       type: "open_pdf",
       eventId: "event-1",
       fileId: "doc-123",
+      fileName: "Vasanth Resume.pdf",
       page: 2,
       highlightQuery: "40%",
     })).toEqual({
@@ -16,6 +17,7 @@ describe("session document surfaces", () => {
         tool: "pdf",
         sourceUrl: "/api/documents/doc-123/raw",
         fileId: "doc-123",
+        fileName: "Vasanth Resume.pdf",
         page: 2,
         highlightQuery: "40%",
       },

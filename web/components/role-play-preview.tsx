@@ -74,7 +74,7 @@ export type RolePlayData = {
   }>;
   config?: {
     claim_handling?: string;
-    context?: { mode?: string; required?: boolean };
+    context?: { mode?: string; required?: boolean; prompt?: string };
     actions?: {
       allowed?: string[];
       default?: string;
@@ -348,6 +348,15 @@ export function RolePlayPreview({
               <section>
                 <h2 className="text-lg font-semibold">First message</h2>
                 <p className="mt-3 text-base leading-relaxed text-muted-foreground">{rolePlay.opening}</p>
+              </section>
+            )}
+
+            {rolePlay.config?.context?.prompt && (
+              <section>
+                <h2 className="text-lg font-semibold">Documents</h2>
+                <p className="mt-3 text-base leading-relaxed text-muted-foreground">
+                  {rolePlay.config.context.prompt}
+                </p>
               </section>
             )}
           </div>

@@ -456,13 +456,13 @@ export function PreJoin({
           {/* Card 2: Context Document */}
           {contextRequired && (
             <section
-              aria-label={contextLabel || "Context document"}
+              aria-label={contextLabel || "Documents"}
               className="flex min-h-85 flex-col justify-between rounded-2xl border border-[#e4e6e8] bg-white p-4 shadow-sm col-span-2 gap-3"
             >
               <div>
                 <div className="flex items-center justify-between">
                   <span className="text-base font-semibold text-[#202124]">
-                    {contextLabel || "Context document"}
+                    {contextLabel || "Documents"}
                   </span>
                   {contextRequired ? (
                     <span className="text-xs font-semibold text-[#b45309]">
@@ -567,7 +567,7 @@ export function PreJoin({
                   }}
                   role="button"
                   tabIndex={0}
-                  aria-label="Upload context document"
+                  aria-label="Upload document"
                   className={cn(
                     "my-auto flex flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed px-6 py-8 text-center transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand",
                     dragOver

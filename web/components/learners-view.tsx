@@ -460,13 +460,10 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
 
             {/* Next Conversation Brief Section: 14px Subheading, 12px Body */}
             <section className="mt-1">
-              <div className="flex items-center justify-between mb-3">
+              <div className="mb-3">
                 <h3 className="text-sm font-semibold tracking-tight text-foreground">
                   Next conversation brief
                 </h3>
-                <span className="text-xs text-muted-foreground">
-                  Derived from unresolved scenario evidence
-                </span>
               </div>
 
               <div className="rounded-2xl border bg-card p-5 shadow-2xs">

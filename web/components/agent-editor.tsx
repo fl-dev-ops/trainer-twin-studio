@@ -477,7 +477,7 @@ export function AgentEditor(initial: AgentEditorProps) {
                 }}
               />
               <FieldDescription className="text-xs">
-                Shown to the learner on the prejoin screen before the session begins.
+                Explains which document the learner should provide for this scenario.
               </FieldDescription>
             </Field>
             {interviewConfig.type === "resume" ? (

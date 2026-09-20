@@ -2,7 +2,7 @@ schema_version: 1
 kind: agent
 agent:
   id: full-mock-interview
-  name: Full Mock Interview
+  name: Internal Testing
   version: 1
   domain: software-engineering-full-interview
   objective: Conduct one continuous interview progressing through resume evidence,
@@ -15,7 +15,7 @@ agent:
       mode: none
       required: false
       prompt: Upload your current résumé as a PDF.
-      label: Résumé
+      label: Documents
       available_sources:
       - resume
       - session_evidence
@@ -76,7 +76,7 @@ agent:
         mode: resume_grounding
         required: true
         prompt: Upload your current résumé as a PDF.
-        label: Résumé
+        label: Documents
       evidence:
         definitions:
           project_problem: The user or business problem the project solved.

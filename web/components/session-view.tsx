@@ -73,6 +73,8 @@ type Props = {
   personas: string[];
   agents: string[];
   contexts: { id: string; name: string; size?: number }[];
+  agentNames?: Record<string, string>;
+  initialAgent?: string;
   agentPersonas?: Record<string, string>;
   agentContextRequired?: Record<string, boolean>;
   agentContextUploads?: Record<string, AgentContextUpload>;
@@ -97,6 +99,8 @@ export function SessionView({
   personas,
   agents,
   contexts,
+  agentNames = {},
+  initialAgent,
   agentPersonas = {},
   agentContextRequired = {},
   agentContextUploads = {},
@@ -122,7 +126,7 @@ export function SessionView({
     [],
   );
 
-  const [agent, setAgent] = useState(agents[0] ?? "");
+  const [agent, setAgent] = useState(initialAgent ?? agents[0] ?? "");
   const persona = agentPersonas[agent] ?? personas[0] ?? "";
   const [contextIds, setContextIds] = useState<string[]>([]);
   const contextId = contextIds[0] ?? "";
@@ -265,10 +269,11 @@ export function SessionView({
 
   const contextUpload = agentContextUploads[agent] ?? (
     agentContextRequired[agent]
-      ? { required: true, prompt: "", label: "Context document", accept: "" }
+      ? { required: true, prompt: "", label: "Documents", accept: "" }
       : null
   );
   const isContextRequired = Boolean(contextUpload?.required ?? agentContextRequired[agent]);
+  const documentLabel = contextUpload?.label || "Documents";
 
   useEffect(() => {
     if (!autoStart || !prejoinComplete || ended || !agent || !persona || launched) return;
@@ -872,7 +877,7 @@ export function SessionView({
                       <SelectGroup>
                         <SelectLabel>Scenarios</SelectLabel>
                         {agents.map((a) => (
-                          <SelectItem key={a} value={a}>{a}</SelectItem>
+                          <SelectItem key={a} value={a}>{agentNames[a] ?? a.replaceAll("-", " ")}</SelectItem>
                         ))}
                       </SelectGroup>
                     </SelectContent>
@@ -881,16 +886,13 @@ export function SessionView({
 
                 <label className="flex flex-col gap-1.5 text-sm">
                   <div className="flex items-center justify-between">
-                    <span className="font-medium">{contextUpload?.label || "Context document"}</span>
+                    <span className="font-medium">{documentLabel}</span>
                     {isContextRequired && (
                       <span className="text-[11px] font-medium text-amber-500">
-                        Required for this scenario
+                        Required
                       </span>
                     )}
                   </div>
-                  {contextUpload?.prompt && (
-                    <p className="text-xs text-muted-foreground">{contextUpload.prompt}</p>
-                  )}
                   <div className="flex items-center gap-2">
                     <Select
                       value={contextId || "none"}
@@ -900,11 +902,11 @@ export function SessionView({
                       }}
                     >
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select document" />
+                        <SelectValue placeholder="Select a document" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectGroup>
-                          <SelectLabel>Uploaded contexts</SelectLabel>
+                          <SelectLabel>Uploaded documents</SelectLabel>
                           <SelectItem value="none">None</SelectItem>
                           {contextList.map((c) => (
                             <SelectItem key={c.id} value={c.id}>
@@ -948,16 +950,13 @@ export function SessionView({
                       variant="outline"
                       size="icon"
                       className="shrink-0"
-                      aria-label="Upload context document"
+                      aria-label="Upload document"
                       disabled={uploadingContext}
                       onClick={() => contextInput.current?.click()}
                     >
                       {uploadingContext ? <LoaderCircle className="animate-spin" /> : <UploadIcon />}
                     </Button>
                   </div>
-                  <span className="text-xs text-muted-foreground">
-                    PDF, Word, PPT, Excel, CSV, text, or images (.pdf, .docx, .pptx, etc.).
-                  </span>
                 </label>
 
                 {error && (
@@ -1089,7 +1088,7 @@ export function SessionView({
                           }
                           initialPage={surface.page}
                           highlightQuery={surface.highlightQuery}
-                          title={contextList.find((c) => c.id === surface.fileId)?.name}
+                          title={surface.fileName ?? contextList.find((c) => c.id === surface.fileId)?.name}
                         />
                       )}
                       {surface.tool === "image" && (
