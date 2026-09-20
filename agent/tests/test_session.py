@@ -15,6 +15,7 @@ def test_build_agent_session_configuration():
     assert session.llm._client.base_url == "http://localhost:3000/api/v1/"
     assert session.llm._client.api_key == "dynamic-runtime-token"
     assert session.llm._opts.model == "trainertwin-brain"
+    assert session.options.user_away_timeout == 60.0
 
     opts = session.options.turn_handling
     assert opts["preemptive_generation"]["enabled"] is False

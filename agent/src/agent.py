@@ -84,6 +84,7 @@ def parse_metadata(raw: str | None) -> dict[str, Any]:
 # 60s cap keeps dead clients (refresh loops, broken video) from stalling sessions; keep
 # intro clips comfortably under it.
 OPENING_RELEASE_TIMEOUT = 60.0
+USER_INACTIVE_SIGNAL = "__TRAINERTWIN_USER_INACTIVE__"
 MCQ_SUBMISSION_PREFIX = "__TRAINERTWIN_MCQ_SUBMISSION__:"
 CODE_SUBMISSION_PREFIX = "__TRAINERTWIN_CODE_SUBMISSION__:"
 WHITEBOARD_SUBMISSION_PREFIX = "__TRAINERTWIN_WHITEBOARD_SUBMISSION__:"
@@ -109,6 +110,7 @@ class TrainerAgent(Agent):
         self.room_name = room_name
         self.opening_release = opening_release
         self.hold_opening = hold_opening
+        self.opening_complete = False
 
     async def inject_screen_note(self, text: str) -> None:
         """Add observer context without triggering another model turn."""
@@ -126,19 +128,22 @@ class TrainerAgent(Agent):
         # the first speech picks up seamlessly instead of talking over the clip. Without
         # the flag the greeting starts immediately (old-client / rollout-skew safe). A
         # timeout keeps dead clients (refresh loops, broken video) from stalling sessions.
-        if not self.hold_opening:
-            await self._generate_opening()
-            return
-        logger.info("TrainerAgent entered room %s, waiting for opening release", self.room_name)
         try:
-            await asyncio.wait_for(self.opening_release.wait(), timeout=OPENING_RELEASE_TIMEOUT)
-        except asyncio.TimeoutError:
-            logger.warning(
-                "No opening release after %.0fs for room %s; speaking anyway",
-                OPENING_RELEASE_TIMEOUT,
-                self.room_name,
-            )
-        await self._generate_opening()
+            if not self.hold_opening:
+                await self._generate_opening()
+                return
+            logger.info("TrainerAgent entered room %s, waiting for opening release", self.room_name)
+            try:
+                await asyncio.wait_for(self.opening_release.wait(), timeout=OPENING_RELEASE_TIMEOUT)
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "No opening release after %.0fs for room %s; speaking anyway",
+                    OPENING_RELEASE_TIMEOUT,
+                    self.room_name,
+                )
+            await self._generate_opening()
+        finally:
+            self.opening_complete = True
 
     async def _generate_opening(self) -> None:
         try:
@@ -146,6 +151,14 @@ class TrainerAgent(Agent):
         except Exception as exc:
             logger.exception("Failed to generate initial reply: %s", exc)
 
+
+def register_inactivity_nudge(session: Any, agent: TrainerAgent) -> None:
+    @session.on("user_state_changed")
+    def on_user_state_changed(event: Any) -> None:
+        if event.new_state != "away" or not agent.opening_complete:
+            return
+        logger.info("User inactive for 60s in room %s; sending nudge", agent.room_name)
+        asyncio.create_task(session.generate_reply(instructions=USER_INACTIVE_SIGNAL))
 
 
 async def entrypoint(ctx: agents.JobContext) -> None:
@@ -372,6 +385,7 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         opening_release=opening_release,
         hold_opening=bool(metadata.get("hold_opening")),
     )
+    register_inactivity_nudge(session, agent)
     screen_feedback = ScreenFeedbackRuntime(
         room=ctx.room,
         participant_identity=participant_identity,

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import asyncio
+from types import SimpleNamespace
+
 import pytest
 
 import agent
@@ -27,9 +30,36 @@ def test_validate_environment_passes_with_all_vars(monkeypatch):
     agent.validate_environment()  # must not raise SystemExit
 
 
-def test_on_session_end_sends_transcript(monkeypatch):
-    import asyncio
+async def test_inactivity_nudge_only_runs_after_opening():
+    class Session:
+        callback = None
+        replies: list[str] = []
 
+        def on(self, _event):
+            def register(callback):
+                self.callback = callback
+                return callback
+            return register
+
+        async def generate_reply(self, *, instructions):
+            self.replies.append(instructions)
+
+    session = Session()
+    trainer = SimpleNamespace(opening_complete=False, room_name="room-1")
+    agent.register_inactivity_nudge(session, trainer)
+
+    session.callback(SimpleNamespace(new_state="away"))
+    await asyncio.sleep(0)
+    assert session.replies == []
+
+    trainer.opening_complete = True
+    session.callback(SimpleNamespace(new_state="listening"))
+    session.callback(SimpleNamespace(new_state="away"))
+    await asyncio.sleep(0)
+    assert session.replies == [agent.USER_INACTIVE_SIGNAL]
+
+
+def test_on_session_end_sends_transcript(monkeypatch):
     class Item:
         type = "message"
         role = "assistant"

@@ -12,6 +12,8 @@ import { studioPrincipal } from "../lib/auth";
  * - On HTTP abort (learner barge-in), triggers cooperative session cancellation.
  */
 
+const USER_INACTIVE_SIGNAL = "__TRAINERTWIN_USER_INACTIVE__";
+
 /** Pure side-effect tools that do not require conversational follow-up speech. */
 const PURE_SIDE_EFFECT_TOOLS = new Set([
   "surface",
@@ -78,7 +80,8 @@ function mapLatestMessage(messages: ChatMessage[]): string | null {
     if (
       candidate.role === "user" ||
       candidate.role === "tool" ||
-      contentToText(candidate.content).trim() === "session-start"
+      contentToText(candidate.content).trim() === "session-start" ||
+      contentToText(candidate.content).trim() === USER_INACTIVE_SIGNAL
     ) {
       latestIndex = index;
       break;
@@ -91,8 +94,11 @@ function mapLatestMessage(messages: ChatMessage[]): string | null {
   }
   const text = contentToText(latest.content).trim();
   if (!text) return null;
-  // LiveKit's generate_reply("session-start") maps to the opening brief.
+  // LiveKit transport control messages become explicit internal events for Eve.
   if (text === "session-start") return "[OPENING] Generate the session opening.";
+  if (text === USER_INACTIVE_SIGNAL) {
+    return "[USER INACTIVE] The learner has been silent for 60 seconds. Adapt to the current moment in the session. Do not advance the interview or ask a new interview question.";
+  }
 
   let previousTurnIndex = -1;
   for (let index = latestIndex - 1; index >= 0; index -= 1) {

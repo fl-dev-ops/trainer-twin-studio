@@ -29,6 +29,12 @@ describe("TrainerTwin prompt contract", () => {
     contains(instructions, "machine-coding");
   });
 
+  test("handles inactive users without advancing the interview", () => {
+    contains(instructions, "[USER INACTIVE]");
+    contains(instructions, "Adapt to the current moment");
+    contains(instructions, "do not advance the plan");
+  });
+
   test("tracks session progress with session_plan", () => {
     contains(instructions, "Session Plan & Progress Tracking (`session_plan`)");
     contains(instructions, "Initialization (on `[OPENING]`");
@@ -58,6 +64,8 @@ describe("TrainerTwin prompt contract", () => {
     contains(instructions, 'surface({ action: "open_choice"');
     contains(instructions, "Do not read the options aloud");
     contains(instructions, "get_choice_state");
+    contains(instructions, "silently call `get_choice_state`");
+    contains(instructions, "treat it as their answer even when `submitted` is false");
     contains(instructions, "highlight_choice");
   });
 

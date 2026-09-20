@@ -62,6 +62,7 @@ def build_agent_session(
         llm=llm,
         tts=tts,
         max_tool_steps=5,
+        user_away_timeout=60.0,
         # The Eve bridge buffers until the durable turn starts streaming; the session's
         # default llm_conn_options timeout (10s) kills every turn whose TTFT exceeds it
         # (measured 4.5-8s with reasoning enabled, plus retry overhead).
