@@ -32,10 +32,26 @@ export default async function RolePlayPreviewPage({
       },
     }),
     db.rolePlayAssignment.findMany({
-      where: { orgId: org.id, deployment: { agent: { slug } }, status: { not: "cancelled" } },
-      select: { memberId: true },
+      where: { orgId: org.id, deployment: { agent: { slug } } },
+      orderBy: { assignedAt: "desc" },
+      select: {
+        id: true,
+        status: true,
+        assignedAt: true,
+        expiresAt: true,
+        member: { select: { user: { select: { name: true, email: true } } } },
+      },
     }),
   ]);
+
+  const assignmentSummaries = assignments.map(({ id, status, assignedAt, expiresAt, member }) => ({
+    id,
+    status,
+    assignedAt: assignedAt.toISOString(),
+    expiresAt: expiresAt.toISOString(),
+    userName: member.user.name || "Unnamed User",
+    userEmail: member.user.email,
+  }));
 
   const availableUsers: OrganizationUser[] = members.map((member) => ({
     id: member.id,
@@ -112,7 +128,7 @@ export default async function RolePlayPreviewPage({
     <RolePlayPreview
       rolePlay={rolePlay}
       availableUsers={availableUsers}
-      assignedUserIds={assignments.map(({ memberId }) => memberId)}
+      assignments={assignmentSummaries}
     />
   );
 }
