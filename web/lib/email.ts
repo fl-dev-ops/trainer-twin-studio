@@ -5,6 +5,7 @@ export const resend = resendApiKey ? new Resend(resendApiKey) : null;
 
 export const DEFAULT_FROM_EMAIL =
   process.env.RESEND_FROM_EMAIL || "TrainerTwin <no-reply@trainertwin.com>";
+const DEFAULT_REPLY_TO = "support@trainertwin.com";
 
 export type SendEmailOptions = {
   to: string | string[];
@@ -35,6 +36,7 @@ export async function sendEmail({
     const result = await resend.emails.send({
       from,
       to,
+      replyTo: DEFAULT_REPLY_TO,
       subject,
       html,
       text,
