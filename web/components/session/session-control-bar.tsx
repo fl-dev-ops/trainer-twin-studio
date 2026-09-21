@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useStartAudio, useTrackToggle } from "@livekit/components-react";
 import {
-  Captions,
   LoaderCircle,
   MessageSquare,
   Mic,
@@ -32,16 +31,12 @@ import { cn } from "@/lib/utils";
 export function SessionControlBar({
   room,
   isConnected,
-  subtitlesActive,
-  onSubtitlesToggle,
   chatOpen,
   onChatToggle,
   onEnd,
 }: {
   room?: Room;
   isConnected: boolean;
-  subtitlesActive: boolean;
-  onSubtitlesToggle: () => void;
   chatOpen: boolean;
   onChatToggle: () => void;
   onEnd: () => void;
@@ -142,19 +137,6 @@ export function SessionControlBar({
           ) : (
             <ScreenShareOff className="size-5" />
           )}
-        </button>
-
-        {/* 4. Live Subtitles (CC) */}
-        <button
-          type="button"
-          onClick={onSubtitlesToggle}
-          title="Toggle live subtitles"
-          className={cn(
-            "grid size-10 shrink-0 place-items-center rounded-full text-white transition-colors hover:bg-white/10",
-            subtitlesActive && "bg-white/15",
-          )}
-        >
-          <Captions className="size-5" />
         </button>
 
         {/* 5. Chat Toggle */}

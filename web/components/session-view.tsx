@@ -155,8 +155,7 @@ export function SessionView({
   const [surfaceRevision, setSurfaceRevision] = useState(0);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isScreenSharePending, setIsScreenSharePending] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [subtitlesActive, setSubtitlesActive] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [latestSpokenText, setLatestSpokenText] = useState("");
   const [elapsed, setElapsed] = useState(0);
 
@@ -1145,7 +1144,7 @@ export function SessionView({
               </div>
 
               {/* YouTube / Prime Video Style Streaming Subtitles */}
-              <LiveSubtitles text={latestSpokenText} visible={subtitlesActive} />
+              <LiveSubtitles text={latestSpokenText} visible={!sidebarOpen} />
             </div>
 
             {/* Chat Sidebar (Pure Chat, exact same height as stage!) */}
@@ -1175,8 +1174,6 @@ export function SessionView({
             <SessionControlBar
               room={room}
               isConnected={connected}
-              subtitlesActive={subtitlesActive}
-              onSubtitlesToggle={() => setSubtitlesActive((v) => !v)}
               chatOpen={sidebarOpen}
               onChatToggle={() => setSidebarOpen((v) => !v)}
               onEnd={() => void handleDisconnect("manual")}
