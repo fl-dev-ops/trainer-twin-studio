@@ -144,6 +144,13 @@ export async function POST(request: Request) {
       persona?: { slug?: string; version?: number; data?: Record<string, unknown> };
       domain?: { slug?: string; version?: number; data?: Record<string, unknown> };
     } | null;
+    // Prewarmed opening artifacts (style hits + surface-already-open flag), written
+    // by warmChatOpening right after activation. Only read by the brain's
+    // session.started resolver, so the block can never leak into later turns.
+    const warmOpening = (session?.warmOpening ?? null) as {
+      style?: unknown;
+      surfaceQueued?: boolean;
+    } | null;
     const [liveAgent, livePersona, liveDomain, sharedKnowledgeBase] = await Promise.all([
       agentSlug
         ? db.agent.findFirst({ where: { slug: { equals: agentSlug, mode: "insensitive" }, orgId }, select: { slug: true, version: true, data: true } })
@@ -277,6 +284,7 @@ export async function POST(request: Request) {
       documents: Array.from(docMap.values()),
       learnerName,
       resume: resumePayload,
+      warmOpening,
       uiState: (session?.runtimeState as Record<string, unknown> | null)?.uiState ?? null,
     });
   }

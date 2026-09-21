@@ -25,9 +25,17 @@ test("custom prompt wins", () => {
   assert.equal(upload.label, "Take-home");
 });
 
-test("legacy generic labels normalize to documents", () => {
-  assert.equal(resolveContextUpload({ label: "Résumé" }).label, "Documents");
-  assert.equal(resolveContextUpload({ label: "Context document" }).label, "Documents");
+test("labels pass through, empty falls back to documents", () => {
+  assert.equal(resolveContextUpload({ label: "Résumé" }).label, "Résumé");
+  assert.equal(resolveContextUpload({ label: "Context document" }).label, "Context document");
+  assert.equal(resolveContextUpload({}).label, "Documents");
+});
+
+test("max_files clamps to 1-5, defaults to 1", () => {
+  assert.equal(resolveContextUpload({ max_files: 3 }).maxFiles, 3);
+  assert.equal(resolveContextUpload({ max_files: 99 }).maxFiles, 5);
+  assert.equal(resolveContextUpload({ max_files: 0 }).maxFiles, 1);
+  assert.equal(resolveContextUpload({}).maxFiles, 1);
 });
 
 test("not required hides the dropzone", () => {

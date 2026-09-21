@@ -307,6 +307,7 @@ model InterviewSession {
   attempt          Int       @default(1)
   compiledSnapshot Json?
   runtimeState     Json?
+  warmOpening      Json?
   runtimeRevision  Int       @default(0)
   lastCompletion   Json?
   createdAt        DateTime  @default(now())

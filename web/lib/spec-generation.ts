@@ -21,6 +21,8 @@ export type GenerationInput = {
   knowledgeBase?: string;
   interviewConfig: InterviewConfig;
   contextPrompt?: string;
+  contextLabel?: string;
+  contextMaxFiles?: number;
   previous: { instruction?: string; agent: unknown; domain: unknown } | null;
 };
 
@@ -376,7 +378,12 @@ export async function generateSpecBundle(input: GenerationInput): Promise<SpecDr
       modelBundle.agent.config.interview = input.interviewConfig;
       modelBundle.agent.config.context = applyLearnerUpload(
         modelBundle.agent.config.context as Record<string, unknown> | undefined,
-        { interviewType: input.interviewConfig.type },
+        {
+          interviewType: input.interviewConfig.type,
+          prompt: input.contextPrompt,
+          label: input.contextLabel,
+          maxFiles: input.contextMaxFiles,
+        },
       );
     }
     normalizeGeneratedEvidence(modelBundle.agent?.stages, input.interviewConfig.type);

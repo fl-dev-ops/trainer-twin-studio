@@ -21,6 +21,8 @@ const inputSchema = z.object({
   publish: z.boolean().optional(),
   interviewConfig: interviewConfigSchema,
   contextPrompt: z.string().trim().max(2500).optional(),
+  contextLabel: z.string().trim().max(120).optional(),
+  contextMaxFiles: z.number().int().min(1).max(5).optional(),
 });
 
 const GENERIC_SAVE_ERROR = "Failed to save the change, try again in a few seconds";
@@ -95,6 +97,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       knowledgeBase,
       interviewConfig,
       contextPrompt: input.data.contextPrompt,
+      contextLabel: input.data.contextLabel,
+      contextMaxFiles: input.data.contextMaxFiles,
       previous: draft
         ? { instruction: draft.agent.instruction, agent: draft.agent, domain: draft.domain }
         : published

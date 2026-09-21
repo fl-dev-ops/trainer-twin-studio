@@ -25,6 +25,18 @@ function contextPromptOf(agent: Record<string, unknown>): string {
   return typeof ctx.prompt === "string" ? ctx.prompt : "";
 }
 
+function contextFieldOf(agent: Record<string, unknown>, field: string): string {
+  const config = agent.config && typeof agent.config === "object" ? agent.config as Record<string, unknown> : {};
+  const ctx = config.context && typeof config.context === "object" ? config.context as Record<string, unknown> : {};
+  return typeof ctx[field] === "string" ? (ctx[field] as string) : "";
+}
+
+function contextMaxFilesOf(agent: Record<string, unknown>): number {
+  const config = agent.config && typeof agent.config === "object" ? agent.config as Record<string, unknown> : {};
+  const ctx = config.context && typeof config.context === "object" ? config.context as Record<string, unknown> : {};
+  return typeof ctx.max_files === "number" && ctx.max_files >= 1 ? Math.min(ctx.max_files, 5) : 1;
+}
+
 export async function SpecResourcePage({
   type,
   slug,
@@ -80,6 +92,8 @@ export async function SpecResourcePage({
           topics={topics}
           interviewConfig={interviewConfigOf(agent)}
           contextPrompt={contextPromptOf(agent)}
+          contextLabel={contextFieldOf(agent, "label")}
+          contextMaxFiles={contextMaxFilesOf(agent)}
         />
       );
     }
@@ -120,6 +134,8 @@ export async function SpecResourcePage({
         topics={topics}
         interviewConfig={interviewConfigOf(working)}
         contextPrompt={contextPromptOf(working)}
+        contextLabel={contextFieldOf(working, "label")}
+        contextMaxFiles={contextMaxFilesOf(working)}
       />
     );
   }

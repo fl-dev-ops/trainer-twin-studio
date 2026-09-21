@@ -137,3 +137,13 @@ describe("TrainerTwin retrieval policy", () => {
     contains(instructions, "Do not validate, reject, or present a technical judgment");
   });
 });
+
+describe("pre-warmed opening contract", () => {
+  test("instructions skip all opening tool calls when the warm block is present", () => {
+    contains(contextRenderer, "PRE-WARMED OPENING");
+    contains(contextRenderer, "deliver the greeting directly with NO tool calls");
+    contains(contextRenderer, "Do NOT call surface on the opening turn");
+    contains(instructions, "PRE-WARMED OPENING exception");
+    contains(instructions, "SKIP this initialization entirely");
+  });
+});

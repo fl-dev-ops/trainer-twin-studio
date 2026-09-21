@@ -1,6 +1,8 @@
 import { db } from "@/lib/db";
 import { activateSession } from "@/lib/interview-sessions";
 import { activateLiveKitSession, closeLiveKitSession } from "@/lib/livekit";
+import { warmChatOpening } from "@/lib/session-warm";
+import { after } from "next/server";
 import type { DeliveryMode } from "@/lib/deployments";
 
 export async function activateInterviewRuntime(input: {
@@ -16,6 +18,9 @@ export async function activateInterviewRuntime(input: {
 }) {
   const session = await activateSession(input);
   if (!session) return null;
+  // Prewarm the chat brain's opening (spec snapshot, surface command, opening
+  // style) while the learner connects. Never blocks or fails activation.
+  after(() => warmChatOpening(session.id, input.orgId).catch(() => {}));
   if (input.mode === "chat") {
     return { session, conversationToken: session.runtimeToken };
   }
