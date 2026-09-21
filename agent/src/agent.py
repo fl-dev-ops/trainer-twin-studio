@@ -102,6 +102,7 @@ class TrainerAgent(Agent):
         room_name: str,
         opening_release: asyncio.Event,
         hold_opening: bool = False,
+        pending_input: list[str] | None = None,
     ) -> None:
         super().__init__(
             instructions=COMMON_VOICE_INSTRUCTIONS,
@@ -111,6 +112,19 @@ class TrainerAgent(Agent):
         self.opening_release = opening_release
         self.hold_opening = hold_opening
         self.opening_complete = False
+        self.pending_input = pending_input if pending_input is not None else []
+
+    def _resume_user_input(self) -> None:
+        """Re-enable the mic and flush user messages buffered during the intro.
+        Called only after the opening reply is fully spoken so the trainer
+        always speaks first."""
+        try:
+            self.session.input.set_audio_enabled(True)
+        except Exception as exc:
+            logger.debug("Mic resume note for room %s: %s", self.room_name, exc)
+        for text in self.pending_input:
+            asyncio.create_task(self.session.generate_reply(user_input=text))
+        self.pending_input.clear()
 
     async def inject_screen_note(self, text: str) -> None:
         """Add observer context without triggering another model turn."""
@@ -142,6 +156,7 @@ class TrainerAgent(Agent):
                     self.room_name,
                 )
             await self._generate_opening()
+            self._resume_user_input()
         finally:
             self.opening_complete = True
 
@@ -190,8 +205,14 @@ async def entrypoint(ctx: agents.JobContext) -> None:
     pending_code_submissions: dict[str, dict[str, Any]] = {}
     accepted_whiteboard_signatures: set[str] = set()
     participant_identity: str | None = None
+    hold_opening = bool(metadata.get("hold_opening"))
 
     def submit_user_input(text: str) -> None:
+        # While the intro video holds the opening, buffer learner input so the
+        # trainer still speaks first; flushed by TrainerAgent._resume_user_input.
+        if hold_opening and not opening_release.is_set():
+            pending_chat_messages.append(text)
+            return
         if active_session is not None:
             asyncio.create_task(active_session.generate_reply(user_input=text))
         else:
@@ -383,7 +404,8 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         tools=[],
         room_name=ctx.room.name,
         opening_release=opening_release,
-        hold_opening=bool(metadata.get("hold_opening")),
+        hold_opening=hold_opening,
+        pending_input=pending_chat_messages,
     )
     register_inactivity_nudge(session, agent)
     screen_feedback = ScreenFeedbackRuntime(
@@ -427,10 +449,15 @@ async def entrypoint(ctx: agents.JobContext) -> None:
             close_on_disconnect=False,
         ),
     )
+    if hold_opening:
+        # Keep the learner's mic out of the session until the opening has been
+        # spoken; otherwise speech during the intro races the greeting.
+        session.input.set_audio_enabled(False)
     await screen_feedback.start(session)
-    for pending_text in pending_chat_messages:
-        asyncio.create_task(session.generate_reply(user_input=pending_text))
-    pending_chat_messages.clear()
+    if not (hold_opening and not opening_release.is_set()):
+        for pending_text in pending_chat_messages:
+            asyncio.create_task(session.generate_reply(user_input=pending_text))
+        pending_chat_messages.clear()
     asyncio.create_task(watch_empty_room())
 
 

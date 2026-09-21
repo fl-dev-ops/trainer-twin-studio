@@ -990,6 +990,7 @@ export function SessionView({
           runtimeToken={connection?.runtimeToken}
           onSurface={handleSurface}
           onEndSession={() => void handleDisconnect("completed")}
+          active={introSrc ? introDone : true}
         >
           {/* Topbar Navigation: Clean Logo Left, Live Badge Right */}
           <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/[0.035] bg-[#14161a]/85 px-6 backdrop-blur-xl">

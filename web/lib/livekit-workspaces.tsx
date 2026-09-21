@@ -95,12 +95,15 @@ export function LiveKitWorkspaceProvider({
   runtimeToken,
   onSurface,
   onEndSession,
+  active = true,
 }: {
   children: ReactNode;
   sessionId?: string;
   runtimeToken?: string;
   onSurface: (surface: AgentSurface) => void;
   onEndSession?: () => void;
+  /** While false (e.g. intro video still playing), pending commands are not polled. */
+  active?: boolean;
 }) {
   const handlers = useRef(new Map<WorkspaceMethod, WorkspaceHandler>());
   const seen = useRef(new Set<string>());
@@ -116,7 +119,7 @@ export function LiveKitWorkspaceProvider({
   );
 
   useEffect(() => {
-    if (!sessionId || !runtimeToken) return;
+    if (!sessionId || !runtimeToken || !active) return;
     let cancelled = false;
     const headers = { Authorization: `Bearer ${runtimeToken}` };
 
@@ -189,7 +192,7 @@ export function LiveKitWorkspaceProvider({
     }
     void poll();
     return () => { cancelled = true; };
-  }, [sessionId, runtimeToken, onSurface, onEndSession]);
+  }, [sessionId, runtimeToken, onSurface, onEndSession, active]);
 
   const value = useMemo(() => register, [register]);
   return <WorkspaceContext value={value}>{children}</WorkspaceContext>;
