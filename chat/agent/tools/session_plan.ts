@@ -2,7 +2,7 @@ import { defineState } from "eve/context";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { studioFetch } from "../lib/studio";
-import { technicalQuestionTarget } from "./session-plan-config";
+import { technicalQuestionTarget } from "../lib/session-plan-config";
 
 export interface RoundPlan {
   id: string;
