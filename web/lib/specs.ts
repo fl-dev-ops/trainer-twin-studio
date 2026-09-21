@@ -165,9 +165,6 @@ export async function listAgentContextRequired(orgId: string, slugs: string[]): 
  * an absolute URL is passed through so a CDN-fronted video needs no special casing.
  */
 export async function listScenarioIntroVideos(orgId: string, slugs: string[]) {
-  // Intro videos are disabled outside production (dev/staging): sessions start
-  // directly without the intro clip. Remove this guard to re-enable.
-  if (process.env.NODE_ENV !== "production") return {};
   if (slugs.length === 0) return {};
   const agents = await db.agent.findMany({
     where: { orgId, slug: { in: slugs } },
