@@ -2,6 +2,7 @@ import { defineState } from "eve/context";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { studioFetch } from "../lib/studio";
+import { technicalQuestionTarget } from "./session-plan-config";
 
 export interface RoundPlan {
   id: string;
@@ -75,18 +76,7 @@ async function autoInitFromStudio(ctx: any): Promise<RoundPlan[]> {
       if (isResume) {
         target = typeof interview.main_questions === "number" ? interview.main_questions : 4;
       } else {
-        // Find matching count for this stage type
-        for (const [kind, count] of Object.entries(questionCounts)) {
-          if (typeof count === "number" && (id.includes(kind) || name.toLowerCase().includes(kind))) {
-            target = count;
-            break;
-          }
-        }
-        // If not matched by stage name, check if only one question type has count
-        if (target === 1) {
-          const nonZero = Object.entries(questionCounts).filter(([, c]) => typeof c === "number" && c > 0);
-          if (nonZero.length === 1) target = nonZero[0][1];
-        }
+        target = technicalQuestionTarget(questionCounts, { id, name }, rawStages.length);
       }
 
       return {
