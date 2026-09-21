@@ -58,6 +58,17 @@ export type SessionSpecs = {
     extractedText: string;
     claims: ResumeClaim[];
   } | null;
+  warmOpening?: {
+    style?: {
+      pastExchanges?: { exchange: string; score: number }[];
+      phrasingStyle?: {
+        text: string;
+        score: number;
+        metadata?: Record<string, unknown>;
+      }[];
+    } | null;
+    surfaceQueued?: boolean;
+  } | null;
   learnerName?: string | null;
   learnerHistory?: {
     isReturning: boolean;
@@ -245,6 +256,10 @@ export async function loadSessionContext(
       pastSessionCount: number;
       lastSessionDate?: string | null;
     };
+    warmOpening?: {
+      style?: unknown;
+      surfaceQueued?: boolean;
+    } | null;
     uiState?: {
       active: string | null;
       key?: string | null;
@@ -347,6 +362,7 @@ export async function loadSessionContext(
       };
     })(),
     resume: result.resume ?? null,
+    warmOpening: (result.warmOpening ?? null) as SessionSpecs["warmOpening"],
     learnerName: result.learnerName,
     learnerHistory: result.learnerHistory,
     uiState: result.uiState ?? null,
@@ -407,6 +423,29 @@ ${claimList}\n`;
       })()
     : "";
 
+  const warmBlock = (() => {
+    if (!specs.warmOpening) return "";
+    const style = specs.warmOpening.style ?? null;
+    const lines: string[] = ["PRE-WARMED OPENING (retrieved before the session started — do NOT re-retrieve)"];
+    if (specs.warmOpening.surfaceQueued) {
+      lines.push("- The learner's document surface is ALREADY OPEN on their screen. Do NOT call surface on the opening turn.");
+    }
+    if (style?.phrasingStyle?.length) {
+      lines.push("- Opening phrasing style (trainer's real speech for greetings):");
+      for (const hit of style.phrasingStyle) {
+        lines.push(`  * "${hit.text}"${hit.metadata?.styleFunction ? ` — ${hit.metadata.styleFunction}` : ""}`);
+      }
+    }
+    if (style?.pastExchanges?.length) {
+      lines.push("- Past greeting exchanges (style examples only; past-learner facts are not current-session evidence):");
+      for (const hit of style.pastExchanges) {
+        lines.push(`  * "${hit.exchange}"`);
+      }
+    }
+    lines.push("- On the [OPENING] turn: deliver the greeting directly with NO tool calls. Skip search_style, session_plan, and surface. session_plan auto-initializes from the scenario spec on your next turn.");
+    return `\n${lines.join("\n")}\n`;
+  })();
+
   const learnerBlock = `LEARNER DATA
 - Name: ${specs.learnerName ?? "unknown"}
 - Relationship: ${specs.learnerHistory?.isReturning ? "returning learner" : "first session"}
@@ -454,7 +493,7 @@ APPROVED KNOWLEDGE BASES
 ${knowledgeBlock}
 
 ${uiStateBlock || "WORKSPACE STATE: not reported"}
-
+${warmBlock}
 ATTACHED ARTIFACTS
 ${specs.expectedArtifact ? `- Expected: ${specs.expectedArtifact.label} (${specs.expectedArtifact.required ? "required" : "optional"})${specs.expectedArtifact.prompt ? ` — "${specs.expectedArtifact.prompt}"` : ""}\n` : ""}${docsBlock}
 ${resumeBlock}
