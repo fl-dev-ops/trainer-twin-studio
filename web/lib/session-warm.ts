@@ -1,25 +1,25 @@
 import { db } from "@/lib/db";
 import { getAgentConfigForAgent } from "@/lib/specs";
-import { buildSpecs } from "@/lib/runtime/compiler";
-import { surfaceForPhase } from "@/lib/runtime/runtime";
 import { MainCollectionService } from "@/lib/main-collection";
 import { redactLearnerNames } from "@/lib/persona-voice";
+import { getCachedSessionContext } from "@/lib/session-context";
+import { embedTexts } from "@/lib/knowledge";
 
 /**
  * Prewarms the chat brain's opening turn in the background right after session
  * activation. While the learner connects (and any intro video plays), this:
  *
  * 1. Pins the compiled spec snapshot on the session row (getSessionContext reuses it).
- * 2. Enqueues the opening `surface` command (e.g. open_pdf) so the learner's
- *    document is already on screen before the greeting — the brain then skips
- *    its surface tool call.
- * 3. Pre-runs the opening style retrieval the brain would otherwise do via the
+ * 2. Pre-runs the opening style retrieval the brain would otherwise do via the
  *    search_style tool (~2.3s: vector load + query embedding).
+ * 3. Primes the cached session context consumed once by Eve's
+ *    session.started resolver.
  *
  * Results land in `InterviewSession.warmOpening`; the brain reads them through
- * getSessionContext and, when present, skips ALL opening tool calls and speaks
- * in one LLM completion. Every step is best-effort: a missed warm just means
- * the brain runs today's slower path.
+ * getSessionContext and, when present, skips the style retrieval and
+ * session-plan tool calls on the opening turn. The agent still owns the surface
+ * decision. Every step is best-effort: a missed warm just means the brain runs
+ * today's slower path.
  */
 
 const OPENING_STYLE_QUERY = "greeting the learner at the start of a training session";
@@ -39,7 +39,11 @@ export async function warmChatOpening(sessionId: string, orgId: string): Promise
         warmOpening: true,
       },
     });
-    if (!session || session.warmOpening) return;
+    if (!session) return;
+    if (session.warmOpening) {
+      await getCachedSessionContext(orgId, sessionId);
+      return;
+    }
 
     // 1. Pin the compiled snapshot (also used by getSessionContext and the old voice runtime).
     let snapshot = session.compiledSnapshot as Record<string, unknown> | null;
@@ -54,51 +58,29 @@ export async function warmChatOpening(sessionId: string, orgId: string): Promise
       });
     }
 
-    const specs = buildSpecs(snapshot as Parameters<typeof buildSpecs>[0]);
     const personaId = (snapshot as { persona?: { id?: string } }).persona?.id;
 
-    // 2. Opening surface (open_pdf etc.) as a durable command; the browser executes
-    //    it on connect. Same shape the brain's surface tool would have enqueued.
-    let surfaceQueued = false;
-    if (personaId) {
-      const neededSurface = surfaceForPhase(specs.agent, 0, specs.documentManifests);
-      if (neededSurface) {
-        try {
-          await db.workspaceCommand.upsert({
-            where: { id: `warm-surface-${sessionId}` },
-            create: {
-              id: `warm-surface-${sessionId}`,
-              sessionId,
-              tool: "surface",
-              input: neededSurface as object,
-              status: "pending",
-            },
-            update: {},
-          });
-          surfaceQueued = true;
-        } catch {
-          // Command table unavailable or session not yet activatable; the brain
-          // will call surface itself on the non-warm path.
-        }
-      }
-    }
-
-    // 3. Opening style retrieval — same studio code path as the search_style tool
-    //    (episodes + style hits, learner names redacted).
+    // 2. Opening style retrieval — same studio code path as the search_style tool
+    //    (episodes + style hits, learner names redacted). The agent still owns
+    //    the surface decision; we just save it the expensive style lookup.
     let openingStyle: unknown = null;
     if (personaId) {
+      // Both searches use the same query — embed once, share the result.
+      const [queryEmbedding] = await embedTexts([OPENING_STYLE_QUERY]);
       const [styleHits, episodeHits] = await Promise.all([
         MainCollectionService.searchStyleEpisodes(orgId, OPENING_STYLE_QUERY, {
           personaId,
           sessionPhase: "opening",
           limit: 4,
           diversify: true,
+          queryEmbedding,
         }),
         MainCollectionService.searchPersonaEpisodes(orgId, OPENING_STYLE_QUERY, {
           personaId,
           sessionPhase: "opening",
           limit: 2,
           diversify: true,
+          queryEmbedding,
         }),
       ]);
       openingStyle = {
@@ -124,8 +106,6 @@ export async function warmChatOpening(sessionId: string, orgId: string): Promise
       };
     }
 
-    if (!openingStyle && !surfaceQueued) return;
-
     // Only warm sessions that have not started talking yet; the fresh-state check
     // keeps a late warm from clobbering an in-flight session.
     const fresh = await db.interviewSession.findUnique({
@@ -136,21 +116,18 @@ export async function warmChatOpening(sessionId: string, orgId: string): Promise
     const state = (fresh?.runtimeState ?? null) as Record<string, unknown> | null;
     if (state && (Array.isArray(state.actions) && (state.actions as string[]).includes("opening"))) return;
 
+    const warmOpening = {
+      style: openingStyle,
+      createdAt: new Date().toISOString(),
+    };
     await db.interviewSession.update({
       where: { id: sessionId },
-      data: {
-        warmOpening: JSON.parse(
-          JSON.stringify({
-            style: openingStyle,
-            surfaceQueued,
-            createdAt: new Date().toISOString(),
-          }),
-        ),
-      },
+      data: { warmOpening: JSON.parse(JSON.stringify(warmOpening)) },
     });
+    await getCachedSessionContext(orgId, sessionId);
 
     console.info(
-      `[session-warm] ${sessionId} warmed in ${Math.round(performance.now() - startedAt)}ms (surface=${surfaceQueued}, style=${Boolean(openingStyle)})`,
+      `[session-warm] ${sessionId} warmed in ${Math.round(performance.now() - startedAt)}ms (style=${Boolean(openingStyle)})`,
     );
   } catch (error) {
     console.warn(`[session-warm] prewarm failed for session ${sessionId}:`, error);

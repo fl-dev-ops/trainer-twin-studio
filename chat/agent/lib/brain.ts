@@ -67,7 +67,6 @@ export type SessionSpecs = {
         metadata?: Record<string, unknown>;
       }[];
     } | null;
-    surfaceQueued?: boolean;
   } | null;
   learnerName?: string | null;
   learnerHistory?: {
@@ -258,7 +257,6 @@ export async function loadSessionContext(
     };
     warmOpening?: {
       style?: unknown;
-      surfaceQueued?: boolean;
     } | null;
     uiState?: {
       active: string | null;
@@ -427,11 +425,8 @@ ${claimList}\n`;
     if (!specs.warmOpening) return "";
     const style = specs.warmOpening.style ?? null;
     const lines: string[] = ["PRE-WARMED OPENING (retrieved before the session started — do NOT re-retrieve)"];
-    if (specs.warmOpening.surfaceQueued) {
-      lines.push("- The learner's document surface is ALREADY OPEN on their screen. Do NOT call surface on the opening turn.");
-    }
     if (style?.phrasingStyle?.length) {
-      lines.push("- Opening phrasing style (trainer's real speech for greetings):");
+      lines.push("- Opening phrasing style (trainer's real speech for greetings — TONE AND RHYTHM ONLY):");
       for (const hit of style.phrasingStyle) {
         lines.push(`  * "${hit.text}"${hit.metadata?.styleFunction ? ` — ${hit.metadata.styleFunction}` : ""}`);
       }
@@ -442,7 +437,8 @@ ${claimList}\n`;
         lines.push(`  * "${hit.exchange}"`);
       }
     }
-    lines.push("- On the [OPENING] turn: deliver the greeting directly with NO tool calls. Skip search_style, session_plan, and surface. session_plan auto-initializes from the scenario spec on your next turn.");
+    lines.push("- Compose a FRESH greeting in this trainer's voice: never reuse or lightly edit the example sentences, openings (e.g. starting with 'Now'), or structures verbatim. Vary the wording, but keep it concise and natural.");
+    lines.push("- On the [OPENING] turn: deliver the greeting directly with NO tool calls except the `surface` tool if the learner's document still needs to be opened. Skip search_style (style is already provided above) and session_plan (auto-initializes from the scenario spec on your next turn).");
     return `\n${lines.join("\n")}\n`;
   })();
 

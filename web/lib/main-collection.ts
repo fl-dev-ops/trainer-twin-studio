@@ -562,6 +562,7 @@ export class MainCollectionService {
       sessionPhase?: string;
       limit?: number;
       diversify?: boolean;
+      queryEmbedding?: number[];
       styleFilters?: { usesLearnerName?: boolean; startsWithThanks?: boolean; hasDoubledAcknowledgement?: boolean };
     } = {},
   ): Promise<{
@@ -596,7 +597,7 @@ export class MainCollectionService {
       }
       const whereClause: Where = conditions.length > 1 ? ({ $and: conditions } as Where) : conditions[0];
       const res = await collection.query({
-        queryEmbeddings: await embedTexts([query]),
+        queryEmbeddings: options.queryEmbedding ? [options.queryEmbedding] : await embedTexts([query]),
         nResults: options.diversify ? limit * 3 : limit,
         where: whereClause,
         include: ["documents", "metadatas", "distances"],
@@ -641,7 +642,7 @@ export class MainCollectionService {
   static async searchPersonaEpisodes(
     orgId: string,
     query: string,
-    options: { personaId?: string; sessionPhase?: string; limit?: number; diversify?: boolean } = {},
+    options: { personaId?: string; sessionPhase?: string; limit?: number; diversify?: boolean; queryEmbedding?: number[] } = {},
   ) {
     return this.searchPersonaVoiceType(orgId, query, "persona_voice_episode", options);
   }
@@ -665,6 +666,7 @@ export class MainCollectionService {
       sessionPhase?: string;
       limit?: number;
       diversify?: boolean;
+      queryEmbedding?: number[];
       styleFilters?: { usesLearnerName?: boolean; startsWithThanks?: boolean; hasDoubledAcknowledgement?: boolean };
     } = {},
   ) {
@@ -677,7 +679,7 @@ export class MainCollectionService {
       }
       const records = await cachedPromise;
       if (records.length > 0) {
-        const [queryEmbedding] = await embedTexts([query]);
+        const [queryEmbedding] = options.queryEmbedding ? [options.queryEmbedding] : await embedTexts([query]);
         const qVec = new Float32Array(queryEmbedding);
 
         const scored: { r: CachedStyleRecord; score: number }[] = [];
