@@ -74,6 +74,8 @@ export type AgentEditorProps = {
   topics: TopicOption[];
   interviewConfig: InterviewConfig;
   contextPrompt?: string;
+  contextLabel?: string;
+  contextMaxFiles?: number;
 };
 
 export function AgentEditor(initial: AgentEditorProps) {
@@ -85,6 +87,8 @@ export function AgentEditor(initial: AgentEditorProps) {
   const [knowledgeBase, setKnowledgeBase] = useState(initial.knowledgeBase);
   const [interviewConfig, setInterviewConfig] = useState<InterviewConfig>(initial.interviewConfig);
   const [contextPrompt, setContextPrompt] = useState(initial.contextPrompt ?? "");
+  const [contextLabel, setContextLabel] = useState(initial.contextLabel ?? "");
+  const [contextMaxFiles, setContextMaxFiles] = useState(initial.contextMaxFiles ?? 1);
   const [voiceId, setVoiceId] = useState(initial.voiceId);
   const [specYaml, setSpecYaml] = useState(initial.specYaml);
   const [revision, setRevision] = useState(initial.revision);
@@ -151,6 +155,8 @@ export function AgentEditor(initial: AgentEditorProps) {
             publish,
             interviewConfig,
             contextPrompt: contextPrompt.trim() || undefined,
+            contextLabel: contextLabel.trim() || undefined,
+            contextMaxFiles: contextMaxFiles > 1 ? contextMaxFiles : undefined,
           }),
         },
       );
@@ -478,6 +484,38 @@ export function AgentEditor(initial: AgentEditorProps) {
               />
               <FieldDescription className="text-xs">
                 Explains which document the learner should provide for this scenario.
+              </FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="learner-upload-label">Learner upload title</FieldLabel>
+              <Input
+                id="learner-upload-label"
+                value={contextLabel}
+                placeholder="e.g. Résumé, Case study, Portfolio"
+                onChange={(event) => {
+                  setContextLabel(event.target.value);
+                  setDirty(true);
+                }}
+              />
+              <FieldDescription className="text-xs">
+                Title shown on the upload card before the session starts.
+              </FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="learner-upload-max-files">Number of files allowed</FieldLabel>
+              <Input
+                id="learner-upload-max-files"
+                type="number"
+                min={1}
+                max={5}
+                value={contextMaxFiles}
+                onChange={(event) => {
+                  setContextMaxFiles(Math.max(1, Math.min(5, Number(event.target.value) || 1)));
+                  setDirty(true);
+                }}
+              />
+              <FieldDescription className="text-xs">
+                How many documents a learner may attach for this scenario (1–5).
               </FieldDescription>
             </Field>
             {interviewConfig.type === "resume" ? (

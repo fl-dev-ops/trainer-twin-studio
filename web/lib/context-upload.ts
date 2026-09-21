@@ -3,6 +3,7 @@ export type AgentContextUpload = {
   prompt: string;
   label: string;
   accept: string;
+  maxFiles: number;
 };
 
 export const DEFAULT_CONTEXT_ACCEPT =
@@ -41,9 +42,7 @@ function text(value: unknown): string {
 
 function documentLabel(value: unknown, fallback = "Documents") {
   const label = text(value);
-  return ["résumé", "resume", "document", "context document"].includes(label.toLowerCase())
-    ? "Documents"
-    : label || fallback;
+  return label || fallback;
 }
 
 /** Agent-level context, or the first stage that requires an upload. */
@@ -72,11 +71,15 @@ export function resolveContextUpload(context: unknown): AgentContextUpload {
   const required = Boolean(ctx?.required);
   const defaults = MODE_DEFAULTS[mode] ?? FALLBACK;
   const resume = mode === "resume_grounding" || mode === "resume_topics_only";
+  const maxFiles = typeof ctx?.max_files === "number" && Number.isInteger(ctx.max_files) && ctx.max_files >= 1
+    ? Math.min(ctx.max_files, 5)
+    : 1;
   return {
     required,
     prompt: required ? text(ctx?.prompt) || defaults.prompt : text(ctx?.prompt),
     label: documentLabel(ctx?.label, defaults.label),
     accept: resume ? RESUME_CONTEXT_ACCEPT : DEFAULT_CONTEXT_ACCEPT,
+    maxFiles,
   };
 }
 
@@ -86,22 +89,30 @@ export function contextUploadFromAgentData(data: unknown): AgentContextUpload {
 
 export function applyLearnerUpload(
   context: Record<string, unknown> | undefined,
-  opts: { interviewType: "resume" | "technical"; prompt?: string },
+  opts: {
+    interviewType: "resume" | "technical";
+    prompt?: string;
+    label?: string;
+    maxFiles?: number;
+  },
 ): Record<string, unknown> {
   const next = { ...(context ?? {}) };
   const prompt = opts.prompt?.trim();
+  const label = opts.label?.trim();
   if (opts.interviewType === "resume") {
     if (!text(next.mode) || next.mode === "none") next.mode = "resume_grounding";
     next.required = true;
     next.prompt = prompt || text(next.prompt) || MODE_DEFAULTS.resume_grounding.prompt;
-    next.label = documentLabel(next.label);
+    next.label = label || text(next.label) || MODE_DEFAULTS.resume_grounding.label;
+    next.max_files = opts.maxFiles ?? (typeof next.max_files === "number" ? next.max_files : 1);
     return next;
   }
   if (prompt) {
     next.required = true;
     next.prompt = prompt;
+    if (label) next.label = label;
     if (!text(next.mode) || next.mode === "none") next.mode = "session_evidence";
-    return next;
   }
+  if (opts.maxFiles) next.max_files = opts.maxFiles;
   return next;
 }
