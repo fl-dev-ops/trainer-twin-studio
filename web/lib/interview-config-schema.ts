@@ -7,7 +7,7 @@ export const questionCountsSchema = z.partialRecord(questionTypeSchema, z.number
 
 const sharedFields = {
   schema_version: z.literal(1),
-  follow_ups_per_main_question: z.number().int().min(0).max(3),
+  follow_ups_per_main_question: z.number().int().min(0).max(10),
 };
 
 export const resumeInterviewConfigSchema = z.object({

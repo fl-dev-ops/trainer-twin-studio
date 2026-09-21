@@ -461,7 +461,7 @@ export function AgentEditor(initial: AgentEditorProps) {
                 max={3}
                 value={interviewConfig.follow_ups_per_main_question}
                 onChange={(event) => {
-                  setInterviewConfig({ ...interviewConfig, follow_ups_per_main_question: Math.max(0, Math.min(3, Number(event.target.value) || 0)) });
+                  setInterviewConfig({ ...interviewConfig, follow_ups_per_main_question: Math.max(0, Math.min(10, Number(event.target.value) || 0)) });
                   setDirty(true);
                 }}
               />
