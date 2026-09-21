@@ -1,4 +1,5 @@
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { defineAgent, defineDynamic } from "eve";
 import type { AgentModelOptionsDefinition } from "eve";
 
@@ -10,6 +11,20 @@ export default defineAgent({
         const attributes = (auth?.attributes ?? {}) as Record<string, string | undefined>;
         const requestedModel = attributes.model || process.env.CHAT_AGENT_MODEL || "google/gemini-3.5-flash-lite";
         const sessionId = attributes.sessionId;
+
+        // Groq direct (OpenAI-compatible endpoint) for models prefixed "groq/".
+        // Example: "groq/qwen/qwen3.8-27b" -> https://api.groq.com/openai/v1
+        if (requestedModel.startsWith("groq/")) {
+          const groq = createOpenAICompatible({
+            name: "groq",
+            baseURL: "https://api.groq.com/openai/v1",
+            apiKey: process.env.GROQ_API_KEY,
+          });
+          return {
+            model: groq(requestedModel.slice("groq/".length)),
+            modelContextWindowTokens: 131_042,
+          };
+        }
 
         // If explicitly prefixed with "openrouter/", route via OpenRouter
         if (requestedModel.startsWith("openrouter/")) {
@@ -42,20 +57,22 @@ export default defineAgent({
             },
           };
         } else if (requestedModel.startsWith("openai/gpt-5")) {
-          // OpenAI 5.x reasoning models: minimal effort caps hidden thinking.
-          // (gpt-5-mini rejects "none"; newer gens accept it but "minimal" is
-          // valid across the family and near-free.)
-          // Azure BYOK: if AZURE_OPENAI_* env is set, requests bill against the
-          // Azure subscription instead of gateway credits.
+          // gpt-5-mini rejects "none"; 5.4+ and 5.6+ accept it.
+          const supportsNone = /gpt-5\.[4-9]/.test(requestedModel);
           const azureKey = process.env.AZURE_OPENAI_API_KEY;
           const azureResource = process.env.AZURE_OPENAI_RESOURCE;
           const providerOptions: AgentModelOptionsDefinition["providerOptions"] = {
-            openai: { reasoningEffort: "minimal" },
+            openai: { reasoningEffort: supportsNone ? "none" : "minimal" },
           };
           if (azureKey && azureResource) {
             providerOptions!.gateway = { byok: { azure: [{ apiKey: azureKey, resourceName: azureResource }] } };
           }
           options = { providerOptions };
+        } else if (requestedModel === "alibaba/qwen3.8-27b") {
+          options = { providerOptions: { gateway: { only: ["cerebras"] } } };
+        } else if (requestedModel.startsWith("deepseek/")) {
+          // DeepSeek: pin to deepinfra for fastest inference
+          options = { providerOptions: { gateway: { only: ["deepinfra"] } } };
         }
         if (options) return { model: requestedModel, modelOptions: options };
         return requestedModel;
