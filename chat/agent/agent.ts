@@ -31,6 +31,8 @@ export default defineAgent({
           options = { providerOptions };
         } else if (requestedModel === "alibaba/qwen3.8-27b") {
           options = { providerOptions: { gateway: { only: ["cerebras"] } } };
+        } else if (requestedModel === "openai/gpt-oss-120b") {
+          options = { providerOptions: { gateway: { only: ["groq"] } } };
         } else if (requestedModel.startsWith("deepseek/")) {
           options = { providerOptions: { gateway: { only: ["deepinfra"] } } };
         }
