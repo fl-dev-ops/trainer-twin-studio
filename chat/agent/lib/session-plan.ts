@@ -116,12 +116,20 @@ export function compileSessionPlan(agentData: AgentData): SessionPlanState {
     };
   });
 
-  return {
+  const state: SessionPlanState = {
     currentRound: 0,
     sessionMaximumTurns: positiveInteger(agentData.config?.turns?.maximum, 12),
     closingState: "interviewing",
     rounds,
   };
+
+  // Auto-activate first question of first round
+  const firstRound = rounds[0];
+  if (firstRound) {
+    activateNextQuestion(state, firstRound);
+  }
+
+  return state;
 }
 
 function totalTurns(state: SessionPlanState) {
@@ -153,13 +161,14 @@ function nextAction(state: SessionPlanState) {
   if (state.closingState === "awaiting_confirmation") return { kind: "await_confirmation" as const };
   if (!round) return { kind: "start_closing" as const, reason: "no_rounds" };
 
-  const active = activeQuestion(round);
+  let active = activeQuestion(round);
+  if (!active) {
+    // Auto-activate next pending question if budget allows (defensive self-heal)
+    active = activateNextQuestion(state, round);
+  }
   if (active) return active.followUpsUsed > 0
     ? { kind: "ask_follow_up" as const, questionId: active.id, questionType: active.type }
     : { kind: "pose_main_question" as const, questionId: active.id, questionType: active.type };
-
-  const pending = round.questions.find(({ status }) => status === "pending");
-  if (pending) return { kind: "prepare_next" as const, questionId: pending.id, questionType: pending.type };
 
   const budgetExhausted = round.turnsUsed >= round.maximumTurns || totalTurns(state) >= state.sessionMaximumTurns;
   if ((completionSatisfied(round) && round.turnsUsed >= round.minimumTurns) || budgetExhausted) {
@@ -171,7 +180,7 @@ function nextAction(state: SessionPlanState) {
 
 function activateEvidenceFollowUp(state: SessionPlanState, round: PlanRound) {
   if (
-    completionSatisfied(round) && round.turnsUsed >= round.minimumTurns ||
+    (completionSatisfied(round) && round.turnsUsed >= round.minimumTurns) ||
     round.turnsUsed >= round.maximumTurns ||
     totalTurns(state) >= state.sessionMaximumTurns
   ) return null;
@@ -185,7 +194,6 @@ function activateEvidenceFollowUp(state: SessionPlanState, round: PlanRound) {
 }
 
 export type PlanEvent =
-  | { type: "prepare_next" }
   | { type: "record_answer"; answerStatus: AnswerStatus; evidenceUpdates?: Record<string, EvidenceStatus> }
   | { type: "start_closing" }
   | { type: "learner_question_during_closing" }
@@ -202,13 +210,11 @@ export function advanceSessionPlan(state: SessionPlanState, event: PlanEvent) {
   } else if (event.type === "confirm_end") {
     if (state.closingState !== "awaiting_confirmation") throw new Error("Session is not awaiting confirmation");
     state.closingState = "confirmed";
-  } else if (event.type === "prepare_next") {
-    if (state.closingState !== "interviewing" || !round) throw new Error("Cannot prepare an interview question now");
-    activateNextQuestion(state, round);
   } else if (event.type === "record_answer") {
     if (state.closingState !== "interviewing" || !round) throw new Error("Cannot record an interview answer now");
     for (const [key, status] of Object.entries(event.evidenceUpdates ?? {})) {
       if (!(key in round.evidence)) throw new Error(`Unknown evidence key: ${key}`);
+      if (round.evidence[key] === "sufficient") continue;
       round.evidence[key] = status === "sufficient" && event.answerStatus !== "strong" ? "partial" : status;
     }
 
@@ -238,6 +244,7 @@ export function advanceSessionPlan(state: SessionPlanState, event: PlanEvent) {
     if (nextRound) {
       state.currentRound += 1;
       nextRound.status = "active";
+      // nextAction will auto-activate the first pending question via self-heal
       action = nextAction(state);
     }
   }
@@ -247,6 +254,7 @@ export function advanceSessionPlan(state: SessionPlanState, event: PlanEvent) {
 export function summarizeSessionPlan(state: SessionPlanState) {
   const round = state.rounds[state.currentRound] ?? null;
   const action = nextAction(state);
+  const active = round ? activeQuestion(round) : null;
   return {
     currentRound: state.currentRound,
     currentRoundId: round?.id ?? null,
@@ -254,9 +262,14 @@ export function summarizeSessionPlan(state: SessionPlanState) {
     closingState: state.closingState,
     totalTurnsUsed: totalTurns(state),
     sessionMaximumTurns: state.sessionMaximumTurns,
-    evidence: round?.evidence ?? {},
+    activeQuestion: active ? { id: active.id, type: active.type, followUpsRemaining: active.followUpsMax - active.followUpsUsed } : null,
+    progress: {
+      done: round?.questions.filter((q) => q.status === "done").length ?? 0,
+      active: round?.questions.filter((q) => q.status === "active").length ?? 0,
+      pending: round?.questions.filter((q) => q.status === "pending").length ?? 0,
+    },
+    evidence: Object.fromEntries(Object.entries(round?.evidence ?? {}).filter(([, v]) => v !== "untested")),
     missingCompletionKeys: round?.completionKeys.filter((key) => round.evidence[key] !== "sufficient") ?? [],
-    questions: round?.questions ?? [],
     nextAction: action,
     isComplete: action.kind === "start_closing" || state.closingState !== "interviewing",
   };

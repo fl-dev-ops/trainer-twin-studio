@@ -37,7 +37,7 @@ test("compiles mixed technical quotas into typed TODOs", () => {
   ]);
   assert.equal(plan.rounds[0].minimumTurns, 6);
   assert.equal(plan.rounds[0].maximumTurns, 12);
-  assert.equal(summarizeSessionPlan(plan).nextAction.kind, "prepare_next");
+  assert.equal(summarizeSessionPlan(plan).nextAction.kind, "pose_main_question");
 });
 
 test("allocates session question quotas exactly once across stages", () => {
@@ -65,17 +65,14 @@ test("advances to the next stage before closing", () => {
   });
   const plan = compileSessionPlan(agent);
 
-  advanceSessionPlan(plan, { type: "prepare_next" });
   const result = advanceSessionPlan(plan, { type: "record_answer", answerStatus: "strong" });
   assert.equal(plan.rounds[0].status, "done");
   assert.equal(plan.currentRound, 1);
-  assert.equal(result.nextAction.kind, "prepare_next");
+  assert.equal(result.nextAction.kind, "pose_main_question");
 });
 
 test("uses follow-ups adaptively and advances after a strong answer", () => {
   const plan = compileSessionPlan(technicalAgent());
-  advanceSessionPlan(plan, { type: "prepare_next" });
-  advanceSessionPlan(plan, { type: "prepare_next" });
   assert.equal(summarizeSessionPlan(plan).nextAction.kind, "pose_main_question");
   assert.equal(plan.rounds[0].turnsUsed, 1);
 
@@ -99,7 +96,6 @@ test("uses follow-ups adaptively and advances after a strong answer", () => {
 
 test("does not accept sufficient evidence from a non-strong answer", () => {
   const plan = compileSessionPlan(technicalAgent());
-  advanceSessionPlan(plan, { type: "prepare_next" });
 
   advanceSessionPlan(plan, {
     type: "record_answer",
@@ -111,6 +107,24 @@ test("does not accept sufficient evidence from a non-strong answer", () => {
   assert.equal(summarizeSessionPlan(plan).nextAction.kind, "ask_follow_up");
 });
 
+test("does not downgrade evidence once sufficient", () => {
+  const plan = compileSessionPlan(technicalAgent());
+
+  advanceSessionPlan(plan, {
+    type: "record_answer",
+    answerStatus: "strong",
+    evidenceUpdates: { concept_explanation: "sufficient" },
+  });
+  assert.equal(plan.rounds[0].evidence.concept_explanation, "sufficient");
+
+  advanceSessionPlan(plan, {
+    type: "record_answer",
+    answerStatus: "partial",
+    evidenceUpdates: { concept_explanation: "partial" },
+  });
+  assert.equal(plan.rounds[0].evidence.concept_explanation, "sufficient");
+});
+
 test("uses remaining follow-up budget to close evidence gaps", () => {
   const agent: any = technicalAgent();
   agent.config.interview.question_counts = { verbal: 1 };
@@ -118,7 +132,6 @@ test("uses remaining follow-up budget to close evidence gaps", () => {
   agent.stages[0].config.turns = { minimum: 1, maximum: 3 };
   const plan = compileSessionPlan(agent);
 
-  advanceSessionPlan(plan, { type: "prepare_next" });
   advanceSessionPlan(plan, { type: "record_answer", answerStatus: "strong" });
   assert.equal(summarizeSessionPlan(plan).nextAction.kind, "ask_follow_up");
 
@@ -141,11 +154,9 @@ test("closing state prevents interview questions and requires confirmation", () 
   agent.stages[0].config.evidence.completion_keys = [];
   const plan = compileSessionPlan(agent);
 
-  advanceSessionPlan(plan, { type: "prepare_next" });
   advanceSessionPlan(plan, { type: "record_answer", answerStatus: "strong" });
   advanceSessionPlan(plan, { type: "start_closing" });
   assert.equal(summarizeSessionPlan(plan).nextAction.kind, "await_confirmation");
-  assert.throws(() => advanceSessionPlan(plan, { type: "prepare_next" }));
 
   advanceSessionPlan(plan, { type: "learner_question_during_closing" });
   assert.equal(summarizeSessionPlan(plan).nextAction.kind, "await_confirmation");

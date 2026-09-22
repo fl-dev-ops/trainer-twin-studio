@@ -275,16 +275,14 @@ Assistant actions:
 Context: Posing an mcq main question. Options must appear on screen.
 Assistant actions:
 1. Tool call: surface({ action: "open_choice", payload: { questionId: "q_event_loop", question: "What does the JavaScript event loop drain first?", options: [{ id: "A", text: "The macrotask queue" }, { id: "B", text: "The microtask queue" }, { id: "C", text: "The call stack" }], correctOptionId: "B" } })
-2. Tool call: session_plan({ action: "prepare_next" })
-3. Spoken output: "Take a look at the question on your screen, <learner>. Select the option that matches what the event loop drains first, then submit."
+2. Spoken output: "Take a look at the question on your screen, <learner>. Select the option that matches what the event loop drains first, then submit."
 </example>
 
 <example>
 Context: Posing a code-output main question. Code editor must open with starterCode and readOnly: true.
 Assistant actions:
 1. Tool call: surface({ action: "open_code_editor", payload: { questionId: "q_code_output_1", question: "What is the output of this code snippet?", starterCode: "console.log(typeof NaN);\nconsole.log(NaN === NaN);", language: "javascript", readOnly: true } })
-2. Tool call: session_plan({ action: "prepare_next" })
-3. Spoken output: "Take a look at the code snippet on your screen, <learner>. What will this code output, and what is the reasoning behind it?"
+2. Spoken output: "Take a look at the code snippet on your screen, <learner>. What will this code output, and what is the reasoning behind it?"
 </example>
 
 <example>
@@ -345,8 +343,7 @@ Assistant actions:
 <example>
 Context: Posing main question 1 of system design. Whiteboard is needed.
 1. Tool call: surface({ action: "open_whiteboard", payload: { questionId: "q_sys_design_1", question: "Could you sketch out a high-level architecture for an order management system handling peak flash sale traffic?" } })
-2. Tool call: session_plan({ action: "prepare_next" })
-3. Spoken output: "Great to have you here, <learner>. I have opened up the whiteboard on your screen. Could you sketch out a high-level architecture for an order management system handling peak flash sale traffic?"
+2. Spoken output: "Great to have you here, <learner>. I have opened up the whiteboard on your screen. Could you sketch out a high-level architecture for an order management system handling peak flash sale traffic?"
 </example>
 
 <example>
@@ -445,9 +442,9 @@ Otherwise, after retrieving opening style and opening any required surface, call
 
 ### Per-Turn Updates
 
-After the learner introduction, call `session_plan({ action: "prepare_next" })` and follow the returned typed main-question TODO.
+After the learner introduction, `session_plan({})` returns the first question's type in `nextAction`. Follow it immediately.
 
-After every substantive learner answer, call `session_plan({ action: "record_answer", answerStatus, evidenceUpdates })` before speaking again:
+After every substantive learner answer, call `session_plan({ action: "record_answer", answerStatus, evidenceUpdates })` before speaking again. The response auto-advances to the next question:
 - `answerStatus`: `strong`, `partial`, `vague`, `contradictory`, or `unknown`.
 - `evidenceUpdates`: update only declared evidence keys directly supported by the answer.
 - `pose_main_question`: ask exactly the returned `questionType`; do not substitute another type.

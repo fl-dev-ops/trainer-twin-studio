@@ -39,7 +39,6 @@ describe("TrainerTwin prompt contract", () => {
     contains(instructions, "Session Plan & Progress Tracking (`session_plan`)");
     contains(instructions, "Initialization (on `[OPENING]`");
     contains(instructions, "executable TODO list");
-    contains(instructions, 'action: "prepare_next"');
     contains(instructions, 'action: "record_answer"');
     contains(instructions, 'action: "start_closing"');
     contains(instructions, 'action: "confirm_end"');

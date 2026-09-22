@@ -19,9 +19,7 @@ export default defineTool({
       return executeWorkspaceTool({ ...input, payload: publicPayload }, ctx);
     }
 
-    if (["open_code_editor", "open_whiteboard", "open_pdf", "open_image", "open_presentation", "close_surface"].includes(input.action)) {
-      activeMcqState.update(() => null);
-    }
+    activeMcqState.update(() => null);
     return executeWorkspaceTool(input, ctx);
   },
 });
