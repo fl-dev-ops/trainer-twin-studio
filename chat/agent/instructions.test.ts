@@ -38,13 +38,16 @@ describe("TrainerTwin prompt contract", () => {
   test("tracks session progress with session_plan", () => {
     contains(instructions, "Session Plan & Progress Tracking (`session_plan`)");
     contains(instructions, "Initialization (on `[OPENING]`");
-    contains(instructions, "questionsAsked");
-    contains(instructions, "questionsTarget");
-    contains(instructions, "followUpsUsed");
-    contains(instructions, "followUpsMax");
+    contains(instructions, "executable TODO list");
+    contains(instructions, 'action: "record_answer"');
+    contains(instructions, 'action: "start_closing"');
+    contains(instructions, 'action: "confirm_end"');
     contains(instructions, "finish_session()");
     contains(instructions, "Shall we end the session here?");
     contains(instructions, "asking the candidate to confirm they are ready to end");
+    contains(instructions, "Grade answers strictly by demonstrated correctness");
+    contains(instructions, "A long or fluent answer is not `strong` by itself");
+    contains(instructions, "Mark evidence `sufficient` only when the same answer is `strong`");
   });
 
   test("renders behavioral rules from agent spec", () => {
@@ -66,7 +69,13 @@ describe("TrainerTwin prompt contract", () => {
     contains(instructions, "get_choice_state");
     contains(instructions, "silently call `get_choice_state`");
     contains(instructions, "treat it as their answer even when `submitted` is false");
+    contains(instructions, "correctOptionId");
+    contains(instructions, "Evaluate only from the returned `isCorrect`");
+    contains(instructions, "without revealing the correct option");
     contains(instructions, "highlight_choice");
+    contains(instructions, 'surface({ action: "close_surface" })');
+    contains(instructions, "Never leave a completed visual question active behind a new verbal question");
+    contains(instructions, "Close any active visual question surface before closing feedback");
   });
 
   test("enforces predict-then-run sequence and highlighted recovery for code-output questions", () => {

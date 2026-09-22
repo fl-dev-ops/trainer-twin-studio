@@ -719,6 +719,7 @@ export function SessionView({
           }
         } else if (data.type === "screen_feedback_highlight") {
           if (participant?.kind !== ParticipantKind.AGENT) return;
+          const questionId = typeof data.questionId === "string" ? data.questionId : "";
           const fromLine = Number(data.fromLine);
           const toLine = Number(data.toLine);
           if (
@@ -727,7 +728,7 @@ export function SessionView({
             fromLine >= 1 &&
             toLine >= fromLine
           ) {
-            setSurface((current) => current?.tool === "code"
+            setSurface((current) => current?.tool === "code" && current.questionId === questionId
               ? { ...current, highlightLines: [fromLine, toLine] as [number, number] }
               : current);
           }

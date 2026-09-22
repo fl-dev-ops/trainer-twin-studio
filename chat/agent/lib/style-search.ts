@@ -115,26 +115,11 @@ export async function searchPersonaStyleLocally(
   }
 
   // 1. Embed query directly
-  let queryEmbedding: number[];
-  try {
-    const res = await embed({
-      model: gateway.textEmbeddingModel("openai/text-embedding-3-small"),
-      value: query,
-    });
-    queryEmbedding = res.embedding;
-  } catch {
-    // Fallback if gateway embedding fails: direct OpenRouter embeddings
-    const openrouterKey = process.env.OPENROUTER_API_KEY;
-    const resp = await fetch("https://openrouter.ai/api/v1/embeddings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${openrouterKey}` },
-      body: JSON.stringify({ model: "openai/text-embedding-3-small", input: [query] }),
-    });
-    const json = await resp.json() as { data: { embedding: number[] }[] };
-    queryEmbedding = json.data[0].embedding;
-  }
-
-  const qVec = new Float32Array(queryEmbedding);
+  const res = await embed({
+    model: gateway.textEmbeddingModel("openai/text-embedding-3-small"),
+    value: query,
+  });
+  const qVec = new Float32Array(res.embedding);
 
   // 2. In-memory dot product (~6ms in RAM)
   const scored: { r: CachedLocalRecord; score: number }[] = [];

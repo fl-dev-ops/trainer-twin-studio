@@ -14,19 +14,23 @@ export function transportTool(
     description,
     inputSchema: inputSchema as never,
     async execute(input, ctx) {
-      const orgId = ctx.session.auth.initiator?.principalId ?? ctx.session.auth.current?.principalId;
-      const sessionId = String(ctx.session.auth.current?.attributes?.sessionId ?? "");
-      if (!orgId || !sessionId) throw new Error("No session attached to this conversation");
-      if (ctx.toolName === "finish_session") {
-        return studioFetch(orgId, { action: "finishSession", sessionId });
-      }
-      return studioFetch(orgId, {
-        action: "enqueueWorkspaceCommand",
-        sessionId,
-        callId: ctx.callId,
-        tool: ctx.toolName,
-        input,
-      });
+      return executeWorkspaceTool(input, ctx);
     },
+  });
+}
+
+export async function executeWorkspaceTool(input: unknown, ctx: any) {
+  const orgId = ctx.session.auth.initiator?.principalId ?? ctx.session.auth.current?.principalId;
+  const sessionId = String(ctx.session.auth.current?.attributes?.sessionId ?? "");
+  if (!orgId || !sessionId) throw new Error("No session attached to this conversation");
+  if (ctx.toolName === "finish_session") {
+    return studioFetch(orgId, { action: "finishSession", sessionId });
+  }
+  return studioFetch(orgId, {
+    action: "enqueueWorkspaceCommand",
+    sessionId,
+    callId: ctx.callId,
+    tool: ctx.toolName,
+    input,
   });
 }

@@ -321,12 +321,16 @@ class ScreenFeedbackRuntime:
                 json.dumps(
                     {
                         "type": "screen_feedback_highlight",
+                        "questionId": snapshot.question.get("id"),
                         "fromLine": from_line,
                         "toLine": to_line,
                     }
                 ).encode("utf-8"),
                 reliable=True,
             )
+
+        if not self._snapshot_is_current(snapshot) or not self._can_evaluate():
+            return
 
         feedback = decision.feedback.strip()
         session.say(feedback, allow_interruptions=True, add_to_chat_ctx=False)
