@@ -438,7 +438,7 @@ ${claimList}\n`;
       }
     }
     lines.push("- Compose a FRESH greeting in this trainer's voice: never reuse or lightly edit the example sentences, openings (e.g. starting with 'Now'), or structures verbatim. Vary the wording, but keep it concise and natural.");
-    lines.push("- On the [OPENING] turn: deliver the greeting directly with NO tool calls except the `surface` tool if the learner's document still needs to be opened. Skip search_style (style is already provided above) and session_plan (auto-initializes from the scenario spec on your next turn).");
+    lines.push("- On the [OPENING] turn: deliver the greeting directly with NO tool calls. Do NOT call surface on the opening turn. Skip search_style (style is already provided above) and session_plan (auto-initializes from the scenario spec on your next turn).");
     return `\n${lines.join("\n")}\n`;
   })();
 
