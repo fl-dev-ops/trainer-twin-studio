@@ -9,7 +9,7 @@
     "build": "eve build",
     "dev": "eve dev",
     "start": "eve start",
-    "test": "bun test agent/lib/session-plan.test.ts agent/lib/mcq-state.test.ts && node --test agent/instructions.test.ts",
+    "test": "bun test tests/",
     "typecheck": "tsc"
   },
   "dependencies": {
