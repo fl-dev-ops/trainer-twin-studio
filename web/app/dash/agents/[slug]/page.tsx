@@ -39,18 +39,19 @@ export default async function RolePlayPreviewPage({
         status: true,
         assignedAt: true,
         expiresAt: true,
+        recipientEmail: true,
         member: { select: { user: { select: { name: true, email: true } } } },
       },
     }),
   ]);
 
-  const assignmentSummaries = assignments.map(({ id, status, assignedAt, expiresAt, member }) => ({
+  const assignmentSummaries = assignments.map(({ id, status, assignedAt, expiresAt, recipientEmail, member }) => ({
     id,
     status,
     assignedAt: assignedAt.toISOString(),
     expiresAt: expiresAt.toISOString(),
-    userName: member.user.name || "Unnamed User",
-    userEmail: member.user.email,
+    userName: member?.user.name || recipientEmail,
+    userEmail: recipientEmail,
   }));
 
   const availableUsers: OrganizationUser[] = members.map((member) => ({

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { HomeRedirect } from "@/components/session/home-redirect";
 import { SessionView } from "@/components/session-view";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { assignmentMatchesUser } from "@/lib/assignments";
 import { signInUrl } from "@/lib/base-domain";
 import { db } from "@/lib/db";
 import { resolveSessionUser } from "@/lib/session-user";
@@ -23,6 +24,7 @@ export default async function SharedSessionPage({ params }: { params: Promise<{ 
       orgId: true,
       status: true,
       expiresAt: true,
+      recipientEmail: true,
       member: { select: { userId: true } },
       deployment: {
         select: {
@@ -39,7 +41,7 @@ export default async function SharedSessionPage({ params }: { params: Promise<{ 
     : false;
   const usable = assignment
     && assignment.orgId === org?.id
-    && assignment.member.userId === user.id
+    && assignmentMatchesUser(assignment, user)
     && assignment.status === "pending"
     && !spent
     && assignment.expiresAt > new Date();

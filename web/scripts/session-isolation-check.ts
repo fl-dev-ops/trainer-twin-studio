@@ -12,7 +12,7 @@ const agent = await db.agent.findFirst({
 assert(agent?.orgId, "expected one configured agent");
 const members = await db.member.findMany({
   where: { organizationId: agent.orgId },
-  select: { id: true, userId: true },
+  select: { id: true, userId: true, user: { select: { email: true } } },
   take: 2,
 });
 assert(members.length >= 2, "expected two members for the isolation check");
@@ -22,6 +22,7 @@ const assignment = await db.rolePlayAssignment.create({
     orgId: agent.orgId,
     deploymentId: deployment.id,
     memberId: members[0].id,
+    recipientEmail: members[0].user.email,
     assignedByUserId: members[0].userId,
     shareCode: newAssignmentShareCode(),
     expiresAt: assignmentExpiresAt(),

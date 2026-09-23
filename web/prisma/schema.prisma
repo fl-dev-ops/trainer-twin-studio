@@ -509,7 +509,8 @@ model RolePlayAssignment {
   id               String    @id @default(cuid())
   orgId            String
   deploymentId     String
-  memberId         String
+  memberId         String?
+  recipientEmail   String
   assignedByUserId String
   shareCode        String    @unique
   mode             String    @default("voice") // voice | chat
@@ -520,10 +521,11 @@ model RolePlayAssignment {
 
   organization Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
   deployment   Deployment         @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
-  member       Member             @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  member       Member?            @relation(fields: [memberId], references: [id], onDelete: Cascade)
   sessions     InterviewSession[]
 
   @@unique([deploymentId, memberId])
+  @@index([deploymentId, recipientEmail])
   @@index([orgId, memberId])
   @@index([shareCode, status])
 }

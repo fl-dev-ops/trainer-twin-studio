@@ -8,9 +8,10 @@ import { contextUploadFromAgentData } from "@/lib/context-upload";
 import { isApiError, requireExternalApi } from "@/lib/external-api";
 
 const updateSchema = z.object({
+  email: z.string().trim().toLowerCase().email().max(320).optional(),
   userId: z.string().min(1).optional(),
   scenario: z.string().regex(/^[a-z0-9][a-z0-9._-]*$/i).optional(),
-}).strict().refine((value) => value.userId || value.scenario, "No changes supplied");
+}).strict().refine((value) => value.email || value.userId || value.scenario, "No changes supplied");
 type Params = { params: Promise<{ id: string }> };
 
 function practiceUrl(orgSlug: string, shareCode: string) {
@@ -28,6 +29,7 @@ export async function GET(request: Request, { params }: Params) {
       assignedAt: true,
       shareCode: true,
       status: true,
+      recipientEmail: true,
       member: { select: { user: { select: { id: true, name: true, email: true } } } },
       deployment: { select: { agent: { select: { slug: true, name: true, version: true, visibility: true } } } },
     },
@@ -38,7 +40,7 @@ export async function GET(request: Request, { params }: Params) {
       id: assignment.id,
       assignedAt: assignment.assignedAt,
       status: assignment.status,
-      user: assignment.member.user,
+      user: assignment.member?.user ?? { id: null, name: null, email: assignment.recipientEmail },
       scenario: assignment.deployment.agent,
       practiceUrl: practiceUrl(api.org.slug, assignment.shareCode),
     },
@@ -49,24 +51,21 @@ export async function PATCH(request: Request, { params }: Params) {
   const api = await requireExternalApi(request, "assignments", "write");
   if (isApiError(api)) return api;
   const parsed = updateSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return Response.json({ error: "Supply a userId or scenario" }, { status: 400 });
+  if (!parsed.success) return Response.json({ error: "Supply an email, userId, or scenario" }, { status: 400 });
   const { id } = await params;
   const current = await db.rolePlayAssignment.findFirst({
     where: { id, orgId: api.org.id },
-    select: { memberId: true, deploymentId: true, assignedAt: true, shareCode: true, status: true },
+    select: { recipientEmail: true, deploymentId: true, assignedAt: true, shareCode: true, status: true },
   });
   if (!current) return Response.json({ error: "Assignment not found" }, { status: 404 });
 
-  const [member, agent, trainer] = await Promise.all([
+  const [user, agent, trainer] = await Promise.all([
     parsed.data.userId
-      ? db.member.findFirst({
-          where: { organizationId: api.org.id, userId: parsed.data.userId, role: "member" },
-          select: { id: true, user: { select: { id: true, name: true, email: true } } },
+      ? db.user.findUnique({
+          where: { id: parsed.data.userId },
+          select: { id: true, name: true, email: true },
         })
-      : db.member.findUnique({
-          where: { id: current.memberId },
-          select: { id: true, user: { select: { id: true, name: true, email: true } } },
-        }),
+      : null,
     parsed.data.scenario
       ? db.agent.findFirst({
           where: { orgId: api.org.id, slug: parsed.data.scenario },
@@ -85,13 +84,14 @@ export async function PATCH(request: Request, { params }: Params) {
       select: { userId: true, user: { select: { name: true } } },
     }),
   ]);
-  if (!member) return Response.json({ error: "User not found" }, { status: 404 });
+  if (parsed.data.userId && !user) return Response.json({ error: "User not found" }, { status: 404 });
   if (!agent) return Response.json({ error: "Scenario not found" }, { status: 404 });
   if (!trainer) return Response.json({ error: "API key creator is no longer an organization trainer" }, { status: 403 });
+  const recipientEmail = parsed.data.email ?? user?.email.toLowerCase() ?? current.recipientEmail;
   const deployment = await ensureDeployment(api.org.id, agent.id);
-  if (member.id === current.memberId && deployment.id === current.deploymentId) {
+  if (recipientEmail === current.recipientEmail && deployment.id === current.deploymentId) {
     return Response.json({
-      assignment: { id, assignedAt: current.assignedAt, userId: member.user.id, scenario: agent.slug },
+      assignment: { id, assignedAt: current.assignedAt, email: recipientEmail, userId: user?.id ?? null, scenario: agent.slug },
       practiceUrl: practiceUrl(api.org.slug, current.shareCode),
       changed: false,
     });
@@ -104,7 +104,8 @@ export async function PATCH(request: Request, { params }: Params) {
     const assignment = await db.rolePlayAssignment.update({
       where: { id },
       data: {
-        memberId: member.id,
+        memberId: null,
+        recipientEmail,
         deploymentId: deployment.id,
         assignedByUserId: trainer.userId,
         assignedAt: new Date(),
@@ -122,8 +123,8 @@ export async function PATCH(request: Request, { params }: Params) {
       ? { label: upload.label, prompt: upload.prompt }
       : null;
     const delivery = await sendRolePlayAssignmentEmail({
-      to: member.user.email,
-      userName: member.user.name,
+      to: recipientEmail,
+      userName: user?.name,
       rolePlayName: agent.name,
       rolePlayObjective: typeof data?.objective === "string" ? data.objective : undefined,
       practiceUrl: url,
@@ -131,14 +132,14 @@ export async function PATCH(request: Request, { params }: Params) {
       requiredArtifact,
     });
     return Response.json({
-      assignment: { ...assignment, userId: member.user.id, scenario: agent.slug },
+      assignment: { ...assignment, email: recipientEmail, userId: user?.id ?? null, scenario: agent.slug },
       practiceUrl: url,
       changed: true,
       emailSent: delivery.success,
     });
   } catch (error) {
     if (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") {
-      return Response.json({ error: "That user already has this scenario assigned" }, { status: 409 });
+      return Response.json({ error: "That email already has this scenario assigned" }, { status: 409 });
     }
     throw error;
   }

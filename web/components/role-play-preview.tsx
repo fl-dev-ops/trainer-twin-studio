@@ -268,22 +268,20 @@ export function RolePlayPreview({
       );
       const result = await response.json().catch(() => null) as {
         added?: number;
-        invited?: number;
         resent?: number;
         skipped?: number;
         emailFailures?: number;
         error?: string;
       } | null;
       if (!response.ok || !result || result.error) {
-        throw new Error(result?.error ?? "Invites could not be sent");
+        throw new Error(result?.error ?? "Practice links could not be sent");
       }
 
       setBadges([]);
       setDraft("");
       const parts: string[] = [];
       if (result.added) parts.push(`${result.added} learner${result.added === 1 ? "" : "s"} assigned`);
-      if (result.invited) parts.push(`${result.invited} new invite${result.invited === 1 ? "" : "s"} sent`);
-      if (result.resent) parts.push(`${result.resent} invite${result.resent === 1 ? "" : "s"} resent`);
+      if (result.resent) parts.push(`${result.resent} practice link${result.resent === 1 ? "" : "s"} resent`);
       if (result.skipped) parts.push(`${result.skipped} skipped`);
       if (parts.length === 0) {
         toast.info("Nothing to send");
@@ -294,7 +292,7 @@ export function RolePlayPreview({
       }
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Invites could not be sent");
+      toast.error(error instanceof Error ? error.message : "Practice links could not be sent");
     } finally {
       setSaving(false);
     }
@@ -313,12 +311,12 @@ export function RolePlayPreview({
       );
       const result = await response.json().catch(() => null) as { error?: string } | null;
       if (!response.ok) {
-        throw new Error(result?.error ?? "Invite could not be removed");
+        throw new Error(result?.error ?? "Assignment could not be removed");
       }
-      toast.success("Invite removed");
+      toast.success("Assignment removed");
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Invite could not be removed");
+      toast.error(error instanceof Error ? error.message : "Assignment could not be removed");
     } finally {
       setRemovingId(null);
     }
@@ -457,7 +455,7 @@ export function RolePlayPreview({
                 </div>
                   {assignments.length === 0 ? (
                     <p className="py-8 text-center text-xs text-muted-foreground">
-                      No assignments yet. Add emails on the right to send invites.
+                      No assignments yet. Add emails on the right to send practice links.
                     </p>
                   ) : visibleAssignments.length === 0 ? (
                     <p className="py-8 text-center text-xs text-muted-foreground">
@@ -489,8 +487,8 @@ export function RolePlayPreview({
                               {assignment.status === "pending" && (
                                 <button
                                   type="button"
-                                  aria-label={`Remove invite for ${assignment.userEmail}`}
-                                  title="Remove invite"
+                                  aria-label={`Remove assignment for ${assignment.userEmail}`}
+                                  title="Remove assignment"
                                   disabled={removingId === assignment.id}
                                   className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
                                   onClick={() => removeAssignment(assignment.id)}
@@ -510,7 +508,7 @@ export function RolePlayPreview({
                 <CardHeader>
                   <CardTitle>New assignment</CardTitle>
                   <CardDescription>
-                    Comma-separated emails. New learners get an invite to join first.
+                    Comma-separated emails. Each learner receives their practice link.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -553,7 +551,7 @@ export function RolePlayPreview({
                       pendingSelected.length > 0 ? setConfirmOpen(true) : submit()
                     }
                   >
-                    <Send data-icon="inline-start" /> {saving ? "Sending…" : "Send invites"}
+                    <Send data-icon="inline-start" /> {saving ? "Sending…" : "Send practice links"}
                   </Button>
                 </CardContent>
               </Card>
@@ -565,12 +563,12 @@ export function RolePlayPreview({
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Already invited</DialogTitle>
+            <DialogTitle>Already assigned</DialogTitle>
             <DialogDescription>
               {pendingSelected.length === 1
-                ? "This learner already has a pending invite that hasn't been started."
-                : `${pendingSelected.length} learners already have pending invites that haven't been started.`}{" "}
-              Send the invite email again?
+                ? "This learner already has a pending assignment that hasn't been started."
+                : `${pendingSelected.length} learners already have pending assignments that haven't been started.`}{" "}
+              Send the practice link again?
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-1">
@@ -609,7 +607,7 @@ export function RolePlayPreview({
                   submit("send");
                 }}
               >
-                {saving ? "Sending…" : "Yes, send invite"}
+                {saving ? "Sending…" : "Yes, send link"}
               </Button>
             </div>
           </DialogFooter>

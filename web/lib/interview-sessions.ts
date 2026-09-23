@@ -1,4 +1,5 @@
 import { createHash, createHmac, randomBytes } from "node:crypto";
+import { assignmentMatchesUser } from "@/lib/assignments";
 import { db } from "@/lib/db";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { ensureDeployment, type DeliveryMode } from "@/lib/deployments";
@@ -180,6 +181,7 @@ export async function createAssignedSession(input: {
 export async function activateSession(input: {
   orgId: string;
   userId: string;
+  userEmail?: string;
   shareCode?: string;
   agentSlug?: string;
   deploymentKey?: string;
@@ -203,7 +205,11 @@ export async function activateSession(input: {
         deployment: { include: { agent: { select: { id: true } } } },
       },
     });
-    if (!found || found.member.userId !== input.userId || found.status === "cancelled") return null;
+    if (
+      !found
+      || !assignmentMatchesUser(found, { id: input.userId, email: input.userEmail ?? "" })
+      || found.status === "cancelled"
+    ) return null;
     if (found.expiresAt <= new Date() && found.status === "pending") {
       await db.rolePlayAssignment.update({ where: { id: found.id }, data: { status: "expired" } });
       return null;

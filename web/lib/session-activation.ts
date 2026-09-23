@@ -9,6 +9,7 @@ export async function activateInterviewRuntime(input: {
   orgId: string;
   userId: string;
   userName?: string;
+  userEmail?: string;
   shareCode?: string;
   agentSlug?: string;
   deploymentKey?: string;

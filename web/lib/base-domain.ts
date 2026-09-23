@@ -4,6 +4,19 @@ export function portalSlug(hostHeader: string) {
   return hostHeader.split(":")[0].split(".")[0];
 }
 
+export function safeFamilyRedirect(value?: string) {
+  if (!value) return null;
+  try {
+    const target = new URL(value);
+    return target.protocol === "https:"
+      && (target.hostname === BASE_DOMAIN || target.hostname.endsWith(`.${BASE_DOMAIN}`))
+      ? target.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export function signInUrl(hostHeader: string, returnPath?: string) {
   const port = hostHeader.includes(":") ? `:${hostHeader.split(":")[1]}` : "";
   const url = new URL(`https://auth.${BASE_DOMAIN}${port}/sign-in`);

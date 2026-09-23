@@ -58,13 +58,14 @@ async function main() {
   const assignment = existing
     ? await db.rolePlayAssignment.update({
         where: { id: existing.id },
-        data: { shareCode, status: "pending", assignedAt: new Date(), expiresAt, usedAt: null },
+        data: { recipientEmail: user.email.toLowerCase(), shareCode, status: "pending", assignedAt: new Date(), expiresAt, usedAt: null },
       })
     : await db.rolePlayAssignment.create({
         data: {
           orgId: org.id,
           deploymentId: deployment.id,
           memberId: member.id,
+          recipientEmail: user.email.toLowerCase(),
           assignedByUserId: user.id,
           shareCode,
           status: "pending",

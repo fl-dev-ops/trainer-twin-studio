@@ -22,17 +22,20 @@ export async function POST(req: Request) {
   if (!body || (!body.shareCode && !body.agentSlug && !body.deploymentKey)) {
     return NextResponse.json({ error: "shareCode, agentSlug, or deploymentKey is required" }, { status: 400 });
   }
-  const member = await db.member.findFirst({
-    where: { organizationId: org.id, userId: user.id },
-    select: { id: true },
-  });
-  if (!member) return NextResponse.json({ error: "Invalid session URL" }, { status: 403 });
+  if (!body.shareCode) {
+    const member = await db.member.findFirst({
+      where: { organizationId: org.id, userId: user.id },
+      select: { id: true },
+    });
+    if (!member) return NextResponse.json({ error: "Invalid session URL" }, { status: 403 });
+  }
 
   try {
     const activation = await activateInterviewRuntime({
       orgId: org.id,
       userId: user.id,
       userName: user.name,
+      userEmail: user.email,
       shareCode: typeof body.shareCode === "string" ? body.shareCode : undefined,
       agentSlug: typeof body.agentSlug === "string" ? body.agentSlug : undefined,
       deploymentKey: typeof body.deploymentKey === "string" ? body.deploymentKey : undefined,

@@ -37,10 +37,10 @@ Starting a direct session abandons the learner's other active sessions for the s
 
 Scenario and persona configuration remains dashboard-only. Assignment calls reference an already published scenario by slug.
 
-- `GET /api/v1/assignments?userId=…&scenario=slug&limit=50&offset=0`
-- `POST /api/v1/assignments` with `{ "userId": "…", "scenario": "scenario-slug" }` — idempotent; sends email only when newly assigned; returns `practiceUrl` (the learner's direct practice link)
+- `GET /api/v1/assignments?email=…&scenario=slug&limit=50&offset=0` (`userId` remains supported)
+- `POST /api/v1/assignments` with `{ "email": "…", "scenario": "scenario-slug" }` (`userId` remains supported) — idempotent; sends the practice link only when newly assigned
 - `GET /api/v1/assignments/:id` — includes `status` (`pending`/`used`/`expired`/`cancelled`) and `practiceUrl`
-- `PATCH /api/v1/assignments/:id` with `{ "userId": "…" }`, `{ "scenario": "…" }`, or both — returns a fresh `practiceUrl`
+- `PATCH /api/v1/assignments/:id` with `{ "email": "…" }`, `{ "userId": "…" }`, `{ "scenario": "…" }`, or a combination — returns a fresh `practiceUrl` when changed
 - `DELETE /api/v1/assignments/:id`
 
 JSON errors use `{ "error": "…" }` with standard HTTP status codes. Assignment and invitation email failures do not roll back persisted changes.
