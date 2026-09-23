@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
+import { PostHogTracker } from "@/components/posthog/tracker";
+import { Suspense } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
@@ -28,6 +30,9 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
           {children}
         </ThemeProvider>
         <Toaster />
+        <Suspense>
+          <PostHogTracker />
+        </Suspense>
       </body>
     </html>
   );
