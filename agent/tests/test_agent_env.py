@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import logging
 from types import SimpleNamespace
 
 import pytest
@@ -57,6 +59,77 @@ async def test_inactivity_nudge_only_runs_after_opening():
     session.callback(SimpleNamespace(new_state="away"))
     await asyncio.sleep(0)
     assert session.replies == [agent.USER_INACTIVE_SIGNAL]
+
+
+def test_latency_logging_emits_structured_turn_metrics(caplog):
+    class Session:
+        def __init__(self):
+            self.callbacks = {}
+
+        def on(self, event):
+            def register(callback):
+                self.callbacks[event] = callback
+                return callback
+            return register
+
+    session = Session()
+    agent.register_latency_logging(session, session_id="s1", room_name="room-1")
+
+    with caplog.at_level(logging.INFO, logger="trainertwin_agent"):
+        session.callbacks["conversation_item_added"](
+            SimpleNamespace(
+                item=SimpleNamespace(
+                    type="message",
+                    id="user-1",
+                    role="user",
+                    metrics={
+                        "transcription_delay": 0.12,
+                        "end_of_turn_delay": 0.65,
+                        "stt_metadata": {"model_provider": "deepgram", "model_name": "flux-general-en"},
+                    },
+                )
+            )
+        )
+        session.callbacks["conversation_item_added"](
+            SimpleNamespace(
+                item=SimpleNamespace(
+                    type="message",
+                    id="assistant-1",
+                    role="assistant",
+                    metrics={
+                        "llm_node_ttft": 1.25,
+                        "tts_node_ttfb": 0.18,
+                        "playback_latency": 0.03,
+                        "e2e_latency": 2.23,
+                        "llm_metadata": {"model_provider": "groq", "model_name": "gpt-oss-120b"},
+                        "tts_metadata": {"model_provider": "sarvam", "model_name": "bulbul:v3"},
+                    },
+                )
+            )
+        )
+
+    records = [record.message for record in caplog.records if record.message.startswith("[voice-latency]")]
+    assert len(records) == 2
+    user = json.loads(records[0].removeprefix("[voice-latency] "))
+    assistant = json.loads(records[1].removeprefix("[voice-latency] "))
+    assert user == {
+        "sessionId": "s1",
+        "roomName": "room-1",
+        "turnIndex": 1,
+        "messageId": "user-1",
+        "role": "user",
+        "transcriptionDelayMs": 120.0,
+        "endOfTurnDelayMs": 650.0,
+        "sttProvider": "deepgram",
+        "sttModel": "flux-general-en",
+    }
+    assert assistant["turnIndex"] == 1
+    assert assistant["llmTtftMs"] == 1250.0
+    assert assistant["ttsTtfbMs"] == 180.0
+    assert assistant["playbackLatencyMs"] == 30.0
+    assert assistant["e2eLatencyMs"] == 2230.0
+    assert assistant["llmProvider"] == "groq"
+    assert assistant["ttsProvider"] == "sarvam"
 
 
 def test_on_session_end_sends_transcript(monkeypatch):
