@@ -176,6 +176,54 @@ def register_inactivity_nudge(session: Any, agent: TrainerAgent) -> None:
         asyncio.create_task(session.generate_reply(instructions=USER_INACTIVE_SIGNAL))
 
 
+def register_latency_logging(session: Any, *, session_id: str, room_name: str) -> None:
+    turn_index = 0
+
+    @session.on("conversation_item_added")
+    def on_conversation_item_added(event: Any) -> None:
+        nonlocal turn_index
+        item = event.item
+        if getattr(item, "type", None) != "message":
+            return
+
+        metrics = getattr(item, "metrics", None) or {}
+        if not metrics:
+            return
+
+        role = getattr(item, "role", "unknown")
+        if role == "user":
+            turn_index += 1
+
+        payload: dict[str, Any] = {
+            "sessionId": session_id,
+            "roomName": room_name,
+            "turnIndex": turn_index,
+            "messageId": getattr(item, "id", None),
+            "role": role,
+        }
+        for source, target in (
+            ("transcription_delay", "transcriptionDelayMs"),
+            ("end_of_turn_delay", "endOfTurnDelayMs"),
+            ("on_user_turn_completed_delay", "userTurnCallbackDelayMs"),
+            ("llm_node_ttft", "llmTtftMs"),
+            ("tts_node_ttfb", "ttsTtfbMs"),
+            ("playback_latency", "playbackLatencyMs"),
+            ("e2e_latency", "e2eLatencyMs"),
+        ):
+            value = metrics.get(source)
+            if isinstance(value, (int, float)):
+                payload[target] = round(value * 1000, 1)
+
+        for source, prefix in (("stt_metadata", "stt"), ("llm_metadata", "llm"), ("tts_metadata", "tts")):
+            metadata = metrics.get(source) or {}
+            if metadata.get("model_provider"):
+                payload[f"{prefix}Provider"] = metadata["model_provider"]
+            if metadata.get("model_name"):
+                payload[f"{prefix}Model"] = metadata["model_name"]
+
+        logger.info("[voice-latency] %s", json.dumps(payload, separators=(",", ":")))
+
+
 async def entrypoint(ctx: agents.JobContext) -> None:
     raw_meta = ctx.job.metadata or ctx.job.room.metadata or ctx.room.metadata
     metadata = parse_metadata(raw_meta)
@@ -408,6 +456,7 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         pending_input=pending_chat_messages,
     )
     register_inactivity_nudge(session, agent)
+    register_latency_logging(session, session_id=session_id, room_name=ctx.room.name)
     screen_feedback = ScreenFeedbackRuntime(
         room=ctx.room,
         participant_identity=participant_identity,

@@ -32,6 +32,7 @@ dev server — see `chat/README.md`; production is `https://chat.trainertwin.com
 | `simulate.py` | **Trainer fidelity** — DeepEval `ConversationSimulator` drives synthetic learners through published scenarios; scores fidelity / completeness / role adherence against the trainer's analyzed persona sources |
 | `behaviors.py` | **Behaviour ladder** — 30-turn imperfect-candidate sim (false claims, hesitation, hints, whiteboard/editor requests) testing phase-locked retrieval and grounding |
 | `latency.py` | 30-turn latency profile (wall, TTFT, word count, phase progression) |
+| `voice_latency_report.py` | Human voice-session report from structured `[voice-latency]` agent logs |
 | `concurrency.py` | 5 parallel sessions × 16 turns: saturation, p90 latency, tool usage |
 | `models_ab.py` | Model bake-off on standardized turns (`BENCH_MODELS` env list) |
 | `test_simulate.py` | Unit tests for pure logic (`deepeval test run test_simulate.py` or `uv run pytest`) |
@@ -56,3 +57,13 @@ protocol), `scenarios.py` (read-only scenario + persona source loading),
 
 Reports contain the simulated transcripts plus `Trainer Fidelity`,
 `Conversation Completeness`, and `Role Adherence` scores.
+
+To summarize logs from instrumented human voice sessions:
+
+```bash
+uv run python voice_latency_report.py agent.log --label baseline-v1 \
+  --output results/voice-baseline-v1.json
+```
+
+See `plans/voice-latency-experiments.md` for the baseline metadata and
+one-variable-at-a-time experiment order.
