@@ -6,7 +6,7 @@ import { finalizeInterviewSession, type SessionEndStatus } from "@/lib/interview
 export async function closeInterviewSession(
   sessionId: string,
   requested: SessionEndStatus,
-  data: { transcript?: unknown; evidence?: unknown; s3AudioKey?: string } = {},
+  data: { transcript?: unknown; evidence?: unknown } = {},
 ) {
   const session = await db.interviewSession.findUnique({
     where: { id: sessionId },
@@ -14,7 +14,6 @@ export async function closeInterviewSession(
       id: true,
       livekitRoom: true,
       livekitDispatchId: true,
-      audioEgressId: true,
       videoEgressId: true,
     },
   });
@@ -22,7 +21,6 @@ export async function closeInterviewSession(
   await closeLiveKitSession({
     room: session.livekitRoom,
     dispatchId: session.livekitDispatchId,
-    audioEgressId: session.audioEgressId,
     videoEgressId: session.videoEgressId,
   });
   return finalizeInterviewSession({
@@ -30,6 +28,5 @@ export async function closeInterviewSession(
     requestedStatus: requested,
     transcript: data.transcript as Prisma.InputJsonValue | undefined,
     evidence: data.evidence as Prisma.InputJsonValue | undefined,
-    s3AudioKey: data.s3AudioKey,
   });
 }

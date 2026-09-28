@@ -4,6 +4,7 @@ import {
   EgressClient,
   EncodedFileOutput,
   EncodedFileType,
+  EncodingOptionsPreset,
   RoomServiceClient,
   S3Upload,
 } from "livekit-server-sdk";
@@ -45,7 +46,6 @@ function recordingOutput(orgId: string, room: string) {
   if (!bucket) return null;
   const region = (process.env.AWS_REGION || "ap-south-1").trim();
   const prefix = (process.env.S3_BASE_PREFIX || "trainertwin-dev").replace(/^\/+|\/+$/g, "");
-  const audioKey = `${prefix}/${orgId}/recordings/${room}/audio.mp4`;
   const videoKey = `${prefix}/${orgId}/recordings/${room}/video.mp4`;
   const s3Upload = new S3Upload({
     accessKey: process.env.AWS_ACCESS_KEY_ID || "",
@@ -55,16 +55,7 @@ function recordingOutput(orgId: string, room: string) {
     bucket,
   });
   return {
-    audioKey,
     videoKey,
-    audioOutput: new EncodedFileOutput({
-      fileType: EncodedFileType.MP4,
-      filepath: audioKey,
-      output: {
-        case: "s3",
-        value: s3Upload,
-      },
-    }),
     videoOutput: new EncodedFileOutput({
       fileType: EncodedFileType.MP4,
       filepath: videoKey,
@@ -107,32 +98,26 @@ export async function activateLiveKitSession(input: {
   const dispatch = existingDispatch ?? await dispatches.createDispatch(room, config.agentName, { metadata });
 
   const recording = recordingOutput(input.orgId, room);
-  let audioEgressId: string | null = null;
   let videoEgressId: string | null = null;
   if (recording) {
     const activeList = await egress.listEgress(room).catch(() => []);
-    const isAudioEgress = (item: (typeof activeList)[number]) =>
-      item.request?.case === "roomComposite" ? Boolean(item.request.value.audioOnly) : false;
-
-    const activeAudio = activeList.find(
-      (item) => (item.status === 0 || item.status === 1 || item.status === 2) && isAudioEgress(item),
-    );
     const activeVideo = activeList.find(
-      (item) => (item.status === 0 || item.status === 1 || item.status === 2) && !isAudioEgress(item),
+      (item) => item.status === 0 || item.status === 1 || item.status === 2,
     );
 
-    // Composite video egress captures shared screen (system design, code, debugging) + speaker tiles + audio
+    // Composite egress captures shared screen (system design, code, debugging) + speaker tiles + mixed audio.
+    // 1080p30 was the best of the three presets tried: 720p30 (server default) is soft on small text, and
+    // 1080p60 duplicated frames because screen share publishes at 15fps while cutting per-pixel bitrate
+    // to 2.89 vs 2.17 here. Keep this at 30 unless the source framerate ever goes up.
+    const startedAt = Date.now();
     try {
-      videoEgressId = activeVideo?.egressId ?? (await egress.startRoomCompositeEgress(room, recording.videoOutput, { audioOnly: false })).egressId;
+      videoEgressId = activeVideo?.egressId ?? (await egress.startRoomCompositeEgress(room, recording.videoOutput, {
+        audioOnly: false,
+        encodingOptions: EncodingOptionsPreset.H264_1080P_30,
+      })).egressId;
+      console.log(`[EXT-API:livekit] composite egress ready room=${room} id=${videoEgressId} preset=H264_1080P_30 elapsed_ms=${Date.now() - startedAt}`);
     } catch (err) {
       console.warn("Could not start video egress:", err);
-    }
-
-    // Audio egress as supplementary/fallback
-    try {
-      audioEgressId = activeAudio?.egressId ?? (await egress.startRoomCompositeEgress(room, recording.audioOutput, { audioOnly: true })).egressId;
-    } catch (err) {
-      console.warn("Could not start audio egress:", err);
     }
   }
 
@@ -146,9 +131,7 @@ export async function activateLiveKitSession(input: {
     token: await token.toJwt(),
     room,
     dispatchId: dispatch.id,
-    audioEgressId,
     videoEgressId,
-    audioS3Key: recording?.audioKey ?? null,
     videoS3Key: recording?.videoKey ?? null,
   };
 }
@@ -156,14 +139,11 @@ export async function activateLiveKitSession(input: {
 export async function closeLiveKitSession(input: {
   room: string | null;
   dispatchId?: string | null;
-  audioEgressId?: string | null;
   videoEgressId?: string | null;
 }) {
   if (!input.room) return;
   const { rooms, dispatches, egress } = clients();
-  for (const egressId of [input.audioEgressId, input.videoEgressId].filter((id): id is string => Boolean(id))) {
-    await egress.stopEgress(egressId).catch(() => {});
-  }
+  if (input.videoEgressId) await egress.stopEgress(input.videoEgressId).catch(() => {});
   if (input.dispatchId) await dispatches.deleteDispatch(input.dispatchId, input.room).catch(() => {});
   await rooms.deleteRoom(input.room).catch(() => {});
 }

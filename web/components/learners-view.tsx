@@ -44,7 +44,6 @@ export type LearnerSessionItem = {
   summaryTags: string[];
   keyMoments: KeyMoment[];
   focusNextTime: string;
-  audioUrl?: string;
   videoUrl?: string;
   report?: SessionReport;
 };
@@ -120,14 +119,12 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
   const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [mediaMode, setMediaMode] = useState<"video" | "audio">("video");
   const [videoState, setVideoState] = useState<{ sessionId: string; status: "loading" | "ready" | "unavailable" }>(() => ({
     sessionId: learners[0]?.sessions[0]?.id ?? "",
     status: learners[0]?.sessions[0]?.videoUrl ? "loading" : "unavailable",
   }));
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const playerContainerRef = useRef<HTMLDivElement | null>(null);
 
   const selectedLearner =
@@ -150,7 +147,6 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
     : videoState.sessionId === selectedSession.id ? videoState.status : "loading";
   const isResolvingVideo = videoStatus === "loading";
   const hasVideo = videoStatus === "ready";
-  const activeMedia = mediaMode === "video" && hasVideo ? "video" : "audio";
 
   const toggleLearnerExpand = (id: string) => {
     setExpandedLearnerIds((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -163,21 +159,16 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
       videoRef.current.pause();
       videoRef.current.currentTime = 0;
     }
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-    }
     setIsPlaying(false);
     setCurrentTime(0);
     setDuration(0);
     setVideoState({ sessionId, status: nextSession?.videoUrl ? "loading" : "unavailable" });
-    setMediaMode(nextSession?.videoUrl ? "video" : "audio");
     setSelectedLearnerId(learnerId);
     setSelectedSessionId(sessionId);
   };
 
   const handleTogglePlayPause = () => {
-    const el = activeMedia === "video" ? videoRef.current : audioRef.current;
+    const el = videoRef.current;
     if (!el) return;
 
     if (isPlaying) {
@@ -195,7 +186,7 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
 
   const handleSeek = (time: number) => {
     setCurrentTime(time);
-    const el = activeMedia === "video" ? videoRef.current : audioRef.current;
+    const el = videoRef.current;
     if (el) {
       el.currentTime = time;
     }
@@ -204,7 +195,7 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
   const handleJumpToMoment = (moment: KeyMoment) => {
     const targetSeconds = parseTimestampToSeconds(moment.timestamp, moment.seconds);
     handleSeek(targetSeconds);
-    const el = activeMedia === "video" ? videoRef.current : audioRef.current;
+    const el = videoRef.current;
     if (el) {
       el.play().then(() => setIsPlaying(true)).catch(() => {});
     }
@@ -214,7 +205,6 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
   const handleToggleMute = () => {
     const nextMute = !isMuted;
     if (videoRef.current) videoRef.current.muted = nextMute;
-    if (audioRef.current) audioRef.current.muted = nextMute;
     setIsMuted(nextMute);
   };
 
@@ -223,7 +213,6 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
     const nextRate = PLAYBACK_RATES[(currentIndex + 1) % PLAYBACK_RATES.length] ?? 1;
     setPlaybackRate(nextRate);
     if (videoRef.current) videoRef.current.playbackRate = nextRate;
-    if (audioRef.current) audioRef.current.playbackRate = nextRate;
   };
 
   const handleToggleFullscreen = () => {
@@ -363,57 +352,25 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
               <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/20">
                 <div className="flex items-center gap-2.5">
                   <div className="size-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center">
-                    {isResolvingVideo || activeMedia === "video" ? <VideoIcon className="size-3.5" /> : <Volume2 className="size-3.5" />}
+                    <VideoIcon className="size-3.5" />
                   </div>
                   <div>
                     <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                      {isResolvingVideo ? "Checking screen recording…" : activeMedia === "video" ? "Candidate Screen & Dialogue Recording" : "Session Dialogue Audio"}
+                      {isResolvingVideo ? "Checking screen recording…" : "Candidate Screen & Dialogue Recording"}
                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
-                        {isResolvingVideo ? "Loading" : activeMedia === "video" ? "Screen + Cam + Voice" : "Audio Only"}
+                        {isResolvingVideo ? "Loading" : "Screen + Cam + Voice"}
                       </Badge>
                     </h4>
                   </div>
                 </div>
 
-                {/* View Mode Toggle (Video vs Audio) */}
-                <div className="flex items-center gap-2">
-                  {hasVideo && selectedSession.audioUrl && (
-                    <div className="flex items-center rounded-lg border bg-muted/50 p-0.5 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => setMediaMode("video")}
-                        className={cn(
-                          "flex items-center gap-1 px-2 py-1 rounded-md transition-colors cursor-pointer text-xs font-medium",
-                          activeMedia === "video"
-                            ? "bg-background text-foreground shadow-xs font-semibold"
-                            : "text-muted-foreground hover:text-foreground"
-                        )}
-                      >
-                        <VideoIcon className="size-3.5" /> Screen
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setMediaMode("audio")}
-                        className={cn(
-                          "flex items-center gap-1 px-2 py-1 rounded-md transition-colors cursor-pointer text-xs font-medium",
-                          activeMedia === "audio"
-                            ? "bg-background text-foreground shadow-xs font-semibold"
-                            : "text-muted-foreground hover:text-foreground"
-                        )}
-                      >
-                        <Volume2 className="size-3.5" /> Audio
-                      </button>
-                    </div>
-                  )}
-
-                  <div className="text-xs font-mono text-muted-foreground pl-1">
-                    {formatTime(currentTime)} / {formatTime(effectiveDuration)}
-                  </div>
+                <div className="text-xs font-mono text-muted-foreground pl-1">
+                  {formatTime(currentTime)} / {formatTime(effectiveDuration)}
                 </div>
               </div>
 
               {/* Video Screen Viewport */}
-              {selectedSession.videoUrl && videoStatus !== "unavailable" && (isResolvingVideo || activeMedia === "video") ? (
+              {selectedSession.videoUrl && videoStatus !== "unavailable" ? (
                 <div className="relative aspect-video w-full bg-black/95 flex items-center justify-center overflow-hidden group">
                   <video
                     key={selectedSession.id}
@@ -431,9 +388,8 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
                     onPause={() => setIsPlaying(false)}
                     onEnded={() => setIsPlaying(false)}
                     onError={() => {
-                      console.warn("Video failed to stream, falling back to audio.");
+                      console.warn("Video failed to stream.");
                       setVideoState({ sessionId: selectedSession.id, status: "unavailable" });
-                      setMediaMode("audio");
                     }}
                     className={cn("h-full w-full object-contain cursor-pointer", isResolvingVideo && "invisible")}
                   />
@@ -453,42 +409,16 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
                 </div>
               ) : null}
 
-              {/* Audio fallback when video is not enabled / active */}
-              {!isResolvingVideo && activeMedia === "audio" && selectedSession.audioUrl && (
-                <div className="p-6 bg-muted/10 flex flex-col items-center justify-center gap-3">
-                  <div className="size-14 rounded-full bg-indigo-100 dark:bg-indigo-950/70 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-                    <Volume2 className="size-6" />
-                  </div>
-                  <div className="text-center">
-                    <div className="text-sm font-semibold">Audio Dialogue Stream</div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Full dialogue recording captured during the session
-                    </p>
-                  </div>
-                  <audio
-                    ref={audioRef}
-                    src={selectedSession.audioUrl}
-                    preload="metadata"
-                    onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-                    onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-                    onPlay={() => setIsPlaying(true)}
-                    onPause={() => setIsPlaying(false)}
-                    onEnded={() => setIsPlaying(false)}
-                    className="hidden"
-                  />
-                </div>
-              )}
-
               {/* No recording fallback */}
-              {videoStatus === "unavailable" && !selectedSession.audioUrl && (
+              {videoStatus === "unavailable" && (
                 <div className="p-8 text-center text-xs text-muted-foreground bg-muted/20">
                   <VolumeX className="size-6 mx-auto mb-2 opacity-50" />
-                  No screen or audio recording was captured for this session.
+                  No screen recording was captured for this session.
                 </div>
               )}
 
               {/* Player Timeline Scrubber */}
-              {!isResolvingVideo && (hasVideo || selectedSession.audioUrl) && (
+              {!isResolvingVideo && hasVideo && (
                 <div className="px-4 pt-3 pb-4 bg-card flex flex-col gap-2">
                   {/* Timeline */}
                   <div className="relative flex items-center group/timeline py-1">
@@ -554,7 +484,7 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
                       </button>
 
                       {/* Fullscreen button */}
-                      {activeMedia === "video" && (
+                      {hasVideo && (
                         <button
                           type="button"
                           onClick={handleToggleFullscreen}

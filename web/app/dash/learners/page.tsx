@@ -115,7 +115,6 @@ export default async function LearnersPage() {
           summaryTags: report?.summaryTags ?? [],
           keyMoments: report?.keyMoments ?? [],
           focusNextTime: report?.focusNextTime ?? "",
-          audioUrl: s.s3AudioKey ? `/api/sessions/${s.id}/audio` : undefined,
           videoUrl: hasVideo ? `/api/sessions/${s.id}/video` : undefined,
           report,
         };

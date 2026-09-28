@@ -10,7 +10,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   const session = await db.interviewSession.findFirst({
     where: { id, orgId: org.id },
-    select: { s3AudioKey: true, userId: true, evidence: true },
+    select: { userId: true, evidence: true },
   });
   if (!session) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -32,9 +32,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const videoKey =
     typeof evidence.videoS3Key === "string" && evidence.videoS3Key
       ? evidence.videoS3Key
-      : session.s3AudioKey
-        ? session.s3AudioKey.replace(/audio\.mp4$/, "video.mp4").replace(/\.wav$/, ".mp4")
-        : `${orgPrefix(org.id)}/recordings/${id}/video.mp4`;
+      : `${orgPrefix(org.id)}/recordings/${id}/video.mp4`;
 
   try {
     const signedUrl = await presignedGetUrl(videoKey, 3600);

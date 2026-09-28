@@ -73,7 +73,7 @@ export default async function SessionDetailPage({
           <Badge>{row.status}</Badge>
         </div>
 
-        {row.videoEgressId || (row.evidence && typeof row.evidence === "object" && ((row.evidence as Record<string, unknown>).videoS3Key || (row.evidence as Record<string, unknown>).videoUrl)) || row.s3AudioKey ? (
+        {row.videoEgressId || (row.evidence && typeof row.evidence === "object" && ((row.evidence as Record<string, unknown>).videoS3Key || (row.evidence as Record<string, unknown>).videoUrl)) ? (
           <Card>
             <CardHeader>
               <CardTitle>Session Recording</CardTitle>
@@ -95,20 +95,11 @@ export default async function SessionDetailPage({
                   </p>
                 </video>
               </div>
-
-              {row.s3AudioKey && (
-                <div className="pt-2 border-t">
-                  <p className="text-xs text-muted-foreground mb-1.5 font-medium">Alternative Audio Stream</p>
-                  <audio controls preload="none" src={`/api/sessions/${row.id}/audio`} className="w-full">
-                    Your browser does not support audio playback.
-                  </audio>
-                </div>
-              )}
             </CardContent>
           </Card>
         ) : null}
 
-        {evidence.length > 0 ? (
+        {/*{evidence.length > 0 ? (
           <Card>
             <CardHeader>
               <CardTitle>Evidence coverage</CardTitle>
@@ -122,7 +113,7 @@ export default async function SessionDetailPage({
               ))}
             </CardContent>
           </Card>
-        ) : null}
+        ) : null}*/}
 
         <Card>
           <CardHeader>

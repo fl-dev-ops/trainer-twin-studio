@@ -69,14 +69,11 @@ export async function activateInterviewRuntime(input: {
       data: {
         livekitRoom: livekit.room,
         livekitDispatchId: livekit.dispatchId,
-        audioEgressId: livekit.audioEgressId,
         videoEgressId: livekit.videoEgressId,
-        s3AudioKey: livekit.audioS3Key,
         ...(livekit.videoS3Key
           ? {
               evidence: {
                 videoS3Key: livekit.videoS3Key,
-                ...(livekit.audioS3Key ? { audioS3Key: livekit.audioS3Key } : {}),
               },
             }
           : {}),
@@ -87,7 +84,6 @@ export async function activateInterviewRuntime(input: {
     await closeLiveKitSession({
       room: row.livekitRoom,
       dispatchId: row.livekitDispatchId,
-      audioEgressId: row.audioEgressId,
       videoEgressId: row.videoEgressId,
     }).catch(() => {});
     const failed = await db.interviewSession.updateMany({

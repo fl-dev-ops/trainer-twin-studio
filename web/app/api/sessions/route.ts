@@ -59,9 +59,7 @@ export async function PATCH(req: Request) {
   const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
   const session = await authorizeRuntimeSession(String(body.id), token);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const finalized = await closeInterviewSession(session.id, body.status as SessionEndStatus, {
-    ...(typeof body.s3AudioKey === "string" ? { s3AudioKey: body.s3AudioKey } : {}),
-  });
+  const finalized = await closeInterviewSession(session.id, body.status as SessionEndStatus);
   if (finalized?.finalStatus === "completed") {
     await scheduleSessionReport(finalized.id).catch((error) => {
       console.warn("Could not initiate session report generation:", error);

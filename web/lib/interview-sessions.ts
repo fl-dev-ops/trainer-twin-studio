@@ -354,7 +354,6 @@ export async function authorizeRuntimeSession(idOrToken: string, tokenParam?: st
       transcript: true,
       livekitRoom: true,
       livekitDispatchId: true,
-      audioEgressId: true,
       videoEgressId: true,
     },
   });
