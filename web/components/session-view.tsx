@@ -871,6 +871,7 @@ export function SessionView({
         contextPrompt={contextUpload?.prompt}
         contextLabel={contextUpload?.label}
         contextAccept={contextUpload?.accept}
+        sessionCode={sessionCode}
         onJoin={(settings, contextId) => {
           setPrejoinMedia(settings);
           setContextIds(contextId ? [contextId] : []);
@@ -1022,6 +1023,7 @@ export function SessionView({
                         try {
                           const form = new FormData();
                           form.append("file", file);
+                          if (sessionCode) form.append("shareCode", sessionCode);
                           const res = await fetch("/api/upload", { method: "POST", body: form });
                           const data = await res.json().catch(() => null);
                           if (!res.ok) throw new Error(data?.error ?? "Upload failed");

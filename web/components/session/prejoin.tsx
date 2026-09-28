@@ -62,6 +62,7 @@ export function PreJoin({
   contextPrompt,
   contextLabel,
   contextAccept,
+  sessionCode,
   onJoin,
 }: {
   scenarioName: string;
@@ -75,6 +76,7 @@ export function PreJoin({
   contextPrompt?: string;
   contextLabel?: string;
   contextAccept?: string;
+  sessionCode: string;
   onJoin: (settings: PreJoinMediaSettings, contextId?: string) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -267,6 +269,7 @@ export function PreJoin({
     try {
       const form = new FormData();
       form.append("file", file);
+      form.append("shareCode", sessionCode);
       const res = await fetch("/api/upload", { method: "POST", body: form });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error ?? "Upload failed");

@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { assignmentMatchesUser } from "@/lib/assignments";
+import { db } from "@/lib/db";
 import { getSessionOrg } from "@/lib/org";
 import { resolveSessionUser } from "@/lib/session-user";
 import { listUploads, saveUpload } from "@/lib/specs";
@@ -20,10 +22,33 @@ export async function POST(req: Request) {
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "Missing file" }, { status: 400 });
   }
-  const org = await getSessionOrg();
-  if (!org) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { user } = await resolveSessionUser().catch(() => ({ user: null }));
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { org, user } = await resolveSessionUser();
+  if (!org || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const member = await db.member.findFirst({
+    where: { organizationId: org.id, userId: user.id },
+    select: { id: true },
+  });
+  if (!member) {
+    const shareCode = form.get("shareCode");
+    const assignment = typeof shareCode === "string" ? await db.rolePlayAssignment.findFirst({
+      where: {
+        shareCode,
+        orgId: org.id,
+        status: "pending",
+        expiresAt: { gt: new Date() },
+        deployment: { status: "active" },
+      },
+      select: {
+        recipientEmail: true,
+        member: { select: { userId: true } },
+        sessions: { where: { status: { in: ["completed", "abandoned"] } }, select: { id: true }, take: 1 },
+      },
+    }) : null;
+    if (!assignment || !assignmentMatchesUser(assignment, user) || assignment.sessions.length) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+  }
 
   try {
     const doc = await saveUpload(
