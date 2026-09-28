@@ -8,6 +8,7 @@ import { MainCollectionService } from "@/lib/main-collection";
 import { redactLearnerNames } from "@/lib/persona-voice";
 import { enqueueWorkspaceCommand } from "@/lib/workspace-commands";
 import { buildSessionContext, getCachedSessionContext } from "@/lib/session-context";
+import { unusedResumeClaims } from "@/lib/resume-interview";
 
 export const runtime = "nodejs";
 
@@ -48,6 +49,21 @@ const requestSchema = z.discriminatedUnion("action", [
     sessionId: z.string().optional(),
     agentSlug: z.string().optional(),
     personaSlug: z.string().optional(),
+  }).strict(),
+  z.object({
+    action: z.literal("listResumeClaims"),
+    sessionId: z.string().trim().min(1),
+    cursor: z.number().int().min(0).optional(),
+  }).strict(),
+  z.object({
+    action: z.literal("getResumeClaim"),
+    sessionId: z.string().trim().min(1),
+    claimId: z.string().trim().min(1),
+  }).strict(),
+  z.object({
+    action: z.literal("resolvePendingResumeQuestion"),
+    sessionId: z.string().trim().min(1),
+    candidateLocated: z.boolean(),
   }).strict(),
   z.object({
     action: z.literal("getPersonaStyleMoments"),
@@ -134,6 +150,53 @@ export async function POST(request: Request) {
       durationMs: Math.round(performance.now() - startedAt),
     });
     return Response.json(context);
+  }
+
+  if (input.action === "listResumeClaims") {
+    const claims = await unusedResumeClaims(orgId, input.sessionId);
+    const offset = input.cursor ?? 0;
+    const page = claims.slice(offset, offset + 20);
+    return Response.json({
+      claims: page.map((claim) => ({
+        claimId: claim.id,
+        section: claim.section,
+        kind: claim.kind,
+        summary: claim.text.slice(0, 300),
+        metric: claim.metric,
+      })),
+      nextCursor: offset + page.length < claims.length ? offset + page.length : null,
+    });
+  }
+
+  if (input.action === "getResumeClaim") {
+    const claim = (await unusedResumeClaims(orgId, input.sessionId)).find((item) => item.id === input.claimId);
+    if (!claim) return Response.json({ error: "Eligible resume claim not found" }, { status: 404 });
+    return Response.json({
+      claimId: claim.id,
+      section: claim.section,
+      kind: claim.kind,
+      text: claim.text.slice(0, 4_000),
+      metric: claim.metric,
+    });
+  }
+
+  if (input.action === "resolvePendingResumeQuestion") {
+    await unusedResumeClaims(orgId, input.sessionId);
+    const pending = await db.workspaceCommand.findFirst({
+      where: { sessionId: input.sessionId, tool: "start_resume_question", status: "completed" },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, input: true, result: true },
+    });
+    const result = pending?.result as { status?: string } | null;
+    const question = (pending?.input as { question?: string } | null)?.question;
+    if (result?.status !== "not_found" || !question) {
+      return Response.json({ error: "No pending resume question" }, { status: 409 });
+    }
+    await db.workspaceCommand.update({
+      where: { id: pending!.id },
+      data: { result: { status: input.candidateLocated ? "located" : "claim_cancelled" } },
+    });
+    return Response.json({ status: input.candidateLocated ? "ready" : "claim_cancelled", question: input.candidateLocated ? question : null });
   }
 
   if (input.action === "enqueueWorkspaceCommand" || input.action === "finishSession") {

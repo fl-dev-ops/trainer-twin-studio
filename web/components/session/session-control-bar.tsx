@@ -8,8 +8,6 @@ import {
   Mic,
   MicOff,
   PhoneOff,
-  ScreenShare,
-  ScreenShareOff,
   Video,
   VideoOff,
   Volume2,
@@ -51,15 +49,6 @@ export function SessionControlBar({
   const { buttonProps: micProps, enabled: micOn, pending: micPending } = useTrackToggle({
     room,
     source: Track.Source.Microphone,
-  });
-
-  const {
-    buttonProps: screenShareProps,
-    enabled: screenShareOn,
-    pending: screenSharePending,
-  } = useTrackToggle({
-    room,
-    source: Track.Source.ScreenShare,
   });
 
   const { mergedProps: audioProps, canPlayAudio } = useStartAudio({
@@ -120,26 +109,7 @@ export function SessionControlBar({
           )}
         </button>
 
-        {/* 3. Screen share */}
-        <button
-          {...screenShareProps}
-          type="button"
-          title={screenShareOn ? "Stop sharing screen" : "Share screen"}
-          className={cn(
-            "grid size-10 shrink-0 place-items-center rounded-full text-white transition-colors hover:bg-white/10",
-            screenShareOn && "bg-white/15",
-          )}
-        >
-          {screenSharePending ? (
-            <LoaderCircle className="size-5 animate-spin" />
-          ) : screenShareOn ? (
-            <ScreenShare className="size-5" />
-          ) : (
-            <ScreenShareOff className="size-5" />
-          )}
-        </button>
-
-        {/* 5. Chat Toggle */}
+        {/* 3. Chat Toggle */}
         <button
           type="button"
           onClick={onChatToggle}
@@ -152,7 +122,7 @@ export function SessionControlBar({
           <MessageSquare className="size-5" />
         </button>
 
-        {/* 6. Red Circular End Call Button */}
+        {/* 4. Red Circular End Call Button */}
         <button
           type="button"
           onClick={() => setConfirmOpen(true)}

@@ -98,6 +98,11 @@ export default async function LearnersPage() {
         const report = isSessionReport(s.report) ? (s.report as SessionReport) : undefined;
         const reportStatus = normalizeSessionReportStatus(s.reportStatus, Boolean(report));
 
+        const hasVideo = Boolean(
+          s.videoEgressId ||
+          (s.evidence && typeof s.evidence === "object" && ((s.evidence as Record<string, unknown>).videoS3Key || (s.evidence as Record<string, unknown>).videoUrl))
+        );
+
         return {
           id: s.id,
           title: s.agentSlug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
@@ -111,6 +116,7 @@ export default async function LearnersPage() {
           keyMoments: report?.keyMoments ?? [],
           focusNextTime: report?.focusNextTime ?? "",
           audioUrl: s.s3AudioKey ? `/api/sessions/${s.id}/audio` : undefined,
+          videoUrl: hasVideo ? `/api/sessions/${s.id}/video` : undefined,
           report,
         };
       });

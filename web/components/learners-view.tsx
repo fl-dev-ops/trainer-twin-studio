@@ -9,9 +9,14 @@ import {
   Clock3,
   GraduationCap,
   LoaderCircle,
+  Maximize2,
+  Minimize2,
   Pause,
   Play,
+  RotateCcw,
+  Sparkles,
   UserPlus,
+  Video as VideoIcon,
   Volume2,
   VolumeX,
 } from "lucide-react";
@@ -40,6 +45,7 @@ export type LearnerSessionItem = {
   keyMoments: KeyMoment[];
   focusNextTime: string;
   audioUrl?: string;
+  videoUrl?: string;
   report?: SessionReport;
 };
 
@@ -74,6 +80,24 @@ function formatTime(seconds: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+function parseTimestampToSeconds(ts?: string, fallbackSeconds?: number): number {
+  if (typeof fallbackSeconds === "number" && !isNaN(fallbackSeconds) && fallbackSeconds >= 0) {
+    return fallbackSeconds;
+  }
+  if (!ts) return 0;
+  const clean = ts.replace(/[^\d:]/g, "");
+  const parts = clean.split(":").map(Number);
+  if (parts.length === 2) {
+    return (parts[0] || 0) * 60 + (parts[1] || 0);
+  }
+  if (parts.length === 3) {
+    return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
+  }
+  return 0;
+}
+
+const PLAYBACK_RATES = [1, 1.25, 1.5, 1.75, 2];
+
 export function LearnersView({ initialLearners = [] }: { initialLearners?: LearnerData[] }) {
   const learners = initialLearners;
 
@@ -94,8 +118,17 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [mediaMode, setMediaMode] = useState<"video" | "audio">("video");
+  const [videoState, setVideoState] = useState<{ sessionId: string; status: "loading" | "ready" | "unavailable" }>(() => ({
+    sessionId: learners[0]?.sessions[0]?.id ?? "",
+    status: learners[0]?.sessions[0]?.videoUrl ? "loading" : "unavailable",
+  }));
 
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const playerContainerRef = useRef<HTMLDivElement | null>(null);
 
   const selectedLearner =
     learners.find((l) => l.id === selectedLearnerId) ??
@@ -112,50 +145,94 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
     0
   );
 
+  const videoStatus = !selectedSession?.videoUrl
+    ? "unavailable"
+    : videoState.sessionId === selectedSession.id ? videoState.status : "loading";
+  const isResolvingVideo = videoStatus === "loading";
+  const hasVideo = videoStatus === "ready";
+  const activeMedia = mediaMode === "video" && hasVideo ? "video" : "audio";
+
   const toggleLearnerExpand = (id: string) => {
     setExpandedLearnerIds((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
   const handleSelectSession = (learnerId: string, sessionId: string) => {
+    if (sessionId === selectedSession?.id) return;
+    const nextSession = learners.find((learner) => learner.id === learnerId)?.sessions.find((session) => session.id === sessionId);
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
+    }
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
     }
     setIsPlaying(false);
     setCurrentTime(0);
+    setDuration(0);
+    setVideoState({ sessionId, status: nextSession?.videoUrl ? "loading" : "unavailable" });
+    setMediaMode(nextSession?.videoUrl ? "video" : "audio");
     setSelectedLearnerId(learnerId);
     setSelectedSessionId(sessionId);
   };
 
   const handleTogglePlayPause = () => {
-    if (!audioRef.current || !selectedSession?.audioUrl) return;
+    const el = activeMedia === "video" ? videoRef.current : audioRef.current;
+    if (!el) return;
+
     if (isPlaying) {
-      audioRef.current.pause();
+      el.pause();
       setIsPlaying(false);
     } else {
-      audioRef.current.play().then(() => {
-        setIsPlaying(true);
-      }).catch((err) => {
-        console.warn("Could not play session audio:", err);
-        setIsPlaying(false);
-      });
+      el.play()
+        .then(() => setIsPlaying(true))
+        .catch((err) => {
+          console.warn("Could not play media:", err);
+          setIsPlaying(false);
+        });
     }
   };
 
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!selectedSession?.audioUrl) return;
-    const time = parseFloat(e.target.value);
+  const handleSeek = (time: number) => {
     setCurrentTime(time);
-    if (audioRef.current) {
-      audioRef.current.currentTime = time;
+    const el = activeMedia === "video" ? videoRef.current : audioRef.current;
+    if (el) {
+      el.currentTime = time;
     }
+  };
+
+  const handleJumpToMoment = (moment: KeyMoment) => {
+    const targetSeconds = parseTimestampToSeconds(moment.timestamp, moment.seconds);
+    handleSeek(targetSeconds);
+    const el = activeMedia === "video" ? videoRef.current : audioRef.current;
+    if (el) {
+      el.play().then(() => setIsPlaying(true)).catch(() => {});
+    }
+    playerContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   };
 
   const handleToggleMute = () => {
-    if (!audioRef.current) return;
     const nextMute = !isMuted;
-    audioRef.current.muted = nextMute;
+    if (videoRef.current) videoRef.current.muted = nextMute;
+    if (audioRef.current) audioRef.current.muted = nextMute;
     setIsMuted(nextMute);
+  };
+
+  const handleCycleRate = () => {
+    const currentIndex = PLAYBACK_RATES.indexOf(playbackRate);
+    const nextRate = PLAYBACK_RATES[(currentIndex + 1) % PLAYBACK_RATES.length] ?? 1;
+    setPlaybackRate(nextRate);
+    if (videoRef.current) videoRef.current.playbackRate = nextRate;
+    if (audioRef.current) audioRef.current.playbackRate = nextRate;
+  };
+
+  const handleToggleFullscreen = () => {
+    if (!playerContainerRef.current) return;
+    if (!document.fullscreenElement) {
+      playerContainerRef.current.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+    } else {
+      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+    }
   };
 
   if (learners.length === 0) {
@@ -168,8 +245,8 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
             </EmptyMedia>
             <EmptyTitle className="text-sm font-semibold">No completed learner sessions yet</EmptyTitle>
             <EmptyDescription className="text-xs leading-relaxed text-muted-foreground">
-              When learners accept an invitation and complete a role play session, their AI performance
-              evaluation, audio recording, and coaching briefs will appear here.
+              When learners accept an invitation and complete a role play session, their screen recordings,
+              AI performance evaluation, and coaching briefs will appear here.
             </EmptyDescription>
           </EmptyHeader>
           <div className="flex items-center gap-2.5 mt-3">
@@ -185,11 +262,12 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
     );
   }
 
+  const effectiveDuration = duration || (selectedSession ? selectedSession.durationMinutes * 60 : 100);
+
   return (
     <div className="flex h-full w-full min-h-0 flex-1 overflow-hidden bg-background text-foreground">
       {/* Left Column: Learners & Completed Sessions Sidebar */}
       <aside className="w-80 sm:w-84 shrink-0 border-r flex flex-col bg-card/40 overflow-hidden">
-        {/* Header Count: 12px */}
         <div className="px-5 py-3.5 border-b text-xs font-medium text-muted-foreground tracking-tight">
           {learners.length} {learners.length === 1 ? "learner" : "learners"} / {totalSessions}{" "}
           {totalSessions === 1 ? "completed session" : "completed sessions"}
@@ -201,7 +279,6 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
             const isExpanded = expandedLearnerIds[learner.id] ?? true;
             return (
               <div key={learner.id} className="py-2">
-                {/* Learner Item Header: 14px Name, 12px Subtitle */}
                 <button
                   type="button"
                   onClick={() => toggleLearnerExpand(learner.id)}
@@ -226,7 +303,7 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
                   </div>
                 </button>
 
-                {/* Sub-sessions List: 14px Title, 12px Subtitle */}
+                {/* Sub-sessions List */}
                 {isExpanded && learner.sessions && (
                   <div className="mt-1 space-y-1 px-3">
                     {learner.sessions.map((session) => {
@@ -245,11 +322,11 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
                         >
                           <div
                             className={cn(
-                              "text-sm tracking-tight truncate",
+                              "text-sm tracking-tight truncate flex items-center justify-between gap-1",
                               isSelected ? "font-semibold text-foreground" : "font-medium"
                             )}
                           >
-                            {session.title}
+                            <span className="truncate">{session.title}</span>
                           </div>
                           <div className="text-xs text-muted-foreground mt-0.5 truncate">
                             {session.dateSubtitle}
@@ -269,77 +346,125 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
       <main className="flex-1 overflow-y-auto p-6 lg:p-8 min-w-0">
         {selectedSession ? (
           <div className="max-w-4xl flex flex-col gap-6">
-            {/* Top Breadcrumb / Meta: 12px */}
+            {/* Top Breadcrumb / Meta */}
             <div className="text-xs font-medium text-muted-foreground tracking-tight">
-              {selectedLearner?.name} / Attempt {selectedSession.attempt} /{" "}
-              {selectedSession.durationMinutes} min / {selectedSession.formattedDate}
+              <div>
+                {selectedLearner?.name} / Attempt {selectedSession.attempt} /{" "}
+                {selectedSession.durationMinutes} min / {selectedSession.formattedDate}
+              </div>
             </div>
 
-            {/* AUDIO PLAYER: 14px Subheading, 12px Meta */}
-            <section className="rounded-2xl border bg-card p-4 sm:p-5 shadow-2xs">
-              <div className="flex items-center justify-between mb-3">
+            {/* FATHOM-STYLE VIDEO / SCREEN RECORDING PLAYER */}
+            <section
+              ref={playerContainerRef}
+              className="rounded-2xl border bg-card overflow-hidden shadow-xs flex flex-col"
+            >
+              {/* Player Top Bar */}
+              <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/20">
                 <div className="flex items-center gap-2.5">
-                  <div className="size-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-                    <Volume2 className="size-4" />
+                  <div className="size-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center">
+                    {isResolvingVideo || activeMedia === "video" ? <VideoIcon className="size-3.5" /> : <Volume2 className="size-3.5" />}
                   </div>
                   <div>
-                    <h4 className="text-sm font-semibold text-foreground">Session Audio</h4>
-                    <p className="text-xs text-muted-foreground">
-                      {selectedSession.audioUrl
-                        ? "Full dialogue recording"
-                        : "Recording unavailable for this session"}
-                    </p>
+                    <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      {isResolvingVideo ? "Checking screen recording…" : activeMedia === "video" ? "Candidate Screen & Dialogue Recording" : "Session Dialogue Audio"}
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
+                        {isResolvingVideo ? "Loading" : activeMedia === "video" ? "Screen + Cam + Voice" : "Audio Only"}
+                      </Badge>
+                    </h4>
                   </div>
                 </div>
 
-                {selectedSession.audioUrl && (
-                  <div className="text-xs font-mono text-muted-foreground">
-                    {formatTime(currentTime)} / {formatTime(duration || selectedSession.durationMinutes * 60)}
+                {/* View Mode Toggle (Video vs Audio) */}
+                <div className="flex items-center gap-2">
+                  {hasVideo && selectedSession.audioUrl && (
+                    <div className="flex items-center rounded-lg border bg-muted/50 p-0.5 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setMediaMode("video")}
+                        className={cn(
+                          "flex items-center gap-1 px-2 py-1 rounded-md transition-colors cursor-pointer text-xs font-medium",
+                          activeMedia === "video"
+                            ? "bg-background text-foreground shadow-xs font-semibold"
+                            : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        <VideoIcon className="size-3.5" /> Screen
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMediaMode("audio")}
+                        className={cn(
+                          "flex items-center gap-1 px-2 py-1 rounded-md transition-colors cursor-pointer text-xs font-medium",
+                          activeMedia === "audio"
+                            ? "bg-background text-foreground shadow-xs font-semibold"
+                            : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        <Volume2 className="size-3.5" /> Audio
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="text-xs font-mono text-muted-foreground pl-1">
+                    {formatTime(currentTime)} / {formatTime(effectiveDuration)}
                   </div>
-                )}
+                </div>
               </div>
 
-              {selectedSession.audioUrl ? (
-                <>
-                  {/* Audio Controls */}
-                  <div className="flex items-center gap-3">
+              {/* Video Screen Viewport */}
+              {selectedSession.videoUrl && videoStatus !== "unavailable" && (isResolvingVideo || activeMedia === "video") ? (
+                <div className="relative aspect-video w-full bg-black/95 flex items-center justify-center overflow-hidden group">
+                  <video
+                    key={selectedSession.id}
+                    ref={videoRef}
+                    src={selectedSession.videoUrl}
+                    preload="metadata"
+                    playsInline
+                    onClick={handleTogglePlayPause}
+                    onLoadedMetadata={(e) => {
+                      setDuration(e.currentTarget.duration);
+                      setVideoState({ sessionId: selectedSession.id, status: "ready" });
+                    }}
+                    onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+                    onPlay={() => setIsPlaying(true)}
+                    onPause={() => setIsPlaying(false)}
+                    onEnded={() => setIsPlaying(false)}
+                    onError={() => {
+                      console.warn("Video failed to stream, falling back to audio.");
+                      setVideoState({ sessionId: selectedSession.id, status: "unavailable" });
+                      setMediaMode("audio");
+                    }}
+                    className={cn("h-full w-full object-contain cursor-pointer", isResolvingVideo && "invisible")}
+                  />
+
+                  {isResolvingVideo && <LoaderCircle className="absolute size-8 animate-spin text-white" aria-label="Loading recording" />}
+                  {/* Big Play Overlay (when paused) */}
+                  {!isResolvingVideo && !isPlaying && (
                     <button
                       type="button"
                       onClick={handleTogglePlayPause}
-                      className="size-8 shrink-0 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 flex items-center justify-center transition-transform active:scale-95 cursor-pointer shadow-xs"
-                      aria-label={isPlaying ? "Pause audio" : "Play audio"}
+                      className="absolute inset-0 m-auto size-16 rounded-full bg-indigo-600/90 text-white flex items-center justify-center shadow-lg hover:bg-indigo-600 hover:scale-105 transition-all cursor-pointer backdrop-blur-xs"
+                      aria-label="Play recording"
                     >
-                      {isPlaying ? (
-                        <Pause className="size-3.5 fill-current" />
-                      ) : (
-                        <Play className="size-3.5 fill-current ml-0.5" />
-                      )}
+                      <Play className="size-7 fill-current ml-1" />
                     </button>
+                  )}
+                </div>
+              ) : null}
 
-                    {/* Scrubber Range Bar */}
-                    <div className="relative flex-1 flex items-center">
-                      <input
-                        type="range"
-                        min={0}
-                        max={duration || selectedSession.durationMinutes * 60 || 100}
-                        step={1}
-                        value={currentTime}
-                        onChange={handleSeek}
-                        className="w-full h-1.5 bg-muted rounded-lg appearance-none cursor-pointer accent-indigo-600 focus:outline-hidden"
-                      />
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleToggleMute}
-                      className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer p-1"
-                      aria-label={isMuted ? "Unmute audio" : "Mute audio"}
-                    >
-                      {isMuted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
-                    </button>
+              {/* Audio fallback when video is not enabled / active */}
+              {!isResolvingVideo && activeMedia === "audio" && selectedSession.audioUrl && (
+                <div className="p-6 bg-muted/10 flex flex-col items-center justify-center gap-3">
+                  <div className="size-14 rounded-full bg-indigo-100 dark:bg-indigo-950/70 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                    <Volume2 className="size-6" />
                   </div>
-
-                  {/* Audio Element */}
+                  <div className="text-center">
+                    <div className="text-sm font-semibold">Audio Dialogue Stream</div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Full dialogue recording captured during the session
+                    </p>
+                  </div>
                   <audio
                     ref={audioRef}
                     src={selectedSession.audioUrl}
@@ -351,11 +476,96 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
                     onEnded={() => setIsPlaying(false)}
                     className="hidden"
                   />
-                </>
-              ) : (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 py-2.5 px-3 rounded-lg border border-border/40">
-                  <VolumeX className="size-3.5 shrink-0 text-muted-foreground/70" />
-                  <span>No audio recording was captured for this session.</span>
+                </div>
+              )}
+
+              {/* No recording fallback */}
+              {videoStatus === "unavailable" && !selectedSession.audioUrl && (
+                <div className="p-8 text-center text-xs text-muted-foreground bg-muted/20">
+                  <VolumeX className="size-6 mx-auto mb-2 opacity-50" />
+                  No screen or audio recording was captured for this session.
+                </div>
+              )}
+
+              {/* Player Timeline Scrubber */}
+              {!isResolvingVideo && (hasVideo || selectedSession.audioUrl) && (
+                <div className="px-4 pt-3 pb-4 bg-card flex flex-col gap-2">
+                  {/* Timeline */}
+                  <div className="relative flex items-center group/timeline py-1">
+                    <input
+                      type="range"
+                      min={0}
+                      max={effectiveDuration || 100}
+                      step={0.5}
+                      value={currentTime}
+                      onChange={(e) => handleSeek(parseFloat(e.target.value))}
+                      className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-indigo-600 focus:outline-hidden"
+                    />
+                  </div>
+
+                  {/* Player Controls Toolbar */}
+                  <div className="flex items-center justify-between gap-3 pt-1">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleTogglePlayPause}
+                        className="size-8 shrink-0 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 flex items-center justify-center transition-transform active:scale-95 cursor-pointer shadow-xs"
+                        aria-label={isPlaying ? "Pause" : "Play"}
+                      >
+                        {isPlaying ? (
+                          <Pause className="size-3.5 fill-current" />
+                        ) : (
+                          <Play className="size-3.5 fill-current ml-0.5" />
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSeek(Math.max(0, currentTime - 10))}
+                        className="p-1.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded-md hover:bg-muted/50"
+                        title="Rewind 10 seconds"
+                      >
+                        <RotateCcw className="size-4" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleToggleMute}
+                        className="p-1.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded-md hover:bg-muted/50"
+                        aria-label={isMuted ? "Unmute" : "Mute"}
+                      >
+                        {isMuted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
+                      </button>
+
+                      <span className="text-xs font-mono text-muted-foreground pl-1">
+                        {formatTime(currentTime)} / {formatTime(effectiveDuration)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {/* Playback speed selector */}
+                      <button
+                        type="button"
+                        onClick={handleCycleRate}
+                        className="px-2 py-1 text-xs font-semibold rounded-md bg-muted/60 hover:bg-muted text-foreground transition-colors cursor-pointer border border-border/50"
+                        title="Change playback speed"
+                      >
+                        {playbackRate}x
+                      </button>
+
+                      {/* Fullscreen button */}
+                      {activeMedia === "video" && (
+                        <button
+                          type="button"
+                          onClick={handleToggleFullscreen}
+                          className="p-1.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded-md hover:bg-muted/50"
+                          title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+                        >
+                          {isFullscreen ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
             </section>
@@ -381,7 +591,7 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
             })()}
 
             {hasCompletedReport && <>
-            {/* SCENARIO SUMMARY Section: 14px Subheading, 12px Body */}
+            {/* SCENARIO SUMMARY Section */}
             <section>
               <h3 className="text-sm font-semibold text-foreground tracking-tight mb-2.5">
                 Scenario Summary
@@ -407,50 +617,69 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
               </div>
             </section>
 
-            {/* Key Moments to Review Section: 14px Subheading, 12px Body */}
+            {/* Key Moments to Review Section */}
             <section className="mt-1">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold tracking-tight text-foreground">
-                  Key moments to review
-                </h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold tracking-tight text-foreground">
+                    Key moments to review
+                  </h3>
+                  <Badge variant="outline" className="text-[10px] text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800">
+                    <Sparkles className="size-3 mr-1" /> Click moment to jump in video
+                  </Badge>
+                </div>
                 <span className="text-xs text-muted-foreground">
-                  {selectedSession.keyMoments.length} moments selected from conversation
+                  {selectedSession.keyMoments.length} moments selected
                 </span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {selectedSession.keyMoments.map((moment) => {
+                  const momentSec = parseTimestampToSeconds(moment.timestamp, moment.seconds);
+                  const isCurrentMoment =
+                    currentTime >= momentSec &&
+                    currentTime < momentSec + 45;
+
                   return (
                     <div
                       key={moment.id}
-                      className="rounded-2xl border bg-card p-4 sm:p-5 shadow-2xs transition-all hover:shadow-xs"
+                      onClick={() => handleJumpToMoment(moment)}
+                      className={cn(
+                        "rounded-2xl border bg-card p-4 sm:p-5 shadow-2xs transition-all hover:shadow-xs cursor-pointer flex flex-col justify-between group",
+                        isCurrentMoment
+                          ? "border-indigo-500 ring-2 ring-indigo-500/20 bg-indigo-50/20 dark:bg-indigo-950/30"
+                          : "hover:border-indigo-300 dark:hover:border-indigo-800"
+                      )}
                     >
                       <div>
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
                             {moment.number}
                           </span>
-                          <span className="text-xs text-muted-foreground">
-                            Approx. {moment.timestamp}
+                          <span className="inline-flex items-center gap-1 text-xs font-mono font-medium px-2 py-0.5 rounded-full bg-muted text-foreground group-hover:bg-indigo-100 dark:group-hover:bg-indigo-950/80 group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">
+                            {moment.timestamp}
                           </span>
                         </div>
 
-                        {/* Moment Subheading: 14px */}
-                        <h4 className="font-semibold text-sm text-foreground mt-2.5">
+                        {/* Moment Subheading */}
+                        <h4 className="font-semibold text-sm text-foreground mt-2.5 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                           {moment.title}
                         </h4>
 
-                        {/* Quote: 12px */}
+                        {/* Quote */}
                         <p className="text-xs text-foreground italic mt-2 leading-relaxed">
                           {moment.quote}
                         </p>
 
-                        {/* Description: 12px */}
+                        {/* Description */}
                         <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
                           {moment.description}
                         </p>
                       </div>
 
+                      <div className="mt-4 pt-3 border-t border-border/40 flex items-center justify-between text-[11px] text-muted-foreground group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                        <span>Jump to timestamp</span>
+                      </div>
                     </div>
                   );
                 })}
@@ -458,7 +687,7 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
             </section>
             </>}
 
-            {/* Next Conversation Brief Section: 14px Subheading, 12px Body */}
+            {/* Next Conversation Brief Section */}
             <section className="mt-1">
               <div className="mb-3">
                 <h3 className="text-sm font-semibold tracking-tight text-foreground">

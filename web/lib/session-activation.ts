@@ -70,7 +70,16 @@ export async function activateInterviewRuntime(input: {
         livekitRoom: livekit.room,
         livekitDispatchId: livekit.dispatchId,
         audioEgressId: livekit.audioEgressId,
+        videoEgressId: livekit.videoEgressId,
         s3AudioKey: livekit.audioS3Key,
+        ...(livekit.videoS3Key
+          ? {
+              evidence: {
+                videoS3Key: livekit.videoS3Key,
+                ...(livekit.audioS3Key ? { audioS3Key: livekit.audioS3Key } : {}),
+              },
+            }
+          : {}),
       },
     });
     return { session, participantToken: livekit.token, room: livekit.room };

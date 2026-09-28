@@ -73,16 +73,37 @@ export default async function SessionDetailPage({
           <Badge>{row.status}</Badge>
         </div>
 
-        {row.s3AudioKey ? (
+        {row.videoEgressId || (row.evidence && typeof row.evidence === "object" && ((row.evidence as Record<string, unknown>).videoS3Key || (row.evidence as Record<string, unknown>).videoUrl)) || row.s3AudioKey ? (
           <Card>
             <CardHeader>
-              <CardTitle>Recording</CardTitle>
-              <CardDescription>Full session recording (mixed audio).</CardDescription>
+              <CardTitle>Session Recording</CardTitle>
+              <CardDescription>
+                Full screen recording with learner workspace, live code, system design sketches
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-              <audio controls preload="none" src={`/api/sessions/${row.id}/audio`} className="w-full">
-                Your browser does not support audio playback.
-              </audio>
+            <CardContent className="space-y-4">
+              <div className="aspect-video w-full rounded-xl overflow-hidden bg-black/95 border flex items-center justify-center">
+                <video
+                  controls
+                  preload="metadata"
+                  playsInline
+                  src={`/api/sessions/${row.id}/video`}
+                  className="h-full w-full object-contain"
+                >
+                  <p className="text-muted-foreground text-xs p-4">
+                    Your browser does not support HTML5 video playback.
+                  </p>
+                </video>
+              </div>
+
+              {row.s3AudioKey && (
+                <div className="pt-2 border-t">
+                  <p className="text-xs text-muted-foreground mb-1.5 font-medium">Alternative Audio Stream</p>
+                  <audio controls preload="none" src={`/api/sessions/${row.id}/audio`} className="w-full">
+                    Your browser does not support audio playback.
+                  </audio>
+                </div>
+              )}
             </CardContent>
           </Card>
         ) : null}

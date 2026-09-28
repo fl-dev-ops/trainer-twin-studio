@@ -41,25 +41,36 @@ function clients() {
 }
 
 function recordingOutput(orgId: string, room: string) {
-  const bucket = process.env.AWS_S3_BUCKET || process.env.S3_BUCKET;
+  const bucket = (process.env.AWS_S3_BUCKET || process.env.S3_BUCKET || "").trim();
   if (!bucket) return null;
-  const region = process.env.AWS_REGION || "ap-south-1";
+  const region = (process.env.AWS_REGION || "ap-south-1").trim();
   const prefix = (process.env.S3_BASE_PREFIX || "trainertwin-dev").replace(/^\/+|\/+$/g, "");
-  const key = `${prefix}/${orgId}/recordings/${room}/audio.mp4`;
+  const audioKey = `${prefix}/${orgId}/recordings/${room}/audio.mp4`;
+  const videoKey = `${prefix}/${orgId}/recordings/${room}/video.mp4`;
+  const s3Upload = new S3Upload({
+    accessKey: process.env.AWS_ACCESS_KEY_ID || "",
+    secret: process.env.AWS_SECRET_ACCESS_KEY || "",
+    sessionToken: process.env.AWS_SESSION_TOKEN || "",
+    region,
+    bucket,
+  });
   return {
-    key,
-    output: new EncodedFileOutput({
+    audioKey,
+    videoKey,
+    audioOutput: new EncodedFileOutput({
       fileType: EncodedFileType.MP4,
-      filepath: key,
+      filepath: audioKey,
       output: {
         case: "s3",
-        value: new S3Upload({
-          accessKey: process.env.AWS_ACCESS_KEY_ID || "",
-          secret: process.env.AWS_SECRET_ACCESS_KEY || "",
-          sessionToken: process.env.AWS_SESSION_TOKEN || "",
-          region,
-          bucket,
-        }),
+        value: s3Upload,
+      },
+    }),
+    videoOutput: new EncodedFileOutput({
+      fileType: EncodedFileType.MP4,
+      filepath: videoKey,
+      output: {
+        case: "s3",
+        value: s3Upload,
       },
     }),
   };
@@ -97,9 +108,32 @@ export async function activateLiveKitSession(input: {
 
   const recording = recordingOutput(input.orgId, room);
   let audioEgressId: string | null = null;
+  let videoEgressId: string | null = null;
   if (recording) {
-    const active = (await egress.listEgress(room)).find((item) => item.status === 0 || item.status === 1 || item.status === 2);
-    audioEgressId = active?.egressId ?? (await egress.startRoomCompositeEgress(room, recording.output, { audioOnly: true })).egressId;
+    const activeList = await egress.listEgress(room).catch(() => []);
+    const isAudioEgress = (item: (typeof activeList)[number]) =>
+      item.request?.case === "roomComposite" ? Boolean(item.request.value.audioOnly) : false;
+
+    const activeAudio = activeList.find(
+      (item) => (item.status === 0 || item.status === 1 || item.status === 2) && isAudioEgress(item),
+    );
+    const activeVideo = activeList.find(
+      (item) => (item.status === 0 || item.status === 1 || item.status === 2) && !isAudioEgress(item),
+    );
+
+    // Composite video egress captures shared screen (system design, code, debugging) + speaker tiles + audio
+    try {
+      videoEgressId = activeVideo?.egressId ?? (await egress.startRoomCompositeEgress(room, recording.videoOutput, { audioOnly: false })).egressId;
+    } catch (err) {
+      console.warn("Could not start video egress:", err);
+    }
+
+    // Audio egress as supplementary/fallback
+    try {
+      audioEgressId = activeAudio?.egressId ?? (await egress.startRoomCompositeEgress(room, recording.audioOutput, { audioOnly: true })).egressId;
+    } catch (err) {
+      console.warn("Could not start audio egress:", err);
+    }
   }
 
   const token = new AccessToken(config.apiKey, config.apiSecret, {
@@ -113,7 +147,9 @@ export async function activateLiveKitSession(input: {
     room,
     dispatchId: dispatch.id,
     audioEgressId,
-    audioS3Key: recording?.key ?? null,
+    videoEgressId,
+    audioS3Key: recording?.audioKey ?? null,
+    videoS3Key: recording?.videoKey ?? null,
   };
 }
 

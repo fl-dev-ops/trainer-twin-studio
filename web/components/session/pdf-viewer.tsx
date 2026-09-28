@@ -9,22 +9,33 @@ export function PdfViewerSurface({
   sourceUrl,
   initialPage,
   highlightQuery,
+  exactHighlight,
+  resumeDocument,
+  searchRequestId,
+  onHighlightResult,
   title,
 }: {
   sourceUrl?: string;
   initialPage?: number;
   highlightQuery?: string;
+  exactHighlight?: boolean;
+  resumeDocument?: boolean;
+  searchRequestId?: string;
+  onHighlightResult?: (requestId: string, status: "highlighted" | "not_found" | "viewer_unavailable" | "document_mismatch") => void;
   title?: string;
 }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const viewerRef = useRef<PDFViewerHandle>(null);
   const [source, setSource] = useState<string | undefined>(sourceUrl);
+  const [loadedSource, setLoadedSource] = useState<string | undefined>();
   const [fileName, setFileName] = useState(
     title || (sourceUrl ? decodeURIComponent(sourceUrl.split("/").pop()?.split("?")[0] || "Document.pdf") : "Document.pdf"),
   );
 
   useEffect(() => {
-    if (sourceUrl) setSource(sourceUrl);
+    if (sourceUrl) {
+      setSource(sourceUrl);
+    }
   }, [sourceUrl]);
 
   useEffect(() => {
@@ -32,10 +43,49 @@ export function PdfViewerSurface({
   }, [title]);
 
   useEffect(() => {
-    if (highlightQuery && viewerRef.current?.search) {
-      viewerRef.current.search(highlightQuery);
+    if (!highlightQuery || exactHighlight) return;
+    const runSearch = () => {
+      if (viewerRef.current?.search) {
+        viewerRef.current.search(highlightQuery);
+      }
+    };
+    runSearch();
+    const t1 = setTimeout(runSearch, 300);
+    const t2 = setTimeout(runSearch, 800);
+    const t3 = setTimeout(runSearch, 1500);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, [highlightQuery, source, exactHighlight]);
+
+  useEffect(() => {
+    if (!exactHighlight || !highlightQuery || !searchRequestId || !source || loadedSource !== source) return;
+    if (resumeDocument && source !== sourceUrl) {
+      onHighlightResult?.(searchRequestId, "document_mismatch");
+      return;
     }
-  }, [highlightQuery]);
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void (async () => {
+        for (const delay of [0, 300, 800]) {
+          if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+          if (cancelled) return;
+          const status = await viewerRef.current?.searchExact?.(highlightQuery) ?? "viewer_unavailable";
+          if (status !== "viewer_unavailable") {
+            if (!cancelled) onHighlightResult?.(searchRequestId, status);
+            return;
+          }
+        }
+        if (!cancelled) onHighlightResult?.(searchRequestId, "viewer_unavailable");
+      })();
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [exactHighlight, highlightQuery, loadedSource, onHighlightResult, resumeDocument, searchRequestId, source, sourceUrl]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -54,7 +104,7 @@ export function PdfViewerSurface({
       />
       <header className="flex min-h-12 shrink-0 items-center gap-2 border-b bg-card px-3">
         <span className="truncate text-sm font-medium">{fileName}</span>
-        <Button
+        {!resumeDocument && <Button
           variant="outline"
           size="sm"
           className="ml-auto"
@@ -62,7 +112,7 @@ export function PdfViewerSurface({
         >
           <FileUp data-icon="inline-start" />
           {source ? "Replace" : "Open"}
-        </Button>
+        </Button>}
       </header>
       <div className="relative min-h-0 flex-1">
         {source ? (
@@ -72,12 +122,13 @@ export function PdfViewerSurface({
             fileName={fileName}
             className="h-full"
             showUpload={false}
-            initialSearchQuery={highlightQuery}
+            initialSearchQuery={exactHighlight ? undefined : highlightQuery}
             onDocumentLoadSuccess={() => {
+              setLoadedSource(source);
               if (initialPage && initialPage > 1) {
                 setTimeout(() => viewerRef.current?.scrollToPage(initialPage), 150);
               }
-              if (highlightQuery) {
+              if (highlightQuery && !exactHighlight) {
                 setTimeout(() => viewerRef.current?.search?.(highlightQuery), 250);
               }
             }}
@@ -94,9 +145,9 @@ export function PdfViewerSurface({
                   Choose a document to read together. It stays in your browser.
                 </p>
               </div>
-              <Button size="lg" onClick={() => fileInput.current?.click()}>
+              {!resumeDocument && <Button size="lg" onClick={() => fileInput.current?.click()}>
                 Choose PDF
-              </Button>
+              </Button>}
             </div>
           </div>
         )}

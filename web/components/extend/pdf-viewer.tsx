@@ -128,6 +128,7 @@ export type PDFViewerHandle = {
   ) => void
   getViewportElement: () => HTMLDivElement | null
   search?: (query: string) => void
+  searchExact?: (query: string) => Promise<"highlighted" | "not_found" | "viewer_unavailable">
   clearSearch?: () => void
 }
 
@@ -2295,34 +2296,61 @@ function PDFViewerInner({
 
   const { state: searchState, provides: searchProvider } = useSearch(documentId)
 
+  const performSearch = React.useCallback(
+    (rawQuery: string, exact = false): Promise<"highlighted" | "not_found" | "viewer_unavailable"> => {
+      if (!searchProvider || !rawQuery?.trim()) return Promise.resolve("viewer_unavailable")
+      const clean = rawQuery.replace(/[*_`#>]/g, " ").replace(/\s+/g, " ").trim()
+      const words = clean.split(" ").filter(Boolean)
+      const candidates = exact ? [rawQuery.trim()] : [
+        clean,
+        clean.replace(/[-–—.,;:!?'"()[\]{}]/g, " ").replace(/\s+/g, " ").trim(),
+        words.slice(0, 4).join(" "),
+        words.slice(0, 3).join(" "),
+        words.slice(0, 2).join(" "),
+      ].filter((q, idx, arr) => q.length >= 3 && arr.indexOf(q) === idx)
+
+      return new Promise((resolve) => {
+        const tryNext = (idx: number) => {
+          if (idx >= candidates.length) return resolve("not_found")
+          const target = candidates[idx]
+          searchProvider.startSearch()
+          searchProvider.searchAllPages(target).wait(
+            (result) => {
+              if (result.results.length > 0) {
+                searchProvider.goToResult(0)
+                const firstResult = result.results[0]
+                const firstRect = firstResult.rects[0]
+                scroll?.scrollToPage({
+                  pageNumber: firstResult.pageIndex + 1,
+                  ...(firstRect
+                    ? {
+                        pageCoordinates: {
+                          x: firstRect.origin.x,
+                          y: firstRect.origin.y,
+                        },
+                        alignY: 30,
+                      }
+                    : {}),
+                  behavior: "auto",
+                })
+                resolve("highlighted")
+              } else {
+                tryNext(idx + 1)
+              }
+            },
+            () => exact ? resolve("viewer_unavailable") : tryNext(idx + 1)
+          )
+        }
+        tryNext(0)
+      })
+    },
+    [scroll, searchProvider]
+  )
+
   React.useEffect(() => {
     if (!initialSearchQuery?.trim() || !searchProvider) return
-    const query = initialSearchQuery.trim()
-    searchProvider.startSearch()
-    searchProvider.searchAllPages(query).wait(
-      (result) => {
-        const firstResult = result.results[0]
-        if (!firstResult) return
-
-        searchProvider.goToResult(0)
-        const firstRect = firstResult.rects[0]
-        scroll?.scrollToPage({
-          pageNumber: firstResult.pageIndex + 1,
-          ...(firstRect
-            ? {
-                pageCoordinates: {
-                  x: firstRect.origin.x,
-                  y: firstRect.origin.y,
-                },
-                alignY: 30,
-              }
-            : {}),
-          behavior: "auto",
-        })
-      },
-      () => undefined
-    )
-  }, [initialSearchQuery, scroll, searchProvider])
+    performSearch(initialSearchQuery)
+  }, [initialSearchQuery, performSearch, searchProvider])
 
   React.useImperativeHandle(
     viewerRef,
@@ -2347,38 +2375,14 @@ function PDFViewerInner({
       },
       getViewportElement: () => viewportElementRef.current,
       search: (query: string) => {
-        if (!searchProvider || !query.trim()) return
-        searchProvider.startSearch()
-        searchProvider.searchAllPages(query.trim()).wait(
-          (result) => {
-            if (result.results.length === 0) return
-            searchProvider.goToResult(0)
-            // goToResult alone does not move the viewport: scroll explicitly to the
-            // match's page and position, mirroring the in-viewer search behavior.
-            const firstResult = result.results[0]
-            const firstRect = firstResult.rects[0]
-            scroll?.scrollToPage({
-              pageNumber: firstResult.pageIndex + 1,
-              ...(firstRect
-                ? {
-                    pageCoordinates: {
-                      x: firstRect.origin.x,
-                      y: firstRect.origin.y,
-                    },
-                    alignY: 30,
-                  }
-                : {}),
-              behavior: "auto",
-            })
-          },
-          () => undefined
-        )
+        void performSearch(query)
       },
+      searchExact: (query: string) => performSearch(query, true),
       clearSearch: () => {
         searchProvider?.stopSearch()
       },
     }),
-    [pdfDocument, scroll, scrollToPage, searchProvider]
+    [pdfDocument, performSearch, scroll, scrollToPage, searchProvider]
   )
 
   const handleDownload = React.useCallback(async () => {

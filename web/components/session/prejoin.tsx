@@ -16,7 +16,10 @@ import {
   LoaderCircle,
   Mic,
   MicOff,
+  Monitor,
   RotateCcw,
+  ScreenShare,
+  ScreenShareOff,
   Video,
   VideoOff,
   Volume2,
@@ -29,6 +32,7 @@ import { FileThumbnail } from "@/components/extend/file-thumbnail";
 export type PreJoinMediaSettings = {
   microphoneEnabled: boolean;
   cameraEnabled: boolean;
+  screenShareEnabled?: boolean;
   microphoneDeviceId?: string;
   cameraDeviceId?: string;
   speakerDeviceId?: string;
@@ -291,6 +295,7 @@ export function PreJoin({
       {
         microphoneEnabled,
         cameraEnabled,
+        screenShareEnabled: true,
         microphoneDeviceId: microphoneDeviceId || undefined,
         cameraDeviceId: cameraDeviceId || undefined,
         speakerDeviceId: speakerDeviceId || undefined,
@@ -367,9 +372,17 @@ export function PreJoin({
         >
           {/* Card 1: Camera and microphone preview */}
           <section
-            aria-label="Camera and microphone preview "
+            aria-label="Camera and microphone preview"
             className="col-span-3 relative flex min-h-85 items-center justify-center overflow-hidden rounded-2xl bg-[#202124] shadow-[0_12px_32px_rgba(32,33,36,0.12)]"
           >
+            {/* Screen share enabled pill */}
+            <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 rounded-full bg-black/70 backdrop-blur-xs px-3 py-1 text-xs text-white border border-white/10">
+              <span className="size-2 rounded-full bg-amber-400" />
+              <span className="font-medium text-[11px]">
+                Entire Screen Required
+              </span>
+            </div>
+
             <video
               ref={videoRef}
               autoPlay
@@ -689,8 +702,11 @@ export function PreJoin({
             }
             className="h-12 min-w-44 cursor-pointer items-center justify-center rounded-full bg-brand px-8 text-sm font-semibold text-white shadow-[0_7px_20px_color-mix(in_srgb,var(--brand)_24%,transparent)] hover:bg-brand-strong disabled:opacity-45 disabled:cursor-not-allowed"
           >
-            {permission === "requesting" ? "Checking devices…" : "Join now"}
+            {permission === "requesting" ? "Checking devices…" : "Join session"}
           </Button>
+          <p className="mt-2.5 text-center text-xs text-[#5f6368] max-w-md">
+            When prompted, choose Entire Screen. Sharing a tab or window will be rejected.
+          </p>
           {permission === "ready" && permissionError ? (
             <p className="mt-3 max-w-sm text-center text-xs leading-5 text-amber-700">
               {permissionError}

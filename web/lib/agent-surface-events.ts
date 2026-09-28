@@ -35,7 +35,7 @@ export type AgentSurface =
       highlightElements?: string[];
       scrollToElements?: string[];
     }
-  | { key: string; tool: "pdf"; sourceUrl?: string; fileId?: string; fileName?: string; page?: number; highlightQuery?: string }
+  | { key: string; tool: "pdf"; sourceUrl?: string; fileId?: string; fileName?: string; page?: number; highlightQuery?: string; claimId?: string; searchRequestId?: string; exactHighlight?: boolean; resumeDocument?: boolean }
   | { key: string; tool: "presentation"; sourceUrl?: string; slideNumber?: number }
   | { key: string; tool: "image"; sourceUrl?: string; fileId?: string }
   | null;
@@ -163,6 +163,7 @@ export function parseAgentSurfaceMessage(value: unknown):
           ...(fileName ? { fileName } : {}),
           page,
           highlightQuery,
+          resumeDocument: event.resumeDocument === true,
         },
       };
     }
@@ -188,6 +189,10 @@ export function parseAgentSurfaceMessage(value: unknown):
           ...(fileName ? { fileName } : {}),
           page,
           highlightQuery,
+          claimId: typeof event.claimId === "string" ? event.claimId : undefined,
+          searchRequestId: typeof event.commandId === "string" ? event.commandId : undefined,
+          exactHighlight: event.exactHighlight === true,
+          resumeDocument: event.resumeDocument === true,
         },
       };
     }

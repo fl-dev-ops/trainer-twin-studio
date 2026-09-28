@@ -42,7 +42,7 @@ export default async function SessionsPage() {
   if (!org) redirect("/auth/no-org");
   const sessions = await db.interviewSession.findMany({
     where: { orgId: org.id, deletedAt: null },
-    orderBy: { startedAt: "desc" },
+    orderBy: { createdAt: "desc" },
     take: 100,
   });
 

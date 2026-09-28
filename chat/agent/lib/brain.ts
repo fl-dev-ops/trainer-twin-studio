@@ -38,6 +38,7 @@ export type SessionSpecs = {
   opening?: string;
   instruction?: string;
   interviewSettings?: string;
+  interviewType?: string;
   agentPolicy?: string;
   domainName?: string;
   domainSlug?: string;
@@ -333,6 +334,7 @@ export async function loadSessionContext(
     opening: typeof agentData.opening === "string" ? agentData.opening : undefined,
     instruction: typeof agentData.instruction === "string" ? agentData.instruction : undefined,
     interviewSettings: formatInterviewSettings(agentData, phases),
+    interviewType: (agentData.config as { interview?: { type?: string } } | null)?.interview?.type,
     behavioralRules: formatBehavioralRules(agentData, phases),
     agentPolicy,
     domainName: typeof domainData.name === "string" ? domainData.name : result.domain?.slug,
@@ -391,18 +393,24 @@ export function formatSessionSpec(specs: SessionSpecs): string {
 
   let resumeBlock = "";
   if (specs.resume) {
-    const claims = specs.resume.claims ?? [];
-    const claimList = claims.length > 0
-      ? claims.slice(0, 30).map((c) => `- [${c.kind.toUpperCase()}] "${c.text}" (section: ${c.section}, anchor: "${c.anchor}"${c.metric ? `, metric: "${c.metric}"` : ""})`).join("\n")
-      : "No structured claims extracted.";
+    if (specs.interviewType === "resume") {
+      resumeBlock = `\nCANDIDATE RESUME DATA
+Document ID: "${specs.resume.documentId}"
+Resume questions must use list_resume_claims, get_resume_claim, and start_resume_question. The model must never choose a highlight phrase.\n`;
+    } else {
+      const claims = specs.resume.claims ?? [];
+      const claimList = claims.length > 0
+        ? claims.slice(0, 30).map((c) => `- [${c.kind.toUpperCase()}] "${c.text}" (section: ${c.section}, anchor: "${c.anchor}"${c.metric ? `, metric: "${c.metric}"` : ""})`).join("\n")
+        : "No structured claims extracted.";
 
-    resumeBlock = `\nCANDIDATE RESUME DATA
+      resumeBlock = `\nCANDIDATE RESUME DATA
 Document ID: "${specs.resume.documentId}"
 Verbatim extracted excerpt:
 ${specs.resume.extractedText.slice(0, 3500)}
 
 Declared claims extracted from the resume; these are not verified facts:
 ${claimList}\n`;
+    }
   }
 
   const uiStateBlock = specs.uiState

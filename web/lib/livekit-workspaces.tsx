@@ -69,7 +69,7 @@ export function parseWorkspaceCommandSurface(command: {
   tool: string;
   input: unknown;
 }): { surface: AgentSurface } | null {
-  if (command.tool !== "surface") return null;
+  if (command.tool !== "surface" && command.tool !== "start_resume_question") return null;
   const input = command.input && typeof command.input === "object" && !Array.isArray(command.input)
     ? command.input as Record<string, unknown>
     : {};
@@ -82,6 +82,7 @@ export function parseWorkspaceCommandSurface(command: {
   return parseAgentSurfaceMessage({
     ...payload,
     type: action,
+    ...(command.tool === "start_resume_question" ? { commandId: command.id } : {}),
     ...(action === "open_code_editor" && !hasId
       ? { commandId: command.id }
       : {}),
@@ -100,7 +101,7 @@ export function LiveKitWorkspaceProvider({
   children: ReactNode;
   sessionId?: string;
   runtimeToken?: string;
-  onSurface: (surface: AgentSurface) => void;
+  onSurface: (surface: AgentSurface) => void | Promise<{ status: string }>;
   onEndSession?: () => void;
   /** While false (e.g. intro video still playing), pending commands are not polled. */
   active?: boolean;
@@ -143,14 +144,15 @@ export function LiveKitWorkspaceProvider({
           onEndSession?.();
           return;
         }
-        if (command.tool === "surface") {
+        if (command.tool === "surface" || command.tool === "start_resume_question") {
           const parsed = parseWorkspaceCommandSurface(command);
-          if (parsed) onSurface(parsed.surface);
+          if (command.tool === "start_resume_question" && !parsed) throw new Error("Resume question has no PDF surface");
+          const surfaceResult = parsed ? await onSurface(parsed.surface) : undefined;
           const action = String(input.action ?? input.type ?? "");
           await fetch(`/api/sessions/${sessionId}/commands/${command.id}`, {
             method: "POST",
             headers: { ...headers, "Content-Type": "application/json" },
-            body: JSON.stringify({ result: { ok: true, action } }),
+            body: JSON.stringify({ result: { ok: true, action, ...(command.tool === "start_resume_question" ? surfaceResult ?? { status: "viewer_unavailable" } : surfaceResult) } }),
           });
           return;
         }

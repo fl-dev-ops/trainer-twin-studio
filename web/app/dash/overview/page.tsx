@@ -38,7 +38,7 @@ export default async function DashboardPage() {
     db.persona.count({ where: { orgId: org.id } }),
     db.agent.count({ where: { orgId: org.id } }),
     db.knowledgeBase.count({ where: { orgId: org.id } }),
-    db.interviewSession.findMany({ where: { orgId: org.id, deletedAt: null }, orderBy: { startedAt: "desc" }, take: 8 }),
+    db.interviewSession.findMany({ where: { orgId: org.id, deletedAt: null }, orderBy: { createdAt: "desc" }, take: 8 }),
   ]);
 
   const stats = [

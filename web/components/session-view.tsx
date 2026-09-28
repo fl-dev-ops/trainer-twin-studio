@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { toast } from "sonner";
-import { Check, LoaderCircle, Play, Upload as UploadIcon, Volume2, X } from "lucide-react";
+import { Check, LoaderCircle, Play, ScreenShare, ScreenShareOff, Upload as UploadIcon, Volume2, X } from "lucide-react";
 import { type AgentContextUpload } from "@/lib/context-upload";
 import "@livekit/components-styles";
 import {
@@ -16,6 +16,7 @@ import {
   ParticipantKind,
   Room,
   RoomEvent,
+  Track,
   type RemoteParticipant,
   type TranscriptionSegment,
 } from "livekit-client";
@@ -40,6 +41,7 @@ import { AgentTile } from "@/components/session/agent-tile";
 import { CandidateTile } from "@/components/session/candidate-tile";
 import { SessionControlBar } from "@/components/session/session-control-bar";
 import { SessionSidebar } from "@/components/session/session-sidebar";
+import { ReportIssueButton } from "@/components/report-issue-button";
 import { LiveSubtitles } from "@/components/session/live-subtitles";
 import { ChoicePanel } from "@/components/session/choice";
 import { CodeEditor } from "@/components/session/code-editor";
@@ -60,6 +62,22 @@ type EndReason = "completed" | "manual" | "disconnected";
 type WhiteboardAcknowledgement = { accepted: boolean; message?: string };
 
 const SURFACE_STATE_PUBLISH_INTERVAL_MS = 5_000;
+
+function screenShareSurface(room: Room) {
+  const publication = [...room.localParticipant.videoTrackPublications.values()]
+    .find((track) => track.source === Track.Source.ScreenShare);
+  return publication?.track?.mediaStreamTrack.getSettings().displaySurface;
+}
+
+async function enableWholeScreenShare(room: Room) {
+  await room.localParticipant.setScreenShareEnabled(true);
+  const surface = screenShareSurface(room);
+  if (surface === "monitor") return;
+  await room.localParticipant.setScreenShareEnabled(false);
+  throw new Error(surface
+    ? "Select Entire Screen, not a browser tab or window."
+    : "This browser could not verify an entire-screen share.");
+}
 
 type SessionConnection = {
   url: string;
@@ -139,6 +157,7 @@ export function SessionView({
   const [prejoinMedia, setPrejoinMedia] = useState<PreJoinMediaSettings>({
     microphoneEnabled: true,
     cameraEnabled: false,
+    screenShareEnabled: true,
   });
   const [connection, setConnection] = useState<SessionConnection | null>(null);
   const [connected, setConnected] = useState(false);
@@ -155,6 +174,10 @@ export function SessionView({
   const [surfaceRevision, setSurfaceRevision] = useState(0);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isScreenSharePending, setIsScreenSharePending] = useState(false);
+  const [screenShareAttempted, setScreenShareAttempted] = useState(false);
+  const [screenShareError, setScreenShareError] = useState("");
+  const screenShareAutoPromptedRef = useRef(false);
+  const screenShareValidationPendingRef = useRef(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [latestSpokenText, setLatestSpokenText] = useState("");
   const [elapsed, setElapsed] = useState(0);
@@ -173,6 +196,10 @@ export function SessionView({
   const whiteboardAcknowledgementsRef = useRef(
     new Map<string, (acknowledgement: WhiteboardAcknowledgement) => void>(),
   );
+  const pendingResumeHighlightRef = useRef(new Map<string, {
+    resolve: (result: { status: string }) => void;
+    timer: ReturnType<typeof setTimeout>;
+  }>());
 
   useEffect(() => {
     entriesRef.current = entries;
@@ -219,6 +246,10 @@ export function SessionView({
     setSurfaceRevision(0);
     setIsScreenSharing(false);
     setIsScreenSharePending(false);
+    setScreenShareAttempted(false);
+    setScreenShareError("");
+    screenShareAutoPromptedRef.current = false;
+    screenShareValidationPendingRef.current = false;
     setLatestSpokenText("");
     setElapsed(0);
   }, []);
@@ -313,16 +344,56 @@ export function SessionView({
 
   useEffect(() => {
     const syncScreenShareState = () => {
-      setIsScreenSharing(room.localParticipant.isScreenShareEnabled);
+      if (!room.localParticipant.isScreenShareEnabled) {
+        setIsScreenSharing(false);
+        return;
+      }
+      const surface = screenShareSurface(room);
+      if (surface !== "monitor") {
+        setIsScreenSharing(false);
+        setScreenShareError(surface
+          ? "Select Entire Screen, not a browser tab or window."
+          : "This browser could not verify an entire-screen share.");
+        if (!screenShareValidationPendingRef.current) {
+          void room.localParticipant.setScreenShareEnabled(false).catch((error) => {
+            console.error("Could not stop a non-screen share:", error);
+          });
+        }
+        return;
+      }
+      setScreenShareError("");
+      setIsScreenSharing(true);
     };
     syncScreenShareState();
     room.on(RoomEvent.LocalTrackPublished, syncScreenShareState);
     room.on(RoomEvent.LocalTrackUnpublished, syncScreenShareState);
+    const checkSurface = window.setInterval(syncScreenShareState, 1000);
     return () => {
       room.off(RoomEvent.LocalTrackPublished, syncScreenShareState);
       room.off(RoomEvent.LocalTrackUnpublished, syncScreenShareState);
+      window.clearInterval(checkSurface);
     };
   }, [room]);
+
+  // Prompt for screen share immediately as soon as the room connects on entry
+  useEffect(() => {
+    if (!connected || screenShareAutoPromptedRef.current || ended) return;
+    screenShareAutoPromptedRef.current = true;
+    screenShareValidationPendingRef.current = true;
+    setIsScreenSharePending(true);
+    void (async () => {
+      try {
+        await enableWholeScreenShare(room);
+      } catch (shareErr) {
+        console.info("Whole-screen sharing was not started on join:", shareErr);
+        setScreenShareError(shareErr instanceof Error ? shareErr.message : "Select Entire Screen to continue.");
+      } finally {
+        screenShareValidationPendingRef.current = false;
+        setIsScreenSharePending(false);
+        setScreenShareAttempted(true);
+      }
+    })();
+  }, [connected, room, ended]);
 
   useEffect(() => {
     if (!connected) return;
@@ -424,6 +495,24 @@ export function SessionView({
       setSurfaceRevision(0);
     }
     setSurface(nextSurface);
+    if (nextSurface?.tool === "pdf" && nextSurface.exactHighlight && nextSurface.searchRequestId) {
+      return new Promise<{ status: string }>((resolve) => {
+        const requestId = nextSurface.searchRequestId!;
+        const timer = setTimeout(() => {
+          pendingResumeHighlightRef.current.delete(requestId);
+          resolve({ status: "viewer_unavailable" });
+        }, 12_000);
+        pendingResumeHighlightRef.current.set(requestId, { resolve, timer });
+      });
+    }
+  }, []);
+
+  const handleResumeHighlightResult = useCallback((requestId: string, status: string) => {
+    const pending = pendingResumeHighlightRef.current.get(requestId);
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    pendingResumeHighlightRef.current.delete(requestId);
+    pending.resolve({ status });
   }, []);
 
   const handleSurfaceContentChange = useCallback(() => {
@@ -467,17 +556,20 @@ export function SessionView({
 
   const handleEnableScreenShare = useCallback(async () => {
     if (isScreenSharePending) return;
+    screenShareValidationPendingRef.current = true;
     setIsScreenSharePending(true);
     try {
-      await room.localParticipant.setScreenShareEnabled(true);
+      await enableWholeScreenShare(room);
     } catch (shareError) {
       console.error("Could not start screen sharing:", shareError);
+      setScreenShareError(shareError instanceof Error ? shareError.message : "Select Entire Screen to continue.");
       toast.error(
         shareError instanceof DOMException && shareError.name === "NotAllowedError"
           ? "Screen sharing was cancelled or denied."
-          : "Could not start screen sharing on this device.",
+          : shareError instanceof Error ? shareError.message : "Could not start screen sharing on this device.",
       );
     } finally {
+      screenShareValidationPendingRef.current = false;
       setIsScreenSharePending(false);
     }
   }, [isScreenSharePending, room]);
@@ -1007,27 +1099,47 @@ export function SessionView({
               </Link>
             )}
 
-            <time className="font-mono text-xs font-medium text-white">{elapsedLabel}</time>
+            <div className="flex items-center gap-3">
+              {sessionCode ? <ReportIssueButton /> : null}
+              {isScreenSharing && (
+                <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium">
+                  <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
+                  Screen sharing live
+                </div>
+              )}
+              <time className="font-mono text-xs font-medium text-white">{elapsedLabel}</time>
+            </div>
           </header>
 
-          {connected && (surface?.tool === "code" || surface?.tool === "canvas") && !isScreenSharing && (
-            <div className="flex shrink-0 items-center justify-center gap-3 border-b border-white/[0.06] bg-amber-400/10 px-4 py-2 text-xs text-amber-100">
-              <span>
-                Share your entire screen so the trainer can review your live work and give timely feedback.
-              </span>
-              <Button
-                type="button"
-                size="sm"
-                disabled={isScreenSharePending}
-                onClick={() => void handleEnableScreenShare()}
-              >
-                {isScreenSharePending ? "Starting…" : "Share screen"}
-              </Button>
-            </div>
-          )}
-
           {/* Main Body: Stage (Left) & Chat Sidebar (Right) — EQUAL HEIGHT */}
-          <main className="flex min-h-0 flex-1 gap-4 p-4 pb-2">
+          <main className="relative flex min-h-0 flex-1 gap-4 p-4 pb-2">
+            {/* Blocking overlay when screen sharing is stopped */}
+            {connected && !isScreenSharing && screenShareAttempted && !isScreenSharePending && (
+              <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/85 p-6 backdrop-blur-md">
+                <div className="max-w-md w-full rounded-2xl border border-brand/40 bg-[#191b22] p-7 text-center shadow-2xl flex flex-col items-center animate-in fade-in zoom-in-95 duration-200">
+                  <div className="size-16 rounded-2xl bg-brand/15 border border-brand/30 text-brand flex items-center justify-center mb-4">
+                    <ScreenShare className="size-8" />
+                  </div>
+                  <h3 className="text-xl font-bold text-white tracking-tight">Entire Screen Required</h3>
+                  <p className="mt-2.5 text-xs text-zinc-300 leading-relaxed">
+                    {screenShareError || "Choose Entire Screen in the browser picker so your trainer can review your work throughout the session. Tabs and windows are not accepted."}
+                  </p>
+                  <div className="mt-6 w-full flex flex-col gap-2.5">
+                    <Button
+                      type="button"
+                      size="lg"
+                      disabled={isScreenSharePending}
+                      onClick={() => void handleEnableScreenShare()}
+                      className="w-full bg-brand hover:bg-brand-strong text-white font-bold h-11 text-sm cursor-pointer shadow-lg active:scale-98 transition-all"
+                    >
+                      <ScreenShare className="size-4.5 mr-2" />
+                      {isScreenSharePending ? "Connecting screen share…" : "Share Entire Screen to Resume"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Stage Section */}
             <div className="relative flex min-h-0 flex-1">
               <div className="flex min-h-0 w-full gap-4 transition-all duration-300">
@@ -1089,6 +1201,10 @@ export function SessionView({
                           }
                           initialPage={surface.page}
                           highlightQuery={surface.highlightQuery}
+                          exactHighlight={surface.exactHighlight}
+                          resumeDocument={surface.resumeDocument}
+                          searchRequestId={surface.searchRequestId}
+                          onHighlightResult={handleResumeHighlightResult}
                           title={surface.fileName ?? contextList.find((c) => c.id === surface.fileId)?.name}
                         />
                       )}
