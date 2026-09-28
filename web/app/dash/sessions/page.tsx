@@ -1,7 +1,7 @@
 import { History } from "lucide-react";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
-import { getSessionOrg } from "@/lib/org";
+import { getTrainerOrg } from "@/lib/org";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -38,10 +38,10 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
 };
 
 export default async function SessionsPage() {
-  const org = await getSessionOrg();
-  if (!org) redirect("/auth/no-org");
+  const trainer = await getTrainerOrg();
+  if (!trainer) redirect("/auth/no-org");
   const sessions = await db.interviewSession.findMany({
-    where: { orgId: org.id, deletedAt: null },
+    where: { orgId: trainer.id, deletedAt: null },
     orderBy: { createdAt: "desc" },
     take: 100,
   });

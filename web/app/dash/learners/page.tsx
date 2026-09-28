@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getTrainerOrg } from "@/lib/org";
 import { LearnersView, type LearnerData, type LearnerSessionItem } from "@/components/learners-view";
 import { isSessionReport, normalizeSessionReportStatus, type SessionReport } from "@/lib/session-report";
 
@@ -48,17 +49,13 @@ export default async function LearnersPage() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/auth/sign-in");
 
-  // Restrict strictly to admins and owners
-  const member = await db.member.findFirst({
-    where: { userId: session.user.id, role: { in: ["owner", "admin"] } },
-    select: { organizationId: true },
-  });
-  if (!member) redirect("/auth/no-org");
+  const trainer = await getTrainerOrg();
+  if (!trainer) redirect("/auth/no-org");
 
   // Fetch all completed sessions for this organization
   const dbSessions = await db.interviewSession.findMany({
     where: {
-      orgId: member.organizationId,
+      orgId: trainer.id,
       status: "completed",
       deletedAt: null,
     },

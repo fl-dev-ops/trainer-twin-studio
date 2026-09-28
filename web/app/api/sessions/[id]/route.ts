@@ -35,8 +35,13 @@ export async function GET(
     try {
       const { org, user } = await resolveSessionUser();
       if (org && user) {
+        const member = await db.member.findFirst({
+          where: { organizationId: org.id, userId: user.id },
+          select: { role: true },
+        });
+        const trainer = member?.role.split(",").some((role) => ["owner", "admin"].includes(role.trim()));
         session = await db.interviewSession.findFirst({
-          where: { id, orgId: org.id, deletedAt: null },
+          where: { id, orgId: org.id, deletedAt: null, ...(trainer ? {} : { userId: user.id }) },
           select: {
             id: true,
             status: true,
@@ -55,7 +60,7 @@ export async function GET(
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
   }
 
-  const runtimeState = session.runtimeState as Record<string, any> | null;
+  const runtimeState = session.runtimeState as Record<string, unknown> | null;
   const coverage = session.evidence ?? runtimeState?.coverage ?? {};
   const phaseIndex = runtimeState?.phase_index ?? 0;
 

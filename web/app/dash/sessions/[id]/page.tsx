@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getTrainerOrg } from "@/lib/org";
 
 export const dynamic = "force-dynamic";
 
@@ -27,23 +28,15 @@ export default async function SessionDetailPage({
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/auth/sign-in");
 
-  const member = await db.member.findFirst({
-    where: { userId: session.user.id, role: { in: ["owner", "admin"] } },
-    select: { organizationId: true },
-  });
-  if (!member) redirect("/auth/no-org");
+  const trainer = await getTrainerOrg();
+  if (!trainer) redirect("/auth/no-org");
 
   const row = await db.interviewSession.findFirst({
-    where: { id, orgId: member.organizationId, deletedAt: null },
+    where: { id, orgId: trainer.id, deletedAt: null },
   });
   if (!row) notFound();
 
   const transcript = Array.isArray(row.transcript) ? (row.transcript as TranscriptEntry[]) : [];
-  const evidence =
-    row.evidence && typeof row.evidence === "object"
-      ? (Object.entries(row.evidence as Record<string, unknown>) as [string, unknown][])
-      : [];
-
   // The user who ran the session (if identified).
   const runner = row.userId
     ? await db.user.findUnique({ where: { id: row.userId }, select: { name: true, email: true } })

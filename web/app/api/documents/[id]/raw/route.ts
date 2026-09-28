@@ -1,6 +1,4 @@
-import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getSessionOrg } from "@/lib/org";
 import { resolveSessionUser } from "@/lib/session-user";
 
 export async function GET(
@@ -8,10 +6,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const org = await getSessionOrg();
-  if (!org) return new Response("Unauthorized", { status: 401 });
-  const { user } = await resolveSessionUser().catch(() => ({ user: null }));
-  if (!user) return new Response("Unauthorized", { status: 401 });
+  const { org, user } = await resolveSessionUser();
+  if (!org || !user) return new Response("Unauthorized", { status: 401 });
 
   const url = new URL(req.url);
   const sessionId = url.searchParams.get("sessionId");

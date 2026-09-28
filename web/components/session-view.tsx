@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { toast } from "sonner";
-import { Check, LoaderCircle, Play, ScreenShare, ScreenShareOff, Upload as UploadIcon, Volume2, X } from "lucide-react";
+import { Check, LoaderCircle, Play, ScreenShare, Upload as UploadIcon, Volume2 } from "lucide-react";
 import { type AgentContextUpload } from "@/lib/context-upload";
 import "@livekit/components-styles";
 import {
@@ -163,7 +163,9 @@ export function SessionView({
   const [connected, setConnected] = useState(false);
   const [agentInRoom, setAgentInRoom] = useState(false);
   const [error, setError] = useState("");
+  const [saveFailed, setSaveFailed] = useState(false);
   const [ended, setEnded] = useState(false);
+  const [completedSessionId, setCompletedSessionId] = useState<string | null>(null);
   const [endReason, setEndReason] = useState<EndReason>("disconnected");
   const [introDone, setIntroDone] = useState(false);
   const [introPlaybackSrc, setIntroPlaybackSrc] = useState<string | null>(null);
@@ -187,6 +189,7 @@ export function SessionView({
   const startedRef = useRef(false);
   const releasedRef = useRef(false);
   const endingRef = useRef(false);
+  const pendingEndReasonRef = useRef<EndReason>("disconnected");
   const entriesRef = useRef<Entry[]>([]);
   const coverageRef = useRef<Coverage>({});
   const finalizedRef = useRef(false);
@@ -235,6 +238,7 @@ export function SessionView({
     setLaunched(false);
     setAgentInRoom(false);
     setError("");
+    setSaveFailed(false);
     setEndReason("disconnected");
     setIntroDone(false);
     setEntries([]);
@@ -442,34 +446,52 @@ export function SessionView({
   }, [room, connected, agentInRoom, ended, introSrc, introDone, prejoinMedia]);
 
   const finalizeSession = useCallback(
-    (status: "completed" | "abandoned") => {
-      if (finalizedRef.current || !connection) return;
+    async (status: "completed" | "abandoned") => {
+      if (!connection) throw new Error("Session connection is unavailable");
+      if (finalizedRef.current) return;
       finalizedRef.current = true;
-      void fetch("/api/sessions/finalize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId: connection.sessionId,
-          status,
-          transcript: entriesRef.current,
-          evidence: coverageRef.current,
-        }),
-        keepalive: true,
-      }).catch(() => {});
+      try {
+        const response = await fetch("/api/sessions/finalize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: connection.sessionId,
+            status,
+            transcript: entriesRef.current,
+            evidence: coverageRef.current,
+          }),
+          keepalive: true,
+        });
+        if (!response.ok) throw new Error(`Session save failed (${response.status})`);
+      } catch (saveError) {
+        finalizedRef.current = false;
+        throw saveError;
+      }
     },
     [connection],
   );
 
   const handleDisconnect = useCallback(
     async (reason: EndReason) => {
+      if (endingRef.current) return;
       endingRef.current = true;
-      finalizeSession(reason === "completed" ? "completed" : "abandoned");
+      pendingEndReasonRef.current = reason;
+      try {
+        await finalizeSession(reason === "completed" ? "completed" : "abandoned");
+      } catch (saveError) {
+        console.error("Could not save session", saveError);
+        setSaveFailed(true);
+        setError("Your session could not be saved. Please try again before closing this tab.");
+        endingRef.current = false;
+        return;
+      }
+      setCompletedSessionId(connection?.sessionId ?? null);
       await room.disconnect().catch(() => {});
       resetSessionState();
       setEndReason(reason);
       setEnded(true);
     },
-    [room, finalizeSession, resetSessionState],
+    [connection, room, finalizeSession, resetSessionState],
   );
 
   const handleSendMessage = useCallback(
@@ -830,10 +852,7 @@ export function SessionView({
 
     function handleRoomDisconnected() {
       if (endingRef.current) return;
-      finalizeSession("abandoned");
-      resetSessionState();
-      setEndReason("disconnected");
-      setEnded(true);
+      void handleDisconnect("disconnected");
     }
 
     room.on(RoomEvent.TranscriptionReceived, handleTranscription);
@@ -845,7 +864,7 @@ export function SessionView({
       room.off(RoomEvent.DataReceived, handleData);
       room.off(RoomEvent.Disconnected, handleRoomDisconnected);
     };
-  }, [room, connection, handleDisconnect, finalizeSession, resetSessionState]);
+  }, [room, connection, handleDisconnect, resetSessionState]);
 
   useEffect(() => {
     if (!launched || ended) return;
@@ -885,8 +904,8 @@ export function SessionView({
     return (
       <div className="dark flex h-dvh w-dvw items-center justify-center bg-[#14161a] p-6 text-foreground">
         <Card className="w-full max-w-md border border-white/[0.06] bg-[#1c1f26] text-center shadow-2xl">
-          {sessionCode && endReason !== "disconnected" ? (
-            <SessionFeedback scenarioName={scenarioName} />
+          {sessionCode && completedSessionId && endReason !== "disconnected" ? (
+            <SessionFeedback scenarioName={scenarioName} sessionId={completedSessionId} />
           ) : (
             <>
               <CardHeader>
@@ -1226,7 +1245,11 @@ export function SessionView({
                       {surface.tool === "presentation" && (
                         <PresentationViewer
                           key={surface.key}
-                          sourceUrl={surface.sourceUrl}
+                          sourceUrl={
+                            surface.sourceUrl?.startsWith("/api/documents/") && !surface.sourceUrl.includes("sessionId=")
+                              ? `${surface.sourceUrl}${surface.sourceUrl.includes("?") ? "&" : "?"}sessionId=${connection?.sessionId ?? ""}`
+                              : surface.sourceUrl
+                          }
                           initialSlideNumber={surface.slideNumber}
                         />
                       )}
@@ -1304,7 +1327,7 @@ export function SessionView({
             <div className="absolute inset-0 z-50 grid place-items-center bg-[#14161a]/85 p-6 backdrop-blur-md">
               <Card className="w-full max-w-md border border-white/[0.06] bg-[#1c1f26] text-center shadow-2xl">
                 <CardHeader>
-                  <CardTitle>Connection problem</CardTitle>
+                  <CardTitle>{saveFailed ? "Could not save session" : "Session problem"}</CardTitle>
                   <CardDescription>{error}</CardDescription>
                 </CardHeader>
                 <CardContent className="flex justify-center gap-2">
@@ -1319,7 +1342,7 @@ export function SessionView({
                       Back
                     </Button>
                   )}
-                  <Button onClick={handleRetry}>Try again</Button>
+                  <Button onClick={saveFailed ? () => void handleDisconnect(pendingEndReasonRef.current) : handleRetry}>Try again</Button>
                 </CardContent>
               </Card>
             </div>
@@ -1331,11 +1354,31 @@ export function SessionView({
   );
 }
 
-/** UI-only feedback form shown on the end screen of assigned sessions. */
-function SessionFeedback({ scenarioName }: { scenarioName?: string }) {
+function SessionFeedback({ scenarioName, sessionId }: { scenarioName?: string; sessionId: string }) {
   const [rating, setRating] = useState<number | null>(null);
   const [note, setNote] = useState("");
   const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [feedbackError, setFeedbackError] = useState("");
+
+  async function sendFeedback() {
+    if (rating === null || sending) return;
+    setSending(true);
+    setFeedbackError("");
+    try {
+      const response = await fetch(`/api/sessions/${sessionId}/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rating, note }),
+      });
+      if (!response.ok) throw new Error("Feedback could not be saved. Please try again.");
+      setSent(true);
+    } catch (error) {
+      setFeedbackError(error instanceof Error ? error.message : "Feedback could not be saved.");
+    } finally {
+      setSending(false);
+    }
+  }
 
   if (sent) {
     return (
@@ -1408,8 +1451,9 @@ function SessionFeedback({ scenarioName }: { scenarioName?: string }) {
           placeholder="Anything else you'd like to share? (optional)"
           className="w-full resize-none rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-brand"
         />
-        <Button disabled={rating === null} onClick={() => setSent(true)} className="w-full">
-          Send feedback
+        {feedbackError && <p role="alert" className="text-sm text-destructive">{feedbackError}</p>}
+        <Button disabled={rating === null || sending} onClick={() => void sendFeedback()} className="w-full">
+          {sending ? "Sending…" : "Send feedback"}
         </Button>
       </CardContent>
     </>

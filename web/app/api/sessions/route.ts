@@ -2,16 +2,16 @@ import { NextResponse } from "next/server";
 import { authorizeRuntimeSession, type SessionEndStatus } from "@/lib/interview-sessions";
 import { closeInterviewSession } from "@/lib/session-lifecycle";
 import { activateInterviewRuntime } from "@/lib/session-activation";
-import { getSessionOrg } from "@/lib/org";
+import { getTrainerOrg } from "@/lib/org";
 import { resolveSessionUser } from "@/lib/session-user";
 import { db } from "@/lib/db";
 import { listSessions } from "@/lib/specs";
 import { scheduleSessionReport } from "@/lib/session-report-jobs";
 
 export async function GET() {
-  const org = await getSessionOrg();
-  if (!org) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  return NextResponse.json({ sessions: await listSessions(org.id) });
+  const trainer = await getTrainerOrg();
+  if (!trainer) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  return NextResponse.json({ sessions: await listSessions(trainer.id) });
 }
 
 /** Learner-triggered activation. No runtime or LiveKit resources exist before this call. */
@@ -46,7 +46,12 @@ export async function POST(req: Request) {
     if (!activation) return NextResponse.json({ error: "Invalid or already used session URL" }, { status: 403 });
     return NextResponse.json(activation);
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Session activation failed" }, { status: 400 });
+    console.error("Session activation failed", error);
+    const message = error instanceof Error ? error.message : "";
+    if (message === "Context not found" || message.startsWith("Deployment does not allow ")) {
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+    return NextResponse.json({ error: "Could not start the session. Please try again or contact support." }, { status: 500 });
   }
 }
 

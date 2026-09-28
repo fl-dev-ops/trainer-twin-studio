@@ -304,6 +304,8 @@ model InterviewSession {
   s3AudioKey       String?
   report           Json?
   reportStatus     String?   @default("none") // none | generating | completed | failed
+  feedbackRating   Int?
+  feedbackNote     String?
   attempt          Int       @default(1)
   compiledSnapshot Json?
   runtimeState     Json?

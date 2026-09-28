@@ -193,6 +193,7 @@ export async function activateSession(input: {
   const mode = input.mode ?? "voice";
   const requestedDocs = Array.from(new Set([...(input.contextIds ?? []), ...(input.contextId ? [input.contextId] : [])]));
   let assignmentId: string | null = null;
+  let assignmentStatus: string | null = null;
   let deploymentId: string;
   let agentId: string;
   let activationKey: string;
@@ -208,7 +209,8 @@ export async function activateSession(input: {
     if (
       !found
       || !assignmentMatchesUser(found, { id: input.userId, email: input.userEmail ?? "" })
-      || found.status === "cancelled"
+      || !["pending", "used"].includes(found.status)
+      || found.deployment.status !== "active"
     ) return null;
     if (found.expiresAt <= new Date() && found.status === "pending") {
       await db.rolePlayAssignment.update({ where: { id: found.id }, data: { status: "expired" } });
@@ -216,6 +218,7 @@ export async function activateSession(input: {
     }
     if (!found.deployment.allowedModes.split(",").includes(mode)) throw new Error(`Deployment does not allow ${mode} sessions`);
     assignmentId = found.id;
+    assignmentStatus = found.status;
     deploymentId = found.deployment.id;
     agentId = found.deployment.agent.id;
     activationKey = `assignment:${found.id}:${found.shareCode}`;
@@ -244,6 +247,7 @@ export async function activateSession(input: {
     await db.interviewSession.update({ where: { id: existing.id }, data: { runtimeTokenHash: tokenHash(token) } });
     return { id: existing.id, agentSlug: existing.agentSlug, status: existing.status, mode: existing.mode as DeliveryMode, runtimeToken: token };
   }
+  if (assignmentId && assignmentStatus !== "pending") return null;
   if (existing?.status === "failed") {
     await db.interviewSession.delete({ where: { id: existing.id } });
   } else if (existing) {

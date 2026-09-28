@@ -4,7 +4,7 @@ import {
   mergeSessionEvidence,
   resolveSessionEndStatus,
   shouldStoreSessionTranscript,
-} from "../../../lib/interview-sessions";
+} from "../../lib/interview-sessions";
 
 test("browser finalization closes active sessions without downgrading completed ones", () => {
   assert.equal(resolveSessionEndStatus("active", "abandoned"), "abandoned");
