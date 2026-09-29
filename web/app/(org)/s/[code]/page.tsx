@@ -1,8 +1,9 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { SwitchAccountButton } from "@/components/auth/switch-account-button";
 import { HomeRedirect } from "@/components/session/home-redirect";
 import { SessionView } from "@/components/session-view";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { assignmentMatchesUser } from "@/lib/assignments";
 import { signInUrl } from "@/lib/base-domain";
 import { db } from "@/lib/db";
@@ -45,6 +46,25 @@ export default async function SharedSessionPage({ params }: { params: Promise<{ 
     && assignment.status === "pending"
     && !spent
     && assignment.expiresAt > new Date();
+  if (!usable && assignment && assignment.orgId === org?.id
+    && assignment.status === "pending" && !spent && assignment.expiresAt > new Date()
+    && !assignmentMatchesUser(assignment, user)) {
+    return (
+      <main className="grid min-h-svh place-items-center p-4">
+        <Card className="w-full max-w-md text-center">
+          <CardHeader>
+            <CardTitle>Use your invited account</CardTitle>
+            <CardDescription>
+              You are signed in as {user.email}. Use the account your trainer assigned to open this practice link.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <SwitchAccountButton returnTo={signInUrl(host, `/s/${encodeURIComponent(code)}`)} />
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
   if (!usable) {
     return (
       <main className="grid min-h-svh place-items-center p-4">

@@ -21,7 +21,7 @@ export default async function SignUpPage({
 
   return (
     <main className="flex min-h-svh items-center justify-center p-4">
-      <SignUpForm redirectTo={requested ?? undefined} />
+      <SignUpForm redirectTo={requested ?? undefined} googleEnabled={Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)} />
     </main>
   );
 }

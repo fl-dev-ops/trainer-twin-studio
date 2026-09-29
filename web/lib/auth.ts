@@ -6,7 +6,7 @@ import { createAccessControl } from "better-auth/plugins/access";
 import { adminAc, defaultStatements, memberAc, ownerAc } from "better-auth/plugins/organization/access";
 import { nextCookies } from "better-auth/next-js";
 import { db } from "@/lib/db";
-import { BASE_DOMAIN } from "@/lib/base-domain";
+import { BASE_DOMAIN, safeFamilyRedirect } from "@/lib/base-domain";
 import { sendInvitationEmail, sendPasswordResetEmail } from "@/lib/email";
 
 const organizationAccess = createAccessControl({
@@ -30,6 +30,14 @@ export const auth = betterAuth({
         resetUrl: data.url,
         userName: data.user.name,
       });
+    },
+  },
+  socialProviders: process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+    ? { google: { clientId: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET } }
+    : {},
+  account: {
+    accountLinking: {
+      trustedProviders: ["google"],
     },
   },
   plugins: [
@@ -81,12 +89,9 @@ export const auth = betterAuth({
   ],
   trustedOrigins: (request) => {
     const allowed = [`https://${BASE_DOMAIN}`, `https://*.${BASE_DOMAIN}`];
-    // Family hosts may carry a local proxy port (portless); trust the caller's
-    // own origin (browsers cannot forge Origin, so this stays safe).
+    // Family hosts may carry a local proxy port (portless).
     const origin = request?.headers?.get?.("origin");
-    if (origin?.includes(BASE_DOMAIN)) {
-      allowed.push(origin);
-    }
+    if (origin && safeFamilyRedirect(origin)) allowed.push(origin);
     return allowed;
   },
   advanced: {

@@ -13,10 +13,11 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { authClient } from "@/lib/auth-client";
 import { safeFamilyRedirect } from "@/lib/base-domain";
 
-export function SignUpForm({ redirectTo }: { redirectTo?: string }) {
+export function SignUpForm({ redirectTo, googleEnabled }: { redirectTo?: string; googleEnabled: boolean }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -60,7 +61,8 @@ export function SignUpForm({ redirectTo }: { redirectTo?: string }) {
         <CardTitle>Create your account</CardTitle>
         <CardDescription>Sign up to start your practice session.</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="grid gap-4">
+        {googleEnabled ? <GoogleSignInButton /> : null}
         <form onSubmit={onSubmit} className="grid gap-4">
           <div className="grid gap-2">
             <Label htmlFor="name">Full name</Label>

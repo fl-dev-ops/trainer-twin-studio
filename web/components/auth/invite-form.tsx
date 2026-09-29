@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
+import { SwitchAccountButton } from "@/components/auth/switch-account-button";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -15,11 +17,31 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { authClient } from "@/lib/auth-client";
 
-/** Learner sign-up via trainer invitation: account details + password, then join the org. */
-export function InviteForm({ invitationId, email }: { invitationId: string; email: string }) {
+/** Learner sign-up via trainer invitation: Google or account details, then join the org. */
+export function InviteForm({ invitationId, email, signedInEmail, googleEnabled }: {
+  invitationId: string;
+  email: string;
+  signedInEmail?: string;
+  googleEnabled: boolean;
+}) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  async function acceptInvitation() {
+    setBusy(true);
+    setError(null);
+    // Better Auth verifies the signed-in user's email against the invitation.
+    const accepted = await authClient.organization.acceptInvitation({ invitationId });
+    if (accepted.error) {
+      setError(accepted.error.message ?? "Could not accept the invitation");
+      setBusy(false);
+      return;
+    }
+    const res = await fetch("/api/me/home", { cache: "no-store" });
+    const { redirect } = await res.json();
+    router.push(redirect);
+  }
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -45,16 +67,7 @@ export function InviteForm({ invitationId, email }: { invitationId: string; emai
       setBusy(false);
       return;
     }
-    // Join the inviting organization. The invitation email must match.
-    const accepted = await authClient.organization.acceptInvitation({ invitationId });
-    if (accepted.error) {
-      setError(accepted.error.message ?? "Could not accept the invitation");
-      setBusy(false);
-      return;
-    }
-    const res = await fetch("/api/me/home", { cache: "no-store" });
-    const { redirect } = await res.json();
-    router.push(redirect);
+    await acceptInvitation();
   }
 
   return (
@@ -63,54 +76,59 @@ export function InviteForm({ invitationId, email }: { invitationId: string; emai
         <CardTitle>Join your trainer</CardTitle>
         <CardDescription>You were invited to practice sessions.</CardDescription>
       </CardHeader>
-      <CardContent>
-        <form onSubmit={onSubmit} className="grid gap-5">
-          <div className="grid gap-4">
-            <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-              Your details
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-2">
-                <Label htmlFor="firstName">First name</Label>
-                <Input id="firstName" name="firstName" autoComplete="given-name" required />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="lastName">Last name</Label>
-                <Input id="lastName" name="lastName" autoComplete="family-name" required />
-              </div>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" value={email} readOnly />
-              <p className="text-muted-foreground text-xs">
-                The address your trainer invited.
+      <CardContent className="grid gap-4">
+        {signedInEmail ? (
+          signedInEmail.toLowerCase() === email.toLowerCase() ? (
+            <Button type="button" disabled={busy} onClick={acceptInvitation} className="w-full">
+              {busy ? "Joining…" : "Accept invitation"}
+            </Button>
+          ) : (
+            <div className="grid gap-3">
+              <p className="text-muted-foreground text-sm">
+                This invitation is for {email}. Sign out of {signedInEmail} and use the invited email.
               </p>
+              <SwitchAccountButton returnTo={`/invite?token=${encodeURIComponent(invitationId)}`} />
             </div>
-          </div>
-
-          <Separator />
-
-          <div className="grid gap-4">
-            <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-              Password
-            </p>
-            <div className="grid gap-2">
-              <Label htmlFor="password">Password</Label>
-              <Input id="password" name="password" type="password" minLength={8} autoComplete="new-password" required />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="confirmPassword">Confirm password</Label>
-              <Input id="confirmPassword" name="confirmPassword" type="password" minLength={8} autoComplete="new-password" required />
-            </div>
-          </div>
-
-          {error ? (
-            <p role="alert" className="text-destructive text-sm">{error}</p>
-          ) : null}
-          <Button type="submit" disabled={busy}>
-            {busy ? "Joining…" : "Join"}
-          </Button>
-        </form>
+          )
+        ) : (
+          <>
+            {googleEnabled ? <GoogleSignInButton /> : null}
+            <form onSubmit={onSubmit} className="grid gap-5">
+              <div className="grid gap-4">
+                <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Your details</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-2">
+                    <Label htmlFor="firstName">First name</Label>
+                    <Input id="firstName" name="firstName" autoComplete="given-name" required />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="lastName">Last name</Label>
+                    <Input id="lastName" name="lastName" autoComplete="family-name" required />
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input id="email" value={email} readOnly />
+                  <p className="text-muted-foreground text-xs">The address your trainer invited.</p>
+                </div>
+              </div>
+              <Separator />
+              <div className="grid gap-4">
+                <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Password</p>
+                <div className="grid gap-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input id="password" name="password" type="password" minLength={8} autoComplete="new-password" required />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="confirmPassword">Confirm password</Label>
+                  <Input id="confirmPassword" name="confirmPassword" type="password" minLength={8} autoComplete="new-password" required />
+                </div>
+              </div>
+              <Button type="submit" disabled={busy}>{busy ? "Joining…" : "Join"}</Button>
+            </form>
+          </>
+        )}
+        {error ? <p role="alert" className="text-destructive text-sm">{error}</p> : null}
       </CardContent>
     </Card>
   );

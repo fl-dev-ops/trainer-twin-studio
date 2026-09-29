@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { headers } from "next/headers";
+import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { InviteForm } from "@/components/auth/invite-form";
 
@@ -10,6 +12,7 @@ export default async function InvitePage({
   searchParams: Promise<{ token?: string }>;
 }) {
   const invitationId = (await searchParams).token;
+  const session = await auth.api.getSession({ headers: await headers() });
   const invitation = invitationId
     ? await db.invitation.findUnique({
         where: { id: invitationId },
@@ -20,7 +23,12 @@ export default async function InvitePage({
   return (
     <main className="flex min-h-svh items-center justify-center p-4">
       {invitationId && invitation && invitation.status === "pending" ? (
-        <InviteForm invitationId={invitationId} email={invitation.email} />
+        <InviteForm
+          invitationId={invitationId}
+          email={invitation.email}
+          signedInEmail={session?.user.email}
+          googleEnabled={Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)}
+        />
       ) : (
         <div className="w-full max-w-sm text-center">
           <h1 className="text-lg font-semibold">Invite required</h1>
