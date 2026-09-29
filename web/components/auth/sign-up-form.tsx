@@ -3,21 +3,28 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import Image from "next/image";
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  FieldSeparator,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
+import { Spinner } from "@/components/ui/spinner";
 import { authClient } from "@/lib/auth-client";
 import { safeFamilyRedirect } from "@/lib/base-domain";
 
-export function SignUpForm({ redirectTo, googleEnabled }: { redirectTo?: string; googleEnabled: boolean }) {
+export function SignUpForm({
+  redirectTo,
+  googleEnabled,
+}: {
+  redirectTo?: string;
+  googleEnabled: boolean;
+}) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -56,45 +63,126 @@ export function SignUpForm({ redirectTo, googleEnabled }: { redirectTo?: string;
   }
 
   return (
-    <Card className="w-full max-w-sm">
-      <CardHeader>
-        <CardTitle>Create your account</CardTitle>
-        <CardDescription>Sign up to start your practice session.</CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-4">
-        {googleEnabled ? <GoogleSignInButton /> : null}
-        <form onSubmit={onSubmit} className="grid gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="name">Full name</Label>
-            <Input id="name" name="name" autoComplete="name" required />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" name="email" type="email" autoComplete="email" required />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="password">Password</Label>
-            <Input id="password" name="password" type="password" minLength={8} autoComplete="new-password" required />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="confirmPassword">Confirm password</Label>
-            <Input id="confirmPassword" name="confirmPassword" type="password" minLength={8} autoComplete="new-password" required />
-          </div>
-          {error ? <p role="alert" className="text-destructive text-sm">{error}</p> : null}
-          <Button type="submit" disabled={busy}>
-            {busy ? "Creating account…" : "Create account"}
-          </Button>
-          <p className="text-center text-sm text-muted-foreground">
-            Already have an account?{" "}
+    <div className="flex flex-col gap-6">
+      <form onSubmit={onSubmit}>
+        <FieldGroup>
+          <div className="flex flex-col items-center gap-2 text-center">
             <Link
-              href={redirectTo ? `/sign-in?redirect=${encodeURIComponent(redirectTo)}` : "/sign-in"}
-              className="text-foreground underline underline-offset-4"
+              href="/"
+              className="flex flex-col items-center gap-2 font-medium"
             >
-              Sign in
+              <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary shadow-xs">
+                <Image
+                  src="/trainertwin-mark.svg"
+                  alt="TrainerTwin"
+                  width={24}
+                  height={24}
+                  className="size-6"
+                />
+              </div>
+              <span className="sr-only">TrainerTwin</span>
             </Link>
-          </p>
-        </form>
-      </CardContent>
-    </Card>
+            <h1 className="text-xl font-bold tracking-tight text-foreground">
+              Create your account
+            </h1>
+            <FieldDescription>
+              Already have an account?{" "}
+              <Link
+                href={
+                  redirectTo
+                    ? `/sign-in?redirect=${encodeURIComponent(redirectTo)}`
+                    : "/sign-in"
+                }
+                className="text-foreground underline underline-offset-4"
+              >
+                Sign in
+              </Link>
+            </FieldDescription>
+          </div>
+
+          {googleEnabled ? (
+            <>
+              <Field>
+                <GoogleSignInButton label="Sign up with Google" />
+              </Field>
+              <FieldSeparator>Or continue with email</FieldSeparator>
+            </>
+          ) : null}
+
+          <Field data-invalid={Boolean(error)}>
+            <FieldLabel htmlFor="name">Full name</FieldLabel>
+            <Input
+              id="name"
+              name="name"
+              autoComplete="name"
+              placeholder="Alex Morgan"
+              required
+            />
+          </Field>
+
+          <Field data-invalid={Boolean(error)}>
+            <FieldLabel htmlFor="email">Email</FieldLabel>
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              placeholder="m@example.com"
+              autoComplete="email"
+              required
+            />
+          </Field>
+
+          <Field data-invalid={Boolean(error)}>
+            <FieldLabel htmlFor="password">Password</FieldLabel>
+            <Input
+              id="password"
+              name="password"
+              type="password"
+              minLength={8}
+              autoComplete="new-password"
+              required
+            />
+          </Field>
+
+          <Field data-invalid={Boolean(error)}>
+            <FieldLabel htmlFor="confirmPassword">Confirm password</FieldLabel>
+            <Input
+              id="confirmPassword"
+              name="confirmPassword"
+              type="password"
+              minLength={8}
+              autoComplete="new-password"
+              required
+            />
+          </Field>
+
+          {error ? (
+            <p role="alert" className="text-destructive text-sm font-medium">
+              {error}
+            </p>
+          ) : null}
+
+          <Field>
+            <Button type="submit" disabled={busy} className="w-full">
+              {busy ? <Spinner data-icon="inline-start" /> : null}
+              {busy ? "Creating account…" : "Create account"}
+            </Button>
+          </Field>
+        </FieldGroup>
+      </form>
+
+      <FieldDescription className="px-6 text-center text-xs">
+        By continuing, you agree to our{" "}
+        <a
+          href="https://www.trainertwin.com/privacy"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-foreground underline underline-offset-4"
+        >
+          Privacy Policy
+        </a>
+        .
+      </FieldDescription>
+    </div>
   );
 }
