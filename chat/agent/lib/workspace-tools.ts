@@ -20,17 +20,21 @@ export function transportTool(
 }
 
 export async function executeWorkspaceTool(input: unknown, ctx: any) {
+  return executeNamedWorkspaceTool(ctx.toolName, input, ctx);
+}
+
+export async function executeNamedWorkspaceTool(toolName: string, input: unknown, ctx: any) {
   const orgId = ctx.session.auth.initiator?.principalId ?? ctx.session.auth.current?.principalId;
   const sessionId = String(ctx.session.auth.current?.attributes?.sessionId ?? "");
   if (!orgId || !sessionId) throw new Error("No session attached to this conversation");
-  if (ctx.toolName === "finish_session") {
+  if (toolName === "finish_session") {
     return studioFetch(orgId, { action: "finishSession", sessionId });
   }
   return studioFetch(orgId, {
     action: "enqueueWorkspaceCommand",
     sessionId,
     callId: ctx.callId,
-    tool: ctx.toolName,
+    tool: toolName,
     input,
   });
 }

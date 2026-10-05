@@ -40,12 +40,14 @@ describe("TrainerTwin prompt contract", () => {
     contains(instructions, "Initialization (on `[OPENING]`");
     contains(instructions, "executable TODO list");
     contains(instructions, 'action: "record_answer"');
-    contains(instructions, 'action: "start_closing"');
+    contains(instructions, "A later oral explanation cannot make unchanged incomplete code complete");
+    contains(instructions, "automatically enters closing");
     contains(instructions, 'action: "confirm_end"');
-    contains(instructions, "finish_session()");
-    contains(instructions, "Shall we end the session here?");
-    contains(instructions, "asking the candidate to confirm they are ready to end");
-    contains(instructions, "Grade answers strictly by demonstrated correctness");
+    contains(instructions, 'session_plan({ action: "confirm_end" })');
+    contains(instructions, "We have covered all the topics planned for this session");
+    contains(instructions, "finalizes the session directly");
+    contains(instructions, "Assess only observable answer qualities");
+    contains(instructions, "The tool derives the answer status; never choose `answerStatus` yourself");
     contains(instructions, "A long or fluent answer is not `strong` by itself");
     contains(instructions, "Mark evidence `sufficient` only when the same answer is `strong`");
   });
@@ -106,7 +108,7 @@ describe("TrainerTwin prompt contract", () => {
     contains(contextRenderer, "- Spec:");
     contains(contextRenderer, "- Instruction:");
     contains(contextRenderer, "INTERVIEW SETTINGS");
-    contains(contextRenderer, "Session turn budget");
+    contains(contextRenderer, "Planned question capacity");
     assert.ok(!contextRenderer.includes(".slice(0, 5000)"));
     assert.ok(!contextRenderer.includes(".slice(0, 3000)"));
   });
@@ -148,11 +150,12 @@ describe("TrainerTwin retrieval policy", () => {
 });
 
 describe("pre-warmed opening contract", () => {
-  test("instructions skip all opening tool calls when the warm block is present", () => {
+  test("instructions open the attached PDF without repeating retrieval or planning", () => {
     contains(contextRenderer, "PRE-WARMED OPENING");
-    contains(contextRenderer, "deliver the greeting directly with NO tool calls");
-    contains(contextRenderer, "Do NOT call surface on the opening turn");
+    contains(contextRenderer, "an attached PDF is present");
+    contains(contextRenderer, "no PDF is attached. Do not call surface(open_pdf)");
     contains(instructions, "PRE-WARMED OPENING exception");
-    contains(instructions, "SKIP this initialization entirely");
+    contains(instructions, "MUST call `surface({ action: \"open_pdf\"");
+    contains(instructions, "skip search_style and session_plan");
   });
 });

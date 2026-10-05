@@ -143,13 +143,25 @@ function formatInterviewSettings(
     ].join("\n");
   }
   const type = typeof interview.type === "string" ? interview.type : "unknown";
-  const followUps = typeof interview.follow_ups_per_main_question === "number"
-    ? String(interview.follow_ups_per_main_question)
-    : "not configured";
+  const followUpsCount = typeof interview.follow_ups_per_main_question === "number"
+    ? interview.follow_ups_per_main_question
+    : null;
+  const followUps = followUpsCount === null ? "not configured" : String(followUpsCount);
+  const counts = interview.question_counts && typeof interview.question_counts === "object" && !Array.isArray(interview.question_counts)
+    ? interview.question_counts as Record<string, unknown>
+    : {};
+  const mainQuestionCount = type === "resume"
+    ? (typeof interview.main_questions === "number" ? interview.main_questions : 0)
+    : QUESTION_TYPES.reduce((sum, kind) => sum + (typeof counts[kind] === "number" ? counts[kind] as number : 0), 0);
+  const plannedCapacity = followUpsCount === null ? null : mainQuestionCount * (followUpsCount + 1);
   const lines = [
     `- Type: ${type}`,
-    ...(turnBudget ? [`- Session turn budget: ${turnBudget}`] : []),
-    ...(stageBudgets.length ? [`- Stage turn budgets: ${stageBudgets.join(", ")}`] : []),
+    ...(plannedCapacity !== null && mainQuestionCount > 0
+      ? [`- Planned question capacity: up to ${plannedCapacity} turns (${mainQuestionCount} main questions plus up to ${followUpsCount} adaptive follow-ups each). Typed question quotas and per-question follow-up limits are authoritative over lower generic turn budgets.`]
+      : [
+          ...(turnBudget ? [`- Session turn budget: ${turnBudget}`] : []),
+          ...(stageBudgets.length ? [`- Stage turn budgets: ${stageBudgets.join(", ")}`] : []),
+        ]),
     `- Follow-ups per main question: ${followUps}`,
   ];
   if (type === "resume") {
@@ -160,9 +172,6 @@ function formatInterviewSettings(
       ? interview.topic_slugs.filter((tag): tag is string => typeof tag === "string")
       : stageTopics;
     lines.push(`- Approved topics (${topics.length}): ${topics.length ? topics.join(", ") : "none"}`);
-    const counts = interview.question_counts && typeof interview.question_counts === "object" && !Array.isArray(interview.question_counts)
-      ? interview.question_counts as Record<string, unknown>
-      : {};
     for (const kind of QUESTION_TYPES) {
       const value = counts[kind];
       lines.push(`- ${kind} main questions: ${typeof value === "number" ? value : 0}`);
@@ -423,6 +432,11 @@ ${claimList}\n`;
 
   const warmBlock = (() => {
     if (!specs.warmOpening) return "";
+    const hasAttachedPdf = Boolean(specs.resume) || specs.documents.some((document) =>
+      document.mimeType?.toLowerCase().includes("pdf")
+      || document.name.toLowerCase().endsWith(".pdf")
+      || document.kind.toLowerCase() === "pdf"
+    );
     const style = specs.warmOpening.style ?? null;
     const lines: string[] = ["PRE-WARMED OPENING (retrieved before the session started — do NOT re-retrieve)"];
     if (style?.phrasingStyle?.length) {
@@ -438,7 +452,10 @@ ${claimList}\n`;
       }
     }
     lines.push("- Compose a FRESH greeting in this trainer's voice: never reuse or lightly edit the example sentences, openings (e.g. starting with 'Now'), or structures verbatim. Vary the wording, but keep it concise and natural.");
-    lines.push("- On the [OPENING] turn: deliver the greeting directly with NO tool calls. Do NOT call surface on the opening turn. Skip search_style (style is already provided above) and session_plan (auto-initializes from the scenario spec on your next turn).");
+    lines.push(hasAttachedPdf
+      ? "- On the [OPENING] turn: an attached PDF is present. Call surface(open_pdf) with its non-empty fileId before speaking, then deliver the greeting. Skip search_style (style is already provided above), read_document, and session_plan (auto-initializes from the scenario spec on your next turn)."
+      : "- On the [OPENING] turn: no PDF is attached. Do not call surface(open_pdf). Deliver the greeting directly, skipping search_style, read_document, and session_plan (auto-initializes from the scenario spec on your next turn)."
+    );
     return `\n${lines.join("\n")}\n`;
   })();
 

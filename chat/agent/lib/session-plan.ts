@@ -3,6 +3,14 @@ export const QUESTION_TYPES = ["verbal", "mcq", "coding", "code-output", "machin
 export type QuestionType = (typeof QUESTION_TYPES)[number] | "resume";
 export type EvidenceStatus = "untested" | "partial" | "sufficient" | "weak" | "unresolved";
 export type AnswerStatus = "strong" | "partial" | "vague" | "contradictory" | "unknown";
+export type AnswerAssessment = {
+  substantive: boolean;
+  direct: boolean;
+  specific: boolean;
+  mechanismOrEvidence: boolean;
+  complete: boolean;
+  contradiction: boolean;
+};
 export type ClosingState = "interviewing" | "awaiting_confirmation" | "confirmed";
 
 export interface PlanQuestion {
@@ -29,6 +37,7 @@ export interface SessionPlanState {
   currentRound: number;
   sessionMaximumTurns: number;
   closingState: ClosingState;
+  lastAnswerTurnId?: string;
   rounds: PlanRound[];
 }
 
@@ -102,14 +111,20 @@ export function compileSessionPlan(agentData: AgentData): SessionPlanState {
   const rounds = stages.map((stage, index): PlanRound => {
     const id = stage.id ?? `round-${index + 1}`;
     const evidenceKeys = stage.config?.evidence?.keys ?? [];
+    const questions = questionsForStage(id, index, stages.length, configuredTypes, followUpsMax);
+    const questionTurnCapacity = questions.length * (followUpsMax + 1);
     return {
       id,
       name: stage.name ?? id,
       status: index === 0 ? "active" : "pending",
       minimumTurns: Math.max(0, stage.config?.turns?.minimum ?? 0),
-      maximumTurns: positiveInteger(stage.config?.turns?.maximum, positiveInteger(agentData.config?.turns?.maximum, 12)),
+      maximumTurns: Math.max(
+        questions.length,
+        questionTurnCapacity,
+        positiveInteger(stage.config?.turns?.maximum, positiveInteger(agentData.config?.turns?.maximum, 12)),
+      ),
       turnsUsed: 0,
-      questions: questionsForStage(id, index, stages.length, configuredTypes, followUpsMax),
+      questions,
       evidence: Object.fromEntries([...new Set([...evidenceKeys, ...(stage.config?.evidence?.completion_keys ?? [])])]
         .map((key) => [key, "untested"])),
       completionKeys: stage.config?.evidence?.completion_keys ?? [],
@@ -118,7 +133,10 @@ export function compileSessionPlan(agentData: AgentData): SessionPlanState {
 
   const state: SessionPlanState = {
     currentRound: 0,
-    sessionMaximumTurns: positiveInteger(agentData.config?.turns?.maximum, 12),
+    sessionMaximumTurns: Math.max(
+      configuredTypes.length * (followUpsMax + 1),
+      positiveInteger(agentData.config?.turns?.maximum, 12),
+    ),
     closingState: "interviewing",
     rounds,
   };
@@ -153,6 +171,14 @@ function activateNextQuestion(state: SessionPlanState, round: PlanRound) {
 
 function activeQuestion(round: PlanRound) {
   return round.questions.find(({ status }) => status === "active") ?? null;
+}
+
+function hasRoomForFollowUp(state: SessionPlanState, round: PlanRound) {
+  const pendingInRound = round.questions.filter(({ status }) => status === "pending").length;
+  const pendingInSession = state.rounds.flatMap(({ questions }) => questions)
+    .filter(({ status }) => status === "pending").length;
+  return round.turnsUsed + 1 + pendingInRound <= round.maximumTurns
+    && totalTurns(state) + 1 + pendingInSession <= state.sessionMaximumTurns;
 }
 
 function nextAction(state: SessionPlanState) {
@@ -194,7 +220,7 @@ function activateEvidenceFollowUp(state: SessionPlanState, round: PlanRound) {
 }
 
 export type PlanEvent =
-  | { type: "record_answer"; answerStatus: AnswerStatus; evidenceUpdates?: Record<string, EvidenceStatus> }
+  | { type: "record_answer"; answerStatus: AnswerStatus; evidenceUpdates?: Record<string, EvidenceStatus>; turnId?: string }
   | { type: "start_closing" }
   | { type: "learner_question_during_closing" }
   | { type: "confirm_end" };
@@ -212,11 +238,15 @@ export function advanceSessionPlan(state: SessionPlanState, event: PlanEvent) {
     state.closingState = "confirmed";
   } else if (event.type === "record_answer") {
     if (state.closingState !== "interviewing" || !round) throw new Error("Cannot record an interview answer now");
+    if (event.turnId && state.lastAnswerTurnId === event.turnId) {
+      throw new Error("The learner answer for this turn was already recorded");
+    }
     for (const [key, status] of Object.entries(event.evidenceUpdates ?? {})) {
       if (!(key in round.evidence)) throw new Error(`Unknown evidence key: ${key}`);
       if (round.evidence[key] === "sufficient") continue;
       round.evidence[key] = status === "sufficient" && event.answerStatus !== "strong" ? "partial" : status;
     }
+    state.lastAnswerTurnId = event.turnId;
 
     const active = activeQuestion(round);
     if (!active) {
@@ -226,8 +256,7 @@ export function advanceSessionPlan(state: SessionPlanState, event: PlanEvent) {
       if (!activateNextQuestion(state, round)) activateEvidenceFollowUp(state, round);
     } else if (
       active.followUpsUsed < active.followUpsMax &&
-      round.turnsUsed < round.maximumTurns &&
-      totalTurns(state) < state.sessionMaximumTurns
+      hasRoomForFollowUp(state, round)
     ) {
       active.followUpsUsed += 1;
       round.turnsUsed += 1;
@@ -273,4 +302,46 @@ export function summarizeSessionPlan(state: SessionPlanState) {
     nextAction: action,
     isComplete: action.kind === "start_closing" || state.closingState !== "interviewing",
   };
+}
+
+export function canFinishSession(state: SessionPlanState | null) {
+  return state !== null && summarizeSessionPlan(state).nextAction.kind === "finish_session";
+}
+
+export function applyCodeAssessment(
+  answerStatus: AnswerStatus,
+  codeStatus: "complete" | "incomplete",
+  submissionRevision: number,
+  incompleteRevision?: number,
+) {
+  const incomplete = codeStatus === "incomplete" || incompleteRevision === submissionRevision;
+  return {
+    answerStatus: incomplete ? "partial" as const : answerStatus,
+    incompleteRevision: incomplete ? submissionRevision : null,
+  };
+}
+
+export function classifyAnswerAssessment(assessment: AnswerAssessment): AnswerStatus {
+  if (assessment.contradiction) return "contradictory";
+  if (!assessment.substantive) return "unknown";
+  if (!assessment.direct || !assessment.specific) return "vague";
+  if (!assessment.mechanismOrEvidence || !assessment.complete) return "partial";
+  return "strong";
+}
+
+export function requiresKnowledgeGrounding(questionType: QuestionType, answerStatus: AnswerStatus) {
+  return questionType !== "resume"
+    && (answerStatus === "strong" || answerStatus === "partial" || answerStatus === "contradictory");
+}
+
+export function assertActivePlanQuestion(
+  state: SessionPlanState | null,
+  questionId: string,
+  allowedTypes: readonly QuestionType[],
+) {
+  if (!state) throw new Error("Session plan is not initialized");
+  const active = summarizeSessionPlan(state).activeQuestion;
+  if (!active || active.id !== questionId || !allowedTypes.includes(active.type)) {
+    throw new Error(`Question ${questionId} does not match the active session plan item`);
+  }
 }

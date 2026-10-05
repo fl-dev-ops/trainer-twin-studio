@@ -129,6 +129,8 @@ export function CodeEditor({
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const decorationIdsRef = useRef<string[]>([]);
   const runAbortControllerRef = useRef<AbortController | null>(null);
+  const submittedCodeRef = useRef<string | null>(null);
+  const submissionRevisionRef = useRef(0);
   const previewFrameRef = useRef<HTMLIFrameElement | null>(null);
   const previewConsoleTargetRef = useRef<PreviewConsoleTarget | null>(null);
   const browserConsoleSequenceRef = useRef(0);
@@ -170,9 +172,11 @@ export function CodeEditor({
         return JSON.stringify({
           ok: true,
           result: {
-            language,
-            code: model.getValue(),
-            selection: selection
+             language,
+             code: model.getValue(),
+             submitted: submissionRevisionRef.current > 0 && submittedCodeRef.current === model.getValue(),
+             submissionRevision: submissionRevisionRef.current,
+             selection: selection
               ? {
                   fromLine: selection.startLineNumber,
                   fromColumn: selection.startColumn,
@@ -468,13 +472,19 @@ export function CodeEditor({
           {!readOnly && onSubmit ? (
             <button
               type="button"
-              onClick={async () => {
-                setIsSubmitting(true);
-                try {
-                  await onSubmit(language, code);
-                  toast.success("Code submitted.");
-                } catch (error) {
-                  toast.error(error instanceof Error ? error.message : "Code submission failed.");
+               onClick={async () => {
+                 setIsSubmitting(true);
+                 const previousCode = submittedCodeRef.current;
+                 const previousRevision = submissionRevisionRef.current;
+                 submittedCodeRef.current = code;
+                 submissionRevisionRef.current += 1;
+                 try {
+                   await onSubmit(language, code);
+                   toast.success("Code submitted.");
+                 } catch (error) {
+                   submittedCodeRef.current = previousCode;
+                   submissionRevisionRef.current = previousRevision;
+                   toast.error(error instanceof Error ? error.message : "Code submission failed.");
                 } finally {
                   setIsSubmitting(false);
                 }

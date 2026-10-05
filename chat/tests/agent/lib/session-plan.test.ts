@@ -1,6 +1,28 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { advanceSessionPlan, compileSessionPlan, summarizeSessionPlan } from "../../../agent/lib/session-plan";
+import { advanceSessionPlan, classifyAnswerAssessment, compileSessionPlan, requiresKnowledgeGrounding, summarizeSessionPlan } from "../../../agent/lib/session-plan";
+
+test("does not classify generic or incomplete answers as strong", () => {
+  const complete = {
+    substantive: true,
+    direct: true,
+    specific: true,
+    mechanismOrEvidence: true,
+    complete: true,
+    contradiction: false,
+  };
+  assert.equal(classifyAnswerAssessment({ ...complete, specific: false }), "vague");
+  assert.equal(classifyAnswerAssessment({ ...complete, complete: false }), "partial");
+  assert.equal(classifyAnswerAssessment(complete), "strong");
+});
+
+test("requires grounding for technical judgments only", () => {
+  assert.equal(requiresKnowledgeGrounding("verbal", "strong"), true);
+  assert.equal(requiresKnowledgeGrounding("coding", "partial"), true);
+  assert.equal(requiresKnowledgeGrounding("mcq", "contradictory"), true);
+  assert.equal(requiresKnowledgeGrounding("verbal", "vague"), false);
+  assert.equal(requiresKnowledgeGrounding("resume", "strong"), false);
+});
 
 function technicalAgent() {
   return {
@@ -36,7 +58,8 @@ test("compiles mixed technical quotas into typed TODOs", () => {
     "code-output",
   ]);
   assert.equal(plan.rounds[0].minimumTurns, 6);
-  assert.equal(plan.rounds[0].maximumTurns, 12);
+  assert.equal(plan.rounds[0].maximumTurns, 15);
+  assert.equal(plan.sessionMaximumTurns, 15);
   assert.equal(summarizeSessionPlan(plan).nextAction.kind, "pose_main_question");
 });
 

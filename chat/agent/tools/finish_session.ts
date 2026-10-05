@@ -1,8 +1,11 @@
 import { z } from "zod";
-import { transportTool } from "../lib/workspace-tools";
+import { defineTool } from "eve/tools";
+import { canFinishSession } from "../lib/session-plan";
+import { planState } from "../lib/session-plan-state";
+import { executeWorkspaceTool } from "../lib/workspace-tools";
 
-export default transportTool(
-  `Finalize the current session. Call exactly once to end the interview.
+export default defineTool({
+  description: `Finalize the current session. Call exactly once to end the interview.
 
 WHEN to call:
 - session_plan reports nextAction.kind: "finish_session" after you already asked the candidate to confirm ending and recorded their confirmation.
@@ -18,5 +21,11 @@ WHEN NOT to call:
 Two-beat closing protocol:
 1. Turn N (start_closing only): closing feedback, then ask them to confirm ending. No finish_session.
 2. Turn N+1: record confirmation in session_plan, then call finish_session() with NO spoken output.`,
-  z.object({}),
-);
+  inputSchema: z.object({}),
+  async execute(input, ctx) {
+    if (!canFinishSession(planState.get())) {
+      throw new Error("Cannot finish before all configured questions and closing confirmation are complete");
+    }
+    return executeWorkspaceTool(input, ctx);
+  },
+});

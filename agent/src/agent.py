@@ -122,8 +122,8 @@ class TrainerAgent(Agent):
             self.session.input.set_audio_enabled(True)
         except Exception as exc:
             logger.debug("Mic resume note for room %s: %s", self.room_name, exc)
-        for text in self.pending_input:
-            asyncio.create_task(self.session.generate_reply(user_input=text))
+        if self.pending_input:
+            self.session.generate_reply(user_input="\n".join(self.pending_input))
         self.pending_input.clear()
 
     async def inject_screen_note(self, text: str) -> None:
@@ -170,10 +170,14 @@ class TrainerAgent(Agent):
 def register_inactivity_nudge(session: Any, agent: TrainerAgent) -> None:
     @session.on("user_state_changed")
     def on_user_state_changed(event: Any) -> None:
-        if event.new_state != "away" or not agent.opening_complete:
+        if (
+            event.new_state != "away"
+            or not agent.opening_complete
+            or getattr(session, "agent_state", "listening") != "listening"
+        ):
             return
         logger.info("User inactive for 60s in room %s; sending nudge", agent.room_name)
-        asyncio.create_task(session.generate_reply(instructions=USER_INACTIVE_SIGNAL))
+        session.generate_reply(instructions=USER_INACTIVE_SIGNAL)
 
 
 def register_latency_logging(session: Any, *, session_id: str, room_name: str) -> None:
@@ -262,7 +266,7 @@ async def entrypoint(ctx: agents.JobContext) -> None:
             pending_chat_messages.append(text)
             return
         if active_session is not None:
-            asyncio.create_task(active_session.generate_reply(user_input=text))
+            active_session.generate_reply(user_input=text)
         else:
             pending_chat_messages.append(text)
 
@@ -504,8 +508,8 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         session.input.set_audio_enabled(False)
     await screen_feedback.start(session)
     if not (hold_opening and not opening_release.is_set()):
-        for pending_text in pending_chat_messages:
-            asyncio.create_task(session.generate_reply(user_input=pending_text))
+        if pending_chat_messages:
+            session.generate_reply(user_input="\n".join(pending_chat_messages))
         pending_chat_messages.clear()
     asyncio.create_task(watch_empty_room())
 

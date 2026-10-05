@@ -1,6 +1,16 @@
 import { timingSafeEqual } from "node:crypto";
 import { defineChannel, POST, type Session } from "eve/channels";
 import { studioPrincipal } from "../lib/auth";
+import {
+  appendSpokenText,
+  enforceClosingSpeech,
+  enforcePlanSpeech,
+  enforceSingleFocalQuestion,
+  enforceWordLimit,
+  isClosingConfirmation,
+  resetSpokenTextForTool,
+} from "../lib/spoken-segment";
+import { studioFetch } from "../lib/studio";
 
 /**
  * OpenAI-compatible chat completions bridge. This endpoint allows LiveKit
@@ -13,6 +23,11 @@ import { studioPrincipal } from "../lib/auth";
  */
 
 const USER_INACTIVE_SIGNAL = "__TRAINERTWIN_USER_INACTIVE__";
+const MCQ_SUBMISSION_PREFIX = "__TRAINERTWIN_MCQ_SUBMISSION__:";
+const CODE_SUBMISSION_PREFIX = "__TRAINERTWIN_CODE_SUBMISSION__:";
+const WHITEBOARD_SUBMISSION_PREFIX = "__TRAINERTWIN_WHITEBOARD_SUBMISSION__:";
+const awaitingClosingSessions = new Set<string>();
+const initializedPlanSessions = new Set<string>();
 
 /** Pure side-effect tools that do not require conversational follow-up speech. */
 const PURE_SIDE_EFFECT_TOOLS = new Set([
@@ -65,6 +80,29 @@ function isPureSideEffectToolResult(message: ChatMessage | undefined): boolean {
   return false;
 }
 
+function normalizeSubmission(text: string) {
+  try {
+    if (text.startsWith(MCQ_SUBMISSION_PREFIX)) {
+      const value = JSON.parse(text.slice(MCQ_SUBMISSION_PREFIX.length)) as Record<string, unknown>;
+      if (typeof value.questionId !== "string" || typeof value.optionId !== "string") return null;
+      return `[MCQ SUBMISSION]\nQuestion: ${value.questionId}\nSelected option: ${value.optionId}\n[REQUIRED] Before speaking, call session_plan with record_answer. The tool reads and grades the authoritative browser selection.`;
+    }
+    if (text.startsWith(CODE_SUBMISSION_PREFIX)) {
+      const value = JSON.parse(text.slice(CODE_SUBMISSION_PREFIX.length)) as Record<string, unknown>;
+      if (typeof value.questionId !== "string" || typeof value.language !== "string" || typeof value.code !== "string") return null;
+      return `[CODE SUBMISSION]\nQuestion: ${value.questionId}\nSubmitted ${value.language} code:\n\`\`\`${value.language}\n${value.code}\n\`\`\`\n[REQUIRED] Review this submission, then call session_plan with record_answer and codeStatus before speaking. The tool verifies the authoritative browser submission and revision.`;
+    }
+    if (text.startsWith(WHITEBOARD_SUBMISSION_PREFIX)) {
+      const value = JSON.parse(text.slice(WHITEBOARD_SUBMISSION_PREFIX.length)) as Record<string, unknown>;
+      if (typeof value.questionId !== "string") return null;
+      return `[WHITEBOARD SUBMISSION]\nQuestion: ${value.questionId}\nAssessment: ${JSON.stringify(value)}\n[REQUIRED] Before speaking, call session_plan with record_answer and follow its nextAction.`;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 /**
  * Maps incoming chat-completions messages to ONE Eve turn input: only the
  * latest relevant message matters because the Eve session maintains the
@@ -100,6 +138,9 @@ function mapLatestMessage(messages: ChatMessage[]): string | null {
     return "[USER INACTIVE] The learner has been silent for 60 seconds. Adapt to the current moment in the session. Do not advance the interview or ask a new interview question.";
   }
 
+  const submission = normalizeSubmission(text);
+  if (submission) return submission;
+
   let previousTurnIndex = -1;
   for (let index = latestIndex - 1; index >= 0; index -= 1) {
     if (messages[index].role === "user" || messages[index].role === "tool") {
@@ -112,8 +153,15 @@ function mapLatestMessage(messages: ChatMessage[]): string | null {
     .filter((message) => message.role === "developer")
     .map((message) => contentToText(message.content).trim())
     .filter((note) => note.startsWith("[SCREEN OBSERVER NOTE]"));
-  if (!observerNotes.length) return text;
-  return `[SCREEN OBSERVER CONTEXT]\n${observerNotes.join("\n")}\n[CANDIDATE]\n${text}`;
+  const candidate = `[CANDIDATE RESPONSE]\n${text}\n[REQUIRED] Before speaking, call session_plan and follow its nextAction.`;
+  if (!observerNotes.length) return candidate;
+  return `[SCREEN OBSERVER CONTEXT]\n${observerNotes.join("\n")}\n${candidate}`;
+}
+
+function requiresPlanBeforeSpeech(message: string) {
+  return !message.startsWith("[OPENING]")
+    && !message.startsWith("[USER INACTIVE]")
+    && !message.startsWith("[TOOL RESULT]");
 }
 
 type StreamEvent = {
@@ -139,6 +187,30 @@ function serviceAuthorized(request: Request) {
   const left = Buffer.from(actual);
   const right = Buffer.from(expected);
   return left.length === right.length && timingSafeEqual(left, right);
+}
+
+function completionWithoutSpeech(model: string) {
+  const chunk = {
+    id: `chatcmpl-${crypto.randomUUID()}`,
+    object: "chat.completion.chunk",
+    created: Math.floor(Date.now() / 1000),
+    model,
+    choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+  };
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\ndata: [DONE]\n\n`));
+      controller.close();
+    },
+  });
+  return new Response(stream, {
+    headers: {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache",
+      connection: "close",
+    },
+  });
 }
 
 export default defineChannel({
@@ -178,34 +250,13 @@ export default defineChannel({
       // If this is a tool execution result for a pure side-effect tool (e.g. surface open_pdf,
       // highlight_whiteboard), complete immediately without invoking the model to speak more.
       if (isPureSideEffectToolResult(latestRaw)) {
-        const completionId = `chatcmpl-${crypto.randomUUID()}`;
-        const created = Math.floor(Date.now() / 1000);
         const model = requestedModel ?? body?.model ?? "trainertwin-runtime";
-        const encoder = new TextEncoder();
-        const chunk = {
-          id: completionId,
-          object: "chat.completion.chunk",
-          created,
-          model,
-          choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
-        };
-        const stream = new ReadableStream({
-          start(controller) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\ndata: [DONE]\n\n`));
-            controller.close();
-          },
-        });
-        return new Response(stream, {
-          headers: {
-            "content-type": "text/event-stream; charset=utf-8",
-            "cache-control": "no-cache",
-            connection: "close",
-          },
-        });
+        return completionWithoutSpeech(model);
       }
 
       const message = mapLatestMessage(body?.messages ?? []);
       if (!message) return Response.json({ error: "No user or tool message to process" }, { status: 400 });
+      const latestUserText = latestRaw?.role === "user" ? contentToText(latestRaw.content).trim() : "";
 
       // Determine advertised tools from client request
       const advertisedTools = new Set<string>();
@@ -220,6 +271,14 @@ export default defineChannel({
       const sessionIdHeader = request.headers.get("x-trainertwin-session-id")?.trim();
       const address = sessionIdHeader || (bearer ? `token:${bearer}` : `sess:${crypto.randomUUID()}`);
       const sessionId = sessionIdHeader || (bearer ? bearer : address);
+      const planRequired = requiresPlanBeforeSpeech(message);
+
+      if (awaitingClosingSessions.has(sessionId) && isClosingConfirmation(latestUserText)) {
+        await studioFetch(orgId, { action: "finishSession", sessionId });
+        awaitingClosingSessions.delete(sessionId);
+        initializedPlanSessions.delete(sessionId);
+        return completionWithoutSpeech(requestedModel ?? body?.model ?? "trainertwin-runtime");
+      }
 
       const modeHeader = request.headers.get("x-trainertwin-mode")?.trim();
       const mode = modeHeader === "chat" ? "chat" : "voice";
@@ -281,8 +340,15 @@ export default defineChannel({
         let sawTurnStarted = false;
         let ttftMs: number | null = null;
         let tFirstEvent = 0;
+        let finalSpokenText = "";
         let usage: { inputTokens?: number; outputTokens?: number } | null = null;
+        let closingState: "none" | "started" | "question-answered" | "ended" = "none";
+        let planResult: Record<string, unknown> | null = null;
+        let planAdvanced = false;
+        let knowledgeRequired = false;
+        let knowledgeGrounded = false;
         const allToolsCalled: { name: string; callId: string; input: unknown }[] = [];
+        const completedSurfaces: { action: string; questionId?: string }[] = [];
         const retrievalTraces: { callId: string; input: unknown; output: unknown }[] = [];
         const finishReason = () => "stop";
 
@@ -303,17 +369,13 @@ export default defineChannel({
                 ttftMs = Date.now() - t_start;
               }
               sawActivity = true;
-              await writeChunk({
-                id: completionId,
-                object: "chat.completion.chunk",
-                created,
-                model,
-                choices: [{ index: 0, delta: { content: ev.data.messageDelta }, finish_reason: null }],
-              });
+              finalSpokenText = appendSpokenText(finalSpokenText, ev.data.messageDelta);
               continue;
             }
 
             if (ev.type === "actions.requested" && Array.isArray(ev.data.actions)) {
+              const hasToolCall = ev.data.actions.some((action) => action.kind === "tool-call");
+              finalSpokenText = resetSpokenTextForTool(finalSpokenText, hasToolCall);
               for (const action of ev.data.actions) {
                 if (action.kind === "tool-call") {
                   allToolsCalled.push({ name: action.toolName, callId: action.callId, input: action.input });
@@ -324,11 +386,43 @@ export default defineChannel({
 
             if (ev.type === "action.result") {
               const result = ev.data.result;
+              if (result?.kind === "tool-result" && result.toolName === "session_plan" && !result.isError) {
+                const output = result.output as Record<string, unknown> | undefined;
+                const call = allToolsCalled.find((candidate) => candidate.callId === result.callId);
+                const input = call?.input as { action?: unknown } | undefined;
+                const action = typeof input?.action === "string" ? input.action : null;
+                const initialPlanCall = planRequired && action === null && !initializedPlanSessions.has(sessionId);
+                planAdvanced = action !== null || initialPlanCall;
+                if (initialPlanCall) initializedPlanSessions.add(sessionId);
+                planResult = output ?? null;
+                knowledgeRequired = output?.knowledgeRequiredBeforeSpeech === true;
+                if (output?.sessionEnded === true) {
+                  closingState = "ended";
+                  awaitingClosingSessions.delete(sessionId);
+                  initializedPlanSessions.delete(sessionId);
+                } else if (output?.closingStarted === true) {
+                  closingState = "started";
+                  awaitingClosingSessions.add(sessionId);
+                }
+                else if (output?.closingQuestionAnswered === true) closingState = "question-answered";
+              }
+              if (result?.kind === "tool-result" && result.toolName === "surface" && !result.isError) {
+                const call = allToolsCalled.find((candidate) => candidate.callId === result.callId);
+                const input = call?.input as { action?: unknown; payload?: { questionId?: unknown } } | undefined;
+                if (typeof input?.action === "string") {
+                  completedSurfaces.push({
+                    action: input.action,
+                    ...(typeof input.payload?.questionId === "string" ? { questionId: input.payload.questionId } : {}),
+                  });
+                }
+              }
               if (
                 result?.kind === "tool-result" &&
                 result.toolName === "search_knowledge" &&
                 !result.isError
               ) {
+                const output = result.output as Record<string, unknown> | undefined;
+                knowledgeGrounded ||= output?.relevant === true;
                 retrievalTraces.push({
                   callId: result.callId ?? "",
                   input: allToolsCalled.find((call) => call.callId === result.callId)?.input ?? {},
@@ -362,6 +456,38 @@ export default defineChannel({
                 first_token_ms: ttftMs,
                 total_turn_ms: wallMs,
               });
+              const closingText = enforceClosingSpeech(finalSpokenText, closingState);
+              const plannedText = enforcePlanSpeech(closingText, {
+                planRequired,
+                planResult,
+                planAdvanced,
+                completedSurfaces,
+                knowledgeRequired,
+                knowledgeGrounded,
+              });
+              if (knowledgeRequired && !knowledgeGrounded) {
+                console.warn("[openai-compat] blocked ungrounded technical speech", { sessionId });
+              }
+              if (plannedText !== closingText) {
+                console.warn("[openai-compat] suppressed speech outside session plan", { sessionId });
+              }
+              const singleQuestionText = enforceSingleFocalQuestion(plannedText);
+              if (singleQuestionText !== plannedText.trim()) {
+                console.warn("[openai-compat] removed additional focal question", { sessionId });
+              }
+              const spokenText = enforceWordLimit(singleQuestionText);
+              if (spokenText !== singleQuestionText) {
+                console.warn("[openai-compat] enforced spoken word limit", { sessionId, maximumWords: 45 });
+              }
+              if (spokenText && ev.type !== "turn.cancelled" && ev.type !== "session.failed") {
+                await writeChunk({
+                  id: completionId,
+                  object: "chat.completion.chunk",
+                  created,
+                  model,
+                  choices: [{ index: 0, delta: { content: spokenText }, finish_reason: null }],
+                });
+              }
               await writeChunk({
                 id: completionId,
                 object: "chat.completion.chunk",

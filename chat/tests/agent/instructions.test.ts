@@ -5,6 +5,7 @@ import { describe, test } from "node:test";
 const instructions = await readFile(new URL("../../agent/instructions.md", import.meta.url), "utf8");
 const transport = await readFile(new URL("../../../agent/src/prompt.md", import.meta.url), "utf8");
 const contextRenderer = await readFile(new URL("../../agent/lib/brain.ts", import.meta.url), "utf8");
+const surfaceTool = await readFile(new URL("../../agent/tools/surface.ts", import.meta.url), "utf8");
 const contains = (source: string, text: string) => assert.ok(source.includes(text), `Missing prompt contract: ${text}`);
 
 describe("TrainerTwin prompt contract", () => {
@@ -20,6 +21,7 @@ describe("TrainerTwin prompt contract", () => {
     contains(instructions, "NEVER use names found in style examples, uploaded documents");
     contains(instructions, "declared evidence, not verified truth");
     contains(instructions, "<learner>");
+    contains(instructions, 'Never claim the learner "mentioned," "said," or "knows" a concept');
     assert.doesNotMatch(instructions, /Harini|Karthik|Vasanth/);
   });
 
@@ -40,14 +42,23 @@ describe("TrainerTwin prompt contract", () => {
     contains(instructions, "Initialization (on `[OPENING]`");
     contains(instructions, "executable TODO list");
     contains(instructions, 'action: "record_answer"');
-    contains(instructions, 'action: "start_closing"');
+    contains(instructions, "automatically enters closing");
     contains(instructions, 'action: "confirm_end"');
-    contains(instructions, "finish_session()");
-    contains(instructions, "Shall we end the session here?");
-    contains(instructions, "asking the candidate to confirm they are ready to end");
-    contains(instructions, "Grade answers strictly by demonstrated correctness");
+    contains(instructions, 'session_plan({ action: "confirm_end" })');
+    contains(instructions, "We have covered all the topics planned for this session");
+    contains(instructions, "finalizes the session directly");
+    contains(instructions, "Assess only observable answer qualities");
+    contains(instructions, "The tool derives the answer status; never choose `answerStatus` yourself");
     contains(instructions, "A long or fluent answer is not `strong` by itself");
     contains(instructions, "Mark evidence `sufficient` only when the same answer is `strong`");
+    contains(instructions, "emit the tool call with zero preceding text");
+    contains(instructions, "Never ask one question before the call and another after it");
+    contains(instructions, "An open PDF by itself is not a highlight");
+    contains(instructions, "`session_plan` selects and highlights the next unused project");
+    contains(instructions, "Four configured résumé main questions require four successful project highlights");
+    contains(instructions, "first response after the opening greeting");
+    contains(instructions, "Never ask the learner to choose a concept, technology, topic, or question");
+    contains(instructions, "Never frame it as a deeper follow-up unless the learner actually discussed that concept");
   });
 
   test("renders behavioral rules from agent spec", () => {
@@ -89,13 +100,20 @@ describe("TrainerTwin prompt contract", () => {
   test("enforces read and highlight flow on coding submissions and walkthroughs", () => {
     contains(instructions, "After submission, ask the candidate to walk through their approach aloud.");
     contains(instructions, "When that uncertainty maps to visible code, use the same mandatory `read_code_range` (lines 1 through 200) then `highlight_code` sequence before asking it.");
+    contains(instructions, "A successful read alone never satisfies this requirement");
+    contains(instructions, "Do not speak between these calls");
     contains(instructions, "the highlighted line");
+  });
+
+  test("keeps the static instruction prompt concise", () => {
+    assert.ok(Buffer.byteLength(instructions) < 45_000, "Static prompt exceeded 45 KB");
   });
 
   test("keeps turns voice-native", () => {
     contains(instructions, "Ask exactly ONE focal question");
     contains(instructions, "under 50 words");
     contains(instructions, "Immediate Verbal Acknowledgment");
+    contains(instructions, "exactly one spoken response containing exactly one focal question");
   });
 
   test("keeps transport thin and session context factual", () => {
@@ -106,7 +124,7 @@ describe("TrainerTwin prompt contract", () => {
     contains(contextRenderer, "- Spec:");
     contains(contextRenderer, "- Instruction:");
     contains(contextRenderer, "INTERVIEW SETTINGS");
-    contains(contextRenderer, "Session turn budget");
+    contains(contextRenderer, "Planned question capacity");
     assert.ok(!contextRenderer.includes(".slice(0, 5000)"));
     assert.ok(!contextRenderer.includes(".slice(0, 3000)"));
   });
@@ -148,11 +166,18 @@ describe("TrainerTwin retrieval policy", () => {
 });
 
 describe("pre-warmed opening contract", () => {
-  test("instructions skip all opening tool calls when the warm block is present", () => {
+  test("instructions open the attached PDF without repeating retrieval or planning", () => {
     contains(contextRenderer, "PRE-WARMED OPENING");
-    contains(contextRenderer, "deliver the greeting directly with NO tool calls");
-    contains(contextRenderer, "Do NOT call surface on the opening turn");
+    contains(contextRenderer, "an attached PDF is present");
+    contains(contextRenderer, "no PDF is attached. Do not call surface(open_pdf)");
     contains(instructions, "PRE-WARMED OPENING exception");
-    contains(instructions, "SKIP this initialization entirely");
+    contains(instructions, "MUST call `surface({ action: \"open_pdf\"");
+    contains(instructions, "skip search_style and session_plan");
+  });
+
+  test("never opens an empty PDF surface", () => {
+    contains(instructions, "Never call `open_pdf` without an attached PDF and its non-empty file ID");
+    contains(surfaceTool, 'input.action === "open_pdf"');
+    contains(surfaceTool, "requires a non-empty SESSION DATA fileId");
   });
 });

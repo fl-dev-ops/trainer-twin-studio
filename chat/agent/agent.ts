@@ -7,7 +7,7 @@ export default defineAgent({
       "step.started": (_event, ctx) => {
         const auth = ctx.session.auth.current;
         const attributes = (auth?.attributes ?? {}) as Record<string, string | undefined>;
-        const requestedModel = attributes.model || process.env.CHAT_AGENT_MODEL || "google/gemini-3.5-flash-lite";
+        const requestedModel = attributes.model || process.env.CHAT_AGENT_MODEL || "openai/gpt-4.1-mini";
 
         // All models route through the Vercel AI Gateway with provider-specific options.
         let options: AgentModelOptionsDefinition | undefined;

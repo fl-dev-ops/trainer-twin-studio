@@ -1,5 +1,6 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
+import { knowledgeGroundingState } from "../lib/knowledge-grounding-state";
 import { callStudio } from "../lib/studio";
 
 const SHARED_KNOWLEDGE_BASE_SLUG = "acme-knowledge";
@@ -12,11 +13,17 @@ export default defineTool({
     limit: z.number().int().min(1).max(8).default(4),
     topics: z.array(z.string().trim().min(1)).optional(),
   }),
-  execute(input, ctx) {
-    return callStudio<Record<string, unknown>>({
+  async execute(input, ctx) {
+    const result = await callStudio<Record<string, unknown>>({
       action: "searchKnowledge",
       knowledgeBase: SHARED_KNOWLEDGE_BASE_SLUG,
       ...input,
     }, ctx);
+    knowledgeGroundingState.update((current) => ({
+      turnId: ctx.session.turn.id,
+      relevant: result.relevant === true
+        || (current?.turnId === ctx.session.turn.id && current.relevant),
+    }));
+    return result;
   },
 });
