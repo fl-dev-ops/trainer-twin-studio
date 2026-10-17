@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { ensureDeployment } from "@/lib/deployments";
 import { sendRolePlayAssignmentEmail } from "@/lib/email";
 import { contextUploadFromAgentData } from "@/lib/context-upload";
-import { isApiError, requireExternalApi } from "@/lib/external-api";
+import { isApiError, paginationFromUrl, requireExternalApi } from "@/lib/external-api";
 
 const createSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(320).optional(),
@@ -24,8 +24,8 @@ export async function GET(request: Request) {
   const userId = url.searchParams.get("userId") || undefined;
   const requestedEmail = url.searchParams.get("email")?.trim().toLowerCase() || undefined;
   const scenario = url.searchParams.get("scenario") || undefined;
-  const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || 50, 1), 100);
-  const offset = Math.max(Number(url.searchParams.get("offset")) || 0, 0);
+  const page = paginationFromUrl(url);
+  if (page instanceof Response) return page;
   const user = userId
     ? await db.user.findUnique({ where: { id: userId }, select: { email: true } })
     : null;
@@ -40,8 +40,8 @@ export async function GET(request: Request) {
     db.rolePlayAssignment.findMany({
       where,
       orderBy: { assignedAt: "desc" },
-      skip: offset,
-      take: limit,
+      skip: page.offset,
+      take: page.limit,
       select: {
         id: true,
         assignedAt: true,
@@ -61,7 +61,7 @@ export async function GET(request: Request) {
       scenario: deployment.agent,
       practiceUrl: practiceUrl(api.org.slug, shareCode),
     })),
-    pagination: { limit, offset, total },
+    pagination: { ...page, total },
   });
 }
 

@@ -17,7 +17,7 @@ Scenario and persona configuration remains dashboard-only.
 ## Create an assignment
 
 ```bash
-curl "https://trainertwin.com/api/v1/assignments" \
+curl "https://dash.trainertwin.com/api/v1/assignments" \
   --request POST \
   --header "x-api-key: $TRAINERTWIN_API_KEY" \
   --header "content-type: application/json" \
@@ -56,7 +56,7 @@ Creating the same learner-scenario pair again is safe. TrainerTwin returns the e
 Move an assignment to another learner, scenario, or both:
 
 ```bash
-curl "https://trainertwin.com/api/v1/assignments/assignment_123" \
+curl "https://dash.trainertwin.com/api/v1/assignments/assignment_123" \
   --request PATCH \
   --header "x-api-key: $TRAINERTWIN_API_KEY" \
   --header "content-type: application/json" \
@@ -68,7 +68,7 @@ A changed assignment sends a notification to the target learner and returns a ne
 ## Inspect an assignment
 
 ```bash
-curl "https://trainertwin.com/api/v1/assignments/assignment_123" \
+curl "https://dash.trainertwin.com/api/v1/assignments/assignment_123" \
   --header "x-api-key: $TRAINERTWIN_API_KEY"
 ```
 
@@ -77,7 +77,7 @@ Returns the learner, scenario, current `status` (`pending`, `used`, `expired`, o
 ## Remove an assignment
 
 ```bash
-curl "https://trainertwin.com/api/v1/assignments/assignment_123" \
+curl "https://dash.trainertwin.com/api/v1/assignments/assignment_123" \
   --request DELETE \
   --header "x-api-key: $TRAINERTWIN_API_KEY"
 ```

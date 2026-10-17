@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { activateInterviewRuntime } from "@/lib/session-activation";
-import { isApiError, requireExternalApi } from "@/lib/external-api";
+import { isApiError, paginationFromUrl, requireExternalApi } from "@/lib/external-api";
 
 const querySchema = z.object({
   status: z.enum(["assigned", "activating", "active", "completed", "abandoned", "failed", "revoked"]).optional(),
@@ -32,8 +32,8 @@ export async function GET(request: Request) {
     to: url.searchParams.get("to") || undefined,
   });
   if (!parsed.success) return Response.json({ error: "Invalid session filters" }, { status: 400 });
-  const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || 50, 1), 100);
-  const offset = Math.max(Number(url.searchParams.get("offset")) || 0, 0);
+  const page = paginationFromUrl(url);
+  if (page instanceof Response) return page;
   const startedAtRange = [
     parsed.data.from ? { gte: new Date(parsed.data.from) } : {},
     parsed.data.to ? { lte: new Date(parsed.data.to) } : {},
@@ -50,8 +50,8 @@ export async function GET(request: Request) {
     db.interviewSession.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      skip: offset,
-      take: limit,
+      skip: page.offset,
+      take: page.limit,
       select: {
         id: true,
         userId: true,
@@ -71,7 +71,7 @@ export async function GET(request: Request) {
     }),
     db.interviewSession.count({ where }),
   ]);
-  return Response.json({ sessions, pagination: { limit, offset, total } });
+  return Response.json({ sessions, pagination: { ...page, total } });
 }
 
 export async function POST(request: Request) {

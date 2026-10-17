@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { isApiError, requireExternalApi } from "@/lib/external-api";
-import { presignedGetUrl } from "@/lib/s3";
+import { orgPrefix, presignedGetUrl } from "@/lib/s3";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -25,6 +25,7 @@ export async function GET(request: Request, { params }: Params) {
       createdAt: true,
       transcript: true,
       evidence: true,
+      videoEgressId: true,
       s3AudioKey: true,
       startedAt: true,
       endedAt: true,
@@ -33,8 +34,23 @@ export async function GET(request: Request, { params }: Params) {
   if (!session) return Response.json({ error: "Session not found" }, { status: 404 });
   // Presigned download URL for the recording (1 hour); null when no audio exists.
   const audioUrl = session.s3AudioKey ? await presignedGetUrl(session.s3AudioKey, 3600) : null;
-  delete (session as { s3AudioKey?: string | null }).s3AudioKey;
-  return Response.json({ session: { ...session, audioUrl } });
+  const internal = session as { s3AudioKey?: string | null; videoEgressId?: string | null };
+  // Video recording: evidence carries the explicit S3 key; otherwise the standard
+  // composite-egress recording path is used when a video egress was started.
+  const evidence = session.evidence && typeof session.evidence === "object" ? (session.evidence as Record<string, unknown>) : {};
+  const videoKey =
+    typeof evidence.videoS3Key === "string" && evidence.videoS3Key
+      ? evidence.videoS3Key
+      : internal.videoEgressId
+        ? `${orgPrefix(api.org.id)}/recordings/${id}/video.mp4`
+        : null;
+  const videoUrl = videoKey ? await presignedGetUrl(videoKey, 3600).catch((error) => {
+    console.error("Failed to presign video recording:", error);
+    return null;
+  }) : null;
+  delete internal.s3AudioKey;
+  delete internal.videoEgressId;
+  return Response.json({ session: { ...session, audioUrl, videoUrl } });
 }
 
 export async function DELETE(request: Request, { params }: Params) {

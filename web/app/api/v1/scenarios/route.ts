@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { isApiError, requireExternalApi } from "@/lib/external-api";
+import { isApiError, paginationFromUrl, requireExternalApi } from "@/lib/external-api";
 
 const listSelect = {
   slug: true,
@@ -18,16 +18,15 @@ const listSelect = {
 export async function GET(request: Request) {
   const api = await requireExternalApi(request, "scenarios", "read");
   if (isApiError(api)) return api;
-  const url = new URL(request.url);
-  const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || 50, 1), 100);
-  const offset = Math.max(Number(url.searchParams.get("offset")) || 0, 0);
+  const page = paginationFromUrl(new URL(request.url));
+  if (page instanceof Response) return page;
 
   const [scenarios, total] = await Promise.all([
     db.agent.findMany({
       where: { orgId: api.org.id },
       orderBy: [{ order: "asc" }, { createdAt: "desc" }],
-      skip: offset,
-      take: limit,
+      skip: page.offset,
+      take: page.limit,
       select: listSelect,
     }),
     db.agent.count({ where: { orgId: api.org.id } }),
@@ -35,6 +34,6 @@ export async function GET(request: Request) {
 
   return Response.json({
     scenarios: scenarios.map(({ deployments, ...scenario }) => ({ ...scenario, assignmentCount: deployments[0]?._count.assignments ?? 0 })),
-    pagination: { limit, offset, total },
+    pagination: { ...page, total },
   });
 }

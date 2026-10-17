@@ -7,10 +7,8 @@ info:
     Scenarios can be listed via the API; scenario, persona, domain, knowledge, and voice
     configuration remains dashboard-only.
 servers:
-  - url: https://trainertwin.com/api/v1
+  - url: https://dash.trainertwin.com/api/v1
     description: Production
-  - url: https://trainertwin.localhost/api/v1
-    description: Local development
 security:
   - ApiKeyAuth: []
 tags:

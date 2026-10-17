@@ -10,7 +10,7 @@ A session is a learner's practice run against a published scenario. Learners nor
 Activate a session for a learner against a published scenario slug:
 
 ```bash
-curl "https://trainertwin.com/api/v1/sessions" \
+curl "https://dash.trainertwin.com/api/v1/sessions" \
   --request POST \
   --header "x-api-key: $TRAINERTWIN_API_KEY" \
   --header "content-type: application/json" \
@@ -61,7 +61,7 @@ Combine any of these filters:
 | `offset` | Records to skip (default `0`) |
 
 ```bash
-curl "https://trainertwin.com/api/v1/sessions?userId=user_123&status=completed&from=2026-09-01T00:00:00Z&to=2026-09-30T23:59:59Z&limit=25" \
+curl "https://dash.trainertwin.com/api/v1/sessions?userId=user_123&status=completed&from=2026-09-01T00:00:00Z&to=2026-09-30T23:59:59Z&limit=25" \
   --header "x-api-key: $TRAINERTWIN_API_KEY"
 ```
 
@@ -100,7 +100,7 @@ The list response contains session metadata without transcript or evidence paylo
 ## Get session results
 
 ```bash
-curl "https://trainertwin.com/api/v1/sessions/session_123" \
+curl "https://dash.trainertwin.com/api/v1/sessions/session_123" \
   --header "x-api-key: $TRAINERTWIN_API_KEY"
 ```
 
@@ -117,7 +117,7 @@ The detail response includes:
 Deletion is a soft delete: the session is hidden from list and detail results, but the record (including transcript and audio) is retained for auditing.
 
 ```bash
-curl "https://trainertwin.com/api/v1/sessions/session_123" \
+curl "https://dash.trainertwin.com/api/v1/sessions/session_123" \
   --request DELETE \
   --header "x-api-key: $TRAINERTWIN_API_KEY"
 ```

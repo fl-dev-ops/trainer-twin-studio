@@ -51,3 +51,13 @@ export async function requireExternalApi(
 export function isApiError(value: ExternalApiContext | Response): value is Response {
   return value instanceof Response;
 }
+
+/** Collection pagination per the API contract: limit 1–100 (default 50), offset >= 0
+ * (default 0). Present-but-invalid values return a 400 Response instead of being clamped. */
+export function paginationFromUrl(url: URL): { limit: number; offset: number } | Response {
+  const limit = url.searchParams.has("limit") ? Number(url.searchParams.get("limit")) : 50;
+  const offset = url.searchParams.has("offset") ? Number(url.searchParams.get("offset")) : 0;
+  const valid = Number.isInteger(limit) && limit >= 1 && limit <= 100 && Number.isInteger(offset) && offset >= 0;
+  if (!valid) return Response.json({ error: "Invalid pagination" }, { status: 400 });
+  return { limit, offset };
+}

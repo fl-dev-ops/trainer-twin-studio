@@ -3,23 +3,22 @@ import { z } from "zod";
 import { BASE_DOMAIN } from "@/lib/base-domain";
 import { db } from "@/lib/db";
 import { sendInvitationEmail } from "@/lib/email";
-import { isApiError, requireExternalApi } from "@/lib/external-api";
+import { isApiError, paginationFromUrl, requireExternalApi } from "@/lib/external-api";
 
 const createSchema = z.object({ email: z.string().trim().email().max(320) }).strict();
 
 export async function GET(request: Request) {
   const api = await requireExternalApi(request, "users", "read");
   if (isApiError(api)) return api;
-  const url = new URL(request.url);
-  const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || 50, 1), 100);
-  const offset = Math.max(Number(url.searchParams.get("offset")) || 0, 0);
+  const page = paginationFromUrl(new URL(request.url));
+  if (page instanceof Response) return page;
 
   const [members, total, invitations] = await Promise.all([
     db.member.findMany({
       where: { organizationId: api.org.id, role: "member" },
       orderBy: { createdAt: "desc" },
-      skip: offset,
-      take: limit,
+      skip: page.offset,
+      take: page.limit,
       select: {
         id: true,
         role: true,
@@ -38,7 +37,7 @@ export async function GET(request: Request) {
   return Response.json({
     users: members.map(({ id: memberId, user, ...member }) => ({ ...user, ...member, memberId })),
     invitations,
-    pagination: { limit, offset, total },
+    pagination: { ...page, total },
   });
 }
 
