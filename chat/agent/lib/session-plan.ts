@@ -11,7 +11,12 @@ export interface PlanQuestion {
   status: "pending" | "active" | "done";
   followUpsUsed: number;
   followUpsMax: number;
+  /** Consecutive "unknown" answers; the second one in a row moves on instead of probing again. */
+  unknownStreak?: number;
 }
+
+/** "I don't know" twice in a row on one question → next question (the first gets one different-angle follow-up). */
+const UNKNOWN_ANSWERS_BEFORE_MOVING_ON = 2;
 
 export interface PlanRound {
   id: string;
@@ -30,6 +35,13 @@ export interface SessionPlanState {
   sessionMaximumTurns: number;
   closingState: ClosingState;
   rounds: PlanRound[];
+  /** Turn whose learner answer was last recorded; one answer must never advance the plan twice. */
+  lastRecordedTurnId?: string;
+}
+
+/** True when this turn's answer is already recorded (e.g. the model re-records to skip a follow-up). */
+export function answerAlreadyRecorded(state: SessionPlanState, turnId: string | undefined) {
+  return Boolean(turnId) && state.lastRecordedTurnId === turnId;
 }
 
 type AgentData = {
@@ -185,7 +197,8 @@ function activateEvidenceFollowUp(state: SessionPlanState, round: PlanRound) {
     totalTurns(state) >= state.sessionMaximumTurns
   ) return null;
 
-  const question = [...round.questions].reverse().find((item) => item.followUpsUsed < item.followUpsMax);
+  const question = [...round.questions].reverse().find((item) =>
+    item.followUpsUsed < item.followUpsMax && (item.unknownStreak ?? 0) < UNKNOWN_ANSWERS_BEFORE_MOVING_ON);
   if (!question) return null;
   question.status = "active";
   question.followUpsUsed += 1;
@@ -219,9 +232,10 @@ export function advanceSessionPlan(state: SessionPlanState, event: PlanEvent) {
     }
 
     const active = activeQuestion(round);
+    if (active) active.unknownStreak = event.answerStatus === "unknown" ? (active.unknownStreak ?? 0) + 1 : 0;
     if (!active) {
       activateNextQuestion(state, round);
-    } else if (event.answerStatus === "strong") {
+    } else if (event.answerStatus === "strong" || (active.unknownStreak ?? 0) >= UNKNOWN_ANSWERS_BEFORE_MOVING_ON) {
       active.status = "done";
       if (!activateNextQuestion(state, round)) activateEvidenceFollowUp(state, round);
     } else if (
@@ -273,4 +287,32 @@ export function summarizeSessionPlan(state: SessionPlanState) {
     nextAction: action,
     isComplete: action.kind === "start_closing" || state.closingState !== "interviewing",
   };
+}
+
+/**
+ * Records one learner answer, at most once per turn (shared by session_plan and
+ * start_resume_question). Returns the original state unchanged when this turn is already recorded.
+ */
+export function recordAnswerOnce(
+  state: SessionPlanState,
+  answer: { answerStatus: AnswerStatus; evidenceUpdates?: Record<string, EvidenceStatus> },
+  turnId: string | undefined,
+): { state: SessionPlanState; alreadyRecorded: boolean } {
+  if (answerAlreadyRecorded(state, turnId)) return { state, alreadyRecorded: true };
+  const result = advanceSessionPlan(structuredClone(state), { type: "record_answer", ...answer });
+  return { state: { ...result.state, lastRecordedTurnId: turnId }, alreadyRecorded: false };
+}
+
+/**
+ * The learner already heard a new main question (the bridge speaks it as the tool call starts) while
+ * the plan wanted a follow-up: close the active question and activate the next one so the plan tracks
+ * what was actually asked. No-op when there is no next main question to move to.
+ */
+export function moveToNextMainQuestion(state: SessionPlanState): { state: SessionPlanState; moved: boolean } {
+  const next = structuredClone(state);
+  const round = next.rounds[next.currentRound];
+  const active = round ? activeQuestion(round) : null;
+  if (!round || !active || !round.questions.some((question) => question.status === "pending")) return { state, moved: false };
+  active.status = "done";
+  return activateNextQuestion(next, round) ? { state: next, moved: true } : { state, moved: false };
 }
