@@ -82,6 +82,7 @@ def test_latency_logging_emits_structured_turn_metrics(caplog):
                     type="message",
                     id="user-1",
                     role="user",
+                    created_at=1791880000.5,
                     metrics={
                         "transcription_delay": 0.12,
                         "end_of_turn_delay": 0.65,
@@ -96,6 +97,7 @@ def test_latency_logging_emits_structured_turn_metrics(caplog):
                     type="message",
                     id="assistant-1",
                     role="assistant",
+                    interrupted=True,
                     metrics={
                         "llm_node_ttft": 1.25,
                         "tts_node_ttfb": 0.18,
@@ -112,18 +114,23 @@ def test_latency_logging_emits_structured_turn_metrics(caplog):
     assert len(records) == 2
     user = json.loads(records[0].removeprefix("[voice-latency] "))
     assistant = json.loads(records[1].removeprefix("[voice-latency] "))
+    assert isinstance(user.pop("loggedAtMs"), int)
     assert user == {
         "sessionId": "s1",
         "roomName": "room-1",
         "turnIndex": 1,
         "messageId": "user-1",
         "role": "user",
+        "interrupted": False,
+        "createdAtMs": 1791880000500,
         "transcriptionDelayMs": 120.0,
         "endOfTurnDelayMs": 650.0,
         "sttProvider": "deepgram",
         "sttModel": "flux-general-en",
     }
     assert assistant["turnIndex"] == 1
+    assert assistant["interrupted"] is True
+    assert "createdAtMs" not in assistant
     assert assistant["llmTtftMs"] == 1250.0
     assert assistant["ttsTtfbMs"] == 180.0
     assert assistant["playbackLatencyMs"] == 30.0
