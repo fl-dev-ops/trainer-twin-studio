@@ -2,6 +2,7 @@ import { gateway, wrapLanguageModel } from "ai";
 import { defineAgent, defineDynamic } from "eve";
 import type { AgentModelOptionsDefinition } from "eve";
 import { hedgedStreamMiddleware, routeTo } from "./lib/hedge";
+import { thinkingBudgetSchema } from "./lib/thinking-budget";
 
 const PRIMARY_ROUTE = process.env.GEMINI_GATEWAY_PROVIDER?.trim() || "google";
 /**
@@ -34,21 +35,20 @@ export default defineAgent({
         const attributes = (auth?.attributes ?? {}) as Record<string, string | undefined>;
         const requestedModel = attributes.model || process.env.CHAT_AGENT_MODEL || "google/gemini-3.5-flash-lite";
 
-        const rawBudget = attributes.thinkingBudget || process.env.GEMINI_THINKING_BUDGET;
-        const baseBudget = rawBudget !== undefined ? Number(rawBudget) : 512;
-        const messages = (ctx as any)?.messages ?? [];
-        const isToolFollowup = Array.isArray(messages) && messages.length > 0 && messages[messages.length - 1]?.role === "tool";
-        const isAsymmetric = attributes.asymmetricThinking === "1" || process.env.ASYMMETRIC_THINKING === "1";
-        const budget = isToolFollowup && isAsymmetric ? 0 : baseBudget;
-
         // All models route through the Vercel AI Gateway with provider-specific options.
         let options: AgentModelOptionsDefinition | undefined;
         if (requestedModel.startsWith("google/")) {
+          const rawBudget = attributes.thinkingBudget ?? process.env.GEMINI_THINKING_BUDGET;
+          const baseBudget = rawBudget !== undefined ? thinkingBudgetSchema.parse(rawBudget) : undefined;
+          const messages = (ctx as any)?.messages ?? [];
+          const isToolFollowup = Array.isArray(messages) && messages.length > 0 && messages[messages.length - 1]?.role === "tool";
+          const isAsymmetric = attributes.asymmetricThinking === "1" || process.env.ASYMMETRIC_THINKING === "1";
+          const budget = baseBudget !== undefined && isToolFollowup && isAsymmetric ? 0 : baseBudget;
           // Gemini 3.x ignores thinkingBudget in practice (budget 0 still thought on 21/30 calls) but
           // honours thinkingLevel; "low" halved average thinking and cut calls over 5 s from 9/30 to 4/30.
           // An explicit budget (header/env) still wins so budget experiments keep working.
           const thinkingLevel = attributes.thinkingLevel || process.env.GEMINI_THINKING_LEVEL || "low";
-          const thinkingConfig: Record<string, string | number> = rawBudget !== undefined ? { thinkingBudget: budget } : { thinkingLevel };
+          const thinkingConfig: Record<string, string | number> = budget !== undefined ? { thinkingBudget: budget } : { thinkingLevel };
           options = {
             providerOptions: {
               // GEMINI_GATEWAY_PROVIDER picks the Google backend: "google" (AI Studio, default) or "vertex".

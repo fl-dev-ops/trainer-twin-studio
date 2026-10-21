@@ -22,6 +22,15 @@ test("session_plan keeps the decision fields and drops claim text", () => {
     resumeClaimCandidates: ["c1", "c2"],
   });
   assert.ok(!JSON.stringify(output).includes("payments rewrite"));
+  assert.ok(!JSON.stringify(summarizeToolInput("session_plan", { reply: "Private learner feedback" })).includes("Private learner feedback"));
+});
+
+test("other tools and errors never include free-text prefixes", () => {
+  assert.deepEqual(
+    summarizeToolInput("search_knowledge", { query: "Private learner answer", limit: 3 }),
+    { query: "string", limit: "number" },
+  );
+  assert.deepEqual(summarizeToolOutput("search_knowledge", { error: "Private learner answer" }), { error: true });
 });
 
 test("statuses, wrapped outputs and errors", () => {
@@ -32,8 +41,8 @@ test("statuses, wrapped outputs and errors", () => {
   );
   assert.deepEqual(summarizeToolOutput("start_resume_question", { type: "json", value: { status: "not_found" } }), { status: "not_found" });
   assert.deepEqual(summarizeToolOutput("start_resume_question", null, true), { error: true });
-  assert.equal(
-    (summarizeToolInput("start_resume_question", { claimId: "c1", question: "x".repeat(200) }).question as string).length,
-    80,
+  assert.deepEqual(
+    summarizeToolInput("start_resume_question", { claimId: "c1", question: "What did you build at Private Company?" }),
+    { claimId: "c1", answerStatus: null, evidenceUpdates: [] },
   );
 });

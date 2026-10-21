@@ -65,6 +65,7 @@ export function createQuestionBridge(
   const claimByCall = new Map<string, string>();
   let bridgedAtMs: number | null = null;
   let bridgedKind: "question" | "reply" | null = null;
+  let bridgedReplyCallId: string | null = null;
   let resultStatus: string | null = null;
   let planAction: string | null = null;
   let suppressing = false;
@@ -105,6 +106,7 @@ export function createQuestionBridge(
         }
         bridgedAtMs ??= Date.now();
         bridgedKind = "reply";
+        bridgedReplyCallId = action.callId;
         suppressing = true;
         return `${reply}\n`;
       }
@@ -113,6 +115,10 @@ export function createQuestionBridge(
     onToolResult(result: ToolResult) {
       // session_plan, or start_resume_question when it recorded the answer itself (one-call new question).
       if (result.toolName === PLAN_TOOL || result.toolName === RESUME_QUESTION_TOOL) planAction = planNextAction(result) ?? planAction;
+      if (result.callId && result.callId === bridgedReplyCallId && (result.isError || result.kind !== "tool-result")) {
+        suppressing = false;
+        resultStatus = "error";
+      }
       const status = highlightStatus(result);
       const claimId = result.callId ? claimByCall.get(result.callId) : undefined;
       if (claimId && (status === "highlighted" || status === "not_found")) usedClaimIds.add(claimId);

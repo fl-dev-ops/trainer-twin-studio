@@ -3,6 +3,8 @@ import { defineChannel, POST, type Session } from "eve/channels";
 import { studioPrincipal } from "../lib/auth";
 import { createQuestionBridge } from "../lib/question-bridge";
 import { followUpGradesFor } from "../lib/turn-grades";
+import { summarizeToolInput, summarizeToolOutput } from "../lib/tool-trace";
+import { thinkingBudgetSchema } from "../lib/thinking-budget";
 
 /** Resume claims already highlighted per session, so the bridge never speaks a spent claim's question. */
 // ponytail: unbounded Map, one small Set per voice session; a process restart clears it.
@@ -15,8 +17,6 @@ function usedClaimsFor(sessionId: string) {
   }
   return used;
 }
-import { summarizeToolInput, summarizeToolOutput } from "../lib/tool-trace";
-
 /**
  * OpenAI-compatible chat completions bridge. This endpoint allows LiveKit
  * (or any standard OpenAI client) to use the Eve agent as the conversational brain.
@@ -178,6 +178,11 @@ export default defineChannel({
         return Response.json({ error: "Organization is required" }, { status: 401 });
       }
 
+      const thinkingBudgetHeader = request.headers.get("x-thinking-budget")?.trim();
+      if (thinkingBudgetHeader !== undefined && !thinkingBudgetSchema.safeParse(thinkingBudgetHeader).success) {
+        return Response.json({ error: "x-thinking-budget must be -1 or a non-negative safe integer" }, { status: 400 });
+      }
+
       const body = (await request.json().catch(() => null)) as ChatCompletionBody | null;
       const latestRaw = [...(body?.messages ?? [])].reverse().find(
         (m) => m.role === "user" || m.role === "tool" || contentToText(m.content).trim() === "session-start"
@@ -225,7 +230,6 @@ export default defineChannel({
         sessionId: request.headers.get("x-trainertwin-session-id")?.trim() ?? null,
         at_ms: Date.now(),
         roles: (body?.messages ?? []).map((m) => m.role),
-        latest: message ? message.slice(0, 80) : null,
         accepted: Boolean(message),
       }));
       if (!message) return Response.json({ error: "No user or tool message to process" }, { status: 400 });
@@ -259,9 +263,8 @@ export default defineChannel({
       if (agentSlug) attributes.agentSlug = agentSlug;
       if (personaSlug) attributes.personaSlug = personaSlug;
 
-      const thinkingBudgetHeader = request.headers.get("x-thinking-budget")?.trim();
       const asymmetricHeader = request.headers.get("x-asymmetric-thinking")?.trim();
-      if (thinkingBudgetHeader) attributes.thinkingBudget = thinkingBudgetHeader;
+      if (thinkingBudgetHeader !== undefined) attributes.thinkingBudget = thinkingBudgetHeader;
       if (asymmetricHeader) attributes.asymmetricThinking = asymmetricHeader;
 
       const auth = {
@@ -347,17 +350,13 @@ export default defineChannel({
           if (currentStep && currentStep.ttft_ms === undefined) currentStep.ttft_ms = Date.now() - currentStepStart!;
           if (currentStep) currentStep.spoke = true;
         };
-        let spokenText = "";
-        const writeText = (content: string) => {
-          spokenText += content;
-          return writeChunk({
-            id: completionId,
-            object: "chat.completion.chunk",
-            created,
-            model,
-            choices: [{ index: 0, delta: { content }, finish_reason: null }],
-          });
-        };
+        const writeText = (content: string) => writeChunk({
+          id: completionId,
+          object: "chat.completion.chunk",
+          created,
+          model,
+          choices: [{ index: 0, delta: { content }, finish_reason: null }],
+        });
         let usage: { inputTokens?: number; outputTokens?: number } | null = null;
         const allToolsCalled: { name: string; callId: string; input: unknown }[] = [];
         const toolExecutionTimes: Record<string, { start: number; end?: number; duration_ms?: number }> = {};
@@ -508,8 +507,6 @@ export default defineChannel({
                 llm_model: requestedModel || process.env.CHAT_AGENT_MODEL || "google/gemini-3.5-flash-lite",
                 llm_route: process.env.GEMINI_GATEWAY_PROVIDER?.trim() || "google",
                 ...questionBridge.trace(t_start),
-                // Exactly what the voice agent received to speak this turn (bridged + model text).
-                spoken_text: spokenText.trim().slice(0, 600),
                 started_at_ms: t_start,
                 status: ev.type,
                 input_kind: inputKind,
@@ -542,7 +539,6 @@ export default defineChannel({
                 first_event_ms: tFirstEvent,
                 first_token_ms: ttftMs,
                 total_turn_ms: wallMs,
-                brain_trace: brainTrace,
               });
               await writeChunk({
                 id: completionId,
@@ -563,7 +559,6 @@ export default defineChannel({
                   first_event_ms: tFirstEvent,
                   first_token_ms: ttftMs,
                   total_turn_ms: wallMs,
-                  brain_trace: brainTrace,
                 },
                 ...(usage
                   ? {

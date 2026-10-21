@@ -55,6 +55,23 @@ test("one-call follow-up: speaks session_plan.reply and drops all later model te
   assert.equal(trace.plan_mismatch, false);
 });
 
+test("a failed bridged plan call forwards recovery, but unrelated failures do not", () => {
+  const bridge = createQuestionBridge("voice");
+  assert.equal(bridge.onToolCalls([planReply("How did you measure that?")]), "How did you measure that?\n");
+  bridge.onToolResult({ kind: "tool-result", callId: "other-call", toolName: "search_style", isError: true });
+  assert.equal(bridge.onModelText("How did you measure that?"), null);
+  bridge.onToolResult({ kind: "tool-result", callId: "plan-1", toolName: "session_plan", isError: true });
+  assert.equal(bridge.onModelText("Sorry, let me record that answer again."), "Sorry, let me record that answer again.");
+  assert.equal(bridge.trace(0).bridged_result, "error");
+});
+
+test("a tool-error event for the bridged plan call also forwards recovery", () => {
+  const bridge = createQuestionBridge("voice");
+  bridge.onToolCalls([planReply("How did you measure that?")]);
+  bridge.onToolResult({ kind: "tool-error", callId: "plan-1", toolName: "session_plan" });
+  assert.equal(bridge.onModelText("Please give me a moment."), "Please give me a moment.");
+});
+
 test("one-call new question: the resume question wins over a reply in the same response", () => {
   const bridge = createQuestionBridge("voice");
   assert.equal(bridge.onToolCalls([planReply("Great, thanks."), question()]), "What did you build?\n");

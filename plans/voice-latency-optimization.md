@@ -83,9 +83,10 @@ trainer is already speaking.
 - **Model settings** (`chat/agent/agent.ts`): Gemini `thinkingLevel: "low"`; Google backend via
   `GEMINI_GATEWAY_PROVIDER`; optional same-route hedge (`chat/agent/lib/hedge.ts`, off).
 - **Instrumentation**: `[brain-trace]` per turn (per-LLM-step timing, decision vs tool time, tokens, cached tokens,
-  `spoke`, tool inputs/outputs summary, bridged/held, plan mismatch, `spoken_text`, `llm_model`, `llm_route`),
+  `spoke`, tool inputs/outputs summary, bridged/held, plan mismatch, `llm_model`, `llm_route`),
   `[plan-turn]` per turn (what the model was shown), `[openai-compat] request` per transport request.
-  `chat/agent/lib/tool-trace.ts` keeps traces free of resume/answer text.
+  Normal telemetry omits learner input, spoken text, tool text prefixes, and tool error messages. Each turn has
+  one `[brain-trace]` log and one `brain_trace` in the final SSE chunk.
 
 ### Voice agent (`agent/`)
 - **Finished sentences go to TTS when Eve's text pauses ≥200 ms** (`agent/src/tts/sentence_flush.py`): LiveKit only
@@ -112,6 +113,8 @@ GEMINI_HEDGE_BACKUP_ROUTE=vertex      # MUST be the same backend (see §4.6)
 # optional: GEMINI_THINKING_LEVEL (default low), GEMINI_THINKING_BUDGET (overrides level; not honoured by 3.8)
 ```
 Code fallback model when `CHAT_AGENT_MODEL` is unset is `google/gemini-3.5-flash-lite` — make sure prod sets it.
+`GEMINI_THINKING_BUDGET` and `x-thinking-budget` must be `-1` (dynamic) or a non-negative safe integer.
+Invalid headers return HTTP 400 before an Eve turn is sent; invalid environment overrides fail model selection.
 
 ### `agent/.env` (local)
 `LLM_BASE_URL=http://127.0.0.1:2001/v1`, `LLM_MODEL=trainertwin-brain` (local Eve). Optional `TTS_IDLE_FLUSH_MS`.
