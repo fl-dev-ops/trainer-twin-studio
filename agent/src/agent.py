@@ -200,7 +200,12 @@ def register_latency_logging(session: Any, *, session_id: str, room_name: str) -
             "turnIndex": turn_index,
             "messageId": getattr(item, "id", None),
             "role": role,
+            "interrupted": bool(getattr(item, "interrupted", False)),
+            "loggedAtMs": round(time.time() * 1000),
         }
+        created_at = getattr(item, "created_at", None)
+        if isinstance(created_at, (int, float)):
+            payload["createdAtMs"] = round(created_at * 1000)
         for source, target in (
             ("transcription_delay", "transcriptionDelayMs"),
             ("end_of_turn_delay", "endOfTurnDelayMs"),

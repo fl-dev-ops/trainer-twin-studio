@@ -21,7 +21,7 @@ def test_build_agent_session_configuration():
     assert opts["preemptive_generation"]["enabled"] is False
     assert opts["endpointing"]["mode"] == "dynamic"
     assert opts["endpointing"]["min_delay"] == 0.6
-    assert opts["endpointing"]["max_delay"] == 2.0
+    assert opts["endpointing"]["max_delay"] == 1.2
     assert opts["interruption"]["mode"] == "adaptive"
     assert opts["interruption"]["min_words"] == 2
     assert opts["interruption"]["resume_false_interruption"] is True

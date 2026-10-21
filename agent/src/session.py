@@ -75,7 +75,8 @@ def build_agent_session(
             endpointing={
                 "mode": "dynamic",
                 "min_delay": 0.6,
-                "max_delay": 2.0,
+                # Was 2.0: the detector hit the max on most turns (6 of 7 on Oct 15), ~38% of the wait.
+                "max_delay": 1.2,
             },
             interruption={
                 "mode": "adaptive",
