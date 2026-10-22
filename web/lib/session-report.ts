@@ -9,12 +9,22 @@ export type KeyMoment = {
   audioUrl?: string;
 };
 
+/** Points awarded for one rubric criterion of a role play. */
+export type RubricScore = {
+  criterion: string;
+  points: number;
+  maxPoints: number;
+  reason: string;
+};
+
 export type SessionReport = {
   summary: string;
   summaryTags: string[];
   keyMoments: KeyMoment[];
   focusNextTime: string;
+  /** For role plays with a rubric, the sum of `rubricScores` points. */
   score?: number;
+  rubricScores?: RubricScore[];
   generatedAt: string;
 };
 
@@ -66,6 +76,31 @@ export const SESSION_REPORT_JSON_SCHEMA = {
     },
   },
 };
+
+const RUBRIC_SCORES_JSON_SCHEMA = {
+  type: "array",
+  description: "One entry per rubric criterion, in the order given, scoring only the learner.",
+  items: {
+    type: "object",
+    additionalProperties: false,
+    required: ["criterion", "points", "reason"],
+    properties: {
+      criterion: { type: "string", description: "The rubric criterion name, exactly as given." },
+      points: { type: "number", description: "Points awarded, from 0 up to the criterion's maximum." },
+      reason: { type: "string", description: "One sentence citing what the learner did or missed." },
+    },
+  },
+};
+
+/** Report schema; role plays with a rubric also return per-criterion points. */
+export function sessionReportJsonSchema(withRubric: boolean) {
+  if (!withRubric) return SESSION_REPORT_JSON_SCHEMA;
+  return {
+    ...SESSION_REPORT_JSON_SCHEMA,
+    required: [...SESSION_REPORT_JSON_SCHEMA.required, "rubricScores"],
+    properties: { ...SESSION_REPORT_JSON_SCHEMA.properties, rubricScores: RUBRIC_SCORES_JSON_SCHEMA },
+  };
+}
 
 export function isSessionReport(value: unknown): value is SessionReport {
   if (typeof value !== "object" || value === null) return false;

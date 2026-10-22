@@ -619,6 +619,30 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
             </section>
             </>}
 
+            {hasCompletedReport && selectedSession.report?.rubricScores?.length ? (
+              <section className="mt-1">
+                <div className="mb-3 flex items-baseline justify-between gap-3">
+                  <h3 className="text-sm font-semibold tracking-tight text-foreground">Scores</h3>
+                  <p className="text-sm font-semibold tabular-nums text-foreground">
+                    {selectedSession.report.score ?? 0} / 100
+                  </p>
+                </div>
+                <ul className="divide-y rounded-2xl border bg-card shadow-2xs">
+                  {selectedSession.report.rubricScores.map((row) => (
+                    <li key={row.criterion} className="flex flex-col gap-1 px-5 py-3">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="text-xs sm:text-[13px] font-medium text-foreground">{row.criterion}</span>
+                        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                          {row.points} / {row.maxPoints}
+                        </span>
+                      </div>
+                      {row.reason && <p className="text-xs leading-relaxed text-muted-foreground">{row.reason}</p>}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+
             {/* Next Conversation Brief Section */}
             <section className="mt-1">
               <div className="mb-3">

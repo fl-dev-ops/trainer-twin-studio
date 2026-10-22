@@ -1,9 +1,11 @@
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { db } from "@/lib/db";
+import { getStoredRoleplay, type RubricCriterion } from "@/lib/roleplay";
 import {
+  type RubricScore,
   type SessionReport,
-  SESSION_REPORT_JSON_SCHEMA,
   isSessionReport,
+  sessionReportJsonSchema,
 } from "@/lib/session-report";
 import { formatSessionReportGrounding } from "@/lib/session-report-grounding";
 
@@ -97,6 +99,8 @@ export async function generateSessionReport(
   try {
     const learnerName = session.user?.name || "Learner";
     const grounding = formatSessionReportGrounding(session.compiledSnapshot, session.evidence);
+    const rubric = snapshotRubric(session.compiledSnapshot);
+    const reportSchema = sessionReportJsonSchema(rubric.length > 0);
     const userPrompt = `Learner name: ${learnerName}
 Scenario: ${session.agentSlug}
 Persona: ${session.personaSlug}
@@ -105,6 +109,11 @@ ${session.contextName ? `Context document: ${session.contextName}` : ""}
 --- SCENARIO AND EVIDENCE ---
 ${grounding || "No structured scenario criteria or recorded evidence were available."}
 
+${rubric.length ? `
+--- SCORING RUBRIC ---
+Score the learner on each criterion below, in this order. Award from 0 up to the criterion's maximum, and give one sentence of evidence from the transcript. The AI plays the client and is never scored.
+${rubric.map((row) => `- ${row.name} (max ${row.points})`).join("\n")}
+` : ""}
 --- SESSION TRANSCRIPT ---
 ${transcriptText}`;
 
@@ -143,7 +152,7 @@ ${transcriptText}`;
             json_schema: {
               name: "session_report",
               strict: true,
-              schema: SESSION_REPORT_JSON_SCHEMA,
+              schema: reportSchema,
             },
           },
         }),
@@ -182,7 +191,7 @@ ${transcriptText}`;
           contents: [{ parts }],
           generationConfig: {
             responseMimeType: "application/json",
-            responseSchema: SESSION_REPORT_JSON_SCHEMA,
+            responseSchema: reportSchema,
           },
         }),
         signal: AbortSignal.timeout(60_000),
@@ -209,9 +218,13 @@ ${transcriptText}`;
         }))
       : [];
 
+    const rubricScores = rubric.length ? alignRubricScores(rubric, (parsed as { rubricScores?: unknown }).rubricScores) : undefined;
     const finalReport: SessionReport = {
       ...parsed,
       keyMoments: keyMomentsWithIds,
+      ...(rubricScores
+        ? { rubricScores, score: rubricScores.reduce((sum, row) => sum + row.points, 0) }
+        : {}),
       generatedAt: new Date().toISOString(),
     };
 
@@ -232,4 +245,29 @@ ${transcriptText}`;
     }).catch(() => {});
     return null;
   }
+}
+
+/** The rubric pinned in the session's compiled snapshot (role plays only). */
+function snapshotRubric(snapshot: unknown): RubricCriterion[] {
+  const agent = snapshot && typeof snapshot === "object" ? (snapshot as { agent?: unknown }).agent : undefined;
+  const rubric = getStoredRoleplay(agent)?.rubric;
+  return Array.isArray(rubric)
+    ? rubric.filter((row) => typeof row?.name === "string" && Number.isFinite(row?.points))
+    : [];
+}
+
+/** One score per rubric row, in rubric order, with points clamped to each row's maximum. */
+function alignRubricScores(rubric: RubricCriterion[], raw: unknown): RubricScore[] {
+  const rows = Array.isArray(raw) ? raw as Array<{ criterion?: unknown; points?: unknown; reason?: unknown }> : [];
+  const byName = new Map(rows.map((row) => [String(row.criterion ?? "").trim().toLowerCase(), row]));
+  return rubric.map((criterion, index) => {
+    const row = byName.get(criterion.name.trim().toLowerCase()) ?? rows[index];
+    const points = Number(row?.points);
+    return {
+      criterion: criterion.name,
+      points: Number.isFinite(points) ? Math.max(0, Math.min(criterion.points, Math.round(points))) : 0,
+      maxPoints: criterion.points,
+      reason: typeof row?.reason === "string" ? row.reason : "",
+    };
+  });
 }
