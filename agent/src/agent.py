@@ -552,7 +552,12 @@ async def on_session_end(ctx: agents.JobContext) -> None:
         logger.debug("Room deletion note: %s", exc)
 
 
-server = agents.AgentServer()
+# Warm job processes kept ready (each loads the speech models). LiveKit's
+# production default is 4; AGENT_NUM_IDLE_PROCESSES trims it on small hosts.
+_idle_processes = os.getenv("AGENT_NUM_IDLE_PROCESSES", "").strip()
+server = agents.AgentServer(
+    **({"num_idle_processes": int(_idle_processes)} if _idle_processes.isdigit() else {})
+)
 server.rtc_session(agent_name=AGENT_NAME, on_session_end=on_session_end)(entrypoint)
 
 
