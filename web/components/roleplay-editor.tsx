@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ArrowLeft, Check, Phone, Plus, Save, Sparkles, Upload } from "lucide-react";
+import { ArrowLeft, Check, Phone, Plus, Save, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -78,7 +78,6 @@ export function RoleplayEditor({ slug, initial, clientPersonas, publishedVersion
   const [revision, setRevision] = useState(initialRevision);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [generating, setGenerating] = useState(false);
 
   const touch = <T,>(setter: (value: T) => void) => (value: T) => {
     setter(value);
@@ -129,29 +128,6 @@ export function RoleplayEditor({ slug, initial, clientPersonas, publishedVersion
     setDirty(true);
   }
 
-  async function generateOpening() {
-    if (!scenario.trim() || generating) {
-      if (!scenario.trim()) toast.error("Write the scenario first.");
-      return;
-    }
-    setGenerating(true);
-    try {
-      const response = await fetch("/api/roleplay/opening", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clientName: displayName, scenario, characterRole, difficulty, howTheyTalk: howTheyTalk || undefined }),
-      });
-      const result = await response.json().catch(() => null);
-      if (!response.ok || typeof result?.opening !== "string") throw new Error(result?.error ?? "Could not generate an opening message");
-      setOpening(result.opening);
-      setDirty(true);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not generate an opening message");
-    } finally {
-      setGenerating(false);
-    }
-  }
-
   async function save(publish: boolean) {
     if (!ready || busy) {
       if (!ready) toast.error(`Add ${missing.join(", ")}.`);
@@ -159,10 +135,11 @@ export function RoleplayEditor({ slug, initial, clientPersonas, publishedVersion
     }
     setBusy(true);
     try {
-      const response = await fetch(`/api/agents/${encodeURIComponent(slug)}/roleplay`, {
+      const response = await fetch(`/api/agents/${encodeURIComponent(slug)}/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          kind: "roleplay",
           name: name.trim(),
           persona,
           clientName: clientName.trim() || undefined,
@@ -478,16 +455,10 @@ export function RoleplayEditor({ slug, initial, clientPersonas, publishedVersion
                   </section>
 
                   <section className="flex flex-col gap-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <h3 className="text-sm font-medium">6. Write the opening message</h3>
-                      <Button variant="ghost" size="sm" onClick={generateOpening} disabled={generating}>
-                        {generating ? <Spinner data-icon="inline-start" /> : <Sparkles data-icon="inline-start" />}
-                        Generate
-                      </Button>
-                    </div>
+                    <h3 className="text-sm font-medium">6. Write the opening message</h3>
                     <TextArea id="rp-opening" value={opening} rows={2} onChange={touch(setOpening)}
                       placeholder="The first line the persona says." />
-                    <p className="text-xs text-muted-foreground">The first line the persona says, written from the scenario and this character role.</p>
+                    <p className="text-xs text-muted-foreground">The first line the persona says, in their voice.</p>
                   </section>
 
                   {whatToExpect && (

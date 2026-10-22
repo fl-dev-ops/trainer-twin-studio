@@ -78,7 +78,7 @@ The persona form has four tabs.
 3. Difficulty, with a one-line description.
 4. How they talk.
 5. How they react: two editable lists, "Gets more guarded or ends the call if the agent…" and "Opens up if the agent…".
-6. Opening message, with a Generate button.
+6. Opening message (prototype has a Generate button; deferred).
 7. "What to expect", a brief for the learner.
 
 A preview card on the right shows the avatar, the character role, "Role play with Daniel", a one-line
@@ -240,7 +240,7 @@ A segmented control **above all settings** on the scenario configuration page:
 | Option | What the page shows | Saved as |
 |---|---|---|
 | **Twin** | Today's editor, unchanged: instructions, first message, trainer persona, knowledge base, interview type, follow-up cap, résumé main questions / technical topics and question counts, learner upload, voice | Today's flow: `POST /api/agents/[slug]/generate`, where the LLM builds the spec from the instructions |
-| **Role play** | The new builder from the prototype (§2.2): **Situation** (scenario, what's really going on, learner role, learner goals ≤5, agrees when / declines when) and **Role play agent** (avatar cards for the client personas, character role, difficulty, how they talk, both reaction lists, opening message with Generate, what to expect), plus the preview card | New `POST /api/agents/[slug]/roleplay`. The spec is built **deterministically** from the fields (no LLM), then the same `saveSpecDraft` / `publishSpecDraft` path, so drafts, versions and publishing work the same |
+| **Role play** | The new builder from the prototype (§2.2): **Situation** (scenario, what's really going on, learner role, learner goals ≤5, agrees when / declines when) and **Role play agent** (avatar cards for the client personas, character role, difficulty, how they talk, both reaction lists, opening message, what to expect), plus the preview card | The existing `POST /api/agents/[slug]/generate` with `kind: "roleplay"`. The spec is built **deterministically** from the fields (no LLM), then the same `saveSpecDraft` / `publishSpecDraft` path, so drafts, versions and publishing work the same |
 
 - When an existing scenario opens, the switch is set from its data: `config.scenario.roleplay` present → Role play, otherwise Twin. Every existing Vasanth scenario opens as Twin and looks exactly as today.
 - A new scenario defaults to Twin.
@@ -253,7 +253,7 @@ A segmented control **above all settings** on the scenario configuration page:
 
 Deferred: TeeTee assistant, Generate from recent activity, Recommended character role, persona Knowledge,
 a persona library UI, and a role-play-specific report screen (reports still render in the existing session view).
-The opening-message Generate button is included.
+The opening message is typed by the trainer (no generation endpoint).
 
 ## 7. Work breakdown
 
@@ -265,7 +265,7 @@ The opening-message Generate button is included.
 | 4 | Role-play report | `web/lib/generate-session-report.ts`, `session-report.ts` | Role-play schema produced; interview report tests pass |
 | 5 | Seed YAML + import script | `web/data/roleplay/**`, `web/scripts/import-roleplay.ts` | Rows compile through `buildSpecs`; script imports into a chosen org (**local DB only, after your OK**) |
 | 6 | Hide client personas from the Personas page | personas list query | Trainer persona list unchanged |
-| 7 | Role play / Twin switch + role-play builder on the configuration page | `components/agent-editor.tsx`, `components/roleplay-editor.tsx`, `app/api/agents/[slug]/roleplay/route.ts`, `lib/roleplay.ts` | Twin unchanged; role-play saves draft and publishes through the normal flow |
+| 7 | Role play / Twin switch + role-play builder on the configuration page | `components/agent-editor.tsx`, `components/roleplay-editor.tsx`, `app/api/agents/[slug]/generate/route.ts` (role-play branch), `lib/roleplay.ts` | Twin unchanged; role-play saves draft and publishes through the normal flow |
 | 8 | Role-play badge in the Scenarios list | `components/spec-resource.tsx` | Badge shown only on role-play rows |
 | 10 | End-to-end check | — | An interview session and both role-plays run in voice and chat against the local DB; reports render |
 
