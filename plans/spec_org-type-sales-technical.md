@@ -1,6 +1,6 @@
 # Org Type: Sales and Technical Interview — Spec
 
-**Status:** draft v5, 2026-10-22 (Phase 1 of spec-driven development; no code yet)
+**Status:** v6, implemented 2026-10-22 on `feat/org-type` (Twin QnA not started)
 **Branch:** cut from `feat/client-roleplay-mode` (its pending work was committed 2026-10-22; the command-polling pause was dropped)
 **UI reference:** V4 prototype, https://trainertwin-beta.vercel.app/v4/
 (local copy extracted to `/data/workspace/trainertwin-v4-prototype/trainertwin-v4/`)
@@ -18,7 +18,7 @@
 Everything else (pages, sessions, learners, knowledge, voices, personas, users, settings, Twin QnA)
 is the same for both types.
 
-| | `SALES` (Olga, `latencytest`) | `TECHNICAL_INTERVIEW` (Vasanth, `careerwithvasanth`) |
+| | `SALES` (Olga's org, to be created) | `TECHNICAL_INTERVIEW` (`careerwithvasanth`, `latencytest`) |
 |---|---|---|
 | Name in the UI | **Role play / Role plays** | **Scenario / Scenarios** |
 | AI plays | A client the learner sells to | The interviewer |
@@ -29,7 +29,7 @@ is the same for both types.
 ## 1. Decisions (confirmed 2026-10-22)
 
 1. Exactly two types, `SALES` and `TECHNICAL_INTERVIEW`, one per org.
-2. `careerwithvasanth` → `TECHNICAL_INTERVIEW`; `latencytest` → `SALES`. Olga's org will be created from a `SALES` invite.
+2. `careerwithvasanth` and `latencytest` are `TECHNICAL_INTERVIEW`. `latencytest`'s 2 role plays and their 6 sessions are deleted (`scripts/remove-mismatched-scenarios.ts latencytest --apply`). Olga's org will be created from a `SALES` invite.
 3. Only developers set or change the type (founder invite field, or a script). Owners never see it.
 4. No "Communication" category.
 5. **Twin QnA is built for both types.**
@@ -75,12 +75,13 @@ model FounderInvite {
 }
 ```
 
-- Migration `YYYYMMDDHHMMSS_organization_type`: create enum, add both columns with defaults,
-  then `UPDATE organization SET type = 'SALES' WHERE slug = 'latencytest'`.
+- Migration `20261022120000_organization_type`: create enum, add both columns with default `TECHNICAL_INTERVIEW`.
 - Typed column rather than the `metadata` JSON bag (`lib/org.ts` already flags the bag, `ponytail PT-1`).
 - Onboarding copies `invite.orgType` onto the new org and never asks.
 - `SessionOrg` / `TrainerOrg` / `getOrgBySlug` in `lib/org.ts` gain `type: OrgType`.
 - `web/scripts/set-org-type.ts <slug> <SALES|TECHNICAL_INTERVIEW>` switches an existing org. No API, no UI.
+- `web/scripts/founder-invite.ts <email> [SALES|TECHNICAL_INTERVIEW]` sets the type on a new invite.
+- `web/scripts/remove-mismatched-scenarios.ts <slug> [--apply]` lists (dry run) or deletes scenarios that do not match the org's type, with their sessions.
 
 ## 4. Org-aware UI (`org-ui`)
 
@@ -166,10 +167,11 @@ About 27 hard-coded "Role play"/"Scenarios" strings in `app/` and `components/` 
 
 ```ts
 // web/lib/org-type.ts
-export type ScenarioKind = "roleplay" | "interview";
+// "twin" is the code's existing name for an interview scenario.
+export type ScenarioKind = "roleplay" | "twin";
 export const SCENARIO_KIND: Record<OrgType, ScenarioKind> = {
   SALES: "roleplay",
-  TECHNICAL_INTERVIEW: "interview",
+  TECHNICAL_INTERVIEW: "twin",
 };
 ```
 
@@ -178,13 +180,15 @@ Rules:
 1. **Create:** "New role play" / "New scenario" opens the org's builder (`roleplay-editor.tsx` for
    Sales, `agent-editor.tsx` for Technical). The trainer is never asked to choose.
 2. **Edit:** the editor shows the org's config section. Shared fields use the same layout for both.
-3. **List / run:** scenario lists, the talk page, assignments and `api/v1/scenarios` return only the
-   org's kind (one filter in `lib/specs.ts` / `lib/scenario-cards.ts`).
-4. **APIs** (`api/agents/[slug]/generate`, `api/spec*`, `api/spec-drafts`, `api/v1/scenarios`):
-   any config of the other kind is rejected with 422. Enforced on the server.
+3. **List / run:** no extra filters. Saves are guarded and mismatched data is removed by the
+   clean-up script, so lists can only contain the org's kind.
+4. **APIs:** `assertScenarioFitsOrg()` in `lib/org.ts` runs inside `saveSpecDraft`, `publishSpecDraft`
+   and the YAML `saveSpec`, so every write path (builder, Copilot, YAML editor) is covered; routes
+   answer 422. The generate route also rejects the other kind before doing any work.
 5. **Data clean-up:** before the gate goes live, scenarios of the wrong kind are removed from each
    org (see §13). After that, the gate guarantees it cannot happen again.
-6. **Copilot / generation** (`copilot/`, `lib/spec-generation.ts`): receives the org type so drafts use the right config.
+6. **Copilot:** not changed. If it drafts the wrong kind, the save is rejected with a clear 422 message.
+   Passing the org type into the Copilot is a follow-up.
 7. **Unchanged:** sessions, learner links (`(org)/s/[code]`), voice agent (`agent/src/agent.py`),
    which all run the scenario's pinned compiled spec.
 
@@ -275,12 +279,12 @@ on the local database, logged in to `latencytest` (Sales) and `careerwithvasanth
 6. Role-play session reports score against the rubric; interview reports are unchanged.
 7. Existing interview scenarios in `careerwithvasanth` work exactly as before.
 
-## 13. Data clean-up (needs a decision)
+## 13. Data clean-up (decided)
 
-Local DB (copy of prod, 2026-10-21):
+Delete `latencytest`'s 2 role plays and their sessions; `latencytest` stays technical interview.
+Run `bun scripts/remove-mismatched-scenarios.ts <slug>` (dry run) then `--apply`, on each database.
 
-| Org | Type | Role plays | Interview scenarios |
-|---|---|---|---|
+---|---|---|---|
 | `careerwithvasanth` | Technical | 0 | 10 (49 sessions) |
 | `latencytest` | Sales | 2 (6 sessions) | **5 (123 sessions)** |
 
