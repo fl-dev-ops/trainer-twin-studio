@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Context } from "@opentelemetry/api";
 import type { ReadableSpan, Span } from "@opentelemetry/sdk-trace-base";
-import { trainerTwinContext } from "../../agent/instrumentation";
+import { trainerTwinContext } from "../../agent/instrumentation/langfuse";
 
 function fakeSpan(traceId: string, spanId: string, attributes: Record<string, unknown>) {
   const span = {

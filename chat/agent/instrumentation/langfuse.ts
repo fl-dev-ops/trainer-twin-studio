@@ -1,7 +1,6 @@
 import { LangfuseSpanProcessor, isDefaultExportSpan } from "@langfuse/otel";
 import type { ReadableSpan, Span, SpanProcessor } from "@opentelemetry/sdk-trace-base";
-import { registerOTel } from "@vercel/otel";
-import { defineInstrumentation } from "eve/instrumentation";
+import { otelIntegration } from "eve/instrumentation/otel";
 
 const activeSpans = new Map<string, Set<Span>>();
 const trainerTwinSessions = new Map<string, string>();
@@ -50,27 +49,21 @@ export const trainerTwinContext: SpanProcessor = {
   shutdown: async () => {},
 };
 
-export default defineInstrumentation({
-  events: {
-    "step.started": ({ session }) => {
-      const sessionId = session.auth.current?.attributes.sessionId;
-      return typeof sessionId === "string"
-        ? { runtimeContext: { "trainertwin.session.id": sessionId } }
-        : undefined;
-    },
+export default otelIntegration({
+  runtimeContext(input) {
+    const sessionId = input.session.auth.current?.attributes.sessionId;
+    return typeof sessionId === "string"
+      ? { "trainertwin.session.id": sessionId }
+      : undefined;
   },
-  setup: ({ agentName }) =>
-    registerOTel({
-      serviceName: agentName,
-      spanProcessors: [
-        trainerTwinContext,
-        new LangfuseSpanProcessor({
-          environment: process.env.VERCEL_ENV ?? "development",
-          exportMode: process.env.VERCEL ? "immediate" : "batched",
-          release: process.env.VERCEL_GIT_COMMIT_SHA,
-          shouldExportSpan: ({ otelSpan }) =>
-            isDefaultExportSpan(otelSpan) || ["gen_ai", "eve"].includes(otelSpan.instrumentationScope.name),
-        }),
-      ],
+  spanProcessors: [
+    trainerTwinContext,
+    new LangfuseSpanProcessor({
+      environment: process.env.VERCEL_ENV ?? "development",
+      exportMode: process.env.VERCEL ? "immediate" : "batched",
+      release: process.env.VERCEL_GIT_COMMIT_SHA,
+      shouldExportSpan: ({ otelSpan }) =>
+        isDefaultExportSpan(otelSpan) || ["gen_ai", "eve"].includes(otelSpan.instrumentationScope.name),
     }),
+  ],
 });
