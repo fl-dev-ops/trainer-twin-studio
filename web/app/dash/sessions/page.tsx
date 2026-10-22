@@ -2,6 +2,7 @@ import { History } from "lucide-react";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
 import { getTrainerOrg } from "@/lib/org";
+import { orgCopy } from "@/lib/org-type";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -40,6 +41,7 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
 export default async function SessionsPage() {
   const trainer = await getTrainerOrg();
   if (!trainer) redirect("/auth/no-org");
+  const copy = orgCopy(trainer.type);
   const sessions = await db.interviewSession.findMany({
     where: { orgId: trainer.id, deletedAt: null },
     orderBy: { createdAt: "desc" },
@@ -56,7 +58,7 @@ export default async function SessionsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Scenario sessions</CardTitle>
+          <CardTitle>{copy.scenario} sessions</CardTitle>
           <CardDescription>
             Click a session to review its transcript, evidence coverage and recording.
           </CardDescription>
@@ -81,7 +83,7 @@ export default async function SessionsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Scenario</TableHead>
+                  <TableHead>{copy.scenario}</TableHead>
                   <TableHead>Started</TableHead>
                   <TableHead>Persona</TableHead>
                   <TableHead>Status</TableHead>

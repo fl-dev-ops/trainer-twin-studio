@@ -6,6 +6,7 @@ import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { toast } from "sonner";
 import { Check, LoaderCircle, Play, ScreenShare, Upload as UploadIcon, Volume2 } from "lucide-react";
+import { useOrgCopy } from "@/components/org-type-provider";
 import { type AgentContextUpload } from "@/lib/context-upload";
 import "@livekit/components-styles";
 import {
@@ -147,6 +148,7 @@ export function SessionView({
     [],
   );
 
+  const copy = useOrgCopy();
   const [agent, setAgent] = useState(initialAgent ?? agents[0] ?? "");
   const persona = agentPersonas[agent] ?? personas[0] ?? "";
   const speaker = agentSpeakers[agent] ?? persona;
@@ -979,19 +981,19 @@ export function SessionView({
               <CardHeader>
                 <CardTitle>Configure the session</CardTitle>
                 <CardDescription>
-                  Choose a scenario. Its trainer persona is already configured.
+                  Choose a {copy.scenarioLower}. Its trainer persona is already configured.
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
                 <label className="flex flex-col gap-1.5 text-sm">
-                  <span className="font-medium">Scenario</span>
+                  <span className="font-medium">{copy.scenario}</span>
                   <Select value={agent} onValueChange={(v) => v !== null && setAgent(v)}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Scenario" />
+                      <SelectValue placeholder={copy.scenario} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
-                        <SelectLabel>Scenarios</SelectLabel>
+                        <SelectLabel>{copy.scenarios}</SelectLabel>
                         {agents.map((a) => (
                           <SelectItem key={a} value={a}>{agentNames[a] ?? a.replaceAll("-", " ")}</SelectItem>
                         ))}

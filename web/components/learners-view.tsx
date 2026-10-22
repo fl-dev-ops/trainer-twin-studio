@@ -20,6 +20,7 @@ import {
   Volume2,
   VolumeX,
 } from "lucide-react";
+import { useOrgCopy } from "@/components/org-type-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -98,6 +99,7 @@ function parseTimestampToSeconds(ts?: string, fallbackSeconds?: number): number 
 const PLAYBACK_RATES = [1, 1.25, 1.5, 1.75, 2];
 
 export function LearnersView({ initialLearners = [] }: { initialLearners?: LearnerData[] }) {
+  const copy = useOrgCopy();
   const learners = initialLearners;
 
   const [expandedLearnerIds, setExpandedLearnerIds] = useState<Record<string, boolean>>(() => {
@@ -234,7 +236,7 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
             </EmptyMedia>
             <EmptyTitle className="text-sm font-semibold">No completed learner sessions yet</EmptyTitle>
             <EmptyDescription className="text-xs leading-relaxed text-muted-foreground">
-              When learners accept an invitation and complete a role play session, their screen recordings,
+              When learners accept an invitation and complete a {copy.scenarioLower} session, their screen recordings,
               AI performance evaluation, and coaching briefs will appear here.
             </EmptyDescription>
           </EmptyHeader>
@@ -524,7 +526,7 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
             {/* SCENARIO SUMMARY Section */}
             <section>
               <h3 className="text-sm font-semibold text-foreground tracking-tight mb-2.5">
-                Scenario Summary
+                {copy.scenario} summary
               </h3>
               <div className="rounded-2xl border border-indigo-100 dark:border-indigo-900/50 bg-[#F4F5FD] dark:bg-indigo-950/20 p-5 sm:p-6 relative border-l-4 border-l-indigo-600">
                 <p className="text-xs sm:text-[13px] text-foreground leading-relaxed font-normal">

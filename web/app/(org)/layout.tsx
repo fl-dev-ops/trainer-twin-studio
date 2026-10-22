@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { OrgAccentProvider } from "@/components/org-accent-provider";
+import { OrgTypeProvider } from "@/components/org-type-provider";
 import { db } from "@/lib/db";
 import { parseAccentColor } from "@/lib/org";
 
@@ -12,13 +13,15 @@ export default async function LearnerLayout({ children }: { children: ReactNode 
   const slug = host.split(":")[0].split(".")[0];
   const org = await db.organization.findUnique({
     where: { slug },
-    select: { metadata: true },
+    select: { type: true, metadata: true },
   });
   if (!org) redirect("/auth/sign-in");
 
   return (
-    <OrgAccentProvider accentColor={parseAccentColor(org.metadata)}>
-      {children}
-    </OrgAccentProvider>
+    <OrgTypeProvider type={org.type}>
+      <OrgAccentProvider accentColor={parseAccentColor(org.metadata)}>
+        {children}
+      </OrgAccentProvider>
+    </OrgTypeProvider>
   );
 }

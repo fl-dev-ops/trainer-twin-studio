@@ -23,6 +23,7 @@ import { seedCopilot } from "@/lib/copilot-handoff";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PersonaBaselinePanel } from "@/components/persona-baseline-panel";
+import { useOrgCopy } from "@/components/org-type-provider";
 import { ScenarioSectionNav } from "@/components/scenario-section-nav";
 import type { PersonaBaseline } from "@/lib/persona-baseline";
 import {
@@ -96,6 +97,12 @@ const COPY = {
     description: "Bounded experiences that bring personas, voices, knowledge, and progression rules together.",
   },
 } as const;
+
+/** Resource wording; scenarios follow the org's type ("Role plays" or "Scenarios"). */
+function useResourceCopy(type: ResourceType) {
+  const org = useOrgCopy();
+  return type === "agents" ? { ...COPY.agents, single: org.scenarioLower, title: org.scenarios } : COPY[type];
+}
 
 type VoiceOption = { id: string; name: string; status: string };
 type KnowledgeOption = { slug: string; name: string };
@@ -257,7 +264,6 @@ function SpecCard({
             </span>
             {type === "agents" && (
               <span className="flex items-center gap-1.5">
-                {spec.kind === "roleplay" && <Badge variant="outline">Role play</Badge>}
                 {spec.status === "draft" ? (
               <Badge variant="outline">Draft r{spec.version}</Badge>
             ) : spec.draftRevision ? (
@@ -291,7 +297,7 @@ function SpecCard({
 
 export function SpecResourceIndex({ type, specs, cards }: { type: ResourceType; specs: Summary[]; cards?: ScenarioCard[] }) {
   const router = useRouter();
-  const copy = COPY[type];
+  const copy = useResourceCopy(type);
   const [createOpen, setCreateOpen] = useState(false);
   const [newScenarioName, setNewScenarioName] = useState("");
   const [creating, setCreating] = useState(false);
@@ -478,7 +484,7 @@ export function SpecResourceEditor({
   const historical = shownVersion !== currentVersion;
   const basePath = `/${type}/${encodeURIComponent(slug)}`;
   const editPath = type === "agents" ? `${basePath}/edit` : basePath;
-  const copy = COPY[type];
+  const copy = useResourceCopy(type);
 
   const [voices, setVoices] = useState<VoiceOption[]>([]);
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeOption[]>([]);

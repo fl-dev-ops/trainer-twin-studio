@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/table";
 import { db } from "@/lib/db";
 import { getSessionOrg } from "@/lib/org";
+import { orgCopy } from "@/lib/org-type";
 
 export const dynamic = "force-dynamic";
 
@@ -41,9 +42,10 @@ export default async function DashboardPage() {
     db.interviewSession.findMany({ where: { orgId: org.id, deletedAt: null }, orderBy: { createdAt: "desc" }, take: 8 }),
   ]);
 
+  const copy = orgCopy(org.type);
   const stats = [
     { label: "Personas", value: personas, href: "/personas", icon: UserRound },
-    { label: "Scenarios", value: agents, href: "/agents", icon: MessagesSquare },
+    { label: copy.scenarios, value: agents, href: "/agents", icon: MessagesSquare },
     { label: "Knowledge bases", value: kbs, href: "/knowledge", icon: BookOpen },
   ];
 
@@ -53,7 +55,7 @@ export default async function DashboardPage() {
       <PageHeader
         className="border-b pb-6"
         title="Dashboard"
-        description="Build and version personas and scenarios, then review their sessions."
+        description={`Build and version personas and ${copy.scenariosLower}, then review their sessions.`}
         actions={
           <Button nativeButton={false} render={<Link href="/talk" />}>
             Start session <ArrowUpRight data-icon="inline-end" />
@@ -81,7 +83,7 @@ export default async function DashboardPage() {
       <Card>
         <CardHeader>
           <CardTitle>Recent sessions</CardTitle>
-          <CardDescription>Recent runs across your published scenarios.</CardDescription>
+          <CardDescription>Recent runs across your published {copy.scenariosLower}.</CardDescription>
         </CardHeader>
         <CardContent>
           {sessions.length === 0 ? (
@@ -97,7 +99,7 @@ export default async function DashboardPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Persona</TableHead>
-                  <TableHead>Scenario</TableHead>
+                  <TableHead>{copy.scenario}</TableHead>
                   <TableHead>Context</TableHead>
                   <TableHead>Started</TableHead>
                   <TableHead>Status</TableHead>

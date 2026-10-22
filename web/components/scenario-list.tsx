@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { LayoutGrid, List, MoreVertical, Pencil, Play, Plus, Search, UserRoundCheck } from "lucide-react";
+import { useOrgCopy } from "@/components/org-type-provider";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -90,6 +91,7 @@ export function ScenarioList({ cards, onNew, actions }: {
   onNew: () => void;
   actions?: React.ReactNode;
 }) {
+  const copy = useOrgCopy();
   const [tab, setTab] = useState<Tab>("published");
   const view = useSyncExternalStore(subscribeView, readView, () => "grid" as View);
   const [query, setQuery] = useState("");
@@ -112,7 +114,7 @@ export function ScenarioList({ cards, onNew, actions }: {
       <header className="flex flex-wrap items-center gap-3">
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
           <UserRoundCheck className="size-5 text-text-secondary" aria-hidden />
-          <h1 className="text-base font-semibold">Scenarios</h1>
+          <h1 className="text-base font-semibold">{copy.scenarios}</h1>
         </div>
         <label className="relative flex items-center">
           <Search className="pointer-events-none absolute left-3.5 size-4 text-text-tertiary" aria-hidden />
@@ -121,20 +123,20 @@ export function ScenarioList({ cards, onNew, actions }: {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search..."
-            aria-label="Search scenarios"
+            aria-label={`Search ${copy.scenariosLower}`}
             className="h-10 w-52 rounded-full border border-input bg-card pr-4 pl-10 text-sm outline-none placeholder:text-text-muted hover:border-field-active focus-visible:border-field-active"
           />
         </label>
         {actions}
         <Button variant="secondary" className="h-10 rounded-full px-5" onClick={onNew}>
-          <Plus data-icon="inline-start" /> New
+          <Plus data-icon="inline-start" /> {copy.newScenario}
         </Button>
       </header>
 
       <section className="flex flex-col gap-4">
-        <h2 className="text-lg leading-6 font-semibold tracking-[-0.015em]">Created role plays</h2>
+        <h2 className="text-lg leading-6 font-semibold tracking-[-0.015em]">Created {copy.scenariosLower}</h2>
         <div className="flex items-center justify-between gap-3">
-          <div role="tablist" aria-label="Scenario status" className="inline-flex rounded-full bg-sunken p-1">
+          <div role="tablist" aria-label={`${copy.scenario} status`} className="inline-flex rounded-full bg-sunken p-1">
             {(["published", "draft"] as const).map((value) => (
               <button
                 key={value}
@@ -177,10 +179,10 @@ export function ScenarioList({ cards, onNew, actions }: {
         {visible.length === 0 ? (
           <div className="rounded-xl border border-card-border bg-card px-5 py-16 text-center shadow-card">
             <p className="text-sm font-medium">
-              {query ? "No scenarios match your search" : tab === "published" ? "No published scenarios yet" : "No drafts"}
+              {query ? `No ${copy.scenariosLower} match your search` : tab === "published" ? `No published ${copy.scenariosLower} yet` : "No drafts"}
             </p>
             <p className="mt-1 text-sm text-text-tertiary">
-              {query ? "Try another name or client." : "Create a scenario to get started."}
+              {query ? "Try another name or client." : `Create a ${copy.scenarioLower} to get started.`}
             </p>
           </div>
         ) : view === "grid" ? (
@@ -275,12 +277,13 @@ function LearnerStack({ card }: { card: ScenarioCard }) {
 }
 
 function ScenarioTable({ cards }: { cards: ScenarioCard[] }) {
+  const copy = useOrgCopy();
   return (
     <div className="overflow-x-auto rounded-xl border border-card-border bg-card shadow-card">
       <table className="w-full min-w-[46rem] text-sm">
         <thead>
           <tr className="border-b text-left text-[13px] text-text-secondary">
-            <th className="px-4 py-3 font-medium">Role play</th>
+            <th className="px-4 py-3 font-medium">{copy.scenario}</th>
             <th className="px-3 py-3 font-medium">Status</th>
             <th className="px-3 py-3 font-medium">Persona</th>
             <th className="px-3 py-3 text-right font-medium">Sessions</th>
