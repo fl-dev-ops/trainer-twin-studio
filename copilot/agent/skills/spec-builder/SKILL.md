@@ -327,7 +327,7 @@ A structurally valid bundle can still be a poor trainer. Do not save disconnecte
 
 A specification exists only after `save_spec_draft` succeeds. Save the artifact instead of pasting full YAML into chat.
 
-After saving, finish the turn's task state before replying. Keep todo item wording and order stable, update their statuses rather than replacing the list, mark completed work as completed, leave trainer-dependent next steps pending, and never park the session with a task still marked in progress.
+After saving, finish the turn before replying. Mark completed work clearly, leave trainer-dependent next steps pending, and summarize what changed.
 
 Then report only:
 
