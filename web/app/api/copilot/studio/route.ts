@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { ScenarioKindMismatchError } from "@/lib/org";
 import { searchKnowledge } from "@/lib/knowledge";
 import { specDraftBundleSchema } from "@/lib/spec-draft-schema";
 import { publishSpecDraft, readSpecDraft, saveSpecDraft } from "@/lib/spec-drafts";
@@ -346,6 +347,7 @@ export async function POST(request: Request) {
       })),
     });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Copilot request failed" }, { status: 500 });
+    const status = error instanceof ScenarioKindMismatchError ? 422 : 500;
+    return Response.json({ error: error instanceof Error ? error.message : "Copilot request failed" }, { status });
   }
 }

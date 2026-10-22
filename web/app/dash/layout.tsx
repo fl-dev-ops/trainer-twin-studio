@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
 import { OrgAccentProvider } from "@/components/org-accent-provider";
+import { OrgTypeProvider } from "@/components/org-type-provider";
 import { auth } from "@/lib/auth";
 import { getSessionOrg } from "@/lib/org";
 import { QueryProvider } from "@/lib/query-client";
@@ -13,9 +14,11 @@ export default async function DashLayout({ children }: { children: ReactNode }) 
   const org = await getSessionOrg();
   return (
     <QueryProvider>
-      <OrgAccentProvider accentColor={org?.accentColor ?? null}>
-        <AppShell>{children}</AppShell>
-      </OrgAccentProvider>
+      <OrgTypeProvider type={org?.type ?? null}>
+        <OrgAccentProvider accentColor={org?.accentColor ?? null}>
+          <AppShell>{children}</AppShell>
+        </OrgAccentProvider>
+      </OrgTypeProvider>
     </QueryProvider>
   );
 }

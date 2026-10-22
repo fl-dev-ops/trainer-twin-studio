@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { getTrainerOrg } from "@/lib/org";
+import { getTrainerOrg, ScenarioKindMismatchError } from "@/lib/org";
+import { scenarioKindFor } from "@/lib/org-type";
 import { readSpecDraft, saveSpecDraft, publishSpecDraft } from "@/lib/spec-drafts";
 import type { SpecDraftBundle } from "@/lib/spec-draft-schema";
 import { generateSpecBundle } from "@/lib/spec-generation";
@@ -39,7 +40,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
   if (!validSlug(agentSlug)) return Response.json({ error: "Invalid scenario id" }, { status: 400 });
 
   const body = await request.json().catch(() => null);
-  if ((body as { kind?: unknown } | null)?.kind === "roleplay") return saveRoleplay(org.id, agentSlug, body);
+  const kind = (body as { kind?: unknown } | null)?.kind === "roleplay" ? "roleplay" : "twin";
+  if (kind !== scenarioKindFor(org.type)) {
+    return Response.json({ error: new ScenarioKindMismatchError(org.type).message }, { status: 422 });
+  }
+  if (kind === "roleplay") return saveRoleplay(org.id, agentSlug, body);
 
   const input = inputSchema.safeParse(body);
   if (!input.success) {

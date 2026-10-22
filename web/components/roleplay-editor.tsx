@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Check, Phone, Plus, Save, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -48,13 +48,12 @@ export type RoleplayEditorProps = {
   clientPersonas: ClientPersonaCard[];
   publishedVersion?: number;
   revision?: number;
-  typeSwitch: ReactNode;
   onSaved?: () => void;
 };
 
 const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? name;
 
-export function RoleplayEditor({ slug, initial, clientPersonas, publishedVersion: initialPublished, revision: initialRevision, typeSwitch, onSaved }: RoleplayEditorProps) {
+export function RoleplayEditor({ slug, initial, clientPersonas, publishedVersion: initialPublished, revision: initialRevision, onSaved }: RoleplayEditorProps) {
   const router = useRouter();
   const [step, setStep] = useState<Step>("situation");
   const [name, setName] = useState(initial?.name ?? "");
@@ -228,8 +227,6 @@ export function RoleplayEditor({ slug, initial, clientPersonas, publishedVersion
           </Button>
         </div>
       </header>
-
-      {typeSwitch}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto grid max-w-6xl gap-6 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_20rem]">

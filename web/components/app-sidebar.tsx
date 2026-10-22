@@ -13,6 +13,7 @@ import {
   UserRound,
   Users,
 } from "lucide-react";
+import { useOrgCopy } from "@/components/org-type-provider";
 import { SidebarAccountMenu } from "@/components/sidebar-account-menu";
 import {
   Sidebar,
@@ -43,7 +44,8 @@ const NAV = [
   },
   {
     label: "Create",
-    items: [{ title: "Scenarios", href: "/agents", icon: MessagesSquare }],
+    // copyKey: the title follows the org's wording, "Role plays" (sales) or "Scenarios" (technical interview).
+    items: [{ title: "Scenarios", copyKey: "scenarios" as const, href: "/agents", icon: MessagesSquare }],
   },
   {
     label: "Library",
@@ -61,6 +63,7 @@ const NAV = [
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const copy = useOrgCopy();
 
   return (
     <Sidebar variant="inset" collapsible="icon">
@@ -86,12 +89,13 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu className="gap-1">
                 {group.items.map((item) => {
+                  const title = "copyKey" in item ? copy[item.copyKey] : item.title;
                   const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
                   return (
                     <SidebarMenuItem key={item.href}>
-                      <SidebarMenuButton render={<Link href={item.href} />} isActive={active} tooltip={item.title}>
+                      <SidebarMenuButton render={<Link href={item.href} />} isActive={active} tooltip={title}>
                         <item.icon />
-                        <span>{item.title}</span>
+                        <span>{title}</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   );

@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { getTrainerOrg } from "@/lib/org";
+import { getTrainerOrg, ScenarioKindMismatchError } from "@/lib/org";
 import { publishSpecDraft, readSpecDraft } from "@/lib/spec-drafts";
 
 export const runtime = "nodejs";
@@ -21,6 +21,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ sl
     const result = await publishSpecDraft(slug, org.id);
     return Response.json({ status: result.status, agentVersion: result.agentVersion, domainVersion: result.domainVersion });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Publish failed" }, { status: 400 });
+    const status = error instanceof ScenarioKindMismatchError ? 422 : 400;
+    return Response.json({ error: error instanceof Error ? error.message : "Publish failed" }, { status });
   }
 }
