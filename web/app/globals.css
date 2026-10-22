@@ -10,9 +10,27 @@
   --color-foreground: var(--foreground);
   --color-brand: var(--brand);
   --color-brand-strong: var(--brand-strong);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-figtree);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-geist-sans);
+  --font-heading: var(--font-figtree);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-subtle: var(--brand-subtle);
+  --color-sunken: var(--tone-sunken);
+  --color-control: var(--tone-control);
+  --color-control-hover: var(--tone-control-hover);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  --color-text-muted: var(--text-muted);
+  --color-field: var(--border-field);
+  --color-field-active: var(--border-interactive);
+  --color-card-border: var(--card-border);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-sidebar-active-foreground: var(--sidebar-active-foreground);
+  --shadow-elevation-1: var(--elevation-1);
+  --shadow-elevation-2: var(--elevation-2);
+  --shadow-elevation-3: var(--elevation-3);
+  --shadow-card: var(--card-shadow);
+  --shadow-button: var(--button-shadow);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -53,88 +71,128 @@
 }
 
 :root {
-  --font-sans: var(--font-geist-sans);
-  --font-heading: var(--font-geist-sans);
-  /* Brand matches the trainertwin-mark logo: #EC3013 with a darker strong variant for hover. */
-  --brand: #ec3013;
-  --brand-strong: #c9270f;
-  /* Three-tone palette: canvas → content surface → interactive control. */
-  --tone-canvas: #f4f4f4;
+  /* Design tokens follow the TrainerTwin design system (prototype tokens.css):
+     Figtree UI type, a near-white canvas, a sunken grey rail, orange brand. */
+  --font-sans: var(--font-figtree);
+  --font-heading: var(--font-figtree);
+  /* Brand orange. Org accents override --brand / --brand-strong (OrgAccentProvider). */
+  --brand: #ff5a00;
+  --brand-strong: #e04d00;
+  --brand-ink: #b83e00; /* brand as TEXT on canvas (5.45:1) */
+  --brand-subtle: #fff4ec;
+  /* Surfaces: canvas → card surface → sunken rail / segmented track → soft fill controls. */
+  --tone-canvas: #fefeff;
   --tone-surface: #ffffff;
-  --tone-control: #e2e2e2;
+  --tone-sunken: #f7f7f7;
+  --tone-control: #f0f0f0;
+  --tone-control-hover: #e9e9e9;
+  --text-secondary: #4a4a4a;
+  --text-tertiary: #656565;
+  --text-muted: #828282;
+  --border-field: #c4c4c4;
+  --border-interactive: #828282;
+  --card-border: #f0f0f0;
+  /* Elevation: light themes lift with shadow. */
+  --elevation-1: 0 1px 2px rgba(30, 28, 25, 0.06);
+  --elevation-2: 0 2px 4px rgb(30 28 25 / 0.07), 0 8px 20px rgb(30 28 25 / 0.11);
+  --elevation-3: 0 4px 8px rgb(30 28 25 / 0.09), 0 16px 40px rgb(30 28 25 / 0.16);
+  --card-shadow: 0 1px 2px rgba(30, 28, 25, 0.04);
+  --button-shadow: 0 0 1px rgb(0 0 0 / 0.4), 0 1px 1px rgb(0 0 0 / 0.04), 0 2px 4px rgb(0 0 0 / 0.04);
+
   --background: var(--tone-canvas);
-  --foreground: #201e1d;
+  --foreground: #1c1b1b;
   --card: var(--tone-surface);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: #1c1b1b;
   --popover: var(--tone-surface);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: var(--brand-strong);
+  --popover-foreground: #1c1b1b;
+  --primary: var(--brand);
   --primary-foreground: #fff;
   --secondary: var(--tone-control);
-  --secondary-foreground: oklch(0.205 0 0);
+  --secondary-foreground: #1c1b1b;
   --muted: var(--tone-control);
-  --muted-foreground: oklch(0.556 0 0);
+  --muted-foreground: var(--text-tertiary);
   --accent: var(--tone-control);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
+  --accent-foreground: #1c1b1b;
+  --destructive: #ce2c33;
+  --border: #e9e9e9;
+  --input: var(--border-field);
   --ring: var(--brand);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: var(--tone-canvas);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: var(--brand-strong);
+  --radius: 0.5rem; /* 8px: buttons, fields; xl ≈ 12px cards; 2xl ≈ 16px modals */
+  --sidebar: var(--tone-sunken);
+  --sidebar-foreground: var(--text-secondary);
+  --sidebar-primary: var(--brand);
   --sidebar-primary-foreground: #fff;
   --sidebar-accent: var(--tone-control);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-accent-foreground: #1c1b1b;
+  --sidebar-active: var(--tone-surface);
+  --sidebar-active-foreground: var(--brand-ink);
+  --sidebar-border: transparent;
   --sidebar-ring: var(--brand);
   --highlight: oklch(0.852 0.199 91.936);
 }
 
 .dark {
-  --tone-canvas: #131313;
-  --tone-surface: #212121;
-  --tone-control: #3d3d3d;
+  --brand: #ff5a00;
+  --brand-strong: #ff7e33;
+  --brand-ink: #ff7e33;
+  --brand-subtle: #3a1300;
+  --tone-canvas: #141414;
+  --tone-surface: #1c1b1b;
+  --tone-sunken: #0a0a0a;
+  --tone-control: #2b2b2b;
+  --tone-control-hover: #4a4a4a;
+  --text-secondary: #c4c4c4;
+  --text-tertiary: #a3a3a3;
+  --text-muted: #828282;
+  --border-field: #4a4a4a;
+  --border-interactive: #828282;
+  --card-border: #242323;
+  /* Dark themes lift with a hairline instead of shadow. */
+  --elevation-1: 0 0 0 1px rgb(253 251 247 / 0.05);
+  --elevation-2: 0 0 0 1px rgb(253 251 247 / 0.07), 0 4px 16px rgb(0 0 0 / 0.5);
+  --elevation-3: 0 0 0 1px rgb(253 251 247 / 0.09), 0 12px 32px rgb(0 0 0 / 0.6);
+  --card-shadow: 0 0 0 1px rgb(253 251 247 / 0.035);
+  --button-shadow: 0 0 1px color-mix(in srgb, #fefeff 45%, transparent), 0 1px 2px rgb(0 0 0 / 0.35);
+
   --background: var(--tone-canvas);
-  --foreground: oklch(0.985 0 0);
+  --foreground: #fefeff;
   --card: var(--tone-surface);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: var(--tone-surface);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: var(--brand-strong);
+  --card-foreground: #fefeff;
+  --popover: #2b2b2b;
+  --popover-foreground: #fefeff;
+  --primary: var(--brand);
   --primary-foreground: #fff;
   --secondary: var(--tone-control);
-  --secondary-foreground: oklch(0.985 0 0);
+  --secondary-foreground: #fefeff;
   --muted: var(--tone-control);
-  --muted-foreground: oklch(0.708 0 0);
+  --muted-foreground: var(--text-tertiary);
   --accent: var(--tone-control);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: var(--tone-control);
-  --input: var(--tone-control);
+  --accent-foreground: #fefeff;
+  --destructive: #f58f93;
+  --border: #2b2b2b;
+  --input: var(--border-field);
   --ring: var(--brand);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --sidebar: var(--tone-canvas);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: var(--brand-strong);
+  --sidebar: var(--tone-sunken);
+  --sidebar-foreground: var(--text-secondary);
+  --sidebar-primary: var(--brand);
   --sidebar-primary-foreground: #fff;
   --sidebar-accent: var(--tone-control);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-accent-foreground: #fefeff;
+  --sidebar-active: var(--tone-surface);
+  --sidebar-active-foreground: #fefeff;
+  --sidebar-border: transparent;
   --sidebar-ring: var(--brand);
   --highlight: oklch(0.852 0.199 91.936);
-  /* Dark mode: lighten the logo red for contrast on the dark canvas. */
-  --brand: #f4603c;
 }
 
 @layer base {
@@ -146,9 +204,17 @@
   }
   html {
     @apply font-sans;
-    /* Global UI scale: rem-based sizes (all Tailwind text/spacing) resolve
-           against this. Bump to scale the whole UI; 110% ≈ Chrome zoom 110%. */
-    font-size: 110%;
+    /* 1rem = 16px so Tailwind sizes match the design system's px scale
+       (text-sm = 14px nav/labels, text-xs = 12px, etc.). */
+    font-size: 100%;
+  }
+  body {
+    /* Design-system body copy: 15px / 23px. */
+    font-size: 15px;
+    line-height: 23px;
+  }
+  ::placeholder {
+    color: var(--text-muted);
   }
   svg {
     color: currentColor;

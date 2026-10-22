@@ -72,7 +72,7 @@ export function AppSidebar() {
                 <Image src="/trainertwin-mark.svg" alt="" width={25} height={19} priority />
               </span>
               <span className="flex flex-col group-data-[collapsible=icon]:hidden">
-                <span className="font-semibold">TrainerTwin</span>
+                <span className="text-base leading-4 font-semibold tracking-[-0.02em]">TrainerTwin</span>
                 <span className="text-xs text-muted-foreground">Digital twin studio</span>
               </span>
             </SidebarMenuButton>
