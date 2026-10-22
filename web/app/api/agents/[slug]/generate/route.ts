@@ -8,7 +8,8 @@ import { generateSpecBundle } from "@/lib/spec-generation";
 import { validSlug } from "@/lib/specs";
 import { interviewConfigSchema } from "@/lib/interview-config-schema";
 import { QuestionBank } from "@/lib/question-bank";
-import { buildRoleplayBundle, isClientPersonaData, roleplayInputSchema } from "@/lib/roleplay";
+import { roleplayInputSchema } from "@/lib/roleplay";
+import { roleplayDraftBundle, RoleplayInputError } from "@/lib/roleplay-drafts";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -164,43 +165,12 @@ async function saveRoleplay(orgId: string, agentSlug: string, body: unknown) {
     return Response.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
   }
   const { publish, ...fields } = parsed.data;
-  const input = { ...fields, kind: undefined };
-
-  const persona = await db.persona.findUnique({
-    where: { orgId_slug: { orgId, slug: input.persona } },
-    select: { data: true },
-  });
-  if (!persona || !isClientPersonaData(persona.data)) {
-    return Response.json({ error: "Choose who the learner will speak with" }, { status: 400 });
-  }
-
-  // The scenario speaks with the chosen voice, else the persona's own voice.
-  const personaVoice = (persona.data as { voiceId?: unknown }).voiceId;
-  const voiceId = input.voiceId || (typeof personaVoice === "string" ? personaVoice : undefined);
-  if (voiceId) {
-    const voice = await db.voice.findFirst({
-      where: { id: voiceId, status: "ready", OR: [{ orgId }, { orgId: null }] },
-      select: { id: true },
-    });
-    if (!voice && input.voiceId) return Response.json({ error: "Voice is not available" }, { status: 400 });
-    input.voiceId = voice ? voiceId : undefined;
-  }
 
   try {
-    const published = await db.agent.findFirst({ where: { slug: agentSlug, orgId } });
-    const publishedDomain = published
-      ? await db.domain.findFirst({ where: { slug: published.domainSlug, orgId }, select: { version: true } })
-      : null;
-    const bundle = buildRoleplayBundle(input, {
-      slug: agentSlug,
-      agentVersion: published?.version ?? 1,
-      // Domain id is invisible to the user; keep the published one so versions stay comparable.
-      domainId: published?.domainSlug ?? `domain-${agentSlug}`,
-      domainVersion: publishedDomain?.version ?? 1,
-    });
-
+    const bundle = await roleplayDraftBundle(orgId, agentSlug, fields);
     return await saveAndRespond(orgId, agentSlug, bundle, publish);
   } catch (error) {
+    if (error instanceof RoleplayInputError) return Response.json({ error: error.message }, { status: 400 });
     console.error("Role-play save failed", error);
     return Response.json({ error: GENERIC_SAVE_ERROR }, { status: 502 });
   }
