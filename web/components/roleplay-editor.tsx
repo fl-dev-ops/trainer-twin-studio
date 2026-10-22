@@ -24,9 +24,14 @@ import {
   CHARACTER_ROLES,
   DIFFICULTIES,
   MAX_LEARNER_GOALS,
+  MAX_RUBRIC_CRITERIA,
+  RUBRIC_PRESETS,
+  RUBRIC_TOTAL,
+  rubricPreset,
   type ClientPersonaCard,
   type Difficulty,
   type RoleplayInput,
+  type RubricCriterion,
 } from "@/lib/roleplay";
 
 const GENERIC_SAVE_ERROR = "Failed to save the change, try again in a few seconds";
@@ -39,7 +44,7 @@ const GOAL_TIPS = [
 ];
 
 type VoiceOption = { id: string; name: string; status: string };
-type Step = "situation" | "agent";
+type Step = "situation" | "agent" | "scoring";
 type CharacterRole = RoleplayInput["agent"]["characterRole"];
 
 export type RoleplayEditorProps = {
@@ -72,6 +77,7 @@ export function RoleplayEditor({ slug, initial, clientPersonas, publishedVersion
   const [guardedIf, setGuardedIf] = useState<string[]>(initial?.agent?.guardedIf ?? []);
   const [opensUpIf, setOpensUpIf] = useState<string[]>(initial?.agent?.opensUpIf ?? []);
   const [opening, setOpening] = useState(initial?.opening ?? "");
+  const [rubric, setRubric] = useState<RubricCriterion[]>(initial?.rubric ?? rubricPreset("sales"));
   const [voices, setVoices] = useState<VoiceOption[]>([]);
   const [publishedVersion, setPublishedVersion] = useState(initialPublished);
   const [revision, setRevision] = useState(initialRevision);
@@ -112,6 +118,8 @@ export function RoleplayEditor({ slug, initial, clientPersonas, publishedVersion
     !goals.length && "at least one learner goal",
     !persona && "who the learner speaks with",
     !opening.trim() && "the opening message",
+    rubricPoints(rubric) !== RUBRIC_TOTAL && `rubric points that add up to ${RUBRIC_TOTAL}`,
+    rubric.some((row) => !row.name.trim()) && "a name for every rubric score",
   ].filter(Boolean) as string[];
   const ready = missing.length === 0;
   const saved = Boolean(publishedVersion || revision);
@@ -160,6 +168,7 @@ export function RoleplayEditor({ slug, initial, clientPersonas, publishedVersion
             whatToExpect: whatToExpect || undefined,
           },
           opening: opening.trim(),
+          rubric: rubric.map((row) => ({ name: row.name.trim(), points: row.points })),
           publish,
         }),
       });
@@ -233,7 +242,7 @@ export function RoleplayEditor({ slug, initial, clientPersonas, publishedVersion
           <section className="min-w-0">
             <div className="mb-4 flex justify-center">
               <div role="tablist" aria-label="Role play steps" className="inline-flex rounded-full bg-sunken p-1">
-                {(["situation", "agent"] as const).map((value) => (
+                {(["situation", "agent", "scoring"] as const).map((value) => (
                   <button
                     key={value}
                     role="tab"
@@ -245,7 +254,7 @@ export function RoleplayEditor({ slug, initial, clientPersonas, publishedVersion
                       step === value ? "bg-card text-foreground shadow-elevation-1" : "text-text-secondary hover:text-foreground",
                     )}
                   >
-                    {value === "situation" ? "Situation" : "Role play agent"}
+                    {value === "situation" ? "Situation" : value === "agent" ? "Role play agent" : "Scoring"}
                   </button>
                 ))}
               </div>
@@ -322,6 +331,14 @@ export function RoleplayEditor({ slug, initial, clientPersonas, publishedVersion
                     <Button onClick={() => setStep("agent")}>Next</Button>
                   </div>
                 </div>
+              ) : step === "scoring" ? (
+                <RubricStep
+                  rubric={rubric}
+                  onChange={touch(setRubric)}
+                  onBack={() => setStep("agent")}
+                  onSave={() => save(false)}
+                  busy={busy}
+                />
               ) : (
                 <div className="flex flex-col gap-7">
                   <h2 className="text-2xl font-semibold">Role play agent</h2>
@@ -467,10 +484,7 @@ export function RoleplayEditor({ slug, initial, clientPersonas, publishedVersion
 
                   <div className="flex justify-between">
                     <Button variant="ghost" onClick={() => setStep("situation")}>Back</Button>
-                    <Button onClick={() => save(false)} disabled={busy}>
-                      {busy ? <Spinner data-icon="inline-start" /> : <Check data-icon="inline-start" />}
-                      Save role play
-                    </Button>
+                    <Button onClick={() => setStep("scoring")}>Next</Button>
                   </div>
                 </div>
               )}
@@ -587,6 +601,98 @@ function EditableList({ items, onChange, max, placeholder, addLabel, ariaLabel, 
           </Button>
         </>
       )}
+    </div>
+  );
+}
+
+const rubricPoints = (rows: RubricCriterion[]) => rows.reduce((sum, row) => sum + (Number.isFinite(row.points) ? row.points : 0), 0);
+
+/** How the learner is scored: named criteria whose points add up to 100. */
+function RubricStep({ rubric, onChange, onBack, onSave, busy }: {
+  rubric: RubricCriterion[];
+  onChange: (rows: RubricCriterion[]) => void;
+  onBack: () => void;
+  onSave: () => void;
+  busy: boolean;
+}) {
+  const total = rubricPoints(rubric);
+  const update = (index: number, patch: Partial<RubricCriterion>) =>
+    onChange(rubric.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h2 className="text-2xl font-semibold">Scoring</h2>
+        <p className="text-sm text-muted-foreground">
+          Each session report gives points for every score below, with a short reason. The total is the session score.
+        </p>
+      </div>
+
+      <Field>
+        <FieldLabel htmlFor="rp-rubric-preset">Start from</FieldLabel>
+        <Select onValueChange={(value) => typeof value === "string" && onChange(rubricPreset(value))}>
+          <SelectTrigger id="rp-rubric-preset" className="w-full sm:w-72">
+            <SelectValue placeholder="Choose a rubric" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              {RUBRIC_PRESETS.map((preset) => (
+                <SelectItem key={preset.value} value={preset.value}>{preset.label}</SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+        <FieldDescription className="text-xs">Replaces the scores below. You can edit every row afterwards.</FieldDescription>
+      </Field>
+
+      <div className="flex flex-col gap-2">
+        <div className="grid grid-cols-[minmax(0,1fr)_5rem_auto] gap-2 text-xs font-medium text-muted-foreground">
+          <span>Score</span>
+          <span className="text-right">Points</span>
+          <span className="sr-only">Remove</span>
+        </div>
+        {rubric.map((row, index) => (
+          <div key={index} className="grid grid-cols-[minmax(0,1fr)_5rem_auto] items-center gap-2">
+            <Input
+              value={row.name}
+              aria-label={`Score ${index + 1} name`}
+              placeholder="e.g. Handling the brush-off"
+              onChange={(event) => update(index, { name: event.target.value })}
+            />
+            <Input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={RUBRIC_TOTAL}
+              value={Number.isFinite(row.points) ? row.points : ""}
+              aria-label={`Score ${index + 1} points`}
+              className="text-right tabular-nums"
+              onChange={(event) => update(index, { points: Math.round(Number(event.target.value)) })}
+            />
+            <Button variant="ghost" size="sm" className="font-semibold" disabled={rubric.length === 1}
+              onClick={() => onChange(rubric.filter((_, i) => i !== index))} aria-label={`Remove ${row.name || `score ${index + 1}`}`}>
+              Remove
+            </Button>
+          </div>
+        ))}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <Button variant="outline" size="sm" className="w-fit rounded-full" disabled={rubric.length >= MAX_RUBRIC_CRITERIA}
+            onClick={() => onChange([...rubric, { name: "", points: Math.max(1, RUBRIC_TOTAL - total) }])}>
+            <Plus data-icon="inline-start" /> Add score
+          </Button>
+          <p className={cn("text-sm tabular-nums", total === RUBRIC_TOTAL ? "text-muted-foreground" : "font-medium text-destructive")}>
+            Total {total} / {RUBRIC_TOTAL}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex justify-between">
+        <Button variant="ghost" onClick={onBack}>Back</Button>
+        <Button onClick={onSave} disabled={busy}>
+          {busy ? <Spinner data-icon="inline-start" /> : <Check data-icon="inline-start" />}
+          Save role play
+        </Button>
+      </div>
     </div>
   );
 }
