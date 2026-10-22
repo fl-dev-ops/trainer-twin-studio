@@ -28,6 +28,7 @@ function geminiModel(modelId: string) {
 }
 
 export default defineAgent({
+  defaultTools: false,
   model: defineDynamic({
     events: {
       "step.started": (_event, ctx) => {
@@ -83,8 +84,7 @@ export default defineAgent({
     },
   }),
   limits: {
-    maxInputTokensPerSession: false,
-    maxOutputTokensPerSession: false,
+    sessionUsage: () => false,
     sessionTimeoutMs: false,
   },
 });
