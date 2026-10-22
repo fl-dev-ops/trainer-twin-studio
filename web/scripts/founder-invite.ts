@@ -1,15 +1,18 @@
 /**
  * Generates a founder invite link (invite-only org creation).
  *
- * Usage: bun scripts/founder-invite.ts <email>
+ * Usage: bun scripts/founder-invite.ts <email> [SALES|TECHNICAL_INTERVIEW]
+ * The org type defaults to TECHNICAL_INTERVIEW.
  */
 import { randomBytes } from "node:crypto";
 import { db } from "../lib/db";
 import { BASE_DOMAIN } from "../lib/base-domain";
+import { isOrgType } from "../lib/org-type";
 
 const email = process.argv[2];
-if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-  console.error("Usage: bun scripts/founder-invite.ts <email>");
+const orgType = process.argv[3] ?? "TECHNICAL_INTERVIEW";
+if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !isOrgType(orgType)) {
+  console.error("Usage: bun scripts/founder-invite.ts <email> [SALES|TECHNICAL_INTERVIEW]");
   process.exit(1);
 }
 
@@ -20,6 +23,6 @@ if (await db.user.findUnique({ where: { email }, select: { id: true } })) {
   process.exit(1);
 }
 
-await db.founderInvite.create({ data: { token, email } });
+await db.founderInvite.create({ data: { token, email, orgType } });
 console.log(`https://auth.${BASE_DOMAIN}/onboarding?t=${token}`);
 process.exit(0);

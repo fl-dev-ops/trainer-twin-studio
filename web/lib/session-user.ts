@@ -23,7 +23,7 @@ export async function resolveSessionUser(): Promise<{
     ? null
     : await db.member.findFirst({
         where: { userId: session.user.id },
-        select: { organization: { select: { id: true, slug: true, metadata: true } } },
+        select: { organization: { select: { id: true, slug: true, type: true, metadata: true } } },
       });
   const org: SessionOrg | null =
     portalOrg ??
@@ -31,6 +31,7 @@ export async function resolveSessionUser(): Promise<{
       ? {
           id: member.organization.id,
           slug: member.organization.slug,
+          type: member.organization.type,
           accentColor: parseAccentColor(member.organization.metadata),
         }
       : null);

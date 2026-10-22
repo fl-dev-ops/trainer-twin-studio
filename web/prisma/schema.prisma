@@ -120,8 +120,18 @@ model FounderInvite {
   email      String?
   acceptedAt DateTime?
   createdAt  DateTime  @default(now())
+  orgType    OrgType   @default(TECHNICAL_INTERVIEW)
 
   @@map("founder_invite")
+}
+
+// Decides which scenario configuration an organization uses: role plays (SALES)
+// or interview scenarios (TECHNICAL_INTERVIEW). Set by developers only.
+enum OrgType {
+  SALES
+  TECHNICAL_INTERVIEW
+
+  @@map("org_type")
 }
 
 // ---- Knowledge ----
@@ -455,6 +465,7 @@ model Organization {
   chromaDatabase     String               @default("default")
   createdAt          DateTime
   metadata           String?
+  type               OrgType              @default(TECHNICAL_INTERVIEW)
   members            Member[]
   invitations        Invitation[]
   assignments        RolePlayAssignment[]
