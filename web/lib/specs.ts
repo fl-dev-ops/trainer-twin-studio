@@ -142,6 +142,17 @@ export async function listAgentPersonas(orgId: string, slugs: string[]) {
   return Object.fromEntries(agents.map((agent) => [agent.slug, agent.persona.slug]));
 }
 
+/** Who the learner hears on the call: the role-play client's name, else the persona's name. */
+export async function listAgentSpeakers(orgId: string, slugs: string[]) {
+  const agents = await db.agent.findMany({
+    where: { orgId, slug: { in: slugs } },
+    select: { slug: true, data: true, persona: { select: { name: true } } },
+  });
+  return Object.fromEntries(
+    agents.map((agent) => [agent.slug, getStoredRoleplay(agent.data)?.client_name ?? agent.persona.name]),
+  );
+}
+
 export async function listAgentNames(orgId: string, slugs: string[]) {
   const agents = await db.agent.findMany({
     where: { orgId, slug: { in: slugs } },

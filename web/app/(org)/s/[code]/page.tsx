@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import { getStoredRoleplay } from "@/lib/roleplay";
 import { redirect } from "next/navigation";
 import { SwitchAccountButton } from "@/components/auth/switch-account-button";
 import { HomeRedirect } from "@/components/session/home-redirect";
@@ -29,7 +30,7 @@ export default async function SharedSessionPage({ params }: { params: Promise<{ 
       member: { select: { userId: true } },
       deployment: {
         select: {
-          agent: { select: { slug: true, name: true, persona: { select: { slug: true } } } },
+          agent: { select: { slug: true, name: true, data: true, persona: { select: { slug: true, name: true } } } },
         },
       },
       organization: { select: { name: true, logo: true } },
@@ -95,6 +96,7 @@ export default async function SharedSessionPage({ params }: { params: Promise<{ 
       organizationName={assignment.organization.name}
       organizationLogo={/^data:image\/(?:png|jpeg|webp);base64,/.test(assignment.organization.logo ?? "") ? assignment.organization.logo : null}
       agentPersonas={{ [agent.slug]: agent.persona.slug }}
+      agentSpeakers={{ [agent.slug]: getStoredRoleplay(agent.data)?.client_name ?? agent.persona.name }}
       agentContextRequired={agentContextRequired}
       agentContextUploads={agentContextUploads}
       introVideos={introVideos}

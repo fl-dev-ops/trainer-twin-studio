@@ -94,6 +94,8 @@ type Props = {
   agentNames?: Record<string, string>;
   initialAgent?: string;
   agentPersonas?: Record<string, string>;
+  /** Display name of who speaks on the call (role-play client or persona name). */
+  agentSpeakers?: Record<string, string>;
   agentContextRequired?: Record<string, boolean>;
   agentContextUploads?: Record<string, AgentContextUpload>;
   sessionCode?: string;
@@ -120,6 +122,7 @@ export function SessionView({
   agentNames = {},
   initialAgent,
   agentPersonas = {},
+  agentSpeakers = {},
   agentContextRequired = {},
   agentContextUploads = {},
   sessionCode,
@@ -146,6 +149,7 @@ export function SessionView({
 
   const [agent, setAgent] = useState(initialAgent ?? agents[0] ?? "");
   const persona = agentPersonas[agent] ?? personas[0] ?? "";
+  const speaker = agentSpeakers[agent] ?? persona;
   const [contextIds, setContextIds] = useState<string[]>([]);
   const contextId = contextIds[0] ?? "";
   const [contextList, setContextList] = useState<{ id: string; name: string; size?: number }[]>(contexts);
@@ -1272,12 +1276,12 @@ export function SessionView({
                       <ScenarioIntro
                         key={agent}
                         src={introPlaybackSrc ?? introSrc}
-                        personaLabel={persona}
+                        personaLabel={speaker}
                         onFinished={() => setIntroDone(true)}
                         className="h-full min-h-0 w-full"
                       />
                     ) : (
-                      <AgentTile persona={persona} compact={surface !== null} />
+                      <AgentTile persona={speaker} compact={surface !== null} />
                     )}
                   </div>
                   <div className="min-h-0 flex-1">
