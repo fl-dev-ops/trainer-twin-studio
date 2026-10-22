@@ -261,7 +261,7 @@ Next.js is repo-pinned with breaking changes; read `web/node_modules/next/dist/d
 ## 10. Verification
 
 No automated tests for this work (decision 8). Each phase ends with a manual check in the browser
-on the local database, logged in to `latencytest` (Sales) and `careerwithvasanth` (Technical).
+on the local database, logged in to a local Sales org (switched with `set-org-type`) and `careerwithvasanth` (Technical).
 
 ## 11. Boundaries
 
@@ -271,7 +271,7 @@ on the local database, logged in to `latencytest` (Sales) and `careerwithvasanth
 
 ## 12. Success criteria
 
-1. After migration, `careerwithvasanth` is `TECHNICAL_INTERVIEW` and `latencytest` is `SALES`.
+1. After migration, existing orgs are `TECHNICAL_INTERVIEW`; `latencytest` holds no role plays after clean-up.
 2. Both orgs see the same pages; Sales says "Role play(s)", Technical says "Scenario(s)", everywhere.
 3. `<DisplayForOrg org="sales">` content appears only in Sales orgs, and `org="technical"` only in Technical orgs.
 4. A Sales org lists, runs and creates only role plays; a Technical org only interview scenarios.
@@ -284,22 +284,14 @@ on the local database, logged in to `latencytest` (Sales) and `careerwithvasanth
 Delete `latencytest`'s 2 role plays and their sessions; `latencytest` stays technical interview.
 Run `bun scripts/remove-mismatched-scenarios.ts <slug>` (dry run) then `--apply`, on each database.
 
----|---|---|---|
-| `careerwithvasanth` | Technical | 0 | 10 (49 sessions) |
-| `latencytest` | Sales | 2 (6 sessions) | **5 (123 sessions)** |
-
-`latencytest` becomes Sales but holds 5 interview scenarios with 123 sessions. Options:
-(a) archive them (hidden, sessions kept for history), (b) delete them and their sessions, or
-(c) keep `latencytest` Technical and create a new demo org for Sales.
-
 ---
 
 ## 14. Implementation guide (draft — becomes `tasks/plan.md` once approved)
 
 **Phase A — `org-type` (≈1 day)**
-1. Enum + columns + migration (incl. `latencytest` → `SALES`); clean-up per §13. *Verify:* query local DB.
+1. Enum + columns + migration; clean-up per §13. *Verify:* query local DB.
 2. `lib/org.ts` gains `type`; onboarding copies invite type. *Verify:* build + API test.
-3. `scripts/set-org-type.ts`. *Verify:* flip `latencytest` and back.
+3. `scripts/set-org-type.ts`, `remove-mismatched-scenarios.ts`, invite type. *Verify:* dry run lists the 2 role plays.
 
 **Phase B — `org-ui` (≈1 day)**
 4. `lib/org-type.ts`, `OrgTypeProvider`, `<DisplayForOrg>`, `useOrgCopy()`.
