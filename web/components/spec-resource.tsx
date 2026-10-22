@@ -298,6 +298,7 @@ function SpecCard({
 export function SpecResourceIndex({ type, specs, cards }: { type: ResourceType; specs: Summary[]; cards?: ScenarioCard[] }) {
   const router = useRouter();
   const copy = useResourceCopy(type);
+  const orgCopy = useOrgCopy();
   const [createOpen, setCreateOpen] = useState(false);
   const [newScenarioName, setNewScenarioName] = useState("");
   const [creating, setCreating] = useState(false);
@@ -417,9 +418,9 @@ export function SpecResourceIndex({ type, specs, cards }: { type: ResourceType; 
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Create scenario</DialogTitle>
+                <DialogTitle>Create {copy.single}</DialogTitle>
                 <DialogDescription>
-                  Start with a name. You will describe the scenario on the next screen.
+                  Start with a name. You will describe the {copy.single} on the next screen.
                 </DialogDescription>
               </DialogHeader>
               <form
@@ -437,7 +438,7 @@ export function SpecResourceIndex({ type, specs, cards }: { type: ResourceType; 
                     maxLength={120}
                     autoFocus
                     onChange={(event) => setNewScenarioName(event.target.value)}
-                    placeholder="React mock interview"
+                    placeholder={orgCopy.exampleName}
                   />
                 </Field>
                 <DialogFooter>
