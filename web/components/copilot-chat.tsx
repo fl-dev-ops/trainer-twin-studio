@@ -429,7 +429,7 @@ export function CopilotChat({
                   </PromptInputActionMenu>
                 </PromptInputTools>
                 <PromptInputSubmit
-                  status={agent.status}
+                  status={agent.status === "resuming" ? "submitted" : agent.status}
                   onStop={() => void agent.cancel()}
                   aria-label={busy ? "Stop response" : "Send message"}
                 />
