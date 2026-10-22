@@ -1,6 +1,7 @@
 import { defineTool, type ToolDefinition } from "eve/tools";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 import { studioFetch } from "./studio";
+import { roleplayGuard } from "./roleplay";
 
 /**
  * Browser-executed workspace tools. Chat records a durable command, the page
@@ -26,6 +27,9 @@ export async function executeWorkspaceTool(input: unknown, ctx: any) {
   if (ctx.toolName === "finish_session") {
     return studioFetch(orgId, { action: "finishSession", sessionId });
   }
+  // Client role-play has no workspace: every screen tool is a no-op.
+  const disabled = await roleplayGuard(ctx);
+  if (disabled) return disabled;
   return studioFetch(orgId, {
     action: "enqueueWorkspaceCommand",
     sessionId,

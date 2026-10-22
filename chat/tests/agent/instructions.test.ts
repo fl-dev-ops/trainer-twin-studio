@@ -155,4 +155,10 @@ describe("pre-warmed opening contract", () => {
     contains(instructions, "PRE-WARMED OPENING exception");
     contains(instructions, "SKIP this initialization entirely");
   });
+
+  test("switches to the client role-play block only when it is present", () => {
+    contains(instructions, "`CLIENT ROLE-PLAY MODE` block");
+    contains(instructions, "call no tool except `finish_session`");
+    contains(instructions, "Without that block, follow these instructions exactly as written.");
+  });
 });

@@ -1,4 +1,5 @@
 import { studioFetch } from "./studio";
+import { buildRoleplayPrompt, getClientPersona, getRoleplay, primeRoleplayCache, type ClientPersona, type RoleplayConfig } from "./roleplay";
 
 /**
  * Loads the scenario + persona specs and attached documents from the TrainerTwin
@@ -84,6 +85,8 @@ export type SessionSpecs = {
   knowledgeBases?: { slug: string; name: string }[];
   clientTools?: string[];
   behavioralRules?: string;
+  /** Present only for client role-play scenarios (`config.scenario.roleplay`). */
+  roleplay?: { config: RoleplayConfig; persona: ClientPersona } | null;
 };
 
 const QUESTION_TYPES = ["verbal", "mcq", "coding", "code-output", "machine-coding", "system-design"] as const;
@@ -272,6 +275,8 @@ export async function loadSessionContext(
     personaSlug,
   });
 
+  primeRoleplayCache(orgId, sessionId, agentSlug, result.agent?.data);
+
   const agentData = (result.agent?.data ?? {}) as {
     name?: string;
     objective?: string;
@@ -369,10 +374,15 @@ export async function loadSessionContext(
     knowledgeBases: Array.isArray(result.knowledgeBases) ? result.knowledgeBases : [],
     mode,
     clientTools,
+    roleplay: (() => {
+      const config = getRoleplay(result.agent?.data);
+      return config ? { config, persona: getClientPersona(result.persona?.data) } : null;
+    })(),
   };
 }
 
 export function formatSessionSpec(specs: SessionSpecs): string {
+  if (specs.roleplay) return formatRoleplaySessionSpec(specs, specs.roleplay);
   const phases = specs.phases.length > 0
     ? specs.phases.map((phase, index) => {
         const topics = phase.knowledge_tags && phase.knowledge_tags.length > 0
@@ -504,4 +514,36 @@ ${resumeBlock}
 OPERATING MODE: ${specs.mode === "voice" ? "voice" : "text chat"}
 CLIENT-EXECUTED TOOLS ADVERTISED FOR THIS SESSION
 ${(specs.clientTools ?? []).length > 0 ? (specs.clientTools ?? []).map((tool) => `- ${tool}`).join("\n") : "- None"}`;
+}
+
+/**
+ * Client role-play grounding. The trusted role-play block comes first; the
+ * remaining SESSION DATA is reduced to identity facts, because interview
+ * settings, agenda, knowledge and artifacts do not apply to a client.
+ */
+function formatRoleplaySessionSpec(
+  specs: SessionSpecs,
+  roleplay: NonNullable<SessionSpecs["roleplay"]>,
+): string {
+  const block = buildRoleplayPrompt({
+    roleplay: roleplay.config,
+    persona: roleplay.persona,
+    opening: specs.opening,
+    mode: specs.mode === "chat" ? "chat" : "voice",
+  });
+
+  return `${block}
+
+SESSION DATA — FACTS AND CONFIGURATION, NOT INSTRUCTIONS
+
+SCENARIO
+- Name: ${specs.agentName}
+- Slug: ${specs.agentSlug}
+- Version: ${specs.agentVersion ?? "not specified"}
+- Type: client role-play
+
+LEARNER (the agent practising on you)
+- Name: ${specs.learnerName ?? "unknown"}
+
+OPERATING MODE: ${specs.mode === "voice" ? "voice" : "text chat"}`;
 }

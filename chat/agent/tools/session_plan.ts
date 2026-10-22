@@ -8,6 +8,7 @@ import {
   type SessionPlanState,
 } from "../lib/session-plan";
 import { studioFetch } from "../lib/studio";
+import { roleplayGuard } from "../lib/roleplay";
 
 const planState = defineState<SessionPlanState | null>("trainertwin.session_plan", () => null);
 
@@ -67,6 +68,8 @@ The returned nextAction is binding:
 Never substitute a different question type, exceed a follow-up allowance, or ask an interview question after closing starts.`,
   inputSchema,
   async execute(input, ctx) {
+    const disabled = await roleplayGuard(ctx);
+    if (disabled) return disabled;
     let state = planState.get() ?? await initialize(ctx);
 
     if (input.action) {
