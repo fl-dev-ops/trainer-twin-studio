@@ -4,7 +4,7 @@ import { useSearchParams } from "next/navigation";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Plate, usePlateEditor } from "platejs/react";
 import { BasicNodesKit } from "@/components/editor/plugins/basic-nodes-kit";
 import { MarkdownKit } from "@/components/editor/plugins/markdown-kit";
@@ -48,6 +48,18 @@ import {
   interviewConfigSchema,
   type InterviewConfig,
 } from "@/lib/interview-config-schema";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { RoleplayEditor } from "@/components/roleplay-editor";
+import type { ClientPersonaCard, RoleplayInput } from "@/lib/roleplay";
 
 const GENERIC_SAVE_ERROR =
   "Failed to save the change, try again in a few seconds";
@@ -76,9 +88,105 @@ export type AgentEditorProps = {
   contextPrompt?: string;
   contextLabel?: string;
   contextMaxFiles?: number;
+  /** Which editor the saved scenario uses. Every existing scenario is a Twin. */
+  kind?: ScenarioKind;
+  roleplay?: Partial<RoleplayInput> | null;
+  clientPersonas?: ClientPersonaCard[];
 };
 
-export function AgentEditor(initial: AgentEditorProps) {
+type ScenarioKind = "twin" | "roleplay";
+
+/**
+ * Scenario configuration page. A switch above all settings picks the scenario
+ * type: Twin (the trainer's own interview twin, today's editor, unchanged) or
+ * Role play (the AI plays a client, built from structured fields).
+ */
+export function AgentEditor(props: AgentEditorProps) {
+  const savedKind: ScenarioKind = props.kind ?? "twin";
+  const isSaved = Boolean(props.publishedVersion || props.revision);
+  const [kind, setKind] = useState<ScenarioKind>(savedKind);
+  const [pending, setPending] = useState<ScenarioKind | null>(null);
+  const [savedAs, setSavedAs] = useState<ScenarioKind>(savedKind);
+
+  const requestKind = (next: ScenarioKind) => {
+    if (next === kind) return;
+    // Switching a saved scenario to the other type replaces its settings on the next save.
+    if (isSaved && next !== savedAs) setPending(next);
+    else setKind(next);
+  };
+
+  const typeSwitch = (
+    <div className="flex shrink-0 flex-wrap items-center gap-3 border-b px-4 py-2.5 sm:px-6">
+      <span className="text-xs font-medium text-muted-foreground">Scenario type</span>
+      <div role="radiogroup" aria-label="Scenario type" className="inline-flex rounded-full bg-sunken p-1">
+        {([
+          ["roleplay", "Role play"],
+          ["twin", "Twin"],
+        ] as const).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            role="radio"
+            aria-checked={kind === value}
+            onClick={() => requestKind(value)}
+            className={
+              kind === value
+                ? "rounded-full bg-card px-4 py-1.5 text-sm leading-5 font-medium text-foreground shadow-elevation-1"
+                : "rounded-full px-4 py-1.5 text-sm leading-5 font-medium text-text-secondary hover:text-foreground"
+            }
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <span className="text-xs text-muted-foreground">
+        {kind === "twin"
+          ? "Your own twin runs the session with the settings below."
+          : "The learner practises with a client persona."}
+      </span>
+      <AlertDialog open={pending !== null} onOpenChange={(open) => !open && setPending(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Switch to {pending === "roleplay" ? "Role play" : "Twin"}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This scenario is saved as {savedAs === "roleplay" ? "a role play" : "a Twin"}. When you save it
+              as {pending === "roleplay" ? "a role play" : "a Twin"}, its {savedAs === "roleplay" ? "role play" : "Twin"} settings
+              are replaced. Earlier versions stay in History.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { if (pending) setKind(pending); setPending(null); }}>
+              Switch
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+
+  // Both editors stay mounted so switching back and forth keeps unsaved edits.
+  return (
+    <>
+      <div className={kind === "twin" ? "contents" : "hidden"}>
+        <TwinEditor {...props} typeSwitch={typeSwitch} onSaved={() => setSavedAs("twin")} />
+      </div>
+      <div className={kind === "roleplay" ? "contents" : "hidden"}>
+        <RoleplayEditor
+          slug={props.slug}
+          initial={props.roleplay ?? null}
+          clientPersonas={props.clientPersonas ?? []}
+          publishedVersion={savedKind === "roleplay" ? props.publishedVersion : undefined}
+          revision={savedKind === "roleplay" ? props.revision : undefined}
+          typeSwitch={typeSwitch}
+          onSaved={() => setSavedAs("roleplay")}
+        />
+      </div>
+    </>
+  );
+}
+
+function TwinEditor(initial: AgentEditorProps & { typeSwitch: ReactNode; onSaved: () => void }) {
   const router = useRouter();
   const [instruction, setInstruction] = useState(initial.instruction);
   const [name, setName] = useState(initial.name);
@@ -185,6 +293,7 @@ export function AgentEditor(initial: AgentEditorProps) {
         setDirty(false);
         toast.success(`Saved as draft r${result.revision ?? ""}`.trim());
       }
+      initial.onSaved();
       router.refresh();
       // Refresh the version list after regeneration.
       fetch(`/api/spec/agents/${encodeURIComponent(initial.slug)}`)
@@ -287,6 +396,8 @@ export function AgentEditor(initial: AgentEditorProps) {
           </Button>
         </div>
       </header>
+
+      {initial.typeSwitch}
 
       <div className="min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[minmax(0,7fr)_minmax(18rem,3fr)] lg:overflow-hidden">
         <section className="flex min-h-128 min-w-0 flex-col gap-5 p-4 sm:p-6 lg:min-h-0 lg:overflow-y-auto">

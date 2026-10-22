@@ -1,4 +1,5 @@
 import yaml from "js-yaml";
+import { getStoredRoleplay, isClientPersonaData } from "@/lib/roleplay";
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { deletePrefix, getObjectText, kbPrefix, presignedGetUrl, putObject } from "@/lib/s3";
@@ -59,7 +60,12 @@ export function agentDisplayName(slug: string, name: string) {
 
 export async function listSpecSummaries(type: "personas" | "agents", orgId: string) {
   if (type === "personas") {
-    return db.persona.findMany({ where: { orgId }, orderBy: { slug: "asc" }, select: { slug: true, name: true, version: true } });
+    // Client personas belong to role-play scenarios and are picked in the role-play
+    // builder; the persona library keeps listing trainer personas only.
+    const personas = await db.persona.findMany({ where: { orgId }, orderBy: { slug: "asc" }, select: { slug: true, name: true, version: true, data: true } });
+    return personas
+      .filter((persona) => !isClientPersonaData(persona.data))
+      .map(({ slug, name, version }) => ({ slug, name, version }));
   }
 
   const [agents, drafts] = await Promise.all([
@@ -79,9 +85,11 @@ export async function listSpecSummaries(type: "personas" | "agents", orgId: stri
   return [
     ...agents.map((agent) => {
       const data = agent.data as { objective?: unknown } | null;
-      const objective = typeof data?.objective === "string" ? data.objective : undefined;
+      const roleplay = getStoredRoleplay(agent.data);
+      const objective = roleplay?.situation?.scenario ?? (typeof data?.objective === "string" ? data.objective : undefined);
       return {
         slug: agent.slug,
+        kind: roleplay ? "roleplay" as const : "twin" as const,
         name: agentDisplayName(agent.slug, agent.name),
         version: agent.version,
         visibility: agent.visibility,
@@ -94,9 +102,11 @@ export async function listSpecSummaries(type: "personas" | "agents", orgId: stri
     }),
     ...drafts.filter(({ slug }) => !published.has(slug)).map((draft) => {
       const agent = draft.agentData as { objective?: unknown } | null;
-      const objective = typeof agent?.objective === "string" ? agent.objective : undefined;
+      const roleplay = getStoredRoleplay(draft.agentData);
+      const objective = roleplay?.situation?.scenario ?? (typeof agent?.objective === "string" ? agent.objective : undefined);
       return {
         slug: draft.slug,
+        kind: roleplay ? "roleplay" as const : "twin" as const,
         name: agentDisplayName(draft.slug, draft.name),
         version: draft.revision,
         objective,

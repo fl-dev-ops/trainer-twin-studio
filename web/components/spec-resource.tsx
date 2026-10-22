@@ -69,6 +69,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { PersonaSourcePanel } from "@/components/persona-source-panel";
+import { ScenarioList } from "@/components/scenario-list";
+import type { ScenarioCard } from "@/lib/scenario-cards";
 
 type ResourceType = "personas" | "agents";
 type Summary = {
@@ -78,6 +80,7 @@ type Summary = {
   objective?: string;
   status?: "draft" | "published";
   draftRevision?: number;
+  kind?: "roleplay" | "twin";
 };
 type VersionInfo = { version: number; createdAt: string; label: string };
 
@@ -252,13 +255,18 @@ function SpecCard({
                 <MessagesSquareIcon ref={iconRef} size={20} />
               )}
             </span>
-            {type === "agents" && (spec.status === "draft" ? (
+            {type === "agents" && (
+              <span className="flex items-center gap-1.5">
+                {spec.kind === "roleplay" && <Badge variant="outline">Role play</Badge>}
+                {spec.status === "draft" ? (
               <Badge variant="outline">Draft r{spec.version}</Badge>
             ) : spec.draftRevision ? (
               <Badge variant="outline">Draft r{spec.draftRevision}</Badge>
             ) : (
               <Badge variant="secondary">Published</Badge>
-            ))}
+            )}
+              </span>
+            )}
           </div>
           <CardTitle className="text-base font-semibold group-hover:text-primary transition-colors">
             {spec.name}
@@ -281,7 +289,7 @@ function SpecCard({
   );
 }
 
-export function SpecResourceIndex({ type, specs }: { type: ResourceType; specs: Summary[] }) {
+export function SpecResourceIndex({ type, specs, cards }: { type: ResourceType; specs: Summary[]; cards?: ScenarioCard[] }) {
   const router = useRouter();
   const copy = COPY[type];
   const [createOpen, setCreateOpen] = useState(false);
@@ -348,6 +356,23 @@ export function SpecResourceIndex({ type, specs }: { type: ResourceType; specs: 
   return (
     <main className="min-h-0 flex-1 overflow-auto p-5 sm:p-8">
       <PageContainer size="narrow">
+        {type === "agents" && cards ? (
+          <ScenarioList
+            cards={cards}
+            onNew={() => setCreateOpen(true)}
+            actions={
+              <>
+                <Button variant="ghost" className="h-10 rounded-full" render={<Link href="/agents/fidelity" />} nativeButton={false}>
+                  Fidelity
+                </Button>
+                <Button variant="ghost" className="h-10 rounded-full" onClick={designWithCopilot}>
+                  <Sparkles data-icon="inline-start" /> Design with Copilot
+                </Button>
+              </>
+            }
+          />
+        ) : (
+        <>
         <PageHeader
           className="border-b pb-6"
           title={copy.title}
@@ -379,6 +404,8 @@ export function SpecResourceIndex({ type, specs }: { type: ResourceType; specs: 
             </div>
           )}
         </div>
+        </>
+        )}
 
         {type === "agents" && (
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>

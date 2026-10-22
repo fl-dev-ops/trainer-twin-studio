@@ -7,6 +7,7 @@ import { getTrainerOrg } from "@/lib/org";
 import { readSpecDraft } from "@/lib/spec-drafts";
 import { listSpecs, listVersions, readSpec, readVersion } from "@/lib/specs";
 import { getPersonaBaseline } from "@/lib/persona-baseline";
+import { clientPersonaCard, isClientPersonaData, roleplayInputFromSpec, type ClientPersonaCard } from "@/lib/roleplay";
 import {
   DEFAULT_RESUME_INTERVIEW_CONFIG,
   interviewConfigSchema,
@@ -62,13 +63,24 @@ export async function SpecResourcePage({
     if (requestedVersion !== undefined && !current && !historical) notFound();
     if (requestedVersion !== undefined && current && version !== current.version && !historical) notFound();
 
-    const [personas, versions, topics] = await Promise.all([
+    const [allPersonas, versions, topics] = await Promise.all([
       listSpecs("personas", org.id).then((slugs) =>
-        db.persona.findMany({ where: { orgId: org.id, slug: { in: slugs.length ? slugs : ["__none__"] } }, orderBy: { slug: "asc" }, select: { slug: true, name: true } }),
+        db.persona.findMany({ where: { orgId: org.id, slug: { in: slugs.length ? slugs : ["__none__"] } }, orderBy: { slug: "asc" }, select: { slug: true, name: true, data: true } }),
       ),
       current ? listVersions(type, slug, org.id) : Promise.resolve([]),
       db.topic.findMany({ where: { status: "approved" }, orderBy: { slug: "asc" }, select: { slug: true, description: true } }),
     ]);
+    // Twin scenarios pick from trainer personas; role-play scenarios pick a client persona card.
+    const personas = allPersonas
+      .filter((persona) => !isClientPersonaData(persona.data))
+      .map(({ slug, name }) => ({ slug, name }));
+    const clientPersonas = allPersonas
+      .map((persona) => clientPersonaCard(persona.slug, persona.data))
+      .filter((card): card is ClientPersonaCard => card !== null);
+    const scenarioType = (agent: Record<string, unknown>) => {
+      const roleplay = roleplayInputFromSpec(agent);
+      return { kind: roleplay ? "roleplay" as const : "twin" as const, roleplay, clientPersonas };
+    };
 
     if (!current) {
       if (requestedVersion !== undefined) notFound();
@@ -94,6 +106,7 @@ export async function SpecResourcePage({
           contextPrompt={contextPromptOf(agent)}
           contextLabel={contextFieldOf(agent, "label")}
           contextMaxFiles={contextMaxFilesOf(agent)}
+          {...scenarioType(agent)}
         />
       );
     }
@@ -136,6 +149,7 @@ export async function SpecResourcePage({
         contextPrompt={contextPromptOf(working)}
         contextLabel={contextFieldOf(working, "label")}
         contextMaxFiles={contextMaxFilesOf(working)}
+        {...scenarioType(working)}
       />
     );
   }
