@@ -436,7 +436,7 @@ export class MainCollectionService {
   static async searchKnowledge(
     orgId: string,
     query: string,
-    options: { kbIds?: string[]; limit?: number; topics?: string[] } = {},
+    options: { kbIds?: string[]; limit?: number; topics?: string[]; docIds?: string[] } = {},
   ): Promise<{ id: string; docId: string; kbId: string; source: string; title?: string; chunkIndex?: number; topic?: string; text: string; score: number }[]> {
     return runOnChromaLane(async () => {
       const collection = await this.getCollection(orgId);
@@ -454,6 +454,10 @@ export class MainCollectionService {
       }
       if (options.topics && options.topics.length > 0) {
         conditions.push({ topic: { $in: options.topics } } as Where);
+      }
+      // Restrict to specific documents (e.g. a client persona's own knowledge).
+      if (options.docIds && options.docIds.length > 0) {
+        conditions.push({ docId: { $in: options.docIds } } as Where);
       }
       const whereFilter: Where =
         conditions.length === 1 ? conditions[0] : ({ $and: conditions } as Where);

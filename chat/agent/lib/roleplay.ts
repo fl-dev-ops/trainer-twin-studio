@@ -38,6 +38,7 @@ export type ClientPersona = {
   behaviours?: string[];
   opening_style?: string;
   how_they_talk?: string;
+  pace?: string;
   mannerisms?: {
     formality?: string;
     answer_length?: string;
@@ -99,6 +100,7 @@ export function getClientPersona(personaData: unknown): ClientPersona {
     behaviours: list(data.behaviours),
     opening_style: text(data.opening_style),
     how_they_talk: text(data.how_they_talk),
+    pace: text(data.pace),
     mannerisms: {
       formality: text(mannerisms.formality),
       answer_length: text(mannerisms.answer_length),
@@ -149,10 +151,12 @@ function bullets(items: string[]): string {
 export function buildRoleplayPrompt(input: {
   roleplay: RoleplayConfig;
   persona: ClientPersona;
+  /** Passages from the persona's own knowledge that match the situation. */
+  knowledge?: Array<{ title?: string; text: string }>;
   opening?: string;
   mode: "voice" | "chat";
 }): string {
-  const { roleplay, persona, opening, mode } = input;
+  const { roleplay, persona, knowledge = [], opening, mode } = input;
   const name = roleplay.client_name ?? persona.name ?? "the client";
   const difficulty = roleplay.agent.difficulty ?? "medium";
   const level = DIFFICULTY[difficulty];
@@ -181,6 +185,7 @@ export function buildRoleplayPrompt(input: {
     m.pauses ? "Sometimes takes a beat before answering, like a real call." : null,
     m.fillers ? `Now and then uses fillers like "um", "well" and "you know".` : null,
     persona.opening_style ? `Opening style: ${persona.opening_style}.` : null,
+    persona.pace && persona.pace !== "normal" ? `Speaking pace: ${persona.pace}.` : null,
   ].filter(Boolean) as string[];
 
   const sections: string[] = [
@@ -198,8 +203,10 @@ ${roleplay.situation.hidden_truth}
 Never volunteer this. Reveal one piece at a time, and only when the agent asks a question that genuinely earns it while your guard is at level 2 or lower.`);
   }
 
+  const otherBehaviours = (persona.behaviours ?? []).filter((item) => item.toLowerCase() !== character?.toLowerCase());
   const talk = [
     characterLine ? `Character: ${characterLine}` : null,
+    otherBehaviours.length ? `Also: ${otherBehaviours.join(", ")}.` : null,
     // The role play's own wording wins; otherwise the client persona's default style.
     roleplay.agent.how_they_talk ?? persona.how_they_talk ?? null,
     ...mannerisms,
@@ -208,6 +215,12 @@ Never volunteer this. Reveal one piece at a time, and only when the agent asks a
       : null,
   ].filter(Boolean) as string[];
   if (talk.length) sections.push(`# How you talk\n${bullets(talk)}`);
+
+  if (knowledge.length) {
+    sections.push(`# What you know (background, from your own experience)
+Use these only to sound real: draw examples, numbers you have heard and objections from them, in your own words. Never read them out, quote a source, or act as an expert advising the agent.
+${knowledge.map((item, index) => `${index + 1}. ${item.title ? `[${item.title}] ` : ""}${item.text.replace(/\s+/g, " ").trim()}`).join("\n")}`);
+  }
 
   sections.push(`# Difficulty: ${difficulty}
 ${level.text}`);
