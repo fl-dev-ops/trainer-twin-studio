@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import Link from "next/link";
+import { SwitchAccountButton } from "@/components/auth/switch-account-button";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { FounderForm } from "@/components/auth/founder-form";
@@ -48,18 +49,20 @@ export default async function OnboardingPage({
     }
   }
 
-  // 2. Check founder invite if not already authenticated into an org
-  const invite =
-    !userOrg && token
-      ? await db.founderInvite.findUnique({
-          where: { token },
-          select: { acceptedAt: true, email: true },
-        })
-      : null;
+  // 2. Check the founder invite
+  const invite = token
+    ? await db.founderInvite.findUnique({
+        where: { token },
+        select: { acceptedAt: true, email: true },
+      })
+    : null;
+  const freshInvite = Boolean(invite && !invite.acceptedAt);
 
-  const canOnboard = Boolean(
-    userOrg || (token && invite && !invite.acceptedAt),
-  );
+  // An unused invite opened by someone who already owns an organization: they
+  // must sign out first, otherwise the form resumes their existing workspace.
+  const ownerWithFreshInvite = Boolean(userOrg && freshInvite);
+
+  const canOnboard = Boolean(userOrg || freshInvite);
 
   return (
     <main className="min-h-svh w-full onboarding-canvas text-foreground flex flex-col antialiased">
@@ -68,10 +71,23 @@ export default async function OnboardingPage({
 
       {/* 2. Main Content Canvas (Upper-middle optical placement) */}
       <div className="relative flex-1 w-full px-8 lg:px-16 xl:px-24 pt-12 sm:pt-20 lg:pt-24 pb-16 flex flex-col items-center justify-start">
-        {canOnboard ? (
+        {ownerWithFreshInvite && userOrg && session ? (
+          <div className="max-w-md mx-auto text-center py-16">
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">
+              Sign out to use this invite
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+              You are signed in as {session.user.email}, which already owns {userOrg.name}. An account
+              can own one organization, so sign out and create a new account to set up a new workspace.
+            </p>
+            <div className="mt-6 flex flex-col items-center gap-2">
+              <SwitchAccountButton returnTo={`/onboarding?t=${encodeURIComponent(token ?? "")}`} />
+            </div>
+          </div>
+        ) : canOnboard ? (
           <FounderForm
             token={token ?? ""}
-            email={invite?.email ?? session?.user.email ?? ""}
+            email={(userOrg ? null : invite?.email) ?? session?.user.email ?? ""}
             connectors={{
               notion: Boolean(process.env.NOTION_OAUTH_CLIENT_ID),
               youtube: Boolean(process.env.YOUTUBE_OAUTH_CLIENT_ID),
