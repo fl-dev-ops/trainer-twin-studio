@@ -279,10 +279,18 @@ export function FounderForm({
     }
   }
 
-  // Navigate to Studio Dashboard
-  function handleGoToDashboard() {
+  // Navigate to Studio Dashboard. The server resolves the address so it also
+  // works behind a proxy that serves every subdomain from one public origin.
+  async function handleGoToDashboard() {
     const port = window.location.port ? `:${window.location.port}` : "";
-    window.location.assign(`https://dash.${BASE_DOMAIN}${port}/`);
+    const fallback = `https://dash.${BASE_DOMAIN}${port}/`;
+    try {
+      const res = await fetch("/api/me/home");
+      const data = (await res.json()) as { redirect?: string };
+      window.location.assign(res.ok && data.redirect && data.redirect !== "/auth/sign-in" ? data.redirect : fallback);
+    } catch {
+      window.location.assign(fallback);
+    }
   }
 
   const isBusy = stage !== "idle";
