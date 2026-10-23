@@ -1307,6 +1307,7 @@ export function SessionView({
                   className="shrink-0 overflow-hidden"
                 >
                   <SessionSidebar
+                    speakerName={speaker}
                     entries={entries}
                     onSendMessage={handleSendMessage}
                     onClose={() => setSidebarOpen(false)}

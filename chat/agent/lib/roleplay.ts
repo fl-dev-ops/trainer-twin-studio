@@ -238,6 +238,11 @@ Do not call any tool except finish_session. search_style, search_knowledge, read
   sections.push(`# Opening
 On the [OPENING] turn, with no tool calls, say exactly: ${opening ? `"${opening}"` : `a short, natural greeting as ${name} answering the call`}`);
 
+  // Last, because it is the rule the model must not break: anything it writes is spoken.
+  sections.push(`# Your reply (most important)
+Everything you write is ${mode === "voice" ? "spoken aloud" : "sent"} to the agent word for word. Write ONLY the words ${name} says on this call, nothing else.
+Never write your reasoning, analysis, plans, notes, "Thinking Process", guard levels, rule checks, headings, labels, lists, asterisks or stage directions. Do all tracking silently, in your head.`);
+
   return sections.join("\n\n");
 }
 

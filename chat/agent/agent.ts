@@ -1,10 +1,11 @@
 import { defineAgent, defineDynamic } from "eve";
 import type { AgentModelOptionsDefinition } from "eve";
+import { isRoleplaySession } from "./lib/roleplay";
 
 export default defineAgent({
   model: defineDynamic({
     events: {
-      "step.started": (_event, ctx) => {
+      "step.started": async (_event, ctx) => {
         const auth = ctx.session.auth.current;
         const attributes = (auth?.attributes ?? {}) as Record<string, string | undefined>;
         const requestedModel = attributes.model || process.env.CHAT_AGENT_MODEL || "google/gemini-3.5-flash-lite";
@@ -12,10 +13,13 @@ export default defineAgent({
         // All models route through the Vercel AI Gateway with provider-specific options.
         let options: AgentModelOptionsDefinition | undefined;
         if (requestedModel.startsWith("google/")) {
+          // Role-play clients answer in a sentence or two. With thinking on, Gemini
+          // wrote its guard-level reasoning into the spoken reply, so it is off there.
+          const thinkingBudget = (await isRoleplaySession(ctx)) ? 0 : 512;
           options = {
             providerOptions: {
               gateway: { only: ["google"] },
-              google: { thinkingConfig: { thinkingBudget: 512 } },
+              google: { thinkingConfig: { thinkingBudget } },
             },
           };
         } else if (requestedModel.startsWith("openai/gpt-5")) {
