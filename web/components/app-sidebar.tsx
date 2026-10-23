@@ -7,8 +7,6 @@ import {
   AudioLines,
   BookOpen,
   BookOpenText,
-  GraduationCap,
-  History,
   MessagesSquare,
   UserRound,
   Users,
@@ -35,13 +33,6 @@ const DOCS_URL =
     : "https://docs.trainertwin.com");
 
 const NAV = [
-  {
-    label: "Activity",
-    items: [
-      { title: "Sessions", href: "/sessions", icon: History },
-      { title: "Learners", href: "/learners", icon: GraduationCap },
-    ],
-  },
   {
     label: "Create",
     // copyKey: the title follows the org's wording, "Role plays" (sales) or "Scenarios" (technical interview).

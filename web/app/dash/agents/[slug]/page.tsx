@@ -4,8 +4,11 @@ import {
   type OrganizationUser,
   type RolePlayData,
 } from "@/components/role-play-preview";
+import { ScenarioOverview, type ScenarioOverviewData } from "@/components/scenario-overview";
 import { db } from "@/lib/db";
-import { getTrainerOrg } from "@/lib/org";
+import { getTrainerOrg, type TrainerOrg } from "@/lib/org";
+import { getStoredRoleplay } from "@/lib/roleplay";
+import { isSessionReport } from "@/lib/session-report";
 import { readSpecDraft } from "@/lib/spec-drafts";
 import { agentDisplayName, readSpec } from "@/lib/specs";
 
@@ -125,11 +128,91 @@ export default async function RolePlayPreviewPage({
     };
   }
 
+  const overviewData = current ? await loadOverview(org, slug) : null;
+
   return (
     <RolePlayPreview
       rolePlay={rolePlay}
       availableUsers={availableUsers}
       assignments={assignmentSummaries}
+      overview={overviewData ? <ScenarioOverview data={overviewData} /> : undefined}
     />
   );
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const MAX_CONVERSATIONS = 50;
+
+type TranscriptTurn = { role?: string; speaker?: string; text?: string };
+
+/** What the overview shows for a published role play or scenario; only data the sessions record. */
+async function loadOverview(org: TrainerOrg, slug: string): Promise<ScenarioOverviewData | null> {
+  const agent = await db.agent.findFirst({
+    where: { slug, orgId: org.id },
+    select: { id: true, slug: true, name: true, data: true, persona: { select: { name: true, data: true } } },
+  });
+  if (!agent) return null;
+
+  const where = { orgId: org.id, agentId: agent.id, deletedAt: null };
+  const [totalSessions, sessions] = await Promise.all([
+    db.interviewSession.count({ where }),
+    db.interviewSession.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: MAX_CONVERSATIONS,
+      select: { id: true, createdAt: true, transcript: true, report: true, user: { select: { name: true, email: true } } },
+    }),
+  ]);
+
+  const roleplay = getStoredRoleplay(agent.data);
+  const data = (agent.data ?? {}) as { objective?: unknown };
+  const personaData = (agent.persona.data ?? {}) as { avatar?: unknown };
+  const aiName = roleplay?.client_name ?? agent.persona.name;
+
+  // Sessions per day for the last seven days, oldest first.
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const week = Array.from({ length: 7 }, (_, index) => {
+    const day = new Date(today.getTime() - (6 - index) * DAY_MS);
+    return { start: day.getTime(), label: day.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" }), count: 0 };
+  });
+  for (const session of sessions) {
+    const time = session.createdAt.getTime();
+    const day = week.find((bucket) => time >= bucket.start && time < bucket.start + DAY_MS);
+    if (day) day.count += 1;
+  }
+
+  const conversations = sessions.map((session) => {
+    const turns = Array.isArray(session.transcript) ? (session.transcript as TranscriptTurn[]) : [];
+    const isLearner = (turn: TranscriptTurn) => turn.role === "user" || turn.speaker === "learner";
+    const firstText = (match: (turn: TranscriptTurn) => boolean) =>
+      turns.find((turn) => match(turn) && typeof turn.text === "string" && turn.text.trim())?.text?.trim();
+    const report = isSessionReport(session.report) ? session.report : null;
+    return {
+      id: session.id,
+      learnerName: session.user.name || session.user.email,
+      aiLine: firstText((turn) => !isLearner(turn)),
+      learnerLine: firstText(isLearner),
+      score: typeof report?.score === "number" ? Math.round(report.score) : undefined,
+      createdAt: session.createdAt.toLocaleDateString("en-US", { day: "numeric", month: "short" }),
+    };
+  });
+
+  return {
+    name: agentDisplayName(agent.slug, agent.name),
+    personaLabel: roleplay ? "Client persona" : "Trainer persona",
+    personaName: aiName,
+    personaAvatar: typeof personaData.avatar === "string" && personaData.avatar ? personaData.avatar : undefined,
+    scenarioLabel: roleplay ? "Situation" : "Objective",
+    scenarioText: roleplay?.situation?.scenario ?? (typeof data.objective === "string" ? data.objective : undefined),
+    aiName,
+    week: week.map(({ label, count }) => ({ label, count })),
+    scores: conversations
+      .map((conversation) => conversation.score)
+      .filter((score): score is number => typeof score === "number")
+      .slice(0, 12)
+      .reverse(),
+    totalSessions,
+    conversations,
+  };
 }

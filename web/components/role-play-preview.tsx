@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   ArrowLeft,
   Pencil,
@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useOrgCopy } from "@/components/org-type-provider";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
 import { MessageResponse } from "@/components/ai-elements/message";
@@ -199,12 +200,16 @@ export function RolePlayPreview({
   rolePlay,
   availableUsers = [],
   assignments = [],
+  overview: overviewContent,
 }: {
   rolePlay: RolePlayData;
   availableUsers?: OrganizationUser[];
   assignments?: AssignmentSummary[];
+  /** Replaces the default overview (instructions, first message, documents). */
+  overview?: ReactNode;
 }) {
   const router = useRouter();
+  const copy = useOrgCopy();
   const canAssign = rolePlay.status === "published";
 
   // Assignments list state
@@ -356,7 +361,7 @@ export function RolePlayPreview({
           href="/agents"
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground hover:underline"
         >
-          <ArrowLeft className="size-4" /> All scenarios
+          <ArrowLeft className="size-4" /> All {copy.scenariosLower}
         </Link>
 
         <PageHeader
@@ -375,11 +380,11 @@ export function RolePlayPreview({
           actions={
             <>
               <Button variant="outline" nativeButton={false} render={<Link href={`/agents/${encodeURIComponent(rolePlay.slug)}/edit`} />}>
-                <Pencil data-icon="inline-start" /> Edit scenario
+                <Pencil data-icon="inline-start" /> Edit {copy.scenarioLower}
               </Button>
               {rolePlay.status === "published" ? (
                 <Button nativeButton={false} render={<Link href={`/talk?agent=${encodeURIComponent(rolePlay.slug)}`} />}>
-                  <Play data-icon="inline-start" /> Test scenario
+                  <Play data-icon="inline-start" /> Test {copy.scenarioLower}
                 </Button>
               ) : (
                 <Button disabled>
@@ -395,7 +400,7 @@ export function RolePlayPreview({
             <div>
               <p className="text-sm font-medium">Unpublished changes</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Draft revision {rolePlay.draftRevision} is newer than the published scenario shown here.
+                Draft revision {rolePlay.draftRevision} is newer than the published {copy.scenarioLower} shown here.
               </p>
             </div>
             <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/agents/${encodeURIComponent(rolePlay.slug)}/edit`} />}>
@@ -413,7 +418,7 @@ export function RolePlayPreview({
           </TabsList>
 
           <TabsContent value="overview" className="mt-6 space-y-8">
-            {overview}
+            {overviewContent ?? overview}
           </TabsContent>
 
           <TabsContent value="assign" className="mt-6">
@@ -423,7 +428,7 @@ export function RolePlayPreview({
                   <div>
                     <h2 className="text-lg font-semibold">Assignments</h2>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      Everyone this scenario has been assigned to.
+                      Everyone this {copy.scenarioLower} has been assigned to.
                     </p>
                   </div>
                   <Badge variant="secondary" className="gap-1 text-[11px]">
