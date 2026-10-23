@@ -17,6 +17,13 @@ export type RubricScore = {
   reason: string;
 };
 
+/** Whether the learner met one role-play learner goal. */
+export type GoalResult = {
+  goal: string;
+  status: "met" | "partly" | "not_met";
+  evidence: string;
+};
+
 export type SessionReport = {
   summary: string;
   summaryTags: string[];
@@ -25,6 +32,8 @@ export type SessionReport = {
   /** For role plays with a rubric, the sum of `rubricScores` points. */
   score?: number;
   rubricScores?: RubricScore[];
+  /** Role plays only: one result per learner goal, in the order configured. */
+  goalResults?: GoalResult[];
   generatedAt: string;
 };
 
@@ -92,13 +101,36 @@ const RUBRIC_SCORES_JSON_SCHEMA = {
   },
 };
 
-/** Report schema; role plays with a rubric also return per-criterion points. */
-export function sessionReportJsonSchema(withRubric: boolean) {
-  if (!withRubric) return SESSION_REPORT_JSON_SCHEMA;
+const GOAL_RESULTS_JSON_SCHEMA = {
+  type: "array",
+  description: "One entry per learner goal, in the order given.",
+  items: {
+    type: "object",
+    additionalProperties: false,
+    required: ["goal", "status", "evidence"],
+    properties: {
+      goal: { type: "string", description: "The learner goal, exactly as given." },
+      status: { type: "string", enum: ["met", "partly", "not_met"], description: "met: clearly did it; partly: attempted but not fully; not_met: did not do it." },
+      evidence: { type: "string", description: "One sentence citing what the learner said or did." },
+    },
+  },
+};
+
+/** Report schema; role plays also return per-goal results and, with a rubric, per-criterion points. */
+export function sessionReportJsonSchema(options: { rubric: boolean; goals: boolean }) {
+  if (!options.rubric && !options.goals) return SESSION_REPORT_JSON_SCHEMA;
   return {
     ...SESSION_REPORT_JSON_SCHEMA,
-    required: [...SESSION_REPORT_JSON_SCHEMA.required, "rubricScores"],
-    properties: { ...SESSION_REPORT_JSON_SCHEMA.properties, rubricScores: RUBRIC_SCORES_JSON_SCHEMA },
+    required: [
+      ...SESSION_REPORT_JSON_SCHEMA.required,
+      ...(options.rubric ? ["rubricScores"] : []),
+      ...(options.goals ? ["goalResults"] : []),
+    ],
+    properties: {
+      ...SESSION_REPORT_JSON_SCHEMA.properties,
+      ...(options.rubric ? { rubricScores: RUBRIC_SCORES_JSON_SCHEMA } : {}),
+      ...(options.goals ? { goalResults: GOAL_RESULTS_JSON_SCHEMA } : {}),
+    },
   };
 }
 

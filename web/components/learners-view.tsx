@@ -534,7 +534,9 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
                 </p>
 
                 {selectedSession.summaryTags && selectedSession.summaryTags.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-4">
+                  <>
+                  <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Topics discussed</p>
+                  <div className="flex flex-wrap gap-2 mt-2">
                     {selectedSession.summaryTags.map((tag) => (
                       <Badge
                         key={tag}
@@ -545,6 +547,7 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
                       </Badge>
                     ))}
                   </div>
+                  </>
                 )}
               </div>
             </section>
@@ -622,7 +625,7 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
             {hasCompletedReport && selectedSession.report?.rubricScores?.length ? (
               <section className="mt-1">
                 <div className="mb-3 flex items-baseline justify-between gap-3">
-                  <h3 className="text-sm font-semibold tracking-tight text-foreground">Scores</h3>
+                  <h3 className="text-sm font-semibold tracking-tight text-foreground">Scoring rubric</h3>
                   <p className="text-sm font-semibold tabular-nums text-foreground">
                     {selectedSession.report.score ?? 0} / 100
                   </p>
@@ -630,13 +633,47 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
                 <ul className="divide-y rounded-2xl border bg-card shadow-2xs">
                   {selectedSession.report.rubricScores.map((row) => (
                     <li key={row.criterion} className="flex flex-col gap-1 px-5 py-3">
-                      <div className="flex items-baseline justify-between gap-3">
-                        <span className="text-xs sm:text-[13px] font-medium text-foreground">{row.criterion}</span>
-                        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                          {row.points} / {row.maxPoints}
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="min-w-0 text-xs sm:text-[13px] font-medium text-foreground">{row.criterion}</span>
+                        <span className="flex shrink-0 items-center gap-3">
+                          <span className="h-1.5 w-24 overflow-hidden rounded-full bg-muted" aria-hidden>
+                            <span
+                              className="block h-full rounded-full bg-primary"
+                              style={{ width: `${row.maxPoints ? Math.round((row.points / row.maxPoints) * 100) : 0}%` }}
+                            />
+                          </span>
+                          <span className="w-12 text-right text-xs tabular-nums text-muted-foreground">
+                            {row.points} / {row.maxPoints}
+                          </span>
                         </span>
                       </div>
                       {row.reason && <p className="text-xs leading-relaxed text-muted-foreground">{row.reason}</p>}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+
+            {hasCompletedReport && selectedSession.report?.goalResults?.length ? (
+              <section className="mt-1">
+                <h3 className="mb-3 text-sm font-semibold tracking-tight text-foreground">Learner goals</h3>
+                <ul className="divide-y rounded-2xl border bg-card shadow-2xs">
+                  {selectedSession.report.goalResults.map((row) => (
+                    <li key={row.goal} className="flex flex-col gap-1 px-5 py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="min-w-0 text-xs sm:text-[13px] text-foreground">{row.goal}</span>
+                        <span
+                          className={cn(
+                            "shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium",
+                            row.status === "met" && "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400",
+                            row.status === "partly" && "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400",
+                            row.status === "not_met" && "bg-muted text-muted-foreground",
+                          )}
+                        >
+                          {row.status === "met" ? "Met" : row.status === "partly" ? "Partly" : "Not met"}
+                        </span>
+                      </div>
+                      {row.evidence && <p className="text-xs leading-relaxed text-muted-foreground">{row.evidence}</p>}
                     </li>
                   ))}
                 </ul>
