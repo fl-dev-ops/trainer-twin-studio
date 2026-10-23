@@ -37,6 +37,7 @@ export type ClientPersona = {
   background?: string;
   behaviours?: string[];
   opening_style?: string;
+  how_they_talk?: string;
   mannerisms?: {
     formality?: string;
     answer_length?: string;
@@ -97,6 +98,7 @@ export function getClientPersona(personaData: unknown): ClientPersona {
     background: text(data.background),
     behaviours: list(data.behaviours),
     opening_style: text(data.opening_style),
+    how_they_talk: text(data.how_they_talk),
     mannerisms: {
       formality: text(mannerisms.formality),
       answer_length: text(mannerisms.answer_length),
@@ -198,7 +200,8 @@ Never volunteer this. Reveal one piece at a time, and only when the agent asks a
 
   const talk = [
     characterLine ? `Character: ${characterLine}` : null,
-    roleplay.agent.how_they_talk ?? null,
+    // The role play's own wording wins; otherwise the client persona's default style.
+    roleplay.agent.how_they_talk ?? persona.how_they_talk ?? null,
     ...mannerisms,
     persona.signature_phrases?.length
       ? `Lines you come back to, in your own words and not every turn: ${persona.signature_phrases.map((p) => `"${p}"`).join(", ")}.`
