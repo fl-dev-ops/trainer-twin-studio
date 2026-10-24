@@ -29,8 +29,8 @@ export const MAX_LEARNER_GOALS = 5;
 const MAX_REACTIONS = 12;
 
 /**
- * How a role play is scored: named criteria whose points add up to 100. The
- * builder starts from one of these presets; the trainer can edit every row.
+ * How a role play is scored: named criteria worth any number of points (presets
+ * add up to 100). Reports scale the total to 0-100 so sessions stay comparable.
  */
 export const RUBRIC_TOTAL = 100;
 export const MAX_RUBRIC_CRITERIA = 8;
@@ -53,8 +53,7 @@ export function rubricPreset(value: string): RubricCriterion[] {
 export const rubricSchema = z.array(z.object({
   name: z.string().trim().min(1, "Name every rubric score").max(120),
   points: z.number().int().min(1, "Each score is worth at least 1 point").max(RUBRIC_TOTAL),
-})).min(1, "Add at least one rubric score").max(MAX_RUBRIC_CRITERIA, `${MAX_RUBRIC_CRITERIA} rubric scores at most`)
-  .refine((rows) => rows.reduce((sum, row) => sum + row.points, 0) === RUBRIC_TOTAL, `Rubric points must add up to ${RUBRIC_TOTAL}`);
+})).min(1, "Add at least one rubric score").max(MAX_RUBRIC_CRITERIA, `${MAX_RUBRIC_CRITERIA} rubric scores at most`);
 
 const line = z.string().trim().min(1).max(300);
 const paragraph = (label: string) => z.string().trim().min(1, `${label} is required`).max(4000);
@@ -264,6 +263,7 @@ export type ClientPersonaCard = {
   background?: string;
   behaviours: string[];
   howTheyTalk?: string;
+  difficulty?: Difficulty;
 };
 
 export function isClientPersonaData(data: unknown): boolean {
@@ -283,5 +283,6 @@ export function clientPersonaCard(slug: string, data: unknown): ClientPersonaCar
     background: str(record.background),
     behaviours: Array.isArray(record.behaviours) ? record.behaviours.filter((b): b is string => typeof b === "string") : [],
     howTheyTalk: str(record.how_they_talk),
+    difficulty: (["easy", "medium", "hard", "hardest"] as const).find((level) => level === str(record.difficulty)?.toLowerCase()),
   };
 }

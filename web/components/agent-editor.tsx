@@ -49,7 +49,7 @@ import {
   type InterviewConfig,
 } from "@/lib/interview-config-schema";
 import { useOrgType } from "@/components/org-type-provider";
-import { RoleplayEditor } from "@/components/roleplay-editor";
+import { RoleplayBuilder } from "@/components/roleplay-builder";
 import { scenarioKindFor, type ScenarioKind } from "@/lib/org-type";
 import type { ClientPersonaCard, RoleplayInput } from "@/lib/roleplay";
 
@@ -95,7 +95,7 @@ export function AgentEditor(props: AgentEditorProps) {
   const kind = orgType ? scenarioKindFor(orgType) : (props.kind ?? "twin");
 
   return kind === "roleplay" ? (
-    <RoleplayEditor
+    <RoleplayBuilder
       slug={props.slug}
       initial={props.roleplay ?? null}
       clientPersonas={props.clientPersonas ?? []}

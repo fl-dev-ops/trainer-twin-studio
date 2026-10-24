@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { GoalResult, SessionReport } from "@/lib/session-report";
+import { rubricTotals, type GoalResult, type SessionReport } from "@/lib/session-report";
 import { cn } from "@/lib/utils";
 
 const GOAL_LABEL: Record<GoalResult["status"], string> = { met: "Met", partly: "Partly", not_met: "Not met" };
@@ -33,7 +33,7 @@ export function SessionReportCards({ report }: { report: SessionReport }) {
         <Card>
           <CardHeader className="flex flex-row items-baseline justify-between gap-3">
             <CardTitle>Scoring rubric</CardTitle>
-            <p className="text-sm tabular-nums"><span className="text-lg font-semibold">{report.score ?? 0}</span> / 100</p>
+            <p className="text-sm tabular-nums"><span className="text-lg font-semibold">{rubricTotals(report.rubricScores).earned}</span> / {rubricTotals(report.rubricScores).max}</p>
           </CardHeader>
           <CardContent>
             <ul className="divide-y">

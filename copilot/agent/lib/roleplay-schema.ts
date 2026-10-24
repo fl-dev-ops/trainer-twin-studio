@@ -35,6 +35,5 @@ export const roleplayInputSchema = z.object({
     name: z.string().trim().min(1).max(120),
     points: z.number().int().min(1).max(100),
   })).min(1).max(8)
-    .refine((rows) => rows.reduce((sum, row) => sum + row.points, 0) === 100, "Rubric points must add up to 100")
-    .describe("Scoring criteria; points must add up to exactly 100."),
+    .describe("Scoring criteria with points per row; usually adding up to 100."),
 });

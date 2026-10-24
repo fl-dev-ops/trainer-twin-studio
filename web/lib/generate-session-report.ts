@@ -254,7 +254,7 @@ ${transcriptText}`;
       ...parsed,
       keyMoments: keyMomentsWithIds,
       ...(rubricScores
-        ? { rubricScores, score: rubricScores.reduce((sum, row) => sum + row.points, 0) }
+        ? { rubricScores, score: rubricPercent(rubricScores) }
         : {}),
       ...(goalResults ? { goalResults } : {}),
       generatedAt: new Date().toISOString(),
@@ -300,6 +300,13 @@ function snapshotRoleplay(snapshot: unknown): { rubric: RubricCriterion[]; learn
     stored.agent?.difficulty ? `Difficulty: ${stored.agent.difficulty}` : null,
   ].filter(Boolean).join("\n");
   return { rubric, learnerGoals: input?.learnerGoals ?? [], brief };
+}
+
+/** Rubric points earned as a 0-100 score, whatever the rubric's total. */
+function rubricPercent(rows: RubricScore[]): number {
+  const max = rows.reduce((sum, row) => sum + row.maxPoints, 0);
+  const earned = rows.reduce((sum, row) => sum + row.points, 0);
+  return max ? Math.round((earned / max) * 100) : 0;
 }
 
 /** One result per learner goal, in goal order; a missing or invalid entry reads as not met. */

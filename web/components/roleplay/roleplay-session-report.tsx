@@ -3,7 +3,7 @@ import { BackButton } from "@/components/roleplay/back-button";
 import { LearnerAvatar } from "@/components/roleplay/learner-avatar";
 import { SessionWhen } from "@/components/roleplay/session-when";
 import type { RoleplaySessionReportData } from "@/lib/roleplay-sessions";
-import type { GoalResult } from "@/lib/session-report";
+import { rubricTotals, type GoalResult } from "@/lib/session-report";
 import { cn } from "@/lib/utils";
 
 const GOAL_CHIP: Record<GoalResult["status"], { label: string; className: string }> = {
@@ -69,7 +69,7 @@ export function RoleplaySessionReport({ data }: { data: RoleplaySessionReportDat
         ) : null}
 
         {report?.rubricScores?.length ? (
-          <Card title="Scoring rubric" aside={<p className="text-sm text-muted-foreground tabular-nums"><b className="text-lg font-semibold text-foreground">{report.score ?? 0}</b> / 100</p>}>
+          <Card title="Scoring rubric" aside={<p className="text-sm text-muted-foreground tabular-nums"><b className="text-lg font-semibold text-foreground">{rubricTotals(report.rubricScores).earned}</b> / {rubricTotals(report.rubricScores).max}</p>}>
             <ul className="divide-y">
               {report.rubricScores.map((row) => (
                 <li key={row.criterion} className="flex items-center gap-4 py-3 text-sm first:pt-0 last:pb-0" title={row.reason || undefined}>

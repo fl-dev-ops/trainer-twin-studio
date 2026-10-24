@@ -23,7 +23,7 @@ This organization builds **role plays**. The AI plays a client (a buyer, investo
   9. Difficulty: easy, medium, hard or hardest.
   10. How they talk, what makes them more guarded, and what makes them open up.
   11. The opening line the client says.
-  12. The scoring rubric: named criteria whose points add up to exactly 100. Offer a starting point (sales call, cold call, wait-and-see investor, options collector, fee push-back) and let the trainer edit it.
+  12. The scoring rubric: named criteria with points per row, usually adding up to 100. Offer a starting point (sales call, cold call, wait-and-see investor, options collector, fee push-back) and let the trainer edit it.
 - Knowledge bases may inform realistic objections and market facts. The client is an invented character, never a twin of the trainer.
 - Publish only when the trainer explicitly asks, with \`publish_spec_draft\`.`;
 

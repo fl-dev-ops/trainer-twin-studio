@@ -134,6 +134,14 @@ export function sessionReportJsonSchema(options: { rubric: boolean; goals: boole
   };
 }
 
+/** Rubric points earned and available, e.g. 74 of 100. */
+export function rubricTotals(rows: RubricScore[]): { earned: number; max: number } {
+  return {
+    earned: rows.reduce((sum, row) => sum + row.points, 0),
+    max: rows.reduce((sum, row) => sum + row.maxPoints, 0),
+  };
+}
+
 export function isSessionReport(value: unknown): value is SessionReport {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;

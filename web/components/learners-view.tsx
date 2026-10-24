@@ -31,7 +31,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { cn } from "@/lib/utils";
-import type { KeyMoment, SessionReport, SessionReportStatus } from "@/lib/session-report";
+import { rubricTotals, type KeyMoment, type SessionReport, type SessionReportStatus } from "@/lib/session-report";
 
 export type LearnerSessionItem = {
   id: string;
@@ -627,7 +627,7 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
                 <div className="mb-3 flex items-baseline justify-between gap-3">
                   <h3 className="text-sm font-semibold tracking-tight text-foreground">Scoring rubric</h3>
                   <p className="text-sm font-semibold tabular-nums text-foreground">
-                    {selectedSession.report.score ?? 0} / 100
+                    {rubricTotals(selectedSession.report.rubricScores).earned} / {rubricTotals(selectedSession.report.rubricScores).max}
                   </p>
                 </div>
                 <ul className="divide-y rounded-2xl border bg-card shadow-2xs">
