@@ -6,6 +6,8 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
 import { DisplayForOrg } from "@/components/display-for-org";
+import { useOrgType } from "@/components/org-type-provider";
+import { RoleplaySidebar } from "@/components/roleplay-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
   SidebarInset,
@@ -26,9 +28,20 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [copilotMounted, setCopilotMounted] = useState(false);
+  const orgType = useOrgType();
 
   if (FULLSCREEN.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     return children;
+  }
+
+  // Sales orgs: the V4 role-play rail and a plain page panel, no header bar or Copilot.
+  if (orgType === "SALES") {
+    return (
+      <div className="flex h-svh min-h-0 overflow-hidden bg-sidebar">
+        <RoleplaySidebar />
+        <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-l-2xl bg-card">{children}</div>
+      </div>
+    );
   }
 
   const copilotPage = pathname === "/";
