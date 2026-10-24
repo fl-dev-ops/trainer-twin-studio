@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useSyncExternalStore, type ReactNode } from "react";
+import { useState, useSyncExternalStore, type ReactElement, type ReactNode } from "react";
 import { useTheme } from "next-themes";
 import { History, LogOut, PanelLeft, Settings, UserCheck, UserCog, Users } from "lucide-react";
 import { toast } from "sonner";
@@ -13,6 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { authClient } from "@/lib/auth-client";
 import { BASE_DOMAIN } from "@/lib/base-domain";
 import { cn } from "@/lib/utils";
@@ -95,7 +96,7 @@ export function RoleplaySidebar() {
         <RailThemeToggle collapsed={collapsed} />
       </div>
 
-      {collapsed ? <hr className="mx-auto my-4 w-8 border-sidebar-border" /> : null}
+      {collapsed ? <hr className="mx-auto my-4 w-8 border-foreground/10" /> : null}
 
       <nav aria-label="Sections" className={cn("flex flex-col gap-1", collapsed ? "items-center" : "mt-5")}>
         {!collapsed ? (
@@ -142,19 +143,17 @@ function RailLink({ href, label, icon, active, collapsed }: {
   );
 }
 
-/** Tooltip shown beside an icon while the rail is collapsed. */
-function RailTip({ label, children }: { label?: string; children: ReactNode }) {
-  if (!label) return <>{children}</>;
+/** Tooltip shown beside an icon while the rail is collapsed (white pill, no arrow, as in V4). */
+function RailTip({ label, children }: { label?: string; children: ReactElement }) {
+  if (!label) return children;
   return (
-    <span className="group/tip relative inline-flex">
-      {children}
-      <span
-        role="tooltip"
-        className="pointer-events-none absolute top-1/2 left-full z-50 ml-2 -translate-y-1/2 rounded-md border bg-popover px-2 py-1 text-xs whitespace-nowrap text-popover-foreground opacity-0 shadow-sm transition-opacity group-hover/tip:opacity-100 group-focus-within/tip:opacity-100"
-      >
+    <Tooltip>
+      <TooltipTrigger render={children} />
+      <TooltipContent side="right" sideOffset={8}
+        className="border bg-popover text-popover-foreground shadow-sm [&_[data-side]]:hidden">
         {label}
-      </span>
-    </span>
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -209,9 +208,9 @@ function RailUser({ collapsed }: { collapsed: boolean }) {
 
   return (
     <DropdownMenu>
-      <RailTip label={collapsed ? user.name : undefined}>
-        <DropdownMenuTrigger
+      <DropdownMenuTrigger
           aria-label={collapsed ? user.name : undefined}
+          title={collapsed ? user.name : undefined}
           className={cn(
             "flex items-center gap-3 rounded-xl text-left text-sm",
             collapsed ? "size-10 justify-center rounded-full" : "w-full bg-card p-2.5 shadow-xs hover:bg-card/80",
@@ -219,8 +218,7 @@ function RailUser({ collapsed }: { collapsed: boolean }) {
         >
           {photo}
           {collapsed ? null : <span className="min-w-0 truncate font-medium">{user.name}</span>}
-        </DropdownMenuTrigger>
-      </RailTip>
+      </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-56">
         <DropdownMenuItem render={<Link href="/profile" />}>
           <Settings /> Settings

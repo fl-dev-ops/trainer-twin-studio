@@ -23,6 +23,7 @@ import { seedCopilot } from "@/lib/copilot-handoff";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PersonaBaselinePanel } from "@/components/persona-baseline-panel";
+import { DisplayForOrg } from "@/components/display-for-org";
 import { useOrgCopy } from "@/components/org-type-provider";
 import { ScenarioSectionNav } from "@/components/scenario-section-nav";
 import type { PersonaBaseline } from "@/lib/persona-baseline";
@@ -368,14 +369,15 @@ export function SpecResourceIndex({ type, specs, cards }: { type: ResourceType; 
             cards={cards}
             onNew={() => setCreateOpen(true)}
             actions={
-              <>
+              // Fidelity and the Copilot build trainer twins; sales orgs only see role plays.
+              <DisplayForOrg org="technical">
                 <Button variant="ghost" className="h-10 rounded-full" render={<Link href="/agents/fidelity" />} nativeButton={false}>
                   Fidelity
                 </Button>
                 <Button variant="ghost" className="h-10 rounded-full" onClick={designWithCopilot}>
                   <Sparkles data-icon="inline-start" /> Design with Copilot
                 </Button>
-              </>
+              </DisplayForOrg>
             }
           />
         ) : (
