@@ -32,6 +32,7 @@ export const ORG_COPY = {
     newScenario: "New role play",
     exampleName: "Wait-and-see investor",
     trainer: "Sales trainer",
+    studio: "Role play studio",
   },
   technical: {
     scenario: "Scenario",
@@ -41,6 +42,7 @@ export const ORG_COPY = {
     newScenario: "New scenario",
     exampleName: "React mock interview",
     trainer: "Interview trainer",
+    studio: "Digital twin studio",
   },
 } as const satisfies Record<OrgKey, Record<string, string>>;
 

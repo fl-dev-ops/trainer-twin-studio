@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useOrgCopy } from "@/components/org-type-provider";
+import { useOrgCopy, useOrgType } from "@/components/org-type-provider";
 import { cn } from "@/lib/utils";
 
 export function ScenarioSectionNav({ active }: { active: "scenarios" | "fidelity" }) {
   const copy = useOrgCopy();
+  // Fidelity compares the trainer's twin with their recordings; sales orgs have no twin.
+  if (useOrgType() === "SALES") return null;
   return (
     <nav aria-label={`${copy.scenario} sections`} className="flex gap-6 border-b">
       {([

@@ -11,7 +11,8 @@ import {
   UserRound,
   Users,
 } from "lucide-react";
-import { useOrgCopy } from "@/components/org-type-provider";
+import { useOrgCopy, useOrgType } from "@/components/org-type-provider";
+import { ORG_KEY, type OrgKey } from "@/lib/org-type";
 import { SidebarAccountMenu } from "@/components/sidebar-account-menu";
 import {
   Sidebar,
@@ -42,7 +43,8 @@ const NAV = [
     label: "Library",
     items: [
       { title: "Personas", href: "/personas", icon: UserRound },
-      { title: "Voices", href: "/voice", icon: AudioLines },
+      // Voice cloning is for the trainer's own twin; sales orgs pick voices per persona.
+      { title: "Voices", href: "/voice", icon: AudioLines, orgs: ["technical"] as OrgKey[] },
       { title: "Knowledge", href: "/knowledge", icon: BookOpen },
     ],
   },
@@ -55,6 +57,8 @@ const NAV = [
 export function AppSidebar() {
   const pathname = usePathname();
   const copy = useOrgCopy();
+  const orgType = useOrgType();
+  const orgKey = orgType ? ORG_KEY[orgType] : null;
 
   return (
     <Sidebar variant="inset" collapsible="icon">
@@ -67,7 +71,7 @@ export function AppSidebar() {
               </span>
               <span className="flex flex-col group-data-[collapsible=icon]:hidden">
                 <span className="text-base leading-4 font-semibold tracking-[-0.02em]">TrainerTwin</span>
-                <span className="text-xs text-muted-foreground">Digital twin studio</span>
+                <span className="text-xs text-muted-foreground">{copy.studio}</span>
               </span>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -79,7 +83,7 @@ export function AppSidebar() {
             <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu className="gap-1">
-                {group.items.map((item) => {
+                {group.items.filter((item) => !("orgs" in item) || !item.orgs || (orgKey !== null && item.orgs.includes(orgKey))).map((item) => {
                   const title = "copyKey" in item ? copy[item.copyKey] : item.title;
                   const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
                   return (

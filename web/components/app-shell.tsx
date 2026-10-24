@@ -5,6 +5,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
+import { DisplayForOrg } from "@/components/display-for-org";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
   SidebarInset,
@@ -47,14 +48,18 @@ export function AppShell({ children }: { children: ReactNode }) {
         {!copilotPage && (
           <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3 sm:px-4">
             <SidebarTrigger />
-            <SidebarTrigger
-              side="right"
-              className="ml-auto w-auto px-3"
-              aria-controls="copilot-panel"
-              onClick={() => setCopilotMounted(true)}
-            >
-              Copilot
-            </SidebarTrigger>
+            <span className="ml-auto" />
+            {/* The Copilot builds trainer-twin scenarios; sales orgs see role plays only. */}
+            <DisplayForOrg org="technical">
+              <SidebarTrigger
+                side="right"
+                className="w-auto px-3"
+                aria-controls="copilot-panel"
+                onClick={() => setCopilotMounted(true)}
+              >
+                Copilot
+              </SidebarTrigger>
+            </DisplayForOrg>
             <ThemeToggle />
           </header>
         )}

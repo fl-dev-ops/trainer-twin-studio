@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, UserRoundCog } from "lucide-react";
+import { Pencil, Plus, UserRoundCog } from "lucide-react";
 import { VoicePlayButton } from "@/components/client-persona/voice-play-button";
 import { Button } from "@/components/ui/button";
 import { formFromPersonaData, speakingTags } from "@/lib/client-persona";
@@ -51,11 +51,13 @@ export function PersonaLibrary({ personas, voices }: { personas: LibraryPersona[
             const avatar = (data as { avatar?: unknown })?.avatar;
             const voice = voices.find((item) => item.id === form.voiceId);
             return (
-              <Link
+              <article
                 key={slug}
-                href={`/personas/${encodeURIComponent(slug)}`}
-                className="relative flex flex-col gap-4 rounded-2xl border bg-card p-5 shadow-2xs transition-shadow hover:shadow-sm focus-visible:outline-2 focus-visible:outline-ring"
+                className="relative flex flex-col gap-4 rounded-2xl border bg-card p-5 shadow-2xs transition-shadow hover:shadow-sm"
               >
+                {/* The whole card opens the editor; the voice and edit buttons sit above this link. */}
+                <Link href={`/personas/${encodeURIComponent(slug)}`} aria-label={`Open ${form.name}`}
+                  className="absolute inset-0 rounded-2xl focus-visible:outline-2 focus-visible:outline-ring" />
                 <span className="absolute top-4 right-4 rounded-full border bg-background px-3 py-1 text-xs">{form.role}</span>
                 {typeof avatar === "string" && avatar ? (
                   // eslint-disable-next-line @next/next/no-img-element -- persona photos are static or uploaded URLs
@@ -69,10 +71,14 @@ export function PersonaLibrary({ personas, voices }: { personas: LibraryPersona[
                 {voice ? (
                   <div className="flex flex-col gap-1.5">
                     <Label>Voice</Label>
-                    <span className="flex items-center gap-1.5 text-[15px]">{voice.name}<VoicePlayButton voiceId={voice.id} name={voice.name} /></span>
+                    <span className="flex items-center gap-1.5 text-[15px]">{voice.name}<VoicePlayButton voiceId={voice.id} name={voice.name} className="relative z-10" /></span>
                   </div>
                 ) : null}
-              </Link>
+                <Button variant="ghost" size="icon-sm" className="absolute right-4 bottom-4 z-10" aria-label={`Edit ${form.name}`} title="Edit"
+                  nativeButton={false} render={<Link href={`/personas/${encodeURIComponent(slug)}`} />}>
+                  <Pencil />
+                </Button>
+              </article>
             );
           })}
         </div>
