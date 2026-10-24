@@ -1,6 +1,8 @@
 import { History } from "lucide-react";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
+import { RoleplaySessions } from "@/components/roleplay/roleplay-sessions";
+import { listRoleplaySessions } from "@/lib/roleplay-sessions";
 import { getTrainerOrg } from "@/lib/org";
 import { orgCopy } from "@/lib/org-type";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +43,7 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
 export default async function SessionsPage() {
   const trainer = await getTrainerOrg();
   if (!trainer) redirect("/auth/no-org");
+  if (trainer.type === "SALES") return <RoleplaySessions rows={await listRoleplaySessions(trainer.id)} />;
   const copy = orgCopy(trainer.type);
   const sessions = await db.interviewSession.findMany({
     where: { orgId: trainer.id, deletedAt: null },

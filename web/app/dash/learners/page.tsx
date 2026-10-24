@@ -2,7 +2,9 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { RoleplayUsers } from "@/components/roleplay/roleplay-users";
 import { getTrainerOrg } from "@/lib/org";
+import { listRoleplayUsers } from "@/lib/roleplay-sessions";
 import { LearnersView, type LearnerData, type LearnerSessionItem } from "@/components/learners-view";
 import { isSessionReport, normalizeSessionReportStatus, type SessionReport } from "@/lib/session-report";
 
@@ -51,6 +53,7 @@ export default async function LearnersPage() {
 
   const trainer = await getTrainerOrg();
   if (!trainer) redirect("/auth/no-org");
+  if (trainer.type === "SALES") return <RoleplayUsers rows={await listRoleplayUsers(trainer.id)} />;
 
   // Fetch all completed sessions for this organization
   const dbSessions = await db.interviewSession.findMany({

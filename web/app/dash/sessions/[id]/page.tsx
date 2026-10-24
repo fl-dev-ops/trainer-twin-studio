@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/card";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { RoleplaySessionReport } from "@/components/roleplay/roleplay-session-report";
+import { readRoleplaySession } from "@/lib/roleplay-sessions";
 import { getTrainerOrg } from "@/lib/org";
 import { orgCopy } from "@/lib/org-type";
 import { getStoredRoleplay } from "@/lib/roleplay";
@@ -35,6 +37,10 @@ export default async function SessionDetailPage({
 
   const trainer = await getTrainerOrg();
   if (!trainer) redirect("/auth/no-org");
+  if (trainer.type === "SALES") {
+    const data = await readRoleplaySession(trainer.id, id);
+    if (data) return <RoleplaySessionReport data={data} />;
+  }
 
   const row = await db.interviewSession.findFirst({
     where: { id, orgId: trainer.id, deletedAt: null },
