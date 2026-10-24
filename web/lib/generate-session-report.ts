@@ -281,7 +281,9 @@ ${transcriptText}`;
 
 /** The role play pinned in the session's compiled snapshot, or null for interview sessions. */
 function snapshotRoleplay(snapshot: unknown): { rubric: RubricCriterion[]; learnerGoals: string[]; brief: string } | null {
-  const agent = snapshot && typeof snapshot === "object" ? (snapshot as { agent?: unknown }).agent : undefined;
+  // The compiled snapshot stores the agent row as { id, slug, version, data }; the spec is in data.
+  const row = snapshot && typeof snapshot === "object" ? (snapshot as { agent?: { data?: unknown } }).agent : undefined;
+  const agent = row && typeof row === "object" && "data" in row ? row.data : row;
   const stored = getStoredRoleplay(agent);
   if (!stored) return null;
   const input = roleplayInputFromSpec(agent as Record<string, unknown>);
