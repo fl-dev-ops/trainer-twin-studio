@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { MoreVertical, Pencil, Play, SquareArrowOutUpRight } from "lucide-react";
+import { MoreVertical, Pencil, Play, SlidersHorizontal, SquareArrowOutUpRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -94,6 +94,12 @@ export function ScenarioCard({ scenario }: { scenario: ScenarioCardData }) {
               <Pencil />
               Configure
             </DropdownMenuItem>
+            {scenario.status !== "draft" ? (
+              <DropdownMenuItem render={<Link href={`${href}/calibrate`} />}>
+                <SlidersHorizontal />
+                Calibrate
+              </DropdownMenuItem>
+            ) : null}
             {scenario.status !== "draft" ? (
               <DropdownMenuItem render={<Link href={`/talk?agent=${encodeURIComponent(scenario.slug)}`} />}>
                 <Play />
