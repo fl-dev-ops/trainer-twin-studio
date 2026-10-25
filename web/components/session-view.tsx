@@ -153,6 +153,8 @@ export function SessionView({
   const contextInput = useRef<HTMLInputElement>(null);
 
   const [launched, setLaunched] = useState(false);
+  /** Seconds left on the "Get ready" screen before the session starts; null when not counting down. */
+  const [countdown, setCountdown] = useState<number | null>(null);
   const [prejoinComplete, setPrejoinComplete] = useState(!sessionCode);
   const [prejoinMedia, setPrejoinMedia] = useState<PreJoinMediaSettings>({
     microphoneEnabled: true,
@@ -236,6 +238,7 @@ export function SessionView({
     setConnection(null);
     setConnected(false);
     setLaunched(false);
+    setCountdown(null);
     setAgentInRoom(false);
     setError("");
     setSaveFailed(false);
@@ -310,16 +313,26 @@ export function SessionView({
   const documentLabel = contextUpload?.label || "Documents";
 
   useEffect(() => {
-    if (!autoStart || !prejoinComplete || ended || !agent || !persona || launched) return;
+    if (!autoStart || !prejoinComplete || ended || !agent || !persona || launched || countdown !== null) return;
     if (isContextRequired && contextIds.length === 0) return;
     // Deliberately NOT waiting on the intro download: a ~100 MB clip would otherwise
     // sit between "Join now" and the session. ScenarioIntro streams the presigned
     // URL (S3 serves 206 range requests) and the prefetch blob is used if it lands first.
-    void Promise.resolve().then(() => {
+    void Promise.resolve().then(() => setCountdown(GET_READY_SECONDS));
+  }, [autoStart, prejoinComplete, ended, agent, persona, launched, countdown, isContextRequired, contextIds]);
+
+  // "Get ready": a short pause so the learner isn't talked at the moment the page opens.
+  // The session is only requested when it ends, so the trainer can't start speaking underneath it.
+  useEffect(() => {
+    if (countdown === null) return;
+    const id = setTimeout(() => {
+      if (countdown > 1) return setCountdown(countdown - 1);
+      setCountdown(null);
       setLaunched(true);
       void handleStartSession();
-    });
-  }, [autoStart, prejoinComplete, ended, agent, persona, launched, isContextRequired, contextIds, handleStartSession]);
+    }, 1000);
+    return () => clearTimeout(id);
+  }, [countdown, handleStartSession]);
 
   useEffect(() => {
     if (!connection || connected) return;
@@ -949,6 +962,31 @@ export function SessionView({
     );
   }
 
+  if (countdown !== null) {
+    return (
+      <div className="flex h-dvh w-dvw flex-col overflow-hidden bg-panel text-foreground">
+        <SessionHeader title={title} linkHome={!sessionCode} />
+        <main className="flex min-h-0 flex-1 px-4 pb-20 sm:px-6">
+          <div className={STAGE}>
+            <div aria-hidden className={cn("pointer-events-none absolute inset-0", STAGE_WASH)} />
+            <div role="status" className="relative flex size-full flex-col items-center justify-center gap-5 p-6 text-center text-neutral-900">
+              <span className="relative grid size-24 place-items-center rounded-full bg-white/80 shadow-[0_2px_4px_rgba(30,28,25,0.07),0_8px_20px_rgba(30,28,25,0.11)]">
+                <span aria-hidden className="absolute inset-0 animate-spin rounded-full border-2 border-neutral-900/10 border-t-neutral-900/60 motion-reduce:animate-none" />
+                <span className="text-4xl font-semibold tabular-nums">{countdown}</span>
+              </span>
+              <div className="flex max-w-sm flex-col gap-1.5">
+                <h2 className="text-xl font-semibold tracking-[-0.015em]">Get ready</h2>
+                <p className="text-sm text-neutral-600">
+                  {trainerName} will start the conversation in a moment. Find a quiet spot and check your mic.
+                </p>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   if (sessionCode && prejoinComplete && !launched && (!isContextRequired || contextIds.length > 0)) {
     return (
       <div className="grid min-h-svh place-items-center bg-panel text-foreground">
@@ -1077,10 +1115,7 @@ export function SessionView({
                 )}
 
                 <Button
-                  onClick={() => {
-                    setLaunched(true);
-                    void handleStartSession();
-                  }}
+                  onClick={() => setCountdown(GET_READY_SECONDS)}
                   disabled={!persona || !agent || (isContextRequired && contextIds.length === 0)}
                   className="mt-2 h-11 w-full rounded-full text-[15px]"
                 >
@@ -1146,8 +1181,8 @@ export function SessionView({
             )}
 
             {/* Stage: the prototype's pastel wash, with the tiles centred or a workspace beside them. */}
-            <div className="relative flex min-h-0 flex-1 overflow-hidden rounded-3xl bg-muted/60">
-              <div aria-hidden className={cn("pointer-events-none absolute inset-0 dark:opacity-20", STAGE_WASH)} />
+            <div className={STAGE}>
+              <div aria-hidden className={cn("pointer-events-none absolute inset-0", STAGE_WASH)} />
               <div
                 className={cn(
                   "relative flex min-h-0 w-full",
@@ -1349,6 +1384,9 @@ export function SessionView({
 }
 
 const RAISED = "shadow-[0_0_0_1px_var(--border),0_4px_8px_rgba(30,28,25,0.05),0_16px_40px_rgba(30,28,25,0.1)] ring-0";
+const GET_READY_SECONDS = 3;
+/** The stage card: the prototype's light wash, kept light in both themes like the role-play cards. */
+const STAGE = "relative flex min-h-0 flex-1 overflow-hidden rounded-3xl bg-[#f3f3f4]";
 const STAGE_WASH =
   "bg-[radial-gradient(ellipse_60%_70%_at_0%_100%,#fcd5bf_0%,transparent_70%),radial-gradient(ellipse_55%_65%_at_55%_105%,#a6c1f4_0%,transparent_70%),radial-gradient(ellipse_55%_75%_at_100%_100%,#94dcae_0%,transparent_70%)]";
 
