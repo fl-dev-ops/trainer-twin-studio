@@ -16,8 +16,10 @@ function studioOrganization(): AuthFn<Request> {
     const expected = Buffer.from(secret);
     if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) return null;
 
+    // userId is set by the web proxy (same request that carries the secret); used for usage attribution.
+    const userId = request.headers.get("x-trainertwin-user-id")?.trim() ?? "";
     return {
-      attributes: { orgId },
+      attributes: { orgId, ...(userId ? { userId } : {}) },
       authenticator: "studio",
       principalId: orgId,
       principalType: "organization",

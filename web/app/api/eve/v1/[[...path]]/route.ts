@@ -19,6 +19,9 @@ async function proxy(request: Request, { params }: Params) {
   const headers = new Headers(request.headers);
   // The authenticated organization becomes Eve's durable session principal.
   headers.set("authorization", `Basic ${Buffer.from(`${org.id}:${secret}`).toString("base64")}`);
+  // Signed-in trainer for usage attribution. set() overwrites any client-sent value; copilot only
+  // trusts it alongside the Basic secret above.
+  headers.set("x-trainertwin-user-id", org.user.id);
   for (const name of ["cookie", "host", "content-length", "accept-encoding"]) headers.delete(name);
 
   try {

@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { after } from "next/server";
 import { callOpenRouter } from "@/lib/runtime/openai";
+import type { UsageMeter } from "@/lib/usage";
 import { documentAnchor } from "@/lib/runtime/claims";
 import { locateClaimAnchors } from "@/lib/pdf-claim-anchors";
 
@@ -87,14 +88,17 @@ type CandidateLine = {
   text: string;
 };
 
-async function classifyLines(candidates: CandidateLine[]): Promise<Array<{ id: string; kind: string; metric?: string }>> {
+async function classifyLines(
+  candidates: CandidateLine[],
+  meter?: UsageMeter,
+): Promise<Array<{ id: string; kind: string; metric?: string }>> {
   const inventory = candidates
     .map((candidate) => `${candidate.id}: ${candidate.text}`)
     .join("\n");
   const raw = await callOpenRouter("claim_extraction", [
     { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
     { role: "user", content: `Classify the resume lines below. Return ONLY the picks JSON.\n\n${inventory.slice(0, 50_000)}` },
-  ], true, undefined, 4_000);
+  ], true, undefined, 4_000, meter);
   const parsed = JSON.parse(raw) as { picks?: Array<{ id?: unknown; kind?: unknown; metric?: unknown }> };
   return (parsed.picks ?? []).filter(
     (pick): pick is { id: string; kind: string; metric?: string } =>
@@ -133,6 +137,8 @@ export async function extractResumeClaims(documentId: string): Promise<number> {
       mimeType: true,
       content: true,
       extractedText: true,
+      orgId: true,
+      ownerUserId: true,
       chunks: { orderBy: { chunkIndex: "asc" }, select: { chunkIndex: true, heading: true, text: true } },
     },
   });
@@ -154,7 +160,12 @@ export async function extractResumeClaims(documentId: string): Promise<number> {
   }
   if (!candidates.length) return 0;
 
-  const picks = await classifyLines(candidates);
+  const picks = await classifyLines(
+    candidates,
+    doc.orgId
+      ? { source: "resume_claims", orgId: doc.orgId, ...(doc.ownerUserId ? { userId: doc.ownerUserId } : {}) }
+      : undefined,
+  );
   const byId = new Map(candidates.map((candidate) => [candidate.id, candidate]));
   const chosen: Array<{ section: string; kind: string; text: string; metric: string | null }> = [];
   const seenIds = new Set<string>();
@@ -280,6 +291,7 @@ const ROUND_OBJECTIVES: Record<number, string> = {
 export type ClaimSelectionContext = {
   round: 1 | 2 | 3;
   usedClaimIds: string[];
+  meter?: UsageMeter;
 };
 
 /**
@@ -317,7 +329,7 @@ ${summaries}
 
 Select exactly one claim id that best advances the round objective among the never-questioned claims.`,
       },
-    ], true, undefined, 200);
+    ], true, undefined, 200, context.meter);
     const parsed = JSON.parse(raw) as { claim_id?: string };
     const picked = typeof parsed.claim_id === "string" ? parsed.claim_id : null;
     if (!picked || used.has(picked) || !claims.some((claim) => claim.id === picked)) return null;

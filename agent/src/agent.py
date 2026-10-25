@@ -21,6 +21,7 @@ from livekit.plugins import noise_cancellation
 from recording import post_completion_webhook
 from screen_feedback import ScreenFeedbackRuntime
 from session import build_agent_session
+from usage import UsageReporter
 
 load_dotenv(override=True)
 
@@ -453,6 +454,25 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         "session": session,
     }
 
+    # Live usage: STT/TTS seconds + conversation time, posted every ~10s (LLM tokens come from chat).
+    usage_secret = os.getenv("COPILOT_SERVICE_SECRET", "").strip()
+    usage: UsageReporter | None = None
+    if usage_secret:
+        usage = UsageReporter(
+            session_id=session_id,
+            stream_id=ctx.job.id,
+            url=f"{WEB_URL}/api/internal/usage",
+            secret=usage_secret,
+        )
+        session.on("session_usage_updated", lambda ev: usage.on_session_usage(ev.usage))
+        ctx.room.on("participant_connected", lambda _p: usage.participants_changed(ctx.room))
+        ctx.room.on("participant_disconnected", lambda _p: usage.participants_changed(ctx.room))
+        usage.participants_changed(ctx.room)
+        usage.start()
+        _sessions[ctx.room.name]["usage"] = usage
+    else:
+        logger.warning("COPILOT_SERVICE_SECRET missing; usage reporting disabled for %s", session_id)
+
     agent = TrainerAgent(
         tools=[],
         room_name=ctx.room.name,
@@ -466,6 +486,7 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         room=ctx.room,
         participant_identity=participant_identity,
         note_sink=agent.inject_screen_note,
+        usage_sink=usage.add_llm_usage if usage is not None else None,
     )
     _sessions[ctx.room.name]["screen_feedback"] = screen_feedback
 
@@ -528,6 +549,13 @@ async def on_session_end(ctx: agents.JobContext) -> None:
 
     transcript = []
     session_obj = state.get("session")
+
+    usage = state.get("usage")
+    if usage is not None:
+        try:
+            await asyncio.wait_for(usage.close(session_obj.usage if session_obj is not None else None), timeout=6)
+        except Exception as exc:
+            logger.warning("Final usage flush failed room=%s error=%s", ctx.room.name, exc)
     if session_obj is not None:
         for item in session_obj.history.items:
             if item.type == "message" and item.role in ("user", "assistant"):

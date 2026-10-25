@@ -29,11 +29,12 @@ class ScreenFeedbackRuntime:
         room: rtc.Room,
         participant_identity: str,
         note_sink: Callable[[str], Awaitable[None]],
+        usage_sink: Callable[..., None] | None = None,
     ) -> None:
         self._room = room
         self._participant_identity = participant_identity
         self._note_sink = note_sink
-        self._analyzer = ScreenFeedbackAnalyzer()
+        self._analyzer = ScreenFeedbackAnalyzer(usage_sink=usage_sink)
         self._session: AgentSession | None = None
         self._question: dict[str, str] | None = None
         self._surface_visible = False

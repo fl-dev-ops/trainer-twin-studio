@@ -20,8 +20,8 @@ from screen_feedback.vision import ScreenVisionClient
 
 
 class ScreenFeedbackAnalyzer:
-    def __init__(self) -> None:
-        self._vision = ScreenVisionClient()
+    def __init__(self, usage_sink=None) -> None:
+        self._vision = ScreenVisionClient(usage_sink=usage_sink)
 
     def trigger(
         self,

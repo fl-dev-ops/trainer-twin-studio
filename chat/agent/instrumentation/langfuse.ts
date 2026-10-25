@@ -50,11 +50,15 @@ export const trainerTwinContext: SpanProcessor = {
 };
 
 export default otelIntegration({
+  // Also read by ./usage.ts (model.call.started.runtimeContext) to attribute token usage.
   runtimeContext(input) {
-    const sessionId = input.session.auth.current?.attributes.sessionId;
-    return typeof sessionId === "string"
-      ? { "trainertwin.session.id": sessionId }
-      : undefined;
+    const attributes = input.session.auth.current?.attributes ?? {};
+    const sessionId = attributes.sessionId;
+    if (typeof sessionId !== "string") return undefined;
+    return {
+      "trainertwin.session.id": sessionId,
+      ...(typeof attributes.orgId === "string" ? { "trainertwin.org.id": attributes.orgId } : {}),
+    };
   },
   spanProcessors: [
     trainerTwinContext,

@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 import os
 import time
+from collections.abc import Callable
+from typing import Any
 
 from livekit.agents import ChatContext, llm
 from livekit.plugins import openai
@@ -15,10 +17,11 @@ logger = logging.getLogger(__name__)
 
 
 class ScreenVisionClient:
-    def __init__(self) -> None:
+    def __init__(self, usage_sink: Callable[[str, str, Any], None] | None = None) -> None:
         model = os.getenv("SCREEN_VISION_MODEL", "openai/gpt-5.5").strip()
         self._llm = openai.LLM.with_openrouter(model=model, parallel_tool_calls=True)
         self._model = model
+        self._usage_sink = usage_sink  # (provider, model, CompletionUsage) -> None
 
     async def analyze(
         self,
@@ -61,6 +64,8 @@ class ScreenVisionClient:
                 chat_ctx=context,
                 response_format=ScreenFeedbackDecision,
             ).collect()
+            if self._usage_sink is not None and response.usage is not None:
+                self._usage_sink("openrouter", self._model, response.usage)
             decision = ScreenFeedbackDecision.model_validate_json(response.text)
         except Exception as exc:
             logger.exception(

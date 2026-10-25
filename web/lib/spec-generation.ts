@@ -4,6 +4,7 @@ import yaml from "js-yaml";
 import { specDraftBundleSchema, type SpecDraftBundle } from "@/lib/spec-draft-schema";
 import type { InterviewConfig } from "@/lib/interview-config-schema";
 import { applyLearnerUpload } from "@/lib/context-upload";
+import { chatCompletionItems, gatewayProvider, meterUsage, type UsageMeter } from "@/lib/usage";
 
 const AI_GATEWAY_BASE_URL = (
   process.env.AI_GATEWAY_BASE_URL ??
@@ -13,6 +14,8 @@ const AI_GATEWAY_BASE_URL = (
 const MODEL = process.env.SPEC_GENERATION_MODEL ?? "google/gemini-2.5-flash";
 
 export type GenerationInput = {
+  /** Who pays for the generation call(s). */
+  meter?: UsageMeter;
   slug: string;
   instruction: string;
   name: string;
@@ -306,7 +309,7 @@ async function referenceExample(): Promise<string> {
   }
 }
 
-async function callModel(messages: { role: string; content: string }[]): Promise<unknown> {
+async function callModel(messages: { role: string; content: string }[], meter?: UsageMeter): Promise<unknown> {
   const key =
     process.env.AI_GATEWAY_API_KEY ??
     process.env.VERCEL_OIDC_TOKEN ??
@@ -327,6 +330,7 @@ async function callModel(messages: { role: string; content: string }[]): Promise
     throw new Error(`Spec generation request failed (${res.status}): ${body.slice(0, 300)}`);
   }
   const data = await res.json();
+  await meterUsage(meter, data?.id ? `gen:${data.id}` : undefined, chatCompletionItems(gatewayProvider(AI_GATEWAY_BASE_URL), MODEL, data?.usage));
   const content: string | undefined = data?.choices?.[0]?.message?.content;
   if (typeof content !== "string") throw new Error("Spec generation returned no content");
   return JSON.parse(content);
@@ -363,7 +367,7 @@ export async function generateSpecBundle(input: GenerationInput): Promise<SpecDr
   for (let attempt = 0; attempt < 2; attempt++) {
     let parsed: unknown;
     try {
-      parsed = await callModel(messages);
+      parsed = await callModel(messages, input.meter);
     } catch (error) {
       lastError = error;
       continue;

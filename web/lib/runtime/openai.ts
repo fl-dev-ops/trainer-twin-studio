@@ -28,6 +28,7 @@ import { redactLearnerNames } from "@/lib/persona-voice";
 import { QuestionBank, selectNextTechnicalQuestion } from "@/lib/question-bank";
 import type { QuestionType } from "@shared/interview-question-types";
 import { toCandidateQuestion } from "@/lib/interview-question-presentation";
+import { chatCompletionItems, gatewayProvider, meterUsageLater, type UsageMeter } from "@/lib/usage";
 import {
   type AnswerAnalysis,
   type CorpusStyleStats,
@@ -387,7 +388,9 @@ export async function callOpenRouter(
   messages: { role: string; content: OpenRouterContent }[],
   responseFormatJson = false,
   usage?: UsageSink,
-  maxTokens?: number
+  maxTokens?: number,
+  /** Bill this call directly. Leave unset when `usage` (a turn's sink) already accounts for it. */
+  meter?: UsageMeter
 ): Promise<string> {
   const key =
     process.env.AI_GATEWAY_API_KEY ||
@@ -419,6 +422,12 @@ export async function callOpenRouter(
 
   const data = await res.json();
   usage?.add(stage, durationMs, data?.usage);
+  meterUsageLater(
+    meter,
+    data?.id ? `gen:${data.id}` : undefined,
+    chatCompletionItems(gatewayProvider(AI_GATEWAY_BASE_URL), RUNTIME_MODEL, data?.usage),
+    { stage }
+  );
   console.info(`[interview-runtime] ${stage} completed`, {
     model: RUNTIME_MODEL,
     durationMs,
@@ -735,7 +744,11 @@ export async function selectNextClaimEvidence(
       const candidatePool = round === 2 && neverUsed.some((claim) => claim.metric)
         ? neverUsed.filter((claim) => claim.metric)
         : neverUsed;
-      const modelPick = await selectClaimWithModel(candidatePool, { round: round as 1 | 2 | 3, usedClaimIds: usedIds });
+      const modelPick = await selectClaimWithModel(candidatePool, {
+        round: round as 1 | 2 | 3,
+        usedClaimIds: usedIds,
+        meter: { source: "resume_claims", sessionId: session.id },
+      });
       picked = modelPick ? candidatePool.find((claim) => claim.id === modelPick) ?? null : null;
       // The model's pick must still be one of the eligible candidates — an
       // invalid or reused id falls through to the deterministic selector.
@@ -3341,6 +3354,14 @@ async function runCompletionPipeline(
     usage: usageTotals,
   });
   (fullResponse as Record<string, unknown>).usage = usageTotals;
+
+  // Ledger: one row set per turn from the sink (claim selection meters itself, outside the sink).
+  meterUsageLater(
+    { source: "runtime", sessionId: session.id },
+    `runtime:${session.id}:${requestHash}`,
+    chatCompletionItems(gatewayProvider(AI_GATEWAY_BASE_URL), RUNTIME_MODEL, usageTotals),
+    { turn: isOpeningTurn ? "opening" : isToolResponseTurn ? "tool_result" : "learner" }
+  );
 
   // Aggregate telemetry for the whole completion
   console.info("[interview-runtime] completion served", {

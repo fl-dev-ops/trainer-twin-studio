@@ -2,6 +2,7 @@ import { createHmac } from "node:crypto";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { NoObjectGeneratedError, Output, generateText, type ModelMessage } from "ai";
 import { z } from "zod";
+import { aiSdkItems, meterUsageLater } from "@/lib/usage";
 import {
   readWhiteboardUpload,
   validateWhiteboardObject,
@@ -92,6 +93,11 @@ export async function POST(request: Request) {
       messages,
       output: Output.object({ schema: evaluationSchema }),
     });
+    meterUsageLater(
+      { source: "evaluate", sessionId: input.roomName.replace(/^session-/, "") },
+      result.response?.id ? `evaluate:${result.response.id}` : undefined,
+      aiSdkItems("openrouter", modelName, result.totalUsage),
+    );
     const payload = JSON.stringify({
       version: 1,
       roomName: input.roomName,

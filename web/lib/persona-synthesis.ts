@@ -14,6 +14,7 @@ import { documentToMarkdown } from "@/lib/documents";
 import { extractPersonaVoiceMoments, shouldRebuildPersona } from "@/lib/persona-voice";
 import { MainCollectionService } from "@/lib/main-collection";
 import { saveSpec } from "@/lib/specs";
+import { chatCompletionItems, gatewayProvider, geminiItems, meterUsage, type UsageMeter } from "@/lib/usage";
 
 const AI_GATEWAY_BASE_URL = (
   process.env.AI_GATEWAY_BASE_URL ??
@@ -225,7 +226,7 @@ Rules:
 
 // ---- Analysis execution ----------------------------------------------------
 
-async function analyzeWithText(content: string, personaName: string, sourceKind: SourceKind, sourceName: string): Promise<unknown> {
+async function analyzeWithText(content: string, personaName: string, sourceKind: SourceKind, sourceName: string, meter?: UsageMeter): Promise<unknown> {
   const res = await fetch(`${AI_GATEWAY_BASE_URL}/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_GATEWAY_API_KEY}` },
@@ -240,11 +241,12 @@ async function analyzeWithText(content: string, personaName: string, sourceKind:
     signal: AbortSignal.timeout(180_000),
   });
   if (!res.ok) throw new Error(`Analysis API returned ${res.status}: ${await res.text()}`);
-  const data = await res.json() as { choices: { message: { content: string } }[] };
+  const data = await res.json() as { id?: string; usage?: unknown; choices: { message: { content: string } }[] };
+  await meterUsage(meter, data.id ? `gen:${data.id}` : undefined, chatCompletionItems(gatewayProvider(AI_GATEWAY_BASE_URL), ANALYSIS_MODEL, data.usage), { sourceName });
   return JSON.parse(data.choices[0].message.content);
 }
 
-async function analyzeWithMedia(geminiFileUri: string, mimeType: string, personaName: string, sourceKind: SourceKind, sourceName: string): Promise<unknown> {
+async function analyzeWithMedia(geminiFileUri: string, mimeType: string, personaName: string, sourceKind: SourceKind, sourceName: string, meter?: UsageMeter): Promise<unknown> {
   if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is required for video/audio analysis");
   const res = await fetch(
     `${GEMINI_FILES_ENDPOINT}/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
@@ -266,7 +268,8 @@ async function analyzeWithMedia(geminiFileUri: string, mimeType: string, persona
     },
   );
   if (!res.ok) throw new Error(`Gemini API returned ${res.status}: ${await res.text()}`);
-  const data = await res.json() as { candidates: { content: { parts: { text: string }[] } }[] };
+  const data = await res.json() as { responseId?: string; usageMetadata?: unknown; candidates: { content: { parts: { text: string }[] } }[] };
+  await meterUsage(meter, data.responseId ? `gemini:${data.responseId}` : undefined, geminiItems("gemini-2.5-flash", data.usageMetadata), { sourceName });
   const text = data.candidates[0]?.content?.parts?.[0]?.text ?? "{}";
   return JSON.parse(text);
 }
@@ -322,18 +325,19 @@ export async function analyzePersonaSource(sourceId: string, orgId: string): Pro
     }
 
     let analysis: unknown;
+    const analysisMeter: UsageMeter = { source: "persona_analysis", orgId };
     if (source.kind === "video" || source.kind === "audio") {
       const bytes = await getObjectBytes(source.s3Key);
       const geminiUri = await uploadToGeminiFiles(bytes, mimeType, source.name);
-      analysis = await analyzeWithMedia(geminiUri, mimeType, source.persona.name, source.kind as SourceKind, source.name);
+      analysis = await analyzeWithMedia(geminiUri, mimeType, source.persona.name, source.kind as SourceKind, source.name, analysisMeter);
     } else if (source.kind === "document") {
       const bytes = await getObjectBytes(source.s3Key);
       const file = new File([Buffer.from(bytes)], source.name, { type: mimeType });
       const { markdown } = await documentToMarkdown(file);
-      analysis = await analyzeWithText(markdown, source.persona.name, source.kind as SourceKind, source.name);
+      analysis = await analyzeWithText(markdown, source.persona.name, source.kind as SourceKind, source.name, analysisMeter);
     } else {
       const bytes = await getObjectBytes(source.s3Key);
-      analysis = await analyzeWithText(new TextDecoder().decode(bytes), source.persona.name, source.kind as SourceKind, source.name);
+      analysis = await analyzeWithText(new TextDecoder().decode(bytes), source.persona.name, source.kind as SourceKind, source.name, analysisMeter);
     }
     const chunks = extractPersonaVoiceMoments(analysis);
     await db.personaSource.update({
@@ -474,7 +478,13 @@ persona:
     signal: AbortSignal.timeout(180_000),
   });
   if (!res.ok) throw new Error(`Synthesis API returned ${res.status}: ${await res.text()}`);
-  const data = await res.json() as { choices: { message: { content: string } }[] };
+  const data = await res.json() as { id?: string; usage?: unknown; choices: { message: { content: string } }[] };
+  await meterUsage(
+    { source: "synthesis", orgId },
+    data.id ? `gen:${data.id}` : undefined,
+    chatCompletionItems(gatewayProvider(AI_GATEWAY_BASE_URL), ANALYSIS_MODEL, data.usage),
+    { personaSlug },
+  );
   return (data.choices[0].message.content ?? "")
     .replace(/^```(?:ya?ml)?\s*\n?/i, "")
     .replace(/\n?```\s*$/, "")

@@ -29,6 +29,9 @@ class FakeRoom:
 
 
 class FakeAnalyzer:
+    def __init__(self, usage_sink=None) -> None:
+        self.usage_sink = usage_sink
+
     def trigger(self, *_args, **_kwargs):
         return ScreenFeedbackTrigger.DEVIATION
 

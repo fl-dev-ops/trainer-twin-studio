@@ -1,4 +1,6 @@
+import { randomUUID } from "node:crypto";
 import type { Prisma } from "@/lib/generated/prisma/client";
+import { chatCompletionItems, gatewayProvider, geminiItems, meterUsage } from "@/lib/usage";
 import { db } from "@/lib/db";
 import {
   type SessionReport,
@@ -154,6 +156,11 @@ ${transcriptText}`;
         throw new Error(`OpenRouter returned ${res.status}: ${await res.text()}`);
       }
       const data = await res.json();
+      await meterUsage(
+        { source: "report", sessionId },
+        data?.id ? `gen:${data.id}` : `report:${sessionId}:${randomUUID()}`,
+        chatCompletionItems(gatewayProvider(AI_GATEWAY_BASE_URL), REPORT_MODEL, data?.usage),
+      );
       const content = data?.choices?.[0]?.message?.content;
       parsed = typeof content === "string" ? JSON.parse(content) : null;
     } else if (GEMINI_API_KEY) {
@@ -192,6 +199,11 @@ ${transcriptText}`;
         throw new Error(`Gemini API returned ${res.status}: ${await res.text()}`);
       }
       const data = await res.json();
+      await meterUsage(
+        { source: "report", sessionId },
+        data?.responseId ? `gemini:${data.responseId}` : `report:${sessionId}:${randomUUID()}`,
+        geminiItems(modelName, data?.usageMetadata),
+      );
       const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
       parsed = typeof text === "string" ? JSON.parse(text) : null;
     } else {

@@ -89,6 +89,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     const domainId = published?.domainSlug ?? `domain-${agentSlug}`;
 
     const generated = await generateSpecBundle({
+      meter: { source: "spec", orgId: org.id, userId: org.user.id },
       slug: agentSlug,
       instruction,
       name,
