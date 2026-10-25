@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { AudioLines, BookOpenText, KeyRound, LogOut, UserCog, Users } from "lucide-react";
 import { toast } from "sonner";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/user-avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -55,10 +55,7 @@ export function SidebarAccountMenu() {
           />
         }
       >
-        <Avatar className="size-7">
-          {user.image ? <AvatarImage src={user.image} alt="" /> : null}
-          <AvatarFallback>{user.name.charAt(0).toUpperCase() || "U"}</AvatarFallback>
-        </Avatar>
+        <UserAvatar user={user} size="sm" />
         <span className="min-w-0 flex-1 truncate font-medium group-data-[collapsible=icon]:hidden">{user.name}</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-56">

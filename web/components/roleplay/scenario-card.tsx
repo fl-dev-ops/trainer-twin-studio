@@ -10,6 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { UserAvatarGroup } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 
 export type ScenarioCardData = {
@@ -23,55 +24,6 @@ export type ScenarioCardData = {
   status?: "draft" | "published";
   draftRevision?: number;
 };
-
-const MAX_AVATARS = 4;
-
-// Opaque tints: avatars overlap, so see-through fills would bleed into each other.
-const TINTS = [
-  "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200",
-  "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200",
-  "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200",
-  "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200",
-  "bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-200",
-];
-
-function tintFor(key: string) {
-  let hash = 0;
-  for (const ch of key) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
-  return TINTS[hash % TINTS.length];
-}
-
-function LearnerStack({ learners }: { learners: NonNullable<ScenarioCardData["learners"]> }) {
-  if (!learners.length) return <span className="text-xs text-muted-foreground">No learners assigned</span>;
-  const extra = learners.length - MAX_AVATARS;
-  return (
-    <span className="flex" aria-label={`${learners.length} assigned learner${learners.length === 1 ? "" : "s"}`}>
-      {learners.slice(0, MAX_AVATARS).map((learner, index) => (
-        <span
-          key={learner.email}
-          title={learner.name}
-          className={cn(
-            "grid size-[28px] shrink-0 place-items-center overflow-hidden rounded-full border-2 border-card text-[11px] font-medium",
-            index > 0 && "-ml-2",
-            learner.image ? "bg-muted" : tintFor(learner.email),
-          )}
-        >
-          {learner.image ? (
-            // eslint-disable-next-line @next/next/no-img-element -- remote avatar URLs from auth providers
-            <img src={learner.image} alt="" className="size-full object-cover" />
-          ) : (
-            learner.name.charAt(0).toUpperCase()
-          )}
-        </span>
-      ))}
-      {extra > 0 ? (
-        <span className="-ml-2 grid size-[28px] shrink-0 place-items-center rounded-full border-2 border-card bg-muted text-[11px] font-medium text-muted-foreground">
-          +{extra}
-        </span>
-      ) : null}
-    </span>
-  );
-}
 
 /** Scenario card, matching the V2 prototype's role-play card. */
 export function ScenarioCard({ scenario }: { scenario: ScenarioCardData }) {
@@ -115,7 +67,11 @@ export function ScenarioCard({ scenario }: { scenario: ScenarioCardData }) {
       </div>
 
       <div className="mt-auto flex items-center justify-between gap-2 p-4">
-        <LearnerStack learners={scenario.learners ?? []} />
+        {scenario.learners?.length ? (
+          <UserAvatarGroup users={scenario.learners} max={4} size="sm" />
+        ) : (
+          <span className="text-xs text-muted-foreground">No learners assigned</span>
+        )}
         <DropdownMenu>
           <DropdownMenuTrigger
             render={

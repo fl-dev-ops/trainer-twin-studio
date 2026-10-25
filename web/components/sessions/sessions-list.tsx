@@ -6,10 +6,10 @@ import { PageContainer } from "@/components/page-container";
 import { SessionFilters } from "@/components/sessions/session-filters";
 import { RANGE_OPTIONS } from "@/components/sessions/session-range";
 import { SessionTime } from "@/components/sessions/session-time";
+import { UserAvatar } from "@/components/user-avatar";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { db } from "@/lib/db";
 import { firstExchange } from "@/lib/session-snippet";
-import { cn } from "@/lib/utils";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const PAGE_SIZE = 100;
@@ -24,20 +24,6 @@ const STATUS_LABEL: Record<string, string> = {
   revoked: "Revoked",
 };
 
-// Initial-avatar tints, picked per learner so the same person keeps the same colour.
-const TINTS = [
-  "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-  "bg-sky-500/15 text-sky-700 dark:text-sky-300",
-  "bg-amber-500/15 text-amber-700 dark:text-amber-300",
-  "bg-rose-500/15 text-rose-700 dark:text-rose-300",
-  "bg-violet-500/15 text-violet-700 dark:text-violet-300",
-];
-
-function tintFor(id: string) {
-  let hash = 0;
-  for (const ch of id) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
-  return TINTS[hash % TINTS.length];
-}
 
 /** Start of the date-range filter, `days` back from now. */
 const since = (days: number) => new Date(Date.now() - days * DAY_MS);
@@ -71,7 +57,7 @@ export async function SessionsList({ orgId, params }: { orgId: string; params: S
         transcript: true,
         agentSlug: true,
         agent: { select: { name: true } },
-        user: { select: { id: true, name: true, email: true } },
+        user: { select: { id: true, name: true, email: true, image: true } },
       },
     }),
     db.agent.findMany({ where: { orgId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
@@ -133,15 +119,7 @@ export async function SessionsList({ orgId, params }: { orgId: string; params: S
                       href={`/sessions/${session.id}`}
                       className="group flex items-start gap-3.5 px-5 py-4 outline-none transition-colors hover:bg-muted/40 focus-visible:bg-muted/40"
                     >
-                      <span
-                        aria-hidden
-                        className={cn(
-                          "grid size-9 shrink-0 place-items-center rounded-full text-sm font-medium",
-                          tintFor(session.user.id),
-                        )}
-                      >
-                        {name.charAt(0).toUpperCase()}
-                      </span>
+                      <UserAvatar user={session.user} size="lg" />
                       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                         <span className="truncate text-sm font-medium">{name}</span>
                         <span className="truncate text-[13px] text-muted-foreground">

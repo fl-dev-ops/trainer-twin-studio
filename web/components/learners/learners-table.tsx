@@ -3,23 +3,11 @@ import { UsersIcon } from "@/components/icons";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader, SectionHeader } from "@/components/page-header";
 import { SessionTime } from "@/components/sessions/session-time";
+import { UserAvatar } from "@/components/user-avatar";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import type { LearnerRow } from "@/lib/learners";
 import { cn } from "@/lib/utils";
 
-const TINTS = [
-  "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200",
-  "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200",
-  "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200",
-  "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200",
-  "bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-200",
-];
-
-function tintFor(key: string) {
-  let hash = 0;
-  for (const ch of key) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
-  return TINTS[hash % TINTS.length];
-}
 
 function formatPractice(seconds: number) {
   const minutes = Math.round(seconds / 60);
@@ -78,15 +66,7 @@ export function LearnersTable({ learners }: { learners: LearnerRow[] }) {
                       >
                         <td className="px-5 py-3">
                           <span className="flex items-center gap-2.5">
-                            <span
-                              aria-hidden
-                              className={cn(
-                                "grid size-7 shrink-0 place-items-center rounded-full text-[11px] font-medium",
-                                tintFor(learner.email),
-                              )}
-                            >
-                              {learner.name.charAt(0).toUpperCase()}
-                            </span>
+                            <UserAvatar user={learner} size="sm" />
                             {href ? (
                               // Stretched link: the whole row opens this learner's sessions.
                               <Link href={href} className="truncate font-medium outline-none after:absolute after:inset-0">

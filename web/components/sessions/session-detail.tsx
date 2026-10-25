@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { AlertCircle, ArrowLeft, Loader2, Play } from "lucide-react";
 import { RECORDING_ID, SeekButton } from "@/components/sessions/seek-button";
 import { SessionTime } from "@/components/sessions/session-time";
+import { UserAvatar } from "@/components/user-avatar";
 import { db } from "@/lib/db";
 import { isSessionReport, normalizeSessionReportStatus, type KeyMoment } from "@/lib/session-report";
 import { cn } from "@/lib/utils";
@@ -66,7 +67,7 @@ export async function SessionDetail({ orgId, id }: { orgId: string; id: string }
       report: true,
       reportStatus: true,
       agent: { select: { name: true, persona: { select: { name: true } } } },
-      user: { select: { name: true, email: true } },
+      user: { select: { name: true, email: true, image: true } },
     },
   });
   if (!row) notFound();
@@ -98,12 +99,7 @@ export async function SessionDetail({ orgId, id }: { orgId: string; id: string }
         <Card className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 flex-col gap-1">
             <div className="flex items-center gap-2.5">
-              <span
-                aria-hidden
-                className="grid size-8 shrink-0 place-items-center rounded-full bg-emerald-100 text-xs font-medium text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
-              >
-                {learner.charAt(0).toUpperCase()}
-              </span>
+              <UserAvatar user={row.user} size="md" />
               <h1 className="truncate text-lg font-semibold">{learner}</h1>
             </div>
             <p className="text-sm text-muted-foreground">{scenario}</p>
