@@ -17,15 +17,13 @@ export function ReportIssueButton() {
   return (
     <>
       <Button
-        variant="ghost"
+        variant="outline"
         size="sm"
         onClick={() => setOpen(true)}
-        aria-label="Report an issue"
-        title="Report an issue"
-        className="text-white/80 hover:bg-white/10 hover:text-white"
+        className="h-9 rounded-full px-4 text-[13px] font-medium"
       >
+        <Flag data-icon="inline-start" />
         Report an issue
-        <Flag />
       </Button>
       <ReportIssueDialog open={open} onOpenChange={setOpen} />
     </>

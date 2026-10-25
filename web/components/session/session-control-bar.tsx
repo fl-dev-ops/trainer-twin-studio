@@ -2,30 +2,24 @@
 
 import { useState } from "react";
 import { useStartAudio, useTrackToggle } from "@livekit/components-react";
-import {
-  LoaderCircle,
-  MessageSquare,
-  Mic,
-  MicOff,
-  PhoneOff,
-  Video,
-  VideoOff,
-  Volume2,
-} from "lucide-react";
+import { LoaderCircle, MessageSquareText, Mic, MicOff, PhoneOff, Video, VideoOff, Volume2 } from "lucide-react";
 import { Room, Track } from "livekit-client";
-import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 
+const CONTROL =
+  "grid size-10 shrink-0 place-items-center rounded-full outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:size-[18px]";
+
+/**
+ * Call controls (V2 prototype): the toggle pill and the End button.
+ * Renders two grid cells, so the parent footer must be a 3-column grid (timer | controls | end).
+ */
 export function SessionControlBar({
   room,
   isConnected,
@@ -40,120 +34,80 @@ export function SessionControlBar({
   onEnd: () => void;
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
-
-  const { buttonProps: cameraProps, enabled: cameraOn, pending: cameraPending } = useTrackToggle({
-    room,
-    source: Track.Source.Camera,
-  });
-
-  const { buttonProps: micProps, enabled: micOn, pending: micPending } = useTrackToggle({
-    room,
-    source: Track.Source.Microphone,
-  });
-
-  const { mergedProps: audioProps, canPlayAudio } = useStartAudio({
-    room,
-    props: { className: "rounded-full" },
-  });
+  const { buttonProps: cameraProps, enabled: cameraOn, pending: cameraPending } = useTrackToggle({ room, source: Track.Source.Camera });
+  const { buttonProps: micProps, enabled: micOn, pending: micPending } = useTrackToggle({ room, source: Track.Source.Microphone });
+  const { mergedProps: audioProps, canPlayAudio } = useStartAudio({ room, props: {} });
 
   if (!isConnected) return null;
 
   return (
     <>
-      <div
-        className="flex items-center gap-2.5 rounded-full border border-white/[0.08] bg-[#1b1e24] p-1.5 px-3.5 shadow-[0_16px_36px_-4px_rgba(0,0,0,0.6)] backdrop-blur-xl"
-        aria-label="Session controls"
-      >
+      <div aria-label="Session controls" role="toolbar" className="col-start-2 flex items-center gap-2 rounded-full bg-muted p-1.5">
         {!canPlayAudio && (
-          <Button {...audioProps} variant="outline" size="sm" className="rounded-full">
-            <Volume2 className="size-4" />
+          <button {...audioProps} type="button" className={cn(CONTROL, "w-auto gap-2 bg-card px-4 text-sm font-medium")}>
+            <Volume2 />
             Enable audio
-          </Button>
+          </button>
         )}
-
-        {/* 1. Camera / Video */}
         <button
           {...cameraProps}
           type="button"
+          aria-label={cameraOn ? "Turn off camera" : "Turn on camera"}
           title={cameraOn ? "Turn off camera" : "Turn on camera"}
-          className={cn(
-            "grid size-10 shrink-0 place-items-center rounded-full transition-colors hover:bg-white/10",
-            cameraOn ? "bg-white/15 text-white" : "bg-red-500/20 text-red-400 hover:bg-red-500/30",
-          )}
+          className={cn(CONTROL, cameraOn ? "hover:bg-card" : "bg-[#ce2c33] text-white hover:bg-[#b5262c]")}
         >
-          {cameraPending ? (
-            <LoaderCircle className="size-5 animate-spin" />
-          ) : cameraOn ? (
-            <Video className="size-5" />
-          ) : (
-            <VideoOff className="size-5" />
-          )}
+          {cameraPending ? <LoaderCircle className="animate-spin" /> : cameraOn ? <Video /> : <VideoOff />}
         </button>
-
-        {/* 2. Microphone */}
         <button
           {...micProps}
           type="button"
+          aria-label={micOn ? "Mute microphone" : "Unmute microphone"}
           title={micOn ? "Mute microphone" : "Unmute microphone"}
-          className={cn(
-            "grid size-10 shrink-0 place-items-center rounded-full transition-colors hover:bg-white/10",
-            micOn ? "bg-white/15 text-white" : "bg-red-500/20 text-red-400 hover:bg-red-500/30",
-          )}
+          className={cn(CONTROL, micOn ? "hover:bg-card" : "bg-[#ce2c33] text-white hover:bg-[#b5262c]")}
         >
-          {micPending ? (
-            <LoaderCircle className="size-5 animate-spin" />
-          ) : micOn ? (
-            <Mic className="size-5" />
-          ) : (
-            <MicOff className="size-5" />
-          )}
+          {micPending ? <LoaderCircle className="animate-spin" /> : micOn ? <Mic /> : <MicOff />}
         </button>
-
-        {/* 3. Chat Toggle */}
         <button
           type="button"
           onClick={onChatToggle}
-          title="Toggle chat panel"
-          className={cn(
-            "grid size-10 shrink-0 place-items-center rounded-full text-white transition-colors hover:bg-white/10",
-            chatOpen && "bg-white/15",
-          )}
+          aria-label="Chat"
+          aria-pressed={chatOpen}
+          title={chatOpen ? "Hide chat" : "Show chat"}
+          className={cn(CONTROL, chatOpen ? "bg-card shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : "hover:bg-card")}
         >
-          <MessageSquare className="size-5" />
-        </button>
-
-        {/* 4. Red Circular End Call Button */}
-        <button
-          type="button"
-          onClick={() => setConfirmOpen(true)}
-          title="End session"
-          className="ml-0.5 grid size-10 shrink-0 place-items-center rounded-full bg-[#e03b3b] text-white shadow-md transition-transform duration-100 hover:scale-105 hover:bg-[#c52b2b]"
-        >
-          <PhoneOff className="size-5" />
+          <MessageSquareText />
         </button>
       </div>
 
+      <button
+        type="button"
+        onClick={() => setConfirmOpen(true)}
+        aria-label="End session"
+        className="col-start-3 inline-flex h-10 items-center gap-2 justify-self-end rounded-full bg-[#ce2c33] px-5 text-[15px] font-medium text-white outline-none transition-colors hover:bg-[#b5262c] focus-visible:ring-3 focus-visible:ring-ring/50"
+      >
+        <PhoneOff className="size-[18px]" />
+        End
+      </button>
+
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>End practice session?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to end this session? Your interview transcript and
-              feedback will be saved to Sessions.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
+        <AlertDialogContent className="flex max-w-[420px]! flex-col items-center gap-2 rounded-3xl px-6 pt-8 pb-6 text-center">
+          <AlertDialogTitle className="text-xl leading-7 font-semibold tracking-[-0.015em]">End this session?</AlertDialogTitle>
+          <AlertDialogDescription>Your transcript and feedback will be saved.</AlertDialogDescription>
+          <div className="mt-4 grid w-full grid-cols-2 gap-2">
+            <button
+              type="button"
               onClick={() => {
                 setConfirmOpen(false);
                 onEnd();
               }}
+              className="h-10 rounded-full bg-card px-4 text-sm font-semibold shadow-[0_0_1px_rgba(0,0,0,0.4),0_1px_1px_rgba(0,0,0,0.04),0_2px_4px_rgba(0,0,0,0.04)] outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 dark:shadow-[0_0_0_1px_var(--border)]"
             >
-              End session
-            </AlertDialogAction>
-          </AlertDialogFooter>
+              Yes, end session
+            </button>
+            <AlertDialogCancel variant="default" className="h-10 rounded-full px-4 text-sm font-semibold">
+              No, I’ll continue
+            </AlertDialogCancel>
+          </div>
         </AlertDialogContent>
       </AlertDialog>
     </>

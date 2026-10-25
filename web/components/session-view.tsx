@@ -878,10 +878,13 @@ export function SessionView({
     };
   }, [room]);
 
+  const title = scenarioName ?? agentNames[agent] ?? agent.replaceAll("-", " ");
+  const trainerName = persona.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Trainer";
+
   if (sessionCode && !prejoinComplete) {
     return (
       <PreJoin
-        scenarioName={scenarioName ?? agent.replaceAll("-", " ")}
+        scenarioName={title}
         userName={userName ?? "You"}
         organizationName={organizationName ?? "TrainerTwin"}
         organizationLogo={organizationLogo}
@@ -902,8 +905,10 @@ export function SessionView({
 
   if (ended) {
     return (
-      <div className="dark flex h-dvh w-dvw items-center justify-center bg-[#14161a] p-6 text-foreground">
-        <Card className="w-full max-w-md border border-white/[0.06] bg-[#1c1f26] text-center shadow-2xl">
+      <div className="flex h-dvh w-dvw flex-col bg-panel text-foreground">
+        <SessionHeader title={title} linkHome={!sessionCode} />
+        <main className="grid min-h-0 flex-1 place-items-center overflow-y-auto p-6">
+        <Card className={cn("w-full max-w-md rounded-3xl text-center", RAISED)}>
           {sessionCode && completedSessionId && endReason !== "disconnected" ? (
             <SessionFeedback scenarioName={scenarioName} sessionId={completedSessionId} />
           ) : (
@@ -922,10 +927,11 @@ export function SessionView({
               </CardHeader>
               {!sessionCode && (
                 <CardContent className="flex justify-center gap-2">
-                  <Button variant="outline" nativeButton={false} render={<Link href="/sessions" />}>
+                  <Button variant="outline" className="h-10 rounded-full px-4" nativeButton={false} render={<Link href="/sessions" />}>
                     View sessions
                   </Button>
                   <Button
+                    className="h-10 rounded-full px-4"
                     onClick={() => {
                       resetSessionState();
                       setEnded(false);
@@ -938,14 +944,15 @@ export function SessionView({
             </>
           )}
         </Card>
+        </main>
       </div>
     );
   }
 
   if (sessionCode && prejoinComplete && !launched && (!isContextRequired || contextIds.length > 0)) {
     return (
-      <div className="grid min-h-svh place-items-center bg-[#14161a] text-white">
-        <div className="flex items-center gap-3 text-sm text-white/75">
+      <div className="grid min-h-svh place-items-center bg-panel text-foreground">
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
           <LoaderCircle className="size-5 animate-spin" /> Preparing your session…
         </div>
       </div>
@@ -954,34 +961,26 @@ export function SessionView({
 
   if (!launched) {
     return (
-      <div className="dark flex h-dvh w-dvw flex-col overflow-hidden bg-[#14161a] text-foreground">
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/[0.035] bg-[#14161a]/85 px-6 backdrop-blur-xl">
-          {sessionCode ? (
-            <div className="flex items-center gap-2.5">
-              <Image src="/trainertwin-mark.svg" alt="" width={22} height={17} priority />
-              <span className="font-bold text-lg tracking-tight text-white">TrainerTwin</span>
-            </div>
-          ) : (
-            <Link href="/" className="flex items-center gap-2.5">
-              <Image src="/trainertwin-mark.svg" alt="" width={22} height={17} priority />
-              <span className="font-bold text-lg tracking-tight text-white">TrainerTwin</span>
-            </Link>
-          )}
-        </header>
+      <div className="flex h-dvh w-dvw flex-col overflow-hidden bg-panel text-foreground">
+        <SessionHeader title={title} linkHome={!sessionCode} />
 
-        <main className="relative flex min-h-0 flex-1 overflow-hidden p-4 sm:p-6">
-          <div className="mx-auto flex h-full w-full max-w-xl items-center">
-            <Card className="w-full border border-white/[0.06] bg-[#1c1f26] shadow-2xl">
+        <main className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto p-4 sm:p-6">
+          <div className="w-full max-w-md">
+            <Card className={cn("w-full rounded-3xl", RAISED)}>
               <CardHeader>
-                <CardTitle>Configure the session</CardTitle>
+                <CardTitle className="text-xl font-semibold tracking-[-0.015em]">Start a practice session</CardTitle>
                 <CardDescription>
-                  Choose a scenario. Its trainer persona is already configured.
+                  You’ll join as a learner. {trainerName} is already set up for this scenario.
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
                 <label className="flex flex-col gap-1.5 text-sm">
                   <span className="font-medium">Scenario</span>
-                  <Select value={agent} onValueChange={(v) => v !== null && setAgent(v)}>
+                  <Select
+                    value={agent}
+                    items={Object.fromEntries(agents.map((a) => [a, agentNames[a] ?? a.replaceAll("-", " ")]))}
+                    onValueChange={(v) => v !== null && setAgent(v)}
+                  >
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Scenario" />
                     </SelectTrigger>
@@ -1000,7 +999,7 @@ export function SessionView({
                   <div className="flex items-center justify-between">
                     <span className="font-medium">{documentLabel}</span>
                     {isContextRequired && (
-                      <span className="text-[11px] font-medium text-amber-500">
+                      <span className="text-[11px] font-medium text-amber-700 dark:text-amber-400">
                         Required
                       </span>
                     )}
@@ -1008,6 +1007,7 @@ export function SessionView({
                   <div className="flex items-center gap-2">
                     <Select
                       value={contextId || "none"}
+                      items={{ none: "None", ...Object.fromEntries(contextList.map((c) => [c.id, c.name])) }}
                       onValueChange={(v) => {
                         if (!v || v === "none") setContextIds([]);
                         else setContextIds([v]);
@@ -1082,7 +1082,7 @@ export function SessionView({
                     void handleStartSession();
                   }}
                   disabled={!persona || !agent || (isContextRequired && contextIds.length === 0)}
-                  className="w-full"
+                  className="mt-2 h-11 w-full rounded-full text-[15px]"
                 >
                   <Play data-icon="inline-start" /> Start session
                 </Button>
@@ -1097,7 +1097,7 @@ export function SessionView({
   const elapsedLabel = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
 
   return (
-    <div className="dark flex h-dvh w-dvw flex-col overflow-hidden bg-[#14161a] text-foreground">
+    <div className="flex h-dvh w-dvw flex-col overflow-hidden bg-panel text-foreground">
       <RoomContext.Provider value={room}>
         <LiveKitWorkspaceProvider
           sessionId={connection?.sessionId}
@@ -1106,43 +1106,27 @@ export function SessionView({
           onEndSession={() => void handleDisconnect("completed")}
           active={introSrc ? introDone : true}
         >
-          {/* Topbar Navigation: Clean Logo Left, Live Badge Right */}
-          <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/[0.035] bg-[#14161a]/85 px-6 backdrop-blur-xl">
-            {sessionCode ? (
-              <div className="flex items-center gap-2.5">
-                <Image src="/trainertwin-mark.svg" alt="" width={22} height={17} priority />
-                <span className="font-bold text-lg tracking-tight text-white">TrainerTwin</span>
-              </div>
-            ) : (
-              <Link href="/" className="flex items-center gap-2.5">
-                <Image src="/trainertwin-mark.svg" alt="" width={22} height={17} priority />
-                <span className="font-bold text-lg tracking-tight text-white">TrainerTwin</span>
-              </Link>
+          <SessionHeader title={title} linkHome={!sessionCode}>
+            {isScreenSharing && (
+              <span className="hidden items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-700 sm:flex dark:text-emerald-400">
+                <span aria-hidden className="size-2 animate-pulse rounded-full bg-emerald-500" />
+                Sharing your screen
+              </span>
             )}
-
-            <div className="flex items-center gap-3">
-              {sessionCode ? <ReportIssueButton /> : null}
-              {isScreenSharing && (
-                <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium">
-                  <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
-                  Screen sharing live
-                </div>
-              )}
-              <time className="font-mono text-xs font-medium text-white">{elapsedLabel}</time>
-            </div>
-          </header>
+            {sessionCode ? <ReportIssueButton /> : null}
+          </SessionHeader>
 
           {/* Main Body: Stage (Left) & Chat Sidebar (Right) — EQUAL HEIGHT */}
-          <main className="relative flex min-h-0 flex-1 gap-4 p-4 pb-2">
+          <main className="relative flex min-h-0 flex-1 gap-4 px-4 sm:px-6">
             {/* Blocking overlay when screen sharing is stopped */}
             {connected && !isScreenSharing && screenShareAttempted && !isScreenSharePending && (
-              <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/85 p-6 backdrop-blur-md">
-                <div className="max-w-md w-full rounded-2xl border border-brand/40 bg-[#191b22] p-7 text-center shadow-2xl flex flex-col items-center animate-in fade-in zoom-in-95 duration-200">
-                  <div className="size-16 rounded-2xl bg-brand/15 border border-brand/30 text-brand flex items-center justify-center mb-4">
-                    <ScreenShare className="size-8" />
+              <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/30 p-6 backdrop-blur-sm">
+                <div className={cn("flex w-full max-w-md flex-col items-center rounded-3xl bg-card p-7 text-center duration-200 animate-in fade-in zoom-in-95", RAISED)}>
+                  <div className="mb-4 grid size-14 place-items-center rounded-2xl bg-primary/10 text-primary">
+                    <ScreenShare className="size-7" />
                   </div>
-                  <h3 className="text-xl font-bold text-white tracking-tight">Entire Screen Required</h3>
-                  <p className="mt-2.5 text-xs text-zinc-300 leading-relaxed">
+                  <h3 className="text-xl font-semibold tracking-[-0.015em]">Share your entire screen</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                     {screenShareError || "Choose Entire Screen in the browser picker so your trainer can review your work throughout the session. Tabs and windows are not accepted."}
                   </p>
                   <div className="mt-6 w-full flex flex-col gap-2.5">
@@ -1151,19 +1135,25 @@ export function SessionView({
                       size="lg"
                       disabled={isScreenSharePending}
                       onClick={() => void handleEnableScreenShare()}
-                      className="w-full bg-brand hover:bg-brand-strong text-white font-bold h-11 text-sm cursor-pointer shadow-lg active:scale-98 transition-all"
+                      className="h-11 w-full rounded-full text-[15px]"
                     >
-                      <ScreenShare className="size-4.5 mr-2" />
-                      {isScreenSharePending ? "Connecting screen share…" : "Share Entire Screen to Resume"}
+                      <ScreenShare data-icon="inline-start" />
+                      {isScreenSharePending ? "Connecting screen share…" : "Share entire screen to continue"}
                     </Button>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Stage Section */}
-            <div className="relative flex min-h-0 flex-1">
-              <div className="flex min-h-0 w-full gap-4 transition-all duration-300">
+            {/* Stage: the prototype's pastel wash, with the tiles centred or a workspace beside them. */}
+            <div className="relative flex min-h-0 flex-1 overflow-hidden rounded-3xl bg-muted/60">
+              <div aria-hidden className={cn("pointer-events-none absolute inset-0 dark:opacity-20", STAGE_WASH)} />
+              <div
+                className={cn(
+                  "relative flex min-h-0 w-full",
+                  surface ? "gap-3 p-3" : "flex-col items-center justify-center gap-6 overflow-y-auto p-6 sm:flex-row sm:gap-8",
+                )}
+              >
                 {/* Surface Presentation Mode (Left Large Workspace) */}
                 {surface && (
                   <motion.section
@@ -1173,7 +1163,8 @@ export function SessionView({
                     animate={{ opacity: 1, scale: 1 }}
                     exit={reduceMotion ? undefined : { opacity: 0, scale: 0.98 }}
                     transition={reduceMotion ? { duration: 0 } : { duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-                    className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/[0.035] bg-[#15181f]"
+                    // Workspaces are dark-themed tools (code editor, whiteboard), so they keep a dark scope.
+                    className="dark flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl bg-[#15181f] text-foreground shadow-[0_8px_24px_rgba(30,28,25,0.18)]"
                   >
                     <div className="min-h-0 flex-1">
                       {surface.tool === "code" && (
@@ -1257,17 +1248,18 @@ export function SessionView({
                   </motion.section>
                 )}
 
-                {/* Participant Tiles:
-                    - Normal Mode: 2 equal side-by-side columns
-                    - Presenting Mode: Stacked vertically on the right side!
-                */}
-                <div
-                  className={cn(
-                    surface ? "flex w-[280px] shrink-0 flex-col gap-3.5" : "grid flex-1 grid-cols-2 gap-4",
-                    "min-h-0 transition-all duration-300",
-                  )}
-                >
-                  <div className="min-h-0 flex-1">
+                {/* Tiles: centred side by side, or a small stack beside the workspace. */}
+                <div className={surface ? "flex w-[220px] shrink-0 flex-col gap-3" : "contents"}>
+                  <div
+                    className={cn(
+                      "w-full shrink-0",
+                      surface
+                        ? "aspect-[4/3]"
+                        : introSrc && !introDone
+                          ? "aspect-video max-w-[640px] sm:w-[640px]"
+                          : "aspect-[4/3] max-w-[340px] sm:w-[340px]",
+                    )}
+                  >
                     {introSrc && !introDone ? (
                       <ScenarioIntro
                         key={agent}
@@ -1280,8 +1272,8 @@ export function SessionView({
                       <AgentTile persona={persona} compact={surface !== null} />
                     )}
                   </div>
-                  <div className="min-h-0 flex-1">
-                    <CandidateTile compact={surface !== null} />
+                  <div className={cn("w-full shrink-0 aspect-[4/3]", !surface && "max-w-[340px] sm:w-[340px]")}>
+                    <CandidateTile name={userName} compact={surface !== null} />
                   </div>
                 </div>
               </div>
@@ -1302,6 +1294,7 @@ export function SessionView({
                 >
                   <SessionSidebar
                     entries={entries}
+                    trainerName={trainerName}
                     onSendMessage={handleSendMessage}
                     onClose={() => setSidebarOpen(false)}
                     disabled={!connected}
@@ -1312,8 +1305,8 @@ export function SessionView({
             </AnimatePresence>
           </main>
 
-          {/* Common Footer across full width */}
-          <footer className="flex h-16 shrink-0 items-center justify-center pb-2">
+          <footer className="grid h-20 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 sm:px-6">
+            <time className="font-mono text-sm tabular-nums" aria-label="Session time">{elapsedLabel}</time>
             <SessionControlBar
               room={room}
               isConnected={connected}
@@ -1324,8 +1317,8 @@ export function SessionView({
           </footer>
 
           {error && (
-            <div className="absolute inset-0 z-50 grid place-items-center bg-[#14161a]/85 p-6 backdrop-blur-md">
-              <Card className="w-full max-w-md border border-white/[0.06] bg-[#1c1f26] text-center shadow-2xl">
+            <div className="absolute inset-0 z-50 grid place-items-center bg-black/30 p-6 backdrop-blur-sm">
+              <Card className={cn("w-full max-w-md rounded-3xl text-center", RAISED)}>
                 <CardHeader>
                   <CardTitle>{saveFailed ? "Could not save session" : "Session problem"}</CardTitle>
                   <CardDescription>{error}</CardDescription>
@@ -1334,6 +1327,7 @@ export function SessionView({
                   {!autoStart && (
                     <Button
                       variant="outline"
+                      className="h-10 rounded-full px-4"
                       onClick={() => {
                         resetSessionState();
                         setLaunched(false);
@@ -1342,7 +1336,7 @@ export function SessionView({
                       Back
                     </Button>
                   )}
-                  <Button onClick={saveFailed ? () => void handleDisconnect(pendingEndReasonRef.current) : handleRetry}>Try again</Button>
+                  <Button className="h-10 rounded-full px-4" onClick={saveFailed ? () => void handleDisconnect(pendingEndReasonRef.current) : handleRetry}>Try again</Button>
                 </CardContent>
               </Card>
             </div>
@@ -1351,6 +1345,31 @@ export function SessionView({
         <RoomAudioRenderer />
       </RoomContext.Provider>
     </div>
+  );
+}
+
+const RAISED = "shadow-[0_0_0_1px_var(--border),0_4px_8px_rgba(30,28,25,0.05),0_16px_40px_rgba(30,28,25,0.1)] ring-0";
+const STAGE_WASH =
+  "bg-[radial-gradient(ellipse_60%_70%_at_0%_100%,#fcd5bf_0%,transparent_70%),radial-gradient(ellipse_55%_65%_at_55%_105%,#a6c1f4_0%,transparent_70%),radial-gradient(ellipse_55%_75%_at_100%_100%,#94dcae_0%,transparent_70%)]";
+
+/** Session top bar (V2 prototype): logo, the scenario in the middle, actions on the right. */
+function SessionHeader({ title, linkHome, children }: { title: string; linkHome: boolean; children?: React.ReactNode }) {
+  const logo = (
+    <>
+      <Image src="/trainertwin-mark.svg" alt="" width={20} height={16} priority />
+      <span className="text-[15px] font-semibold tracking-tight">TrainerTwin</span>
+    </>
+  );
+  return (
+    <header className="grid h-[72px] shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 px-6">
+      {linkHome ? (
+        <Link href="/" className="flex w-fit items-center gap-2">{logo}</Link>
+      ) : (
+        <div className="flex items-center gap-2">{logo}</div>
+      )}
+      <h1 className="max-w-[40vw] truncate text-center text-[15px] font-medium">{title}</h1>
+      <div className="flex items-center justify-end gap-3">{children}</div>
+    </header>
   );
 }
 
@@ -1425,7 +1444,7 @@ function SessionFeedback({ scenarioName, sessionId }: { scenarioName?: string; s
                     "h-10 w-10 rounded-full border text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand",
                     selected
                       ? "border-brand bg-brand text-white"
-                      : "border-white/10 bg-white/[0.04] text-muted-foreground hover:border-white/25 hover:text-foreground",
+                      : "bg-card text-muted-foreground hover:border-foreground/25 hover:text-foreground",
                   )}
                 >
                   {value}
@@ -1449,7 +1468,7 @@ function SessionFeedback({ scenarioName, sessionId }: { scenarioName?: string; s
           rows={3}
           maxLength={500}
           placeholder="Anything else you'd like to share? (optional)"
-          className="w-full resize-none rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-brand"
+          className="w-full resize-none rounded-xl border bg-card px-3 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-brand"
         />
         {feedbackError && <p role="alert" className="text-sm text-destructive">{feedbackError}</p>}
         <Button disabled={rating === null || sending} onClick={() => void sendFeedback()} className="w-full">
@@ -1511,7 +1530,7 @@ function ScenarioIntro({
   }
 
   return (
-    <div className={cn("relative overflow-hidden rounded-2xl border border-white/[0.035] bg-black", className)}>
+    <div className={cn("relative overflow-hidden rounded-2xl bg-black shadow-[0_2px_4px_rgba(30,28,25,0.07),0_8px_20px_rgba(30,28,25,0.11)]", className)}>
       <video
         ref={video}
         src={latchedSrc}
