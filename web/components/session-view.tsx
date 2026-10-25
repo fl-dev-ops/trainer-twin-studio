@@ -180,7 +180,7 @@ export function SessionView({
   const [screenShareError, setScreenShareError] = useState("");
   const screenShareAutoPromptedRef = useRef(false);
   const screenShareValidationPendingRef = useRef(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [latestSpokenText, setLatestSpokenText] = useState("");
   const [elapsed, setElapsed] = useState(0);
 
@@ -1250,21 +1250,21 @@ export function SessionView({
 
                 {/* Tiles: centred side by side, or a small stack beside the workspace. */}
                 <div className={surface ? "flex w-[220px] shrink-0 flex-col gap-3" : "contents"}>
+                  {/* Side by side the tiles share the row and shrink to fit; the intro video gets twice the share. */}
                   <div
                     className={cn(
                       "w-full shrink-0",
                       surface
                         ? "aspect-[4/3]"
                         : introSrc && !introDone
-                          ? "aspect-video max-w-[640px] sm:w-[640px]"
-                          : "aspect-[4/3] max-w-[340px] sm:w-[340px]",
+                          ? "aspect-video max-w-[640px] sm:min-w-0 sm:flex-[2_1_0]"
+                          : "aspect-[4/3] max-w-[340px] sm:min-w-0 sm:flex-[1_1_0]",
                     )}
                   >
                     {introSrc && !introDone ? (
                       <ScenarioIntro
                         key={agent}
                         src={introPlaybackSrc ?? introSrc}
-                        personaLabel={persona}
                         onFinished={() => setIntroDone(true)}
                         className="h-full min-h-0 w-full"
                       />
@@ -1272,7 +1272,7 @@ export function SessionView({
                       <AgentTile persona={persona} compact={surface !== null} />
                     )}
                   </div>
-                  <div className={cn("w-full shrink-0 aspect-[4/3]", !surface && "max-w-[340px] sm:w-[340px]")}>
+                  <div className={cn("w-full shrink-0 aspect-[4/3]", !surface && "max-w-[340px] sm:min-w-0 sm:flex-[1_1_0]")}>
                     <CandidateTile name={userName} compact={surface !== null} />
                   </div>
                 </div>
@@ -1481,12 +1481,10 @@ function SessionFeedback({ scenarioName, sessionId }: { scenarioName?: string; s
 
 function ScenarioIntro({
   src,
-  personaLabel,
   onFinished,
   className,
 }: {
   src: string;
-  personaLabel?: string;
   onFinished?: () => void;
   className?: string;
 }) {
@@ -1541,15 +1539,7 @@ function ScenarioIntro({
         onError={() => onFinished?.()}
         onLoadedMetadata={armReleaseDeadline}
       />
-      {personaLabel ? (
-        <div className="absolute bottom-3.5 left-3.5 flex items-center gap-2 rounded-md bg-[#121419]/85 px-2.5 py-1 text-xs text-muted-foreground backdrop-blur-md">
-          <span className="font-medium text-foreground">
-            {personaLabel.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Trainer"}
-          </span>
-          <span aria-hidden="true" className="size-1 rounded-full bg-border" />
-          <span>Speaking</span>
-        </div>
-      ) : null}
+      {/* No overlay pills: intro videos carry their own name card and branding. */}
       {needsTap ? (
         <button
           type="button"
