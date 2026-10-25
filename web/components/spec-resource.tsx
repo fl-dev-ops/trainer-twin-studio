@@ -16,14 +16,15 @@ import {
 import { MessagesSquareIcon } from "@/components/icons/messages-square-icon";
 import { UserRoundIcon } from "@/components/icons/user-round-icon";
 import { PageContainer } from "@/components/page-container";
-import { PageHeader } from "@/components/page-header";
+import { RoleplayIcon } from "@/components/icons";
+import { PageHeader, SectionHeader } from "@/components/page-header";
+import { ScenarioCard, type ScenarioCardData } from "@/components/roleplay/scenario-card";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { seedCopilot } from "@/lib/copilot-handoff";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PersonaBaselinePanel } from "@/components/persona-baseline-panel";
-import { ScenarioSectionNav } from "@/components/scenario-section-nav";
 import type { PersonaBaseline } from "@/lib/persona-baseline";
 import {
   Card,
@@ -71,14 +72,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { PersonaSourcePanel } from "@/components/persona-source-panel";
 
 type ResourceType = "personas" | "agents";
-type Summary = {
-  slug: string;
-  name: string;
-  version: number;
-  objective?: string;
-  status?: "draft" | "published";
-  draftRevision?: number;
-};
+type Summary = ScenarioCardData & { version: number };
 type VersionInfo = { version: number; createdAt: string; label: string };
 
 const COPY = {
@@ -339,46 +333,57 @@ export function SpecResourceIndex({ type, specs }: { type: ResourceType; specs: 
     }
   }
 
-  async function designWithCopilot() {
-    if (type !== "agents") return;
-    seedCopilot("I want to design a new scenario from scratch. Follow the spec-builder method and walk me through it.");
-    router.push("/");
-  }
-
   return (
-    <main className="min-h-0 flex-1 overflow-auto p-5 sm:p-8">
+    <main className="min-h-0 flex-1 overflow-auto p-6">
       <PageContainer size="narrow">
         <PageHeader
-          className="border-b pb-6"
-          title={copy.title}
-          description={copy.description}
+          className={type === "agents" ? undefined : "border-b pb-6"}
+          icon={type === "agents" ? RoleplayIcon : undefined}
+          title={type === "agents" ? "Roleplay" : copy.title}
+          description={type === "agents" ? undefined : copy.description}
           actions={
             <>
-              {type === "agents" && (
-                <Button variant="outline" onClick={designWithCopilot}>
-                  <Sparkles data-icon="inline-start" /> Design with Copilot
-                </Button>
-              )}
-              <Button onClick={() => type === "agents" ? setCreateOpen(true) : void createNew()}>
-                <Plus data-icon="inline-start" /> New {copy.single}
+              <Button
+                className={type === "agents" ? "rounded-full" : undefined}
+                onClick={() => type === "agents" ? setCreateOpen(true) : void createNew()}
+              >
+                <Plus data-icon="inline-start" /> {type === "agents" ? "Create new" : `New ${copy.single}`}
               </Button>
             </>
           }
         />
 
-        {type === "agents" && <ScenarioSectionNav active="scenarios" />}
-
-        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {specs.map((spec) => (
-            <SpecCard key={spec.slug} type={type} spec={spec} />
-          ))}
-          {!specs.length && (
-            <div className="rounded-xl border px-5 py-16 text-center md:col-span-2 xl:col-span-3">
-              <p className="text-sm font-medium">No {copy.title.toLowerCase()} yet</p>
-              <p className="mt-1 text-sm text-muted-foreground">Create the first {copy.single} to get started.</p>
-            </div>
-          )}
-        </div>
+        {type === "agents" ? (
+          <>
+            <section className="mt-6 flex flex-col gap-3">
+              <SectionHeader title="All scenarios" note="Role plays your learners practise, twin-based or not" />
+              {specs.length ? (
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {specs.map((spec) => (
+                    <ScenarioCard key={spec.slug} scenario={spec} />
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border bg-card px-5 py-16 text-center">
+                  <p className="text-sm font-medium">No scenarios yet</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Create the first role play to get started.</p>
+                </div>
+              )}
+            </section>
+          </>
+        ) : (
+          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {specs.map((spec) => (
+              <SpecCard key={spec.slug} type={type} spec={spec} />
+            ))}
+            {!specs.length && (
+              <div className="rounded-xl border px-5 py-16 text-center md:col-span-2 xl:col-span-3">
+                <p className="text-sm font-medium">No {copy.title.toLowerCase()} yet</p>
+                <p className="mt-1 text-sm text-muted-foreground">Create the first {copy.single} to get started.</p>
+              </div>
+            )}
+          </div>
+        )}
 
         {type === "agents" && (
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>

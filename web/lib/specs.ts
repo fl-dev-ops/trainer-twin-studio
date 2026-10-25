@@ -62,30 +62,62 @@ export async function listSpecSummaries(type: "personas" | "agents", orgId: stri
     return db.persona.findMany({ where: { orgId }, orderBy: { slug: "asc" }, select: { slug: true, name: true, version: true } });
   }
 
-  const [agents, drafts] = await Promise.all([
+  const [agents, drafts, assignments] = await Promise.all([
     db.agent.findMany({
       where: { orgId },
       orderBy: [{ order: "asc" }, { name: "asc" }],
-      select: { slug: true, name: true, version: true, visibility: true, data: true, order: true },
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        version: true,
+        visibility: true,
+        data: true,
+        order: true,
+        persona: { select: { name: true, data: true } },
+      },
     }),
     db.specDraft.findMany({
       where: { orgId },
       orderBy: { name: "asc" },
       select: { slug: true, name: true, status: true, revision: true, agentData: true },
     }),
+    // Learners currently assigned to each scenario (cancelled/expired links don't count).
+    db.rolePlayAssignment.findMany({
+      where: { orgId, status: { in: ["pending", "used"] } },
+      orderBy: { assignedAt: "asc" },
+      select: { recipientEmail: true, deployment: { select: { agentId: true } } },
+    }),
   ]);
+  const emails = [...new Set(assignments.map((a) => a.recipientEmail))];
+  const users = emails.length
+    ? await db.user.findMany({ where: { email: { in: emails } }, select: { email: true, name: true, image: true } })
+    : [];
+  const userByEmail = new Map(users.map((u) => [u.email, u]));
+  const learnersByAgent = new Map<string, ScenarioLearner[]>();
+  for (const { recipientEmail, deployment } of assignments) {
+    const list = learnersByAgent.get(deployment.agentId) ?? [];
+    if (list.some((l) => l.email === recipientEmail)) continue;
+    const user = userByEmail.get(recipientEmail);
+    list.push({ email: recipientEmail, name: user?.name || recipientEmail, image: user?.image ?? null });
+    learnersByAgent.set(deployment.agentId, list);
+  }
+
   const published = new Set(agents.map(({ slug }) => slug));
   const draftsBySlug = new Map(drafts.map((draft) => [draft.slug, draft]));
+  const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : undefined);
   return [
     ...agents.map((agent) => {
       const data = agent.data as { objective?: unknown } | null;
-      const objective = typeof data?.objective === "string" ? data.objective : undefined;
       return {
         slug: agent.slug,
         name: agentDisplayName(agent.slug, agent.name),
         version: agent.version,
         visibility: agent.visibility,
-        objective,
+        objective: text(data?.objective),
+        quote: personaQuote(agent.persona.data, agent.slug),
+        personaName: agent.persona.name,
+        learners: learnersByAgent.get(agent.id) ?? [],
         status: "published" as const,
         draftRevision: draftsBySlug.get(agent.slug)?.status === "draft"
           ? draftsBySlug.get(agent.slug)?.revision
@@ -94,16 +126,36 @@ export async function listSpecSummaries(type: "personas" | "agents", orgId: stri
     }),
     ...drafts.filter(({ slug }) => !published.has(slug)).map((draft) => {
       const agent = draft.agentData as { objective?: unknown } | null;
-      const objective = typeof agent?.objective === "string" ? agent.objective : undefined;
       return {
         slug: draft.slug,
         name: agentDisplayName(draft.slug, draft.name),
         version: draft.revision,
-        objective,
+        objective: text(agent?.objective),
+        learners: [] as ScenarioLearner[],
         status: "draft" as const,
       };
     }),
   ];
+}
+
+export type ScenarioLearner = { email: string; name: string; image: string | null };
+
+/**
+ * A short line the trainer really said (persona `examples`), for scenario cards.
+ * Varies by scenario so cards sharing a persona don't all show the same line.
+ */
+export function personaQuote(personaData: unknown, seed: string): string | undefined {
+  const examples = isRecord(personaData) && isRecord(personaData.examples) ? personaData.examples : {};
+  const lines = Object.values(examples)
+    .flatMap((value) => (Array.isArray(value) ? value : []))
+    .filter((line): line is string => typeof line === "string")
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter((line) => line.length >= 20 && line.length <= 110)
+    .sort((a, b) => a.length - b.length || a.localeCompare(b));
+  if (!lines.length) return undefined;
+  let hash = 0;
+  for (const ch of seed) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  return lines[hash % Math.min(lines.length, 8)];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
