@@ -6,6 +6,7 @@ import { ensureDeployment } from "@/lib/deployments";
 import { sendRolePlayAssignmentEmail } from "@/lib/email";
 import { contextUploadFromAgentData } from "@/lib/context-upload";
 import { getTrainerOrg } from "@/lib/org";
+import { homeOrgsByEmail } from "@/lib/org-lock";
 
 const bodySchema = z.object({
   emails: z
@@ -71,10 +72,16 @@ export async function PUT(
     select: { id: true, recipientEmail: true, status: true, shareCode: true },
   });
   const assignmentByEmail = new Map(assignments.map((assignment) => [assignment.recipientEmail, assignment]));
-  const stats = { added: 0, resent: 0, skipped: 0 };
+  const homeOrgs = await homeOrgsByEmail(emails);
+  const stats = { added: 0, resent: 0, skipped: 0, blocked: 0 };
   const assignmentEmails: Array<{ to: string; practiceUrl: string }> = [];
 
   for (const email of emails) {
+    const home = homeOrgs.get(email);
+    if (home && home !== trainer.id) {
+      stats.blocked++; // single-org lock: learner already belongs to another organization
+      continue;
+    }
     const existing = assignmentByEmail.get(email);
     if (!existing || existing.status === "cancelled" || existing.status === "expired") {
       const shareCode = newAssignmentShareCode();

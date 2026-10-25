@@ -1,5 +1,6 @@
 import { apiKey } from "@better-auth/api-key";
 import { betterAuth } from "better-auth";
+import { APIError } from "better-auth/api";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { organization } from "better-auth/plugins";
 import { createAccessControl } from "better-auth/plugins/access";
@@ -8,6 +9,12 @@ import { nextCookies } from "better-auth/next-js";
 import { db } from "@/lib/db";
 import { BASE_DOMAIN, safeFamilyRedirect } from "@/lib/base-domain";
 import { sendInvitationEmail, sendPasswordResetEmail } from "@/lib/email";
+import { belongsToOtherOrg, ORG_LOCK_MESSAGE } from "@/lib/org-lock";
+
+// Single-org lock: block invites/memberships for people already bound to another org.
+async function assertSingleOrg(email: string, organizationId: string) {
+  if (await belongsToOtherOrg(email, organizationId)) throw new APIError("FORBIDDEN", { message: ORG_LOCK_MESSAGE });
+}
 
 const organizationAccess = createAccessControl({
   ...defaultStatements,
@@ -48,6 +55,17 @@ export const auth = betterAuth({
       // founder onboarding flow, never self-serve.
       allowUserToCreateOrganization: false,
       organizationLimit: 1,
+      organizationHooks: {
+        beforeCreateInvitation: async ({ invitation, organization }) => {
+          await assertSingleOrg(invitation.email, organization.id);
+        },
+        beforeAcceptInvitation: async ({ user, organization }) => {
+          await assertSingleOrg(user.email, organization.id);
+        },
+        beforeAddMember: async ({ user, organization }) => {
+          await assertSingleOrg(user.email, organization.id);
+        },
+      },
       sendInvitationEmail: async (data) => {
         const inviteLink = `https://auth.${BASE_DOMAIN}/invite?token=${data.id}`;
         const inviterName =

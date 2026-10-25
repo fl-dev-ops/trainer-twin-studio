@@ -5,6 +5,7 @@ import { Prisma } from "@/lib/generated/prisma/client";
 import { ensureDeployment, type DeliveryMode } from "@/lib/deployments";
 import { initRuntimeState } from "@/lib/runtime/runtime";
 import { getAgentConfigForAgent } from "@/lib/specs";
+import { assertUserInOrg } from "@/lib/org-lock";
 
 const shareCode = () => randomBytes(18).toString("base64url");
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
@@ -190,6 +191,7 @@ export async function activateSession(input: {
   mode?: DeliveryMode;
   idempotencyKey?: string;
 }) {
+  await assertUserInOrg(input.userId, input.orgId); // single-org lock: every session path goes through here
   const mode = input.mode ?? "voice";
   const requestedDocs = Array.from(new Set([...(input.contextIds ?? []), ...(input.contextId ? [input.contextId] : [])]));
   let assignmentId: string | null = null;

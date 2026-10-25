@@ -270,6 +270,7 @@ export function RolePlayPreview({
         added?: number;
         resent?: number;
         skipped?: number;
+        blocked?: number;
         emailFailures?: number;
         error?: string;
       } | null;
@@ -283,8 +284,12 @@ export function RolePlayPreview({
       if (result.added) parts.push(`${result.added} learner${result.added === 1 ? "" : "s"} assigned`);
       if (result.resent) parts.push(`${result.resent} practice link${result.resent === 1 ? "" : "s"} resent`);
       if (result.skipped) parts.push(`${result.skipped} skipped`);
+      const blocked = result.blocked
+        ? `${result.blocked} learner${result.blocked === 1 ? " is" : "s are"} already part of another organization and ${result.blocked === 1 ? "was" : "were"} not assigned.`
+        : "";
+      if (blocked) toast.warning(blocked);
       if (parts.length === 0) {
-        toast.info("Nothing to send");
+        if (!blocked) toast.info("Nothing to send");
       } else if (result.emailFailures) {
         toast.warning(`${parts.join(" · ")}, but ${result.emailFailures} email${result.emailFailures === 1 ? "" : "s"} could not be sent.`);
       } else {

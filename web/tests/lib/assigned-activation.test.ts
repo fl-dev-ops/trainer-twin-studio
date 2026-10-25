@@ -13,11 +13,15 @@ mock.module("@/lib/db", () => ({ db: {
       deployment: { id: "deployment", status: deploymentStatus, allowedModes: "voice", agent: { id: "agent" } },
     }),
     update: async ({ data }: { data: { status: string } }) => { updatedStatus = data.status; },
+    findMany: async () => [],
   },
   interviewSession: {
     findUnique: async () => existing,
+    findMany: async () => [], // single-org lock lookup (no prior sessions)
     update: async () => ({}),
   },
+  user: { findUnique: async () => ({ email: "learner@example.com" }) },
+  member: { findMany: async () => [] },
 } }));
 
 const { activateSession } = await import("../../lib/interview-sessions");

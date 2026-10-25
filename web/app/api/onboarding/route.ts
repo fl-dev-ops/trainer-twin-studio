@@ -11,6 +11,7 @@ import {
   notionAuthorizationUrl,
 } from "@/lib/notion-oauth";
 import { getOrCreateOrgKnowledgeBase } from "@/lib/org-knowledge";
+import { homeOrgsByEmail, ORG_LOCK_MESSAGE } from "@/lib/org-lock";
 import { validateOrgSlug } from "@/lib/slugs";
 import { startYouTubeOAuth } from "@/lib/youtube-oauth";
 
@@ -83,6 +84,11 @@ export async function POST(request: Request) {
       { error: "This invite belongs to a different email address" },
       { status: 403 },
     );
+  }
+
+  // Single-org lock: a person already bound to an org can't found a second one.
+  if ((await homeOrgsByEmail([session.user.email])).size > 0) {
+    return NextResponse.json({ error: ORG_LOCK_MESSAGE }, { status: 409 });
   }
 
   const { orgName, slug } = parsed.data;

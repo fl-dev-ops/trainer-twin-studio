@@ -2,6 +2,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { activateInterviewRuntime } from "@/lib/session-activation";
 import { isApiError, paginationFromUrl, requireExternalApi } from "@/lib/external-api";
+import { OrgLockError } from "@/lib/org-lock";
 
 const querySchema = z.object({
   status: z.enum(["assigned", "activating", "active", "completed", "abandoned", "failed", "revoked"]).optional(),
@@ -98,6 +99,7 @@ export async function POST(request: Request) {
     if (!activation) return Response.json({ error: "Could not activate session" }, { status: 409 });
     return Response.json(activation, { status: 201 });
   } catch (error) {
+    if (error instanceof OrgLockError) return Response.json({ error: error.message }, { status: 409 });
     return Response.json({ error: error instanceof Error ? error.message : "Session activation failed" }, { status: 400 });
   }
 }

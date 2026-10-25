@@ -6,6 +6,7 @@ import { ensureDeployment } from "@/lib/deployments";
 import { sendRolePlayAssignmentEmail } from "@/lib/email";
 import { contextUploadFromAgentData } from "@/lib/context-upload";
 import { isApiError, paginationFromUrl, requireExternalApi } from "@/lib/external-api";
+import { belongsToOtherOrg, ORG_LOCK_MESSAGE } from "@/lib/org-lock";
 
 const createSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(320).optional(),
@@ -97,6 +98,9 @@ export async function POST(request: Request) {
 
   const recipientEmail = parsed.data.email ?? user?.email.toLowerCase();
   if (!recipientEmail) return Response.json({ error: "Email is required" }, { status: 400 });
+  if (await belongsToOtherOrg(recipientEmail, api.org.id)) {
+    return Response.json({ error: ORG_LOCK_MESSAGE }, { status: 409 });
+  }
   const deployment = await ensureDeployment(api.org.id, agent.id);
   const existing = await db.rolePlayAssignment.findFirst({
     // ponytail: dashboard/API requests are serialized; add a DB unique index if concurrent assignment creation appears.

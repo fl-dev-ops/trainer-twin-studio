@@ -4,6 +4,7 @@ import { BASE_DOMAIN } from "@/lib/base-domain";
 import { db } from "@/lib/db";
 import { sendInvitationEmail } from "@/lib/email";
 import { isApiError, paginationFromUrl, requireExternalApi } from "@/lib/external-api";
+import { belongsToOtherOrg, ORG_LOCK_MESSAGE } from "@/lib/org-lock";
 
 const createSchema = z.object({ email: z.string().trim().email().max(320) }).strict();
 
@@ -53,6 +54,7 @@ export async function POST(request: Request) {
     select: { id: true },
   });
   if (existingMember) return Response.json({ error: "User is already an organization member" }, { status: 409 });
+  if (await belongsToOtherOrg(email, api.org.id)) return Response.json({ error: ORG_LOCK_MESSAGE }, { status: 409 });
 
   const inviter = await db.member.findFirst({
     where: {
