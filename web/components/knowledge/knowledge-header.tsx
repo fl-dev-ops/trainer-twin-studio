@@ -1,6 +1,7 @@
 "use client";
 
 import { Clock, Plus, Upload } from "lucide-react";
+import { TwinIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import type { KnowledgeStats } from "./types";
@@ -31,8 +32,9 @@ export function KnowledgeHeader({
   return (
     <PageHeader
       className="border-b pb-6"
-      title="Knowledge"
-      description="Upload and manage source material used to ground your scenarios."
+      icon={TwinIcon}
+      title="Twin"
+      description="The knowledge your twin answers from: upload and manage source material."
       actions={
         <>
           {stats?.lastIndexedAt && (

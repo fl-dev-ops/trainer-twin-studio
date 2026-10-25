@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { PageContainer } from "@/components/page-container";
+import { SettingsIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { OrganizationForm, ProfileForm } from "@/components/profile-form";
 import { auth } from "@/lib/auth";
@@ -35,7 +36,8 @@ export default async function ProfilePage() {
       <PageContainer size="narrow">
         <PageHeader
           className="border-b pb-6"
-          title="Profile"
+          icon={SettingsIcon}
+          title="Settings"
           description="Manage the details shown across your TrainerTwin workspace."
         />
 

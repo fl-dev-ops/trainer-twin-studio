@@ -1,0 +1,71 @@
+import type { SVGProps } from "react";
+
+/**
+ * Studio nav/page icons, matching the V2 prototype (Tabler icon paths, MIT).
+ * Inlined instead of adding @tabler/icons-react for a handful of glyphs.
+ */
+function tabler(paths: string[], name: string) {
+  function Icon(props: SVGProps<SVGSVGElement>) {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+        {...props}
+      >
+        {paths.map((d) => (
+          <path key={d} d={d} />
+        ))}
+      </svg>
+    );
+  }
+  Icon.displayName = name;
+  return Icon;
+}
+
+/** Sessions (prototype: "Twin sessions"). */
+export const SessionsIcon = tabler(
+  [
+    "M21 14l-3 -3h-7a1 1 0 0 1 -1 -1v-6a1 1 0 0 1 1 -1h9a1 1 0 0 1 1 1v10",
+    "M14 15v2a1 1 0 0 1 -1 1h-7l-3 3v-10a1 1 0 0 1 1 -1h2",
+  ],
+  "SessionsIcon",
+);
+
+/** Roleplay (prototype: "Scenarios"). */
+export const RoleplayIcon = tabler(
+  ["M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0", "M6 21v-2a4 4 0 0 1 4 -4h4", "M15 19l2 2l4 -4"],
+  "RoleplayIcon",
+);
+
+/** Twin (prototype: "Twin's brain"). */
+export const TwinIcon = tabler(
+  [
+    "M17 21v-1.25c0 -2.311 .778 -1.92 2.244 -3.749a8 8 0 1 0 -14.244 -5.001q 0 .25 -1.876 3.518a1 1 0 0 0 .876 1.482h2v3a2 2 0 0 0 2 2h3",
+    "M12 11a1 1 0 1 0 2 0a1 1 0 1 0 -2 0",
+  ],
+  "TwinIcon",
+);
+
+/** Users (prototype: "Twin users"). */
+export const UsersIcon = tabler(
+  [
+    "M9 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0",
+    "M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2",
+    "M16 3.13a4 4 0 0 1 0 7.75",
+    "M21 21v-2a4 4 0 0 0 -3 -3.85",
+  ],
+  "UsersIcon",
+);
+
+export const SettingsIcon = tabler(
+  [
+    "M10.325 4.317c.426 -1.756 2.924 -1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543 -.94 3.31 .826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756 .426 1.756 2.924 0 3.35a1.724 1.724 0 0 0 -1.066 2.573c.94 1.543 -.826 3.31 -2.37 2.37a1.724 1.724 0 0 0 -2.572 1.065c-.426 1.756 -2.924 1.756 -3.35 0a1.724 1.724 0 0 0 -2.573 -1.066c-1.543 .94 -3.31 -.826 -2.37 -2.37a1.724 1.724 0 0 0 -1.065 -2.572c-1.756 -.426 -1.756 -2.924 0 -3.35a1.724 1.724 0 0 0 1.066 -2.573c-.94 -1.543 .826 -3.31 2.37 -2.37c1 .608 2.296 .07 2.572 -1.065",
+    "M9 12a3 3 0 1 0 6 0a3 3 0 0 0 -6 0",
+  ],
+  "SettingsIcon",
+);

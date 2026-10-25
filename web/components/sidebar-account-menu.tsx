@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { KeyRound, LogOut, UserRound } from "lucide-react";
+import { AudioLines, BookOpenText, KeyRound, LogOut, UserCog, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -10,19 +10,22 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenuButton } from "@/components/ui/sidebar";
 import { authClient } from "@/lib/auth-client";
 import { BASE_DOMAIN } from "@/lib/base-domain";
 
-export function SidebarAccountMenu({
-  profileHref,
-  isActive = false,
-}: {
-  profileHref?: string;
-  isActive?: boolean;
-}) {
+const DOCS_URL =
+  process.env.NEXT_PUBLIC_DOCS_URL ??
+  (process.env.NODE_ENV === "development"
+    ? "https://docs.trainertwin.localhost"
+    : "https://docs.trainertwin.com");
+
+/** Footer user card. Its menu also holds studio pages that are not in the main nav. */
+export function SidebarAccountMenu() {
   const { data: session } = authClient.useSession();
   const [signingOut, setSigningOut] = useState(false);
   const user = session?.user;
@@ -44,30 +47,48 @@ export function SidebarAccountMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        render={<SidebarMenuButton size="lg" isActive={isActive} tooltip="Profile" />}
+        render={
+          <SidebarMenuButton
+            size="lg"
+            tooltip={user.name}
+            className="h-11 gap-2.5 rounded-xl bg-card px-2 text-[13px] shadow-xs hover:bg-card data-open:bg-card"
+          />
+        }
       >
-        <Avatar>
+        <Avatar className="size-7">
           {user.image ? <AvatarImage src={user.image} alt="" /> : null}
           <AvatarFallback>{user.name.charAt(0).toUpperCase() || "U"}</AvatarFallback>
         </Avatar>
-        <span className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
-          <span className="block truncate font-medium">{user.name}</span>
-          <span className="block truncate text-xs text-muted-foreground">{user.email}</span>
-        </span>
+        <span className="min-w-0 flex-1 truncate font-medium group-data-[collapsible=icon]:hidden">{user.name}</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-56">
         <DropdownMenuGroup>
-          {profileHref ? (
-            <DropdownMenuItem render={<Link href={profileHref} />}>
-              <UserRound />
-              Profile
-            </DropdownMenuItem>
-          ) : null}
+          <DropdownMenuLabel className="truncate font-normal text-muted-foreground">{user.email}</DropdownMenuLabel>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuItem render={<Link href="/personas" />}>
+            <UserCog />
+            Personas
+          </DropdownMenuItem>
+          <DropdownMenuItem render={<Link href="/voice" />}>
+            <AudioLines />
+            Voices
+          </DropdownMenuItem>
+          <DropdownMenuItem render={<Link href="/users" />}>
+            <Users />
+            Team
+          </DropdownMenuItem>
           <DropdownMenuItem render={<Link href="/developer" />}>
             <KeyRound />
             Developer API
           </DropdownMenuItem>
+          <DropdownMenuItem render={<a href={DOCS_URL} target="_blank" rel="noreferrer" />}>
+            <BookOpenText />
+            Docs
+          </DropdownMenuItem>
         </DropdownMenuGroup>
+        <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem onClick={signOut} disabled={signingOut}>
             <LogOut />

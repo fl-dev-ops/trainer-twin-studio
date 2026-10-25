@@ -3,124 +3,112 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  AudioLines,
-  BookOpen,
-  BookOpenText,
-  GraduationCap,
-  History,
-  MessagesSquare,
-  UserRound,
-  Users,
-} from "lucide-react";
+import { RoleplayIcon, SessionsIcon, SettingsIcon, TwinIcon, UsersIcon } from "@/components/icons";
 import { SidebarAccountMenu } from "@/components/sidebar-account-menu";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
-
-const DOCS_URL =
-  process.env.NEXT_PUBLIC_DOCS_URL ??
-  (process.env.NODE_ENV === "development"
-    ? "https://docs.trainertwin.localhost"
-    : "https://docs.trainertwin.com");
+import { cn } from "@/lib/utils";
 
 const NAV = [
-  {
-    label: "Activity",
-    items: [
-      { title: "Sessions", href: "/sessions", icon: History },
-      { title: "Learners", href: "/learners", icon: GraduationCap },
-    ],
-  },
-  {
-    label: "Create",
-    items: [{ title: "Scenarios", href: "/agents", icon: MessagesSquare }],
-  },
-  {
-    label: "Library",
-    items: [
-      { title: "Personas", href: "/personas", icon: UserRound },
-      { title: "Voices", href: "/voice", icon: AudioLines },
-      { title: "Knowledge", href: "/knowledge", icon: BookOpen },
-    ],
-  },
-  {
-    label: "Organization",
-    items: [{ title: "Users", href: "/users", icon: Users }],
-  },
+  // All learner sessions: role play and twin.
+  { title: "Sessions", href: "/sessions", icon: SessionsIcon },
+  // Every scenario, twin role play or not.
+  { title: "Roleplay", href: "/agents", icon: RoleplayIcon },
+  // The twin's knowledge.
+  { title: "Twin", href: "/knowledge", icon: TwinIcon },
+  // Every learner.
+  { title: "Users", href: "/learners", icon: UsersIcon },
 ];
+
+/** Prototype rail: white pill + brand text/icon for the active item, quiet text otherwise. */
+const navButton = cn(
+  "h-7 gap-2 rounded-md px-2 text-[13px] font-medium text-sidebar-foreground/80 hover:bg-sidebar-accent/60",
+  "[&_svg]:size-4 [&_svg]:text-sidebar-foreground/70",
+  "data-active:bg-card data-active:text-primary data-active:shadow-xs data-active:hover:bg-card",
+  "data-active:[&_svg]:text-(--brand)",
+);
+
+function isActive(pathname: string, href: string) {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function Brand() {
+  const { state, toggleSidebar } = useSidebar();
+  const collapsed = state === "collapsed";
+  return (
+    <div className="flex items-center justify-between gap-2 group-data-[collapsible=icon]:flex-col">
+      <button
+        type="button"
+        onClick={toggleSidebar}
+        aria-label={collapsed ? "Expand menu" : "Collapse menu"}
+        aria-expanded={!collapsed}
+        className="flex h-9 items-center gap-2 rounded-lg px-1 outline-hidden ring-sidebar-ring focus-visible:ring-2"
+      >
+        <Image src="/trainertwin-mark.svg" alt="" width={20} height={15} priority />
+        <span className="text-[15px] font-semibold tracking-tight group-data-[collapsible=icon]:hidden">
+          TrainerTwin
+        </span>
+      </button>
+      <ThemeToggle />
+    </div>
+  );
+}
 
 export function AppSidebar() {
   const pathname = usePathname();
 
   return (
     <Sidebar variant="inset" collapsible="icon">
-      <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton size="lg" render={<Link href="/" />}>
-              <span className="grid size-8 place-items-center">
-                <Image src="/trainertwin-mark.svg" alt="" width={25} height={19} priority />
-              </span>
-              <span className="flex flex-col group-data-[collapsible=icon]:hidden">
-                <span className="font-semibold">TrainerTwin</span>
-                <span className="text-xs text-muted-foreground">Digital twin studio</span>
-              </span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+      <SidebarHeader className="pt-3">
+        <Brand />
       </SidebarHeader>
       <SidebarContent>
-        {NAV.map((group) => (
-          <SidebarGroup key={group.label}>
-            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu className="gap-1">
-                {group.items.map((item) => {
-                  const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-                  return (
-                    <SidebarMenuItem key={item.href}>
-                      <SidebarMenuButton render={<Link href={item.href} />} isActive={active} tooltip={item.title}>
-                        <item.icon />
-                        <span>{item.title}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu className="gap-0.5">
+              {NAV.map((item) => (
+                <SidebarMenuItem key={item.href}>
+                  <SidebarMenuButton
+                    render={<Link href={item.href} />}
+                    isActive={isActive(pathname, item.href)}
+                    tooltip={item.title}
+                    className={navButton}
+                  >
+                    <item.icon />
+                    <span>{item.title}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter>
-        <SidebarMenu className="gap-1">
+      <SidebarFooter className="gap-2 pb-3">
+        <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
-              render={
-                <Link
-                  href={DOCS_URL}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label="Documentation (opens in a new tab)"
-                />
-              }
-              tooltip="Documentation"
+              render={<Link href="/profile" />}
+              isActive={isActive(pathname, "/profile")}
+              tooltip="Settings"
+              className={navButton}
             >
-              <BookOpenText />
-              <span>Docs</span>
+              <SettingsIcon />
+              <span>Settings</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarAccountMenu profileHref="/profile" isActive={pathname === "/profile"} />
+            <SidebarAccountMenu />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
