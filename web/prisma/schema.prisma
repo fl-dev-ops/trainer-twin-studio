@@ -783,3 +783,40 @@ model IssueReport {
   @@index([orgId, status])
   @@index([userId])
 }
+
+// ---- Usage metering ----
+
+// Append-only ledger of raw usage (tokens, audio seconds, characters). One row per
+// metric per event; prices/credits are computed later from these rows, never stored here.
+// No FK relations on purpose: billing history must survive user/org/session deletion.
+model UsageEvent {
+  id             String   @id @default(cuid())
+  orgId          String
+  userId         String?
+  sessionId      String?
+  source         String // voice_agent | chat | copilot | report | synthesis | spec | rerank | evaluate | runtime
+  provider       String // e.g. vercel | Deepgram | Sarvam | livekit
+  model          String
+  metric         String // input_tokens | output_tokens | cache_read_tokens | ... | stt_seconds | tts_characters | cost_usd
+  quantity       Float
+  idempotencyKey String   @unique
+  meta           Json?
+  createdAt      DateTime @default(now())
+
+  @@index([orgId, createdAt])
+  @@index([userId, createdAt])
+  @@index([sessionId])
+}
+
+// Last running total received per producer stream (e.g. one LiveKit agent job), used to
+// turn cumulative snapshots into deltas so lost/retried posts never lose or double-count.
+model UsageCursor {
+  streamId  String
+  provider  String
+  model     String
+  metric    String
+  lastValue Float
+  updatedAt DateTime @updatedAt
+
+  @@id([streamId, provider, model, metric])
+}
