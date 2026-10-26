@@ -124,15 +124,21 @@ function omitRatings<T extends { ratings: unknown }>(row: T): Omit<T, "ratings">
 /** Persona-level label of who talks to the twin ("Agent", "Learner"...), from the skill's scenario.json. */
 const whoAsks = (data: Record<string, unknown>) => text(asRecord(data.scenario).learner_role) ?? "Learner";
 
+/** The twin's AI avatar (image or video), set on its own persona as `data.avatarUrl`; https or same-site paths only. */
+function aiAvatarUrl(personaData: unknown): string | null {
+  const url = text(asRecord(personaData).avatarUrl);
+  return url && (url.startsWith("https://") || url.startsWith("/")) ? url : null;
+}
+
 const agentsRouter = t.router({
   /** The library: all-skills twins and skill twins, with assigned learners and the latest learner question. */
   list: studioProcedure.query(async ({ ctx }) => {
     const orgId = ctx.user.orgId;
-    const [agents, assignments, latest] = await Promise.all([
+    const [agents, assignments, latest, admin] = await Promise.all([
       db.agent.findMany({
         where: { orgId, kind: "TWIN" },
         orderBy: [{ order: "asc" }, { name: "asc" }],
-        select: { id: true, slug: true, name: true, data: true, updatedAt: true },
+        select: { id: true, slug: true, name: true, data: true, updatedAt: true, persona: { select: { data: true } } },
       }),
       db.twinAssignment.findMany({
         where: { orgId, status: "active" },
@@ -145,6 +151,8 @@ const agentsRouter = t.router({
         distinct: ["agentId"],
         select: { agentId: true, transcript: true },
       }),
+      // A twin is the org admin's own AI: their avatar stands in when no AI avatar is configured.
+      db.member.findFirst({ where: { organizationId: orgId, role: "admin" }, select: { user: { select: { name: true, email: true, image: true } } } }),
     ]);
     const questionOf = new Map(latest.map((row) => [row.agentId, firstExchange(transcriptTurns(row.transcript)).question]));
     const cards = agents.map((agent) => {
@@ -156,6 +164,7 @@ const agentsRouter = t.router({
         quote: questionOf.get(agent.id) ?? null,
         updatedAt: agent.updatedAt.toISOString(),
         allSkills: data.source === TWIN_SOURCE,
+        face: { person: admin?.user ?? null, avatarUrl: aiAvatarUrl(agent.persona.data) },
         learners: assignments
           .filter((row) => row.agentId === agent.id)
           .map((row) => ({ name: row.user?.name || row.recipientEmail, email: row.recipientEmail, image: row.user?.image ?? null })),
