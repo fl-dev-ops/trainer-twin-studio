@@ -5,14 +5,16 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { authClient } from "@/lib/auth-client";
 import { BASE_DOMAIN } from "@/lib/base-domain";
 import { CopyButton } from "@/components/users/copy-button";
 
-/** Creates an organization invitation and surfaces the shareable signup link. */
+/** Invites someone by email as team (runs the studio) or user (practises); no second admin. Shows the signup link too. */
 export function InviteUser({ organizationId }: { organizationId: string }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
+  const [role, setRole] = useState<"user" | "team">("user");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
@@ -24,7 +26,7 @@ export function InviteUser({ organizationId }: { organizationId: string }) {
     setInviteUrl(null);
     const invited = await authClient.organization.inviteMember({
       email: email.trim(),
-      role: "user",
+      role,
       organizationId,
     });
     setBusy(false);
@@ -49,8 +51,12 @@ export function InviteUser({ organizationId }: { organizationId: string }) {
           required
           className="max-w-xs"
         />
+        <NativeSelect aria-label="Role" value={role} onChange={(e) => setRole(e.target.value as "user" | "team")}>
+          <NativeSelectOption value="user">User</NativeSelectOption>
+          <NativeSelectOption value="team">Team</NativeSelectOption>
+        </NativeSelect>
         <Button type="submit" disabled={busy}>
-          {busy ? "Inviting…" : "Invite user"}
+          {busy ? "Inviting…" : "Invite"}
         </Button>
       </form>
       {error ? <p className="text-destructive text-sm">{error}</p> : null}

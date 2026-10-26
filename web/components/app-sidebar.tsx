@@ -48,7 +48,7 @@ const navButton = cn(
   "group-data-[collapsible=icon]:justify-center",
 );
 
-const NAV_HREFS = [...NAV_GROUPS.flatMap((group) => group.items.map((item) => item.href)), "/profile"];
+const NAV_HREFS = [...NAV_GROUPS.flatMap((group) => group.items.map((item) => item.href)), "/settings"];
 
 const matches = (pathname: string, href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
@@ -120,8 +120,8 @@ export function AppSidebar() {
           <SidebarMenu className="gap-2">
             <SidebarMenuItem>
               <SidebarMenuButton
-                render={<Link href="/profile" />}
-                isActive={isActive(pathname, "/profile")}
+                render={<Link href="/settings" />}
+                isActive={isActive(pathname, "/settings")}
                 tooltip="Settings"
                 className={navButton}
               >

@@ -51,7 +51,7 @@
     "primary": {
       "type": "button",
       "label": "Create API key",
-      "href": "https://dash.trainertwin.com/profile"
+      "href": "https://dash.trainertwin.com/developer"
     }
   },
   "footer": {
