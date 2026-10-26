@@ -1,7 +1,9 @@
+import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { MainCollectionService } from "@/lib/main-collection";
+import { putObject, s3Configured, scenarioArtifactsPrefix, scenarioRunPrefix } from "@/lib/s3";
 import { validSlug } from "@/lib/specs";
 
 /**
@@ -10,6 +12,12 @@ import { validSlug } from "@/lib/specs";
  * Uses existing tables only: the skill lives in Agent.data, items in Chroma.
  * The files are stored exactly as ingestion produced them: schemas validate, they never trim,
  * default or drop anything (loose objects keep unknown keys).
+ *
+ * Where each file lives:
+ *   S3        every file as produced (SKILL.md, scenario.json, items.json, patterns.md; per run:
+ *             plan.json, report.md, specs/*.md), versioned with the Agent. The source of truth.
+ *   Postgres  Agent.data.skill / .scenario for the runtime, plus an `artifacts` pointer to S3.
+ *   Chroma    items.json as `scenario_item` records, for retrieval during sessions.
  */
 
 const kebab = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "must be kebab-case");
@@ -52,6 +60,9 @@ export const scenarioItemSchema = z.looseObject({
 });
 export type ScenarioItem = z.infer<typeof scenarioItemSchema>;
 
+/** Safe as an S3 path segment and stable across retries of the same ingest run. */
+const runId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/, "letters, digits, dot, dash or underscore");
+
 export const scenarioIngestSchema = z.object({
   /** The trainer persona the scenario speaks as; must already exist in the org. */
   personaSlug: z.string().min(1),
@@ -59,8 +70,47 @@ export const scenarioIngestSchema = z.object({
   skill: z.string().min(1).max(200_000),
   scenario: scenarioManifestSchema,
   items: z.array(scenarioItemSchema).max(5000),
+  /** patterns.md: reviewer evidence, archived to S3 only. */
+  patterns: z.string().max(1_000_000).optional(),
+  /** The ingest run this scenario came from (see /api/internal/scenario-runs). */
+  runId: runId.optional(),
 });
 export type ScenarioIngestInput = z.infer<typeof scenarioIngestSchema>;
+
+/** One ingest run's files: plan.json, report.md and specs/<id>.md. */
+export const scenarioRunSchema = z.object({
+  runId,
+  plan: z.looseObject({}),
+  report: z.string().max(1_000_000),
+  specs: z.record(z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "spec ids are kebab-case"), z.string().max(1_000_000)).default({}),
+});
+export type ScenarioRunInput = z.infer<typeof scenarioRunSchema>;
+
+/** Bearer check shared by the ingest routes. Its own secret: the ingest agent shouldn't hold the copilot one. */
+export function ingestAuthorized(request: Request) {
+  const expected = process.env.SCENARIO_INGEST_SECRET;
+  const actual = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  if (!expected || !actual) return false;
+  const left = Buffer.from(actual);
+  const right = Buffer.from(expected);
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
+// The same serialization scenario-ingest uses for these files, so the S3 copies match byte for byte.
+export const fileText = {
+  scenario: (manifest: unknown) => `${JSON.stringify(manifest, null, 2)}\n`,
+  items: (items: unknown) => `${JSON.stringify(items, null, 1)}\n`,
+  plan: (plan: unknown) => `${JSON.stringify(plan, null, 1)}\n`,
+};
+
+/** JSON with object keys sorted, so data read back from jsonb (which reorders keys) compares equal. */
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
 
 /** SKILL.md without its `---` YAML header. Only for reading step goals; the stored skill keeps its header. */
 export function skillBody(skill: string): string {
@@ -108,13 +158,22 @@ export class ScenarioIngestError extends Error {
 
 const json = (value: unknown) => value as Prisma.InputJsonValue;
 
-/** Creates or updates the scenario, then replaces its items. Safe to call again with the same files. */
+async function requireOrg(orgId: string) {
+  if (!s3Configured) throw new ScenarioIngestError("Storage is not configured", 503);
+  const org = await db.organization.findUnique({ where: { id: orgId }, select: { id: true, slug: true } });
+  if (!org) throw new ScenarioIngestError("Organization not found", 404);
+  return org;
+}
+
+/**
+ * Creates or updates the scenario. Order: S3 files, then Chroma items, then the Postgres rows, so a
+ * failure never leaves a published scenario without its files or items. Safe to call again.
+ */
 export async function ingestScenario(orgId: string, input: ScenarioIngestInput) {
   const [org, persona] = await Promise.all([
-    db.organization.findUnique({ where: { id: orgId }, select: { id: true, slug: true } }),
+    requireOrg(orgId),
     db.persona.findFirst({ where: { orgId, slug: input.personaSlug }, select: { id: true } }),
   ]);
-  if (!org) throw new ScenarioIngestError("Organization not found", 404);
   if (!persona) throw new ScenarioIngestError(`Persona "${input.personaSlug}" was not found in this organization`, 404);
 
   const { slug, domainSlug, agentData, domainData } = buildScenario(org.slug, input.scenario, input.skill);
@@ -129,37 +188,57 @@ export async function ingestScenario(orgId: string, input: ScenarioIngestInput) 
     throw new ScenarioIngestError(`Scenario "${slug}" belongs to another organization`, 409);
   }
 
-  // Items first: if Chroma fails nothing is published, and a retry replaces them anyway.
+  // An intro video is provisioned separately, so a re-ingest carries it forward (as publishSpecDraft does).
+  const previous = currentAgent?.data as Record<string, unknown> | null | undefined;
+  const content = { ...agentData, ...(typeof previous?.introVideo === "string" ? { introVideo: previous.introVideo } : {}) };
+  // Decide the version first: the S3 folder and the Agent row must carry the same number.
+  const previousContent = Object.fromEntries(Object.entries(previous ?? {}).filter(([key]) => key !== "artifacts"));
+  const unchanged = Boolean(currentAgent) && currentAgent!.personaId === persona.id && stableJson(previousContent) === stableJson(content);
+  const version = currentAgent ? (unchanged ? currentAgent.version : currentAgent.version + 1) : 1;
+  const artifacts = scenarioArtifactsPrefix(org.id, slug, version);
+  const data = { ...content, artifacts };
+
+  await Promise.all([
+    putObject(`${artifacts}/SKILL.md`, input.skill, "text/markdown; charset=utf-8"),
+    putObject(`${artifacts}/scenario.json`, fileText.scenario(input.scenario), "application/json"),
+    putObject(`${artifacts}/items.json`, fileText.items(input.items), "application/json"),
+    ...(input.patterns !== undefined ? [putObject(`${artifacts}/patterns.md`, input.patterns, "text/markdown; charset=utf-8")] : []),
+  ]);
   const itemCount = await MainCollectionService.replaceScenarioItems(org.id, slug, input.scenario.scenario, input.items);
 
-  // An intro video is provisioned separately, so a re-ingest carries it forward (as publishSpecDraft does).
-  const previousVideo = (currentAgent?.data as { introVideo?: unknown } | null | undefined)?.introVideo;
-  const data = { ...agentData, ...(typeof previousVideo === "string" ? { introVideo: previousVideo } : {}) };
-
-  const version = await db.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     if (!currentDomain) {
       await tx.domain.create({ data: { slug: domainSlug, name: domainData.name, version: 1, data: json(domainData), orgId: org.id } });
     }
     if (!currentAgent) {
       await tx.agent.create({
-        data: { slug, name: agentData.name, version: 1, domainSlug, personaId: persona.id, data: json(data), orgId: org.id },
+        data: { slug, name: agentData.name, version, domainSlug, personaId: persona.id, data: json(data), orgId: org.id },
       });
-      return 1;
+      return;
     }
-    if (JSON.stringify(currentAgent.data) === JSON.stringify(data) && currentAgent.personaId === persona.id) {
-      return currentAgent.version;
-    }
+    if (unchanged) return;
     // Same versioning as a dashboard publish: snapshot the old spec, bump the version.
-    const { version: previous } = currentAgent;
     await tx.specVersion.create({
-      data: { entityType: "agents", entitySlug: slug, version: previous, data: json(currentAgent.data), orgId: org.id },
+      data: { entityType: "agents", entitySlug: slug, version: currentAgent.version, data: json(currentAgent.data), orgId: org.id },
     });
     await tx.agent.update({
       where: { id: currentAgent.id },
-      data: { name: agentData.name, version: previous + 1, domainSlug, personaId: persona.id, data: json(data) },
+      data: { name: agentData.name, version, domainSlug, personaId: persona.id, data: json(data) },
     });
-    return previous + 1;
   });
 
-  return { slug, name: agentData.name, version, created: !currentAgent, items: itemCount };
+  return { slug, name: agentData.name, version, created: !currentAgent, items: itemCount, artifacts, runId: input.runId ?? null };
+}
+
+/** Archives one ingest run's files (plan.json, report.md, specs/*.md) to S3. Re-sending overwrites them. */
+export async function ingestScenarioRun(orgId: string, input: ScenarioRunInput) {
+  const org = await requireOrg(orgId);
+  const prefix = scenarioRunPrefix(org.id, input.runId);
+  const specs = Object.entries(input.specs);
+  await Promise.all([
+    putObject(`${prefix}/plan.json`, fileText.plan(input.plan), "application/json"),
+    putObject(`${prefix}/report.md`, input.report, "text/markdown; charset=utf-8"),
+    ...specs.map(([id, text]) => putObject(`${prefix}/specs/${id}.md`, text, "text/markdown; charset=utf-8")),
+  ]);
+  return { runId: input.runId, files: 2 + specs.length, prefix };
 }

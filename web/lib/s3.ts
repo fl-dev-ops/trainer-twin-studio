@@ -56,6 +56,15 @@ export function personaSourcePrefix(orgId: string, personaId: string, sourceId?:
     : `${orgPrefix(orgId)}/personas/${personaId}/sources`;
 }
 
+/** Files from the scenario-ingest agent, kept exactly as it produced them. */
+export function scenarioArtifactsPrefix(orgId: string, agentSlug: string, version: number) {
+  return `${orgPrefix(orgId)}/scenario-ingest/scenarios/${agentSlug}/v${version}`;
+}
+
+export function scenarioRunPrefix(orgId: string, runId: string) {
+  return `${orgPrefix(orgId)}/scenario-ingest/runs/${runId}`;
+}
+
 export async function getObjectBytes(key: string): Promise<Uint8Array> {
   const res = await client().send(new GetObjectCommand({ Bucket: bucket, Key: key }));
   if (!res.Body) return new Uint8Array(0);

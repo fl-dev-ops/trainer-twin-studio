@@ -6,6 +6,7 @@ let agents: Row[] = [];
 let domains: Row[] = [];
 let specVersions: Row[] = [];
 let storedItems: { orgId: string; agentSlug: string; count: number } | null = null;
+const s3 = new Map<string, string>();
 
 const fakeDb = {
   organization: {
@@ -37,6 +38,19 @@ const fakeDb = {
   $transaction: async (fn: (tx: unknown) => unknown) => fn(fakeDb),
 };
 mock.module("@/lib/db", () => ({ db: fakeDb }));
+mock.module("@/lib/s3", () => ({
+  s3Configured: true,
+  scenarioArtifactsPrefix: (orgId: string, slug: string, version: number) => `p/${orgId}/scenario-ingest/scenarios/${slug}/v${version}`,
+  scenarioRunPrefix: (orgId: string, runId: string) => `p/${orgId}/scenario-ingest/runs/${runId}`,
+  putObject: async (key: string, body: string) => {
+    if (!log.includes("s3")) log.push("s3");
+    s3.set(key, body);
+  },
+  deletePrefix: async () => {},
+  getObjectText: async () => "",
+  kbPrefix: () => "",
+  presignedGetUrl: async () => "",
+}));
 mock.module("@/lib/main-collection", () => ({
   invalidateCollectionCache: () => {},
   invalidatePersonaStyleCache: () => {},
@@ -49,8 +63,9 @@ mock.module("@/lib/main-collection", () => ({
   },
 }));
 
-const { buildScenario, ingestScenario, scenarioIngestSchema, skillBody, stepGoal } = await import("@/lib/scenario-ingest");
+const { buildScenario, fileText, ingestScenario, scenarioIngestSchema, skillBody, stepGoal } = await import("@/lib/scenario-ingest");
 const { POST } = await import("@/app/api/internal/scenarios/route");
+const { POST: POST_RUN } = await import("@/app/api/internal/scenario-runs/route");
 
 // The shape scenario-ingest's save_skill writes: YAML name/description header + Markdown body.
 const SKILL = `---
@@ -97,6 +112,7 @@ beforeEach(() => {
   domains = [];
   specVersions = [];
   storedItems = null;
+  s3.clear();
 });
 
 test("skill body drops the YAML header; step goals come from the step's own section", () => {
@@ -135,9 +151,16 @@ test("builds an org-prefixed agent the runtime can read", () => {
 });
 
 test("first ingest creates domain + agent after storing items (duplicate item ids allowed)", async () => {
-  const result = await ingestScenario("org1", input());
-  expect(result).toEqual({ slug: "acme-fundamental-depth", name: "Fundamental depth", version: 1, created: true, items: 2 });
-  expect(log).toEqual(["chroma", "agent.create"]);
+  const result = await ingestScenario("org1", input({ patterns: "# Patterns\n", runId: "run-1" }));
+  const prefix = "p/org1/scenario-ingest/scenarios/acme-fundamental-depth/v1";
+  expect(result).toEqual({ slug: "acme-fundamental-depth", name: "Fundamental depth", version: 1, created: true, items: 2, artifacts: prefix, runId: "run-1" });
+  // Files, then items, then the rows.
+  expect(log).toEqual(["s3", "chroma", "agent.create"]);
+  expect([...s3.keys()].sort()).toEqual([`${prefix}/SKILL.md`, `${prefix}/items.json`, `${prefix}/patterns.md`, `${prefix}/scenario.json`]);
+  expect(s3.get(`${prefix}/SKILL.md`)).toBe(SKILL);
+  expect(s3.get(`${prefix}/scenario.json`)).toBe(`${JSON.stringify(scenario, null, 2)}\n`);
+  expect(JSON.parse(s3.get(`${prefix}/items.json`)!)).toEqual([item("x#1"), item("x#1")]);
+  expect((agents[0].data as Row).artifacts).toBe(prefix);
   expect(storedItems).toEqual({ orgId: "org1", agentSlug: "acme-fundamental-depth", count: 2 });
   expect(domains).toHaveLength(1);
   expect(agents[0]).toMatchObject({ personaId: "p1", domainSlug: "domain-acme-fundamental-depth", orgId: "org1" });
@@ -145,14 +168,19 @@ test("first ingest creates domain + agent after storing items (duplicate item id
 
 test("re-ingest is a no-op when unchanged, and versions the spec when changed", async () => {
   await ingestScenario("org1", input());
-  agents[0].data = { ...(agents[0].data as Row), introVideo: "intro.mp4" };
+  // Postgres jsonb hands keys back in its own order; that must not count as a change.
+  const stored = { ...(agents[0].data as Row), introVideo: "intro.mp4" };
+  agents[0].data = Object.fromEntries(Object.entries(stored).reverse());
   const same = await ingestScenario("org1", input());
   // introVideo is carried forward, so an identical re-send changes nothing.
   expect(same).toMatchObject({ version: 1, created: false });
   expect(specVersions).toHaveLength(0);
+  expect(log.filter((entry) => entry === "agent.update")).toHaveLength(0);
 
   const changed = await ingestScenario("org1", input({ scenario: { ...scenario, name: "Depth drill" } }));
-  expect(changed).toMatchObject({ version: 2, created: false, name: "Depth drill" });
+  expect(changed).toMatchObject({ version: 2, created: false, name: "Depth drill", artifacts: "p/org1/scenario-ingest/scenarios/acme-fundamental-depth/v2" });
+  expect(s3.has("p/org1/scenario-ingest/scenarios/acme-fundamental-depth/v2/scenario.json")).toBe(true);
+  expect((agents[0].data as Row).artifacts).toBe("p/org1/scenario-ingest/scenarios/acme-fundamental-depth/v2");
   expect(specVersions).toEqual([expect.objectContaining({ entityType: "agents", entitySlug: "acme-fundamental-depth", version: 1 })]);
   expect((agents[0].data as Row).introVideo).toBe("intro.mp4");
 });
@@ -175,5 +203,26 @@ test("route: secret, org header and payload are checked before ingesting", async
   expect((await call({ authorization: "Bearer s3cret", "x-trainertwin-org-id": "org1" }, { ...body, scenario: { name: "x" } })).status).toBe(400);
   const ok = await call({ authorization: "Bearer s3cret", "x-trainertwin-org-id": "org1" }, body);
   expect(ok.status).toBe(201);
+  // items.json is archived with keys in the order ingest wrote them (scenario_id first), byte for byte.
+  expect(s3.get("p/org1/scenario-ingest/scenarios/acme-fundamental-depth/v1/items.json")).toBe(`${JSON.stringify(body.items, null, 1)}\n`);
   expect(await ok.json()).toMatchObject({ ok: true, scenario: { slug: "acme-fundamental-depth", items: 1 } });
+});
+
+test("run route: archives plan.json, report.md and specs as ingest wrote them", async () => {
+  process.env.SCENARIO_INGEST_SECRET = "s3cret";
+  const call = (headers: Record<string, string>, body: unknown) =>
+    POST_RUN(new Request("http://x/api/internal/scenario-runs", { method: "POST", headers, body: JSON.stringify(body) }));
+  const plan = { scenarios: [{ id: "fundamental-depth", sessions: [] }] };
+  const body = { runId: "run-1", plan, report: "# Report\n", specs: { "fundamental-depth": "# Spec\n" } };
+  const auth = { authorization: "Bearer s3cret", "x-trainertwin-org-id": "org1" };
+
+  expect((await call({ ...auth, authorization: "Bearer no" }, body)).status).toBe(401);
+  expect((await call(auth, { ...body, runId: "../escape" })).status).toBe(400);
+  expect((await call(auth, { ...body, specs: { "../x": "y" } })).status).toBe(400);
+  const ok = await call(auth, body);
+  expect(ok.status).toBe(200);
+  expect(await ok.json()).toEqual({ ok: true, run: { runId: "run-1", files: 3, prefix: "p/org1/scenario-ingest/runs/run-1" } });
+  expect(s3.get("p/org1/scenario-ingest/runs/run-1/plan.json")).toBe(fileText.plan(plan));
+  expect(s3.get("p/org1/scenario-ingest/runs/run-1/report.md")).toBe("# Report\n");
+  expect(s3.get("p/org1/scenario-ingest/runs/run-1/specs/fundamental-depth.md")).toBe("# Spec\n");
 });
