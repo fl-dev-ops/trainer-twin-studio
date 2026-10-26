@@ -6,6 +6,7 @@ import { ensureDeployment } from "@/lib/deployments";
 import { sendRolePlayAssignmentEmail } from "@/lib/email";
 import { contextUploadFromAgentData } from "@/lib/context-upload";
 import { isApiError, requireExternalApi } from "@/lib/external-api";
+import { STUDIO_ROLES } from "@/lib/org";
 
 const updateSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(320).optional(),
@@ -68,7 +69,7 @@ export async function PATCH(request: Request, { params }: Params) {
       : null,
     parsed.data.scenario
       ? db.agent.findFirst({
-          where: { orgId: api.org.id, slug: parsed.data.scenario },
+          where: { orgId: api.org.id, slug: parsed.data.scenario, kind: "ROLEPLAY" }, // twins use twin assignments
           select: { id: true, slug: true, name: true, version: true, data: true },
         })
       : db.agent.findFirst({
@@ -78,7 +79,7 @@ export async function PATCH(request: Request, { params }: Params) {
     db.member.findFirst({
       where: {
         organizationId: api.org.id,
-        role: { in: ["owner", "admin"] },
+        role: { in: [...STUDIO_ROLES] },
         ...(api.actorUserId ? { userId: api.actorUserId } : {}),
       },
       select: { userId: true, user: { select: { name: true } } },

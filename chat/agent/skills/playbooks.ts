@@ -1,5 +1,5 @@
 import { defineDynamic, defineSkill } from "eve/skills";
-import { type TwinPlaybook, playbookSkillNames } from "../lib/brain";
+import { type AgentKind, type TwinPlaybook, isAllSkillsTwin, playbookSkillNames } from "../lib/brain";
 import { studioFetch } from "../lib/studio";
 
 /**
@@ -15,13 +15,13 @@ export default defineDynamic({
       if (!orgId || (!attributes.sessionId && !attributes.agentSlug)) return null;
 
       // Same call as the session-spec instructions; web caches it per session.
-      const context = await studioFetch<{ agent: { data?: Record<string, unknown> } | null; twinPlaybooks?: TwinPlaybook[] }>(orgId, {
+      const context = await studioFetch<{ agent: { kind?: AgentKind | null; data?: Record<string, unknown> } | null; twinPlaybooks?: TwinPlaybook[] }>(orgId, {
         action: "getSessionContext",
         sessionId: attributes.sessionId,
         agentSlug: attributes.agentSlug,
         personaSlug: attributes.personaSlug,
       });
-      const playbooks = context.agent?.data?.source === "twin" ? context.twinPlaybooks ?? [] : [];
+      const playbooks = isAllSkillsTwin(context.agent?.kind, context.agent?.data) ? context.twinPlaybooks ?? [] : [];
       if (playbooks.length === 0) return null;
 
       const names = playbookSkillNames(playbooks);

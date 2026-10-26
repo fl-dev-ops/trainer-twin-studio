@@ -81,6 +81,14 @@ def parse_metadata(raw: str | None) -> dict[str, Any]:
         return {}
 
 
+def seconds_until_end(metadata: dict[str, Any], now: float) -> float | None:
+    """Twin minutes: seconds left until `ends_at` (unix seconds, set by the web), or None when unlimited."""
+    ends_at = metadata.get("ends_at")
+    if isinstance(ends_at, bool) or not isinstance(ends_at, (int, float)) or ends_at <= 0:
+        return None
+    return max(0.0, float(ends_at) - now)
+
+
 # Client gated on the intro video: the greeting releases on "begin-opening". The fixed
 # 60s cap keeps dead clients (refresh loops, broken video) from stalling sessions; keep
 # intro clips comfortably under it.
@@ -513,6 +521,16 @@ async def entrypoint(ctx: agents.JobContext) -> None:
                     logger.debug("Room teardown note: %s", exc)
                 return
 
+    async def end_at_deadline(delay: float) -> None:
+        """Twin minutes: close the room when the learner's budget runs out; on_session_end then
+        posts the completion webhook as for any other ending."""
+        await asyncio.sleep(delay)
+        logger.info("Room %s reached its minutes limit; ending session", ctx.room.name)
+        try:
+            await ctx.api.room.delete_room(api.DeleteRoomRequest(room=ctx.room.name))
+        except Exception as exc:
+            logger.debug("Room teardown note: %s", exc)
+
     active_session = session
     await session.start(
         room=ctx.room,
@@ -534,6 +552,10 @@ async def entrypoint(ctx: agents.JobContext) -> None:
             asyncio.create_task(session.generate_reply(user_input=pending_text))
         pending_chat_messages.clear()
     asyncio.create_task(watch_empty_room())
+    # shortcut: the call just ends at the limit (no spoken goodbye); add a short notice first if learners find it abrupt.
+    limit = seconds_until_end(metadata, time.time())
+    if limit is not None:
+        asyncio.create_task(end_at_deadline(limit))
 
 
 async def on_session_end(ctx: agents.JobContext) -> None:

@@ -24,7 +24,7 @@ export function InviteUser({ organizationId }: { organizationId: string }) {
     setInviteUrl(null);
     const invited = await authClient.organization.inviteMember({
       email: email.trim(),
-      role: "member",
+      role: "user",
       organizationId,
     });
     setBusy(false);

@@ -55,7 +55,7 @@ test("assigned non-member can read only documents attached to their own session"
 test("session snapshots are scoped to the owner, except for org trainers", async () => {
   await readSession(new Request("https://demo.trainertwin.com/api/sessions/session"), context("session"));
   expect(sessionWhere).toMatchObject({ id: "session", orgId: "demo", userId: "learner" });
-  role = "owner";
+  role = "team"; // team has the same studio access as admin
   user = { id: "trainer", email: "trainer@example.com" };
   await readSession(new Request("https://demo.trainertwin.com/api/sessions/session"), context("session"));
   expect(sessionWhere).toMatchObject({ id: "session", orgId: "demo" });

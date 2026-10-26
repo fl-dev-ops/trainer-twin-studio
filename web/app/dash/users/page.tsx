@@ -22,6 +22,7 @@ import { CopyButton } from "@/components/users/copy-button";
 import { BASE_DOMAIN } from "@/lib/base-domain";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { LEARNER_ROLE, STUDIO_ROLES } from "@/lib/org";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export default async function UsersPage() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/auth/sign-in");
   const member = await db.member.findFirst({
-    where: { userId: session.user.id, role: { in: ["owner", "admin"] } },
+    where: { userId: session.user.id, role: { in: [...STUDIO_ROLES] } },
     select: { organizationId: true },
   });
   if (!member) redirect("/auth/no-org");
@@ -52,8 +53,8 @@ export default async function UsersPage() {
   ]);
 
   const orderedMembers = [
-    ...members.filter((item) => item.role !== "member"),
-    ...members.filter((item) => item.role === "member"),
+    ...members.filter((item) => item.role !== LEARNER_ROLE),
+    ...members.filter((item) => item.role === LEARNER_ROLE),
   ];
 
   return (
@@ -100,7 +101,7 @@ export default async function UsersPage() {
                     </TableCell>
                     <TableCell />
                     <TableCell className="capitalize">
-                      {item.role === "member" ? "user" : item.role}
+                      {item.role}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -119,7 +120,7 @@ export default async function UsersPage() {
                       />
                     </TableCell>
                     <TableCell className="capitalize">
-                      {invitation.role === "member" || !invitation.role ? "user" : invitation.role}
+                      {invitation.role}
                     </TableCell>
                   </TableRow>
                 ))}

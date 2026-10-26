@@ -124,7 +124,7 @@ export async function POST(request: Request) {
             create: {
               id: randomUUID(),
               userId: session.user.id,
-              role: "owner",
+              role: "admin", // the founder; better-auth creatorRole
               createdAt: new Date(),
             },
           },

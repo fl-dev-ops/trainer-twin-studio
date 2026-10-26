@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { resolveSessionUser } from "@/lib/session-user";
 import { presignedGetUrl } from "@/lib/s3";
+import { isStudioRole } from "@/lib/org";
 
-/** Recording access is limited to its learner or an owner/admin in the same org. */
+/** Recording access is limited to its learner or a studio member (admin or team) in the same org. */
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { org, user } = await resolveSessionUser();
   if (!org || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -18,7 +19,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       where: { organizationId: org.id, userId: user.id },
       select: { role: true },
     });
-    if (!trainer?.role.split(",").some((role) => ["owner", "admin"].includes(role.trim()))) {
+    if (!isStudioRole(trainer?.role)) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
   }

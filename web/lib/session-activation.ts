@@ -63,6 +63,10 @@ export async function activateInterviewRuntime(input: {
       agentSlug: row.agentSlug,
       holdOpening: Boolean(agentData?.introVideo),
       voice: configuredVoice?.id ?? sharedDefault?.id,
+      // Twin minutes: the voice agent ends the call at this moment (absolute, so agent and web count the same span).
+      endsAt: "twinSecondsLeft" in session && session.twinSecondsLeft != null
+        ? Math.floor(Date.now() / 1000) + session.twinSecondsLeft
+        : undefined,
     });
     await db.interviewSession.update({
       where: { id: session.id },

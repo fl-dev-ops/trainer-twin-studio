@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { getTrainerOrg } from "@/lib/org";
 import { readSpecDraft } from "@/lib/spec-drafts";
 import { agentDisplayName, readSpec } from "@/lib/specs";
+import { LEARNER_ROLE } from "@/lib/org";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ export default async function RolePlayPreviewPage({
     readSpec("agents", slug, org.id).catch(() => null),
     readSpecDraft(slug, org.id).catch(() => null),
     db.member.findMany({
-      where: { organizationId: org.id, role: "member" },
+      where: { organizationId: org.id, role: LEARNER_ROLE },
       orderBy: { createdAt: "asc" },
       select: {
         id: true,

@@ -14,8 +14,9 @@ const fakeDb = {
       ({ org1: { id: "org1", slug: "acme" }, org2: { id: "org2", slug: "other" } })[where.id] ?? null,
   },
   persona: {
-    findFirst: async ({ where }: { where: { orgId: string; slug: { equals: string; mode: string } } }) =>
-      where.orgId === "org1" && where.slug.mode === "insensitive" && where.slug.equals.toLowerCase() === "vasanth" ? { id: "p1" } : null,
+    // Only the org's own persona can back a skill twin.
+    findFirst: async ({ where }: { where: { orgId: string; isOwn?: boolean; slug: { equals: string; mode: string } } }) =>
+      where.orgId === "org1" && where.isOwn === true && where.slug.mode === "insensitive" && where.slug.equals.toLowerCase() === "vasanth" ? { id: "p1" } : null,
   },
   agent: {
     findUnique: async ({ where }: { where: { slug: string } }) => agents.find((a) => a.slug === where.slug) ?? null,
@@ -164,7 +165,7 @@ test("first ingest creates domain + agent after storing items (duplicate item id
   expect((agents[0].data as Row).artifacts).toBe(prefix);
   expect(storedItems).toEqual({ orgId: "org1", agentSlug: "acme-fundamental-depth", count: 2 });
   expect(domains).toHaveLength(1);
-  expect(agents[0]).toMatchObject({ personaId: "p1", domainSlug: "domain-acme-fundamental-depth", orgId: "org1" });
+  expect(agents[0]).toMatchObject({ personaId: "p1", domainSlug: "domain-acme-fundamental-depth", orgId: "org1", kind: "TWIN" });
 });
 
 test("re-ingest is a no-op when unchanged, and versions the spec when changed", async () => {
@@ -188,7 +189,13 @@ test("re-ingest is a no-op when unchanged, and versions the spec when changed", 
 
 test("refuses unknown personas and another org's scenario without writing anything", async () => {
   await expect(ingestScenario("org1", input({ personaSlug: "Nobody" }))).rejects.toMatchObject({ status: 404 });
-  agents.push({ id: "z", slug: "acme-fundamental-depth", orgId: "org2", data: {} });
+  agents.push({ id: "z", slug: "acme-fundamental-depth", orgId: "org2", kind: "TWIN", data: {} });
+  await expect(ingestScenario("org1", input())).rejects.toMatchObject({ status: 409 });
+  expect(log).toEqual([]);
+});
+
+test("never overwrites a role play that shares the slug", async () => {
+  agents.push({ id: "r", slug: "acme-fundamental-depth", orgId: "org1", kind: "ROLEPLAY", data: {} });
   await expect(ingestScenario("org1", input())).rejects.toMatchObject({ status: 409 });
   expect(log).toEqual([]);
 });

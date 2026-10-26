@@ -9,6 +9,7 @@ import { signInUrl } from "@/lib/base-domain";
 import { db } from "@/lib/db";
 import { resolveSessionUser } from "@/lib/session-user";
 import { listAgentContextRequired, listAgentContextUploads, listScenarioIntroVideos } from "@/lib/specs";
+import { TwinAccessError, twinAccessByCode } from "@/lib/twin-access";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,30 @@ export default async function SharedSessionPage({ params }: { params: Promise<{ 
       organization: { select: { name: true, logo: true } },
     },
   }) : null;
+  // Not a role-play invite: maybe a twin assignment or a twin share link. Checked here without creating
+  // anything; the user's assignment is created when the session starts (POST /api/sessions).
+  if (!assignment && org) {
+    const twin = await twinAccessByCode({ orgId: org.id, user, code, join: false }).catch((error: unknown) => {
+      if (error instanceof TwinAccessError) return error;
+      throw error;
+    });
+    if (twin instanceof TwinAccessError) {
+      return (
+        <main className="grid min-h-svh place-items-center p-4">
+          <Card className="w-full max-w-md text-center">
+            <CardHeader>
+              <CardTitle>Twin not available</CardTitle>
+              <CardDescription>
+                {twin.message}. You are signed in as {user.email}.
+                <HomeRedirect />
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </main>
+      );
+    }
+    if (twin) return <TwinSession orgId={org.id} agentId={twin.agentId} code={code} userName={user.name} />;
+  }
   const spent = assignment
     ? (await db.interviewSession.count({
         where: { assignmentId: assignment.id, status: { in: ["completed", "abandoned"] } },
@@ -94,6 +119,37 @@ export default async function SharedSessionPage({ params }: { params: Promise<{ 
       userName={user.name}
       organizationName={assignment.organization.name}
       organizationLogo={/^data:image\/(?:png|jpeg|webp);base64,/.test(assignment.organization.logo ?? "") ? assignment.organization.logo : null}
+      agentPersonas={{ [agent.slug]: agent.persona.slug }}
+      agentContextRequired={agentContextRequired}
+      agentContextUploads={agentContextUploads}
+      introVideos={introVideos}
+      autoStart
+      contexts={[]}
+      sessionCode={code}
+    />
+  );
+}
+
+/** A twin opened from its link: same voice session screen; minutes are enforced when the session starts. */
+async function TwinSession({ orgId, agentId, code, userName }: { orgId: string; agentId: string; code: string; userName: string }) {
+  const [agent, organization] = await Promise.all([
+    db.agent.findFirstOrThrow({ where: { id: agentId, orgId }, select: { slug: true, name: true, persona: { select: { slug: true } } } }),
+    db.organization.findUniqueOrThrow({ where: { id: orgId }, select: { name: true, logo: true } }),
+  ]);
+  const [introVideos, agentContextRequired, agentContextUploads] = await Promise.all([
+    listScenarioIntroVideos(orgId, [agent.slug]),
+    listAgentContextRequired(orgId, [agent.slug]),
+    listAgentContextUploads(orgId, [agent.slug]),
+  ]);
+  const logo = organization.logo ?? "";
+  return (
+    <SessionView
+      personas={[agent.persona.slug]}
+      agents={[agent.slug]}
+      scenarioName={agent.name}
+      userName={userName}
+      organizationName={organization.name}
+      organizationLogo={/^data:image\/(?:png|jpeg|webp);base64,/.test(logo) ? logo : null}
       agentPersonas={{ [agent.slug]: agent.persona.slug }}
       agentContextRequired={agentContextRequired}
       agentContextUploads={agentContextUploads}

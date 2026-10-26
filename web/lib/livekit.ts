@@ -76,6 +76,8 @@ export async function activateLiveKitSession(input: {
   agentSlug?: string;
   holdOpening?: boolean;
   voice?: string;
+  /** Unix seconds when the call must end (twin minutes); the voice agent closes the room then. */
+  endsAt?: number;
 }) {
   const { config, rooms, dispatches, egress } = clients();
   const room = input.sessionId;
@@ -86,6 +88,7 @@ export async function activateLiveKitSession(input: {
     runtimeToken: input.runtimeToken,
     hold_opening: Boolean(input.holdOpening),
     ...(input.voice ? { voice: input.voice } : {}),
+    ...(input.endsAt ? { ends_at: input.endsAt } : {}),
   });
 
   if (!(await rooms.listRooms([room])).length) {

@@ -2,6 +2,15 @@ import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 
+/**
+ * Org roles on `member.role` (one per member, CHECK member_role_check): admin and team run the studio
+ * with identical access; user only practises (twin / role play).
+ */
+export const STUDIO_ROLES = ["admin", "team"] as const;
+export const LEARNER_ROLE = "user";
+export type OrgRole = (typeof STUDIO_ROLES)[number] | typeof LEARNER_ROLE;
+export const isStudioRole = (role: string | null | undefined) => role === "admin" || role === "team";
+
 export type SessionOrg = { id: string; slug: string; accentColor: string | null };
 export type TrainerOrg = SessionOrg & {
   role: string;
@@ -39,7 +48,7 @@ export async function getSessionOrg(): Promise<SessionOrg | null> {
   };
 }
 
-/** The signed-in owner/admin and their organization. */
+/** The signed-in studio member (admin or team) and their organization. */
 export async function getTrainerOrg(): Promise<TrainerOrg | null> {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return null;
@@ -50,7 +59,7 @@ export async function getTrainerOrg(): Promise<TrainerOrg | null> {
       organization: { select: { id: true, slug: true, metadata: true } },
     },
   });
-  if (!member || !member.role.split(",").some((role) => ["owner", "admin"].includes(role.trim()))) {
+  if (!member || !isStudioRole(member.role)) {
     return null;
   }
   return {

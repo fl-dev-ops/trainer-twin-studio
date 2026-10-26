@@ -44,7 +44,7 @@ async function main() {
   }
 
   const trainer = await db.member.findFirst({
-    where: { organizationId: agent.orgId, role: { in: ["owner", "admin"] } },
+    where: { organizationId: agent.orgId, role: { in: ["admin", "team"] } },
     select: { userId: true, user: { select: { name: true } } },
   });
 

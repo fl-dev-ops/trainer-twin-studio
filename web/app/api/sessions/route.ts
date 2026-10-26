@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { listSessions } from "@/lib/specs";
 import { scheduleSessionReport } from "@/lib/session-report-jobs";
 import { OrgLockError } from "@/lib/org-lock";
+import { TwinAccessError } from "@/lib/twin-access";
 
 export async function GET() {
   const trainer = await getTrainerOrg();
@@ -48,6 +49,7 @@ export async function POST(req: Request) {
     return NextResponse.json(activation);
   } catch (error) {
     if (error instanceof OrgLockError) return NextResponse.json({ error: error.message }, { status: 403 });
+    if (error instanceof TwinAccessError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error("Session activation failed", error);
     const message = error instanceof Error ? error.message : "";
     if (message === "Context not found" || message.startsWith("Deployment does not allow ")) {

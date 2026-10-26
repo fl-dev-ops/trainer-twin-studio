@@ -366,3 +366,49 @@ export async function sendRolePlayAssignmentEmail({
     text: `You have been assigned to practice "${rolePlayName}" on TrainerTwin.${requiredArtifact?.prompt ? ` What to bring: ${requiredArtifact.prompt}.` : ""} Start your practice here: ${practiceUrl}`,
   });
 }
+
+const escapeHtml = (value: string) =>
+  value.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
+
+/** A learner got access to a twin: talk to it by voice, up to `minutes` minutes in total. */
+export async function sendTwinAssignmentEmail({
+  to,
+  twinName,
+  minutes,
+  practiceUrl,
+  trainerName = "Your trainer",
+}: {
+  to: string;
+  twinName: string;
+  minutes: number;
+  practiceUrl: string;
+  trainerName?: string;
+}) {
+  const subject = `You can now talk to ${twinName}`;
+  const html = renderEmailLayout({
+    title: escapeHtml(subject),
+    previewText: escapeHtml(`${trainerName} gave you ${minutes} minutes with ${twinName} on TrainerTwin.`),
+    contentHtml: `
+      <h1>${escapeHtml(subject)}</h1>
+      <p>
+        Hi there,<br>
+        <strong>${escapeHtml(trainerName)}</strong> gave you <strong>${minutes} minutes</strong> with
+        <strong>${escapeHtml(twinName)}</strong>. Ask about the real situations you are working on, by voice.
+      </p>
+      <div style="text-align: center; margin: 28px 0;">
+        <a href="${practiceUrl}" class="btn" target="_blank">Start talking</a>
+      </div>
+      <p style="font-size: 13px; color: #64748b; margin-top: 24px;">
+        Or open this link:<br>
+        <a href="${practiceUrl}" class="muted-link">${practiceUrl}</a>
+      </p>
+    `,
+  });
+
+  return sendEmail({
+    to,
+    subject,
+    html,
+    text: `${trainerName} gave you ${minutes} minutes with ${twinName} on TrainerTwin. Start here: ${practiceUrl}`,
+  });
+}

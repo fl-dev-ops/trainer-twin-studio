@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, test } from "node:test";
 import { BASE_INSTRUCTIONS_HEADER, baseInstructions, coreInstructions, CORE_HEADINGS } from "../../../agent/lib/base-instructions";
-import { formatSessionSpec, isTwinData, playbookSkillNames, type SessionSpecs, type TwinPlaybook } from "../../../agent/lib/brain";
+import { formatSessionSpec, isAllSkillsTwin, playbookSkillNames, type SessionSpecs, type TwinPlaybook } from "../../../agent/lib/brain";
 
 const full = await readFile(new URL("../../../prompts/base-instructions.md", import.meta.url), "utf8");
 
@@ -33,9 +33,11 @@ describe("base instructions", () => {
 const playbook = (id: string, name: string): TwinPlaybook => ({ slug: `acme-${id}`, id, name, description: `${name} desc`, steps: [], skill: `# ${name}` });
 
 describe("twin", () => {
-  test("recognises twin agents", () => {
-    assert.equal(isTwinData({ source: "twin" }), true);
-    assert.equal(isTwinData({ source: "scenario-ingest" }), false);
+  test("recognises the all-skills twin by kind, then provenance", () => {
+    assert.equal(isAllSkillsTwin("TWIN", { source: "twin" }), true);
+    assert.equal(isAllSkillsTwin("TWIN", { source: "scenario-ingest" }), false); // a skill twin
+    assert.equal(isAllSkillsTwin("ROLEPLAY", { source: "twin" }), false); // kind decides the module
+    assert.equal(isAllSkillsTwin(undefined, { source: "twin" }), false);
   });
 
   test("skill names are valid eve names and unique", () => {

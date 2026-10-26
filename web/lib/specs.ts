@@ -1,6 +1,6 @@
 import yaml from "js-yaml";
 import { randomUUID } from "node:crypto";
-import type { Prisma } from "@/lib/generated/prisma/client";
+import type { AgentKind, Prisma } from "@/lib/generated/prisma/client";
 import { deletePrefix, getObjectText, kbPrefix, presignedGetUrl, putObject } from "@/lib/s3";
 import { db } from "@/lib/db";
 import {
@@ -75,6 +75,7 @@ export async function listSpecSummaries(type: "personas" | "agents", orgId: stri
         data: true,
         order: true,
         updatedAt: true,
+        kind: true,
         persona: { select: { name: true, data: true } },
       },
     }),
@@ -119,7 +120,9 @@ export async function listSpecSummaries(type: "personas" | "agents", orgId: stri
         quote: personaQuote(agent.persona.data, agent.slug),
         personaName: agent.persona.name,
         learners: learnersByAgent.get(agent.id) ?? [],
-        twin: data?.source === "twin",
+        kind: agent.kind,
+        // The all-skills twin ("Ask Olga"); skill twins are TWIN too but open from their SKILL.md.
+        twin: agent.kind === "TWIN" && data?.source === "twin",
         updatedAt: agent.updatedAt.toISOString(),
         status: "published" as const,
         draftRevision: draftsBySlug.get(agent.slug)?.status === "draft"
@@ -167,27 +170,44 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /** Specs complete enough for the Python interview runtime; editor drafts stay hidden from /talk. */
 export async function listRunnableSpecs(type: "personas" | "agents", orgId: string): Promise<string[]> {
-  const rows = type === "personas"
-    ? await db.persona.findMany({ where: { orgId }, orderBy: { slug: "asc" }, select: { slug: true, data: true } })
-    : await db.agent.findMany({ where: { orgId }, orderBy: [{ order: "asc" }, { name: "asc" }], select: { slug: true, data: true, personaId: true } });
-  return rows.filter((row) => {
-    const { data } = row;
-    if (!isRecord(data)) return false;
-    return type === "personas"
-      ? isRecord(data.style) && isRecord(data.decision_preferences)
-      : "personaId" in row && Boolean(row.personaId) && isRunnableAgentData(data);
-  }).map(({ slug }) => slug);
+  if (type === "personas") {
+    const personas = await db.persona.findMany({ where: { orgId }, orderBy: { slug: "asc" }, select: { slug: true, data: true } });
+    return personas
+      .filter(({ data }) => isRecord(data) && isRecord(data.style) && isRecord(data.decision_preferences))
+      .map(({ slug }) => slug);
+  }
+  const agents = await db.agent.findMany({ where: { orgId }, orderBy: [{ order: "asc" }, { name: "asc" }], select: { slug: true, data: true, personaId: true, kind: true } });
+  return agents
+    .filter((agent) => isRecord(agent.data) && Boolean(agent.personaId) && isRunnableAgentData(agent.kind, agent.data))
+    .map(({ slug }) => slug);
 }
 
 /**
- * A role play can start a session when it is either a copilot spec (objective, opening, config) or a
- * scenario-ingest playbook (its SKILL.md opens the session, so it has no `opening`).
+ * Whether an agent can start a session. A role play needs a copilot spec (objective, opening, config).
+ * A twin is either one skill (its SKILL.md opens the session, so no `opening`) or the all-skills twin,
+ * an open conversation over its persona's skills; `data.source` tells the two apart inside the twin module.
  */
-export function isRunnableAgentData(data: Record<string, unknown>) {
-  if (data.source === "scenario-ingest") return typeof data.skill === "string" && typeof data.objective === "string";
-  // A twin ("Ask Olga") is an open conversation over its persona's playbooks.
-  if (data.source === "twin") return typeof data.objective === "string";
+export function isRunnableAgentData(kind: AgentKind, data: Record<string, unknown>) {
+  if (kind === "TWIN") {
+    return typeof data.objective === "string" && (data.source === "twin" || typeof data.skill === "string");
+  }
   return typeof data.objective === "string" && typeof data.opening === "string" && isRecord(data.config);
+}
+
+/**
+ * A persona a role play may use: the org's own row first, else a global one (orgId null).
+ * Twin paths must not use this; a twin needs the org's own persona (`isOwn`).
+ */
+export function findOrgOrGlobalPersona<S extends Prisma.PersonaSelect>(
+  orgId: string,
+  slug: string | { equals: string; mode: "insensitive" },
+  select: S,
+) {
+  return db.persona.findFirst({
+    where: { slug, OR: [{ orgId }, { orgId: null }] },
+    orderBy: { orgId: { sort: "asc", nulls: "last" } },
+    select,
+  });
 }
 
 export async function listAgentPersonas(orgId: string, slugs: string[]) {
@@ -315,7 +335,8 @@ export async function saveSpec(type: SpecType, slug: string, text: string, orgId
   if (!existing) {
     if (type === "agents") throw new Error("Create agents through Agent Studio so a persona is assigned");
     const created = type === "personas"
-      ? await db.persona.create({ data: { slug, name, version: 1, data, orgId } })
+      // Studio and synthesis personas are the user's own (real people); role-play characters come later.
+      ? await db.persona.create({ data: { slug, name, version: 1, data, orgId, isOwn: true } })
       : await modelFor(type).create({ data: { slug, name, version: 1, data, orgId, ...relation } });
     return { created: true, versionBumped: false, version: created.version };
   }

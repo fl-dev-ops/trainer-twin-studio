@@ -233,11 +233,11 @@ export async function POST(request: Request) {
   // Real lines from a scenario-ingest scenario (items.json), for the chat tool scenario_examples.
   if (input.action === "searchScenarioItems") {
     // scenario.json's steps map the newer items' `action` to a step, and a step to its moves.
-    const agent = await db.agent.findFirst({ where: { slug: input.agentSlug, orgId }, select: { data: true, personaId: true } });
+    const agent = await db.agent.findFirst({ where: { slug: input.agentSlug, orgId }, select: { data: true, personaId: true, kind: true } });
     const data = agent?.data as { source?: unknown; scenario?: { steps?: unknown } } | null;
     let scope: { slugs: string[]; steps: ScenarioStep[] };
-    if (agent && data?.source === TWIN_SOURCE) {
-      // A twin searches its persona's playbooks: all of them, or the one the model has loaded.
+    if (agent?.kind === "TWIN" && data?.source === TWIN_SOURCE) {
+      // The all-skills twin searches its persona's skill twins: all of them, or the one the model has loaded.
       const all = await twinPlaybooks(orgId, agent.personaId);
       const named = input.playbook ? all.filter((p) => p.id === input.playbook || p.slug === input.playbook) : [];
       // An unknown name (e.g. a sanitised skill name) widens to all playbooks rather than finding nothing.

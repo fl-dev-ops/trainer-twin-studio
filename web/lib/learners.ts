@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { LEARNER_ROLE } from "@/lib/org";
 
 type Person = { id: string; name: string; email: string; image: string | null };
 
@@ -83,7 +84,7 @@ export async function listLearners(orgId: string): Promise<LearnerRow[]> {
       where: { orgId, deletedAt: null },
       select: { agentId: true, startedAt: true, endedAt: true, createdAt: true, user: person },
     }),
-    db.member.findMany({ where: { organizationId: orgId, role: "member" }, select: { user: person } }),
+    db.member.findMany({ where: { organizationId: orgId, role: LEARNER_ROLE }, select: { user: person } }),
   ]);
   const known = new Set([...sessions.map((s) => s.user.email), ...members.map((m) => m.user.email)].map((e) => e.toLowerCase()));
   const missing = [...new Set(assignments.map((a) => a.recipientEmail.toLowerCase()))].filter((e) => !known.has(e));

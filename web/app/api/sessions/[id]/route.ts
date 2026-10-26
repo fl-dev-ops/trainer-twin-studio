@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { resolveSessionUser } from "@/lib/session-user";
 import { authorizeRuntimeSession } from "@/lib/interview-sessions";
+import { isStudioRole } from "@/lib/org";
 
 /**
  * Returns snapshot of an interview session: coverage, phase, status.
@@ -39,7 +40,7 @@ export async function GET(
           where: { organizationId: org.id, userId: user.id },
           select: { role: true },
         });
-        const trainer = member?.role.split(",").some((role) => ["owner", "admin"].includes(role.trim()));
+        const trainer = isStudioRole(member?.role);
         session = await db.interviewSession.findFirst({
           where: { id, orgId: org.id, deletedAt: null, ...(trainer ? {} : { userId: user.id }) },
           select: {

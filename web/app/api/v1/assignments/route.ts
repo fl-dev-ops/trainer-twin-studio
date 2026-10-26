@@ -7,6 +7,7 @@ import { sendRolePlayAssignmentEmail } from "@/lib/email";
 import { contextUploadFromAgentData } from "@/lib/context-upload";
 import { isApiError, paginationFromUrl, requireExternalApi } from "@/lib/external-api";
 import { belongsToOtherOrg, ORG_LOCK_MESSAGE } from "@/lib/org-lock";
+import { STUDIO_ROLES } from "@/lib/org";
 
 const createSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(320).optional(),
@@ -80,13 +81,13 @@ export async function POST(request: Request) {
         })
       : null,
     db.agent.findFirst({
-      where: { orgId: api.org.id, slug: parsed.data.scenario },
+      where: { orgId: api.org.id, slug: parsed.data.scenario, kind: "ROLEPLAY" }, // twins use twin assignments
       select: { id: true, slug: true, name: true, version: true, data: true },
     }),
     db.member.findFirst({
       where: {
         organizationId: api.org.id,
-        role: { in: ["owner", "admin"] },
+        role: { in: [...STUDIO_ROLES] },
         ...(api.actorUserId ? { userId: api.actorUserId } : {}),
       },
       select: { userId: true, user: { select: { name: true } } },

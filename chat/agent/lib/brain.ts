@@ -7,6 +7,9 @@ import { studioFetch } from "./studio";
 
 type SpecRow = { slug: string; version: number; data: Record<string, unknown> };
 
+/** Which module an agent belongs to (web `Agent.kind`). Missing on persona/domain rows. */
+export type AgentKind = "TWIN" | "ROLEPLAY";
+
 export type AttachedDocument = {
   id: string;
   name: string;
@@ -38,9 +41,9 @@ export type ScenarioPlaybook = {
 
 const strings = (value: unknown) => (Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : []);
 
-/** The playbook of a scenario-ingest scenario, or undefined for copilot-format specs. */
-export function scenarioPlaybook(agentData: Record<string, unknown>): ScenarioPlaybook | undefined {
-  if (agentData.source !== "scenario-ingest" || typeof agentData.skill !== "string") return undefined;
+/** The playbook of a skill twin (an ingested SKILL.md), or undefined for role plays and the all-skills twin. */
+export function scenarioPlaybook(kind: AgentKind | null | undefined, agentData: Record<string, unknown>): ScenarioPlaybook | undefined {
+  if (kind !== "TWIN" || typeof agentData.skill !== "string") return undefined;
   const manifest = (agentData.scenario ?? {}) as Record<string, unknown>;
   const steps = Array.isArray(manifest.steps) ? manifest.steps as Record<string, unknown>[] : [];
   return {
@@ -70,9 +73,12 @@ export type TwinPlaybook = {
   skill: string;
 };
 
-/** A twin ("Ask Olga") session: an open conversation over every playbook of the persona. */
-export function isTwinData(agentData: Record<string, unknown> | null | undefined) {
-  return agentData?.source === "twin";
+/**
+ * The all-skills twin ("Ask Olga"): an open conversation over every skill of the persona. Skill twins are
+ * TWIN too; inside the twin module `data.source` (provenance) tells the two apart.
+ */
+export function isAllSkillsTwin(kind: AgentKind | null | undefined, agentData: Record<string, unknown> | null | undefined) {
+  return kind === "TWIN" && agentData?.source === "twin";
 }
 
 /** The eve skill name for a playbook: letters, digits, `-` and `_`, starting with a letter, at most 64 chars. */
@@ -310,7 +316,7 @@ export async function loadSessionContext(
 ): Promise<SessionSpecs> {
   const result = await studioFetch<{
     sessionId: string | null;
-    agent: SpecRow | null;
+    agent: (SpecRow & { kind?: AgentKind | null }) | null;
     persona: SpecRow | null;
     domain?: SpecRow | null;
     documents: AttachedDocument[];
@@ -396,8 +402,8 @@ export async function loadSessionContext(
 
   return {
     sessionId: result.sessionId ?? sessionId,
-    playbook: scenarioPlaybook(agentData as Record<string, unknown>),
-    twin: isTwinData(agentData as Record<string, unknown>) ? { playbooks: result.twinPlaybooks ?? [] } : undefined,
+    playbook: scenarioPlaybook(result.agent?.kind, agentData as Record<string, unknown>),
+    twin: isAllSkillsTwin(result.agent?.kind, agentData as Record<string, unknown>) ? { playbooks: result.twinPlaybooks ?? [] } : undefined,
     agentName: agentData.name ?? result.agent?.slug ?? agentSlug ?? "Training Session",
     agentSlug: result.agent?.slug ?? agentSlug ?? "session",
     agentVersion: result.agent?.version,

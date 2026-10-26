@@ -1,7 +1,43 @@
 # Twin / Role play — DB split plan
 
-**Status:** agreed design, 2026-10-26. Not implemented yet. Built on `plans/twin-content-inventory.md`.
+**Status:** Phases 1–3 implemented 2026-10-27 (see §0). Built on `plans/twin-content-inventory.md`.
 **Base:** `v2` only. Nothing is merged from `origin/feat/client-roleplay-mode` for now; its shapes are referenced only as the future role play format.
+
+
+## 0. Implementation status (2026-10-27)
+
+| Phase | Migration | State |
+|---|---|---|
+| 1. kind + isOwn | `20261027000000_split_twin_roleplay` | ✅ applied locally, tested |
+| 2. roles admin / team / user | `20261027010000_org_roles` | ✅ applied locally, tested |
+| 3. twin access + minutes | `20261027020000_twin_access` | ✅ applied locally, tested |
+
+**Tests:** `web/tests/sql/{kind-invariants,org-roles,twin-access,assigned-learner-session}.sql` (run with
+`psql -v ON_ERROR_STOP=1 -f`), `web/tests/lib/twin-access.test.ts`, updated `runnable-agent`, `scenario-ingest`,
+`org-lock`, `assigned-activation`, `learner-session-access`; chat `twin`/`playbook` tests; agent `test_minutes_limit.py`.
+
+**Differences from the design below:**
+- Global uniqueness uses the existing unique indexes rebuilt `NULLS NOT DISTINCT` (Persona, SpecVersion) instead of a
+  partial index, so Prisma sees no drift. Needs Postgres 15+.
+- `tt_twin_access_kind()` uses a nested `IF`: PL/pgSQL resolves `NEW."shareLinkId"` even inside `AND`, which broke every
+  share-link insert (caught by `twin-access.sql`).
+- twin_access runs the extended `enforce_interview_session_org()` **before** converting old invites, and creates the twin
+  triggers **after**, so production history (non-member learners, old chat sessions) does not block the migration.
+- Minutes use `now() AT TIME ZONE 'UTC'`: timestamps are naive UTC and the DB session time zone may differ.
+- better-auth roles live in `web/lib/auth-roles.ts` (shared by server and client); `creatorRole: "admin"`.
+- First start through a role-play invite, twin assignment or twin link gives the learner a `member` row (role `user`).
+
+**Code map:** `web/lib/twin-access.ts` (access + minutes + studio management), `activateSession` in
+`web/lib/interview-sessions.ts`, `ends_at` in LiveKit metadata (`lib/livekit.ts`, `lib/session-activation.ts`,
+`agent/src/agent.py`), `/s/[code]` page, `/api/twins/[slug]/assignments` (GET, PUT, PATCH) and
+`/api/twins/[slug]/share-links` (GET, POST, PATCH), `sendTwinAssignmentEmail`.
+
+**Deploy order:** web migrations and web first, then chat (chat reads `agent.kind` from `getSessionContext`), then the
+voice agent. Dry-run the three migrations on a prod dump first.
+
+**Not done (deliberately):** pinning a twin session's skill list in `compiledSnapshot`; list pages filtering by kind (UI
+phase, mocks for now); a spoken goodbye before the minutes cut-off; the copilot `inventory`/`readSpec` actions (no callers);
+`web/scripts/create-cwv-scenarios.ts` (untracked, not type-checked) must set `kind` before it is run again.
 
 ---
 
@@ -394,7 +430,7 @@ erDiagram
 
 ```sql
 SELECT coalesce(sum(extract(epoch FROM (
-  coalesce("endedAt", CASE WHEN status IN ('activating', 'active') THEN now() ELSE "startedAt" END)
+  coalesce("endedAt", CASE WHEN status IN ('activating', 'active') THEN now() AT TIME ZONE 'UTC' ELSE "startedAt" END)
   - "startedAt"))), 0) / 60 AS minutes_used
 FROM "InterviewSession" WHERE "twinAssignmentId" = $1 AND "startedAt" IS NOT NULL;
 ```

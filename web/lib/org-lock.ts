@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 
 /**
  * Single-org lock: a person (by email) belongs to exactly one organization — the org of their
- * earliest membership, live assignment, or session. Multi-org is a separate, later release.
+ * earliest membership, live role-play assignment, active twin assignment, or session. Multi-org is a separate, later release.
  * shortcut: derived from existing rows (no column/constraint); move to a User.homeOrgId column
  * with a DB constraint when multi-org lands.
  */
@@ -20,7 +20,7 @@ export async function homeOrgsByEmail(emails: string[]): Promise<Map<string, str
   const wanted = [...new Set(emails.map((e) => e.trim().toLowerCase()).filter(Boolean))];
   if (!wanted.length) return new Map();
 
-  const [members, assignments, sessions] = await Promise.all([
+  const [members, assignments, twinAssignments, sessions] = await Promise.all([
     db.member.findMany({
       where: { user: { email: { in: wanted } } },
       select: { organizationId: true, createdAt: true, user: { select: { email: true } } },
@@ -29,6 +29,11 @@ export async function homeOrgsByEmail(emails: string[]): Promise<Map<string, str
       // cancelled/expired invitations never bound anyone; emails are stored lowercase (better-auth + assignments)
       where: { recipientEmail: { in: wanted }, status: { in: ["pending", "used"] } },
       select: { orgId: true, assignedAt: true, recipientEmail: true },
+    }),
+    db.twinAssignment.findMany({
+      // revoked twin access never bound anyone; emails are stored lowercase (DB check)
+      where: { recipientEmail: { in: wanted }, status: "active" },
+      select: { orgId: true, createdAt: true, recipientEmail: true },
     }),
     db.interviewSession.findMany({
       where: { user: { email: { in: wanted } } },
@@ -44,6 +49,7 @@ export async function homeOrgsByEmail(emails: string[]): Promise<Map<string, str
   };
   for (const m of members) consider(m.user.email, m.organizationId, m.createdAt);
   for (const a of assignments) consider(a.recipientEmail, a.orgId, a.assignedAt);
+  for (const t of twinAssignments) consider(t.recipientEmail, t.orgId, t.createdAt);
   for (const s of sessions) consider(s.user.email, s.orgId, s.createdAt);
   return new Map([...earliest].map(([email, { orgId }]) => [email, orgId]));
 }

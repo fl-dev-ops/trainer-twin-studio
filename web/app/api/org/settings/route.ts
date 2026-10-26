@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { isStudioRole } from "@/lib/org";
 
 const bodySchema = z.object({
   accentColor: z.string().regex(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i),
@@ -25,7 +26,7 @@ export async function PATCH(request: Request) {
     select: { organizationId: true, role: true, organization: { select: { metadata: true } } },
   });
   if (!member) return NextResponse.json({ error: "No organization" }, { status: 403 });
-  if (!member.role.split(",").some((role) => ["owner", "admin"].includes(role.trim()))) {
+  if (!isStudioRole(member.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

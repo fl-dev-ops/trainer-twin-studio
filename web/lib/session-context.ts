@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
+import { findOrgOrGlobalPersona } from "@/lib/specs";
 import { TWIN_SOURCE, twinPlaybooks } from "@/lib/twins";
 
 const SHARED_KNOWLEDGE_BASE_SLUG = "acme-knowledge";
@@ -36,10 +37,10 @@ export async function buildSessionContext(input: {
   const snapshot = session?.compiledSnapshot as Snapshot | null;
   const [liveAgent, livePersona, liveDomain, sharedKnowledgeBase] = await Promise.all([
     agentSlug
-      ? db.agent.findFirst({ where: { slug: { equals: agentSlug, mode: "insensitive" }, orgId: input.orgId }, select: { slug: true, version: true, data: true, personaId: true } })
+      ? db.agent.findFirst({ where: { slug: { equals: agentSlug, mode: "insensitive" }, orgId: input.orgId }, select: { slug: true, version: true, data: true, personaId: true, kind: true } })
       : null,
     personaSlug
-      ? db.persona.findFirst({ where: { slug: { equals: personaSlug, mode: "insensitive" }, orgId: input.orgId }, select: { slug: true, version: true, data: true } })
+      ? findOrgOrGlobalPersona(input.orgId, { equals: personaSlug, mode: "insensitive" }, { slug: true, version: true, data: true })
       : null,
     domainSlug
       ? db.domain.findFirst({ where: { slug: domainSlug, orgId: input.orgId }, select: { slug: true, version: true, data: true } })
@@ -131,13 +132,14 @@ export async function buildSessionContext(input: {
     ? { slug: snapshot.domain.slug ?? liveDomain?.slug ?? domainSlug, version: snapshot.domain.version ?? liveDomain?.version ?? 0, data: snapshot.domain.data }
     : liveDomain;
 
-  // A twin draws on every playbook of its persona; they are listed live so new ingests show up.
-  const isTwin = (agent?.data as Record<string, unknown> | undefined)?.source === TWIN_SOURCE;
-  const playbooks = isTwin && liveAgent?.personaId ? await twinPlaybooks(input.orgId, liveAgent.personaId) : undefined;
+  // The all-skills twin draws on every skill twin of its persona; they are listed live so new ingests show up.
+  // kind is immutable, so the live row's kind is the session's module.
+  const isAllSkillsTwin = liveAgent?.kind === "TWIN" && (agent?.data as Record<string, unknown> | undefined)?.source === TWIN_SOURCE;
+  const playbooks = isAllSkillsTwin && liveAgent?.personaId ? await twinPlaybooks(input.orgId, liveAgent.personaId) : undefined;
 
   return {
     sessionId: session?.id ?? input.sessionId ?? null,
-    agent: agent ? { slug: agent.slug, version: agent.version, data: agent.data } : null,
+    agent: agent ? { slug: agent.slug, version: agent.version, kind: liveAgent?.kind ?? null, data: agent.data } : null,
     ...(playbooks ? { twinPlaybooks: playbooks } : {}),
     persona: persona ?? null,
     domain: domain ?? null,

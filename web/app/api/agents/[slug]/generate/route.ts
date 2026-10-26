@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { getTrainerOrg } from "@/lib/org";
 import { readSpecDraft, saveSpecDraft, publishSpecDraft } from "@/lib/spec-drafts";
 import { generateSpecBundle } from "@/lib/spec-generation";
-import { validSlug } from "@/lib/specs";
+import { findOrgOrGlobalPersona, validSlug } from "@/lib/specs";
 import { interviewConfigSchema } from "@/lib/interview-config-schema";
 import { QuestionBank } from "@/lib/question-bank";
 
@@ -46,10 +46,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     return Response.json({ error: "Select at least one generated question topic before publishing" }, { status: 400 });
   }
 
-  const persona = await db.persona.findUnique({
-    where: { orgId_slug: { orgId: org.id, slug: personaSlug } },
-    select: { id: true, name: true },
-  });
+  // Role plays may use the org's persona or a global one.
+  const persona = await findOrgOrGlobalPersona(org.id, personaSlug, { id: true, name: true });
   if (!persona) return Response.json({ error: "Persona is not available" }, { status: 400 });
 
   const [voice, knowledge] = await Promise.all([

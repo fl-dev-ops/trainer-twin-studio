@@ -27,17 +27,18 @@ export type TwinPlaybook = {
 
 const asRecord = (value: unknown) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null);
 
-/** Every ingested scenario played by this persona, as twin playbooks. */
+/** Every skill twin of this persona (an ingested SKILL.md), as the all-skills twin's playbooks. */
 export async function twinPlaybooks(orgId: string, personaId: string): Promise<TwinPlaybook[]> {
   const rows = await db.agent.findMany({
-    where: { orgId, personaId },
+    where: { orgId, personaId, kind: "TWIN" },
     orderBy: [{ order: "asc" }, { name: "asc" }],
     select: { slug: true, name: true, data: true },
   });
   return rows.flatMap((row) => {
     const data = asRecord(row.data);
     const manifest = asRecord(data?.scenario);
-    if (data?.source !== "scenario-ingest" || typeof data.skill !== "string" || !manifest) return [];
+    // The all-skills twin itself has no skill; only skill twins carry one.
+    if (typeof data?.skill !== "string" || !manifest) return [];
     return [{
       slug: row.slug,
       id: typeof manifest.scenario === "string" ? manifest.scenario : row.slug,
@@ -55,7 +56,8 @@ export async function twinPlaybooks(orgId: string, personaId: string): Promise<T
 export async function ensureTwin(orgId: string, personaSlug: string) {
   const [org, persona] = await Promise.all([
     db.organization.findUnique({ where: { id: orgId }, select: { slug: true } }),
-    db.persona.findFirst({ where: { orgId, slug: { equals: personaSlug, mode: "insensitive" } }, select: { id: true, slug: true, name: true } }),
+    // A twin is the user's own persona, never a global or invented one (also enforced by a DB trigger).
+    db.persona.findFirst({ where: { orgId, isOwn: true, slug: { equals: personaSlug, mode: "insensitive" } }, select: { id: true, slug: true, name: true } }),
   ]);
   if (!org) throw new TwinError("Organization not found", 404);
   if (!persona) throw new TwinError(`Persona "${personaSlug}" was not found in this organization`, 404);
@@ -87,7 +89,7 @@ export async function ensureTwin(orgId: string, personaSlug: string) {
     if (!existingDomain) {
       await tx.domain.create({ data: { slug: domainSlug, name, version: 1, data: json({ id: domainSlug, name }), orgId } });
     }
-    await tx.agent.create({ data: { slug, name, version: 1, domainSlug, personaId: persona.id, data: json(data), orgId } });
+    await tx.agent.create({ data: { slug, name, version: 1, domainSlug, personaId: persona.id, kind: "TWIN", data: json(data), orgId } });
   });
   return { slug, name, created: true };
 }

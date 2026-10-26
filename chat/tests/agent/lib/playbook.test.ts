@@ -42,10 +42,11 @@ const base: SessionSpecs = {
 };
 
 describe("scenario-ingest playbook sessions", () => {
-  test("only scenario-ingest specs with a skill are playbooks", () => {
-    assert.equal(scenarioPlaybook({ name: "copilot spec", stages: [] }), undefined);
-    assert.equal(scenarioPlaybook({ source: "scenario-ingest" }), undefined);
-    assert.deepEqual(scenarioPlaybook(ingestData), {
+  test("only skill twins (TWIN with a skill) are playbooks", () => {
+    assert.equal(scenarioPlaybook("ROLEPLAY", { name: "copilot spec", stages: [] }), undefined);
+    assert.equal(scenarioPlaybook("TWIN", { source: "scenario-ingest" }), undefined);
+    assert.equal(scenarioPlaybook("ROLEPLAY", ingestData), undefined); // kind decides the module
+    assert.deepEqual(scenarioPlaybook("TWIN", ingestData), {
       skill: SKILL,
       trainerRole: "interviewer",
       learnerRole: "candidate",
@@ -54,7 +55,7 @@ describe("scenario-ingest playbook sessions", () => {
   });
 
   test("the playbook is the operating instruction, verbatim, outside SESSION DATA", () => {
-    const prompt = formatSessionSpec({ ...base, playbook: scenarioPlaybook(ingestData) });
+    const prompt = formatSessionSpec({ ...base, playbook: scenarioPlaybook("TWIN", ingestData) });
     assert.ok(prompt.startsWith("SCENARIO PLAYBOOK — OPERATING INSTRUCTIONS FOR THIS SESSION"));
     // SKILL.md exactly as ingested, YAML header included, before the factual SESSION DATA block.
     assert.ok(prompt.includes(`<playbook>\n${SKILL}\n</playbook>`));

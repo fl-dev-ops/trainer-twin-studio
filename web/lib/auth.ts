@@ -3,8 +3,7 @@ import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { organization } from "better-auth/plugins";
-import { createAccessControl } from "better-auth/plugins/access";
-import { adminAc, defaultStatements, memberAc, ownerAc } from "better-auth/plugins/organization/access";
+import { organizationAccess, organizationRoles } from "@/lib/auth-roles";
 import { nextCookies } from "better-auth/next-js";
 import { db } from "@/lib/db";
 import { BASE_DOMAIN, safeFamilyRedirect } from "@/lib/base-domain";
@@ -16,15 +15,6 @@ async function assertSingleOrg(email: string, organizationId: string) {
   if (await belongsToOtherOrg(email, organizationId)) throw new APIError("FORBIDDEN", { message: ORG_LOCK_MESSAGE });
 }
 
-const organizationAccess = createAccessControl({
-  ...defaultStatements,
-  apiKey: ["create", "read", "update", "delete"],
-} as const);
-const organizationRoles = {
-  owner: organizationAccess.newRole({ ...ownerAc.statements, apiKey: ["create", "read", "update", "delete"] }),
-  admin: organizationAccess.newRole({ ...adminAc.statements, apiKey: ["create", "read", "update", "delete"] }),
-  member: organizationAccess.newRole({ ...memberAc.statements, apiKey: [] }),
-};
 
 export const auth = betterAuth({
   appName: "TrainerTwin",
@@ -51,6 +41,7 @@ export const auth = betterAuth({
     organization({
       ac: organizationAccess,
       roles: organizationRoles,
+      creatorRole: "admin",
       // Invite-only platform: organizations are created exclusively through the
       // founder onboarding flow, never self-serve.
       allowUserToCreateOrganization: false,

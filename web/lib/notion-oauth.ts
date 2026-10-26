@@ -91,7 +91,7 @@ export async function consumeNotionOAuthState(
       AND kb."orgId" = ${orgId}
       AND m."organizationId" = ${orgId}
       AND m."userId" = ${userId}
-      AND m.role ~* '(^|,)\s*(owner|admin)\s*(,|$)'
+      AND m.role IN ('admin', 'team')
     RETURNING s.id, s."orgId", s."userId", s."kbId", kb.slug AS "kbSlug"
   `;
 

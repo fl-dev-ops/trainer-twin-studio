@@ -8,12 +8,12 @@ INSERT INTO "user" (id, name, email, "createdAt", "updatedAt") VALUES
   ('test-outsider', 'Outsider', 'outsider@example.com', NOW(), NOW()),
   ('test-trainer', 'Trainer', 'trainer@example.com', NOW(), NOW());
 INSERT INTO "member" (id, "organizationId", "userId", role, "createdAt")
-  VALUES ('test-member', 'test-org', 'test-trainer', 'owner', NOW());
+  VALUES ('test-member', 'test-org', 'test-trainer', 'admin', NOW());
 INSERT INTO "Persona" (id, "orgId", slug, name, data, "updatedAt")
   VALUES ('test-persona', 'test-org', 'test-persona', 'Persona', '{}', NOW());
-INSERT INTO "Agent" (id, "orgId", slug, name, "domainSlug", "personaId", data, "updatedAt") VALUES
-  ('test-agent', 'test-org', 'test-agent', 'Agent', 'test-domain', 'test-persona', '{}', NOW()),
-  ('test-other-agent', 'test-org', 'test-other-agent', 'Other agent', 'test-domain', 'test-persona', '{}', NOW());
+INSERT INTO "Agent" (id, "orgId", slug, name, "domainSlug", "personaId", kind, data, "updatedAt") VALUES
+  ('test-agent', 'test-org', 'test-agent', 'Agent', 'test-domain', 'test-persona', 'ROLEPLAY', '{}', NOW()),
+  ('test-other-agent', 'test-org', 'test-other-agent', 'Other agent', 'test-domain', 'test-persona', 'ROLEPLAY', '{}', NOW());
 INSERT INTO "Deployment" (id, "orgId", "agentId", "publicKey", "updatedAt")
   VALUES ('test-deployment', 'test-org', 'test-agent', 'test-public-key', NOW());
 INSERT INTO "RolePlayAssignment" (id, "orgId", "deploymentId", "recipientEmail", "assignedByUserId", "shareCode", "expiresAt")

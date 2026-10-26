@@ -2,8 +2,8 @@ import { headers } from "next/headers";
 import { BASE_DOMAIN } from "@/lib/base-domain";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { isStudioRole } from "@/lib/org";
 
-const TRAINER_ROLES = new Set(["owner", "admin"]);
 
 function familyOrigin(name: string) {
   // Preserve the port so local proxies (portless :NNNN) keep working.
@@ -31,7 +31,7 @@ export async function resolveHome(): Promise<string | null> {
   if (memberships.length === 0) return "/auth/no-org";
 
   const isTrainer = memberships.some((m) =>
-    m.role.split(",").some((r) => TRAINER_ROLES.has(r.trim())),
+    isStudioRole(m.role),
   );
   if (isTrainer) return `${await familyOrigin("dash")}/`;
   return `${await familyOrigin(memberships[0].organization.slug)}/`;

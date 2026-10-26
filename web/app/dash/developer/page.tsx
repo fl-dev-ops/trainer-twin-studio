@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/page-header";
 import { auth } from "@/lib/auth";
 import { BASE_DOMAIN } from "@/lib/base-domain";
 import { db } from "@/lib/db";
+import { isStudioRole } from "@/lib/org";
 
 const DOCS_URL =
   process.env.NEXT_PUBLIC_DOCS_URL ??
@@ -27,7 +28,7 @@ export default async function DeveloperApiPage() {
   });
   if (!membership) redirect("/auth/no-org");
 
-  const canManageApiKeys = membership.role.split(",").some((role) => ["owner", "admin"].includes(role.trim()));
+  const canManageApiKeys = isStudioRole(membership.role);
   const apiKeys = canManageApiKeys
     ? await db.apikey.findMany({
         where: { referenceId: membership.organization.id, configId: "default" },

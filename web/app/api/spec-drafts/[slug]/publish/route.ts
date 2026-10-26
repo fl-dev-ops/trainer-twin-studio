@@ -1,6 +1,6 @@
-import { db } from "@/lib/db";
 import { getTrainerOrg } from "@/lib/org";
 import { publishSpecDraft, readSpecDraft } from "@/lib/spec-drafts";
+import { findOrgOrGlobalPersona } from "@/lib/specs";
 
 export const runtime = "nodejs";
 
@@ -13,7 +13,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ sl
   const draft = await readSpecDraft(slug, org.id).catch(() => null);
   if (!draft) return Response.json({ error: `Draft "${slug}" was not found` }, { status: 404 });
   if (draft.personaSlug) {
-    const persona = await db.persona.findFirst({ where: { slug: draft.personaSlug, orgId: org.id }, select: { id: true } });
+    const persona = await findOrgOrGlobalPersona(org.id, draft.personaSlug, { id: true });
     if (!persona) return Response.json({ error: "Persona is not available" }, { status: 400 });
   }
 

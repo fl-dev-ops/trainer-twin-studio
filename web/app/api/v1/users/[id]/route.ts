@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { isApiError, requireExternalApi } from "@/lib/external-api";
+import { LEARNER_ROLE } from "@/lib/org";
 
 const updateSchema = z.object({ name: z.string().trim().min(1).max(100) }).strict();
 type Params = { params: Promise<{ id: string }> };
@@ -10,7 +11,7 @@ export async function GET(request: Request, { params }: Params) {
   if (isApiError(api)) return api;
   const { id } = await params;
   const member = await db.member.findFirst({
-    where: { organizationId: api.org.id, userId: id, role: "member" },
+    where: { organizationId: api.org.id, userId: id, role: LEARNER_ROLE },
     select: {
       id: true,
       role: true,
@@ -29,7 +30,7 @@ export async function PATCH(request: Request, { params }: Params) {
   if (!parsed.success) return Response.json({ error: "A name of up to 100 characters is required" }, { status: 400 });
   const { id } = await params;
   const member = await db.member.findFirst({
-    where: { organizationId: api.org.id, userId: id, role: "member" },
+    where: { organizationId: api.org.id, userId: id, role: LEARNER_ROLE },
     select: { id: true },
   });
   if (!member) return Response.json({ error: "User not found" }, { status: 404 });
@@ -38,7 +39,7 @@ export async function PATCH(request: Request, { params }: Params) {
     data: { name: parsed.data.name },
     select: { id: true, name: true, email: true, emailVerified: true },
   });
-  return Response.json({ user: { ...user, memberId: member.id, role: "member" } });
+  return Response.json({ user: { ...user, memberId: member.id, role: LEARNER_ROLE } });
 }
 
 export async function DELETE(request: Request, { params }: Params) {
@@ -46,7 +47,7 @@ export async function DELETE(request: Request, { params }: Params) {
   if (isApiError(api)) return api;
   const { id } = await params;
   const removed = await db.member.deleteMany({
-    where: { organizationId: api.org.id, userId: id, role: "member" },
+    where: { organizationId: api.org.id, userId: id, role: LEARNER_ROLE },
   });
   if (!removed.count) return Response.json({ error: "User not found" }, { status: 404 });
   return new Response(null, { status: 204 });

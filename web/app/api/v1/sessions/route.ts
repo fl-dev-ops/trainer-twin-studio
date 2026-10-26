@@ -2,6 +2,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { activateInterviewRuntime } from "@/lib/session-activation";
 import { isApiError, paginationFromUrl, requireExternalApi } from "@/lib/external-api";
+import { TwinAccessError } from "@/lib/twin-access";
 import { OrgLockError } from "@/lib/org-lock";
 
 const querySchema = z.object({
@@ -82,7 +83,7 @@ export async function POST(request: Request) {
   if (!parsed.success) return Response.json({ error: "userId and deploymentKey or scenario are required" }, { status: 400 });
   const user = await db.user.findFirst({
     where: { id: parsed.data.userId, members: { some: { organizationId: api.org.id } } },
-    select: { id: true, name: true },
+    select: { id: true, name: true, email: true },
   });
   if (!user) return Response.json({ error: "User not found" }, { status: 404 });
   try {
@@ -90,6 +91,7 @@ export async function POST(request: Request) {
       orgId: api.org.id,
       userId: user.id,
       userName: user.name,
+      userEmail: user.email,
       deploymentKey: parsed.data.deploymentKey,
       agentSlug: parsed.data.scenario,
       contextId: parsed.data.documentId,
@@ -100,6 +102,7 @@ export async function POST(request: Request) {
     return Response.json(activation, { status: 201 });
   } catch (error) {
     if (error instanceof OrgLockError) return Response.json({ error: error.message }, { status: 409 });
+    if (error instanceof TwinAccessError) return Response.json({ error: error.message }, { status: error.status });
     return Response.json({ error: error instanceof Error ? error.message : "Session activation failed" }, { status: 400 });
   }
 }

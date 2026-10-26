@@ -16,6 +16,9 @@ model Persona {
   name      String
   version   Int             @default(1)
   data      Json
+  // The user's own persona (a real person: recordings, style, cloned voice). Never true for a
+  // global persona (orgId null). Immutable; twins require it (DB triggers, see migration split_twin_roleplay).
+  isOwn     Boolean         @default(false)
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
   sources   PersonaSource[]
@@ -25,25 +28,39 @@ model Persona {
   @@index([orgId])
 }
 
+/// Which module an agent belongs to. Immutable once set (DB trigger).
+enum AgentKind {
+  TWIN
+  ROLEPLAY
+
+  @@map("agent_kind")
+}
+
 model Agent {
-  orgId       String?
-  visibility  String               @default("public") // public | private (within the org)
-  id          String               @id @default(cuid())
-  slug        String               @unique
-  name        String
-  version     Int                  @default(1)
-  domainSlug  String
-  personaId   String
-  persona     Persona              @relation(fields: [personaId], references: [id], onDelete: Restrict)
-  data        Json
-  order       Int                  @default(0)
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
-  deployments Deployment[]
-  sessions    InterviewSession[]
+  orgId           String?
+  visibility      String             @default("public") // public | private (within the org)
+  id              String             @id @default(cuid())
+  slug            String             @unique
+  name            String
+  version         Int                @default(1)
+  domainSlug      String
+  personaId       String
+  persona         Persona            @relation(fields: [personaId], references: [id], onDelete: Restrict)
+  // No default: every writer must choose the module.
+  kind            AgentKind
+  data            Json
+  order           Int                @default(0)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  deployments     Deployment[]
+  sessions        InterviewSession[]
+  twinAssignments TwinAssignment[]
+  twinShareLinks  TwinShareLink[]
 
   @@index([orgId])
   @@index([personaId])
+  @@index([orgId, kind])
+  @@index([personaId, kind])
 }
 
 model Domain {
@@ -83,6 +100,8 @@ model SpecDraft {
   slug          String    @unique
   name          String
   personaSlug   String?
+  // Copied onto the Agent when published. No default: every writer must choose.
+  kind          AgentKind
   agentData     Json
   domainData    Json
   groundingData Json
@@ -97,6 +116,7 @@ model SpecDraft {
   revisions SpecDraftRevision[]
 
   @@index([orgId])
+  @@index([orgId, kind])
 }
 
 model SpecDraftRevision {
@@ -245,7 +265,6 @@ model ResumeClaim {
   @@index([documentId])
 }
 
-
 model InterviewSessionDocument {
   sessionId  String
   documentId String
@@ -317,28 +336,33 @@ model InterviewSession {
   endedAt          DateTime?
   deletedAt        DateTime?
 
-  organization Organization               @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  user         User                       @relation(fields: [userId], references: [id], onDelete: Restrict)
-  agent        Agent                      @relation(fields: [agentId], references: [id], onDelete: Restrict)
-  context      ContextDocument?           @relation(fields: [contextId], references: [id], onDelete: SetNull)
+  organization      Organization               @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user              User                       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  agent             Agent                      @relation(fields: [agentId], references: [id], onDelete: Restrict)
+  context           ContextDocument?           @relation(fields: [contextId], references: [id], onDelete: SetNull)
   documents         InterviewSessionDocument[]
   commands          WorkspaceCommand[]
   deploymentId      String?
   assignmentId      String?
-  mode              String    @default("voice") // voice | chat
-  activationKey     String?   @unique
+  mode              String                     @default("voice") // voice | chat
+  activationKey     String?                    @unique
   livekitRoom       String?
   livekitDispatchId String?
   audioEgressId     String?
   videoEgressId     String?
 
-  deployment Deployment?         @relation(fields: [deploymentId], references: [id], onDelete: SetNull)
-  assignment RolePlayAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  deployment       Deployment?         @relation(fields: [deploymentId], references: [id], onDelete: SetNull)
+  assignment       RolePlayAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  // Twin sessions only; never together with assignmentId (CHECK session_one_assignment_kind). Minutes used
+  // are the sum of these sessions' startedAt..endedAt.
+  twinAssignmentId String?
+  twinAssignment   TwinAssignment?     @relation(fields: [twinAssignmentId], references: [id], onDelete: SetNull)
 
   @@index([orgId, userId])
   @@index([agentId])
   @@index([deploymentId])
   @@index([assignmentId])
+  @@index([twinAssignmentId])
 }
 
 model User {
@@ -360,6 +384,7 @@ model User {
   youtubeConnections YouTubeConnection[]
   youtubeOAuthStates YouTubeOAuthState[]
   issueReports       IssueReport[]
+  twinAssignments    TwinAssignment[]
 
   @@unique([email])
   @@map("user")
@@ -458,6 +483,8 @@ model Organization {
   members            Member[]
   invitations        Invitation[]
   assignments        RolePlayAssignment[]
+  twinAssignments    TwinAssignment[]
+  twinShareLinks     TwinShareLink[]
   deployments        Deployment[]
   interviewSessions  InterviewSession[]
   knowledgeBases     KnowledgeBase[]
@@ -478,7 +505,8 @@ model Member {
   organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   userId         String
   user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role           String               @default("member")
+  // admin | team | user (CHECK member_role_check). admin and team run the studio; user only practises.
+  role           String               @default("user")
   createdAt      DateTime
   assignments    RolePlayAssignment[]
 
@@ -490,15 +518,15 @@ model Member {
 model Deployment {
   id                 String   @id @default(cuid())
   orgId              String
-  agentId             String
-  publicKey           String   @unique
-  secretKeyHash       String?  @unique
-  allowedModes        String   @default("chat,voice")
-  allowedOrigins      Json?
-  status              String   @default("active") // active | disabled
-  rateLimitPerMinute  Int      @default(30)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  agentId            String
+  publicKey          String   @unique
+  secretKeyHash      String?  @unique
+  allowedModes       String   @default("chat,voice")
+  allowedOrigins     Json?
+  status             String   @default("active") // active | disabled
+  rateLimitPerMinute Int      @default(30)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   organization Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
   agent        Agent                @relation(fields: [agentId], references: [id], onDelete: Cascade)
@@ -535,13 +563,13 @@ model RolePlayAssignment {
 }
 
 model WorkspaceCommand {
-  id          String   @id
+  id          String    @id
   sessionId   String
   tool        String
   input       Json
-  status      String   @default("pending") // pending | completed | failed
+  status      String    @default("pending") // pending | completed | failed
   result      Json?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
   completedAt DateTime?
 
   session InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
@@ -554,7 +582,7 @@ model Invitation {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   email          String
-  role           String?
+  role           String       @default("user") // admin | team | user (CHECK invitation_role_check)
   status         String       @default("pending")
   expiresAt      DateTime
   createdAt      DateTime     @default(now())
@@ -819,4 +847,53 @@ model UsageCursor {
   updatedAt DateTime @updatedAt
 
   @@id([streamId, provider, model, metric])
+}
+
+// ---- Twin access (migration twin_access) ----
+// Role plays keep RolePlayAssignment (email invite, 30 days, one attempt). Twins are assigned per user with a
+// minutes budget; one budget per twin agent. Agent kind TWIN and same org are enforced by DB triggers.
+
+/// A common link for one twin: each signed-in user who opens it gets their own TwinAssignment.
+model TwinShareLink {
+  id              String   @id @default(cuid())
+  orgId           String
+  agentId         String
+  code            String   @unique
+  minutesPerUser  Int // > 0 (CHECK)
+  status          String   @default("active") // active | disabled
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  agent        Agent            @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  assignments  TwinAssignment[]
+
+  @@index([agentId])
+}
+
+/// One user's access to one twin agent, with a minutes budget. No expiry for now.
+model TwinAssignment {
+  id               String   @id @default(cuid())
+  orgId            String
+  agentId          String
+  recipientEmail   String // lower case (CHECK); one assignment per user per twin
+  userId           String?
+  minutesLimit     Int // > 0 (CHECK)
+  shareCode        String   @unique // personal invite link
+  shareLinkId      String?
+  assignedByUserId String?
+  status           String   @default("active") // active | revoked
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  agent        Agent              @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  user         User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  shareLink    TwinShareLink?     @relation(fields: [shareLinkId], references: [id], onDelete: SetNull)
+  sessions     InterviewSession[]
+
+  @@unique([agentId, recipientEmail])
+  @@index([orgId, status])
+  @@index([userId])
 }

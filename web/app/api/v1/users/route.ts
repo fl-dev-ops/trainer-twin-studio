@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { sendInvitationEmail } from "@/lib/email";
 import { isApiError, paginationFromUrl, requireExternalApi } from "@/lib/external-api";
 import { belongsToOtherOrg, ORG_LOCK_MESSAGE } from "@/lib/org-lock";
+import { LEARNER_ROLE, STUDIO_ROLES } from "@/lib/org";
 
 const createSchema = z.object({ email: z.string().trim().email().max(320) }).strict();
 
@@ -16,7 +17,7 @@ export async function GET(request: Request) {
 
   const [members, total, invitations] = await Promise.all([
     db.member.findMany({
-      where: { organizationId: api.org.id, role: "member" },
+      where: { organizationId: api.org.id, role: LEARNER_ROLE },
       orderBy: { createdAt: "desc" },
       skip: page.offset,
       take: page.limit,
@@ -27,7 +28,7 @@ export async function GET(request: Request) {
         user: { select: { id: true, name: true, email: true, emailVerified: true } },
       },
     }),
-    db.member.count({ where: { organizationId: api.org.id, role: "member" } }),
+    db.member.count({ where: { organizationId: api.org.id, role: LEARNER_ROLE } }),
     db.invitation.findMany({
       where: { organizationId: api.org.id, status: "pending" },
       orderBy: { createdAt: "desc" },
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
   const inviter = await db.member.findFirst({
     where: {
       organizationId: api.org.id,
-      role: { in: ["owner", "admin"] },
+      role: { in: [...STUDIO_ROLES] },
       ...(api.actorUserId ? { userId: api.actorUserId } : {}),
     },
     select: { userId: true, user: { select: { name: true } } },
@@ -81,7 +82,7 @@ export async function POST(request: Request) {
           id: randomUUID(),
           organizationId: api.org.id,
           email,
-          role: "member",
+          role: LEARNER_ROLE,
           status: "pending",
           expiresAt,
           inviterId: inviter.userId,

@@ -28,7 +28,7 @@ export default async function OnboardingPage({
 
   if (session?.user) {
     const member = await db.member.findFirst({
-      where: { userId: session.user.id, role: "owner" },
+      where: { userId: session.user.id, role: "admin" },
       include: { organization: true },
     });
     if (member) {

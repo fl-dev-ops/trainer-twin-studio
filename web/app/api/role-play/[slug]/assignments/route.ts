@@ -61,7 +61,8 @@ export async function PUT(
   const { slug } = await params;
   const emails = [...new Set(parsed.data.emails)];
   const agent = await db.agent.findFirst({
-    where: { slug, orgId: trainer.id },
+    // Role-play invites are for role plays only; twins have their own assignments (/api/twins/[slug]/assignments).
+    where: { slug, orgId: trainer.id, kind: "ROLEPLAY" },
     select: { id: true, name: true, data: true },
   });
   if (!agent) return Response.json({ error: "Published role play not found" }, { status: 404 });

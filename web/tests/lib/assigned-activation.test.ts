@@ -20,6 +20,7 @@ mock.module("@/lib/db", () => ({ db: {
     findMany: async () => [], // single-org lock lookup (no prior sessions)
     update: async () => ({}),
   },
+  twinAssignment: { findMany: async () => [] }, // single-org lock lookup (no twin access)
   user: { findUnique: async () => ({ email: "learner@example.com" }) },
   member: { findMany: async () => [] },
 } }));

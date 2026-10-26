@@ -173,7 +173,8 @@ export async function ingestScenario(orgId: string, input: ScenarioIngestInput) 
   const [org, persona] = await Promise.all([
     requireOrg(orgId),
     // Case-insensitive like the session context lookup: the ingest agent sends its source folder name ("vasanth").
-    db.persona.findFirst({ where: { orgId, slug: { equals: input.personaSlug, mode: "insensitive" } }, select: { id: true } }),
+    // A skill twin speaks as the user's own persona (also enforced by a DB trigger).
+    db.persona.findFirst({ where: { orgId, isOwn: true, slug: { equals: input.personaSlug, mode: "insensitive" } }, select: { id: true } }),
   ]);
   if (!persona) throw new ScenarioIngestError(`Persona "${input.personaSlug}" was not found in this organization`, 404);
 
@@ -187,6 +188,10 @@ export async function ingestScenario(orgId: string, input: ScenarioIngestInput) 
   ]);
   if ((currentAgent && currentAgent.orgId !== org.id) || (currentDomain && currentDomain.orgId !== org.id)) {
     throw new ScenarioIngestError(`Scenario "${slug}" belongs to another organization`, 409);
+  }
+  // Ingested scenarios are skill twins; never overwrite a role play that happens to share the slug.
+  if (currentAgent && currentAgent.kind !== "TWIN") {
+    throw new ScenarioIngestError(`"${slug}" is a role play, not a twin skill`, 409);
   }
 
   // An intro video is provisioned separately, so a re-ingest carries it forward (as publishSpecDraft does).
@@ -213,7 +218,7 @@ export async function ingestScenario(orgId: string, input: ScenarioIngestInput) 
     }
     if (!currentAgent) {
       await tx.agent.create({
-        data: { slug, name: agentData.name, version, domainSlug, personaId: persona.id, data: json(data), orgId: org.id },
+        data: { slug, name: agentData.name, version, domainSlug, personaId: persona.id, kind: "TWIN", data: json(data), orgId: org.id },
       });
       return;
     }

@@ -195,7 +195,7 @@ async function main() {
         },
       });
       await db.member.create({
-        data: { id: randomUUID(), organizationId: ORG_ID, userId: user.id, role: "member", createdAt: new Date() },
+        data: { id: randomUUID(), organizationId: ORG_ID, userId: user.id, role: "user", createdAt: new Date() },
       });
     }
     learnerIds.push(user.id);
