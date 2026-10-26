@@ -568,6 +568,8 @@ for (const input of SCENARIOS) {
       personaId: template.personaId,
       visibility: "public",
       orgId: ORG_ID,
+      // Interview scenarios are role plays (Agent.kind is required; twins come only from scenario ingest).
+      kind: "ROLEPLAY",
       data,
     },
   });

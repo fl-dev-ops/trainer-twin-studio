@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import type { AgentKind } from "@/lib/generated/prisma/client";
 import { LEARNER_ROLE } from "@/lib/org";
 
 type Person = { id: string; name: string; email: string; image: string | null };
@@ -73,15 +74,18 @@ export function summarizeLearners({ assignments, sessions, members, users }: Inp
     .sort((a, b) => (b.lastActiveAt ?? "").localeCompare(a.lastActiveAt ?? "") || a.name.localeCompare(b.name));
 }
 
-export async function listLearners(orgId: string): Promise<LearnerRow[]> {
+/** Learners of one module: role-play invites or twin assignments, and that module's sessions. */
+export async function listLearners(orgId: string, kind: AgentKind): Promise<LearnerRow[]> {
   const person = { select: { id: true, name: true, email: true, image: true } } as const;
   const [assignments, sessions, members] = await Promise.all([
-    db.rolePlayAssignment.findMany({
-      where: { orgId, status: { in: ["pending", "used"] } },
-      select: { recipientEmail: true, deployment: { select: { agentId: true } } },
-    }),
+    kind === "ROLEPLAY"
+      ? db.rolePlayAssignment.findMany({
+          where: { orgId, status: { in: ["pending", "used"] } },
+          select: { recipientEmail: true, deployment: { select: { agentId: true } } },
+        }).then((rows) => rows.map((a) => ({ recipientEmail: a.recipientEmail, agentId: a.deployment.agentId })))
+      : db.twinAssignment.findMany({ where: { orgId, status: "active" }, select: { recipientEmail: true, agentId: true } }),
     db.interviewSession.findMany({
-      where: { orgId, deletedAt: null },
+      where: { orgId, deletedAt: null, agent: { kind } },
       select: { agentId: true, startedAt: true, endedAt: true, createdAt: true, user: person },
     }),
     db.member.findMany({ where: { organizationId: orgId, role: LEARNER_ROLE }, select: { user: person } }),
@@ -91,7 +95,7 @@ export async function listLearners(orgId: string): Promise<LearnerRow[]> {
   const users = missing.length ? await db.user.findMany({ where: { email: { in: missing } }, ...person }) : [];
 
   return summarizeLearners({
-    assignments: assignments.map((a) => ({ recipientEmail: a.recipientEmail, agentId: a.deployment.agentId })),
+    assignments,
     sessions,
     members: members.map((m) => m.user),
     users,

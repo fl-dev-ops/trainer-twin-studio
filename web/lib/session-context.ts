@@ -1,7 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 import { findOrgOrGlobalPersona } from "@/lib/specs";
-import { TWIN_SOURCE, twinPlaybooks } from "@/lib/twins";
+import { type PinnedTwinSkill, TWIN_SOURCE, twinPlaybooks } from "@/lib/twins";
 
 const SHARED_KNOWLEDGE_BASE_SLUG = "acme-knowledge";
 
@@ -9,6 +9,8 @@ type Snapshot = {
   agent?: { slug?: string; version?: number; data?: Record<string, unknown> };
   persona?: { slug?: string; version?: number; data?: Record<string, unknown> };
   domain?: { slug?: string; version?: number; data?: Record<string, unknown> };
+  /** All-skills twin sessions: the skill twins pinned when the session started. */
+  twinSkills?: PinnedTwinSkill[];
 };
 
 export async function buildSessionContext(input: {
@@ -132,10 +134,12 @@ export async function buildSessionContext(input: {
     ? { slug: snapshot.domain.slug ?? liveDomain?.slug ?? domainSlug, version: snapshot.domain.version ?? liveDomain?.version ?? 0, data: snapshot.domain.data }
     : liveDomain;
 
-  // The all-skills twin draws on every skill twin of its persona; they are listed live so new ingests show up.
-  // kind is immutable, so the live row's kind is the session's module.
+  // The all-skills twin draws on its persona's skill twins: the ones pinned when the session started (older
+  // sessions without a pin get the live list). kind is immutable, so the live row's kind is the session's module.
   const isAllSkillsTwin = liveAgent?.kind === "TWIN" && (agent?.data as Record<string, unknown> | undefined)?.source === TWIN_SOURCE;
-  const playbooks = isAllSkillsTwin && liveAgent?.personaId ? await twinPlaybooks(input.orgId, liveAgent.personaId) : undefined;
+  const playbooks = isAllSkillsTwin && liveAgent?.personaId
+    ? await twinPlaybooks(input.orgId, liveAgent.personaId, Array.isArray(snapshot?.twinSkills) ? snapshot.twinSkills : undefined)
+    : undefined;
 
   return {
     sessionId: session?.id ?? input.sessionId ?? null,

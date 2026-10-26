@@ -8,6 +8,7 @@ import { getAgentConfigForAgent } from "@/lib/specs";
 import { assertUserInOrg } from "@/lib/org-lock";
 import { isStudioRole, LEARNER_ROLE } from "@/lib/org";
 import { TwinAccessError, twinAccessByAgent, twinAccessByCode } from "@/lib/twin-access";
+import { pinTwinSkills, TWIN_SOURCE } from "@/lib/twins";
 
 const shareCode = () => randomBytes(18).toString("base64url");
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
@@ -308,6 +309,11 @@ export async function activateSession(input: {
   const primaryId = snapshot.docIds[0];
   const primary = snapshot.documents.find((document) => document.id === primaryId);
   const compiledConfig = await getAgentConfigForAgent(agentId, input.orgId, primaryId, snapshot.docIds);
+  // The all-skills twin keeps the skills (and versions) it started with for the whole session.
+  const twinSkills = snapshot.agent.kind === "TWIN" && (snapshot.agent.data as Record<string, unknown> | null)?.source === TWIN_SOURCE
+    ? await pinTwinSkills(input.orgId, snapshot.agent.personaId)
+    : undefined;
+  const sessionSnapshotData = compiledConfig || twinSkills ? { ...(compiledConfig ?? {}), ...(twinSkills ? { twinSkills } : {}) } : undefined;
   const session = await db.$transaction(async (tx) => {
     if (!assignmentId) {
       await tx.interviewSession.updateMany({
@@ -335,7 +341,7 @@ export async function activateSession(input: {
         contextId: primary?.id,
         contextName: primary?.name,
         status: "activating",
-        compiledSnapshot: compiledConfig ? JSON.parse(JSON.stringify(compiledConfig)) : undefined,
+        compiledSnapshot: sessionSnapshotData ? JSON.parse(JSON.stringify(sessionSnapshotData)) : undefined,
         runtimeState: JSON.parse(JSON.stringify(initRuntimeState())),
         lastCompletion: Prisma.DbNull,
       },

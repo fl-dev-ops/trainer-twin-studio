@@ -35,9 +35,16 @@
 **Deploy order:** web migrations and web first, then chat (chat reads `agent.kind` from `getSessionContext`), then the
 voice agent. Dry-run the three migrations on a prod dump first.
 
-**Not done (deliberately):** pinning a twin session's skill list in `compiledSnapshot`; list pages filtering by kind (UI
-phase, mocks for now); a spoken goodbye before the minutes cut-off; the copilot `inventory`/`readSpec` actions (no callers);
-`web/scripts/create-cwv-scenarios.ts` (untracked, not type-checked) must set `kind` before it is run again.
+**Follow-ups (done 2026-10-27):**
+- An all-skills twin session pins its skills at start (`compiledSnapshot.twinSkills`: slug + version); the prompt,
+  the eve skills and `scenario_examples` use that list, reading a re-ingested skill's older SKILL.md from SpecVersion.
+  Items in Chroma hold only the latest version, so example lines of a re-ingested skill are the new ones.
+- Lists are per module: `/agents`, `/sessions` and `/learners` show role plays; `SessionsList`, `listLearners` and
+  `listSpecSummaries` take a kind for the twin pages. The portal catalog lists role plays only; the talk page shows a
+  `user` only the twins assigned to them (admin and team see everything).
+- The voice agent says a short goodbye 20 s before the minutes run out, turns the learner's mic off, and ends at the
+  limit (calls under 40 s just end). The line is fixed English for now.
+- `web/scripts/create-cwv-scenarios.ts` creates its agents as `ROLEPLAY`.
 
 ---
 

@@ -16,8 +16,11 @@ export default defineTool({
     const orgId = ctx.session.auth.initiator?.principalId ?? ctx.session.auth.current?.principalId;
     if (!orgId) throw new Error("No organization principal attached to session");
     // The scenario comes from the session, never from the model, so lines can't cross scenarios.
-    const agentSlug = (ctx.session.auth.current?.attributes as Record<string, unknown> | undefined)?.agentSlug;
+    const attributes = ctx.session.auth.current?.attributes as Record<string, unknown> | undefined;
+    const agentSlug = attributes?.agentSlug;
     if (typeof agentSlug !== "string" || !agentSlug) return { examples: [], note: "This session has no scenario." };
+    // An all-skills twin session searches only the skills pinned when it started.
+    const sessionId = typeof attributes?.sessionId === "string" && attributes.sessionId ? attributes.sessionId : undefined;
     return studioFetch(orgId, {
       action: "searchScenarioItems",
       agentSlug,
@@ -26,6 +29,7 @@ export default defineTool({
       role: input.role,
       limit: input.limit,
       playbook: input.playbook,
+      sessionId,
     });
   },
 });

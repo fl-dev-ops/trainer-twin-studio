@@ -27,28 +27,61 @@ export type TwinPlaybook = {
 
 const asRecord = (value: unknown) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null);
 
-/** Every skill twin of this persona (an ingested SKILL.md), as the all-skills twin's playbooks. */
-export async function twinPlaybooks(orgId: string, personaId: string): Promise<TwinPlaybook[]> {
-  const rows = await db.agent.findMany({
+/** A skill twin's spec as a playbook, or null when it carries no skill (the all-skills twin itself). */
+function toPlaybook(slug: string, name: string, agentData: unknown): TwinPlaybook | null {
+  const data = asRecord(agentData);
+  const manifest = asRecord(data?.scenario);
+  if (typeof data?.skill !== "string" || !manifest) return null;
+  return {
+    slug,
+    id: typeof manifest.scenario === "string" ? manifest.scenario : slug,
+    name: typeof manifest.name === "string" ? manifest.name : name,
+    description: typeof manifest.description === "string" ? manifest.description : "",
+    trainerRole: typeof manifest.trainer_role === "string" ? manifest.trainer_role : undefined,
+    learnerRole: typeof manifest.learner_role === "string" ? manifest.learner_role : undefined,
+    steps: Array.isArray(manifest.steps) ? (manifest.steps as TwinPlaybook["steps"]) : [],
+    skill: data.skill,
+  };
+}
+
+/** The skill twins (and their versions) an all-skills twin session is pinned to, saved when it starts. */
+export type PinnedTwinSkill = { slug: string; version: number };
+
+const liveSkillTwins = (orgId: string, personaId: string) =>
+  db.agent.findMany({
     where: { orgId, personaId, kind: "TWIN" },
     orderBy: [{ order: "asc" }, { name: "asc" }],
-    select: { slug: true, name: true, data: true },
+    select: { slug: true, name: true, version: true, data: true },
   });
-  return rows.flatMap((row) => {
-    const data = asRecord(row.data);
-    const manifest = asRecord(data?.scenario);
-    // The all-skills twin itself has no skill; only skill twins carry one.
-    if (typeof data?.skill !== "string" || !manifest) return [];
-    return [{
-      slug: row.slug,
-      id: typeof manifest.scenario === "string" ? manifest.scenario : row.slug,
-      name: typeof manifest.name === "string" ? manifest.name : row.name,
-      description: typeof manifest.description === "string" ? manifest.description : "",
-      trainerRole: typeof manifest.trainer_role === "string" ? manifest.trainer_role : undefined,
-      learnerRole: typeof manifest.learner_role === "string" ? manifest.learner_role : undefined,
-      steps: Array.isArray(manifest.steps) ? (manifest.steps as TwinPlaybook["steps"]) : [],
-      skill: data.skill,
-    }];
+
+/** The persona's skill twins right now, to pin into a new session's snapshot. */
+export async function pinTwinSkills(orgId: string, personaId: string): Promise<PinnedTwinSkill[]> {
+  const rows = await liveSkillTwins(orgId, personaId);
+  return rows.filter((row) => toPlaybook(row.slug, row.name, row.data)).map(({ slug, version }) => ({ slug, version }));
+}
+
+/**
+ * The all-skills twin's playbooks. With `pinned` (a session's snapshot) the session keeps exactly the skills and
+ * versions it started with: a skill re-ingested since then is read from its SpecVersion, one ingested since then
+ * is left out, one deleted since then is dropped. Without `pinned`, every skill twin of the persona right now.
+ */
+export async function twinPlaybooks(orgId: string, personaId: string, pinned?: PinnedTwinSkill[]): Promise<TwinPlaybook[]> {
+  const rows = await liveSkillTwins(orgId, personaId);
+  if (!pinned) return rows.flatMap((row) => toPlaybook(row.slug, row.name, row.data) ?? []);
+
+  const live = new Map(rows.map((row) => [row.slug, row]));
+  const older = pinned.filter(({ slug, version }) => live.get(slug)?.version !== version);
+  const versions = older.length
+    ? await db.specVersion.findMany({
+        where: { orgId, entityType: "agents", OR: older.map(({ slug, version }) => ({ entitySlug: slug, version })) },
+        select: { entitySlug: true, version: true, data: true },
+      })
+    : [];
+  const snapshotOf = new Map(versions.map((row) => [`${row.entitySlug}@${row.version}`, row.data]));
+  return pinned.flatMap(({ slug, version }) => {
+    const row = live.get(slug);
+    const data = row?.version === version ? row.data : snapshotOf.get(`${slug}@${version}`);
+    return toPlaybook(slug, row?.name ?? slug, data) ?? [];
   });
 }
 

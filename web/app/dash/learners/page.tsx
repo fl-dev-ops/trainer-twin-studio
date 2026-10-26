@@ -8,5 +8,5 @@ export const dynamic = "force-dynamic";
 export default async function UsersPage() {
   const trainer = await getTrainerOrg();
   if (!trainer) redirect("/auth/no-org");
-  return <LearnersTable learners={await listLearners(trainer.id)} />;
+  return <LearnersTable learners={await listLearners(trainer.id, "ROLEPLAY")} />;
 }

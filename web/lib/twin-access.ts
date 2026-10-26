@@ -217,3 +217,27 @@ export async function setTwinShareLinkStatus(input: { orgId: string; agentId: st
   if (!found) throw new TwinAccessError("Share link not found", 404);
   return db.twinShareLink.update({ where: { id: found.id }, data: { status: input.status }, select: { id: true, status: true } });
 }
+
+/**
+ * Of these runnable agent slugs, the ones this person may start: admin and team see everything; anyone else
+ * sees every role play but only the twins they hold an active assignment for.
+ */
+export async function startableAgentSlugs(orgId: string, user: Person | null, slugs: string[], studio: boolean) {
+  if (studio || !slugs.length) return slugs;
+  const twins = await db.agent.findMany({ where: { orgId, slug: { in: slugs }, kind: "TWIN" }, select: { id: true, slug: true } });
+  if (!twins.length) return slugs;
+  const assigned = user
+    ? await db.twinAssignment.findMany({
+        where: {
+          orgId,
+          status: "active",
+          agentId: { in: twins.map((twin) => twin.id) },
+          OR: [{ userId: user.id }, { userId: null, recipientEmail: user.email.trim().toLowerCase() }],
+        },
+        select: { agentId: true },
+      })
+    : [];
+  const allowed = new Set(assigned.map((row) => row.agentId));
+  const hidden = new Set(twins.filter((twin) => !allowed.has(twin.id)).map((twin) => twin.slug));
+  return slugs.filter((slug) => !hidden.has(slug));
+}

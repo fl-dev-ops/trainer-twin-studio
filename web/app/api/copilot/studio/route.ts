@@ -5,7 +5,7 @@ import { searchKnowledge } from "@/lib/knowledge";
 import { specDraftBundleSchema } from "@/lib/spec-draft-schema";
 import { publishSpecDraft, readSpecDraft, saveSpecDraft } from "@/lib/spec-drafts";
 import { MainCollectionService, type ScenarioStep } from "@/lib/main-collection";
-import { TWIN_SOURCE, twinPlaybooks } from "@/lib/twins";
+import { type PinnedTwinSkill, TWIN_SOURCE, twinPlaybooks } from "@/lib/twins";
 import { redactLearnerNames } from "@/lib/persona-voice";
 import { enqueueWorkspaceCommand } from "@/lib/workspace-commands";
 import { buildSessionContext, getCachedSessionContext } from "@/lib/session-context";
@@ -48,6 +48,8 @@ const requestSchema = z.discriminatedUnion("action", [
     limit: z.number().int().min(1).max(6).optional(),
     /** Twin sessions: narrow to one playbook (its scenario id or slug). */
     playbook: z.string().trim().min(1).max(200).optional(),
+    /** All-skills twin sessions: search only the skills pinned when the session started. */
+    sessionId: z.string().min(1).max(100).optional(),
   }).strict(),
   z.object({
     action: z.literal("readDocument"),
@@ -238,7 +240,11 @@ export async function POST(request: Request) {
     let scope: { slugs: string[]; steps: ScenarioStep[] };
     if (agent?.kind === "TWIN" && data?.source === TWIN_SOURCE) {
       // The all-skills twin searches its persona's skill twins: all of them, or the one the model has loaded.
-      const all = await twinPlaybooks(orgId, agent.personaId);
+      const pinned = input.sessionId
+        ? (await db.interviewSession.findFirst({ where: { id: input.sessionId, orgId, agentSlug: input.agentSlug }, select: { compiledSnapshot: true } }))
+          ?.compiledSnapshot as { twinSkills?: PinnedTwinSkill[] } | null | undefined
+        : undefined;
+      const all = await twinPlaybooks(orgId, agent.personaId, Array.isArray(pinned?.twinSkills) ? pinned.twinSkills : undefined);
       const named = input.playbook ? all.filter((p) => p.id === input.playbook || p.slug === input.playbook) : [];
       // An unknown name (e.g. a sanitised skill name) widens to all playbooks rather than finding nothing.
       const chosen = named.length > 0 ? named : all;

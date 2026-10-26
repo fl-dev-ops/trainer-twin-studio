@@ -9,6 +9,7 @@ import { SessionTime } from "@/components/sessions/session-time";
 import { UserAvatar } from "@/components/user-avatar";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { db } from "@/lib/db";
+import type { AgentKind } from "@/lib/generated/prisma/client";
 import { firstExchange } from "@/lib/session-snippet";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -32,13 +33,13 @@ const pick = (value: string | string[] | undefined) => (Array.isArray(value) ? v
 
 export type SessionsSearchParams = Record<string, string | string[] | undefined>;
 
-/** Sessions list for one org: filters in the URL, newest first. */
-export async function SessionsList({ orgId, params }: { orgId: string; params: SessionsSearchParams }) {
+/** Sessions list for one org and module (twin or role play): filters in the URL, newest first. */
+export async function SessionsList({ orgId, params, kind }: { orgId: string; params: SessionsSearchParams; kind: AgentKind }) {
   const range = RANGE_OPTIONS.some((o) => o.value === pick(params.range)) ? pick(params.range) : "30";
   const scenario = pick(params.scenario) || "all";
   const learner = pick(params.learner) || "all";
 
-  const baseWhere = { orgId, deletedAt: null };
+  const baseWhere = { orgId, deletedAt: null, agent: { kind } };
   const [sessions, scenarios, learners] = await Promise.all([
     db.interviewSession.findMany({
       where: {
@@ -60,7 +61,7 @@ export async function SessionsList({ orgId, params }: { orgId: string; params: S
         user: { select: { id: true, name: true, email: true, image: true } },
       },
     }),
-    db.agent.findMany({ where: { orgId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    db.agent.findMany({ where: { orgId, kind }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.interviewSession.findMany({
       where: baseWhere,
       distinct: ["userId"],

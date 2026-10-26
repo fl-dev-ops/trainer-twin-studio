@@ -89,6 +89,17 @@ def seconds_until_end(metadata: dict[str, Any], now: float) -> float | None:
     return max(0.0, float(ends_at) - now)
 
 
+# Twin minutes: the twin says goodbye this long before the call is cut, then the learner's mic goes off.
+# shortcut: one fixed English line in the twin's voice; persona-written or localized goodbyes when needed.
+GOODBYE_LEAD_SECONDS = 20.0
+GOODBYE_LINE = "We're nearly out of time for today, so let's stop here. Thanks for talking it through with me."
+
+
+def goodbye_delay(limit: float) -> float | None:
+    """Seconds from now until the goodbye, or None when the call is too short to fit one before the end."""
+    return limit - GOODBYE_LEAD_SECONDS if limit > GOODBYE_LEAD_SECONDS * 2 else None
+
+
 # Client gated on the intro video: the greeting releases on "begin-opening". The fixed
 # 60s cap keeps dead clients (refresh loops, broken video) from stalling sessions; keep
 # intro clips comfortably under it.
@@ -521,10 +532,21 @@ async def entrypoint(ctx: agents.JobContext) -> None:
                     logger.debug("Room teardown note: %s", exc)
                 return
 
-    async def end_at_deadline(delay: float) -> None:
-        """Twin minutes: close the room when the learner's budget runs out; on_session_end then
-        posts the completion webhook as for any other ending."""
-        await asyncio.sleep(delay)
+    async def end_at_deadline(limit: float) -> None:
+        """Twin minutes: say goodbye shortly before the budget runs out, then close the room at the limit;
+        on_session_end posts the completion webhook as for any other ending."""
+        started = time.monotonic()
+        notice = goodbye_delay(limit)
+        if notice is not None:
+            await asyncio.sleep(notice)
+            try:
+                handle = session.say(GOODBYE_LINE, allow_interruptions=False)
+                await asyncio.wait_for(handle.wait_for_playout(), timeout=GOODBYE_LEAD_SECONDS)
+                # No new turn after the goodbye: a reply started now would be cut off mid-sentence.
+                session.input.set_audio_enabled(False)
+            except Exception as exc:
+                logger.warning("Goodbye before the minutes limit failed room=%s error=%s", ctx.room.name, exc)
+        await asyncio.sleep(max(0.0, limit - (time.monotonic() - started)))
         logger.info("Room %s reached its minutes limit; ending session", ctx.room.name)
         try:
             await ctx.api.room.delete_room(api.DeleteRoomRequest(room=ctx.room.name))
@@ -552,7 +574,6 @@ async def entrypoint(ctx: agents.JobContext) -> None:
             asyncio.create_task(session.generate_reply(user_input=pending_text))
         pending_chat_messages.clear()
     asyncio.create_task(watch_empty_room())
-    # shortcut: the call just ends at the limit (no spoken goodbye); add a short notice first if learners find it abrupt.
     limit = seconds_until_end(metadata, time.time())
     if limit is not None:
         asyncio.create_task(end_at_deadline(limit))

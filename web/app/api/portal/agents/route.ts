@@ -18,7 +18,8 @@ export async function GET(request: Request) {
 
   const runnable = await listRunnableSpecs("agents", org.id);
   const agents = await db.agent.findMany({
-    where: { orgId: org.id, visibility: "public", slug: { in: runnable } },
+    // Role plays only: twins are opened through a twin assignment or share link, not the public catalog.
+    where: { orgId: org.id, visibility: "public", slug: { in: runnable }, kind: "ROLEPLAY" },
     orderBy: [{ order: "asc" }, { name: "asc" }],
     select: { slug: true, name: true, version: true, domainSlug: true },
   });

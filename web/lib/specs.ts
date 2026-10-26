@@ -57,14 +57,15 @@ export function agentDisplayName(slug: string, name: string) {
   return slug === "full-mock-interview" ? "Internal Testing" : name;
 }
 
-export async function listSpecSummaries(type: "personas" | "agents", orgId: string) {
+/** Persona or agent cards for an org. `kind` limits agents (and their drafts) to one module. */
+export async function listSpecSummaries(type: "personas" | "agents", orgId: string, kind?: AgentKind) {
   if (type === "personas") {
     return db.persona.findMany({ where: { orgId }, orderBy: { slug: "asc" }, select: { slug: true, name: true, version: true } });
   }
 
   const [agents, drafts, assignments] = await Promise.all([
     db.agent.findMany({
-      where: { orgId },
+      where: { orgId, ...(kind ? { kind } : {}) },
       orderBy: [{ order: "asc" }, { name: "asc" }],
       select: {
         id: true,
@@ -80,7 +81,7 @@ export async function listSpecSummaries(type: "personas" | "agents", orgId: stri
       },
     }),
     db.specDraft.findMany({
-      where: { orgId },
+      where: { orgId, ...(kind ? { kind } : {}) },
       orderBy: { name: "asc" },
       select: { slug: true, name: true, status: true, revision: true, agentData: true },
     }),
