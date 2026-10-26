@@ -59,6 +59,7 @@ export function TeamSection(props: {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [query, setQuery] = useState<Record<string, string>>({});
+  const [inviting, setInviting] = useState<"team" | "user" | null>(null);
 
   async function run(key: string, action: () => Promise<{ error?: { message?: string } | null } | Response>, done: string) {
     setBusy(key);
@@ -162,7 +163,7 @@ export function TeamSection(props: {
                 {group.title} <span className="text-muted-foreground font-normal">· {all.filter((m) => !m.disabledAt).length}</span>
               </CardTitle>
               <CardAction>
-                <Dialog>
+                <Dialog open={inviting === group.role} onOpenChange={(open) => setInviting(open ? group.role : null)}>
                   <DialogTrigger render={<Button size="sm" />}>
                     <Plus />
                     Invite
@@ -170,9 +171,9 @@ export function TeamSection(props: {
                   <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                       <DialogTitle>{group.invite}</DialogTitle>
-                      <DialogDescription>{group.hint} They get an email with a sign-up link.</DialogDescription>
+                      <DialogDescription>{group.hint} Add one or more emails, separated by commas; each person gets a sign-up link.</DialogDescription>
                     </DialogHeader>
-                    <InviteUser organizationId={props.organizationId} role={group.role} />
+                    <InviteUser organizationId={props.organizationId} role={group.role} onDone={() => setInviting(null)} />
                   </DialogContent>
                 </Dialog>
               </CardAction>
