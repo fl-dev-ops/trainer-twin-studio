@@ -35,7 +35,7 @@ export function ScenarioOverview({ data }: { data: ScenarioOverviewData }) {
   const weekMax = Math.max(1, ...data.week.map((day) => day.count));
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid max-w-4xl gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader><CardTitle>{data.name}</CardTitle></CardHeader>
           <CardContent className="flex flex-col gap-5">
