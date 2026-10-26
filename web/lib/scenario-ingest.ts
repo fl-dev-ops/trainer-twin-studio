@@ -172,7 +172,8 @@ async function requireOrg(orgId: string) {
 export async function ingestScenario(orgId: string, input: ScenarioIngestInput) {
   const [org, persona] = await Promise.all([
     requireOrg(orgId),
-    db.persona.findFirst({ where: { orgId, slug: input.personaSlug }, select: { id: true } }),
+    // Case-insensitive like the session context lookup: the ingest agent sends its source folder name ("vasanth").
+    db.persona.findFirst({ where: { orgId, slug: { equals: input.personaSlug, mode: "insensitive" } }, select: { id: true } }),
   ]);
   if (!persona) throw new ScenarioIngestError(`Persona "${input.personaSlug}" was not found in this organization`, 404);
 

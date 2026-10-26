@@ -14,8 +14,8 @@ const fakeDb = {
       ({ org1: { id: "org1", slug: "acme" }, org2: { id: "org2", slug: "other" } })[where.id] ?? null,
   },
   persona: {
-    findFirst: async ({ where }: { where: { orgId: string; slug: string } }) =>
-      where.orgId === "org1" && where.slug === "Vasanth" ? { id: "p1" } : null,
+    findFirst: async ({ where }: { where: { orgId: string; slug: { equals: string; mode: string } } }) =>
+      where.orgId === "org1" && where.slug.mode === "insensitive" && where.slug.equals.toLowerCase() === "vasanth" ? { id: "p1" } : null,
   },
   agent: {
     findUnique: async ({ where }: { where: { slug: string } }) => agents.find((a) => a.slug === where.slug) ?? null,
@@ -151,7 +151,8 @@ test("builds an org-prefixed agent the runtime can read", () => {
 });
 
 test("first ingest creates domain + agent after storing items (duplicate item ids allowed)", async () => {
-  const result = await ingestScenario("org1", input({ patterns: "# Patterns\n", runId: "run-1" }));
+  // The agent sends its source folder name; the persona is "Vasanth".
+  const result = await ingestScenario("org1", input({ personaSlug: "vasanth", patterns: "# Patterns\n", runId: "run-1" }));
   const prefix = "p/org1/scenario-ingest/scenarios/acme-fundamental-depth/v1";
   expect(result).toEqual({ slug: "acme-fundamental-depth", name: "Fundamental depth", version: 1, created: true, items: 2, artifacts: prefix, runId: "run-1" });
   // Files, then items, then the rows.
