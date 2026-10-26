@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { searchKnowledge } from "@/lib/knowledge";
 import { specDraftBundleSchema } from "@/lib/spec-draft-schema";
 import { publishSpecDraft, readSpecDraft, saveSpecDraft } from "@/lib/spec-drafts";
-import { MainCollectionService } from "@/lib/main-collection";
+import { MainCollectionService, type ScenarioStep } from "@/lib/main-collection";
 import { redactLearnerNames } from "@/lib/persona-voice";
 import { enqueueWorkspaceCommand } from "@/lib/workspace-commands";
 import { buildSessionContext, getCachedSessionContext } from "@/lib/session-context";
@@ -229,10 +229,14 @@ export async function POST(request: Request) {
 
   // Real lines from a scenario-ingest scenario (items.json), for the chat tool scenario_examples.
   if (input.action === "searchScenarioItems") {
+    // scenario.json's steps map the newer items' `action` to a step, and a step to its moves.
+    const agent = await db.agent.findFirst({ where: { slug: input.agentSlug, orgId }, select: { data: true } });
+    const scenario = (agent?.data as { scenario?: { steps?: unknown } } | null)?.scenario;
     const examples = await MainCollectionService.searchScenarioItems(orgId, input.agentSlug, input.query, {
       step: input.step,
       role: input.role,
       limit: input.limit,
+      steps: Array.isArray(scenario?.steps) ? (scenario.steps as ScenarioStep[]) : [],
     });
     return Response.json({ query: input.query, examples });
   }

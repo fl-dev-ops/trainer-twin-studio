@@ -68,6 +68,26 @@ export type ScenarioItemMetadata = {
 
 export type MainCollectionMetadata = KnowledgeMetadata | PersonaVoiceMetadata | ScenarioItemMetadata;
 
+/** One step of scenario.json: the moves it allows on each side. */
+export type ScenarioStep = { id: string; trainer_moves?: unknown; learner_moves?: unknown };
+
+/** step → its moves, and move → its (first) step, from scenario.json's steps. */
+export function scenarioStepIndex(steps: ScenarioStep[]) {
+  const movesByStep = new Map<string, string[]>();
+  const stepByMove = new Map<string, string>();
+  for (const step of steps) {
+    const moves = [step.trainer_moves, step.learner_moves].flatMap((list) =>
+      Array.isArray(list) ? list.filter((m): m is string => typeof m === "string") : [],
+    );
+    movesByStep.set(step.id, moves);
+    for (const move of moves) if (!stepByMove.has(move)) stepByMove.set(move, step.id);
+  }
+  return {
+    movesOf: (step: string) => movesByStep.get(step) ?? [],
+    stepOf: (move?: string) => (move ? stepByMove.get(move) : undefined),
+  };
+}
+
 const collectionCache = new Map<string, Collection>();
 
 interface CachedStyleRecord {
@@ -459,19 +479,25 @@ export class MainCollectionService {
 
   /**
    * Real lines from one scenario for a situation, optionally limited to a step and a side.
+   * Reads both item formats scenario-ingest has produced: `step` + `move`, and `action` (+ `part`),
+   * where the step comes from scenario.json (`steps`: the moves each step allows).
    * Falls back to the whole scenario when the step has no matching lines.
    */
   static async searchScenarioItems(
     orgId: string,
     agentSlug: string,
     query: string,
-    options: { step?: string; role?: "trainer" | "learner"; limit?: number } = {},
+    options: { step?: string; role?: "trainer" | "learner"; limit?: number; steps?: ScenarioStep[] } = {},
   ): Promise<{ text: string; context: string; step?: string; move?: string; role: string; score: number }[]> {
     const collection = await this.getCollection(orgId);
     const [queryEmbedding] = await embedTexts([query]);
+    const index = scenarioStepIndex(options.steps ?? []);
     const run = async (step?: string) => {
       const conditions: Where[] = [{ type: "scenario_item" }, { agentSlug }];
-      if (step) conditions.push({ step });
+      if (step) {
+        const moves = index.movesOf(step);
+        conditions.push(moves.length ? { $or: [{ step }, { move: { $in: moves } }, { action: { $in: moves } }] } as Where : { step });
+      }
       if (options.role) conditions.push({ role: options.role });
       const res = await collection.query({
         queryEmbeddings: [queryEmbedding],
@@ -485,11 +511,12 @@ export class MainCollectionService {
       return (res.ids?.[0] ?? []).map((_, i) => {
         const meta = metas[i] ?? {};
         const distance = distances[i];
+        const move = typeof meta.move === "string" ? meta.move : typeof meta.action === "string" ? meta.action : undefined;
         return {
           text: docs[i] ?? "",
           context: typeof meta.context === "string" ? meta.context : "",
-          step: typeof meta.step === "string" ? meta.step : undefined,
-          move: typeof meta.move === "string" ? meta.move : undefined,
+          step: typeof meta.step === "string" ? meta.step : index.stepOf(move),
+          move,
           role: String(meta.role ?? ""),
           score: typeof distance === "number" ? 1 - distance : 0,
         };
