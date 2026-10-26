@@ -5,9 +5,9 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "@/components/ui/item";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CopyButton } from "@/components/users/copy-button";
 import { InviteUser } from "@/components/users/invite-user";
 import { authClient } from "@/lib/auth-client";
@@ -71,25 +71,25 @@ export function TeamSection(props: {
   const cancel = (invitation: TeamInvitation) =>
     run(invitation.id, () => authClient.organization.cancelInvitation({ invitationId: invitation.id }), "Invitation cancelled");
 
-  function memberRows(members: TeamMember[]) {
+  function memberItems(members: TeamMember[]) {
     return members.map((member) => {
       const you = member.userId === props.currentUserId;
       const locked = you || member.role === "admin";
       return (
-        <TableRow key={member.id} className={member.disabledAt ? "opacity-60" : undefined}>
-          <TableCell>
-            <span className="block font-medium">
+        <Item key={member.id} role="listitem" variant="outline" size="sm" className={member.disabledAt ? "opacity-60" : undefined}>
+          <ItemContent>
+            <ItemTitle>
               {member.name}
-              {you ? <span className="text-muted-foreground font-normal"> (you)</span> : null}
-            </span>
-            <span className="block text-sm text-muted-foreground">{member.email}</span>
-          </TableCell>
-          <TableCell className="text-sm text-muted-foreground">
-            {member.disabledAt ? <Badge variant="outline">Disabled {day(member.disabledAt)}</Badge> : `Joined ${day(member.createdAt)}`}
-          </TableCell>
-          <TableCell>
+              {you ? <span className="text-muted-foreground font-normal">(you)</span> : null}
+              {member.disabledAt ? <Badge variant="outline">Disabled {day(member.disabledAt)}</Badge> : null}
+            </ItemTitle>
+            <ItemDescription>
+              {member.email} · Joined {day(member.createdAt)}
+            </ItemDescription>
+          </ItemContent>
+          <ItemActions>
             {locked || member.disabledAt ? (
-              <span className="text-sm">{ROLE_LABEL[member.role] ?? member.role}</span>
+              <Badge variant="secondary">{ROLE_LABEL[member.role] ?? member.role}</Badge>
             ) : (
               <NativeSelect
                 size="sm"
@@ -102,42 +102,39 @@ export function TeamSection(props: {
                 <NativeSelectOption value="user">User</NativeSelectOption>
               </NativeSelect>
             )}
-          </TableCell>
-          <TableCell className="text-right">
             {locked ? null : (
               <Button variant="outline" size="sm" disabled={busy === member.id} onClick={() => setDisabled(member, !member.disabledAt)}>
                 {member.disabledAt ? "Enable" : "Disable"}
               </Button>
             )}
-          </TableCell>
-        </TableRow>
+          </ItemActions>
+        </Item>
       );
     });
   }
 
-  function invitationRows(invitations: TeamInvitation[]) {
+  function invitationItems(invitations: TeamInvitation[]) {
     return invitations.map((invitation) => (
-      <TableRow key={invitation.id}>
-        <TableCell>
-          <span className="block font-medium">{invitation.email}</span>
-          <span className="block text-sm text-muted-foreground">Invited</span>
-        </TableCell>
-        <TableCell className="text-sm text-muted-foreground">Expires {day(invitation.expiresAt)}</TableCell>
-        <TableCell className="text-sm">{ROLE_LABEL[invitation.role] ?? invitation.role}</TableCell>
-        <TableCell>
-          <div className="flex justify-end gap-2">
-            <CopyButton value={inviteUrl(invitation.id)} label="Copy link" />
-            <Button variant="outline" size="sm" disabled={busy === invitation.id} onClick={() => resend(invitation)}>Resend</Button>
-            <Button variant="ghost" size="sm" disabled={busy === invitation.id} onClick={() => cancel(invitation)}>Cancel</Button>
-          </div>
-        </TableCell>
-      </TableRow>
+      <Item key={invitation.id} role="listitem" variant="outline" size="sm">
+        <ItemContent>
+          <ItemTitle>
+            {invitation.email}
+            <Badge variant="outline">Invited</Badge>
+          </ItemTitle>
+          <ItemDescription>Invite expires {day(invitation.expiresAt)}</ItemDescription>
+        </ItemContent>
+        <ItemActions>
+          <CopyButton value={inviteUrl(invitation.id)} label="Copy link" />
+          <Button variant="outline" size="sm" disabled={busy === invitation.id} onClick={() => resend(invitation)}>Resend</Button>
+          <Button variant="ghost" size="sm" disabled={busy === invitation.id} onClick={() => cancel(invitation)}>Cancel</Button>
+        </ItemActions>
+      </Item>
     ));
   }
 
   const groups = [
-    { title: "Team", hint: "Run the studio: twins, role plays, sessions and settings.", role: "team", studio: true },
-    { title: "Users", hint: "Practise with twins and role plays. Disabled people cannot sign in.", role: "user", studio: false },
+    { title: "Team", role: "team", studio: true },
+    { title: "Users", role: "user", studio: false },
   ] as const;
 
   return (
@@ -151,25 +148,14 @@ export function TeamSection(props: {
               <CardTitle>
                 {group.title} <span className="text-muted-foreground font-normal">· {members.filter((m) => !m.disabledAt).length}</span>
               </CardTitle>
-              <CardDescription>{group.hint}</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4">
               <InviteUser organizationId={props.organizationId} role={group.role} />
               {members.length || invitations.length ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Person</TableHead>
-                      <TableHead className="w-40">Status</TableHead>
-                      <TableHead className="w-28">Role</TableHead>
-                      <TableHead className="w-48" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {memberRows(members)}
-                    {invitationRows(invitations)}
-                  </TableBody>
-                </Table>
+                <ItemGroup className="gap-2">
+                  {memberItems(members)}
+                  {invitationItems(invitations)}
+                </ItemGroup>
               ) : (
                 <p className="text-sm text-muted-foreground">No one yet.</p>
               )}
