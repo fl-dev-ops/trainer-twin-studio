@@ -108,6 +108,17 @@ test("skill body drops the YAML header; step goals come from the step's own sect
   expect(stepGoal(body, "missing")).toBeUndefined();
 });
 
+test("stores the ingestion files verbatim: SKILL.md with its header, unknown keys, untrimmed text", () => {
+  const raw = { ...scenario, name: "  Fundamental depth ", future_field: { kept: true } };
+  const parsed = scenarioIngestSchema.parse({ personaSlug: "Vasanth", skill: SKILL, scenario: raw, items: [{ ...item("x#1"), text: " Okay. ", extra: 1 }] });
+  expect(parsed.scenario).toEqual(raw);
+  expect(parsed.items[0]).toMatchObject({ text: " Okay. ", extra: 1 });
+  const built = buildScenario("acme", parsed.scenario, SKILL);
+  expect(built.agentData.skill).toBe(SKILL);
+  expect(built.agentData.scenario).toEqual(raw);
+  expect(built.agentData.source).toBe("scenario-ingest");
+});
+
 test("builds an org-prefixed agent the runtime can read", () => {
   const built = buildScenario("acme", scenario, SKILL);
   expect(built.slug).toBe("acme-fundamental-depth");
@@ -120,7 +131,7 @@ test("builds an org-prefixed agent the runtime can read", () => {
       { id: "breadth-scan", name: "Breadth scan", objective: "Define each topic clearly." },
     ],
   });
-  expect(built.agentData.instruction).not.toContain("description:");
+  expect("instruction" in built.agentData).toBe(false);
 });
 
 test("first ingest creates domain + agent after storing items (duplicate item ids allowed)", async () => {

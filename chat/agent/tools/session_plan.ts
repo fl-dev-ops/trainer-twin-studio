@@ -10,6 +10,13 @@ import { ensureStyleCache } from "../lib/ensure-style";
 import { planState, resumeCandidateState } from "../lib/plan-state";
 import { resumeClaimCandidates } from "../lib/resume-candidates";
 import { studioFetch } from "../lib/studio";
+import { scenarioPlaybook } from "../lib/brain";
+
+/** Returned instead of a plan for scenario-ingest scenarios, which run from their playbook. */
+export const PLAYBOOK_SESSION_NOTE = {
+  playbookSession: true,
+  note: "This session follows the SCENARIO PLAYBOOK, so there is no interview plan. Do not call session_plan again; continue with the playbook's current step.",
+};
 
 const evidenceStatus = z.enum(["untested", "partial", "sufficient", "weak", "unresolved"]);
 const inputSchema = z.object({
@@ -27,7 +34,7 @@ const inputSchema = z.object({
     .describe("Voice only, per CURRENT PLAN STATE: the exact words to say to the learner this turn. Spoken immediately; say nothing else this turn. Omit when calling start_resume_question in the same response."),
 });
 
-async function initialize(ctx: any) {
+async function initialize(ctx: any): Promise<ReturnType<typeof compileSessionPlan> | null> {
   const orgId = ctx.session?.auth?.initiator?.principalId ?? ctx.session?.auth?.current?.principalId;
   const attributes = (ctx.session?.auth?.current?.attributes ?? {}) as Record<string, string | undefined>;
   if (!orgId) throw new Error("No TrainerTwin organization is attached to this conversation");
@@ -38,6 +45,8 @@ async function initialize(ctx: any) {
       sessionId: attributes.sessionId,
       agentSlug: attributes.agentSlug,
     });
+    // A playbook scenario would compile into quota-bound rounds that fight its own step logic.
+    if (scenarioPlaybook(result.agent?.data ?? {})) return null;
     const state = compileSessionPlan(result.agent?.data ?? {});
     planState.update(() => state);
     return state;
@@ -71,7 +80,9 @@ For a resume pose_main_question, the result includes resumeClaimCandidates (elig
 Never substitute a different question type, exceed a follow-up allowance, or ask an interview question after closing starts.`,
   inputSchema,
   async execute(input, ctx) {
-    let state = planState.get() ?? await initialize(ctx);
+    const current = planState.get() ?? await initialize(ctx);
+    if (!current) return PLAYBOOK_SESSION_NOTE;
+    let state = current;
 
     if (input.action === "record_answer") {
       if (!input.answerStatus) throw new Error("record_answer requires answerStatus");

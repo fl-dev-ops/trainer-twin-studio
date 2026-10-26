@@ -39,6 +39,14 @@ const requestSchema = z.discriminatedUnion("action", [
     }).optional(),
   }).strict(),
   z.object({
+    action: z.literal("searchScenarioItems"),
+    agentSlug: slug,
+    query: z.string().trim().min(2).max(500),
+    step: z.string().trim().min(1).max(100).optional(),
+    role: z.enum(["trainer", "learner"]).optional(),
+    limit: z.number().int().min(1).max(6).optional(),
+  }).strict(),
+  z.object({
     action: z.literal("readDocument"),
     documentId: z.string().trim().min(1).max(120),
     query: z.string().trim().min(1).max(500).optional(),
@@ -217,6 +225,16 @@ export async function POST(request: Request) {
     if (!persona) return Response.json({ error: `No persona named "${input.personaSlug}"` });
     const moments = await MainCollectionService.getRawStyleEpisodesForPersona(orgId, persona.id);
     return Response.json({ personaSlug: persona.slug, personaName: persona.name, moments });
+  }
+
+  // Real lines from a scenario-ingest scenario (items.json), for the chat tool scenario_examples.
+  if (input.action === "searchScenarioItems") {
+    const examples = await MainCollectionService.searchScenarioItems(orgId, input.agentSlug, input.query, {
+      step: input.step,
+      role: input.role,
+      limit: input.limit,
+    });
+    return Response.json({ query: input.query, examples });
   }
 
   if (input.action === "searchStyleEpisodes") {

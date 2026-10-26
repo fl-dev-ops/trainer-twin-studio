@@ -8,24 +8,26 @@ import { validSlug } from "@/lib/specs";
  * Stores a scenario produced by the scenario-ingest agent (SKILL.md + scenario.json + items.json)
  * as a role-play Agent the app can run, plus its items in the org's Chroma collection.
  * Uses existing tables only: the skill lives in Agent.data, items in Chroma.
+ * The files are stored exactly as ingestion produced them: schemas validate, they never trim,
+ * default or drop anything (loose objects keep unknown keys).
  */
 
 const kebab = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "must be kebab-case");
 
 /** scenario.json, as written by scenario-ingest's save_skill. */
-export const scenarioManifestSchema = z.object({
+export const scenarioManifestSchema = z.looseObject({
   scenario: kebab,
-  name: z.string().trim().min(1).max(200),
-  description: z.string().trim().min(1).max(1024),
-  trainer_role: z.string().trim().min(1).max(100),
-  learner_role: z.string().trim().min(1).max(100),
+  name: z.string().min(1).max(200),
+  description: z.string().min(1).max(1024),
+  trainer_role: z.string().min(1).max(100),
+  learner_role: z.string().min(1).max(100),
   steps: z
     .array(
-      z.object({
+      z.looseObject({
         id: kebab,
-        name: z.string().trim().min(1).max(200),
-        trainer_moves: z.array(z.string()).default([]),
-        learner_moves: z.array(z.string()).default([]),
+        name: z.string().min(1).max(200),
+        trainer_moves: z.array(z.string()),
+        learner_moves: z.array(z.string()),
       }),
     )
     .min(1)
@@ -34,21 +36,19 @@ export const scenarioManifestSchema = z.object({
 export type ScenarioManifest = z.infer<typeof scenarioManifestSchema>;
 
 /** One entry of items.json. */
-export const scenarioItemSchema = z.object({
+export const scenarioItemSchema = z.looseObject({
   id: z.string().min(1).max(300),
   role: z.enum(["trainer", "learner"]),
-  context: z.string().max(2000).default(""),
-  text: z.string().trim().min(1).max(8000),
-  metadata: z
-    .object({
-      step: z.string().max(100).optional(),
-      move: z.string().max(100).optional(),
-      source: z.string().max(300).optional(),
-      kind: z.string().max(40).optional(),
-      ref: z.number().int().nullable().optional(),
-      words: z.number().int().optional(),
-    })
-    .default({}),
+  context: z.string().max(2000),
+  text: z.string().min(1).max(8000),
+  metadata: z.looseObject({
+    step: z.string().max(100).optional(),
+    move: z.string().max(100).optional(),
+    source: z.string().max(300).optional(),
+    kind: z.string().max(40).optional(),
+    ref: z.number().int().nullable().optional(),
+    words: z.number().int().optional(),
+  }),
 });
 export type ScenarioItem = z.infer<typeof scenarioItemSchema>;
 
@@ -58,11 +58,11 @@ export const scenarioIngestSchema = z.object({
   /** SKILL.md exactly as published (YAML header + Markdown body). */
   skill: z.string().min(1).max(200_000),
   scenario: scenarioManifestSchema,
-  items: z.array(scenarioItemSchema).max(5000).default([]),
+  items: z.array(scenarioItemSchema).max(5000),
 });
 export type ScenarioIngestInput = z.infer<typeof scenarioIngestSchema>;
 
-/** SKILL.md without its `---` YAML header; the header only repeats name/description from scenario.json. */
+/** SKILL.md without its `---` YAML header. Only for reading step goals; the stored skill keeps its header. */
 export function skillBody(skill: string): string {
   const match = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/.exec(skill);
   return (match ? skill.slice(match[0].length) : skill).trim();
@@ -76,7 +76,10 @@ export function stepGoal(body: string, stepId: string): string | undefined {
   return section?.match(/\*\*[^*\n]*goal:\*\*\s*(.+)/i)?.[1].trim();
 }
 
-/** The Agent + Domain rows for a scenario, in the shape the chat runtime already reads. */
+/**
+ * The Agent + Domain rows for a scenario. `skill` and `scenario` are the ingestion files verbatim;
+ * name/objective/stages are derived copies so the dashboard can list and describe the scenario.
+ */
 export function buildScenario(orgSlug: string, manifest: ScenarioManifest, skill: string) {
   const slug = `${orgSlug}-${manifest.scenario}`.toLowerCase();
   const domainSlug = `domain-${slug}`;
@@ -86,13 +89,12 @@ export function buildScenario(orgSlug: string, manifest: ScenarioManifest, skill
     name: manifest.name,
     objective: manifest.description,
     domain: domainSlug,
-    // The skill playbook is the instruction the runtime puts in front of the model.
-    instruction: body,
     stages: manifest.steps.map((step) => ({ id: step.id, name: step.name, objective: stepGoal(body, step.id) ?? step.name })),
     config: { context: { mode: "none", required: false } },
-    // Kept verbatim (roles, steps, moves) so the runtime can use the moves the items are tagged with.
-    scenario: manifest,
+    // The chat runtime runs these scenarios from the playbook (see chat/agent/lib/brain.ts).
     source: "scenario-ingest",
+    skill,
+    scenario: manifest,
   };
   const domainData = { id: domainSlug, name: manifest.name, description: manifest.description };
   return { slug, domainSlug, agentData, domainData };

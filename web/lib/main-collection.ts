@@ -51,7 +51,10 @@ export type PersonaVoiceMetadata = {
   wordCount?: number;
 };
 
-/** A tagged line from scenario-ingest's items.json (one trainer or learner turn, with its situation). */
+/**
+ * A tagged line from scenario-ingest's items.json (one trainer or learner turn, with its situation).
+ * The item's own metadata (step, move, source, kind, ref, words, scenario_id, …) is copied as-is.
+ */
 export type ScenarioItemMetadata = {
   type: "scenario_item";
   orgId: string;
@@ -61,13 +64,7 @@ export type ScenarioItemMetadata = {
   itemIndex: number;
   role: "trainer" | "learner";
   context: string;
-  step?: string;
-  move?: string;
-  source?: string;
-  kind?: string;
-  ref?: number;
-  words?: number;
-};
+} & Record<string, string | number | boolean>;
 
 export type MainCollectionMetadata = KnowledgeMetadata | PersonaVoiceMetadata | ScenarioItemMetadata;
 
@@ -440,6 +437,12 @@ export class MainCollectionService {
         embeddings: embeddings.slice(i, i + 5000),
         documents: batch.map((item) => item.text),
         metadatas: batch.map((item, j): ScenarioItemMetadata => ({
+          // Chroma metadata holds scalars only, so a null ref (method-doc lines) is left out.
+          ...Object.fromEntries(
+            Object.entries(item.metadata).filter((entry): entry is [string, string | number | boolean] =>
+              ["string", "number", "boolean"].includes(typeof entry[1]),
+            ),
+          ),
           type: "scenario_item",
           orgId,
           agentSlug,
@@ -448,17 +451,52 @@ export class MainCollectionService {
           itemIndex: i + j,
           role: item.role,
           context: item.context,
-          ...(item.metadata.step ? { step: item.metadata.step } : {}),
-          ...(item.metadata.move ? { move: item.metadata.move } : {}),
-          ...(item.metadata.source ? { source: item.metadata.source } : {}),
-          ...(item.metadata.kind ? { kind: item.metadata.kind } : {}),
-          // Chroma metadata can't hold null.
-          ...(typeof item.metadata.ref === "number" ? { ref: item.metadata.ref } : {}),
-          ...(typeof item.metadata.words === "number" ? { words: item.metadata.words } : {}),
         })),
       });
     }
     return items.length;
+  }
+
+  /**
+   * Real lines from one scenario for a situation, optionally limited to a step and a side.
+   * Falls back to the whole scenario when the step has no matching lines.
+   */
+  static async searchScenarioItems(
+    orgId: string,
+    agentSlug: string,
+    query: string,
+    options: { step?: string; role?: "trainer" | "learner"; limit?: number } = {},
+  ): Promise<{ text: string; context: string; step?: string; move?: string; role: string; score: number }[]> {
+    const collection = await this.getCollection(orgId);
+    const [queryEmbedding] = await embedTexts([query]);
+    const run = async (step?: string) => {
+      const conditions: Where[] = [{ type: "scenario_item" }, { agentSlug }];
+      if (step) conditions.push({ step });
+      if (options.role) conditions.push({ role: options.role });
+      const res = await collection.query({
+        queryEmbeddings: [queryEmbedding],
+        nResults: options.limit ?? 3,
+        where: { $and: conditions } as Where,
+        include: ["documents", "metadatas", "distances"],
+      });
+      const docs = res.documents?.[0] ?? [];
+      const metas = (res.metadatas?.[0] ?? []) as Record<string, unknown>[];
+      const distances = res.distances?.[0] ?? [];
+      return (res.ids?.[0] ?? []).map((_, i) => {
+        const meta = metas[i] ?? {};
+        const distance = distances[i];
+        return {
+          text: docs[i] ?? "",
+          context: typeof meta.context === "string" ? meta.context : "",
+          step: typeof meta.step === "string" ? meta.step : undefined,
+          move: typeof meta.move === "string" ? meta.move : undefined,
+          role: String(meta.role ?? ""),
+          score: typeof distance === "number" ? 1 - distance : 0,
+        };
+      });
+    };
+    const hits = await run(options.step);
+    return hits.length > 0 || !options.step ? hits : run();
   }
 
   /**
