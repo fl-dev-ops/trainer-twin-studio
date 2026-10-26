@@ -14,7 +14,8 @@ import {
   twinUrl,
 } from "@/lib/twin-access";
 import { TWIN_SOURCE } from "@/lib/twins";
-import { durationSeconds, firstExchange, lastSevenDays, likeRateByWeek, titleFrom, transcriptTurns } from "@/lib/twin/stats";
+import { isTwinReport } from "@/lib/twin/session-report";
+import { durationSeconds, firstExchange, lastSevenDays, likeRateByWeek, mostAsked, titleFrom, transcriptTurns } from "@/lib/twin/stats";
 
 /**
  * Twin-scoped tRPC surface, mounted at /api/twin. Studio members (admin, team) only; every query is
@@ -37,7 +38,10 @@ async function twinCall<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-/** Learner conversations with twins: calibrations and failed starts are not part of them. */
+/**
+ * Learner conversations with twins: calibrations, failed starts, and sessions run by studio members
+ * (admin/team trying the twin) are not part of them.
+ */
 const learnerSessions = (orgId: string, agentId?: string): Prisma.InterviewSessionWhereInput => ({
   orgId,
   deletedAt: null,
@@ -45,6 +49,7 @@ const learnerSessions = (orgId: string, agentId?: string): Prisma.InterviewSessi
   status: { not: "failed" },
   twinCalibration: { is: null },
   agent: { kind: "TWIN" },
+  user: { members: { some: { organizationId: orgId, role: LEARNER_ROLE } } },
   ...(agentId ? { agentId } : {}),
 });
 
@@ -162,7 +167,12 @@ const agentsRouter = t.router({
     const [agent, assignments, sessions, calibrations] = await Promise.all([
       db.agent.findUniqueOrThrow({ where: { id: found.id }, select: { data: true } }),
       listTwinAssignments(orgId, found.id),
-      db.interviewSession.findMany({ where: learnerSessions(orgId, found.id), orderBy: { createdAt: "desc" }, take: 200, select: sessionRowSelect }),
+      db.interviewSession.findMany({
+        where: learnerSessions(orgId, found.id),
+        orderBy: { createdAt: "desc" },
+        take: 200,
+        select: { ...sessionRowSelect, report: true },
+      }),
       calibrationRows(orgId, found.id),
     ]);
     const data = asRecord(agent.data);
@@ -190,6 +200,7 @@ const agentsRouter = t.router({
         avgMinutes: lengths.length ? Math.round(lengths.reduce((a, b) => a + b, 0) / lengths.length / 6) / 10 : null,
         week: lastSevenDays(sessions.map((row) => row.startedAt ?? row.createdAt)),
         feelsLikeMe: likeRateByWeek(calibrations.flatMap((row) => row.ratings.map((rating) => ({ rating: rating.rating, at: rating.createdAt })))),
+        mostAsked: mostAsked(sessions.map((row) => (isTwinReport(row.report) ? row.report.questions : []))),
       },
       calibrations: calibrations.map((row) => omitRatings(row)),
       sessions: sessions.map(sessionItem),
@@ -299,11 +310,10 @@ const sessionsRouter = t.router({
       select: { ...sessionRowSelect, feedbackNote: true, report: true, evidence: true },
     });
     if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
-    const tags = asRecord(row.report).summaryTags;
     return {
       ...sessionItem(row),
       feedbackNote: row.feedbackNote,
-      topics: Array.isArray(tags) ? tags.filter((tag): tag is string => typeof tag === "string") : [],
+      topics: isTwinReport(row.report) ? row.report.topics : [],
       hasVideo: typeof asRecord(row.evidence).videoS3Key === "string",
       turns: transcriptTurns(row.transcript),
     };

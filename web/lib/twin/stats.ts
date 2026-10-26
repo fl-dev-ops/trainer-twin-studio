@@ -53,6 +53,26 @@ export function likeRateByWeek(ratings: { rating: string; at: Date }[], weeks = 
   });
 }
 
+/**
+ * Most asked questions across a twin's sessions, top `limit`, highest count first (ties: first asked wins).
+ * shortcut: exact text match (case/space-insensitive); group similar wordings only if counts come out fragmented.
+ */
+export function mostAsked(questionLists: string[][], limit = 3): { question: string; count: number }[] {
+  const counts = new Map<string, { question: string; count: number }>();
+  for (const questions of questionLists) {
+    const seen = new Set<string>();
+    for (const question of questions) {
+      const key = question.toLowerCase().replace(/\s+/g, " ").trim();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      const entry = counts.get(key);
+      if (entry) entry.count += 1;
+      else counts.set(key, { question: question.trim(), count: 1 });
+    }
+  }
+  return [...counts.values()].sort((a, b) => b.count - a.count).slice(0, limit);
+}
+
 /** A list title from the first thing the trainer said. */
 export function titleFrom(text: string | null | undefined, fallback: string): string {
   const line = text?.replace(/\s+/g, " ").trim();

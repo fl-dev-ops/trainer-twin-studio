@@ -261,16 +261,23 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
         <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
           {/* Card 1: Left column - Agent Description & Credit */}
           <article className="flex flex-col rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
-            <h1 className="m-0 text-[18px] font-semibold leading-7 tracking-[-0.015em]">{twin.name}</h1>
+            <h1 className="m-0 line-clamp-2 text-[18px] font-semibold leading-7 tracking-[-0.015em]" title={twin.name}>
+              {twin.name}
+            </h1>
 
             <div className="mt-6">
               <p className="text-[11px] font-medium tracking-[0.08em] uppercase text-muted-foreground">Who asks</p>
-              <p className="mt-1 text-[20px] font-semibold leading-7">{twin.whoAsks}</p>
+              <p className="mt-1 line-clamp-1 text-[20px] font-semibold leading-7" title={twin.whoAsks}>
+                {twin.whoAsks}
+              </p>
             </div>
 
             <div className="mt-6">
               <p className="text-[11px] font-medium tracking-[0.08em] uppercase text-muted-foreground">What it does</p>
-              <p className="mt-1 text-[15px] leading-6 text-(--text-secondary)">
+              <p
+                className="mt-1 line-clamp-4 text-[15px] leading-6 text-(--text-secondary)"
+                title={twin.description ?? undefined}
+              >
                 {twin.description ?? "No description yet."}
               </p>
             </div>
@@ -348,7 +355,20 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
           {/* Card 3: Full width - Most asked */}
           <article className="col-span-1 md:col-span-2 flex flex-col rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
             <h2 className="m-0 text-[17px] font-semibold tracking-[-0.015em]">Most asked</h2>
-            <p className="mt-4 text-sm text-muted-foreground">Not tracked yet.</p>
+            {twin.report.mostAsked.length ? (
+              <ul className="mt-4 flex flex-col gap-3 p-0 list-none">
+                {twin.report.mostAsked.map((item) => (
+                  <li key={item.question} className="flex items-baseline justify-between gap-4 text-sm">
+                    <span className="line-clamp-2 text-(--text-secondary)" title={item.question}>
+                      {item.question}
+                    </span>
+                    <span className="tabular-nums font-semibold text-(--foreground)">{item.count}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-4 text-sm text-muted-foreground">No questions yet.</p>
+            )}
           </article>
 
           {/* Card 4: Full width - Reports raised */}

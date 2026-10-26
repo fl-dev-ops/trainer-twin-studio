@@ -48,8 +48,14 @@ const navButton = cn(
   "group-data-[collapsible=icon]:justify-center",
 );
 
+const NAV_HREFS = [...NAV_GROUPS.flatMap((group) => group.items.map((item) => item.href)), "/profile"];
+
+const matches = (pathname: string, href: string) => pathname === href || pathname.startsWith(`${href}/`);
+
+/** Only the most specific link is active: /twin/sessions lights "Twin sessions", not "Twin agents" too. */
 function isActive(pathname: string, href: string) {
-  return pathname === href || pathname.startsWith(`${href}/`);
+  if (!matches(pathname, href)) return false;
+  return !NAV_HREFS.some((other) => other.length > href.length && matches(pathname, other));
 }
 
 /** Brand lockup: mark + wordmark; clicking toggles the rail (reference behaviour). */

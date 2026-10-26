@@ -151,7 +151,10 @@ function TwinBotCard({ bot, index }: { bot: TwinCard; index: number }) {
                 preload="auto"
               />
               <span className="flex min-w-0 flex-col">
-                <span className="text-[13px] leading-[18px] text-(--text-secondary) dark:text-[#c4c4c4]">
+                <span
+                  title={bot.quote ?? bot.description ?? bot.name}
+                  className="line-clamp-2 text-[13px] leading-[18px] text-(--text-secondary) dark:text-[#c4c4c4]"
+                >
                   {bot.quote ? `“${bot.quote}”` : bot.description ?? bot.name}
                 </span>
               </span>
@@ -161,10 +164,14 @@ function TwinBotCard({ bot, index }: { bot: TwinCard; index: number }) {
 
         {/* Card Body */}
         <div className="flex flex-col gap-2 px-4 pt-3.5 pb-0">
-          <span className="text-[15px] font-semibold leading-[22px] tracking-[-0.015em] text-(--foreground)">
+          <span className="line-clamp-1 text-[15px] font-semibold leading-[22px] tracking-[-0.015em] text-(--foreground)" title={bot.name}>
             {bot.name}
           </span>
-          {bot.description ? <span className="text-[13px] leading-5 text-(--text-secondary)">{bot.description}</span> : null}
+          {bot.description ? (
+            <span className="line-clamp-3 text-[13px] leading-5 text-(--text-secondary)" title={bot.description}>
+              {bot.description}
+            </span>
+          ) : null}
         </div>
       </Link>
 

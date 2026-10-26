@@ -3,7 +3,7 @@ import { finalizeInterviewSession, type SessionEndStatus } from "@/lib/interview
 import { closeInterviewSession } from "@/lib/session-lifecycle";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { db } from "@/lib/db";
-import { scheduleSessionReport } from "@/lib/session-report-jobs";
+import { processCompletedSession } from "@/lib/session-processing";
 
 /**
  * Fixed webhook route for LiveKit agent recording & session finalization.
@@ -64,7 +64,7 @@ export async function POST(req: Request) {
     : await finalizeInterviewSession({ sessionId: session.id, ...payload });
   if (!finalized) return NextResponse.json({ error: "Session not found" }, { status: 404 });
   if (finalized.finalStatus === "completed") {
-    await scheduleSessionReport(finalized.id).catch((error) => {
+    await processCompletedSession(finalized.id).catch((error) => {
       console.warn("Could not initiate session report generation:", error);
     });
   }

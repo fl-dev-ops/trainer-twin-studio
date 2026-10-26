@@ -6,7 +6,7 @@ import { getTrainerOrg } from "@/lib/org";
 import { resolveSessionUser } from "@/lib/session-user";
 import { db } from "@/lib/db";
 import { listSessions } from "@/lib/specs";
-import { scheduleSessionReport } from "@/lib/session-report-jobs";
+import { processCompletedSession } from "@/lib/session-processing";
 import { OrgLockError } from "@/lib/org-lock";
 import { TwinAccessError } from "@/lib/twin-access";
 
@@ -70,7 +70,7 @@ export async function PATCH(req: Request) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const finalized = await closeInterviewSession(session.id, body.status as SessionEndStatus);
   if (finalized?.finalStatus === "completed") {
-    await scheduleSessionReport(finalized.id).catch((error) => {
+    await processCompletedSession(finalized.id).catch((error) => {
       console.warn("Could not initiate session report generation:", error);
     });
   }

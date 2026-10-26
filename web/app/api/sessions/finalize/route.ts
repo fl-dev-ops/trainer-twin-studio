@@ -5,7 +5,7 @@ import { closeInterviewSession } from "@/lib/session-lifecycle";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { resolveSessionUser } from "@/lib/session-user";
 import { LearnerMemoryService } from "@/lib/learner-memory";
-import { scheduleSessionReport } from "@/lib/session-report-jobs";
+import { processCompletedSession } from "@/lib/session-processing";
 
 /**
  * Finalizes a session: persists the transcript and evidence coverage captured
@@ -79,7 +79,7 @@ export async function POST(request: Request) {
 
   if (finalized.finalStatus === "completed") {
     try {
-      await scheduleSessionReport(String(body.sessionId));
+      await processCompletedSession(String(body.sessionId));
     } catch (err) {
       console.warn("Could not initiate session report generation:", err);
     }
