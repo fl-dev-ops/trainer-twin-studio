@@ -21,6 +21,8 @@ import { Bubble, CalibrationStats, PANEL_SHADOW, PILL, RatingLabel, SOFT_SHADOW,
 import { RoleplayIcon } from "@/components/icons";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { LiveKitWorkspaceProvider } from "@/lib/livekit-workspaces";
+import { twinClient } from "@/lib/twin/client";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 type Phase = "connecting" | "live" | "ended" | "error";
@@ -32,10 +34,13 @@ const CONTROL =
 const ignoreSurface = () => undefined;
 
 /**
- * Calibration call (V2 prototype "Talk to my twin"): a real LiveKit session with the role play's persona.
- * Uses the same session API as /talk; ratings live only in this page (nothing calibration-specific is stored).
+ * Calibration call (V2 prototype "Talk to my twin"): a real LiveKit session with the agent's persona, through
+ * the same session API as /talk. With `twin`, the call is saved as a twin calibration and every rating is stored
+ * (twin tRPC); without it (role plays) ratings live only in this page.
  */
-export function CalibrationCall(props: { slug: string; scenarioName: string; twinName: string }) {
+type CallProps = { slug: string; scenarioName: string; twinName: string; twin?: boolean };
+
+export function CalibrationCall(props: CallProps) {
   const room = useMemo(
     () => new Room({ adaptiveStream: true, audioCaptureDefaults: { autoGainControl: true, echoCancellation: true, noiseSuppression: true } }),
     [],
@@ -48,7 +53,7 @@ export function CalibrationCall(props: { slug: string; scenarioName: string; twi
   );
 }
 
-function Call({ room, slug, scenarioName, twinName }: { room: Room; slug: string; scenarioName: string; twinName: string }) {
+function Call({ room, slug, scenarioName, twinName, twin = false }: CallProps & { room: Room }) {
   const [phase, setPhase] = useState<Phase>("connecting");
   const [error, setError] = useState("");
   const [connection, setConnection] = useState<Connection | null>(null);
@@ -60,6 +65,10 @@ function Call({ room, slug, scenarioName, twinName }: { room: Room; slug: string
   const [confirmEnd, setConfirmEnd] = useState(false);
 
   const turnsRef = useRef<CalibrationTurn[]>([]);
+  /** Twin calls: the stored calibration this call's ratings go to. */
+  const calibrationRef = useRef<Promise<string | null> | null>(null);
+  const [calibrationId, setCalibrationId] = useState<string | null>(null);
+  const backHref = twin ? `/twin/${encodeURIComponent(slug)}/calibration` : "/agents";
   const connectionRef = useRef<Connection | null>(null);
   const startedRef = useRef(false);
   const endingRef = useRef(false);
@@ -133,6 +142,17 @@ function Call({ room, slug, scenarioName, twinName }: { room: Room; slug: string
       const active = { sessionId: launch.session.id as string, runtimeToken: launch.session.runtimeToken as string };
       connectionRef.current = active;
       setConnection(active);
+      if (twin) {
+        // Saved as a calibration before anything can be rated; a failure only loses the ratings, not the call.
+        calibrationRef.current = twinClient.calibrations.start
+          .mutate({ slug, sessionId: active.sessionId })
+          .then(({ calibrationId: id }) => (setCalibrationId(id), id))
+          .catch((saveError) => {
+            console.error("Could not save the calibration:", saveError);
+            toast.error("Ratings in this call can't be saved.");
+            return null;
+          });
+      }
       await room.connect(url, launch.participantToken).catch((connectError) => {
         console.error("LiveKit connect failed:", connectError);
         throw new Error("Could not connect to the call. Check your connection and try again.");
@@ -156,7 +176,7 @@ function Call({ room, slug, scenarioName, twinName }: { room: Room; slug: string
       setError(startError instanceof Error ? startError.message : "Could not start the call.");
       setPhase("error");
     }
-  }, [room, slug, closeSession]);
+  }, [room, slug, closeSession, twin]);
 
   // Start once on open; the ref stops React's dev double-mount from starting a second session.
   useEffect(() => {
@@ -221,7 +241,24 @@ function Call({ room, slug, scenarioName, twinName }: { room: Room; slug: string
     };
   }, [room, end, updateTurns]);
 
-  const rate = (id: string, rating: Rating) => updateTurns((prev) => prev.map((t) => (t.id === id ? { ...t, rating } : t)));
+  const rate = (id: string, rating: Rating) => {
+    updateTurns((prev) => prev.map((t) => (t.id === id ? { ...t, rating } : t)));
+    const calibration = calibrationRef.current;
+    if (!twin || !calibration) return;
+    const turns = turnsRef.current;
+    const turnIndex = turns.findIndex((t) => t.id === id);
+    if (turnIndex < 0) return;
+    const question = turns.slice(0, turnIndex).reverse().find((t) => t.speaker === "you")?.text ?? null;
+    void calibration.then((calibrationId) => {
+      if (!calibrationId) return;
+      return twinClient.calibrations.rate
+        .mutate({ calibrationId, turnIndex, question, reply: turns[turnIndex].text, rating })
+        .catch((saveError) => {
+          console.error("Could not save the rating:", saveError);
+          toast.error("That rating was not saved.");
+        });
+    });
+  };
 
   async function toggleMute() {
     const next = !muted;
@@ -244,14 +281,20 @@ function Call({ room, slug, scenarioName, twinName }: { room: Room; slug: string
       active={phase === "live"}
     >
       <div className="relative flex min-h-0 flex-1 flex-col">
-        <Link href="/agents" className="flex w-fit items-center gap-2 px-8 pt-6 text-sm text-foreground/90 hover:text-foreground">
+        <Link href={backHref} className="flex w-fit items-center gap-2 px-8 pt-6 text-sm text-foreground/90 hover:text-foreground">
           <ArrowLeft className="size-4" aria-hidden />
           Calibrate · {scenarioName}
         </Link>
 
         {phase === "ended" ? (
           <CallSummary
-            sessionId={connection?.sessionId}
+            transcriptHref={
+              twin
+                ? calibrationId ? `/twin/${encodeURIComponent(slug)}/calibration/${encodeURIComponent(calibrationId)}` : undefined
+                : connection?.sessionId ? `/sessions/${encodeURIComponent(connection.sessionId)}` : undefined
+            }
+            backHref={backHref}
+            backLabel={twin ? "All calibrations" : "Go to Roleplay"}
             twinName={twinName}
             seconds={seconds}
             turns={turns}
@@ -427,13 +470,17 @@ function ConversationPanel({ turns, twinName, onClose }: { turns: CalibrationTur
 
 /** After the call: how long it ran and how the answers were rated. */
 function CallSummary({
-  sessionId,
+  transcriptHref,
+  backHref,
+  backLabel,
   twinName,
   seconds,
   turns,
   onRestart,
 }: {
-  sessionId?: string;
+  transcriptHref?: string;
+  backHref: string;
+  backLabel: string;
   twinName: string;
   seconds: number;
   turns: CalibrationTurn[];
@@ -448,9 +495,9 @@ function CallSummary({
       <TwinPortrait name={twinName} className={cn("mt-6 size-60 rounded-[48px] text-7xl", SOFT_SHADOW)} />
       <h1 className="mt-6 text-lg font-semibold">{twinName}</h1>
       <p className="mt-0.5 text-sm text-foreground/75">Time spoke {clock(seconds)}</p>
-      {sessionId ? (
+      {transcriptHref ? (
         <Link
-          href={`/sessions/${encodeURIComponent(sessionId)}`}
+          href={transcriptHref}
           className="mt-5 flex items-center gap-1.5 text-sm font-medium text-foreground/75 hover:text-foreground"
         >
           View transcript
@@ -469,9 +516,9 @@ function CallSummary({
           <PhoneIcon className="size-[18px]" />
           Speak again
         </button>
-        <Link href="/agents" className={cn(PILL, "h-10 px-4 text-sm")}>
+        <Link href={backHref} className={cn(PILL, "h-10 px-4 text-sm")}>
           <RoleplayIcon className="size-[18px]" />
-          Go to Roleplay
+          {backLabel}
         </Link>
       </div>
     </div>

@@ -1,13 +1,436 @@
-import { protectedProcedure, t } from "@/lib/trpc";
+import { TRPCError } from "@trpc/server";
+import { z } from "zod";
+import { db } from "@/lib/db";
+import type { Prisma } from "@/lib/generated/prisma/client";
+import { LEARNER_ROLE } from "@/lib/org";
+import { studioProcedure, t } from "@/lib/trpc";
+import {
+  assignTwinAndInvite,
+  createTwinShareLink,
+  DEFAULT_TWIN_MINUTES,
+  findTwinAgent,
+  listTwinAssignments,
+  TwinAccessError,
+  twinUrl,
+} from "@/lib/twin-access";
+import { TWIN_SOURCE } from "@/lib/twins";
+import { durationSeconds, firstExchange, lastSevenDays, likeRateByWeek, titleFrom, transcriptTurns } from "@/lib/twin/stats";
 
 /**
- * Twin-scoped tRPC surface. Built on the app-wide primitives in lib/trpc.ts;
- * mounted at /api/twin by the catch-all route. The rest of the app keeps its
- * plain REST routes.
+ * Twin-scoped tRPC surface, mounted at /api/twin. Studio members (admin, team) only; every query is
+ * scoped to their organization. Server components call it through `twinRouter.createCaller`.
  */
+
+const slugInput = z.object({ slug: z.string().min(1).max(200) });
+const asRecord = (value: unknown) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
+const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : null);
+
+/** twin-access errors keep their meaning over tRPC. */
+async function twinCall<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (error instanceof TwinAccessError) {
+      throw new TRPCError({ code: error.status === 404 ? "NOT_FOUND" : error.status === 400 ? "BAD_REQUEST" : "FORBIDDEN", message: error.message });
+    }
+    throw error;
+  }
+}
+
+/** Learner conversations with twins: calibrations and failed starts are not part of them. */
+const learnerSessions = (orgId: string, agentId?: string): Prisma.InterviewSessionWhereInput => ({
+  orgId,
+  deletedAt: null,
+  startedAt: { not: null },
+  status: { not: "failed" },
+  twinCalibration: { is: null },
+  agent: { kind: "TWIN" },
+  ...(agentId ? { agentId } : {}),
+});
+
+const sessionRowSelect = {
+  id: true,
+  createdAt: true,
+  startedAt: true,
+  endedAt: true,
+  feedbackRating: true,
+  transcript: true,
+  agent: { select: { slug: true, name: true } },
+  user: { select: { id: true, name: true, email: true, image: true } },
+} as const;
+
+type SessionRow = Prisma.InterviewSessionGetPayload<{ select: typeof sessionRowSelect }>;
+
+/** One row of a twin sessions list. */
+function sessionItem(row: SessionRow) {
+  const { question, answer } = firstExchange(transcriptTurns(row.transcript));
+  return {
+    id: row.id,
+    learner: row.user.name || row.user.email,
+    learnerEmail: row.user.email,
+    agentSlug: row.agent.slug,
+    agentName: row.agent.name,
+    at: (row.startedAt ?? row.createdAt).toISOString(),
+    seconds: durationSeconds(row.startedAt, row.endedAt),
+    question,
+    answer,
+    rating: row.feedbackRating,
+  };
+}
+
+/** Calibrations of one twin, newest first, with their rating counts. */
+async function calibrationRows(orgId: string, agentId: string) {
+  const rows = await db.twinCalibration.findMany({
+    where: { session: { orgId, agentId, deletedAt: null } },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      createdAt: true,
+      session: { select: { startedAt: true, endedAt: true, transcript: true } },
+      ratings: { select: { rating: true, question: true, createdAt: true } },
+    },
+  });
+  return rows.map((row) => {
+    const turns = transcriptTurns(row.session.transcript);
+    return {
+      id: row.id,
+      title: titleFrom(turns.find((turn) => turn.who === "learner")?.text ?? row.ratings[0]?.question, "Calibration"),
+      at: (row.session.startedAt ?? row.createdAt).toISOString(),
+      seconds: durationSeconds(row.session.startedAt, row.session.endedAt),
+      turns: turns.length,
+      like: row.ratings.filter((rating) => rating.rating === "like").length,
+      off: row.ratings.filter((rating) => rating.rating === "off").length,
+      ratings: row.ratings,
+    };
+  });
+}
+
+/** A calibration row for the client: rating details stay on the server. */
+function omitRatings<T extends { ratings: unknown }>(row: T): Omit<T, "ratings"> {
+  const { ratings, ...rest } = row;
+  void ratings;
+  return rest;
+}
+
+/** Persona-level label of who talks to the twin ("Agent", "Learner"...), from the skill's scenario.json. */
+const whoAsks = (data: Record<string, unknown>) => text(asRecord(data.scenario).learner_role) ?? "Learner";
+
+const agentsRouter = t.router({
+  /** The library: all-skills twins and skill twins, with assigned learners and the latest learner question. */
+  list: studioProcedure.query(async ({ ctx }) => {
+    const orgId = ctx.user.orgId;
+    const [agents, assignments, latest] = await Promise.all([
+      db.agent.findMany({
+        where: { orgId, kind: "TWIN" },
+        orderBy: [{ order: "asc" }, { name: "asc" }],
+        select: { id: true, slug: true, name: true, data: true, updatedAt: true },
+      }),
+      db.twinAssignment.findMany({
+        where: { orgId, status: "active" },
+        orderBy: { createdAt: "asc" },
+        select: { agentId: true, recipientEmail: true, user: { select: { name: true, image: true } } },
+      }),
+      db.interviewSession.findMany({
+        where: learnerSessions(orgId),
+        orderBy: { createdAt: "desc" },
+        distinct: ["agentId"],
+        select: { agentId: true, transcript: true },
+      }),
+    ]);
+    const questionOf = new Map(latest.map((row) => [row.agentId, firstExchange(transcriptTurns(row.transcript)).question]));
+    const cards = agents.map((agent) => {
+      const data = asRecord(agent.data);
+      return {
+        slug: agent.slug,
+        name: agent.name,
+        description: text(data.objective),
+        quote: questionOf.get(agent.id) ?? null,
+        updatedAt: agent.updatedAt.toISOString(),
+        allSkills: data.source === TWIN_SOURCE,
+        learners: assignments
+          .filter((row) => row.agentId === agent.id)
+          .map((row) => ({ name: row.user?.name || row.recipientEmail, email: row.recipientEmail, image: row.user?.image ?? null })),
+      };
+    });
+    return { twins: cards.filter((card) => card.allSkills), skills: cards.filter((card) => !card.allSkills) };
+  }),
+
+  /** One twin's page: description, minutes credit, report numbers, calibrations and learner sessions. */
+  get: studioProcedure.input(slugInput).query(({ ctx, input }) => twinCall(async () => {
+    const orgId = ctx.user.orgId;
+    const found = await findTwinAgent(orgId, input.slug);
+    const [agent, assignments, sessions, calibrations] = await Promise.all([
+      db.agent.findUniqueOrThrow({ where: { id: found.id }, select: { data: true } }),
+      listTwinAssignments(orgId, found.id),
+      db.interviewSession.findMany({ where: learnerSessions(orgId, found.id), orderBy: { createdAt: "desc" }, take: 200, select: sessionRowSelect }),
+      calibrationRows(orgId, found.id),
+    ]);
+    const data = asRecord(agent.data);
+    const active = assignments.filter((row) => row.status === "active");
+    const lengths = sessions.map((row) => durationSeconds(row.startedAt, row.endedAt)).filter((s): s is number => s !== null);
+    const rated = sessions.map((row) => row.feedbackRating).filter((r): r is number => r !== null);
+    const settings = asRecord(data.twinSettings);
+    return {
+      slug: found.slug,
+      name: found.name,
+      description: text(data.objective),
+      whoAsks: whoAsks(data),
+      settings: {
+        preScreenshare: settings.preScreenshare === true,
+        preUpload: settings.preUpload === true,
+        duringUpload: settings.duringUpload === true,
+      },
+      credit: {
+        minutes: active.reduce((sum, row) => sum + row.minutesLimit, 0),
+        used: Math.round(active.reduce((sum, row) => sum + row.minutesUsed, 0)),
+      },
+      report: {
+        sessions: sessions.length,
+        helpScore: rated.length ? Math.round((rated.reduce((a, b) => a + b, 0) / rated.length) * 10) / 10 : null,
+        avgMinutes: lengths.length ? Math.round(lengths.reduce((a, b) => a + b, 0) / lengths.length / 6) / 10 : null,
+        week: lastSevenDays(sessions.map((row) => row.startedAt ?? row.createdAt)),
+        feelsLikeMe: likeRateByWeek(calibrations.flatMap((row) => row.ratings.map((rating) => ({ rating: rating.rating, at: rating.createdAt })))),
+      },
+      calibrations: calibrations.map((row) => omitRatings(row)),
+      sessions: sessions.map(sessionItem),
+    };
+  })),
+
+  /** Name, description and conversation settings. Saved like any spec change: snapshot, then version + 1. */
+  update: studioProcedure
+    .input(slugInput.extend({
+      name: z.string().trim().min(1).max(120),
+      description: z.string().trim().max(2000),
+      settings: z.object({ preScreenshare: z.boolean(), preUpload: z.boolean(), duringUpload: z.boolean() }).strict(),
+    }))
+    .mutation(({ ctx, input }) => twinCall(async () => {
+      const found = await findTwinAgent(ctx.user.orgId, input.slug);
+      const current = await db.agent.findUniqueOrThrow({ where: { id: found.id }, select: { version: true, data: true } });
+      // shortcut: the settings are stored for the session screen; enforcing them in sessions comes with that screen.
+      const data = { ...asRecord(current.data), name: input.name, objective: input.description, twinSettings: input.settings };
+      if (JSON.stringify(data) === JSON.stringify(current.data) && input.name === found.name) return { version: current.version };
+      const json = (value: unknown) => value as Prisma.InputJsonValue;
+      await db.$transaction([
+        db.specVersion.create({ data: { entityType: "agents", entitySlug: found.slug, version: current.version, data: json(current.data), orgId: ctx.user.orgId } }),
+        db.agent.update({ where: { id: found.id }, data: { name: input.name, version: current.version + 1, data: json(data) } }),
+      ]);
+      return { version: current.version + 1 };
+    })),
+
+  /** The twin's common link (created with the default minutes the first time). */
+  shareLink: studioProcedure.input(slugInput).mutation(({ ctx, input }) => twinCall(async () => {
+    const found = await findTwinAgent(ctx.user.orgId, input.slug);
+    const existing = await db.twinShareLink.findFirst({
+      where: { orgId: ctx.user.orgId, agentId: found.id, status: "active" },
+      orderBy: { createdAt: "asc" },
+      select: { code: true, minutesPerUser: true },
+    });
+    const link = existing ?? await createTwinShareLink({
+      orgId: ctx.user.orgId, agentId: found.id, minutesPerUser: DEFAULT_TWIN_MINUTES, createdByUserId: ctx.user.id,
+    });
+    return { url: twinUrl(ctx.user.orgSlug, link.code), minutesPerUser: link.minutesPerUser };
+  })),
+});
+
+const assignmentsRouter = t.router({
+  /** Who has the twin, and the org's learners who could get it. */
+  list: studioProcedure.input(slugInput).query(({ ctx, input }) => twinCall(async () => {
+    const found = await findTwinAgent(ctx.user.orgId, input.slug);
+    const [assigned, members] = await Promise.all([
+      listTwinAssignments(ctx.user.orgId, found.id),
+      db.member.findMany({
+        where: { organizationId: ctx.user.orgId, role: LEARNER_ROLE },
+        select: { user: { select: { name: true, email: true, image: true } } },
+      }),
+    ]);
+    const byEmail = new Map(assigned.map((row) => [row.recipientEmail, row]));
+    const people = new Map<string, { email: string; name: string; image: string | null }>();
+    for (const { user } of members) people.set(user.email.toLowerCase(), { email: user.email.toLowerCase(), name: user.name || user.email, image: user.image });
+    for (const row of assigned) {
+      if (!people.has(row.recipientEmail)) people.set(row.recipientEmail, { email: row.recipientEmail, name: row.user?.name || row.recipientEmail, image: row.user?.image ?? null });
+    }
+    return [...people.values()]
+      .map((person) => {
+        const row = byEmail.get(person.email);
+        return {
+          ...person,
+          assigned: row?.status === "active",
+          minutes: row?.minutesLimit ?? null,
+          minutesUsed: row?.minutesUsed ?? 0,
+        };
+      })
+      .sort((a, b) => Number(b.assigned) - Number(a.assigned) || a.name.localeCompare(b.name));
+  })),
+
+  /** Gives people the twin with a minutes budget each and emails them their link. */
+  assign: studioProcedure
+    .input(slugInput.extend({
+      emails: z.array(z.string().trim().toLowerCase().email().max(320)).min(1).max(100),
+      minutes: z.number().int().min(1).max(10_000),
+    }))
+    .mutation(({ ctx, input }) => twinCall(async () => {
+      const agent = await findTwinAgent(ctx.user.orgId, input.slug);
+      return assignTwinAndInvite({
+        org: { id: ctx.user.orgId, slug: ctx.user.orgSlug },
+        by: { id: ctx.user.id, name: ctx.user.name },
+        agent,
+        emails: input.emails,
+        minutes: input.minutes,
+      });
+    })),
+});
+
+const sessionsRouter = t.router({
+  /** Learner conversations with every twin of the org, newest first. */
+  list: studioProcedure.query(async ({ ctx }) => {
+    const rows = await db.interviewSession.findMany({
+      where: learnerSessions(ctx.user.orgId),
+      orderBy: { createdAt: "desc" },
+      take: 200,
+      select: sessionRowSelect,
+    });
+    return rows.map(sessionItem);
+  }),
+
+  /** One learner conversation: transcript, feedback, topics. */
+  get: studioProcedure.input(z.object({ id: z.string().min(1).max(100) })).query(async ({ ctx, input }) => {
+    const row = await db.interviewSession.findFirst({
+      where: { ...learnerSessions(ctx.user.orgId), id: input.id },
+      select: { ...sessionRowSelect, feedbackNote: true, report: true, evidence: true },
+    });
+    if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
+    const tags = asRecord(row.report).summaryTags;
+    return {
+      ...sessionItem(row),
+      feedbackNote: row.feedbackNote,
+      topics: Array.isArray(tags) ? tags.filter((tag): tag is string => typeof tag === "string") : [],
+      hasVideo: typeof asRecord(row.evidence).videoS3Key === "string",
+      turns: transcriptTurns(row.transcript),
+    };
+  }),
+});
+
+const usersRouter = t.router({
+  /** Everyone with twin access: how many twins, minutes given and used (active assignments). */
+  list: studioProcedure.query(async ({ ctx }) => {
+    const rows = await db.twinAssignment.findMany({
+      where: { orgId: ctx.user.orgId, status: "active" },
+      select: { id: true, recipientEmail: true, minutesLimit: true, user: { select: { name: true, image: true } } },
+    });
+    const used = await db.$queryRaw<{ id: string; seconds: number }[]>`
+      SELECT "twinAssignmentId" AS id, coalesce(sum(extract(epoch FROM (
+        coalesce("endedAt", CASE WHEN status IN ('activating', 'active') THEN now() AT TIME ZONE 'UTC' ELSE "startedAt" END)
+        - "startedAt"))), 0)::float8 AS seconds
+      FROM "InterviewSession"
+      WHERE "orgId" = ${ctx.user.orgId} AND "twinAssignmentId" IS NOT NULL AND "startedAt" IS NOT NULL
+      GROUP BY "twinAssignmentId"`;
+    const secondsOf = new Map(used.map((row) => [row.id, row.seconds]));
+    const people = new Map<string, { email: string; name: string; image: string | null; agents: number; minutes: number; used: number }>();
+    for (const row of rows) {
+      const person = people.get(row.recipientEmail)
+        ?? { email: row.recipientEmail, name: row.user?.name || row.recipientEmail, image: row.user?.image ?? null, agents: 0, minutes: 0, used: 0 };
+      person.agents += 1;
+      person.minutes += row.minutesLimit;
+      person.used += (secondsOf.get(row.id) ?? 0) / 60;
+      people.set(row.recipientEmail, person);
+    }
+    return [...people.values()]
+      .map((person) => ({ ...person, used: Math.round(person.used) }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }),
+});
+
+const calibrationsRouter = t.router({
+  /** One twin's calibrations with their like/off counts. */
+  list: studioProcedure.input(slugInput).query(({ ctx, input }) => twinCall(async () => {
+    const found = await findTwinAgent(ctx.user.orgId, input.slug);
+    const rows = await calibrationRows(ctx.user.orgId, found.id);
+    return { name: found.name, calibrations: rows.map((row) => omitRatings(row)) };
+  })),
+
+  /** One calibration: the call's transcript with the ratings on the replies that were rated. */
+  get: studioProcedure.input(z.object({ id: z.string().min(1).max(100) })).query(async ({ ctx, input }) => {
+    const row = await db.twinCalibration.findFirst({
+      where: { id: input.id, session: { orgId: ctx.user.orgId } },
+      select: {
+        createdAt: true,
+        session: { select: { startedAt: true, transcript: true, agent: { select: { slug: true, name: true } } } },
+        ratings: { orderBy: { turnIndex: "asc" }, select: { turnIndex: true, question: true, reply: true, rating: true } },
+      },
+    });
+    if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Calibration not found" });
+    const transcript = transcriptTurns(row.session.transcript);
+    // The saved transcript may come from the voice agent, so ratings are matched by the reply they rated.
+    const ratingOf = (reply: string) => row.ratings.find((rating) => rating.reply === reply)?.rating as "like" | "off" | undefined;
+    const turns = transcript.length
+      ? transcript.map((turn, i) => ({ id: String(i), speaker: turn.who === "twin" ? "twin" as const : "you" as const, text: turn.text, rating: turn.who === "twin" ? ratingOf(turn.text) : undefined }))
+      : row.ratings.flatMap((rating) => [
+          ...(rating.question ? [{ id: `q${rating.turnIndex}`, speaker: "you" as const, text: rating.question, rating: undefined }] : []),
+          { id: `r${rating.turnIndex}`, speaker: "twin" as const, text: rating.reply, rating: rating.rating as "like" | "off" },
+        ]);
+    return {
+      slug: row.session.agent.slug,
+      twinName: row.session.agent.name,
+      startedAt: (row.session.startedAt ?? row.createdAt).toISOString(),
+      turns,
+    };
+  }),
+
+  /** Marks a just-started twin call as a calibration (idempotent). */
+  start: studioProcedure
+    .input(slugInput.extend({ sessionId: z.string().min(1).max(100) }))
+    .mutation(({ ctx, input }) => twinCall(async () => {
+      const found = await findTwinAgent(ctx.user.orgId, input.slug);
+      const session = await db.interviewSession.findFirst({
+        where: { id: input.sessionId, orgId: ctx.user.orgId, userId: ctx.user.id, agentId: found.id },
+        select: { id: true },
+      });
+      if (!session) throw new TwinAccessError("That call is not yours to calibrate", 404);
+      const calibration = await db.twinCalibration.upsert({
+        where: { sessionId: session.id },
+        create: { sessionId: session.id, createdByUserId: ctx.user.id },
+        update: {},
+        select: { id: true },
+      });
+      return { calibrationId: calibration.id };
+    })),
+
+  /** Rates one twin reply; rating the same turn again replaces it. */
+  rate: studioProcedure
+    .input(z.object({
+      calibrationId: z.string().min(1).max(100),
+      turnIndex: z.number().int().min(0).max(10_000),
+      question: z.string().trim().max(8000).nullable(),
+      reply: z.string().trim().min(1).max(8000),
+      rating: z.enum(["like", "off"]),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const calibration = await db.twinCalibration.findFirst({
+        where: { id: input.calibrationId, session: { orgId: ctx.user.orgId } },
+        select: { id: true },
+      });
+      if (!calibration) throw new TRPCError({ code: "NOT_FOUND", message: "Calibration not found" });
+      const fields = { question: input.question || null, reply: input.reply, rating: input.rating };
+      await db.twinCalibrationRating.upsert({
+        where: { calibrationId_turnIndex: { calibrationId: calibration.id, turnIndex: input.turnIndex } },
+        create: { calibrationId: calibration.id, turnIndex: input.turnIndex, ...fields },
+        update: fields,
+      });
+      return { ok: true };
+    }),
+});
+
 export const twinRouter = t.router({
   /** Who is talking to us over /api/twin. */
-  me: protectedProcedure.query(({ ctx }) => ctx.user),
+  me: studioProcedure.query(({ ctx }) => ctx.user),
+  agents: agentsRouter,
+  assignments: assignmentsRouter,
+  sessions: sessionsRouter,
+  users: usersRouter,
+  calibrations: calibrationsRouter,
 });
 
 export type TwinRouter = typeof twinRouter;
+
+/** What each twin query returns, for the page components. */
+export type TwinOutputs = import("@trpc/server").inferRouterOutputs<TwinRouter>;

@@ -1,75 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2 } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
+import { SessionTime } from "@/components/sessions/session-time";
+import type { TwinOutputs } from "@/lib/twin/trpc";
 import { cn } from "@/lib/utils";
 
-type SessionDetailData = {
-  id: string;
-  learner: string;
-  bot: string;
-  when: string;
-  duration: string;
-  score: number;
-  feedbackComment: string;
-  topics: string[];
-  turns: {
-    who: "learner" | "twin";
-    name: string;
-    text: string;
-    rated?: "like" | "off";
-  }[];
-};
+type SessionDetail = TwinOutputs["sessions"]["get"];
 
-const MOCK_SESSION_DETAILS: Record<string, SessionDetailData> = {
-  "sess-1": {
-    id: "sess-1",
-    learner: "Aisha",
-    bot: "The off-plan sales process",
-    when: "Today, 2:14 pm",
-    duration: "6 min",
-    score: 9,
-    feedbackComment: "Answered exactly what I was stuck on. Clear structure for the Zoom call.",
-    topics: ["Off-plan qualification", "First call framework", "Next step commitment"],
-    turns: [
-      {
-        who: "learner",
-        name: "Aisha",
-        text: "I need a structure, step by step.",
-      },
-      {
-        who: "twin",
-        name: "Olga’s twin",
-        text: "First call books the educational Zoom, Zoom qualifies and books the presentation meeting. Every stage has one single goal: book the next step without forcing a premature decision.",
-        rated: "like",
-      },
-      {
-        who: "learner",
-        name: "Aisha",
-        text: "What if the buyer insists on discussing prices right away on that first call?",
-      },
-      {
-        who: "twin",
-        name: "Olga’s twin",
-        text: "I wouldn’t quote numbers in the dark. Tell them prices depend entirely on the unit tier, view, and payment plan. Suggest a 15-minute Zoom where you can put two concrete layouts on screen.",
-        rated: "like",
-      },
-      {
-        who: "learner",
-        name: "Aisha",
-        text: "Understood. That makes complete sense.",
-      },
-    ],
-  },
-};
-
-const DEFAULT_SESSION: SessionDetailData = MOCK_SESSION_DETAILS["sess-1"];
-
-export function TwinSessionDetailPage({ id }: { id: string }) {
-  const session = MOCK_SESSION_DETAILS[id] || {
-    ...DEFAULT_SESSION,
-    id,
-  };
+export function TwinSessionDetailPage({ session }: { session: SessionDetail }) {
+  const duration = session.seconds === null ? null : `${Math.max(1, Math.round(session.seconds / 60))} min`;
 
   return (
     <div className="h-full w-full overflow-y-auto">
@@ -90,75 +30,78 @@ export function TwinSessionDetailPage({ id }: { id: string }) {
           <article className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
             <div className="flex items-center gap-4 min-w-0">
               <span className="grid size-12 shrink-0 place-items-center rounded-full bg-emerald-500/15 text-base font-semibold text-emerald-600 dark:text-emerald-400">
-                {session.learner.charAt(0)}
+                {session.learner.charAt(0).toUpperCase()}
               </span>
               <div className="flex flex-col min-w-0">
                 <h1 className="m-0 text-xl font-semibold leading-7">{session.learner}</h1>
-                <p className="mt-0.5 text-sm font-medium text-(--foreground)">{session.bot}</p>
+                <p className="mt-0.5 text-sm font-medium text-(--foreground)">{session.agentName}</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  {session.when} · {session.duration}
+                  <SessionTime iso={session.at} />
+                  {duration ? ` · ${duration}` : ""}
                 </p>
               </div>
             </div>
 
-            {/* Video preview */}
-            <div className="flex flex-col gap-1.5 shrink-0 sm:w-60">
-              <video
-                src="/media/twin-listening.mp4"
-                autoPlay
-                muted
-                loop
-                playsInline
-                preload="auto"
-                className="w-full aspect-video rounded-[12px] bg-(--sidebar) object-cover"
-              />
-              <span className="text-[11px] text-muted-foreground text-center sm:text-left">
-                Recording · {session.duration}
-              </span>
-            </div>
-          </article>
-
-          {/* Feedback Card */}
-          <article className="rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
-            <div className="flex items-center justify-between gap-4">
-              <h2 className="m-0 text-sm font-semibold uppercase tracking-[0.04em] text-muted-foreground">
-                Learner feedback
-              </h2>
-              <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                Helpful {session.score}/10
-              </span>
-            </div>
-            <p className="mt-3 text-sm italic text-(--text-secondary)">“{session.feedbackComment}”</p>
-          </article>
-
-          {/* Topics Card */}
-          <article className="rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
-            <h2 className="m-0 text-sm font-semibold uppercase tracking-[0.04em] text-muted-foreground">
-              Topics discussed
-            </h2>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {session.topics.map((t) => (
-                <span
-                  key={t}
-                  className="rounded-full bg-(--sidebar) border border-(--border) px-3 py-1 text-xs font-medium text-(--text-secondary)"
-                >
-                  {t}
+            {/* Recording */}
+            {session.hasVideo ? (
+              <div className="flex flex-col gap-1.5 shrink-0 sm:w-60">
+                <video
+                  src={`/api/sessions/${encodeURIComponent(session.id)}/video`}
+                  controls
+                  preload="metadata"
+                  className="w-full aspect-video rounded-[12px] bg-(--sidebar) object-cover"
+                />
+                <span className="text-[11px] text-muted-foreground text-center sm:text-left">
+                  Recording{duration ? ` · ${duration}` : ""}
                 </span>
-              ))}
-            </div>
+              </div>
+            ) : null}
           </article>
+
+          {/* Feedback Card: only when the learner left feedback */}
+          {session.rating !== null || session.feedbackNote ? (
+            <article className="rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
+              <div className="flex items-center justify-between gap-4">
+                <h2 className="m-0 text-sm font-semibold uppercase tracking-[0.04em] text-muted-foreground">
+                  Learner feedback
+                </h2>
+                {session.rating !== null ? (
+                  <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                    Helpful {session.rating}/5
+                  </span>
+                ) : null}
+              </div>
+              {session.feedbackNote ? <p className="mt-3 text-sm italic text-(--text-secondary)">“{session.feedbackNote}”</p> : null}
+            </article>
+          ) : null}
+
+          {/* Topics Card: from the session report, when there is one */}
+          {session.topics.length ? (
+            <article className="rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
+              <h2 className="m-0 text-sm font-semibold uppercase tracking-[0.04em] text-muted-foreground">
+                Topics discussed
+              </h2>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {session.topics.map((t) => (
+                  <span
+                    key={t}
+                    className="rounded-full bg-(--sidebar) border border-(--border) px-3 py-1 text-xs font-medium text-(--text-secondary)"
+                  >
+                    {t}
+                  </span>
+                ))}
+              </div>
+            </article>
+          ) : null}
 
           {/* Transcript Card (rp-chat) */}
           <article className="rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
             <div className="flex items-center justify-between gap-4 border-b border-(--border) pb-4">
               <h2 className="m-0 text-base font-semibold">Transcript</h2>
-              <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-                Rated “Feels like me”
-              </span>
             </div>
 
             <div className="mt-4 flex flex-col gap-4">
+              {session.turns.length === 0 ? <p className="text-sm text-muted-foreground">No transcript was saved.</p> : null}
               {session.turns.map((turn, i) => {
                 const isTwin = turn.who === "twin";
                 return (
@@ -171,20 +114,10 @@ export function TwinSessionDetailPage({ id }: { id: string }) {
                         : "self-end bg-(--brand) text-white font-normal",
                     )}
                   >
-                    <span
-                      className={cn(
-                        "text-xs font-semibold",
-                        isTwin ? "text-muted-foreground" : "text-white/80",
-                      )}
-                    >
-                      {turn.name}
+                    <span className={cn("text-xs font-semibold", isTwin ? "text-muted-foreground" : "text-white/80")}>
+                      {isTwin ? session.agentName : session.learner}
                     </span>
                     <p className="m-0">{turn.text}</p>
-                    {turn.rated === "like" && isTwin && (
-                      <span className="mt-2 inline-flex items-center gap-1 self-start rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-                        <CheckCircle2 className="size-3" /> Feels like me
-                      </span>
-                    )}
                   </div>
                 );
               })}

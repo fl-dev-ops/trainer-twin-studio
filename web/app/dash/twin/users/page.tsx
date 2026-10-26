@@ -1,5 +1,9 @@
 import { TwinUsersPage } from "@/components/twin/twin-users-page";
+import { twinServer } from "@/lib/twin/server";
 
-export default function TwinUsersRoute() {
-  return <TwinUsersPage />;
+export const dynamic = "force-dynamic";
+
+export default async function TwinUsersRoute() {
+  const twin = await twinServer();
+  return <TwinUsersPage learners={await twin.users.list()} />;
 }

@@ -1,18 +1,11 @@
 import { CalibrationCall } from "@/components/calibration/calibration-call";
+import { orNotFound, twinServer } from "@/lib/twin/server";
 
-export default async function TwinLiveCalibrateRoute({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export const dynamic = "force-dynamic";
+
+export default async function TwinLiveCalibrateRoute({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const twinName = id === "olga-twin" ? "Olga’s twin" : "The off-plan sales process";
-
-  return (
-    <CalibrationCall
-      slug={id}
-      scenarioName={twinName}
-      twinName={twinName}
-    />
-  );
+  const twin = await twinServer();
+  const { name } = await orNotFound(twin.calibrations.list({ slug: id }));
+  return <CalibrationCall slug={id} scenarioName={name} twinName={name} twin />;
 }

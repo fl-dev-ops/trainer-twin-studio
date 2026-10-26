@@ -1,29 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ArrowLeft, Check, Search } from "lucide-react";
+import { toast } from "sonner";
+import { twinClient } from "@/lib/twin/client";
+import type { TwinOutputs } from "@/lib/twin/trpc";
 import { cn } from "@/lib/utils";
 
-type LearnerAssign = {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  assigned: boolean;
-  minutes: number;
-};
-
-const INITIAL_LEARNERS: LearnerAssign[] = [
-  { id: "u-1", name: "Aisha Khan", email: "aisha.khan@gmail.com", phone: "+971 50 123 4567", assigned: true, minutes: 60 },
-  { id: "u-2", name: "James Carter", email: "james.carter@outlook.com", phone: "+971 55 234 7788", assigned: true, minutes: 60 },
-  { id: "u-3", name: "Nora Ali", email: "nora.ali@gmail.com", phone: "+44 7700 900 142", assigned: false, minutes: 30 },
-  { id: "u-4", name: "Leo Martin", email: "leo@martinrealty.ae", phone: "+971 52 889 1023", assigned: false, minutes: 30 },
-  { id: "u-5", name: "Priya Nair", email: "priya.nair@gmail.com", phone: "+91 98765 43210", assigned: true, minutes: 60 },
-  { id: "u-6", name: "Omar Haddad", email: "omar.haddad@dubaihomes.com", phone: "+971 56 410 2291", assigned: false, minutes: 30 },
-  { id: "u-7", name: "Sofia Rossi", email: "sofia.rossi@gmail.com", phone: "+39 345 123 4567", assigned: false, minutes: 30 },
-  { id: "u-8", name: "Daniel Cho", email: "daniel.cho@outlook.com", phone: "+82 10 5555 1234", assigned: false, minutes: 30 },
-];
+type LearnerAssign = TwinOutputs["assignments"]["list"][number];
 
 const AVATAR_TONES = [
   "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
@@ -64,35 +50,41 @@ function SwitchToggle({
   );
 }
 
-export function TwinEditPage({ id }: { id: string }) {
-  const twinTitle = id === "olga-twin" ? "Olga’s twin" : "The off-plan sales process";
+export function TwinEditPage({
+  twin,
+  learners,
+  defaultMinutes,
+}: {
+  twin: Pick<TwinOutputs["agents"]["get"], "slug" | "name" | "description" | "settings">;
+  learners: LearnerAssign[];
+  defaultMinutes: number;
+}) {
+  const id = twin.slug;
+  const router = useRouter();
 
   // General fields
-  const [name, setName] = useState(twinTitle);
-  const [description, setDescription] = useState(
-    "First call, educational Zoom and presentation meeting. Every stage books the next one."
-  );
+  const [name, setName] = useState(twin.name);
+  const [description, setDescription] = useState(twin.description ?? "");
 
   // Before conversation start
-  const [preScreenshare, setPreScreenshare] = useState(true);
-  const [preUpload, setPreUpload] = useState(true);
+  const [preScreenshare, setPreScreenshare] = useState(twin.settings.preScreenshare);
+  const [preUpload, setPreUpload] = useState(twin.settings.preUpload);
 
   // During conversation
-  const [duringUpload, setDuringUpload] = useState(true);
+  const [duringUpload, setDuringUpload] = useState(twin.settings.duringUpload);
 
-  // Assign learners
-  const [learners, setLearners] = useState(INITIAL_LEARNERS);
+  // Assign learners (selection is by email)
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [query, setQuery] = useState("");
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const assignedCount = learners.filter((l) => l.assigned).length;
 
   const filtered = learners.filter(
     (l) =>
       l.name.toLowerCase().includes(query.toLowerCase()) ||
-      l.email.toLowerCase().includes(query.toLowerCase()) ||
-      l.phone.includes(query)
+      l.email.toLowerCase().includes(query.toLowerCase())
   );
 
   function togglePick(learnerId: string) {
@@ -101,13 +93,29 @@ export function TwinEditPage({ id }: { id: string }) {
     );
   }
 
-  function handleSave() {
-    setLearners((prev) =>
-      prev.map((l) => (selectedIds.includes(l.id) ? { ...l, assigned: true } : l))
-    );
-    setSelectedIds([]);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await twinClient.agents.update.mutate({
+        slug: id,
+        name,
+        description,
+        settings: { preScreenshare, preUpload, duringUpload },
+      });
+      if (selectedIds.length) {
+        const result = await twinClient.assignments.assign.mutate({ slug: id, emails: selectedIds, minutes: defaultMinutes });
+        if (result.blocked) toast.warning(`${result.blocked} learner(s) belong to another organization and were not assigned.`);
+        if (result.emailFailures) toast.warning(`${result.emailFailures} invite email(s) could not be sent.`);
+      }
+      setSelectedIds([]);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -266,13 +274,15 @@ export function TwinEditPage({ id }: { id: string }) {
             {/* Learner checklist */}
             <div className="flex flex-col overflow-hidden rounded-[12px] border border-(--border)">
               {filtered.length === 0 ? (
-                <p className="p-6 text-center text-sm text-muted-foreground">No one matches that search.</p>
+                <p className="p-6 text-center text-sm text-muted-foreground">
+                  {learners.length ? "No one matches that search." : "No learners in your organization yet."}
+                </p>
               ) : (
                 filtered.map((u, i) => {
-                  const isSelected = selectedIds.includes(u.id);
+                  const isSelected = selectedIds.includes(u.email);
                   return (
                     <label
-                      key={u.id}
+                      key={u.email}
                       className={cn(
                         "flex items-center justify-between gap-3 p-3.5 px-4 cursor-pointer transition-colors hover:bg-(--sidebar)",
                         i > 0 && "border-t border-(--border)",
@@ -284,7 +294,7 @@ export function TwinEditPage({ id }: { id: string }) {
                           type="checkbox"
                           checked={u.assigned || isSelected}
                           disabled={u.assigned}
-                          onChange={() => togglePick(u.id)}
+                          onChange={() => togglePick(u.email)}
                           className="size-4 rounded accent-(--brand) cursor-pointer"
                         />
                         <span
@@ -294,7 +304,7 @@ export function TwinEditPage({ id }: { id: string }) {
                           )}
                           aria-hidden
                         >
-                          {u.name.charAt(0)}
+                          {u.name.charAt(0).toUpperCase()}
                         </span>
                         <div className="flex flex-col min-w-0">
                           <span className="text-sm font-semibold truncate text-(--foreground)">{u.name}</span>
@@ -305,11 +315,11 @@ export function TwinEditPage({ id }: { id: string }) {
                       <div className="shrink-0">
                         {u.assigned ? (
                           <span className="inline-flex items-center rounded-full bg-(--sidebar) border border-(--border) px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                            Assigned · {u.minutes} min
+                            Assigned · {u.minutesUsed} of {u.minutes} min used
                           </span>
                         ) : isSelected ? (
                           <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                            Selected (30 min)
+                            Selected ({defaultMinutes} min)
                           </span>
                         ) : null}
                       </div>
@@ -330,8 +340,9 @@ export function TwinEditPage({ id }: { id: string }) {
             </Link>
             <button
               type="button"
-              onClick={handleSave}
-              className="inline-flex h-9 items-center gap-2 rounded-full bg-(--brand) px-5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+              onClick={() => void handleSave()}
+              disabled={saving || !name.trim()}
+              className="inline-flex h-9 items-center gap-2 rounded-full bg-(--brand) px-5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
             >
               {saved && <Check className="size-4" />}
               <span>{saved ? "Saved" : "Save changes"}</span>

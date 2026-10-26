@@ -1,9 +1,6 @@
 import { z } from "zod";
-import { BASE_DOMAIN } from "@/lib/base-domain";
-import { sendTwinAssignmentEmail } from "@/lib/email";
 import { getTrainerOrg } from "@/lib/org";
-import { homeOrgsByEmail } from "@/lib/org-lock";
-import { assignTwin, findTwinAgent, listTwinAssignments, TwinAccessError, updateTwinAssignment } from "@/lib/twin-access";
+import { assignTwinAndInvite, findTwinAgent, listTwinAssignments, TwinAccessError, twinUrl, updateTwinAssignment } from "@/lib/twin-access";
 
 export const runtime = "nodejs";
 
@@ -30,9 +27,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
   try {
     const agent = await findTwinAgent(trainer.id, (await params).slug);
     const assignments = await listTwinAssignments(trainer.id, agent.id);
-    return Response.json({
-      assignments: assignments.map(({ shareCode, ...row }) => ({ ...row, url: `https://${trainer.slug}.${BASE_DOMAIN}/s/${shareCode}` })),
-    });
+    return Response.json({ assignments: assignments.map(({ shareCode, ...row }) => ({ ...row, url: twinUrl(trainer.slug, shareCode) })) });
   } catch (error) {
     return failed(error);
   }
@@ -46,22 +41,13 @@ export async function PUT(request: Request, { params }: { params: Promise<{ slug
   if (!parsed.success) return Response.json({ error: "Give a list of emails and the minutes for each person" }, { status: 400 });
   try {
     const agent = await findTwinAgent(trainer.id, (await params).slug);
-    const { stats, invites } = await assignTwin({
-      orgId: trainer.id,
-      agentId: agent.id,
+    return Response.json(await assignTwinAndInvite({
+      org: { id: trainer.id, slug: trainer.slug },
+      by: { id: trainer.user.id, name: trainer.user.name },
+      agent,
       emails: parsed.data.emails,
       minutes: parsed.data.minutes,
-      assignedByUserId: trainer.user.id,
-      homeOrgs: await homeOrgsByEmail(parsed.data.emails),
-    });
-    const deliveries = await Promise.all(invites.map(({ to, shareCode }) => sendTwinAssignmentEmail({
-      to,
-      twinName: agent.name,
-      minutes: parsed.data.minutes,
-      practiceUrl: `https://${trainer.slug}.${BASE_DOMAIN}/s/${shareCode}`,
-      trainerName: trainer.user.name,
-    })));
-    return Response.json({ ...stats, emailFailures: deliveries.filter(({ success }) => !success).length });
+    }));
   } catch (error) {
     return failed(error);
   }

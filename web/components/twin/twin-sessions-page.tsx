@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { SessionsIcon } from "@/components/icons";
-import { TwinSessionItem, TWIN_SESSIONS_MOCK } from "@/components/twin/twin-session-item";
+import { TwinSessionItem, type TwinSessionItemData } from "@/components/twin/twin-session-item";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,25 +11,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
-
-const TWIN_SESSIONS = TWIN_SESSIONS_MOCK;
-
-const AGENT_OPTIONS = [
-  { value: "all", label: "All twin agents" },
-  { value: "The off-plan sales process", label: "The off-plan sales process" },
-  { value: "Handling client objections", label: "Handling client objections" },
-  { value: "Re-engaging clients who have gone quiet", label: "Re-engaging clients who have gone quiet" },
-];
-
-const LEARNER_OPTIONS = [
-  { value: "all", label: "All learners" },
-  { value: "Aisha", label: "Aisha" },
-  { value: "James", label: "James" },
-  { value: "Nora", label: "Nora" },
-  { value: "Leo", label: "Leo" },
-  { value: "Priya", label: "Priya" },
-];
 
 const DATE_OPTIONS = [
   { value: "30", label: "Last 30 days" },
@@ -83,15 +64,31 @@ function FilterDropdown({
   );
 }
 
-export function TwinSessionsPage() {
+const DAY = 86_400_000;
+/** Whether an ISO time falls in the picked range ("30", "7", "today" or "all"). */
+function inRange(iso: string, range: string, now = Date.now()) {
+  if (range === "all") return true;
+  const at = new Date(iso).getTime();
+  if (range === "today") return new Date(at).toDateString() === new Date(now).toDateString();
+  return at >= now - Number(range) * DAY;
+}
+
+/** Options from the sessions themselves, "All …" first. */
+function optionsOf(all: string, pairs: [string, string][]) {
+  return [{ value: "all", label: all }, ...[...new Map(pairs)].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label))];
+}
+
+export function TwinSessionsPage({ sessions }: { sessions: TwinSessionItemData[] }) {
   const [botFilter, setBotFilter] = useState("all");
   const [learnerFilter, setLearnerFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("30");
 
-  const filteredSessions = TWIN_SESSIONS.filter((s) => {
-    if (botFilter !== "all" && s.bot !== botFilter) return false;
-    if (learnerFilter !== "all" && s.learner !== learnerFilter) return false;
-    return true;
+  const agentOptions = optionsOf("All twin agents", sessions.map((s) => [s.agentSlug, s.agentName]));
+  const learnerOptions = optionsOf("All learners", sessions.map((s) => [s.learnerEmail, s.learner]));
+  const filteredSessions = sessions.filter((s) => {
+    if (botFilter !== "all" && s.agentSlug !== botFilter) return false;
+    if (learnerFilter !== "all" && s.learnerEmail !== learnerFilter) return false;
+    return inRange(s.at, dateFilter);
   });
 
   return (
@@ -110,12 +107,12 @@ export function TwinSessionsPage() {
             <FilterDropdown
               value={botFilter}
               onChange={setBotFilter}
-              options={AGENT_OPTIONS}
+              options={agentOptions}
             />
             <FilterDropdown
               value={learnerFilter}
               onChange={setLearnerFilter}
-              options={LEARNER_OPTIONS}
+              options={learnerOptions}
             />
             <FilterDropdown
               value={dateFilter}

@@ -47,6 +47,7 @@
         "@t3-oss/env-nextjs": "^0.13.11",
         "@tanstack/react-query": "^5.102.8",
         "@tanstack/react-virtual": "^3.13.12",
+        "@trpc/client": "11.19.0",
         "@trpc/server": "^11",
         "@types/three": "^0.185.4",
         "ai": "^7.0.148",
@@ -772,6 +773,8 @@
     "@tanstack/react-virtual": ["@tanstack/react-virtual@3.14.10", "", { "dependencies": { "@tanstack/virtual-core": "3.17.8" }, "peerDependencies": { "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0", "react-dom": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-SRyoUbdFMRHuYXMijV5H4ZarQWpXkj3iANq8OFre+pybeVap8ZJjZ3Nz9bVjx4d8PfobVUQUdKyyyHYk3E+djw=="],
 
     "@tanstack/virtual-core": ["@tanstack/virtual-core@3.17.8", "", {}, "sha512-BfEvehNpOT75r5Ksc5xW6NZuXujTfb7nlSEyVu4XHG3gdxNg1KqXruWbDewXOUaUYIo4oRbSfkjIajz4MAT8tA=="],
+
+    "@trpc/client": ["@trpc/client@11.19.0", "", { "peerDependencies": { "@trpc/server": "11.19.0", "typescript": ">=5.7.2" }, "bin": { "intent": "bin/intent.js" } }, "sha512-0MKkPq6MejsKB5Opca1Rl22KVIaqo2+A1EiXyZ8EGUsl9TLrPdpGn+Usux20TZKFwnSC2+wI/WilqNJaP4ODfw=="],
 
     "@trpc/server": ["@trpc/server@11.19.0", "", { "peerDependencies": { "typescript": ">=5.7.2" }, "bin": { "intent": "bin/intent.js" } }, "sha512-7C1goiDurz82yFKtZUbEzjXd0Rg/jyisaIZQhdvus+1l7E6mwcEYZXjZ1US/HF8kOyz1LERL8UN3bcboJtjcyQ=="],
 

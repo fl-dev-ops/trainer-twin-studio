@@ -1,10 +1,10 @@
 import { TwinAgentDetailPage } from "@/components/twin/twin-agent-detail-page";
+import { orNotFound, twinServer } from "@/lib/twin/server";
 
-export default async function TwinAgentDetailRoute({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export const dynamic = "force-dynamic";
+
+export default async function TwinAgentDetailRoute({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return <TwinAgentDetailPage id={id} />;
+  const twin = await twinServer();
+  return <TwinAgentDetailPage twin={await orNotFound(twin.agents.get({ slug: id }))} />;
 }

@@ -1,16 +1,6 @@
 import { UsersIcon } from "@/components/icons";
+import type { TwinOutputs } from "@/lib/twin/trpc";
 import { cn } from "@/lib/utils";
-
-const TWIN_LEARNERS = [
-  { name: "Aisha Khan", email: "aisha.khan@gmail.com", agents: 4, minutes: 240, used: 168 },
-  { name: "James Carter", email: "james.carter@outlook.com", agents: 3, minutes: 180, used: 74 },
-  { name: "Nora Ali", email: "nora.ali@gmail.com", agents: 2, minutes: 120, used: 112 },
-  { name: "Leo Martin", email: "leo@martinrealty.ae", agents: 3, minutes: 180, used: 31 },
-  { name: "Priya Nair", email: "priya.nair@gmail.com", agents: 4, minutes: 240, used: 205 },
-  { name: "Omar Haddad", email: "omar.haddad@dubaihomes.com", agents: 2, minutes: 120, used: 48 },
-  { name: "Sofia Rossi", email: "sofia.rossi@gmail.com", agents: 3, minutes: 180, used: 96 },
-  { name: "Daniel Cho", email: "daniel.cho@outlook.com", agents: 2, minutes: 120, used: 12 },
-];
 
 const AVATAR_TONES = [
   "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
@@ -20,7 +10,7 @@ const AVATAR_TONES = [
   "bg-orange-500/15 text-orange-600 dark:text-orange-400",
 ];
 
-export function TwinUsersPage() {
+export function TwinUsersPage({ learners }: { learners: TwinOutputs["users"]["list"] }) {
   return (
     <div className="h-full w-full overflow-y-auto">
       <div className="mx-auto w-full max-w-[1024px] px-4 md:px-0 pt-5 pb-16">
@@ -50,9 +40,14 @@ export function TwinUsersPage() {
           </div>
 
           {/* Rows */}
-          {TWIN_LEARNERS.map((l, i) => {
-            const left = l.minutes - l.used;
-            const pct = Math.round((l.used / l.minutes) * 100);
+          {learners.length === 0 ? (
+            <p className="border-t border-(--border) px-5 py-6 text-center text-sm text-muted-foreground">
+              Nobody has twin access yet. Assign a twin or share its link.
+            </p>
+          ) : null}
+          {learners.map((l, i) => {
+            const left = Math.max(0, l.minutes - l.used);
+            const pct = Math.min(100, Math.round((l.used / l.minutes) * 100));
             const isHigh = pct >= 90;
             return (
               <div
@@ -67,7 +62,7 @@ export function TwinUsersPage() {
                     )}
                     aria-hidden
                   >
-                    {l.name.charAt(0)}
+                    {l.name.charAt(0).toUpperCase()}
                   </span>
                   <span className="truncate">{l.name}</span>
                 </span>

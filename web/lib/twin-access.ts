@@ -1,5 +1,8 @@
 import { randomBytes } from "node:crypto";
+import { BASE_DOMAIN } from "@/lib/base-domain";
 import { db } from "@/lib/db";
+import { sendTwinAssignmentEmail } from "@/lib/email";
+import { homeOrgsByEmail } from "@/lib/org-lock";
 
 /**
  * Twin access (migration twin_access). A twin is used through a TwinAssignment: one per user per twin
@@ -16,6 +19,12 @@ export class TwinAccessError extends Error {
 }
 
 export const newTwinShareCode = () => randomBytes(18).toString("base64url");
+
+/** The learner-facing link for a twin assignment or share link code. */
+export const twinUrl = (orgSlug: string, code: string) => `https://${orgSlug}.${BASE_DOMAIN}/s/${code}`;
+
+/** Minutes a learner gets when nobody chose otherwise (assign screen default, share links). */
+export const DEFAULT_TWIN_MINUTES = 30;
 
 /**
  * Seconds already used on an assignment. A session still running counts up to now; one that ended
@@ -183,6 +192,32 @@ export async function assignTwin(input: {
     invites.push({ to: email, shareCode });
   }
   return { stats, invites };
+}
+
+/** assignTwin, then emails each new or reactivated learner their personal link. */
+export async function assignTwinAndInvite(input: {
+  org: { id: string; slug: string };
+  by: { id: string; name: string };
+  agent: { id: string; name: string };
+  emails: string[];
+  minutes: number;
+}) {
+  const { stats, invites } = await assignTwin({
+    orgId: input.org.id,
+    agentId: input.agent.id,
+    emails: input.emails,
+    minutes: input.minutes,
+    assignedByUserId: input.by.id,
+    homeOrgs: await homeOrgsByEmail(input.emails),
+  });
+  const deliveries = await Promise.all(invites.map(({ to, shareCode }) => sendTwinAssignmentEmail({
+    to,
+    twinName: input.agent.name,
+    minutes: input.minutes,
+    practiceUrl: twinUrl(input.org.slug, shareCode),
+    trainerName: input.by.name,
+  })));
+  return { ...stats, emailFailures: deliveries.filter(({ success }) => !success).length };
 }
 
 /** Changes one assignment's minutes or revokes / restores it. */

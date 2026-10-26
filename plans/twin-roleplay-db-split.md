@@ -774,3 +774,48 @@ Tested with test data (two orgs, inside `BEGIN … ROLLBACK`):
 **App work for this:** create the `member` row (role `user`) when a learner first signs in through an invite or a twin link,
 so nobody new ends up without a role. Add `TwinAssignment` to `homeOrgsByEmail` so the lock knows about twin access.
 Learners with invites in more than one org keep them, but the lock already blocks the non-home org (unchanged).
+
+---
+
+## 14. Twin calibration + twin tRPC (2026-10-27)
+
+### Calibration tables (migration `20261027030000_twin_calibration`)
+
+```mermaid
+erDiagram
+  INTERVIEW_SESSION ||--o| TWIN_CALIBRATION : "is a calibration call"
+  TWIN_CALIBRATION ||--o{ TWIN_CALIBRATION_RATING : "rated replies"
+  TWIN_CALIBRATION {
+    string sessionId "unique; the session's agent must be a TWIN (trigger)"
+    string createdByUserId
+  }
+  TWIN_CALIBRATION_RATING {
+    string calibrationId
+    int turnIndex "unique per calibration; >= 0"
+    string question "what the trainer said before"
+    string reply "the twin's words, as rated"
+    string rating "like | off"
+  }
+```
+
+- A calibration is a studio member's twin call: transcript, duration and recording stay on the session.
+- Ratings keep the rated text, so the review shows what was judged even when the saved transcript came from the voice agent.
+- Calibration sessions are left out of learner session lists, counts and the twin report.
+- Not built: reasons / notes on "off" (the UI has none), feeding ratings back into the twin's prompt.
+- Tests: `web/tests/sql/twin-calibration.sql`.
+
+### tRPC (`/api/twin`, `web/lib/twin/trpc.ts`)
+
+| Procedure | Used by |
+|---|---|
+| `agents.list` / `agents.get` / `agents.update` / `agents.shareLink` | `/twin`, `/twin/[id]`, `/twin/[id]/edit` and `/assign`, Share actions |
+| `assignments.list` / `assignments.assign` | `/twin/[id]/edit` and `/assign` |
+| `sessions.list` / `sessions.get` | `/twin/sessions`, `/twin/sessions/[id]`, twin detail |
+| `users.list` | `/twin/users` |
+| `calibrations.list` / `get` / `start` / `rate` | `/twin/[id]/calibration`, `/calibration/[calibId]`, `/calibrate` |
+
+- Studio members only (`studioProcedure`), scoped to their org. Pages read through `twinServer()` (server
+  `createCaller`); client components mutate through `twinClient` (`@trpc/client`) and `router.refresh()`.
+- Shown as "—" / "Not tracked yet" because no data exists: average response time, "most asked", reports raised.
+- Twin conversation settings (screen share / uploads) are stored in `Agent.data.twinSettings`; the session screen
+  does not apply them yet.

@@ -2,53 +2,17 @@
 
 import Link from "next/link";
 import { ArrowLeft, ArrowUpRight, Sliders } from "lucide-react";
+import { SessionTime } from "@/components/sessions/session-time";
+import type { TwinOutputs } from "@/lib/twin/trpc";
 import { cn } from "@/lib/utils";
 
-const CALIBRATIONS = [
-  {
-    id: "cal-prices",
-    title: "Handling “prices will drop next year”",
-    when: "Today, 11:11",
-    length: "6 min",
-    turns: 15,
-    like: 4,
-    off: 1,
-  },
-  {
-    id: "cal-fee",
-    title: "Pushing back on a one percent fee",
-    when: "Yesterday, 4:20",
-    length: "5 min",
-    turns: 4,
-    like: 3,
-    off: 0,
-  },
-  {
-    id: "cal-landlord",
-    title: "Opening a cold call with a landlord",
-    when: "Mon, 10:05",
-    length: "4 min",
-    turns: 4,
-    like: 3,
-    off: 1,
-  },
-  {
-    id: "cal-viewing",
-    title: "Following up after a viewing",
-    when: "Sun, 6:48",
-    length: "2 min",
-    turns: 3,
-    like: 4,
-    off: 0,
-  },
-];
+export function TwinCalibrationOverviewPage({ id, data }: { id: string; data: TwinOutputs["calibrations"]["list"] }) {
+  const twinTitle = data.name;
+  const calibrations = data.calibrations;
 
-export function TwinCalibrationOverviewPage({ id }: { id: string }) {
-  const twinTitle = id === "olga-twin" ? "Olga’s twin" : "The off-plan sales process";
-
-  const totalLike = CALIBRATIONS.reduce((acc, c) => acc + c.like, 0);
-  const totalOff = CALIBRATIONS.reduce((acc, c) => acc + c.off, 0);
-  const accuracy = Math.round((totalLike / (totalLike + totalOff)) * 100);
+  const totalLike = calibrations.reduce((acc, c) => acc + c.like, 0);
+  const totalOff = calibrations.reduce((acc, c) => acc + c.off, 0);
+  const accuracy = totalLike + totalOff ? `${Math.round((totalLike / (totalLike + totalOff)) * 100)}%` : "—";
 
   return (
     <div className="h-full w-full overflow-y-auto">
@@ -84,7 +48,7 @@ export function TwinCalibrationOverviewPage({ id }: { id: string }) {
         <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
           <article className="flex flex-col justify-between rounded-[12px] border border-(--card-border) bg-card p-4 text-left shadow-xs">
             <p className="m-0 text-[11px] font-medium tracking-[0.08em] uppercase text-muted-foreground">Total sessions</p>
-            <p className="mt-2 text-2xl font-semibold tabular-nums">{CALIBRATIONS.length}</p>
+            <p className="mt-2 text-2xl font-semibold tabular-nums">{calibrations.length}</p>
             <p className="m-0 mt-1 text-xs text-muted-foreground">calibrations</p>
           </article>
 
@@ -102,7 +66,7 @@ export function TwinCalibrationOverviewPage({ id }: { id: string }) {
 
           <article className="flex flex-col justify-between rounded-[12px] border border-(--card-border) bg-card p-4 text-left shadow-xs">
             <p className="m-0 text-[11px] font-medium tracking-[0.08em] uppercase text-muted-foreground">Overall accuracy</p>
-            <p className="mt-2 text-2xl font-semibold tabular-nums">{accuracy}%</p>
+            <p className="mt-2 text-2xl font-semibold tabular-nums">{accuracy}</p>
             <p className="m-0 mt-1 text-xs text-muted-foreground">Rated “Feels like me”</p>
           </article>
         </div>
@@ -113,7 +77,10 @@ export function TwinCalibrationOverviewPage({ id }: { id: string }) {
           <p className="mt-1 text-sm text-muted-foreground">Conversations you’ve had with this twin</p>
 
           <div className="mt-4 flex flex-col overflow-hidden rounded-[16px] border border-(--card-border) bg-card p-0 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
-            {CALIBRATIONS.map((c, idx) => (
+            {calibrations.length === 0 ? (
+              <p className="p-6 text-center text-sm text-muted-foreground">No calibrations yet. Talk to your twin and rate its answers.</p>
+            ) : null}
+            {calibrations.map((c, idx) => (
               <Link
                 key={c.id}
                 href={`/twin/${id}/calibration/${c.id}`}
@@ -125,7 +92,8 @@ export function TwinCalibrationOverviewPage({ id }: { id: string }) {
                 <div className="flex flex-col gap-0.5 min-w-0">
                   <span className="text-sm font-semibold text-(--foreground)">{c.title}</span>
                   <span className="text-[13px] text-muted-foreground">
-                    {c.when} · {c.length} · {c.turns} turns
+                    <SessionTime iso={c.at} />
+                    {c.seconds !== null ? ` · ${Math.max(1, Math.round(c.seconds / 60))} min` : ""} · {c.turns} turns
                   </span>
                 </div>
                 <ArrowUpRight className="size-4 shrink-0 text-muted-foreground" />
@@ -137,7 +105,7 @@ export function TwinCalibrationOverviewPage({ id }: { id: string }) {
         {/* Floating / Sticky Footer CTA matching reference cal-foot */}
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-20">
           <Link
-            href={`/calibration/${id}`}
+            href={`/twin/${id}/calibrate`}
             className="inline-flex h-11 items-center gap-2.5 rounded-full bg-(--brand) px-6 text-[14px] font-medium text-white shadow-lg transition-transform hover:scale-105 hover:bg-[#e04d00]"
           >
             <Sliders className="size-4" />

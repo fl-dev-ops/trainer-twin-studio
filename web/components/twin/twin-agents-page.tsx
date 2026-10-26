@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { ChevronDown, Play, Settings2, Share2, Sliders, Trash2, UserPlus } from "lucide-react";
 import { SetupIcon } from "@/components/icons";
+import { SessionTime } from "@/components/sessions/session-time";
+import { copyTwinLink } from "@/components/twin/copy-twin-link";
+import { UserAvatarGroup } from "@/components/user-avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,37 +14,22 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import type { TwinOutputs } from "@/lib/twin/trpc";
 import { cn } from "@/lib/utils";
 
 /**
  * Twin Agents library, ported from the reference prototype
- * (`page--library page--twin-profile` + its card/quote/learners rules).
- * Static mock data for now; drills into /api/twin when the surface is wired.
+ * (`page--library page--twin-profile` + its card/quote/learners rules), on the twin tRPC data.
  */
 
-const LEARNER_FACES = ["/media/learner-1.png", "/media/learner-2.png", "/media/learner-3.png", "/media/learner-4.png"];
+type TwinCard = TwinOutputs["agents"]["list"]["twins"][number];
 
-/** One learner avatar row: 28px faces overlapping by 8px, 2px surface ring, +N chip. */
-function LearnerAvatars({ extra, offset = 0, className }: { extra: number; offset?: number; className?: string }) {
+/** Learners assigned to the twin (avatars with a +N chip), or a quiet note when nobody is. */
+function LearnerAvatars({ learners, className }: { learners: TwinCard["learners"]; className?: string }) {
+  if (!learners.length) return <span className={cn("text-xs text-muted-foreground", className)}>No learners yet</span>;
   return (
     <span className={cn("flex items-center", className)} aria-label="Learners who talk to your twin">
-      {LEARNER_FACES.map((face, i) => (
-        <img
-          key={face}
-          src={LEARNER_FACES[(i + offset) % LEARNER_FACES.length]}
-          alt=""
-          width={28}
-          height={28}
-          className={cn("size-7 shrink-0 rounded-full border-2 border-card object-cover", i > 0 && "-ml-2")}
-        />
-      ))}
-      {extra > 0 && (
-        <span
-          className="-ml-2 grid size-7 place-items-center rounded-full border-2 border-card bg-[#e9e9e9] text-[11px] font-medium text-(--text-secondary) dark:bg-[#4a4a4a]"
-        >
-          +{extra}
-        </span>
-      )}
+      <UserAvatarGroup users={learners} max={4} size="sm" />
     </span>
   );
 }
@@ -58,10 +46,10 @@ function DotsIcon() {
 }
 
 /** The "Twin for all use cases" card: video avatar + title + meta + learners. */
-function TwinAllCard() {
+function TwinAllCard({ twin }: { twin: TwinCard }) {
   return (
     <article className="mt-4 flex items-center justify-between gap-4 rounded-[12px] border border-(--card-border) bg-card p-4 px-5 text-left shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)] transition-shadow hover:shadow-[0_2px_4px_rgb(30_28_25/0.07),0_8px_20px_rgb(30_28_25/0.11)]">
-      <Link href="/twin/olga-twin" className="flex flex-1 items-center gap-4 min-w-0 outline-none">
+      <Link href={`/twin/${twin.slug}`} className="flex flex-1 items-center gap-4 min-w-0 outline-none">
         <video
           className="size-[86px] shrink-0 rounded-[20px] bg-(--tone-control) object-cover object-[center_18%]"
           src="/media/twin-listening.mp4"
@@ -73,14 +61,14 @@ function TwinAllCard() {
           aria-hidden
         />
         <div className="min-w-0 flex-1">
-          <h3 className="m-0 text-[16px] font-semibold leading-6">Olga’s twin</h3>
+          <h3 className="m-0 text-[16px] font-semibold leading-6">{twin.name}</h3>
           <p className="mt-0.5 flex items-center gap-1 text-sm leading-5 text-muted-foreground">
-            Last updated 2 days ago
+            Last updated <SessionTime iso={twin.updatedAt} />
             <span className="grid size-5 shrink-0 place-items-center text-muted-foreground">
               <ChevronDown className="size-3.5" />
             </span>
           </p>
-          <LearnerAvatars extra={1} className="mt-2" />
+          <LearnerAvatars learners={twin.learners} className="mt-2" />
         </div>
       </Link>
 
@@ -90,7 +78,7 @@ function TwinAllCard() {
             render={
               <button
                 type="button"
-                aria-label="More actions for Olga’s twin"
+                aria-label={`More actions for ${twin.name}`}
                 className="grid size-8 place-items-center rounded-full bg-(--tone-control) text-(--foreground) hover:bg-(--border) transition-colors outline-none focus-visible:ring-2 focus-visible:ring-(--brand)"
               >
                 <DotsIcon />
@@ -99,25 +87,19 @@ function TwinAllCard() {
           />
           <DropdownMenuContent side="bottom" align="end" className="w-44">
             <DropdownMenuGroup>
-              <DropdownMenuItem render={<Link href="/twin/olga-twin/edit" />}>
+              <DropdownMenuItem render={<Link href={`/twin/${twin.slug}/edit`} />}>
                 <Settings2 className="size-4" />
                 <span>Configure</span>
               </DropdownMenuItem>
-              <DropdownMenuItem render={<Link href="/twin/olga-twin/calibration" />}>
+              <DropdownMenuItem render={<Link href={`/twin/${twin.slug}/calibration`} />}>
                 <Sliders className="size-4" />
                 <span>Calibrate</span>
               </DropdownMenuItem>
-              <DropdownMenuItem render={<Link href="/twin/olga-twin/assign" />}>
+              <DropdownMenuItem render={<Link href={`/twin/${twin.slug}/assign`} />}>
                 <UserPlus className="size-4" />
                 <span>Assign</span>
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  if (typeof window !== "undefined") {
-                    navigator.clipboard?.writeText(`${window.location.origin}/s/olga-twin`);
-                  }
-                }}
-              >
+              <DropdownMenuItem onClick={() => void copyTwinLink(twin.slug)}>
                 <Share2 className="size-4" />
                 <span>Share</span>
               </DropdownMenuItem>
@@ -143,14 +125,12 @@ const GRADIENTS = [
   "bg-[linear-gradient(135deg,#bcead0_0%,#c4e0e4_50%,#d4d0f0_100%)]",
 ];
 
-type TwinBot = { title: string; quote: string; blurb: string };
-
 /** "Twin agents for specific use cases" card: art + quote, body, learners + dots. */
-function TwinBotCard({ bot, index }: { bot: TwinBot; index: number }) {
+function TwinBotCard({ bot, index }: { bot: TwinCard; index: number }) {
   return (
     <article className="flex flex-col overflow-visible rounded-[12px] border border-(--card-border) bg-card text-left shadow-[0_1px_2px_rgb(30_28_25/0.04)] transition-shadow hover:shadow-[0_2px_4px_rgb(30_28_25/0.07),0_8px_20px_rgb(30_28_25/0.11)]">
       {/* Top gradient banner with centered quote bubble (reference rp-art--twin + rp-quote) */}
-      <Link href="/twin/offplan-process" className="block outline-none">
+      <Link href={`/twin/${bot.slug}`} className="block outline-none">
         <div
           className={cn(
             "relative flex min-h-[176px] items-center justify-center p-4 rounded-t-[12px]",
@@ -172,7 +152,7 @@ function TwinBotCard({ bot, index }: { bot: TwinBot; index: number }) {
               />
               <span className="flex min-w-0 flex-col">
                 <span className="text-[13px] leading-[18px] text-(--text-secondary) dark:text-[#c4c4c4]">
-                  “{bot.quote}”
+                  {bot.quote ? `“${bot.quote}”` : bot.description ?? bot.name}
                 </span>
               </span>
             </div>
@@ -182,22 +162,22 @@ function TwinBotCard({ bot, index }: { bot: TwinBot; index: number }) {
         {/* Card Body */}
         <div className="flex flex-col gap-2 px-4 pt-3.5 pb-0">
           <span className="text-[15px] font-semibold leading-[22px] tracking-[-0.015em] text-(--foreground)">
-            {bot.title}
+            {bot.name}
           </span>
-          <span className="text-[13px] leading-5 text-(--text-secondary)">{bot.blurb}</span>
+          {bot.description ? <span className="text-[13px] leading-5 text-(--text-secondary)">{bot.description}</span> : null}
         </div>
       </Link>
 
       {/* Card Footer */}
       <div className="mt-auto flex items-center justify-between gap-2 px-4 pt-4 pb-4">
-        <LearnerAvatars extra={1} offset={index} />
+        <LearnerAvatars learners={bot.learners} />
 
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
               <button
                 type="button"
-                aria-label={`Actions for ${bot.title}`}
+                aria-label={`Actions for ${bot.name}`}
                 className="ml-auto grid size-8 place-items-center rounded-full text-(--foreground) hover:bg-(--tone-control) transition-colors outline-none focus-visible:ring-2 focus-visible:ring-(--brand)"
               >
                 <DotsIcon />
@@ -206,29 +186,23 @@ function TwinBotCard({ bot, index }: { bot: TwinBot; index: number }) {
           />
           <DropdownMenuContent side="bottom" align="end" className="w-44">
             <DropdownMenuGroup>
-              <DropdownMenuItem render={<Link href="/twin/offplan-process/edit" />}>
+              <DropdownMenuItem render={<Link href={`/twin/${bot.slug}/edit`} />}>
                 <Settings2 className="size-4" />
                 <span>Configure</span>
               </DropdownMenuItem>
-              <DropdownMenuItem render={<Link href="/twin/offplan-process/calibration" />}>
+              <DropdownMenuItem render={<Link href={`/twin/${bot.slug}/calibration`} />}>
                 <Sliders className="size-4" />
                 <span>Calibrate</span>
               </DropdownMenuItem>
-              <DropdownMenuItem render={<Link href="/dash/talk" />}>
+              <DropdownMenuItem render={<Link href={`/talk?agent=${encodeURIComponent(bot.slug)}`} />}>
                 <Play className="size-4" />
                 <span>Try as learner</span>
               </DropdownMenuItem>
-              <DropdownMenuItem render={<Link href="/twin/offplan-process/assign" />}>
+              <DropdownMenuItem render={<Link href={`/twin/${bot.slug}/assign`} />}>
                 <UserPlus className="size-4" />
                 <span>Assign</span>
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  if (typeof window !== "undefined") {
-                    navigator.clipboard?.writeText(`${window.location.origin}/s/offplan-process`);
-                  }
-                }}
-              >
+              <DropdownMenuItem onClick={() => void copyTwinLink(bot.slug)}>
                 <Share2 className="size-4" />
                 <span>Share</span>
               </DropdownMenuItem>
@@ -247,16 +221,8 @@ function TwinBotCard({ bot, index }: { bot: TwinBot; index: number }) {
   );
 }
 
-const MOCK_BOTS: TwinBot[] = [
-  {
-    title: "The off-plan sales process",
-    quote: "I need a structure, step by step.",
-    blurb: "First call, educational Zoom and presentation meeting. Every stage books the next one.",
-  },
-];
-
 /** Full Twin Agents library page (beta `page--twin-profile`). */
-export function TwinAgentsPage() {
+export function TwinAgentsPage({ data }: { data: TwinOutputs["agents"]["list"] }) {
   return (
     <div className="h-full w-full overflow-y-auto">
       {/* Reference .page.page--library: max-width 1024px centered, padding 20px top, 32px bottom. */}
@@ -280,14 +246,18 @@ export function TwinAgentsPage() {
         </header>
 
         <h2 className="mt-10 max-w-none text-[18px] font-semibold leading-6 tracking-[-0.015em]">Twin for all use cases</h2>
-        <TwinAllCard />
+        {data.twins.length ? (
+          data.twins.map((twin) => <TwinAllCard key={twin.slug} twin={twin} />)
+        ) : (
+          <p className="mt-4 text-sm text-muted-foreground">No twin yet.</p>
+        )}
 
         <h2 className="mt-8 max-w-none text-[18px] font-semibold leading-6 tracking-[-0.015em]">
           Twin agents for specific use cases
         </h2>
         <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {MOCK_BOTS.map((bot, i) => (
-            <TwinBotCard key={bot.title} bot={bot} index={i} />
+          {data.skills.map((bot, i) => (
+            <TwinBotCard key={bot.slug} bot={bot} index={i} />
           ))}
         </div>
       </div>

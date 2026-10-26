@@ -357,6 +357,7 @@ model InterviewSession {
   // are the sum of these sessions' startedAt..endedAt.
   twinAssignmentId String?
   twinAssignment   TwinAssignment?     @relation(fields: [twinAssignmentId], references: [id], onDelete: SetNull)
+  twinCalibration  TwinCalibration?
 
   @@index([orgId, userId])
   @@index([agentId])
@@ -896,4 +897,36 @@ model TwinAssignment {
   @@unique([agentId, recipientEmail])
   @@index([orgId, status])
   @@index([userId])
+}
+
+// ---- Twin calibration (migration twin_calibration) ----
+// A studio member (admin / team) talks to a twin and marks its replies "feels like me" or "feels off".
+// The call is a normal twin InterviewSession (transcript, duration, recording live there); the session's
+// agent must be a TWIN (DB trigger).
+
+/// One calibration call: 1:1 with its session.
+model TwinCalibration {
+  id              String   @id @default(cuid())
+  sessionId       String   @unique
+  createdByUserId String
+  createdAt       DateTime @default(now())
+
+  session InterviewSession        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  ratings TwinCalibrationRating[]
+}
+
+/// One rated twin reply. The text is kept as rated, so the review shows exactly what was judged.
+model TwinCalibrationRating {
+  id            String   @id @default(cuid())
+  calibrationId String
+  turnIndex     Int // position in the call's turns (>= 0, CHECK)
+  question      String? // what the trainer said just before
+  reply         String
+  rating        String // like | off (CHECK)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  calibration TwinCalibration @relation(fields: [calibrationId], references: [id], onDelete: Cascade)
+
+  @@unique([calibrationId, turnIndex])
 }

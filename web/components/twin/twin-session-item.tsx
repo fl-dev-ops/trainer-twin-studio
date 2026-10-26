@@ -1,69 +1,10 @@
 import Link from "next/link";
+import { SessionTime } from "@/components/sessions/session-time";
+import type { TwinOutputs } from "@/lib/twin/trpc";
 import { cn } from "@/lib/utils";
 
-export type TwinSessionItemData = {
-  id: string;
-  learner: string;
-  bot: string;
-  when: string;
-  question: string;
-  answer: string;
-  score: number;
-  issues?: number;
-};
-
-export const TWIN_SESSIONS_MOCK: TwinSessionItemData[] = [
-  {
-    id: "sess-1",
-    learner: "Aisha",
-    bot: "The off-plan sales process",
-    when: "Today, 2:14 pm",
-    question: "I need a structure, step by step.",
-    answer: "First call books the educational Zoom, Zoom qualifies and books the presentation meeting.",
-    score: 9,
-    issues: 0,
-  },
-  {
-    id: "sess-2",
-    learner: "James",
-    bot: "Handling client objections",
-    when: "Yesterday, 11:02 am",
-    question: "A buyer tells me prices will drop next year. What do I say?",
-    answer: "I’d ask what they’ll do with the money while they wait, and put a year of rent next to the payment plan.",
-    score: 8,
-    issues: 0,
-  },
-  {
-    id: "sess-3",
-    learner: "Nora",
-    bot: "Re-engaging clients who have gone quiet",
-    when: "Yesterday, 4:40 pm",
-    question: "My client went quiet after the viewing.",
-    answer: "Send one specific detail from the property they liked, not a generic follow-up.",
-    score: 6,
-    issues: 1,
-  },
-  {
-    id: "sess-4",
-    learner: "Leo",
-    bot: "The off-plan sales process",
-    when: "Monday, 9:18 am",
-    question: "How do I transition from the discovery call to the Zoom?",
-    answer: "Reference their specific budget and say you’ve prepared three options to review on screen.",
-    score: 9,
-    issues: 0,
-  },
-  {
-    id: "sess-5",
-    learner: "Priya",
-    bot: "Handling client objections",
-    when: "Sunday, 6:05 pm",
-    question: "A seller wants me to cut my fee to one percent.",
-    answer: "Name the exact scope: photography, viewings, negotiation. Ask which part they’d like to skip.",
-    score: 10,
-    issues: 0,
-  },
-];
+/** One learner conversation with a twin (twin tRPC `sessions.list` row). */
+export type TwinSessionItemData = TwinOutputs["sessions"]["list"][number];
 
 const AVATAR_TONES = [
   "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
@@ -84,10 +25,14 @@ export function TwinSessionItem({
   divider?: boolean;
   className?: string;
 }) {
+  // Learner feedback is 1-5.
+  const score = session.rating;
   const scoreTone =
-    session.score >= 9
+    score === null
+      ? ""
+      : score >= 5
       ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-      : session.score >= 7
+      : score >= 4
         ? "bg-sky-500/15 text-sky-600 dark:text-sky-400"
         : "bg-amber-500/15 text-amber-600 dark:text-amber-400";
 
@@ -112,21 +57,20 @@ export function TwinSessionItem({
         <span className="flex flex-col gap-0.5 min-w-0">
           <span className="text-sm font-semibold leading-5 text-(--foreground)">{session.learner}</span>
           <span className="text-[13px] leading-[18px] text-muted-foreground">
-            {session.bot} · {session.when}
+            {session.agentName} · <SessionTime iso={session.at} />
           </span>
-          <span className="text-[13px] leading-[18px] text-muted-foreground truncate">
-            “{session.question}” · {session.answer}
-          </span>
-          <span className="mt-1 flex flex-wrap items-center gap-2">
-            <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium", scoreTone)}>
-              Helpful {session.score}/10
+          {session.question ? (
+            <span className="text-[13px] leading-[18px] text-muted-foreground truncate">
+              “{session.question}”{session.answer ? ` · ${session.answer}` : ""}
             </span>
-            {(session.issues ?? 0) > 0 && (
-              <span className="inline-flex items-center rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
-                {session.issues} issue reported
+          ) : null}
+          {score !== null ? (
+            <span className="mt-1 flex flex-wrap items-center gap-2">
+              <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium", scoreTone)}>
+                Helpful {score}/5
               </span>
-            )}
-          </span>
+            </span>
+          ) : null}
         </span>
 
         {/* Arrow action */}
