@@ -3,6 +3,7 @@ import { unstable_cache, revalidateTag } from "next/cache";
 import { ChromaTenantService } from "@/lib/chroma-tenant";
 import { embedTexts } from "@/lib/knowledge";
 import type { PersonaVoiceMoment } from "@/lib/persona-voice";
+import type { ScenarioItem } from "@/lib/scenario-ingest";
 
 export const aiGatewayEmbeddings: EmbeddingFunction = {
   generate: embedTexts,
@@ -50,7 +51,25 @@ export type PersonaVoiceMetadata = {
   wordCount?: number;
 };
 
-export type MainCollectionMetadata = KnowledgeMetadata | PersonaVoiceMetadata;
+/** A tagged line from scenario-ingest's items.json (one trainer or learner turn, with its situation). */
+export type ScenarioItemMetadata = {
+  type: "scenario_item";
+  orgId: string;
+  agentSlug: string;
+  scenarioId: string;
+  itemId: string;
+  itemIndex: number;
+  role: "trainer" | "learner";
+  context: string;
+  step?: string;
+  move?: string;
+  source?: string;
+  kind?: string;
+  ref?: number;
+  words?: number;
+};
+
+export type MainCollectionMetadata = KnowledgeMetadata | PersonaVoiceMetadata | ScenarioItemMetadata;
 
 const collectionCache = new Map<string, Collection>();
 
@@ -396,6 +415,50 @@ export class MainCollectionService {
     }
 
     return records.length;
+  }
+
+  /**
+   * Replaces every item of one scenario (agent) with `items`. Idempotent: re-sending the same
+   * items.json leaves the same records. Embeds the situation with the line, so retrieval can
+   * match "what just happened" to "what the trainer said next".
+   */
+  static async replaceScenarioItems(orgId: string, agentSlug: string, scenarioId: string, items: ScenarioItem[]): Promise<number> {
+    const collection = await this.getCollection(orgId);
+    try {
+      await collection.delete({ where: { $and: [{ type: "scenario_item" }, { agentSlug }] } as Where });
+    } catch {
+      // Nothing stored yet
+    }
+    if (items.length === 0) return 0;
+
+    const embeddings = await embedTexts(items.map((item) => (item.context ? `${item.context}\n${item.text}` : item.text)));
+    for (let i = 0; i < items.length; i += 5000) {
+      const batch = items.slice(i, i + 5000);
+      await collection.upsert({
+        // By position: items.json may repeat an id (one turn picked for two moves); the original id is in metadata.
+        ids: batch.map((_, j) => `scenario_item_${agentSlug}#${i + j}`),
+        embeddings: embeddings.slice(i, i + 5000),
+        documents: batch.map((item) => item.text),
+        metadatas: batch.map((item, j): ScenarioItemMetadata => ({
+          type: "scenario_item",
+          orgId,
+          agentSlug,
+          scenarioId,
+          itemId: item.id,
+          itemIndex: i + j,
+          role: item.role,
+          context: item.context,
+          ...(item.metadata.step ? { step: item.metadata.step } : {}),
+          ...(item.metadata.move ? { move: item.metadata.move } : {}),
+          ...(item.metadata.source ? { source: item.metadata.source } : {}),
+          ...(item.metadata.kind ? { kind: item.metadata.kind } : {}),
+          // Chroma metadata can't hold null.
+          ...(typeof item.metadata.ref === "number" ? { ref: item.metadata.ref } : {}),
+          ...(typeof item.metadata.words === "number" ? { words: item.metadata.words } : {}),
+        })),
+      });
+    }
+    return items.length;
   }
 
   /**
