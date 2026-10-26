@@ -358,7 +358,7 @@ export function SpecResourceIndex({ type, specs }: { type: ResourceType; specs: 
           <>
             {specs.some((spec) => spec.twin) ? (
               <section className="mt-6 flex flex-col gap-3">
-                <SectionHeader title="Twin for all use cases" note="Answers anything from everything you've taught" />
+                <SectionHeader title="Twin for all use cases" note="Helps learners with real situations, the way you would" />
                 <div className="flex flex-col gap-4">
                   {specs.filter((spec) => spec.twin).map((spec) => (
                     <TwinCard key={spec.slug} twin={spec} />

@@ -77,7 +77,7 @@ export async function ensureTwin(orgId: string, personaSlug: string) {
   const data = {
     id: slug,
     name,
-    objective: `Answers any question from everything ${persona.name} has taught, in ${persona.name}'s voice.`,
+    objective: `Helps with real client situations: what to do and say next, the way ${persona.name} would.`,
     domain: domainSlug,
     source: TWIN_SOURCE,
     config: { context: { mode: "none", required: false } },

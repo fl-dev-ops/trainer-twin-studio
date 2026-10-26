@@ -56,6 +56,9 @@ describe("twin", () => {
     assert.ok(prompt.includes("- `objections`: Objections"));
     assert.ok(prompt.includes("Do not call session_plan"));
     assert.ok(prompt.includes("Do not call search_knowledge"));
+    assert.ok(prompt.includes("comes to you with a real situation"));
+    assert.ok(prompt.includes("the exact words to say to their client"));
+    assert.ok(prompt.includes("Do not offer practice or a role play"));
     assert.ok(!prompt.includes("Off-plan coaching desc"), "descriptions come from eve's skill announcement");
     assert.ok(!prompt.includes("INTERVIEW SETTINGS"));
   });

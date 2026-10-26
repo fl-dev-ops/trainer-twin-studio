@@ -29,7 +29,7 @@ export default defineDynamic({
         playbooks.map((playbook, i) => [
           names[i],
           defineSkill({
-            description: `${playbook.name}${playbook.description ? `: ${playbook.description}` : ""} Load before advising on this kind of practice.`.slice(0, 1024),
+            description: `${playbook.name}${playbook.description ? `: ${playbook.description}` : ""} Load before advising on a real situation of this kind.`.slice(0, 1024),
             markdown: playbook.skill,
           }),
         ]),
