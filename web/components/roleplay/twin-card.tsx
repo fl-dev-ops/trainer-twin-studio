@@ -23,24 +23,22 @@ export function TwinCard({ twin }: { twin: ScenarioCardData }) {
   const updated = useSyncExternalStore(noopSubscribe, () => (twin.updatedAt ? updatedAgo(twin.updatedAt) : ""), () => "");
 
   return (
-    <article className="group relative flex items-center gap-4 rounded-2xl border bg-card p-4 shadow-[0_1px_2px_rgba(30,28,25,0.04)] transition-shadow focus-within:ring-3 focus-within:ring-ring/50 hover:shadow-md">
-      {/* The persona's avatar, as everywhere else; inline size so it never depends on a freshly generated class. */}
-      <div className="shrink-0" style={{ width: 88, height: 88 }}>
-        <UserAvatar user={{ name: twin.personaName ?? twin.name }} className="size-full text-3xl" />
-      </div>
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+    <article className="group relative flex items-center gap-3 rounded-2xl border bg-card px-4 py-3.5 shadow-[0_1px_2px_rgba(30,28,25,0.04)] transition-shadow focus-within:ring-3 focus-within:ring-ring/50 hover:shadow-md">
+      {/* 40px, the size a persona gets in the scenario cards. */}
+      <UserAvatar user={{ name: twin.personaName ?? twin.name }} size="xl" />
+      <div className="flex min-w-0 flex-1 flex-col">
         <h3 className="text-[15px] leading-[22px] font-semibold">
           <Link href={href} className="outline-none after:absolute after:inset-0 after:rounded-2xl">
             {twin.name}
           </Link>
         </h3>
         <p className="min-h-5 text-[13px] leading-5 text-muted-foreground">{updated ? `Last updated ${updated}` : "\u00a0"}</p>
-        {twin.learners?.length ? (
-          <UserAvatarGroup users={twin.learners} max={4} size="sm" />
-        ) : (
-          <span className="text-xs text-muted-foreground">No learners assigned</span>
-        )}
       </div>
+      {twin.learners?.length ? (
+        <UserAvatarGroup users={twin.learners} max={4} size="sm" />
+      ) : (
+        <span className="text-xs text-muted-foreground">No learners assigned</span>
+      )}
       <ScenarioMenu scenario={twin} />
     </article>
   );
