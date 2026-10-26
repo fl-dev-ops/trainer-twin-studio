@@ -172,8 +172,17 @@ export async function listRunnableSpecs(type: "personas" | "agents", orgId: stri
     if (!isRecord(data)) return false;
     return type === "personas"
       ? isRecord(data.style) && isRecord(data.decision_preferences)
-      : "personaId" in row && Boolean(row.personaId) && typeof data.objective === "string" && typeof data.opening === "string" && isRecord(data.config);
+      : "personaId" in row && Boolean(row.personaId) && isRunnableAgentData(data);
   }).map(({ slug }) => slug);
+}
+
+/**
+ * A role play can start a session when it is either a copilot spec (objective, opening, config) or a
+ * scenario-ingest playbook (its SKILL.md opens the session, so it has no `opening`).
+ */
+export function isRunnableAgentData(data: Record<string, unknown>) {
+  if (data.source === "scenario-ingest") return typeof data.skill === "string" && typeof data.objective === "string";
+  return typeof data.objective === "string" && typeof data.opening === "string" && isRecord(data.config);
 }
 
 export async function listAgentPersonas(orgId: string, slugs: string[]) {
