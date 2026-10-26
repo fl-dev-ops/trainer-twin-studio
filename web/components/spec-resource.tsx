@@ -19,6 +19,7 @@ import { PageContainer } from "@/components/page-container";
 import { RoleplayIcon } from "@/components/icons";
 import { PageHeader, SectionHeader } from "@/components/page-header";
 import { ScenarioCard, type ScenarioCardData } from "@/components/roleplay/scenario-card";
+import { TwinCard } from "@/components/roleplay/twin-card";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { seedCopilot } from "@/lib/copilot-handoff";
@@ -355,11 +356,21 @@ export function SpecResourceIndex({ type, specs }: { type: ResourceType; specs: 
 
         {type === "agents" ? (
           <>
+            {specs.some((spec) => spec.twin) ? (
+              <section className="mt-6 flex flex-col gap-3">
+                <SectionHeader title="Twin for all use cases" note="Answers anything from everything you've taught" />
+                <div className="flex flex-col gap-4">
+                  {specs.filter((spec) => spec.twin).map((spec) => (
+                    <TwinCard key={spec.slug} twin={spec} />
+                  ))}
+                </div>
+              </section>
+            ) : null}
             <section className="mt-6 flex flex-col gap-3">
               <SectionHeader title="All scenarios" note="Role plays your learners practise, twin-based or not" />
-              {specs.length ? (
+              {specs.some((spec) => !spec.twin) ? (
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                  {specs.map((spec) => (
+                  {specs.filter((spec) => !spec.twin).map((spec) => (
                     <ScenarioCard key={spec.slug} scenario={spec} />
                   ))}
                 </div>

@@ -74,6 +74,7 @@ export async function listSpecSummaries(type: "personas" | "agents", orgId: stri
         visibility: true,
         data: true,
         order: true,
+        updatedAt: true,
         persona: { select: { name: true, data: true } },
       },
     }),
@@ -108,7 +109,7 @@ export async function listSpecSummaries(type: "personas" | "agents", orgId: stri
   const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : undefined);
   return [
     ...agents.map((agent) => {
-      const data = agent.data as { objective?: unknown } | null;
+      const data = agent.data as { objective?: unknown; source?: unknown } | null;
       return {
         slug: agent.slug,
         name: agentDisplayName(agent.slug, agent.name),
@@ -118,6 +119,8 @@ export async function listSpecSummaries(type: "personas" | "agents", orgId: stri
         quote: personaQuote(agent.persona.data, agent.slug),
         personaName: agent.persona.name,
         learners: learnersByAgent.get(agent.id) ?? [],
+        twin: data?.source === "twin",
+        updatedAt: agent.updatedAt.toISOString(),
         status: "published" as const,
         draftRevision: draftsBySlug.get(agent.slug)?.status === "draft"
           ? draftsBySlug.get(agent.slug)?.revision

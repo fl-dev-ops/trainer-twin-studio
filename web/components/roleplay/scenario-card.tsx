@@ -23,6 +23,9 @@ export type ScenarioCardData = {
   learners?: { email: string; name: string; image: string | null }[];
   status?: "draft" | "published";
   draftRevision?: number;
+  /** A twin ("Ask Olga"): an open conversation over all of the persona's playbooks. */
+  twin?: boolean;
+  updatedAt?: string;
 };
 
 /** Scenario card, matching the V2 prototype's role-play card. */
@@ -72,6 +75,16 @@ export function ScenarioCard({ scenario }: { scenario: ScenarioCardData }) {
         ) : (
           <span className="text-xs text-muted-foreground">No learners assigned</span>
         )}
+        <ScenarioMenu scenario={scenario} />
+      </div>
+    </article>
+  );
+}
+
+/** The card's ⋮ menu; it sits above the card's stretched link. */
+export function ScenarioMenu({ scenario }: { scenario: ScenarioCardData }) {
+  const href = `/agents/${encodeURIComponent(scenario.slug)}`;
+  return (
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
@@ -90,10 +103,13 @@ export function ScenarioCard({ scenario }: { scenario: ScenarioCardData }) {
               <SquareArrowOutUpRight />
               Open
             </DropdownMenuItem>
-            <DropdownMenuItem render={<Link href={`${href}/edit`} />}>
-              <Pencil />
-              Configure
-            </DropdownMenuItem>
+            {/* A twin has no spec of its own: its playbooks are the persona's scenarios. */}
+            {!scenario.twin ? (
+              <DropdownMenuItem render={<Link href={`${href}/edit`} />}>
+                <Pencil />
+                Configure
+              </DropdownMenuItem>
+            ) : null}
             {scenario.status !== "draft" ? (
               <DropdownMenuItem render={<Link href={`${href}/calibrate`} />}>
                 <SlidersHorizontal />
@@ -108,7 +124,5 @@ export function ScenarioCard({ scenario }: { scenario: ScenarioCardData }) {
             ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
-    </article>
   );
 }
