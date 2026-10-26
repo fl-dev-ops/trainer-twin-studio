@@ -17,7 +17,7 @@ export async function GET(request: Request) {
 
   const [members, total, invitations] = await Promise.all([
     db.member.findMany({
-      where: { organizationId: api.org.id, role: LEARNER_ROLE },
+      where: { organizationId: api.org.id, role: LEARNER_ROLE, disabledAt: null },
       orderBy: { createdAt: "desc" },
       skip: page.offset,
       take: page.limit,
@@ -27,7 +27,7 @@ export async function GET(request: Request) {
         user: { select: { id: true, name: true, email: true, emailVerified: true } },
       },
     }),
-    db.member.count({ where: { organizationId: api.org.id, role: LEARNER_ROLE } }),
+    db.member.count({ where: { organizationId: api.org.id, role: LEARNER_ROLE, disabledAt: null } }),
     db.invitation.findMany({
       where: { organizationId: api.org.id, status: "pending" },
       orderBy: { createdAt: "desc" },
@@ -52,8 +52,11 @@ export async function POST(request: Request) {
   const email = parsed.data.email.toLowerCase();
   const existingMember = await db.member.findFirst({
     where: { organizationId: api.org.id, user: { email } },
-    select: { id: true },
+    select: { id: true, disabledAt: true },
   });
+  if (existingMember?.disabledAt) {
+    return Response.json({ error: "User was removed (disabled); re-enable them in Settings → Team and users" }, { status: 409 });
+  }
   if (existingMember) return Response.json({ error: "User is already an organization member" }, { status: 409 });
   if (await belongsToOtherOrg(email, api.org.id)) return Response.json({ error: ORG_LOCK_MESSAGE }, { status: 409 });
 

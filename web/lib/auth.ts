@@ -9,6 +9,7 @@ import { db } from "@/lib/db";
 import { BASE_DOMAIN, safeFamilyRedirect } from "@/lib/base-domain";
 import { sendInvitationEmail, sendPasswordResetEmail } from "@/lib/email";
 import { belongsToOtherOrg, ORG_LOCK_MESSAGE } from "@/lib/org-lock";
+import { ADMIN_ROLE, assertNoSecondAdmin, DISABLED_MESSAGE, isDisabledUser, NO_REMOVAL_MESSAGE, ONE_ADMIN_MESSAGE } from "@/lib/members";
 
 // Single-org lock: block invites/memberships for people already bound to another org.
 async function assertSingleOrg(email: string, organizationId: string) {
@@ -32,6 +33,16 @@ export const auth = betterAuth({
   socialProviders: process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
     ? { google: { clientId: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET } }
     : {},
+  databaseHooks: {
+    session: {
+      create: {
+        // Disabled members cannot sign in (any method); disabling also deletes their open sessions.
+        before: async (session) => {
+          if (await isDisabledUser(session.userId)) throw new APIError("FORBIDDEN", { message: DISABLED_MESSAGE });
+        },
+      },
+    },
+  },
   account: {
     accountLinking: {
       trustedProviders: ["google"],
@@ -48,13 +59,22 @@ export const auth = betterAuth({
       organizationLimit: 1,
       organizationHooks: {
         beforeCreateInvitation: async ({ invitation, organization }) => {
+          await assertNoSecondAdmin(invitation.role, organization.id);
           await assertSingleOrg(invitation.email, organization.id);
         },
         beforeAcceptInvitation: async ({ user, organization }) => {
           await assertSingleOrg(user.email, organization.id);
         },
-        beforeAddMember: async ({ user, organization }) => {
+        beforeAddMember: async ({ member, user, organization }) => {
+          await assertNoSecondAdmin(member.role, organization.id);
           await assertSingleOrg(user.email, organization.id);
+        },
+        beforeUpdateMemberRole: async ({ member, newRole, organization }) => {
+          if (member.role === ADMIN_ROLE) throw new APIError("FORBIDDEN", { message: ONE_ADMIN_MESSAGE });
+          await assertNoSecondAdmin(newRole, organization.id);
+        },
+        beforeRemoveMember: async () => {
+          throw new APIError("FORBIDDEN", { message: NO_REMOVAL_MESSAGE });
         },
       },
       sendInvitationEmail: async (data) => {

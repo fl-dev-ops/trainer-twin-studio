@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { setMemberDisabled } from "@/lib/members";
 import { API_LEARNER_ROLE, isApiError, requireExternalApi } from "@/lib/external-api";
 import { LEARNER_ROLE } from "@/lib/org";
 
@@ -11,7 +12,7 @@ export async function GET(request: Request, { params }: Params) {
   if (isApiError(api)) return api;
   const { id } = await params;
   const member = await db.member.findFirst({
-    where: { organizationId: api.org.id, userId: id, role: LEARNER_ROLE },
+    where: { organizationId: api.org.id, userId: id, role: LEARNER_ROLE, disabledAt: null },
     select: {
       id: true,
       createdAt: true,
@@ -29,7 +30,7 @@ export async function PATCH(request: Request, { params }: Params) {
   if (!parsed.success) return Response.json({ error: "A name of up to 100 characters is required" }, { status: 400 });
   const { id } = await params;
   const member = await db.member.findFirst({
-    where: { organizationId: api.org.id, userId: id, role: LEARNER_ROLE },
+    where: { organizationId: api.org.id, userId: id, role: LEARNER_ROLE, disabledAt: null },
     select: { id: true },
   });
   if (!member) return Response.json({ error: "User not found" }, { status: 404 });
@@ -45,9 +46,12 @@ export async function DELETE(request: Request, { params }: Params) {
   const api = await requireExternalApi(request, "users", "write");
   if (isApiError(api)) return api;
   const { id } = await params;
-  const removed = await db.member.deleteMany({
-    where: { organizationId: api.org.id, userId: id, role: LEARNER_ROLE },
+  // Never deleted: "remove" disables the learner (signed out, access revoked, history kept). Same 204 / 404 contract.
+  const member = await db.member.findFirst({
+    where: { organizationId: api.org.id, userId: id, role: LEARNER_ROLE, disabledAt: null },
+    select: { id: true },
   });
-  if (!removed.count) return Response.json({ error: "User not found" }, { status: 404 });
+  if (!member) return Response.json({ error: "User not found" }, { status: 404 });
+  await setMemberDisabled({ orgId: api.org.id, memberId: member.id, actorUserId: api.actorUserId ?? "", disabled: true });
   return new Response(null, { status: 204 });
 }

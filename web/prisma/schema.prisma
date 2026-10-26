@@ -509,6 +509,8 @@ model Member {
   // admin | team | user (CHECK member_role_check). admin and team run the studio; user only practises.
   role           String               @default("user")
   createdAt      DateTime
+  // Set when a studio member disables this person (never deleted). Disabled people cannot sign in.
+  disabledAt     DateTime?
   assignments    RolePlayAssignment[]
 
   @@index([organizationId])

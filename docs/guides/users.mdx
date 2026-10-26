@@ -64,4 +64,4 @@ curl "https://dash.trainertwin.com/api/v1/users/user_123" \
   --header "x-api-key: $TRAINERTWIN_API_KEY"
 ```
 
-A successful removal returns `204 No Content`. This removes organization membership and assignments, but does not delete the learner's TrainerTwin account or historical sessions.
+A successful removal returns `204 No Content`. Nothing is deleted: the learner is disabled — signed out and unable to sign in, with pending assignments cancelled and open sessions ended. Their account and historical sessions are kept. A removed learner no longer appears in list or detail responses; an organization trainer can re-enable them from Settings → Team and users.

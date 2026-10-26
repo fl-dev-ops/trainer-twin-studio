@@ -228,7 +228,7 @@ paths:
       operationId: removeUser
       tags: [Users]
       summary: Remove a learner
-      description: Removes the learner's organization membership and assignments without deleting their account or historical sessions.
+      description: Disables the learner. They are signed out and can no longer sign in, their pending assignments are cancelled and open sessions end; their account and historical sessions are kept. A removed learner is no longer listed or returned.
       responses:
         '204':
           description: Learner removed.
