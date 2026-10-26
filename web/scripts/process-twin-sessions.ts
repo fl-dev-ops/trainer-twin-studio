@@ -1,12 +1,12 @@
 /**
- * One-off: give existing completed twin learner sessions a twin report (they were processed with the
- * roleplay report before twin processing existed). Calibrations are skipped. Sequential on purpose.
+ * One-off: give completed twin learner sessions a twin report directly (no workflow; for sessions processed
+ * before twin reports existed, or whose report run failed). Calibrations are skipped. Sequential on purpose.
  *
  *   bun scripts/process-twin-sessions.ts           # only sessions without a twin report
  *   bun scripts/process-twin-sessions.ts --all     # regenerate every twin report
  */
 import { db } from "@/lib/db";
-import { generateTwinReport, isTwinReport } from "@/lib/twin/session-report";
+import { buildTwinReport, isTwinReport, loadTwinReportInput, markTwinReportFailed, saveTwinReport } from "@/lib/twin/session-report";
 
 const all = process.argv.includes("--all");
 const sessions = await db.interviewSession.findMany({
@@ -20,9 +20,15 @@ console.log(`${todo.length} of ${sessions.length} completed twin sessions to pro
 let done = 0;
 for (const { id } of todo) {
   await db.interviewSession.update({ where: { id }, data: { reportStatus: "generating" } });
-  const report = await generateTwinReport(id);
-  if (report) done += 1;
-  console.log(report ? `ok      ${id}  topics=${JSON.stringify(report.topics)}  questions=${report.questions.length}` : `failed  ${id}`);
+  try {
+    const report = await buildTwinReport(id, await loadTwinReportInput(id));
+    await saveTwinReport(id, report);
+    done += 1;
+    console.log(`ok      ${id}  topics=${JSON.stringify(report.topics)}  questions=${report.questions.length}`);
+  } catch (error) {
+    await markTwinReportFailed(id);
+    console.log(`failed  ${id}  ${error instanceof Error ? error.message : error}`);
+  }
 }
 console.log(`${done}/${todo.length} processed`);
 await db.$disconnect();

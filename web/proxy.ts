@@ -96,5 +96,6 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // Workflow SDK's internal routes must reach it untouched (no host rewrite, no body consumption).
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.well-known/workflow/).*)"],
 };

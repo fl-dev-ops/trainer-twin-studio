@@ -1,5 +1,24 @@
 import { expect, test } from "bun:test";
-import { durationSeconds, firstExchange, lastSevenDays, likeRateByWeek, titleFrom, transcriptTurns } from "@/lib/twin/stats";
+import { attachRatings, durationSeconds, firstExchange, lastSevenDays, likeRateByWeek, titleFrom, transcriptTurns } from "@/lib/twin/stats";
+
+test("calibration ratings land on the turn they rated, even when the final transcript is split differently", () => {
+  const turns = transcriptTurns([
+    { role: "user", text: "Prices will drop next year?" },
+    { role: "trainer", text: "I'd ask what they'll do with the money while they wait. Then compare rent." },
+    { role: "user", text: "And the fee?" },
+    { role: "trainer", text: "I wouldn't cut it." },
+  ]);
+  const result = attachRatings(turns, [
+    { turnIndex: 3, question: "And the fee?", reply: "I wouldn\u2019t cut it!", rating: "off" }, // punctuation differs
+    { turnIndex: 1, question: null, reply: "I'd ask what they'll do with the money while they wait.", rating: "like" }, // a prefix of the turn
+    { turnIndex: 9, question: "Lost one?", reply: "A reply that is nowhere in the transcript", rating: "like" },
+  ]);
+  expect(result.map((turn) => turn.rating ?? null)).toEqual([null, "like", null, "off", null, "like"]);
+  expect(result.slice(4)).toEqual([
+    { who: "learner", text: "Lost one?" },
+    { who: "twin", text: "A reply that is nowhere in the transcript", rating: "like" },
+  ]);
+});
 
 test("transcripts become learner / twin turns; empty and malformed lines are dropped", () => {
   const turns = transcriptTurns([

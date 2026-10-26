@@ -323,6 +323,8 @@ model InterviewSession {
   s3AudioKey       String?
   report           Json?
   reportStatus     String?   @default("none") // none | generating | completed | failed
+  // Twin sessions: the Vercel Workflow run that generates the report (dedupe and status checks).
+  reportWorkflowRunId String?
   feedbackRating   Int?
   feedbackNote     String?
   attempt          Int       @default(1)

@@ -9,6 +9,7 @@ import { assertUserInOrg } from "@/lib/org-lock";
 import { isStudioRole, LEARNER_ROLE } from "@/lib/org";
 import { TwinAccessError, twinAccessByAgent, twinAccessByCode } from "@/lib/twin-access";
 import { pinTwinSkills, TWIN_SOURCE } from "@/lib/twins";
+import { twinSettingsFromAgentData } from "@/lib/context-upload";
 
 const shareCode = () => randomBytes(18).toString("base64url");
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
@@ -47,6 +48,8 @@ export async function finalizeInterviewSession(input: {
   transcript?: Prisma.InputJsonValue;
   evidence?: Prisma.InputJsonValue;
   s3AudioKey?: string;
+  /** The voice agent's full transcript replaces the browser's provisional one (twin sessions). */
+  replaceTranscript?: boolean;
 }) {
   return db.$transaction(async (tx) => {
     const existing = await tx.interviewSession.findUnique({
@@ -68,7 +71,9 @@ export async function finalizeInterviewSession(input: {
       becameCompleted = finalStatus === "completed" && transitioned.count === 1;
     }
 
-    const storeTranscript = shouldStoreSessionTranscript(existing.transcript, input.transcript);
+    const storeTranscript = input.replaceTranscript
+      ? Array.isArray(input.transcript) && input.transcript.length > 0
+      : shouldStoreSessionTranscript(existing.transcript, input.transcript);
     const mergedEvidence = mergeSessionEvidence(existing.evidence, input.evidence);
 
     const updated = await tx.interviewSession.update({
@@ -302,6 +307,10 @@ export async function activateSession(input: {
   const snapshot = await sessionSnapshot(input.orgId, agentId, input.contextId, requestedDocs);
   for (const document of snapshot.documents) {
     if (document.ownerUserId && document.ownerUserId !== input.userId) throw new Error("Context not found");
+  }
+  // A twin takes documents at the start only when its configure page turns pre-session uploads on.
+  if (snapshot.agent.kind === "TWIN" && snapshot.docIds.length && !twinSettingsFromAgentData(snapshot.agent.data).preUpload) {
+    throw new TwinAccessError("This twin does not take documents", 400);
   }
   // An invited learner (role-play invite, twin assignment or twin link) joins the org as a `user` on first start.
   // The single-org lock above already refused people bound to another org.

@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { scheduleSessionReport } from "@/lib/session-report-jobs";
-import { scheduleTwinReport } from "@/lib/twin/session-report";
+import { scheduleTwinReport } from "@/lib/twin/schedule-report";
 
 /**
  * Runs once a session is completed: picks the report for its kind.

@@ -69,17 +69,22 @@ export function TwinEditPage({
   // Before conversation start
   const [preScreenshare, setPreScreenshare] = useState(twin.settings.preScreenshare);
   const [preUpload, setPreUpload] = useState(twin.settings.preUpload);
+  const [uploadTitle, setUploadTitle] = useState(twin.settings.uploadTitle);
+  const [uploadInstruction, setUploadInstruction] = useState(twin.settings.uploadInstruction);
 
   // During conversation
   const [duringUpload, setDuringUpload] = useState(twin.settings.duringUpload);
 
-  // Assign learners (selection is by email)
+  // Assign learners (selection is by email). Assigning only: existing assignments are not changed here.
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [minutes, setMinutes] = useState(String(defaultMinutes));
   const [query, setQuery] = useState("");
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const assignedCount = learners.filter((l) => l.assigned).length;
+  const minutesValue = Number(minutes);
+  const minutesValid = Number.isInteger(minutesValue) && minutesValue >= 1 && minutesValue <= 10_000;
 
   const filtered = learners.filter(
     (l) =>
@@ -95,26 +100,31 @@ export function TwinEditPage({
 
   async function handleSave() {
     setSaving(true);
+    let settingsSaved = false;
     try {
       await twinClient.agents.update.mutate({
         slug: id,
         name,
         description,
-        settings: { preScreenshare, preUpload, duringUpload },
+        settings: { preScreenshare, preUpload, duringUpload, uploadTitle, uploadInstruction },
       });
+      settingsSaved = true;
       if (selectedIds.length) {
-        const result = await twinClient.assignments.assign.mutate({ slug: id, emails: selectedIds, minutes: defaultMinutes });
+        // Already-active people are skipped server-side, so retrying after a failure sends no second invite.
+        const result = await twinClient.assignments.assign.mutate({ slug: id, emails: selectedIds, minutes: minutesValue });
         if (result.blocked) toast.warning(`${result.blocked} learner(s) belong to another organization and were not assigned.`);
         if (result.emailFailures) toast.warning(`${result.emailFailures} invite email(s) could not be sent.`);
+        setSelectedIds([]);
       }
-      setSelectedIds([]);
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
-      router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not save");
+      const message = error instanceof Error ? error.message : "Could not save";
+      // The selection is kept so assigning can be retried.
+      toast.error(settingsSaved ? `Settings saved, but the learners were not assigned: ${message}` : message);
     } finally {
       setSaving(false);
+      if (settingsSaved) router.refresh();
     }
   }
 
@@ -132,18 +142,18 @@ export function TwinEditPage({
           </Link>
         </header>
 
-        {/* Combined Configure & Assign Card */}
-        <article className="mt-6 flex flex-col gap-8 rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
-          <div>
-            <h1 className="m-0 text-[20px] font-semibold leading-7 tracking-[-0.015em]">
-              Configure twin agent
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Set conversation permissions and manage learner access for this twin.
-            </p>
-          </div>
+        <div className="mt-6">
+          <h1 className="m-0 text-[20px] font-semibold leading-7 tracking-[-0.015em]">
+            Configure twin agent
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Set conversation permissions and manage learner access for this twin.
+          </p>
+        </div>
 
-          {/* Section: Basic info */}
+        <div className="mt-6 flex flex-col gap-4">
+        {/* Card 1: name and description */}
+        <article className="flex flex-col gap-6 rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
               <label htmlFor="bot-name" className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
@@ -172,8 +182,12 @@ export function TwinEditPage({
             </div>
           </div>
 
+        </article>
+
+        {/* Card 2: before and during conversation settings */}
+        <article className="flex flex-col gap-6 rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
           {/* Section: Before conversation start */}
-          <div className="flex flex-col gap-4 border-t border-(--border) pt-6">
+          <div className="flex flex-col gap-4">
             <div>
               <h2 className="m-0 text-sm font-semibold uppercase tracking-wide text-(--foreground)">
                 Before conversation start
@@ -188,7 +202,7 @@ export function TwinEditPage({
                 <div className="flex flex-col gap-0.5">
                   <span className="text-sm font-medium">Enable screenshare</span>
                   <span className="text-xs text-muted-foreground">
-                    Allow learners to share their screen before starting the conversation.
+                    Learners share their entire screen when the conversation starts, so the twin can follow along.
                   </span>
                 </div>
                 <SwitchToggle
@@ -211,6 +225,41 @@ export function TwinEditPage({
                   label="Enable upload before conversation start"
                 />
               </div>
+
+              {preUpload ? (
+                <div className="flex flex-col gap-3 py-3.5">
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="upload-title" className="text-xs font-medium text-muted-foreground">
+                      Upload title
+                    </label>
+                    <input
+                      id="upload-title"
+                      type="text"
+                      maxLength={80}
+                      value={uploadTitle}
+                      placeholder="e.g. Listing brochure, Client brief"
+                      onChange={(e) => setUploadTitle(e.target.value)}
+                      className="h-9 rounded-lg border border-(--border) bg-card px-3 text-sm text-(--foreground) outline-none focus:border-(--brand) focus:ring-1 focus:ring-(--brand)"
+                    />
+                    <span className="text-xs text-muted-foreground">Shown on the upload card before the conversation.</span>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="upload-instruction" className="text-xs font-medium text-muted-foreground">
+                      What to upload
+                    </label>
+                    <input
+                      id="upload-instruction"
+                      type="text"
+                      maxLength={300}
+                      value={uploadInstruction}
+                      placeholder="e.g. Upload the property brochure you want to discuss."
+                      onChange={(e) => setUploadInstruction(e.target.value)}
+                      className="h-9 rounded-lg border border-(--border) bg-card px-3 text-sm text-(--foreground) outline-none focus:border-(--brand) focus:ring-1 focus:ring-(--brand)"
+                    />
+                    <span className="text-xs text-muted-foreground">Tells the learner which file to add. Uploading stays optional.</span>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -242,8 +291,11 @@ export function TwinEditPage({
             </div>
           </div>
 
-          {/* Section: Assign learners */}
-          <div id="assign" className="flex flex-col gap-4 border-t border-(--border) pt-6">
+        </article>
+
+        {/* Card 3: assign learners */}
+        <article id="assign" className="flex flex-col gap-6 rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
+          <div className="flex flex-col gap-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <div>
                 <h2 className="m-0 text-sm font-semibold uppercase tracking-wide text-(--foreground)">
@@ -259,12 +311,30 @@ export function TwinEditPage({
               </span>
             </div>
 
+            {/* Minutes for the people being assigned now */}
+            <div className="flex items-center justify-between gap-4">
+              <label htmlFor="assign-minutes" className="text-sm font-medium">
+                Minutes per selected learner
+              </label>
+              <input
+                id="assign-minutes"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={10_000}
+                value={minutes}
+                onChange={(e) => setMinutes(e.target.value)}
+                aria-invalid={!minutesValid}
+                className="h-9 w-28 rounded-lg border border-(--border) bg-transparent px-3 text-sm tabular-nums text-(--foreground) outline-none focus:border-(--brand) focus:ring-1 focus:ring-(--brand) aria-invalid:border-destructive"
+              />
+            </div>
+
             {/* Search box */}
             <div className="relative">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <input
                 type="search"
-                placeholder="Search by name, email or number"
+                placeholder="Search by name or email"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 className="h-10 w-full rounded-full border border-(--border) bg-(--sidebar) pl-10 pr-4 text-sm text-(--foreground) outline-none focus:border-(--brand) focus:ring-1 focus:ring-(--brand)"
@@ -319,7 +389,7 @@ export function TwinEditPage({
                           </span>
                         ) : isSelected ? (
                           <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                            Selected ({defaultMinutes} min)
+                            Selected ({minutesValid ? minutesValue : "?"} min)
                           </span>
                         ) : null}
                       </div>
@@ -330,8 +400,10 @@ export function TwinEditPage({
             </div>
           </div>
 
+        </article>
+
           {/* Action buttons */}
-          <div className="mt-2 flex items-center justify-end gap-3 border-t border-(--border) pt-5">
+          <div className="flex items-center justify-end gap-3 pt-2">
             <Link
               href={`/twin/${id}`}
               className="inline-flex h-9 items-center rounded-full px-4 text-sm font-medium text-muted-foreground hover:text-(--foreground)"
@@ -341,14 +413,14 @@ export function TwinEditPage({
             <button
               type="button"
               onClick={() => void handleSave()}
-              disabled={saving || !name.trim()}
+              disabled={saving || !name.trim() || (selectedIds.length > 0 && !minutesValid)}
               className="inline-flex h-9 items-center gap-2 rounded-full bg-(--brand) px-5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
             >
               {saved && <Check className="size-4" />}
               <span>{saved ? "Saved" : "Save changes"}</span>
             </button>
           </div>
-        </article>
+        </div>
       </div>
     </div>
   );

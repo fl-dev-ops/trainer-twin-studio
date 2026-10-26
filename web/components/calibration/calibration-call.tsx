@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, LoaderCircle, Volume2 } from "lucide-react";
 import { RoomAudioRenderer, RoomContext, useStartAudio, useVoiceAssistant } from "@livekit/components-react";
@@ -33,6 +34,21 @@ const CONTROL =
   "grid size-[54px] place-items-center rounded-full outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 [&_svg]:size-[22px]";
 const ignoreSurface = () => undefined;
 
+/** A failure retrying won't fix (4xx). */
+class PermanentError extends Error {}
+
+/** Retries transient failures (network, 5xx) with a short backoff; permanent ones throw at once. */
+async function withRetries<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (attempt >= attempts || error instanceof PermanentError) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 400 * 2 ** (attempt - 1)));
+    }
+  }
+}
+
 /**
  * Calibration call (V2 prototype "Talk to my twin"): a real LiveKit session with the agent's persona, through
  * the same session API as /talk. With `twin`, the call is saved as a twin calibration and every rating is stored
@@ -64,10 +80,13 @@ function Call({ room, slug, scenarioName, twinName, twin = false }: CallProps & 
   const [panelOpen, setPanelOpen] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
 
+  const router = useRouter();
   const turnsRef = useRef<CalibrationTurn[]>([]);
-  /** Twin calls: the stored calibration this call's ratings go to. */
-  const calibrationRef = useRef<Promise<string | null> | null>(null);
+  /** Twin calls: the stored calibration this call's ratings go to. Rating waits until it exists. */
   const [calibrationId, setCalibrationId] = useState<string | null>(null);
+  const [calibrationFailed, setCalibrationFailed] = useState(false);
+  /** Rating saves still in flight; ending the call or leaving waits for them. */
+  const pendingRatings = useRef(new Set<Promise<unknown>>());
   const backHref = twin ? `/twin/${encodeURIComponent(slug)}/calibration` : "/agents";
   const connectionRef = useRef<Connection | null>(null);
   const startedRef = useRef(false);
@@ -86,27 +105,45 @@ function Call({ room, slug, scenarioName, twinName, twin = false }: CallProps & 
     });
   }, []);
 
-  /** Saves the transcript and closes the session on the server, exactly as /talk does. */
-  const closeSession = useCallback(async (status: "completed" | "abandoned") => {
+  /**
+   * Saves the transcript and closes the session on the server, as /talk does. Retried on network and 5xx
+   * failures. keepalive only when the page is going away (it caps the body at 64 KB); the agent's webhook
+   * also delivers the full transcript, so this is the fast path, not the only one.
+   */
+  const closeSession = useCallback(async (status: "completed" | "abandoned", unloading = false) => {
     const active = connectionRef.current;
-    if (!active) return;
-    await fetch("/api/sessions/finalize", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId: active.sessionId,
-        status,
-        transcript: turnsRef.current.map((t) => ({ role: t.speaker === "you" ? "user" : "trainer", text: t.text })),
-      }),
-      keepalive: true,
-    }).catch((saveError) => console.error("Could not save calibration transcript:", saveError));
+    if (!active) return true;
+    const body = JSON.stringify({
+      sessionId: active.sessionId,
+      status,
+      transcript: turnsRef.current.map((t) => ({ role: t.speaker === "you" ? "user" : "trainer", text: t.text })),
+    });
+    try {
+      await withRetries(async () => {
+        const response = await fetch("/api/sessions/finalize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+          keepalive: unloading,
+        });
+        if (response.status >= 500) throw new Error(`finalize returned ${response.status}`);
+        if (!response.ok) throw new PermanentError(`finalize returned ${response.status}`);
+      }, unloading ? 1 : 3);
+      return true;
+    } catch (saveError) {
+      console.error("Could not save calibration transcript:", saveError);
+      return false;
+    }
   }, []);
 
   const end = useCallback(
-    async (status: "completed" | "abandoned") => {
+    async (status: "completed" | "abandoned", unloading = false) => {
       if (endingRef.current) return;
       endingRef.current = true;
-      await closeSession(status);
+      // Ratings first: the summary and the review must show every rating that was made.
+      await Promise.allSettled([...pendingRatings.current]);
+      const saved = await closeSession(status, unloading);
+      if (!saved && !unloading) toast.error("The call's transcript could not be saved.");
       await room.disconnect().catch(() => {});
       setPanelOpen(false);
       setConfirmEnd(false);
@@ -120,6 +157,11 @@ function Call({ room, slug, scenarioName, twinName, twin = false }: CallProps & 
     joinedRef.current = false;
     connectionRef.current = null;
     turnsRef.current = [];
+    // A new call keeps nothing from the previous one.
+    nextId.current = 0;
+    pendingRatings.current.clear();
+    setCalibrationId(null);
+    setCalibrationFailed(false);
     setConnection(null);
     setTurns([]);
     setLiveText("");
@@ -143,14 +185,14 @@ function Call({ room, slug, scenarioName, twinName, twin = false }: CallProps & 
       connectionRef.current = active;
       setConnection(active);
       if (twin) {
-        // Saved as a calibration before anything can be rated; a failure only loses the ratings, not the call.
-        calibrationRef.current = twinClient.calibrations.start
-          .mutate({ slug, sessionId: active.sessionId })
-          .then(({ calibrationId: id }) => (setCalibrationId(id), id))
+        // Saved as a calibration before anything can be rated (rating stays off until then); a failure only
+        // loses the ratings, not the call. Creating it is idempotent, so retrying is safe.
+        void withRetries(() => twinClient.calibrations.start.mutate({ slug, sessionId: active.sessionId }))
+          .then(({ calibrationId: id }) => setCalibrationId(id))
           .catch((saveError) => {
             console.error("Could not save the calibration:", saveError);
+            setCalibrationFailed(true);
             toast.error("Ratings in this call can't be saved.");
-            return null;
           });
       }
       await room.connect(url, launch.participantToken).catch((connectError) => {
@@ -185,10 +227,10 @@ function Call({ room, slug, scenarioName, twinName, twin = false }: CallProps & 
     void start();
   }, [start]);
 
-  // Leaving the page mid-call still closes the session.
+  // Leaving the page mid-call still closes the session (pending rating saves can't be awaited here; Back does).
   useEffect(
     () => () => {
-      if (!endingRef.current && connectionRef.current) void end("abandoned");
+      if (!endingRef.current && connectionRef.current) void end("abandoned", true);
     },
     [end],
   );
@@ -241,24 +283,33 @@ function Call({ room, slug, scenarioName, twinName, twin = false }: CallProps & 
     };
   }, [room, end, updateTurns]);
 
+  /** Twin calls rate only once their calibration exists; role plays rate on the page only. */
+  const canRate = !twin || calibrationId !== null;
   const rate = (id: string, rating: Rating) => {
+    if (!canRate) return;
     updateTurns((prev) => prev.map((t) => (t.id === id ? { ...t, rating } : t)));
-    const calibration = calibrationRef.current;
-    if (!twin || !calibration) return;
+    if (!twin || !calibrationId) return;
     const turns = turnsRef.current;
     const turnIndex = turns.findIndex((t) => t.id === id);
     if (turnIndex < 0) return;
     const question = turns.slice(0, turnIndex).reverse().find((t) => t.speaker === "you")?.text ?? null;
-    void calibration.then((calibrationId) => {
-      if (!calibrationId) return;
-      return twinClient.calibrations.rate
-        .mutate({ calibrationId, turnIndex, question, reply: turns[turnIndex].text, rating })
-        .catch((saveError) => {
-          console.error("Could not save the rating:", saveError);
-          toast.error("That rating was not saved.");
-        });
-    });
+    const reply = turns[turnIndex].text;
+    const write: Promise<unknown> = withRetries(() => twinClient.calibrations.rate.mutate({ calibrationId, turnIndex, question, reply, rating }))
+      .catch((saveError) => {
+        console.error("Could not save the rating:", saveError);
+        toast.error("That rating was not saved.");
+      })
+      .finally(() => pendingRatings.current.delete(write));
+    pendingRatings.current.add(write);
   };
+
+  /** Back during a call: end it properly (ratings flushed, transcript saved) before leaving. */
+  async function leave(event: React.MouseEvent) {
+    if (phase !== "live" && phase !== "connecting") return;
+    event.preventDefault();
+    await end("abandoned");
+    router.push(backHref);
+  }
 
   async function toggleMute() {
     const next = !muted;
@@ -281,7 +332,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false }: CallProps & 
       active={phase === "live"}
     >
       <div className="relative flex min-h-0 flex-1 flex-col">
-        <Link href={backHref} className="flex w-fit items-center gap-2 px-8 pt-6 text-sm text-foreground/90 hover:text-foreground">
+        <Link href={backHref} onClick={(event) => void leave(event)} className="flex w-fit items-center gap-2 px-8 pt-6 text-sm text-foreground/90 hover:text-foreground">
           <ArrowLeft className="size-4" aria-hidden />
           Calibrate · {scenarioName}
         </Link>
@@ -354,15 +405,20 @@ function Call({ room, slug, scenarioName, twinName, twin = false }: CallProps & 
                         {turn.streaming ? null : turn.rating ? (
                           <RatingLabel rating={turn.rating} className="text-[13px]" />
                         ) : (
-                          <div className="flex gap-2">
-                            <button type="button" className={PILL} onClick={() => rate(turn.id, "like")}>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button type="button" className={cn(PILL, "disabled:opacity-50")} disabled={!canRate} onClick={() => rate(turn.id, "like")}>
                               <FeelsLikeMeIcon className="size-4" />
                               Feels like me
                             </button>
-                            <button type="button" className={PILL} onClick={() => rate(turn.id, "off")}>
+                            <button type="button" className={cn(PILL, "disabled:opacity-50")} disabled={!canRate} onClick={() => rate(turn.id, "off")}>
                               <FeelsOffIcon className="size-4" />
                               Feels off
                             </button>
+                            {twin && !canRate ? (
+                              <span className="text-xs text-muted-foreground">
+                                {calibrationFailed ? "Ratings can't be saved in this call." : "Getting ready to save ratings\u2026"}
+                              </span>
+                            ) : null}
                           </div>
                         )}
                       </div>

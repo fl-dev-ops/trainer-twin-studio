@@ -73,6 +73,37 @@ export function mostAsked(questionLists: string[][], limit = 3): { question: str
   return [...counts.values()].sort((a, b) => b.count - a.count).slice(0, limit);
 }
 
+const comparable = (text: string) => text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+
+export type RatedTurn = Turn & { rating?: "like" | "off" };
+
+/**
+ * Puts each saved calibration rating on the twin turn it rated. The final transcript may be split differently
+ * from what was on screen when rating, so: same text first, then the turn that contains the rated reply (or is
+ * contained by it). Each turn takes one rating. A rating nothing matches is added after the conversation, not lost.
+ */
+export function attachRatings(
+  turns: Turn[],
+  ratings: { turnIndex: number; question: string | null; reply: string; rating: string }[],
+): RatedTurn[] {
+  const rated: RatedTurn[] = turns.map((turn) => ({ ...turn }));
+  const keys = rated.map((turn) => comparable(turn.text));
+  const leftover: RatedTurn[] = [];
+  for (const item of [...ratings].sort((a, b) => a.turnIndex - b.turnIndex)) {
+    const rating = item.rating === "off" ? "off" : "like";
+    const key = comparable(item.reply);
+    const open = (i: number) => rated[i].who === "twin" && !rated[i].rating && Boolean(key) && Boolean(keys[i]);
+    let at = rated.findIndex((_, i) => open(i) && keys[i] === key);
+    if (at < 0) at = rated.findIndex((_, i) => open(i) && (keys[i].includes(key) || key.includes(keys[i])));
+    if (at >= 0) rated[at].rating = rating;
+    else {
+      if (item.question) leftover.push({ who: "learner", text: item.question });
+      leftover.push({ who: "twin", text: item.reply, rating });
+    }
+  }
+  return [...rated, ...leftover];
+}
+
 /** A list title from the first thing the trainer said. */
 export function titleFrom(text: string | null | undefined, fallback: string): string {
   const line = text?.replace(/\s+/g, " ").trim();

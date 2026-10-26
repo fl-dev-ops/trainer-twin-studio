@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useStartAudio, useTrackToggle } from "@livekit/components-react";
-import { LoaderCircle, MessageSquareText, Mic, MicOff, PhoneOff, Video, VideoOff, Volume2 } from "lucide-react";
+import { LoaderCircle, MessageSquareText, Mic, MicOff, Paperclip, PhoneOff, Video, VideoOff, Volume2 } from "lucide-react";
 import { Room, Track } from "livekit-client";
 import {
   AlertDialog,
@@ -26,12 +26,17 @@ export function SessionControlBar({
   chatOpen,
   onChatToggle,
   onEnd,
+  onAttach,
+  attaching = false,
 }: {
   room?: Room;
   isConnected: boolean;
   chatOpen: boolean;
   onChatToggle: () => void;
   onEnd: () => void;
+  /** Shown only when the agent lets the learner attach a file during the conversation. */
+  onAttach?: () => void;
+  attaching?: boolean;
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const { buttonProps: cameraProps, enabled: cameraOn, pending: cameraPending } = useTrackToggle({ room, source: Track.Source.Camera });
@@ -77,6 +82,18 @@ export function SessionControlBar({
         >
           <MessageSquareText />
         </button>
+        {onAttach ? (
+          <button
+            type="button"
+            onClick={onAttach}
+            disabled={attaching}
+            aria-label="Attach a file"
+            title="Attach a file"
+            className={cn(CONTROL, "hover:bg-card disabled:opacity-60")}
+          >
+            {attaching ? <LoaderCircle className="animate-spin" /> : <Paperclip />}
+          </button>
+        ) : null}
       </div>
 
       <button

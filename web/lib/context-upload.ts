@@ -4,7 +4,26 @@ export type AgentContextUpload = {
   label: string;
   accept: string;
   maxFiles: number;
+  /** Show the upload card before the session even when not required. */
+  offered: boolean;
+  /** A document may be attached when the session starts. */
+  allowed: boolean;
+  /** The learner shares their entire screen for the whole session. */
+  screenShare: boolean;
+  /** The learner may attach a file during the conversation. */
+  duringSession: boolean;
 };
+
+/** Twin conversation settings (Agent.data.twinSettings), set on the twin's configure page. Off unless turned on. */
+export type TwinSettings = {
+  preScreenshare: boolean;
+  preUpload: boolean;
+  duringUpload: boolean;
+  uploadTitle: string;
+  uploadInstruction: string;
+};
+
+export const TWIN_UPLOAD_TITLE_DEFAULT = "Documents";
 
 export const DEFAULT_CONTEXT_ACCEPT =
   ".md,.txt,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.csv,.json,.png,.jpg,.jpeg,.webp";
@@ -80,11 +99,41 @@ export function resolveContextUpload(context: unknown): AgentContextUpload {
     label: documentLabel(ctx?.label, defaults.label),
     accept: resume ? RESUME_CONTEXT_ACCEPT : DEFAULT_CONTEXT_ACCEPT,
     maxFiles,
+    // Role plays: the card shows only when required, any picked document is accepted, the whole screen is
+    // always shared, and there is no attaching mid-call.
+    offered: required,
+    allowed: true,
+    screenShare: true,
+    duringSession: false,
   };
 }
 
-export function contextUploadFromAgentData(data: unknown): AgentContextUpload {
-  return resolveContextUpload(contextConfigFromAgentData(data));
+export function twinSettingsFromAgentData(data: unknown): TwinSettings {
+  const settings = asRecord(asRecord(data)?.twinSettings);
+  return {
+    preScreenshare: settings?.preScreenshare === true,
+    preUpload: settings?.preUpload === true,
+    duringUpload: settings?.duringUpload === true,
+    uploadTitle: text(settings?.uploadTitle),
+    uploadInstruction: text(settings?.uploadInstruction),
+  };
+}
+
+/** What the session screen offers for this agent. Twins follow their settings; everything else the role play rules. */
+export function contextUploadFromAgentData(data: unknown, kind?: string | null): AgentContextUpload {
+  if (kind !== "TWIN") return resolveContextUpload(contextConfigFromAgentData(data));
+  const settings = twinSettingsFromAgentData(data);
+  return {
+    required: false,
+    prompt: settings.uploadInstruction,
+    label: settings.uploadTitle || TWIN_UPLOAD_TITLE_DEFAULT,
+    accept: DEFAULT_CONTEXT_ACCEPT,
+    maxFiles: 1,
+    offered: settings.preUpload,
+    allowed: settings.preUpload,
+    screenShare: settings.preScreenshare,
+    duringSession: settings.duringUpload,
+  };
 }
 
 export function applyLearnerUpload(

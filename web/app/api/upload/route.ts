@@ -2,8 +2,22 @@ import { NextResponse } from "next/server";
 import { assignmentMatchesUser } from "@/lib/assignments";
 import { db } from "@/lib/db";
 import { getSessionOrg } from "@/lib/org";
+import { twinSettingsFromAgentData } from "@/lib/context-upload";
 import { resolveSessionUser } from "@/lib/session-user";
 import { listUploads, saveUpload } from "@/lib/specs";
+import { twinAccessByCode } from "@/lib/twin-access";
+
+/**
+ * Someone not yet in the org may upload through a twin code they can use (not consuming it), when the twin takes
+ * files. Joining the org happens when the session starts.
+ */
+async function twinCodeAllowsUpload(orgId: string, user: { id: string; email: string }, code: string) {
+  const access = await twinAccessByCode({ orgId, user, code, join: false }).catch(() => null);
+  if (!access) return false;
+  const agent = await db.agent.findFirst({ where: { id: access.agentId, orgId, kind: "TWIN" }, select: { data: true } });
+  const settings = twinSettingsFromAgentData(agent?.data);
+  return Boolean(agent) && (settings.preUpload || settings.duringUpload);
+}
 
 export async function GET() {
   const org = await getSessionOrg();
@@ -45,7 +59,9 @@ export async function POST(req: Request) {
         sessions: { where: { status: { in: ["completed", "abandoned"] } }, select: { id: true }, take: 1 },
       },
     }) : null;
-    if (!assignment || !assignmentMatchesUser(assignment, user) || assignment.sessions.length) {
+    const roleplayOk = Boolean(assignment && assignmentMatchesUser(assignment, user) && !assignment.sessions.length);
+    const twinOk = !assignment && typeof shareCode === "string" && await twinCodeAllowsUpload(org.id, user, shareCode);
+    if (!roleplayOk && !twinOk) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
   }

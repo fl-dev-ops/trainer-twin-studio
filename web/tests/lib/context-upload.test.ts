@@ -4,7 +4,7 @@ import {
   applyLearnerUpload,
   contextUploadFromAgentData,
   resolveContextUpload,
-} from "../../../lib/context-upload";
+} from "@/lib/context-upload";
 
 test("resume mode uses the default documents label", () => {
   const upload = resolveContextUpload({ mode: "resume_grounding", required: true });
@@ -50,6 +50,34 @@ test("stage-level required is enough for full-mock style specs", () => {
   assert.equal(upload.required, true);
   assert.equal(upload.label, "Documents");
   assert.match(upload.prompt, /résumé/i);
+});
+
+test("role plays keep their rules: card only when required, whole screen, no mid-call attach", () => {
+  const upload = contextUploadFromAgentData({ config: { context: { mode: "session_evidence", required: false } } }, "ROLEPLAY");
+  assert.equal(upload.offered, false);
+  assert.equal(upload.allowed, true);
+  assert.equal(upload.screenShare, true);
+  assert.equal(upload.duringSession, false);
+  assert.equal(contextUploadFromAgentData({}).screenShare, true);
+});
+
+test("twins follow their configure page; an unconfigured twin asks for nothing", () => {
+  const off = contextUploadFromAgentData({}, "TWIN");
+  assert.deepEqual(
+    { offered: off.offered, allowed: off.allowed, screenShare: off.screenShare, duringSession: off.duringSession, required: off.required },
+    { offered: false, allowed: false, screenShare: false, duringSession: false, required: false },
+  );
+  const on = contextUploadFromAgentData({
+    twinSettings: { preScreenshare: true, preUpload: true, duringUpload: true, uploadTitle: " Brochure ", uploadInstruction: "Add the listing brochure." },
+  }, "TWIN");
+  assert.equal(on.offered, true);
+  assert.equal(on.allowed, true);
+  assert.equal(on.required, false);
+  assert.equal(on.screenShare, true);
+  assert.equal(on.duringSession, true);
+  assert.equal(on.label, "Brochure");
+  assert.equal(on.prompt, "Add the listing brochure.");
+  assert.equal(contextUploadFromAgentData({ twinSettings: { preUpload: true } }, "TWIN").label, "Documents");
 });
 
 test("generate overlay stamps résumé upload on resume interviews", () => {

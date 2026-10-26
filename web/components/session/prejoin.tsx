@@ -59,6 +59,8 @@ export function PreJoin({
   organizationLogo,
   contexts: _contexts = [],
   contextRequired = false,
+  contextOffered = false,
+  screenShare = true,
   contextPrompt,
   contextLabel,
   contextAccept,
@@ -73,6 +75,10 @@ export function PreJoin({
   contexts?: PreJoinDocument[];
   /** Scenario cannot run without an attached document. */
   contextRequired?: boolean;
+  /** Show the (optional) upload card even when no document is required. */
+  contextOffered?: boolean;
+  /** The session asks for the entire screen. */
+  screenShare?: boolean;
   contextPrompt?: string;
   contextLabel?: string;
   contextAccept?: string;
@@ -108,6 +114,7 @@ export function PreJoin({
   const [dragOver, setDragOver] = useState(false);
 
   const docAttached = Boolean(selectedDoc);
+  const showDocumentCard = contextRequired || contextOffered;
 
   const releasePreview = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -298,7 +305,7 @@ export function PreJoin({
       {
         microphoneEnabled,
         cameraEnabled,
-        screenShareEnabled: true,
+        screenShareEnabled: screenShare,
         microphoneDeviceId: microphoneDeviceId || undefined,
         cameraDeviceId: cameraDeviceId || undefined,
         speakerDeviceId: speakerDeviceId || undefined,
@@ -370,7 +377,7 @@ export function PreJoin({
         <div
           className={cn(
             "grid gap-6 items-stretch",
-            contextRequired ? "lg:grid-cols-5" : "max-w-xl mx-auto"
+            showDocumentCard ? "lg:grid-cols-5" : "max-w-xl mx-auto"
           )}
         >
           {/* Card 1: Camera and microphone preview */}
@@ -379,12 +386,14 @@ export function PreJoin({
             className="col-span-3 relative flex min-h-85 items-center justify-center overflow-hidden rounded-2xl bg-[#202124] shadow-[0_12px_32px_rgba(32,33,36,0.12)]"
           >
             {/* Screen share enabled pill */}
-            <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 rounded-full bg-black/70 backdrop-blur-xs px-3 py-1 text-xs text-white border border-white/10">
-              <span className="size-2 rounded-full bg-amber-400" />
-              <span className="font-medium text-[11px]">
-                Entire Screen Required
-              </span>
-            </div>
+            {screenShare ? (
+              <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 rounded-full bg-black/70 backdrop-blur-xs px-3 py-1 text-xs text-white border border-white/10">
+                <span className="size-2 rounded-full bg-amber-400" />
+                <span className="font-medium text-[11px]">
+                  Entire Screen Required
+                </span>
+              </div>
+            ) : null}
 
             <video
               ref={videoRef}
@@ -470,7 +479,7 @@ export function PreJoin({
           </section>
 
           {/* Card 2: Context Document */}
-          {contextRequired && (
+          {showDocumentCard && (
             <section
               aria-label={contextLabel || "Documents"}
               className="flex min-h-85 flex-col justify-between rounded-2xl border border-[#e4e6e8] bg-white p-4 shadow-sm col-span-2 gap-3"
@@ -707,9 +716,11 @@ export function PreJoin({
           >
             {permission === "requesting" ? "Checking devices…" : "Join session"}
           </Button>
-          <p className="mt-2.5 text-center text-xs text-[#5f6368] max-w-md">
-            When prompted, choose Entire Screen. Sharing a tab or window will be rejected.
-          </p>
+          {screenShare ? (
+            <p className="mt-2.5 text-center text-xs text-[#5f6368] max-w-md">
+              When prompted, choose Entire Screen. Sharing a tab or window will be rejected.
+            </p>
+          ) : null}
           {permission === "ready" && permissionError ? (
             <p className="mt-3 max-w-sm text-center text-xs leading-5 text-amber-700">
               {permissionError}

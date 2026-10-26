@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { SessionTime } from "@/components/sessions/session-time";
+import { useSessionReportState } from "@/components/twin/use-report-polling";
 import type { TwinOutputs } from "@/lib/twin/trpc";
 import { cn } from "@/lib/utils";
 
@@ -10,6 +11,7 @@ type SessionDetail = TwinOutputs["sessions"]["get"];
 
 export function TwinSessionDetailPage({ session }: { session: SessionDetail }) {
   const duration = session.seconds === null ? null : `${Math.max(1, Math.round(session.seconds / 60))} min`;
+  const report = useSessionReportState(session.id, session.reportState);
 
   return (
     <div className="h-full w-full overflow-y-auto">
@@ -75,22 +77,35 @@ export function TwinSessionDetailPage({ session }: { session: SessionDetail }) {
             </article>
           ) : null}
 
-          {/* Topics Card: from the session report, when there is one */}
-          {session.topics.length ? (
+          {/* Topics Card: from the session report; quiet placeholders while it is made or when it isn't coming */}
+          {report !== "ready" || session.topics.length ? (
             <article className="rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
               <h2 className="m-0 text-sm font-semibold uppercase tracking-[0.04em] text-muted-foreground">
                 Topics discussed
               </h2>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {session.topics.map((t) => (
-                  <span
-                    key={t}
-                    className="rounded-full bg-(--sidebar) border border-(--border) px-3 py-1 text-xs font-medium text-(--text-secondary)"
-                  >
-                    {t}
-                  </span>
-                ))}
-              </div>
+              {report === "pending" ? (
+                <div className="mt-3 flex flex-col gap-3" role="status" aria-live="polite">
+                  <div className="flex flex-wrap gap-2" aria-hidden>
+                    {["w-28", "w-36", "w-24"].map((width) => (
+                      <span key={width} className={cn("h-6 animate-pulse rounded-full bg-(--sidebar)", width)} />
+                    ))}
+                  </div>
+                  <p className="m-0 text-xs text-muted-foreground">Preparing report…</p>
+                </div>
+              ) : report === "unavailable" ? (
+                <p className="mt-3 text-sm text-muted-foreground">Report not available yet.</p>
+              ) : (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {session.topics.map((t) => (
+                    <span
+                      key={t}
+                      className="rounded-full bg-(--sidebar) border border-(--border) px-3 py-1 text-xs font-medium text-(--text-secondary)"
+                    >
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              )}
             </article>
           ) : null}
 

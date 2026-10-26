@@ -25,6 +25,7 @@ import {
 import { SessionTime } from "@/components/sessions/session-time";
 import { copyTwinLink } from "@/components/twin/copy-twin-link";
 import { TwinSessionItem } from "@/components/twin/twin-session-item";
+import { usePendingReports } from "@/components/twin/use-report-polling";
 import type { TwinOutputs } from "@/lib/twin/trpc";
 import { cn } from "@/lib/utils";
 
@@ -157,6 +158,7 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
   const calibrations = twin.calibrations.filter((item) => inRange(item.at, dateFilter));
   const sessions = twin.sessions.filter((item) => inRange(item.at, dateFilter));
   const { minutes, used } = twin.credit;
+  const pendingReports = usePendingReports(id, twin.report.pendingReports);
 
   return (
     <div className="h-full w-full overflow-y-auto">
@@ -367,7 +369,9 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
                 ))}
               </ul>
             ) : (
-              <p className="mt-4 text-sm text-muted-foreground">No questions yet.</p>
+              <p className="mt-4 text-sm text-muted-foreground" role="status">
+                {pendingReports > 0 ? "Preparing report…" : "No questions yet."}
+              </p>
             )}
           </article>
 

@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withWorkflow } from "workflow/next";
 
 import "./env"; // Fail fast at build/dev startup if required env keys are missing
 
@@ -32,4 +33,5 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Workflow SDK: compiles "use workflow" / "use step" (twin session reports) and serves /.well-known/workflow/*.
+export default withWorkflow(nextConfig);

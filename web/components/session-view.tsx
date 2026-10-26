@@ -262,18 +262,32 @@ export function SessionView({
     setElapsed(0);
   }, []);
 
+  const contextUpload = agentContextUploads[agent] ?? (
+    agentContextRequired[agent]
+      ? { required: true, prompt: "", label: "Documents", accept: "", offered: true }
+      : null
+  );
+  const isContextRequired = Boolean(contextUpload?.required ?? agentContextRequired[agent]);
+  const documentLabel = contextUpload?.label || "Documents";
+  // Role-play defaults when the agent has no resolved settings: whole screen shared, documents accepted, no mid-call attach.
+  const screenShareRequired = contextUpload?.screenShare ?? true;
+  const documentsAllowed = contextUpload?.allowed ?? true;
+  const attachDuringSession = contextUpload?.duringSession ?? false;
+
   const handleStartSession = useCallback(async () => {
     if (startedRef.current) return;
     startedRef.current = true;
     setError("");
+    // A document picked for another scenario is not sent to an agent that takes none.
+    const ids = documentsAllowed ? contextIds : [];
     try {
       const launchResponse = await fetch("/api/sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
           sessionCode
-            ? { shareCode: sessionCode, contextId: contextId || undefined, contextIds }
-            : { agentSlug: agent, contextId: contextId || undefined, contextIds },
+            ? { shareCode: sessionCode, contextId: ids[0] || undefined, contextIds: ids }
+            : { agentSlug: agent, contextId: ids[0] || undefined, contextIds: ids },
         ),
       });
       const launch = await launchResponse.json().catch(() => ({}));
@@ -297,21 +311,13 @@ export function SessionView({
       setError(e instanceof Error ? e.message : "Failed to start session");
       if (!autoStart) setLaunched(false);
     }
-  }, [agent, contextId, contextIds, sessionCode, autoStart]);
+  }, [agent, contextIds, documentsAllowed, sessionCode, autoStart]);
 
   const handleRetry = useCallback(() => {
     startedRef.current = false;
     setError("");
     void handleStartSession();
   }, [handleStartSession]);
-
-  const contextUpload = agentContextUploads[agent] ?? (
-    agentContextRequired[agent]
-      ? { required: true, prompt: "", label: "Documents", accept: "" }
-      : null
-  );
-  const isContextRequired = Boolean(contextUpload?.required ?? agentContextRequired[agent]);
-  const documentLabel = contextUpload?.label || "Documents";
 
   useEffect(() => {
     if (!autoStart || !prejoinComplete || ended || !agent || !persona || launched || countdown !== null) return;
@@ -393,9 +399,9 @@ export function SessionView({
     };
   }, [room]);
 
-  // Prompt for screen share immediately as soon as the room connects on entry
+  // Prompt for screen share immediately as soon as the room connects on entry (when the agent asks for it)
   useEffect(() => {
-    if (!connected || screenShareAutoPromptedRef.current || ended) return;
+    if (!screenShareRequired || !connected || screenShareAutoPromptedRef.current || ended) return;
     screenShareAutoPromptedRef.current = true;
     screenShareValidationPendingRef.current = true;
     setIsScreenSharePending(true);
@@ -411,7 +417,7 @@ export function SessionView({
         setScreenShareAttempted(true);
       }
     })();
-  }, [connected, room, ended]);
+  }, [connected, room, ended, screenShareRequired]);
 
   useEffect(() => {
     if (!connected) return;
@@ -521,6 +527,38 @@ export function SessionView({
       }
     },
     [room],
+  );
+
+  const [attaching, setAttaching] = useState(false);
+  const attachInput = useRef<HTMLInputElement>(null);
+  /** Mid-call file: upload it, link it to this session, then tell the twin which file to read (it reads by ID). */
+  const handleAttach = useCallback(
+    async (file: File) => {
+      if (!connection) return;
+      setAttaching(true);
+      try {
+        const form = new FormData();
+        form.append("file", file);
+        if (sessionCode) form.append("shareCode", sessionCode);
+        const uploaded = await fetch("/api/upload", { method: "POST", body: form });
+        const doc = await uploaded.json().catch(() => null);
+        if (!uploaded.ok) throw new Error(doc?.error ?? "Upload failed");
+        const linked = await fetch(`/api/sessions/${encodeURIComponent(connection.sessionId)}/documents`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ documentId: doc.id }),
+        });
+        const result = await linked.json().catch(() => null);
+        if (!linked.ok) throw new Error(result?.error ?? "Could not attach the file");
+        await handleSendMessage(`I've attached a file: ${doc.name} (document ID ${doc.id}).`);
+        toast.success(`${doc.name} attached`);
+      } catch (attachError) {
+        toast.error(attachError instanceof Error ? attachError.message : "Could not attach the file");
+      } finally {
+        setAttaching(false);
+      }
+    },
+    [connection, sessionCode, handleSendMessage],
   );
 
   const handleSurface = useCallback((nextSurface: AgentSurface) => {
@@ -904,6 +942,8 @@ export function SessionView({
         organizationLogo={organizationLogo}
         contexts={contextList}
         contextRequired={isContextRequired}
+        contextOffered={Boolean(contextUpload?.offered)}
+        screenShare={screenShareRequired}
         contextPrompt={contextUpload?.prompt}
         contextLabel={contextUpload?.label}
         contextAccept={contextUpload?.accept}
@@ -1033,6 +1073,7 @@ export function SessionView({
                   </Select>
                 </label>
 
+                {documentsAllowed ? (
                 <label className="flex flex-col gap-1.5 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="font-medium">{documentLabel}</span>
@@ -1109,6 +1150,7 @@ export function SessionView({
                     </Button>
                   </div>
                 </label>
+                ) : null}
 
                 {error && (
                   <p role="alert" className="text-sm text-destructive">{error}</p>
@@ -1154,7 +1196,7 @@ export function SessionView({
           {/* Main Body: Stage (Left) & Chat Sidebar (Right) — EQUAL HEIGHT */}
           <main className="relative flex min-h-0 flex-1 gap-4 px-4 sm:px-6">
             {/* Blocking overlay when screen sharing is stopped */}
-            {connected && !isScreenSharing && screenShareAttempted && !isScreenSharePending && (
+            {screenShareRequired && connected && !isScreenSharing && screenShareAttempted && !isScreenSharePending && (
               <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/30 p-6 backdrop-blur-sm">
                 <div className={cn("flex w-full max-w-md flex-col items-center rounded-3xl bg-card p-7 text-center duration-200 animate-in fade-in zoom-in-95", RAISED)}>
                   <div className="mb-4 grid size-14 place-items-center rounded-2xl bg-primary/10 text-primary">
@@ -1347,7 +1389,22 @@ export function SessionView({
               chatOpen={sidebarOpen}
               onChatToggle={() => setSidebarOpen((v) => !v)}
               onEnd={() => void handleDisconnect("manual")}
+              onAttach={attachDuringSession ? () => attachInput.current?.click() : undefined}
+              attaching={attaching}
             />
+            {attachDuringSession ? (
+              <input
+                ref={attachInput}
+                type="file"
+                hidden
+                accept={contextUpload?.accept || ".md,.txt,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.csv,.json,.png,.jpg,.jpeg,.webp"}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.currentTarget.value = "";
+                  if (file) void handleAttach(file);
+                }}
+              />
+            ) : null}
           </footer>
 
           {error && (

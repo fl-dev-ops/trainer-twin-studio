@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
+import { twinSettingsFromAgentData } from "@/lib/context-upload";
 import { LEARNER_ROLE } from "@/lib/org";
 import { studioProcedure, t } from "@/lib/trpc";
 import {
@@ -14,8 +15,9 @@ import {
   twinUrl,
 } from "@/lib/twin-access";
 import { TWIN_SOURCE } from "@/lib/twins";
-import { isTwinReport } from "@/lib/twin/session-report";
-import { durationSeconds, firstExchange, lastSevenDays, likeRateByWeek, mostAsked, titleFrom, transcriptTurns } from "@/lib/twin/stats";
+import { getRun } from "workflow/api";
+import { isTwinReport, reportState } from "@/lib/twin/session-report";
+import { attachRatings, durationSeconds, firstExchange, lastSevenDays, likeRateByWeek, mostAsked, titleFrom, transcriptTurns } from "@/lib/twin/stats";
 
 /**
  * Twin-scoped tRPC surface, mounted at /api/twin. Studio members (admin, team) only; every query is
@@ -58,6 +60,8 @@ const sessionRowSelect = {
   createdAt: true,
   startedAt: true,
   endedAt: true,
+  status: true,
+  reportStatus: true,
   feedbackRating: true,
   transcript: true,
   agent: { select: { slug: true, name: true } },
@@ -179,17 +183,12 @@ const agentsRouter = t.router({
     const active = assignments.filter((row) => row.status === "active");
     const lengths = sessions.map((row) => durationSeconds(row.startedAt, row.endedAt)).filter((s): s is number => s !== null);
     const rated = sessions.map((row) => row.feedbackRating).filter((r): r is number => r !== null);
-    const settings = asRecord(data.twinSettings);
     return {
       slug: found.slug,
       name: found.name,
       description: text(data.objective),
       whoAsks: whoAsks(data),
-      settings: {
-        preScreenshare: settings.preScreenshare === true,
-        preUpload: settings.preUpload === true,
-        duringUpload: settings.duringUpload === true,
-      },
+      settings: twinSettingsFromAgentData(data),
       credit: {
         minutes: active.reduce((sum, row) => sum + row.minutesLimit, 0),
         used: Math.round(active.reduce((sum, row) => sum + row.minutesUsed, 0)),
@@ -201,10 +200,25 @@ const agentsRouter = t.router({
         week: lastSevenDays(sessions.map((row) => row.startedAt ?? row.createdAt)),
         feelsLikeMe: likeRateByWeek(calibrations.flatMap((row) => row.ratings.map((rating) => ({ rating: rating.rating, at: rating.createdAt })))),
         mostAsked: mostAsked(sessions.map((row) => (isTwinReport(row.report) ? row.report.questions : []))),
+        pendingReports: sessions.filter((row) => reportState(row) === "pending").length,
       },
       calibrations: calibrations.map((row) => omitRatings(row)),
       sessions: sessions.map(sessionItem),
     };
+  })),
+
+  /** How many of this twin's learner sessions are still getting their report (the page polls while > 0). */
+  pendingReports: studioProcedure.input(slugInput).query(({ ctx, input }) => twinCall(async () => {
+    const found = await findTwinAgent(ctx.user.orgId, input.slug);
+    const rows = await db.interviewSession.findMany({
+      where: {
+        ...learnerSessions(ctx.user.orgId, found.id),
+        OR: [{ reportStatus: "generating" }, { reportStatus: { in: ["none"] } }, { reportStatus: null }],
+      },
+      take: 200,
+      select: { status: true, reportStatus: true, report: true, endedAt: true },
+    });
+    return { count: rows.filter((row) => reportState(row) === "pending").length };
   })),
 
   /** Name, description and conversation settings. Saved like any spec change: snapshot, then version + 1. */
@@ -212,12 +226,18 @@ const agentsRouter = t.router({
     .input(slugInput.extend({
       name: z.string().trim().min(1).max(120),
       description: z.string().trim().max(2000),
-      settings: z.object({ preScreenshare: z.boolean(), preUpload: z.boolean(), duringUpload: z.boolean() }).strict(),
+      settings: z.object({
+        preScreenshare: z.boolean(),
+        preUpload: z.boolean(),
+        duringUpload: z.boolean(),
+        uploadTitle: z.string().trim().max(80),
+        uploadInstruction: z.string().trim().max(300),
+      }).strict(),
     }))
     .mutation(({ ctx, input }) => twinCall(async () => {
       const found = await findTwinAgent(ctx.user.orgId, input.slug);
       const current = await db.agent.findUniqueOrThrow({ where: { id: found.id }, select: { version: true, data: true } });
-      // shortcut: the settings are stored for the session screen; enforcing them in sessions comes with that screen.
+      // Read by the session screen (lib/context-upload) and enforced by session start and the attach route.
       const data = { ...asRecord(current.data), name: input.name, objective: input.description, twinSettings: input.settings };
       if (JSON.stringify(data) === JSON.stringify(current.data) && input.name === found.name) return { version: current.version };
       const json = (value: unknown) => value as Prisma.InputJsonValue;
@@ -303,6 +323,11 @@ const sessionsRouter = t.router({
     return rows.map(sessionItem);
   }),
 
+  /** Report state only (cheap): polled by the session page while the report is being made. */
+  reportState: studioProcedure
+    .input(z.object({ id: z.string().min(1).max(100) }))
+    .query(async ({ ctx, input }) => ({ state: await sessionReportState(ctx.user.orgId, input.id) })),
+
   /** One learner conversation: transcript, feedback, topics. */
   get: studioProcedure.input(z.object({ id: z.string().min(1).max(100) })).query(async ({ ctx, input }) => {
     const row = await db.interviewSession.findFirst({
@@ -314,11 +339,34 @@ const sessionsRouter = t.router({
       ...sessionItem(row),
       feedbackNote: row.feedbackNote,
       topics: isTwinReport(row.report) ? row.report.topics : [],
+      reportState: reportState(row),
       hasVideo: typeof asRecord(row.evidence).videoS3Key === "string",
       turns: transcriptTurns(row.transcript),
     };
   }),
 });
+
+/**
+ * A twin session's report state, for polling. A run that ended without saving (failed, cancelled, gone) is
+ * marked failed here so the page stops waiting; nothing is restarted from a poll.
+ */
+async function sessionReportState(orgId: string, id: string) {
+  const row = await db.interviewSession.findFirst({
+    where: { ...learnerSessions(orgId), id },
+    select: { status: true, reportStatus: true, report: true, endedAt: true, reportWorkflowRunId: true },
+  });
+  if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
+  const state = reportState(row);
+  if (state === "pending" && row.reportStatus === "generating" && row.reportWorkflowRunId) {
+    const status = await getRun(row.reportWorkflowRunId).status.catch(() => null);
+    if (status === "failed" || status === "cancelled") {
+      await db.interviewSession.updateMany({ where: { id, reportStatus: "generating" }, data: { reportStatus: "failed" } });
+      return "unavailable" as const;
+    }
+  }
+  return state;
+}
+
 
 const usersRouter = t.router({
   /** Everyone with twin access: how many twins, minutes given and used (active assignments). */
@@ -369,15 +417,9 @@ const calibrationsRouter = t.router({
       },
     });
     if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Calibration not found" });
-    const transcript = transcriptTurns(row.session.transcript);
-    // The saved transcript may come from the voice agent, so ratings are matched by the reply they rated.
-    const ratingOf = (reply: string) => row.ratings.find((rating) => rating.reply === reply)?.rating as "like" | "off" | undefined;
-    const turns = transcript.length
-      ? transcript.map((turn, i) => ({ id: String(i), speaker: turn.who === "twin" ? "twin" as const : "you" as const, text: turn.text, rating: turn.who === "twin" ? ratingOf(turn.text) : undefined }))
-      : row.ratings.flatMap((rating) => [
-          ...(rating.question ? [{ id: `q${rating.turnIndex}`, speaker: "you" as const, text: rating.question, rating: undefined }] : []),
-          { id: `r${rating.turnIndex}`, speaker: "twin" as const, text: rating.reply, rating: rating.rating as "like" | "off" },
-        ]);
+    // The saved transcript usually comes from the voice agent, so ratings are matched to it by the reply they rated.
+    const turns = attachRatings(transcriptTurns(row.session.transcript), row.ratings)
+      .map((turn, i) => ({ id: String(i), speaker: turn.who === "twin" ? "twin" as const : "you" as const, text: turn.text, rating: turn.rating }));
     return {
       slug: row.session.agent.slug,
       twinName: row.session.agent.name,

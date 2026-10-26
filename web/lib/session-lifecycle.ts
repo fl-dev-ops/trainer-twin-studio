@@ -6,7 +6,7 @@ import { finalizeInterviewSession, type SessionEndStatus } from "@/lib/interview
 export async function closeInterviewSession(
   sessionId: string,
   requested: SessionEndStatus,
-  data: { transcript?: unknown; evidence?: unknown } = {},
+  data: { transcript?: unknown; evidence?: unknown; replaceTranscript?: boolean } = {},
 ) {
   const session = await db.interviewSession.findUnique({
     where: { id: sessionId },
@@ -28,5 +28,6 @@ export async function closeInterviewSession(
     requestedStatus: requested,
     transcript: data.transcript as Prisma.InputJsonValue | undefined,
     evidence: data.evidence as Prisma.InputJsonValue | undefined,
+    replaceTranscript: data.replaceTranscript,
   });
 }

@@ -233,10 +233,10 @@ export async function listAgentContextUploads(orgId: string, slugs: string[]): P
   if (slugs.length === 0) return {};
   const agents = await db.agent.findMany({
     where: { orgId, slug: { in: slugs } },
-    select: { slug: true, data: true },
+    select: { slug: true, data: true, kind: true },
   });
   return Object.fromEntries(
-    agents.map((agent) => [agent.slug, contextUploadFromAgentData(agent.data)]),
+    agents.map((agent) => [agent.slug, contextUploadFromAgentData(agent.data, agent.kind)]),
   );
 }
 
@@ -651,6 +651,21 @@ export async function readUploadBytes(id: string, orgId: string) {
 
 // ---- Compiled config for the voice agent ----
 
+/** How a session lists an attached document to the runtime (its stored manifest, or a minimal one). */
+export function documentManifestOf(doc: { id: string; name: string; kind: string; mimeType: string; size: number; manifest: unknown }): DocumentManifest {
+  if (doc.manifest && typeof doc.manifest === "object") {
+    return { ...(doc.manifest as unknown as DocumentManifest), id: doc.id };
+  }
+  return {
+    id: doc.id,
+    name: doc.name,
+    kind: (doc.kind as "document" | "image") || "document",
+    mimeType: doc.mimeType,
+    size: doc.size,
+    summary: `Document: ${doc.name}`,
+  };
+}
+
 export async function getAgentConfigForAgent(agentId: string, orgId: string, contextId?: string, contextIds?: string[]) {
   const agent = await db.agent.findFirst({
     where: {
@@ -704,19 +719,7 @@ export async function getAgentConfigForAgent(agentId: string, orgId: string, con
   );
   const personaVoiceCoverage = personaCoverageLevel(personaVoiceSources);
 
-  const documentManifests: DocumentManifest[] = contextDocs.map((doc) => {
-    if (doc.manifest && typeof doc.manifest === "object") {
-      return { ...(doc.manifest as unknown as DocumentManifest), id: doc.id };
-    }
-    return {
-      id: doc.id,
-      name: doc.name,
-      kind: (doc.kind as "document" | "image") || "document",
-      mimeType: doc.mimeType,
-      size: doc.size,
-      summary: `Document: ${doc.name}`,
-    };
-  });
+  const documentManifests: DocumentManifest[] = contextDocs.map(documentManifestOf);
 
   const primaryDoc = contextDocs.find((d) => d.id === contextId) ?? contextDocs[0];
   const context: { id: string; name: string; content: string } | null = primaryDoc

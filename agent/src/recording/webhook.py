@@ -19,13 +19,19 @@ async def post_completion_webhook(
     if not webhook_url:
         return
 
+    # The web app refuses the webhook without the shared service secret (it updates transcripts and recordings).
+    secret = os.getenv("COPILOT_SERVICE_SECRET", "").strip()
+    if not secret:
+        logger.error("COPILOT_SERVICE_SECRET missing; session webhook not sent for %s", payload.get("session_id"))
+        return
+
     def _send() -> None:
         body = json.dumps(payload, default=str).encode("utf-8")
         logger.info("Posting session webhook to %s", webhook_url)
         req = request.Request(
             webhook_url,
             data=body,
-            headers={"Content-Type": "application/json"},
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {secret}"},
             method="POST",
         )
         ssl_ctx = None
