@@ -26,7 +26,8 @@ type TwinCard = TwinOutputs["agents"]["list"]["twins"][number];
 
 /**
  * The twin's face: its AI avatar (image, or a looping video) when one is configured on its persona,
- * otherwise the org admin's avatar (their photo, or their initial). `className` sets size and corners.
+ * otherwise the org admin's avatar (their photo, or their initial). `className` sets the size; a non-round shape must
+ * also round the avatar's border overlay and contents (after:/*: variants), which default to a circle.
  */
 function TwinFace({ face, className }: { face: TwinCard["face"]; className: string }) {
   if (face.avatarUrl) {
@@ -37,7 +38,7 @@ function TwinFace({ face, className }: { face: TwinCard["face"]; className: stri
       <img className={cn("shrink-0 bg-(--tone-control) object-cover", className)} src={face.avatarUrl} alt="" aria-hidden />
     );
   }
-  return <UserAvatar user={face.person ?? { name: "Twin" }} className={cn("after:rounded-[inherit] *:rounded-[inherit]", className)} />;
+  return <UserAvatar user={face.person ?? { name: "Twin" }} className={className} />;
 }
 
 /** Learners assigned to the twin (avatars with a +N chip), or a quiet note when nobody is. */
@@ -66,7 +67,7 @@ function TwinAllCard({ twin }: { twin: TwinCard }) {
   return (
     <article className="mt-4 flex items-center justify-between gap-4 rounded-[12px] border border-(--card-border) bg-card p-4 px-5 text-left shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)] transition-shadow hover:shadow-[0_2px_4px_rgb(30_28_25/0.07),0_8px_20px_rgb(30_28_25/0.11)]">
       <Link href={`/twin/${twin.slug}`} className="flex flex-1 items-center gap-4 min-w-0 outline-none">
-        <TwinFace face={twin.face} className="size-[86px] rounded-[20px] text-3xl" />
+        <TwinFace face={twin.face} className="size-[86px] text-3xl rounded-[20px] after:rounded-[20px] *:rounded-[20px]" />
         <div className="min-w-0 flex-1">
           <h3 className="m-0 text-[16px] font-semibold leading-6">{twin.name}</h3>
           <p className="mt-0.5 flex items-center gap-1 text-sm leading-5 text-muted-foreground">
