@@ -23,7 +23,7 @@ export function TwinCard({ twin }: { twin: ScenarioCardData }) {
   const updated = useSyncExternalStore(noopSubscribe, () => (twin.updatedAt ? updatedAgo(twin.updatedAt) : ""), () => "");
 
   return (
-    <article className="group relative flex items-center gap-3 rounded-2xl border bg-card px-4 py-3.5 shadow-[0_1px_2px_rgba(30,28,25,0.04)] transition-shadow focus-within:ring-3 focus-within:ring-ring/50 hover:shadow-md">
+    <article className="group relative flex items-center gap-3 rounded-2xl border bg-card p-4 shadow-[0_1px_2px_rgba(30,28,25,0.04)] transition-shadow focus-within:ring-3 focus-within:ring-ring/50 hover:shadow-md">
       {/* 40px, the size a persona gets in the scenario cards. */}
       <UserAvatar user={{ name: twin.personaName ?? twin.name }} size="xl" />
       <div className="flex min-w-0 flex-1 flex-col">
