@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { twinClient } from "@/lib/twin/client";
 import type { TwinOutputs } from "@/lib/twin/trpc";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type LearnerAssign = TwinOutputs["assignments"]["list"][number];
 
@@ -54,10 +55,13 @@ export function TwinEditPage({
   twin,
   learners,
   defaultMinutes,
+  defaultTab = "general",
 }: {
   twin: Pick<TwinOutputs["agents"]["get"], "slug" | "name" | "description" | "settings">;
   learners: LearnerAssign[];
   defaultMinutes: number;
+  /** /edit opens on General, /assign on Learners. All tabs share one Save. */
+  defaultTab?: "general" | "conversation" | "learners";
 }) {
   const id = twin.slug;
   const router = useRouter();
@@ -152,7 +156,18 @@ export function TwinEditPage({
         </div>
 
         <div className="mt-6 flex flex-col gap-4">
+        <Tabs defaultValue={defaultTab} className="gap-4">
+          <TabsList>
+            <TabsTrigger value="general">General</TabsTrigger>
+            <TabsTrigger value="conversation">Conversation</TabsTrigger>
+            <TabsTrigger value="learners">
+              Learners
+              {selectedIds.length > 0 ? <span className="text-(--brand) tabular-nums">· {selectedIds.length}</span> : null}
+            </TabsTrigger>
+          </TabsList>
+
         {/* Card 1: name and description */}
+        <TabsContent value="general">
         <article className="flex flex-col gap-6 rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
@@ -183,8 +198,10 @@ export function TwinEditPage({
           </div>
 
         </article>
+        </TabsContent>
 
         {/* Card 2: before and during conversation settings */}
+        <TabsContent value="conversation">
         <article className="flex flex-col gap-6 rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
           {/* Section: Before conversation start */}
           <div className="flex flex-col gap-4">
@@ -292,8 +309,10 @@ export function TwinEditPage({
           </div>
 
         </article>
+        </TabsContent>
 
         {/* Card 3: assign learners */}
+        <TabsContent value="learners">
         <article id="assign" className="flex flex-col gap-6 rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
           <div className="flex flex-col gap-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -401,6 +420,8 @@ export function TwinEditPage({
           </div>
 
         </article>
+        </TabsContent>
+        </Tabs>
 
           {/* Action buttons */}
           <div className="flex items-center justify-end gap-3 pt-2">

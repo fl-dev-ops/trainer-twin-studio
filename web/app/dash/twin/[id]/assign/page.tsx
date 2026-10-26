@@ -11,5 +11,5 @@ export default async function TwinConfigureRoute({ params }: { params: Promise<{
     orNotFound(twin.agents.get({ slug: id })),
     orNotFound(twin.assignments.list({ slug: id })),
   ]);
-  return <TwinEditPage twin={agent} learners={learners} defaultMinutes={DEFAULT_TWIN_MINUTES} />;
+  return <TwinEditPage twin={agent} learners={learners} defaultMinutes={DEFAULT_TWIN_MINUTES} defaultTab="learners" />;
 }
