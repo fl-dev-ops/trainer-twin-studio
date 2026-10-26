@@ -13,7 +13,14 @@ import {
 } from "@/components/ui/card";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { RoleplaySessionReport } from "@/components/roleplay/roleplay-session-report";
+import { readRoleplaySession } from "@/lib/roleplay-sessions";
 import { getTrainerOrg } from "@/lib/org";
+import { orgCopy } from "@/lib/org-type";
+import { getStoredRoleplay } from "@/lib/roleplay";
+import { isSessionReport } from "@/lib/session-report";
+import { agentDisplayName } from "@/lib/specs";
+import { SessionReportCards } from "@/components/session-report-cards";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +37,10 @@ export default async function SessionDetailPage({
 
   const trainer = await getTrainerOrg();
   if (!trainer) redirect("/auth/no-org");
+  if (trainer.type === "SALES") {
+    const data = await readRoleplaySession(trainer.id, id);
+    if (data) return <RoleplaySessionReport data={data} />;
+  }
 
   const row = await db.interviewSession.findFirst({
     where: { id, orgId: trainer.id, deletedAt: null },
@@ -38,24 +49,32 @@ export default async function SessionDetailPage({
 
   const transcript = Array.isArray(row.transcript) ? (row.transcript as TranscriptEntry[]) : [];
   // The user who ran the session (if identified).
-  const runner = row.userId
-    ? await db.user.findUnique({ where: { id: row.userId }, select: { name: true, email: true } })
-    : null;
+  const [runner, agent] = await Promise.all([
+    row.userId
+      ? db.user.findUnique({ where: { id: row.userId }, select: { name: true, email: true } })
+      : null,
+    db.agent.findUnique({ where: { id: row.agentId }, select: { slug: true, name: true, data: true, persona: { select: { name: true } } } }),
+  ]);
+  const copy = orgCopy(trainer.type);
+  const scenarioName = agent ? agentDisplayName(agent.slug, agent.name) : row.agentSlug;
+  const aiName = (agent && getStoredRoleplay(agent.data)?.client_name) ?? agent?.persona.name ?? "Trainer";
+  const learnerName = runner?.name || "Learner";
+  const report = isSessionReport(row.report) ? row.report : null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
       <PageContainer size="narrow" className="flex flex-col gap-6">
         <Link
-          href="/sessions"
+          href={`/agents/${encodeURIComponent(agent?.slug ?? row.agentSlug)}`}
           className="text-muted-foreground flex items-center gap-1 text-sm hover:underline"
         >
-          <ArrowLeft className="size-4" /> All sessions
+          <ArrowLeft className="size-4" /> Back to {copy.scenarioLower}
         </Link>
 
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">
-              {row.agentSlug} <Badge variant="outline">v{row.agentVersion}</Badge>
+              {scenarioName} <Badge variant="outline">v{row.agentVersion}</Badge>
             </h1>
             <p className="text-muted-foreground mt-1 text-sm">
               {(row.startedAt ?? row.createdAt).toISOString().replace("T", " ").slice(0, 16)} · persona{" "}
@@ -108,6 +127,8 @@ export default async function SessionDetailPage({
           </Card>
         ) : null}*/}
 
+        {report ? <SessionReportCards report={report} /> : null}
+
         <Card>
           <CardHeader>
             <CardTitle>Transcript</CardTitle>
@@ -129,6 +150,7 @@ export default async function SessionDetailPage({
                           : "border bg-background max-w-[80%] rounded-xl px-3.5 py-2.5 text-sm"
                       }
                     >
+                      <p className="mb-0.5 text-xs font-semibold opacity-80">{entry.role === "user" ? learnerName : aiName}</p>
                       {entry.text}
                     </div>
                   </div>

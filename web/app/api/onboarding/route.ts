@@ -113,6 +113,7 @@ export async function POST(request: Request) {
           name: orgName,
           slug,
           websiteUrl,
+          type: invite.orgType,
           createdAt: new Date(),
           members: {
             create: {

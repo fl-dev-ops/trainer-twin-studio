@@ -7,12 +7,12 @@ import {
   AudioLines,
   BookOpen,
   BookOpenText,
-  GraduationCap,
-  History,
   MessagesSquare,
   UserRound,
   Users,
 } from "lucide-react";
+import { useOrgCopy, useOrgType } from "@/components/org-type-provider";
+import { ORG_KEY, type OrgKey } from "@/lib/org-type";
 import { SidebarAccountMenu } from "@/components/sidebar-account-menu";
 import {
   Sidebar,
@@ -35,21 +35,16 @@ const DOCS_URL =
 
 const NAV = [
   {
-    label: "Activity",
-    items: [
-      { title: "Sessions", href: "/sessions", icon: History },
-      { title: "Learners", href: "/learners", icon: GraduationCap },
-    ],
-  },
-  {
     label: "Create",
-    items: [{ title: "Scenarios", href: "/agents", icon: MessagesSquare }],
+    // copyKey: the title follows the org's wording, "Role plays" (sales) or "Scenarios" (technical interview).
+    items: [{ title: "Scenarios", copyKey: "scenarios" as const, href: "/agents", icon: MessagesSquare }],
   },
   {
     label: "Library",
     items: [
       { title: "Personas", href: "/personas", icon: UserRound },
-      { title: "Voices", href: "/voice", icon: AudioLines },
+      // Voice cloning is for the trainer's own twin; sales orgs pick voices per persona.
+      { title: "Voices", href: "/voice", icon: AudioLines, orgs: ["technical"] as OrgKey[] },
       { title: "Knowledge", href: "/knowledge", icon: BookOpen },
     ],
   },
@@ -61,6 +56,9 @@ const NAV = [
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const copy = useOrgCopy();
+  const orgType = useOrgType();
+  const orgKey = orgType ? ORG_KEY[orgType] : null;
 
   return (
     <Sidebar variant="inset" collapsible="icon">
@@ -73,7 +71,7 @@ export function AppSidebar() {
               </span>
               <span className="flex flex-col group-data-[collapsible=icon]:hidden">
                 <span className="text-base leading-4 font-semibold tracking-[-0.02em]">TrainerTwin</span>
-                <span className="text-xs text-muted-foreground">Digital twin studio</span>
+                <span className="text-xs text-muted-foreground">{copy.studio}</span>
               </span>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -85,13 +83,14 @@ export function AppSidebar() {
             <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu className="gap-1">
-                {group.items.map((item) => {
+                {group.items.filter((item) => !("orgs" in item) || !item.orgs || (orgKey !== null && item.orgs.includes(orgKey))).map((item) => {
+                  const title = "copyKey" in item ? copy[item.copyKey] : item.title;
                   const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
                   return (
                     <SidebarMenuItem key={item.href}>
-                      <SidebarMenuButton render={<Link href={item.href} />} isActive={active} tooltip={item.title}>
+                      <SidebarMenuButton render={<Link href={item.href} />} isActive={active} tooltip={title}>
                         <item.icon />
-                        <span>{item.title}</span>
+                        <span>{title}</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   );

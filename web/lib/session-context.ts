@@ -1,5 +1,8 @@
 import { unstable_cache } from "next/cache";
+import { personaKnowledgeDocIds } from "@/lib/client-persona-data";
 import { db } from "@/lib/db";
+import { MainCollectionService } from "@/lib/main-collection";
+import { getStoredRoleplay, isClientPersonaData } from "@/lib/roleplay";
 
 const SHARED_KNOWLEDGE_BASE_SLUG = "acme-knowledge";
 
@@ -130,6 +133,8 @@ export async function buildSessionContext(input: {
     ? { slug: snapshot.domain.slug ?? liveDomain?.slug ?? domainSlug, version: snapshot.domain.version ?? liveDomain?.version ?? 0, data: snapshot.domain.data }
     : liveDomain;
 
+  const personaKnowledge = await loadPersonaKnowledge(input.orgId, agent?.data, persona?.data);
+
   return {
     sessionId: session?.id ?? input.sessionId ?? null,
     agent: agent ?? null,
@@ -141,12 +146,35 @@ export async function buildSessionContext(input: {
     resume,
     warmOpening: session?.warmOpening ?? null,
     uiState: (session?.runtimeState as Record<string, unknown> | null)?.uiState ?? null,
+    personaKnowledge,
   };
+}
+
+const PERSONA_KNOWLEDGE_PASSAGES = 5;
+
+/**
+ * Role plays only: passages from the client persona's own knowledge that match the
+ * situation, so the client can bring up realistic examples and objections.
+ */
+async function loadPersonaKnowledge(orgId: string, agentData: unknown, personaData: unknown): Promise<Array<{ title?: string; text: string }>> {
+  const roleplay = getStoredRoleplay(agentData);
+  if (!roleplay || !isClientPersonaData(personaData)) return [];
+  try {
+    const docIds = await personaKnowledgeDocIds(orgId, personaData);
+    if (!docIds.length) return [];
+    const query = [roleplay.situation?.scenario, roleplay.situation?.hidden_truth].filter(Boolean).join("\n").slice(0, 2000);
+    if (!query) return [];
+    const hits = await MainCollectionService.searchKnowledge(orgId, query, { docIds, limit: PERSONA_KNOWLEDGE_PASSAGES });
+    return hits.map((hit) => ({ title: hit.title, text: hit.text.slice(0, 1200) }));
+  } catch (error) {
+    console.error("[session-context] persona knowledge failed", error);
+    return [];
+  }
 }
 
 /** Session context is immutable after activation; prime this during the intro. */
 export const getCachedSessionContext = unstable_cache(
   (orgId: string, sessionId: string) => buildSessionContext({ orgId, sessionId }),
-  ["session-context-v1"],
+  ["session-context-v2"],
   { revalidate: 86_400 },
 );

@@ -22,6 +22,7 @@ import { CopyButton } from "@/components/users/copy-button";
 import { BASE_DOMAIN } from "@/lib/base-domain";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { orgCopy } from "@/lib/org-type";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,7 @@ export default async function UsersPage() {
   if (!session) redirect("/auth/sign-in");
   const member = await db.member.findFirst({
     where: { userId: session.user.id, role: { in: ["owner", "admin"] } },
-    select: { organizationId: true },
+    select: { organizationId: true, organization: { select: { type: true } } },
   });
   if (!member) redirect("/auth/no-org");
 
@@ -62,7 +63,7 @@ export default async function UsersPage() {
         <PageHeader
           className="border-b pb-6"
           title="Users"
-          description="Invite users and manage who can access your scenarios."
+          description={`Invite users and manage who can access your ${orgCopy(member.organization.type).scenariosLower}.`}
         />
 
         <Card className="mt-6">

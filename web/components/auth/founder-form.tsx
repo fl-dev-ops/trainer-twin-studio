@@ -100,6 +100,9 @@ export function FounderForm({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  // An invite tied to an email locks the field; an open invite lets the founder type one.
+  const emailLocked = Boolean(email);
+  const [accountEmail, setAccountEmail] = useState(email);
 
   const initialCompany = inferCompanyFromEmail(email);
   const [orgName, setOrgName] = useState(defaultOrgName || initialCompany.name);
@@ -175,6 +178,10 @@ export function FounderForm({
       setError("Please enter your last name");
       return;
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(accountEmail.trim())) {
+      setError("Please enter a valid email address");
+      return;
+    }
     if (password.length < 8) {
       setError("Password must be at least 8 characters long");
       return;
@@ -216,7 +223,7 @@ export function FounderForm({
       try {
         const signUp = await authClient.signUp.email({
           name: `${firstName} ${lastName}`.trim(),
-          email,
+          email: accountEmail.trim(),
           password,
         });
         if (signUp.error) {
@@ -279,10 +286,18 @@ export function FounderForm({
     }
   }
 
-  // Navigate to Studio Dashboard
-  function handleGoToDashboard() {
+  // Navigate to Studio Dashboard. The server resolves the address so it also
+  // works behind a proxy that serves every subdomain from one public origin.
+  async function handleGoToDashboard() {
     const port = window.location.port ? `:${window.location.port}` : "";
-    window.location.assign(`https://dash.${BASE_DOMAIN}${port}/`);
+    const fallback = `https://dash.${BASE_DOMAIN}${port}/`;
+    try {
+      const res = await fetch("/api/me/home");
+      const data = (await res.json()) as { redirect?: string };
+      window.location.assign(res.ok && data.redirect && data.redirect !== "/auth/sign-in" ? data.redirect : fallback);
+    } catch {
+      window.location.assign(fallback);
+    }
   }
 
   const isBusy = stage !== "idle";
@@ -347,20 +362,32 @@ export function FounderForm({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1.5">
+                <label htmlFor={emailLocked ? undefined : "founder-email"} className="block text-sm font-medium text-foreground mb-1.5">
                   Email address
                 </label>
-                <div className="relative">
+                {emailLocked ? (
+                  <div className="relative">
+                    <input
+                      type="email"
+                      value={email}
+                      readOnly
+                      className="w-full h-10 pl-3.5 pr-28 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 text-sm text-muted-foreground shadow-2xs cursor-not-allowed focus:outline-none select-all"
+                    />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-100 dark:border-emerald-800/40 select-none">
+                      <Check className="size-3" /> Verified invite
+                    </span>
+                  </div>
+                ) : (
                   <input
+                    id="founder-email"
                     type="email"
-                    value={email}
-                    readOnly
-                    className="w-full h-10 pl-3.5 pr-28 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 text-sm text-muted-foreground shadow-2xs cursor-not-allowed focus:outline-none select-all"
+                    autoComplete="email"
+                    value={accountEmail}
+                    onChange={(event) => setAccountEmail(event.target.value)}
+                    placeholder="you@company.com"
+                    className="w-full h-10 px-3.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-sm text-foreground shadow-2xs focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground"
                   />
-                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-100 dark:border-emerald-800/40 select-none">
-                    <Check className="size-3" /> Verified invite
-                  </span>
-                </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

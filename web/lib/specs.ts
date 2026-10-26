@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { deletePrefix, getObjectText, kbPrefix, presignedGetUrl, putObject } from "@/lib/s3";
 import { db } from "@/lib/db";
+import { assertScenarioFitsOrg } from "@/lib/org";
 import {
   ALL_DOCUMENT_EXTENSIONS,
   documentToMarkdown,
@@ -142,6 +143,17 @@ export async function listAgentPersonas(orgId: string, slugs: string[]) {
   return Object.fromEntries(agents.map((agent) => [agent.slug, agent.persona.slug]));
 }
 
+/** Who the learner hears on the call: the role-play client's name, else the persona's name. */
+export async function listAgentSpeakers(orgId: string, slugs: string[]) {
+  const agents = await db.agent.findMany({
+    where: { orgId, slug: { in: slugs } },
+    select: { slug: true, data: true, persona: { select: { name: true } } },
+  });
+  return Object.fromEntries(
+    agents.map((agent) => [agent.slug, getStoredRoleplay(agent.data)?.client_name ?? agent.persona.name]),
+  );
+}
+
 export async function listAgentNames(orgId: string, slugs: string[]) {
   const agents = await db.agent.findMany({
     where: { orgId, slug: { in: slugs } },
@@ -229,6 +241,7 @@ export async function saveSpec(type: SpecType, slug: string, text: string, orgId
     if (!domainSlug || !validSlug(domainSlug)) {
       throw new Error('Agent requires a valid "domain" slug');
     }
+    await assertScenarioFitsOrg(orgId, data);
     if (!(await db.domain.findUnique({ where: { slug: domainSlug }, select: { id: true } }))) {
       throw new Error(`Domain "${domainSlug}" does not exist`);
     }

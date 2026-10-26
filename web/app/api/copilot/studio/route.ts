@@ -1,6 +1,10 @@
 import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { ScenarioKindMismatchError } from "@/lib/org";
+import { orgCopy, scenarioKindFor } from "@/lib/org-type";
+import { isClientPersonaData, roleplayInputSchema } from "@/lib/roleplay";
+import { roleplayDraftBundle, RoleplayInputError } from "@/lib/roleplay-drafts";
 import { searchKnowledge } from "@/lib/knowledge";
 import { specDraftBundleSchema } from "@/lib/spec-draft-schema";
 import { publishSpecDraft, readSpecDraft, saveSpecDraft } from "@/lib/spec-drafts";
@@ -15,6 +19,8 @@ export const runtime = "nodejs";
 const slug = z.string().regex(/^[a-z0-9][a-z0-9._-]*$/i);
 const requestSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("inventory") }).strict(),
+  z.object({ action: z.literal("organization") }).strict(),
+  z.object({ action: z.literal("saveRoleplayDraft"), slug, input: roleplayInputSchema }).strict(),
   z.object({ action: z.literal("readSpec"), type: z.enum(["persona", "agent", "domain"]), slug }).strict(),
   z.object({ action: z.literal("readDraft"), slug }).strict(),
   z.object({ action: z.literal("saveDraft"), bundle: specDraftBundleSchema }).strict(),
@@ -268,9 +274,28 @@ export async function POST(request: Request) {
   }
 
   try {
+    if (input.action === "organization") {
+      const org = await db.organization.findUnique({ where: { id: orgId }, select: { name: true, type: true } });
+      if (!org) return Response.json({ error: "Organization was not found" }, { status: 404 });
+      return Response.json({ name: org.name, type: org.type, scenarioKind: scenarioKindFor(org.type), wording: orgCopy(org.type) });
+    }
+
+    if (input.action === "saveRoleplayDraft") {
+      const bundle = await roleplayDraftBundle(orgId, input.slug, input.input);
+      const saved = await saveSpecDraft(bundle, orgId);
+      return Response.json({
+        slug: saved.slug,
+        name: saved.name,
+        status: saved.status,
+        revision: saved.revision,
+        changed: saved.changed,
+      });
+    }
+
     if (input.action === "inventory") {
-      const [personas, agents, domains, knowledgeBases, drafts] = await Promise.all([
-        db.persona.findMany({ where: { orgId }, orderBy: { slug: "asc" }, select: { slug: true, name: true, version: true } }),
+      const [org, personas, agents, domains, knowledgeBases, drafts] = await Promise.all([
+        db.organization.findUnique({ where: { id: orgId }, select: { type: true } }),
+        db.persona.findMany({ where: { orgId }, orderBy: { slug: "asc" }, select: { slug: true, name: true, version: true, data: true } }),
         db.agent.findMany({ where: { orgId }, orderBy: [{ order: "asc" }, { slug: "asc" }], select: { slug: true, name: true, version: true, domainSlug: true } }),
         db.domain.findMany({ where: { orgId }, orderBy: { slug: "asc" }, select: { slug: true, name: true, version: true } }),
         db.knowledgeBase.findMany({
@@ -285,7 +310,9 @@ export async function POST(request: Request) {
         }),
       ]);
       return Response.json({
-        personas,
+        organization: org ? { type: org.type, scenarioKind: scenarioKindFor(org.type) } : null,
+        // Client personas are the people a learner speaks with in a role play.
+        personas: personas.map(({ data, ...persona }) => ({ ...persona, client: isClientPersonaData(data) })),
         agents,
         domains,
         knowledgeBases,
@@ -346,6 +373,7 @@ export async function POST(request: Request) {
       })),
     });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Copilot request failed" }, { status: 500 });
+    const status = error instanceof ScenarioKindMismatchError ? 422 : error instanceof RoleplayInputError ? 400 : 500;
+    return Response.json({ error: error instanceof Error ? error.message : "Copilot request failed" }, { status });
   }
 }

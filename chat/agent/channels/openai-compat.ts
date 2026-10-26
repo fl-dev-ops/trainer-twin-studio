@@ -18,6 +18,7 @@ const USER_INACTIVE_SIGNAL = "__TRAINERTWIN_USER_INACTIVE__";
 const PURE_SIDE_EFFECT_TOOLS = new Set([
   "surface",
   "finish_session",
+  "end_call",
   "clear_canvas",
   "highlight_code",
   "highlight_whiteboard",

@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { ScenarioSectionNav } from "@/components/scenario-section-nav";
 import { loadLatestFidelityReport } from "@/lib/fidelity-report.server";
 import { getTrainerOrg } from "@/lib/org";
+import { orgCopy } from "@/lib/org-type";
 import { getPersonaBaseline } from "@/lib/persona-baseline";
 import { listSpecSummaries } from "@/lib/specs";
 
@@ -30,8 +31,8 @@ export default async function FidelityPage({
     <main className="min-h-0 flex-1 overflow-auto p-5 sm:p-8">
       <PageContainer size="narrow" className="space-y-6">
         <PageHeader
-          title="Scenarios"
-          description="Role-play scenarios and evidence-backed fidelity evaluation."
+          title={orgCopy(org.type).scenarios}
+          description="Evidence-backed fidelity evaluation."
         />
         <ScenarioSectionNav active="fidelity" />
         <div>
@@ -48,6 +49,7 @@ export default async function FidelityPage({
         {report ? (
           <FidelityView
             report={report}
+            scenarioLabel={orgCopy(org.type).scenario}
             scenarios={scenarios.map(({ slug, name, version }) => ({ slug, name, version }))}
             baseline={baseline}
             selectedScenario={selection.scenario}

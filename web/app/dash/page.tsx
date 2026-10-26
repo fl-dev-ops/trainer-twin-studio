@@ -1,12 +1,12 @@
-"use client";
+import { redirect } from "next/navigation";
+import { HomeCopilot } from "@/components/home-copilot";
+import { getSessionOrg } from "@/lib/org";
 
-import dynamic from "next/dynamic";
+export const dynamic = "force-dynamic";
 
-const CopilotChat = dynamic(
-  () => import("@/components/copilot-chat").then((module) => module.CopilotChat),
-  { ssr: false, loading: () => <main className="min-h-0 flex-1 bg-background" aria-busy="true" /> },
-);
-
-export default function HomePage() {
-  return <CopilotChat />;
+export default async function HomePage() {
+  // Sales orgs work with role plays only; the Copilot home builds trainer twins.
+  const org = await getSessionOrg();
+  if (org?.type === "SALES") redirect("/agents");
+  return <HomeCopilot />;
 }

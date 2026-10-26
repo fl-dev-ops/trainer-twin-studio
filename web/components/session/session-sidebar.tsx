@@ -12,7 +12,10 @@ export function SessionSidebar({
   onClose,
   disabled = false,
   className,
+  speakerName = "Trainer",
 }: {
+  /** Who the AI is on this call: the trainer persona, or the role-play client. */
+  speakerName?: string;
   entries: Entry[];
   onSendMessage?: (text: string) => void;
   onClose?: () => void;
@@ -97,7 +100,7 @@ export function SessionSidebar({
               return (
                 <div key={index} className={cn("flex flex-col gap-1", isUser ? "items-end" : "items-start")}>
                   <div className="flex items-center gap-1.5 px-1 text-[11px] text-muted-foreground">
-                    <strong className="font-semibold text-foreground/90">{isUser ? "You" : "Vasanth"}</strong>
+                    <strong className="font-semibold text-foreground/90">{isUser ? "You" : speakerName}</strong>
                   </div>
                   <div
                     className={cn(
@@ -149,7 +152,7 @@ export function SessionSidebar({
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleSend();
               }}
-              placeholder={disabled ? "Connecting to trainer…" : "Message the trainer…"}
+              placeholder={disabled ? `Connecting to ${speakerName}…` : `Message ${speakerName}…`}
               className="flex-1 bg-transparent text-foreground text-sm placeholder:text-muted-foreground focus:outline-hidden disabled:opacity-50"
             />
             <button

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { toast } from "sonner";
 import { Check, LoaderCircle, Play, ScreenShare, Upload as UploadIcon, Volume2 } from "lucide-react";
+import { useOrgCopy } from "@/components/org-type-provider";
 import { type AgentContextUpload } from "@/lib/context-upload";
 import "@livekit/components-styles";
 import {
@@ -94,6 +95,8 @@ type Props = {
   agentNames?: Record<string, string>;
   initialAgent?: string;
   agentPersonas?: Record<string, string>;
+  /** Display name of who speaks on the call (role-play client or persona name). */
+  agentSpeakers?: Record<string, string>;
   agentContextRequired?: Record<string, boolean>;
   agentContextUploads?: Record<string, AgentContextUpload>;
   sessionCode?: string;
@@ -120,6 +123,7 @@ export function SessionView({
   agentNames = {},
   initialAgent,
   agentPersonas = {},
+  agentSpeakers = {},
   agentContextRequired = {},
   agentContextUploads = {},
   sessionCode,
@@ -144,8 +148,10 @@ export function SessionView({
     [],
   );
 
+  const copy = useOrgCopy();
   const [agent, setAgent] = useState(initialAgent ?? agents[0] ?? "");
   const persona = agentPersonas[agent] ?? personas[0] ?? "";
+  const speaker = agentSpeakers[agent] ?? persona;
   const [contextIds, setContextIds] = useState<string[]>([]);
   const contextId = contextIds[0] ?? "";
   const [contextList, setContextList] = useState<{ id: string; name: string; size?: number }[]>(contexts);
@@ -975,19 +981,19 @@ export function SessionView({
               <CardHeader>
                 <CardTitle>Configure the session</CardTitle>
                 <CardDescription>
-                  Choose a scenario. Its trainer persona is already configured.
+                  Choose a {copy.scenarioLower}. Its trainer persona is already configured.
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
                 <label className="flex flex-col gap-1.5 text-sm">
-                  <span className="font-medium">Scenario</span>
+                  <span className="font-medium">{copy.scenario}</span>
                   <Select value={agent} onValueChange={(v) => v !== null && setAgent(v)}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Scenario" />
+                      <SelectValue placeholder={copy.scenario} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
-                        <SelectLabel>Scenarios</SelectLabel>
+                        <SelectLabel>{copy.scenarios}</SelectLabel>
                         {agents.map((a) => (
                           <SelectItem key={a} value={a}>{agentNames[a] ?? a.replaceAll("-", " ")}</SelectItem>
                         ))}
@@ -1272,12 +1278,12 @@ export function SessionView({
                       <ScenarioIntro
                         key={agent}
                         src={introPlaybackSrc ?? introSrc}
-                        personaLabel={persona}
+                        personaLabel={speaker}
                         onFinished={() => setIntroDone(true)}
                         className="h-full min-h-0 w-full"
                       />
                     ) : (
-                      <AgentTile persona={persona} compact={surface !== null} />
+                      <AgentTile persona={speaker} compact={surface !== null} />
                     )}
                   </div>
                   <div className="min-h-0 flex-1">
@@ -1301,6 +1307,7 @@ export function SessionView({
                   className="shrink-0 overflow-hidden"
                 >
                   <SessionSidebar
+                    speakerName={speaker}
                     entries={entries}
                     onSendMessage={handleSendMessage}
                     onClose={() => setSidebarOpen(false)}

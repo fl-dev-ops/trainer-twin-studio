@@ -1,6 +1,7 @@
 "use client";
 
 import { Clock, Plus, Upload } from "lucide-react";
+import { useOrgCopy } from "@/components/org-type-provider";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import type { KnowledgeStats } from "./types";
@@ -28,11 +29,12 @@ export function KnowledgeHeader({
   stats: KnowledgeStats | null;
   onOpenUpload: () => void;
 }) {
+  const copy = useOrgCopy();
   return (
     <PageHeader
       className="border-b pb-6"
       title="Knowledge"
-      description="Upload and manage source material used to ground your scenarios."
+      description={`Upload and manage source material used to ground your ${copy.scenariosLower}.`}
       actions={
         <>
           {stats?.lastIndexedAt && (

@@ -1,5 +1,6 @@
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { db } from "@/lib/db";
+import { assertScenarioFitsOrg } from "@/lib/org";
 import { specDraftBundleSchema, type SpecDraftBundle } from "@/lib/spec-draft-schema";
 
 function json(value: unknown): Prisma.InputJsonValue {
@@ -54,6 +55,7 @@ export async function readSpecDraft(slug: string, orgId: string) {
 
 export async function saveSpecDraft(input: unknown, orgId: string) {
   const bundle = specDraftBundleSchema.parse(input);
+  await assertScenarioFitsOrg(orgId, bundle.agent);
   const existing = await db.specDraft.findUnique({ where: { slug: bundle.slug } });
   if (existing?.orgId && existing.orgId !== orgId) {
     throw new Error("Draft belongs to another organization");
@@ -108,6 +110,7 @@ export async function publishSpecDraft(slug: string, orgId: string) {
   const row = await db.specDraft.findFirst({ where: { slug, orgId } });
   if (!row) throw new Error(`Draft "${slug}" was not found`);
   const bundle = bundleFromRow(row);
+  await assertScenarioFitsOrg(orgId, bundle.agent);
   if (bundle.gaps.length) throw new Error(`Resolve ${bundle.gaps.length} draft gap(s) before publishing`);
   const requestedKnowledge = [...new Set([
     ...bundle.domain.knowledge_bases,

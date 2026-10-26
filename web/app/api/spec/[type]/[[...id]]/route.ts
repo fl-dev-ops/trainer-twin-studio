@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getTrainerOrg } from "@/lib/org";
+import { getTrainerOrg, ScenarioKindMismatchError } from "@/lib/org";
 import {
   deleteSpec,
   isSpecType,
@@ -51,7 +51,7 @@ export async function PUT(req: Request, { params }: Params) {
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Save failed" },
-      { status: 400 },
+      { status: error instanceof ScenarioKindMismatchError ? 422 : 400 },
     );
   }
 }

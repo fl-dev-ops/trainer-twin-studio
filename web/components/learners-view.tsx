@@ -14,12 +14,12 @@ import {
   Pause,
   Play,
   RotateCcw,
-  Sparkles,
   UserPlus,
   Video as VideoIcon,
   Volume2,
   VolumeX,
 } from "lucide-react";
+import { useOrgCopy } from "@/components/org-type-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,7 +30,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { cn } from "@/lib/utils";
-import type { KeyMoment, SessionReport, SessionReportStatus } from "@/lib/session-report";
+import { rubricTotals, type KeyMoment, type SessionReport, type SessionReportStatus } from "@/lib/session-report";
 
 export type LearnerSessionItem = {
   id: string;
@@ -79,25 +79,10 @@ function formatTime(seconds: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-function parseTimestampToSeconds(ts?: string, fallbackSeconds?: number): number {
-  if (typeof fallbackSeconds === "number" && !isNaN(fallbackSeconds) && fallbackSeconds >= 0) {
-    return fallbackSeconds;
-  }
-  if (!ts) return 0;
-  const clean = ts.replace(/[^\d:]/g, "");
-  const parts = clean.split(":").map(Number);
-  if (parts.length === 2) {
-    return (parts[0] || 0) * 60 + (parts[1] || 0);
-  }
-  if (parts.length === 3) {
-    return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
-  }
-  return 0;
-}
-
 const PLAYBACK_RATES = [1, 1.25, 1.5, 1.75, 2];
 
 export function LearnersView({ initialLearners = [] }: { initialLearners?: LearnerData[] }) {
+  const copy = useOrgCopy();
   const learners = initialLearners;
 
   const [expandedLearnerIds, setExpandedLearnerIds] = useState<Record<string, boolean>>(() => {
@@ -192,16 +177,6 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
     }
   };
 
-  const handleJumpToMoment = (moment: KeyMoment) => {
-    const targetSeconds = parseTimestampToSeconds(moment.timestamp, moment.seconds);
-    handleSeek(targetSeconds);
-    const el = videoRef.current;
-    if (el) {
-      el.play().then(() => setIsPlaying(true)).catch(() => {});
-    }
-    playerContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  };
-
   const handleToggleMute = () => {
     const nextMute = !isMuted;
     if (videoRef.current) videoRef.current.muted = nextMute;
@@ -234,7 +209,7 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
             </EmptyMedia>
             <EmptyTitle className="text-sm font-semibold">No completed learner sessions yet</EmptyTitle>
             <EmptyDescription className="text-xs leading-relaxed text-muted-foreground">
-              When learners accept an invitation and complete a role play session, their screen recordings,
+              When learners accept an invitation and complete a {copy.scenarioLower} session, their screen recordings,
               AI performance evaluation, and coaching briefs will appear here.
             </EmptyDescription>
           </EmptyHeader>
@@ -524,7 +499,7 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
             {/* SCENARIO SUMMARY Section */}
             <section>
               <h3 className="text-sm font-semibold text-foreground tracking-tight mb-2.5">
-                Scenario Summary
+                {copy.scenario} summary
               </h3>
               <div className="rounded-2xl border border-indigo-100 dark:border-indigo-900/50 bg-[#F4F5FD] dark:bg-indigo-950/20 p-5 sm:p-6 relative border-l-4 border-l-indigo-600">
                 <p className="text-xs sm:text-[13px] text-foreground leading-relaxed font-normal">
@@ -532,7 +507,9 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
                 </p>
 
                 {selectedSession.summaryTags && selectedSession.summaryTags.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-4">
+                  <>
+                  <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Topics discussed</p>
+                  <div className="flex flex-wrap gap-2 mt-2">
                     {selectedSession.summaryTags.map((tag) => (
                       <Badge
                         key={tag}
@@ -543,6 +520,7 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
                       </Badge>
                     ))}
                   </div>
+                  </>
                 )}
               </div>
             </section>
@@ -554,9 +532,6 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
                   <h3 className="text-sm font-semibold tracking-tight text-foreground">
                     Key moments to review
                   </h3>
-                  <Badge variant="outline" className="text-[10px] text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800">
-                    <Sparkles className="size-3 mr-1" /> Click moment to jump in video
-                  </Badge>
                 </div>
                 <span className="text-xs text-muted-foreground">
                   {selectedSession.keyMoments.length} moments selected
@@ -565,34 +540,18 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {selectedSession.keyMoments.map((moment) => {
-                  const momentSec = parseTimestampToSeconds(moment.timestamp, moment.seconds);
-                  const isCurrentMoment =
-                    currentTime >= momentSec &&
-                    currentTime < momentSec + 45;
-
                   return (
                     <div
                       key={moment.id}
-                      onClick={() => handleJumpToMoment(moment)}
-                      className={cn(
-                        "rounded-2xl border bg-card p-4 sm:p-5 shadow-2xs transition-all hover:shadow-xs cursor-pointer flex flex-col justify-between group",
-                        isCurrentMoment
-                          ? "border-indigo-500 ring-2 ring-indigo-500/20 bg-indigo-50/20 dark:bg-indigo-950/30"
-                          : "hover:border-indigo-300 dark:hover:border-indigo-800"
-                      )}
+                      className="rounded-2xl border bg-card p-4 sm:p-5 shadow-2xs flex flex-col"
                     >
                       <div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                            {moment.number}
-                          </span>
-                          <span className="inline-flex items-center gap-1 text-xs font-mono font-medium px-2 py-0.5 rounded-full bg-muted text-foreground group-hover:bg-indigo-100 dark:group-hover:bg-indigo-950/80 group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">
-                            {moment.timestamp}
-                          </span>
-                        </div>
+                        <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                          {moment.number}
+                        </span>
 
                         {/* Moment Subheading */}
-                        <h4 className="font-semibold text-sm text-foreground mt-2.5 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                        <h4 className="font-semibold text-sm text-foreground mt-2.5">
                           {moment.title}
                         </h4>
 
@@ -607,15 +566,70 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
                         </p>
                       </div>
 
-                      <div className="mt-4 pt-3 border-t border-border/40 flex items-center justify-between text-[11px] text-muted-foreground group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
-                        <span>Jump to timestamp</span>
-                      </div>
                     </div>
                   );
                 })}
               </div>
             </section>
             </>}
+
+            {hasCompletedReport && selectedSession.report?.rubricScores?.length ? (
+              <section className="mt-1">
+                <div className="mb-3 flex items-baseline justify-between gap-3">
+                  <h3 className="text-sm font-semibold tracking-tight text-foreground">Scoring rubric</h3>
+                  <p className="text-sm font-semibold tabular-nums text-foreground">
+                    {rubricTotals(selectedSession.report.rubricScores).earned} / {rubricTotals(selectedSession.report.rubricScores).max}
+                  </p>
+                </div>
+                <ul className="divide-y rounded-2xl border bg-card shadow-2xs">
+                  {selectedSession.report.rubricScores.map((row) => (
+                    <li key={row.criterion} className="flex flex-col gap-1 px-5 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="min-w-0 text-xs sm:text-[13px] font-medium text-foreground">{row.criterion}</span>
+                        <span className="flex shrink-0 items-center gap-3">
+                          <span className="h-1.5 w-24 overflow-hidden rounded-full bg-muted" aria-hidden>
+                            <span
+                              className="block h-full rounded-full bg-primary"
+                              style={{ width: `${row.maxPoints ? Math.round((row.points / row.maxPoints) * 100) : 0}%` }}
+                            />
+                          </span>
+                          <span className="w-12 text-right text-xs tabular-nums text-muted-foreground">
+                            {row.points} / {row.maxPoints}
+                          </span>
+                        </span>
+                      </div>
+                      {row.reason && <p className="text-xs leading-relaxed text-muted-foreground">{row.reason}</p>}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+
+            {hasCompletedReport && selectedSession.report?.goalResults?.length ? (
+              <section className="mt-1">
+                <h3 className="mb-3 text-sm font-semibold tracking-tight text-foreground">Learner goals</h3>
+                <ul className="divide-y rounded-2xl border bg-card shadow-2xs">
+                  {selectedSession.report.goalResults.map((row) => (
+                    <li key={row.goal} className="flex flex-col gap-1 px-5 py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="min-w-0 text-xs sm:text-[13px] text-foreground">{row.goal}</span>
+                        <span
+                          className={cn(
+                            "shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium",
+                            row.status === "met" && "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400",
+                            row.status === "partly" && "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400",
+                            row.status === "not_met" && "bg-muted text-muted-foreground",
+                          )}
+                        >
+                          {row.status === "met" ? "Met" : row.status === "partly" ? "Partly" : "Not met"}
+                        </span>
+                      </div>
+                      {row.evidence && <p className="text-xs leading-relaxed text-muted-foreground">{row.evidence}</p>}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
 
             {/* Next Conversation Brief Section */}
             <section className="mt-1">

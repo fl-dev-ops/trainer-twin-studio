@@ -74,7 +74,9 @@ export function FidelityView({
   baseline,
   selectedScenario,
   selectedSection,
+  scenarioLabel = "Scenario",
 }: {
+  scenarioLabel?: string;
   report: FidelityReport;
   scenarios: ScenarioSummary[];
   baseline: PersonaBaseline | null;
@@ -118,14 +120,14 @@ export function FidelityView({
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Scenario fidelity</CardTitle>
-          <CardDescription>Select a scenario to inspect its consolidated simulation findings.</CardDescription>
+          <CardTitle>{scenarioLabel} fidelity</CardTitle>
+          <CardDescription>Select a {scenarioLabel.toLowerCase()} to inspect its consolidated simulation findings.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Scenario</TableHead>
+                <TableHead>{scenarioLabel}</TableHead>
                 <TableHead>Persona fidelity</TableHead>
                 <TableHead>Decision adherence</TableHead>
                 <TableHead>Knowledge retrieval</TableHead>

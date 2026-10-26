@@ -86,7 +86,7 @@ export type SessionSpecs = {
   clientTools?: string[];
   behavioralRules?: string;
   /** Present only for client role-play scenarios (`config.scenario.roleplay`). */
-  roleplay?: { config: RoleplayConfig; persona: ClientPersona } | null;
+  roleplay?: { config: RoleplayConfig; persona: ClientPersona; knowledge?: Array<{ title?: string; text: string }> } | null;
 };
 
 const QUESTION_TYPES = ["verbal", "mcq", "coding", "code-output", "machine-coding", "system-design"] as const;
@@ -268,6 +268,8 @@ export async function loadSessionContext(
       updatedAt?: string;
     } | null;
     knowledgeBases?: { slug: string; name: string }[];
+    /** Role plays only: passages from the client persona's own knowledge. */
+    personaKnowledge?: Array<{ title?: string; text: string }>;
   }>(orgId, {
     action: "getSessionContext",
     sessionId,
@@ -376,7 +378,13 @@ export async function loadSessionContext(
     clientTools,
     roleplay: (() => {
       const config = getRoleplay(result.agent?.data);
-      return config ? { config, persona: getClientPersona(result.persona?.data) } : null;
+      if (!config) return null;
+      const knowledge = Array.isArray(result.personaKnowledge)
+        ? (result.personaKnowledge as Array<{ title?: unknown; text?: unknown }>)
+            .filter((item) => typeof item?.text === "string" && item.text.trim())
+            .map((item) => ({ title: typeof item.title === "string" ? item.title : undefined, text: String(item.text) }))
+        : [];
+      return { config, persona: getClientPersona(result.persona?.data), knowledge };
     })(),
   };
 }
@@ -528,6 +536,7 @@ function formatRoleplaySessionSpec(
   const block = buildRoleplayPrompt({
     roleplay: roleplay.config,
     persona: roleplay.persona,
+    knowledge: roleplay.knowledge,
     opening: specs.opening,
     mode: specs.mode === "chat" ? "chat" : "voice",
   });

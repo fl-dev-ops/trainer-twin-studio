@@ -122,6 +122,12 @@ scenarios:
         - "Gives an easy way out: \"If it's not for you, I'll stop contacting you\""
         - Offers real sales and rental data, with no pressure to buy
     opening: The market has basically stopped. I'll wait for prices to hit the bottom, then I'll buy.
+    rubric:
+      - { name: Acknowledging the concern calmly, points: 20 }
+      - { name: Finding out why they started looking, points: 20 }
+      - { name: "Real sales and rental data, no pressure", points: 25 }
+      - { name: "Handling \u201cwait for the bottom\u201d", points: 20 }
+      - { name: Dated follow-up, points: 15 }
 
   - slug: options-collector
     name: The options-collector who ghosts
@@ -170,3 +176,9 @@ scenarios:
         - Offers to help compare the offers they already have, with no promise to sell
         - Asks gently what they could comfortably put aside in the next few months
     opening: Hi, yeah. Can you just send me some options? I'm at work.
+    rubric:
+      - { name: Holding back the options, points: 20 }
+      - { name: Asking what they want over the next years, points: 25 }
+      - { name: Comparing the offers they already have, points: 20 }
+      - { name: Booking a Zoom at a set time, points: 25 }
+      - { name: Tone and pace, points: 10 }

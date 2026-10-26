@@ -28,6 +28,33 @@ export const CHARACTER_ROLES = [
 export const MAX_LEARNER_GOALS = 5;
 const MAX_REACTIONS = 12;
 
+/**
+ * How a role play is scored: named criteria worth any number of points (presets
+ * add up to 100). Reports scale the total to 0-100 so sessions stay comparable.
+ */
+export const RUBRIC_TOTAL = 100;
+export const MAX_RUBRIC_CRITERIA = 8;
+
+export const RUBRIC_PRESETS = [
+  { value: "sales", label: "Sales call", criteria: [["Rapport and tone", 20], ["Discovery questions", 20], ["Objection handling", 20], ["Value and data", 20], ["Next step booked", 20]] },
+  { value: "cold-call", label: "Cold call", criteria: [["Opening and permission to talk", 20], ["Clear reason for calling", 20], ["Handling the brush-off", 25], ["Value in one line", 15], ["Follow-up agreed", 20]] },
+  { value: "wait-and-see", label: "Wait-and-see investor", criteria: [["Acknowledging the concern calmly", 20], ["Finding out why they started looking", 20], ["Real sales and rental data, no pressure", 25], ["Handling \u201cwait for the bottom\u201d", 20], ["Dated follow-up", 15]] },
+  { value: "options-collector", label: "Options collector", criteria: [["Holding back the options", 20], ["Asking what they want over the next years", 25], ["Comparing the offers they already have", 20], ["Booking a Zoom at a set time", 25], ["Tone and pace", 10]] },
+  { value: "fee-pushback", label: "Fee push-back", criteria: [["Staying calm on the fee", 20], ["Naming the work behind the fee", 25], ["Asking which part they\u2019d skip", 20], ["Not discounting", 20], ["Next step agreed", 15]] },
+] as const satisfies readonly { value: string; label: string; criteria: readonly (readonly [string, number])[] }[];
+
+export type RubricCriterion = { name: string; points: number };
+
+export function rubricPreset(value: string): RubricCriterion[] {
+  const preset = RUBRIC_PRESETS.find((item) => item.value === value) ?? RUBRIC_PRESETS[0];
+  return preset.criteria.map(([name, points]) => ({ name, points }));
+}
+
+export const rubricSchema = z.array(z.object({
+  name: z.string().trim().min(1, "Name every rubric score").max(120),
+  points: z.number().int().min(1, "Each score is worth at least 1 point").max(RUBRIC_TOTAL),
+})).min(1, "Add at least one rubric score").max(MAX_RUBRIC_CRITERIA, `${MAX_RUBRIC_CRITERIA} rubric scores at most`);
+
 const line = z.string().trim().min(1).max(300);
 const paragraph = (label: string) => z.string().trim().min(1, `${label} is required`).max(4000);
 
@@ -53,6 +80,7 @@ export const roleplayInputSchema = z.object({
     whatToExpect: z.string().trim().max(2000).optional(),
   }),
   opening: z.string().trim().min(1, "Opening message is required").max(1000),
+  rubric: rubricSchema,
 });
 
 export type RoleplayInput = z.infer<typeof roleplayInputSchema>;
@@ -76,6 +104,8 @@ export type StoredRoleplay = {
     reactions: { guarded_if: string[]; opens_up_if: string[] };
     what_to_expect?: string;
   };
+  /** Absent on role plays saved before rubrics existed. */
+  rubric?: RubricCriterion[];
 };
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
@@ -112,6 +142,7 @@ function storedRoleplay(input: RoleplayInput): StoredRoleplay {
       reactions: { guarded_if: input.agent.guardedIf, opens_up_if: input.agent.opensUpIf },
       ...(optional(input.agent.whatToExpect) ? { what_to_expect: optional(input.agent.whatToExpect) } : {}),
     },
+    rubric: input.rubric,
   };
 }
 
@@ -218,6 +249,7 @@ export function roleplayInputFromSpec(agentData: Record<string, unknown>): Parti
       whatToExpect: stored.agent?.what_to_expect,
     },
     opening: typeof agentData.opening === "string" ? agentData.opening : "",
+    rubric: stored.rubric?.length ? stored.rubric : rubricPreset("sales"),
   };
 }
 
@@ -231,6 +263,7 @@ export type ClientPersonaCard = {
   background?: string;
   behaviours: string[];
   howTheyTalk?: string;
+  difficulty?: Difficulty;
 };
 
 export function isClientPersonaData(data: unknown): boolean {
@@ -250,5 +283,6 @@ export function clientPersonaCard(slug: string, data: unknown): ClientPersonaCar
     background: str(record.background),
     behaviours: Array.isArray(record.behaviours) ? record.behaviours.filter((b): b is string => typeof b === "string") : [],
     howTheyTalk: str(record.how_they_talk),
+    difficulty: (["easy", "medium", "hard", "hardest"] as const).find((level) => level === str(record.difficulty)?.toLowerCase()),
   };
 }
