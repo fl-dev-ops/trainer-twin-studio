@@ -1,47 +1,7 @@
-import type { SourceKind } from "@/components/calibration/call-icons";
-
-// shortcut: calibration UI runs on this mock data, replace with the live call + TurnRating API once the backend lands.
+// shortcut: past calibrations aren't stored yet, so the review page shows this sample; replace once ratings are saved.
 
 export type Rating = "like" | "off";
 export type CalibrationTurn = { id: string; speaker: "you" | "twin"; text: string; rating?: Rating };
-export type AnswerSource = { title: string; kind: SourceKind; meta: string };
-
-/** What the twin and the trainer say in the demo call, revealed one turn at a time. */
-export const DEMO_SCRIPT: CalibrationTurn[] = [
-  {
-    id: "t1",
-    speaker: "twin",
-    text: "Hi! I’m your twin. I’ve learnt how you run these conversations. Ask me anything your learners would, and I’ll answer the way you would.",
-  },
-  { id: "t2", speaker: "you", text: "A learner freezes when I ask about their biggest weakness. What do I tell them?" },
-  {
-    id: "t3",
-    speaker: "twin",
-    text: "I’d tell them to pick a real weakness, say what they did about it last month, and stop there. Short and honest beats polished.",
-  },
-  { id: "t4", speaker: "you", text: "And if they ramble during the project deep dive?" },
-  {
-    id: "t5",
-    speaker: "twin",
-    text: "I’d ask for the one decision they owned, then the result. Everything else can wait for my follow-up question.",
-  },
-];
-
-/** What the twin says after "Feels off" (the prototype asks why, then tries again). */
-export const FEELS_OFF_FOLLOW_UP = "Why do you feel the response feels off? Tell me and I’ll answer it again the way you would.";
-
-export const DEMO_WHY = {
-  summary:
-    "A learner freezing on the weakness question is something you cover in your interview playbook. I used your “one real weakness, one recent action” structure.",
-  total: 12,
-  sources: [
-    { title: "Course deck: Interview playbook", kind: "slides", meta: "Slides · Module 2 · Answering the weakness question" },
-    { title: "Coaching notes", kind: "notion", meta: "Notion · Your workspace · Short answers beat polished ones" },
-    { title: "Feedback guide", kind: "doc", meta: "Doc · Course materials · When to stop a learner" },
-    { title: "Mock interview walkthrough", kind: "video", meta: "YouTube · 09:48 · Owning one decision" },
-    { title: "Project deep dive worksheet", kind: "doc", meta: "Google Doc · Shared with learners · Decision, then result" },
-  ] satisfies AnswerSource[],
-};
 
 /** A finished calibration, as shown on its review page. */
 export const DEMO_CALIBRATION = {

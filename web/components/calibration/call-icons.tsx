@@ -83,18 +83,6 @@ export function FeelsOffIcon(props: P) {
   );
 }
 
-/** "Why did the twin say this?" — a document with a sparkle. */
-export function WhyIcon(props: P) {
-  return (
-    <svg {...base} {...line} strokeWidth={2} {...props}>
-      <path d="M14 3v4a1 1 0 0 0 1 1h4" />
-      <path d="M12 21h-5a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v3.5" />
-      <path d="M9 9h1M9 13h6M9 17h3" />
-      <path d="M19 22.5a4.75 4.75 0 0 1 3.5 -3.5a4.75 4.75 0 0 1 -3.5 -3.5a4.75 4.75 0 0 1 -3.5 3.5a4.75 4.75 0 0 1 3.5 3.5" />
-    </svg>
-  );
-}
-
 export function CloseIcon(props: P) {
   return (
     <svg {...base} {...props}>
@@ -107,30 +95,6 @@ export function ArrowUpRightIcon(props: P) {
   return (
     <svg {...base} {...line} strokeWidth={1.8} {...props}>
       <path d="M7 17 17 7M8 7h9v9" />
-    </svg>
-  );
-}
-
-const SOURCE_PATHS = {
-  slides: ["M3 4h18", "M4 4v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-10", "M12 16v4M9 20h6M8 12l3 -3l2 2l3 -3"],
-  notion: ["M4 6a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z", "M9 16v-8l6 8v-8"],
-  doc: ["M14 3v4a1 1 0 0 0 1 1h4", "M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z", "M9 13h6M9 17h4"],
-  video: [],
-} as const;
-
-export type SourceKind = keyof typeof SOURCE_PATHS;
-
-export function SourceIcon({ kind, ...props }: P & { kind: SourceKind }) {
-  return (
-    <svg {...base} {...line} strokeWidth={1.8} {...props}>
-      {kind === "video" ? (
-        <>
-          <rect x="3" y="5" width="18" height="14" rx="4" />
-          <path d="m10 9.5 5 2.5-5 2.5z" fill="currentColor" />
-        </>
-      ) : (
-        SOURCE_PATHS[kind].map((d) => <path key={d} d={d} />)
-      )}
     </svg>
   );
 }
