@@ -50,7 +50,7 @@ const SAMPLE_SENTENCE = "Hi, this is a quick test of my voice. Let us begin toda
 export function VoiceLibrary({ mine, samples }: { mine: VoiceRow[]; samples: VoiceRow[] }) {
   return (
     <Tabs defaultValue={mine.length ? "my" : "explore"} className="mt-6" >
-      <TabsList variant="line">
+      <TabsList>
         <TabsTrigger className={"cursor-pointer"} value="explore">Explore voices</TabsTrigger>
         <TabsTrigger className={"cursor-pointer"} value="my">My voices</TabsTrigger>
       </TabsList>

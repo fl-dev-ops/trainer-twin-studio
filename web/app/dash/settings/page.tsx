@@ -14,12 +14,6 @@ import { isStudioRole } from "@/lib/org";
 export const dynamic = "force-dynamic";
 
 const TABS = ["account", "team", "branding"] as const;
-// Pill segmented control, same look as the twin agent page's Calibration / Sessions switch.
-const pillList = "h-auto rounded-full bg-(--sidebar) p-1";
-const pillTab =
-  "h-auto flex-none rounded-full border-0 px-4 py-1.5 text-[14px] leading-5 font-medium text-muted-foreground hover:text-(--foreground) " +
-  "data-active:bg-card data-active:text-(--foreground) group-data-[variant=default]/tabs-list:data-active:shadow-[0_1px_2px_rgb(30_28_25/0.06)] " +
-  "dark:text-muted-foreground dark:data-active:bg-card dark:data-active:text-(--foreground)";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -75,10 +69,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         />
 
         <Tabs defaultValue={tab} className="mt-6">
-          <TabsList className={pillList}>
-            <TabsTrigger value="account" className={pillTab}>Account</TabsTrigger>
-            {team ? <TabsTrigger value="team" className={pillTab}>Team</TabsTrigger> : null}
-            <TabsTrigger value="branding" className={pillTab}>Branding</TabsTrigger>
+          <TabsList>
+            <TabsTrigger value="account">Account</TabsTrigger>
+            {team ? <TabsTrigger value="team">Team</TabsTrigger> : null}
+            <TabsTrigger value="branding">Branding</TabsTrigger>
           </TabsList>
 
           <TabsContent value="account">

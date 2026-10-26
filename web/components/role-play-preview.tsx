@@ -410,7 +410,7 @@ export function RolePlayPreview({
         )}
 
         <Tabs defaultValue="overview" className="mt-6">
-          <TabsList variant="line">
+          <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="assign" disabled={!canAssign}>
               Assign
