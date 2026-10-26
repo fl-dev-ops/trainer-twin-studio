@@ -1,18 +1,12 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { RoleplayIcon, SessionsIcon, SettingsIcon, TwinIcon, UsersIcon } from "@/components/icons";
+import { RoleplayIcon, SessionsIcon, SettingsIcon, SetupIcon, TwinIcon, UsersIcon } from "@/components/icons";
 import { SidebarAccountMenu } from "@/components/sidebar-account-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -20,43 +14,61 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
-const NAV = [
-  // All learner sessions: role play and twin.
-  { title: "Sessions", href: "/sessions", icon: SessionsIcon },
-  // Every scenario, twin role play or not.
-  { title: "Roleplay", href: "/agents", icon: RoleplayIcon },
-  // The twin's knowledge.
-  { title: "Twin", href: "/knowledge", icon: TwinIcon },
-  // Every learner.
-  { title: "Users", href: "/learners", icon: UsersIcon },
+/**
+ * Rail port of the reference sidebar (trainertwin-beta app.css `.rail`):
+ * 248px expanded / 72px collapsed, sunken background, uppercase group labels,
+ * 32px nav rows with white active pills, and a card-style user row at the foot.
+ */
+const NAV_GROUPS = [
+  {
+    label: "Twin",
+    items: [
+      { title: "Twin agents", href: "/twin", icon: SetupIcon },
+      { title: "Twin sessions", href: "/twin/sessions", icon: SessionsIcon },
+      { title: "Twin users", href: "/twin/users", icon: UsersIcon },
+      { title: "Twin’s brain", href: "/knowledge", icon: TwinIcon },
+    ],
+  },
+  {
+    label: "Role play",
+    items: [{ title: "Scenarios", href: "/agents", icon: RoleplayIcon }],
+  },
 ];
 
-/** Prototype rail: white pill + brand text/icon for the active item, quiet text otherwise. */
+/** Reference nav-item metrics: 32px row, 8px radius, 14px/20px text, 20px icon. */
 const navButton = cn(
-  "h-7 gap-2 rounded-md px-2 text-[13px] font-medium text-sidebar-foreground/80 hover:bg-sidebar-accent/60",
-  "[&_svg]:size-4 [&_svg]:text-sidebar-foreground/70",
-  "data-active:bg-card data-active:text-primary data-active:shadow-xs data-active:hover:bg-card",
+  "min-h-8 px-2 text-sm font-normal text-(--text-secondary)",
+  "hover:bg-(--tone-control) hover:text-foreground",
+  "[&_svg]:size-5 [&_svg]:shrink-0 [&_svg]:text-(--text-secondary) [&_svg]:transition-colors",
+  "data-active:bg-card data-active:font-medium data-active:text-primary data-active:shadow-[0_1px_2px_rgb(30_28_25/0.06)] data-active:hover:bg-card",
   "data-active:[&_svg]:text-(--brand)",
+  "dark:data-active:text-foreground dark:data-active:[&_svg]:text-foreground",
+  // Collapsed: 40px square row, centered (reference overrides the ui 32px collapse).
+  "group-data-[collapsible=icon]:size-10! group-data-[collapsible=icon]:min-h-0! group-data-[collapsible=icon]:p-0!",
+  "group-data-[collapsible=icon]:justify-center",
 );
 
 function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+/** Brand lockup: mark + wordmark; clicking toggles the rail (reference behaviour). */
 function Brand() {
   const { state, toggleSidebar } = useSidebar();
   const collapsed = state === "collapsed";
   return (
-    <div className="flex items-center justify-between gap-2 group-data-[collapsible=icon]:flex-col">
+    <div className="flex min-h-8 items-center justify-between gap-2 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center">
       <button
         type="button"
         onClick={toggleSidebar}
         aria-label={collapsed ? "Expand menu" : "Collapse menu"}
         aria-expanded={!collapsed}
-        className="flex h-9 items-center gap-2 rounded-lg px-1 outline-hidden ring-sidebar-ring focus-visible:ring-2"
+        className="flex h-8 items-center gap-1.5 rounded-md text-foreground transition-colors outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring hover:text-(--text-secondary) group-data-[collapsible=icon]:w-10 group-data-[collapsible=icon]:justify-center"
       >
-        <Image src="/trainertwin-mark.svg" alt="" width={20} height={15} priority />
-        <span className="text-[15px] font-semibold tracking-tight group-data-[collapsible=icon]:hidden">
+        <svg viewBox="0 0 441 441" width={20} height={20} fill="currentColor" aria-hidden className="shrink-0 text-primary">
+          <path d="M20 0L421 0A20 20 0 0 1 441 20L441 127A20 20 0 0 1 421 147L314 147A20 20 0 0 0 294 167L294 274A20 20 0 0 0 314 294L421 294A20 20 0 0 1 441 314L441 421A20 20 0 0 1 421 441L314 441A20 20 0 0 1 294 421L294 314A20 20 0 0 0 274 294L167 294A20 20 0 0 0 147 314L147 421A20 20 0 0 1 127 441L20 441A20 20 0 0 1 0 421L0 314A20 20 0 0 1 20 294L127 294A20 20 0 0 0 147 274L147 167A20 20 0 0 0 127 147L20 147A20 20 0 0 1 0 127L0 20A20 20 0 0 1 20 0Z" />
+        </svg>
+        <span className="text-base font-semibold leading-none tracking-[-0.02em] group-data-[collapsible=icon]:hidden">
           TrainerTwin
         </span>
       </button>
@@ -69,49 +81,52 @@ export function AppSidebar() {
   const pathname = usePathname();
 
   return (
-    <Sidebar variant="inset" collapsible="icon">
-      <SidebarHeader className="pt-3">
+    <Sidebar variant="sidebar" collapsible="icon" className="border-r-0">
+      {/* Reference "rail-scroll": padded 16/12/12, children stacked with an 8px gap. */}
+      <div className="flex h-full min-h-0 flex-col gap-2 px-3 pt-4 pb-3 group-data-[collapsible=icon]:px-2">
         <Brand />
-      </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu className="gap-0.5">
-              {NAV.map((item) => (
-                <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton
-                    render={<Link href={item.href} />}
-                    isActive={isActive(pathname, item.href)}
-                    tooltip={item.title}
-                    className={navButton}
-                  >
-                    <item.icon />
-                    <span>{item.title}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-      <SidebarFooter className="gap-2 pb-3">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              render={<Link href="/profile" />}
-              isActive={isActive(pathname, "/profile")}
-              tooltip="Settings"
-              className={navButton}
-            >
-              <SettingsIcon />
-              <span>Settings</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarAccountMenu />
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
+        <nav aria-label="Sections" className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+          {NAV_GROUPS.map((group, index) => (
+            <div key={group.label} className={index === 0 ? "mt-1" : "mt-3"}>
+              <p className="px-2 text-[11px] leading-4 font-medium tracking-[0.08em] uppercase text-muted-foreground group-data-[collapsible=icon]:hidden">
+                {group.label}
+              </p>
+              <SidebarMenu className="mt-2 gap-2">
+                {group.items.map((item) => (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      render={<Link href={item.href} />}
+                      isActive={isActive(pathname, item.href)}
+                      tooltip={item.title}
+                      className={navButton}
+                    >
+                      <item.icon />
+                      <span>{item.title}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </div>
+          ))}
+        </nav>
+        {/* Reference "rail-foot": pinned to the bottom, 12px gap, 12px top padding. */}
+        <div className="mt-auto flex flex-col gap-3 pt-3">
+          <SidebarMenu className="gap-2">
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                render={<Link href="/profile" />}
+                isActive={isActive(pathname, "/profile")}
+                tooltip="Settings"
+                className={navButton}
+              >
+                <SettingsIcon />
+                <span>Settings</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+          <SidebarAccountMenu />
+        </div>
+      </div>
     </Sidebar>
   );
 }

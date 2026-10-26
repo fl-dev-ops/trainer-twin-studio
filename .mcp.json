@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "paper-cdp": {
+      "command": "node",
+      "args": ["/Users/suryaumapathy/paper-cdp-mcp/bin/cli.mjs"],
+      "env": { "CDP_PORT": "9222" },
+      "directTools": true,
+      "lifecycle": "eager"
+    }
+  }
+}

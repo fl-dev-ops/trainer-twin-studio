@@ -69,3 +69,50 @@ export const SettingsIcon = tabler(
   ],
   "SettingsIcon",
 );
+
+/** Reference theme-glyphs: 16px grid, 1.5 stroke (prototype "theme-switch"). */
+function refIcon(paths: string[], name: string) {
+  function Icon(props: SVGProps<SVGSVGElement>) {
+    return (
+      <svg
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+        {...props}
+      >
+        {paths.map((d) => (
+          <path key={d} d={d} />
+        ))}
+      </svg>
+    );
+  }
+  Icon.displayName = name;
+  return Icon;
+}
+
+export const ThemeLightIcon = refIcon(
+  [
+    "M8 5.75a2.25 2.25 0 1 0 0 4.5a2.25 2.25 0 1 0 0-4.5Z",
+    "M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M3.6 12.4l1.1-1.1M11.3 4.7l1.1-1.1",
+  ],
+  "ThemeLightIcon",
+);
+
+export const ThemeDarkIcon = refIcon(
+  ["M9.2 2.2a5.2 5.2 0 1 0 4.6 7.6 4.4 4.4 0 0 1-4.6-7.6Z"],
+  "ThemeDarkIcon",
+);
+
+/** Twin landing glyph (prototype: "Twin agents" sparkle). */
+export const SetupIcon = tabler(
+  [
+    "M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2",
+    "M16 6a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2",
+    "M9 18a6 6 0 0 1 6 -6a6 6 0 0 1 -6 -6a6 6 0 0 1 -6 6a6 6 0 0 1 6 6",
+  ],
+  "SetupIcon",
+);

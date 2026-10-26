@@ -56,32 +56,38 @@
 :root {
   --font-sans: var(--font-figtree);
   --font-heading: var(--font-figtree);
-  /* Brand matches the trainertwin-mark logo: #EC3013 with a darker strong variant for hover. */
-  --brand: #ec3013;
-  --brand-strong: #c9270f;
+  /* Brand matches the trainertwin-mark logo: #FF5A00 with an ink variant for brand-as-text.
+     Values mirror the reference tokens (trainertwin-beta tokens.css):
+     brand=--tt-primary, brand-strong=--tt-primary-ink, canvas=--tt-canvas, control=--tt-fill-soft. */
+  --brand: #ff5a00;
+  --brand-strong: #b83e00;
   /* Three-tone palette: canvas → content surface → interactive control. */
-  --tone-canvas: #f4f4f4;
+  --tone-canvas: #fefeff;
   --tone-surface: #ffffff;
-  --tone-control: #e2e2e2;
+  --tone-control: #f0f0f0;
+  /* Second text step (rail nav items, feature rows): --tt-text-secondary. */
+  --text-secondary: #4a4a4a;
+  /* Card's own resting border — lighter than --border (--tt-card-border). */
+  --card-border: #f0f0f0;
   --background: var(--tone-canvas);
   /* Main content panel beside the sidebar (V2 prototype). */
   --panel: #fefeff;
-  --foreground: #201e1d;
+  --foreground: #1c1b1b;
   --card: var(--tone-surface);
   --card-foreground: oklch(0.145 0 0);
   --popover: var(--tone-surface);
-  --popover-foreground: oklch(0.145 0 0);
+  --popover-foreground: #1c1b1b;
   --primary: var(--brand-strong);
   --primary-foreground: #fff;
   --secondary: var(--tone-control);
-  --secondary-foreground: oklch(0.205 0 0);
+  --secondary-foreground: #1c1b1b;
   --muted: var(--tone-control);
-  --muted-foreground: oklch(0.556 0 0);
+  --muted-foreground: #656565;
   --accent: var(--tone-control);
-  --accent-foreground: oklch(0.205 0 0);
+  --accent-foreground: #1c1b1b;
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
+  --border: #e9e9e9;
+  --input: #e9e9e9;
   --ring: var(--brand);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
@@ -90,7 +96,7 @@
   --chart-5: oklch(0.269 0 0);
   --radius: 0.625rem;
   --sidebar: #f7f7f7;
-  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-foreground: #1c1b1b;
   --sidebar-primary: var(--brand-strong);
   --sidebar-primary-foreground: #fff;
   --sidebar-accent: var(--tone-control);
@@ -101,25 +107,27 @@
 }
 
 .dark {
-  --tone-canvas: #131313;
+  --tone-canvas: #141414;
   /* V2 prototype: cards #1c1b1b on a #141414 panel beside a #0a0a0a sidebar. */
   --tone-surface: #1c1b1b;
-  --tone-control: #3d3d3d;
+  --tone-control: #2b2b2b;
+  --text-secondary: #c4c4c4;
+  --card-border: #242323;
   --background: var(--tone-canvas);
   --panel: #141414;
-  --foreground: oklch(0.985 0 0);
+  --foreground: #fefeff;
   --card: var(--tone-surface);
-  --card-foreground: oklch(0.985 0 0);
+  --card-foreground: #fefeff;
   --popover: var(--tone-surface);
-  --popover-foreground: oklch(0.985 0 0);
+  --popover-foreground: #fefeff;
   --primary: var(--brand-strong);
   --primary-foreground: #fff;
   --secondary: var(--tone-control);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: var(--tone-control);
-  --muted-foreground: oklch(0.708 0 0);
+  --muted-foreground: #a3a3a3;
   --accent: var(--tone-control);
-  --accent-foreground: oklch(0.985 0 0);
+  --accent-foreground: #fefeff;
   --destructive: oklch(0.704 0.191 22.216);
   --border: var(--tone-control);
   --input: var(--tone-control);
@@ -130,16 +138,16 @@
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --sidebar: #0a0a0a;
-  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-foreground: #fefeff;
   --sidebar-primary: var(--brand-strong);
   --sidebar-primary-foreground: #fff;
   --sidebar-accent: var(--tone-control);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-accent-foreground: #fefeff;
+  --sidebar-border: #2b2b2b;
   --sidebar-ring: var(--brand);
   --highlight: oklch(0.852 0.199 91.936);
-  /* Dark mode: lighten the logo red for contrast on the dark canvas. */
-  --brand: #f4603c;
+  /* Dark mode keeps the reference brand (its tokens do not shift the logo in dark). */
+  --brand: #ff5a00;
 }
 
 @layer base {
