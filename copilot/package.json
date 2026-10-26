@@ -8,19 +8,23 @@
   },
   "scripts": {
     "build": "eve build",
-    "dev": "eve dev",
+    "deploy": "eve deploy",
+    "dev": "eve dev --no-default-extensions",
+    "eval": "eve eval",
     "start": "eve start",
+    "test": "node --test test/sandbox.node.mjs",
     "typecheck": "tsc"
   },
   "dependencies": {
-    "@openrouter/ai-sdk-provider": "^3.0.0",
-    "ai": "^7.0.148",
+    "@ai-sdk/cerebras": "^3.0.78",
+    "@aws-sdk/client-s3": "^3.1156.0",
+    "ai": "^7.0.137",
     "eve": "^0.82.0",
-    "just-bash": "^3.1.0",
-    "zod": "4.4.3"
+    "zod": "4.5.4"
   },
   "devDependencies": {
     "@types/node": "24.x",
+    "just-bash": "^3.6.0",
     "typescript": "7.0.2"
   },
   "engines": {

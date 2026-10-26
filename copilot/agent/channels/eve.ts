@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { eveChannel } from "eve/channels/eve";
-import { type AuthFn, localDev } from "eve/channels/auth";
+import { type AuthFn, localDev, vercelOidc } from "eve/channels/auth";
 
 function studioOrganization(): AuthFn<Request> {
   return (request) => {
@@ -28,5 +28,6 @@ function studioOrganization(): AuthFn<Request> {
 }
 
 export default eveChannel({
-  auth: [studioOrganization(), localDev()],
+  // The web app (org-scoped sessions), the eve TUI against a deployment, and `eve dev` locally.
+  auth: [studioOrganization(), vercelOidc(), localDev()],
 });

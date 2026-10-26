@@ -9,3 +9,7 @@ node_modules
 dist
 .DS_Store
 *.tsbuildinfo
+
+# Run outputs hold trainer data and names; never commit them.
+output/
+runs/

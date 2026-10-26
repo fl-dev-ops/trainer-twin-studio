@@ -1,26 +1,21 @@
-# TrainerTwin Spec Copilot
+# TrainerTwin Copilot (scenario ingest)
 
-Standalone [Eve](https://eve.dev) service for TrainerTwin's durable spec-design conversations.
-It reads and writes Studio data only through the authenticated `STUDIO_URL/api/copilot/studio`
-endpoint; it does not import the Next.js application or connect to its database directly.
+[eve](https://eve.dev) agent that builds role-play scenarios from a trainer's recorded sessions and
+method material. It replaced the earlier spec-design copilot; the folder, deployment, web proxy
+(`/api/eve/v1`) and org authentication are unchanged.
 
-## Local development
+For each scenario it writes `SKILL.md`, `scenario.json`, `items.json` and `patterns.md`, checks them,
+and publishes. The web app stores what it publishes: S3 keeps the files, Postgres the runnable
+scenario, Chroma the items the trainer's twin retrieves in sessions (see `web/lib/scenario-ingest.ts`).
 
-```bash
-npm install
-cp .env.example .env
-npm run dev # http://localhost:2000
-```
-
-Use the same `COPILOT_SERVICE_SECRET` in `copilot/.env` and `web/.env`.
-
-## Deploy to Vercel
+- `agent/` instructions, tools, the `build-scenario` skill and `lib/` (sources, checks, publication)
+- `agent/channels/eve.ts` org authentication for the web proxy (`orgId:COPILOT_SERVICE_SECRET`)
+- `agent/instrumentation/` usage metering to the web ledger
+- Sources: `users/<user>/` in `INGEST_S3_BUCKET`, or `INGEST_USERS` locally (see `.env.example`)
 
 ```bash
-npx eve link
-npx eve deploy
+bun install
+bun run dev        # eve dev
+bun run typecheck
+bun run test
 ```
-
-Configure `STUDIO_URL`, `COPILOT_SERVICE_SECRET`, `OPENROUTER_API_KEY`, and optionally
-`SPEC_COPILOT_MODEL` in the Copilot Vercel project. In the Studio project, set `EVE_ORIGIN`
-to the deployed Copilot origin and configure the same service secret.

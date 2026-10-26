@@ -1,0 +1,9 @@
+minimumReleaseAge: 0
+minimumReleaseAgeStrict: true
+allowBuilds:
+  esbuild: true
+  sharp: false
+# just-bash's optional compression codecs; not needed for shell and file operations (eve docs/sandbox/just-bash).
+ignoredOptionalDependencies:
+  - '@mongodb-js/zstd'
+  - node-liblzma
