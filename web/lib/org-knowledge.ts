@@ -35,30 +35,6 @@ export type OrgKnowledgeStats = {
   totalSizeBytes: number;
 };
 
-export type EmbeddingPoint3D = {
-  id: string;
-  x: number;
-  y: number;
-  z: number;
-  type: "knowledge" | "persona_voice";
-  title: string;
-  source: string;
-  docId?: string;
-  personaId?: string;
-  chunkIndex?: number;
-  action?: string;
-  preview: string;
-};
-
-export type Embeddings3DResponse = {
-  points: EmbeddingPoint3D[];
-  stats: {
-    totalPoints: number;
-    knowledgePoints: number;
-    personaVoicePoints: number;
-  };
-};
-
 /**
  * Ensures a default primary knowledge base exists for an organization.
  */
@@ -76,114 +52,6 @@ export async function getOrCreateOrgKnowledgeBase(orgId: string): Promise<{ id: 
     });
   }
   return kb;
-}
-
-/**
- * Fast Principal Component Analysis (PCA) projection from high-dimensional embeddings to 3D.
- */
-export function computePCA3D(matrix: number[][], bounds = 25): [number, number, number][] {
-  const n = matrix.length;
-  if (n === 0) return [];
-  const d = matrix[0].length;
-  if (n < 3) {
-    return matrix.map((_, i) => [(i * 2 - 1) * 10, 0, 0]);
-  }
-
-  // 1. Mean center
-  const mean = new Float64Array(d);
-  for (let i = 0; i < n; i++) {
-    for (let j = 0; j < d; j++) mean[j] += matrix[i][j];
-  }
-  for (let j = 0; j < d; j++) mean[j] /= n;
-
-  const centered: Float64Array[] = matrix.map((row) => {
-    const c = new Float64Array(d);
-    for (let j = 0; j < d; j++) c[j] = row[j] - mean[j];
-    return c;
-  });
-
-  // Matrix-vector multiplication X * v (n x 1)
-  const mulXv = (v: Float64Array): Float64Array => {
-    const u = new Float64Array(n);
-    for (let i = 0; i < n; i++) {
-      let sum = 0;
-      const row = centered[i];
-      for (let j = 0; j < d; j++) sum += row[j] * v[j];
-      u[i] = sum;
-    }
-    return u;
-  };
-
-  // Matrix-transpose vector multiplication X^T * u (d x 1)
-  const mulXtu = (u: Float64Array): Float64Array => {
-    const w = new Float64Array(d);
-    for (let i = 0; i < n; i++) {
-      const ui = u[i];
-      if (ui === 0) continue;
-      const row = centered[i];
-      for (let j = 0; j < d; j++) w[j] += row[j] * ui;
-    }
-    return w;
-  };
-
-  const normalize = (v: Float64Array): Float64Array => {
-    let sum = 0;
-    for (let j = 0; j < d; j++) sum += v[j] * v[j];
-    const norm = Math.sqrt(sum) || 1e-10;
-    for (let j = 0; j < d; j++) v[j] /= norm;
-    return v;
-  };
-
-  const dot = (a: Float64Array, b: Float64Array): number => {
-    let s = 0;
-    for (let j = 0; j < d; j++) s += a[j] * b[j];
-    return s;
-  };
-
-  // Extract top 3 orthogonal components
-  const components: Float64Array[] = [];
-  for (let c = 0; c < 3; c++) {
-    const v = new Float64Array(d);
-    for (let j = 0; j < d; j++) v[j] = Math.sin((c + 1) * 31 + j * 17);
-    normalize(v);
-
-    for (let iter = 0; iter < 15; iter++) {
-      for (const prev of components) {
-        const dVal = dot(v, prev);
-        for (let j = 0; j < d; j++) v[j] -= dVal * prev[j];
-      }
-      normalize(v);
-
-      const u = mulXv(v);
-      const w = mulXtu(u);
-      normalize(w);
-      for (let j = 0; j < d; j++) v[j] = w[j];
-    }
-    components.push(v);
-  }
-
-  // Project points
-  const points: [number, number, number][] = [];
-  let maxAbs = 0;
-  for (let i = 0; i < n; i++) {
-    const row = centered[i];
-    const px = dot(row, components[0]);
-    const py = dot(row, components[1]);
-    const pz = dot(row, components[2]);
-    maxAbs = Math.max(maxAbs, Math.abs(px), Math.abs(py), Math.abs(pz));
-    points.push([px, py, pz]);
-  }
-
-  const scale = maxAbs > 0 ? bounds / maxAbs : 1;
-  return points.map(([x, y, z]) => [x * scale, y * scale, z * scale]);
-}
-
-// In-memory cache for computed 3D PCA projections
-const embeddingsCache = new Map<string, { data: Embeddings3DResponse; timestamp: number }>();
-const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
-
-export function invalidateOrgKnowledgeCache(orgId: string) {
-  embeddingsCache.delete(orgId);
 }
 
 export class OrganizationKnowledgeService {
@@ -345,7 +213,6 @@ export class OrganizationKnowledgeService {
       data: { sourceId: queueResult.sourceId, status: "queued" },
     });
 
-    invalidateOrgKnowledgeCache(orgId);
 
     return {
       id: doc.id,
@@ -400,7 +267,6 @@ export class OrganizationKnowledgeService {
     ]);
 
     await db.knowledgeDocument.delete({ where: { id: doc.id } });
-    invalidateOrgKnowledgeCache(orgId);
   }
 
   /**
@@ -444,7 +310,6 @@ export class OrganizationKnowledgeService {
         error: null,
       },
     });
-    invalidateOrgKnowledgeCache(orgId);
 
     return {
       ok: true,
@@ -497,101 +362,5 @@ export class OrganizationKnowledgeService {
     }
 
     return items.sort((a, b) => a.chunkIndex - b.chunkIndex);
-  }
-
-  /**
-   * Fetches vectors from Chroma in batches (<= 250 to respect Chroma Cloud quotas),
-   * computes 3D coordinates via PCA, and returns points.
-   */
-  static async get3DPoints(orgId: string, limit = 2000, forceRefresh = false): Promise<Embeddings3DResponse> {
-    if (!forceRefresh) {
-      const cached = embeddingsCache.get(orgId);
-      if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-        return cached.data;
-      }
-    }
-
-    const collection = await MainCollectionService.getCollection(orgId);
-    const totalCount = await collection.count();
-    if (totalCount === 0) {
-      return {
-        points: [],
-        stats: { totalPoints: 0, knowledgePoints: 0, personaVoicePoints: 0 },
-      };
-    }
-
-    const targetLimit = Math.min(limit, totalCount);
-    const BATCH_SIZE = 250;
-
-    const allIds: string[] = [];
-    const allEmbeddings: number[][] = [];
-    const allDocs: (string | null)[] = [];
-    const allMetas: (Record<string, unknown> | null)[] = [];
-
-    for (let offset = 0; offset < targetLimit; offset += BATCH_SIZE) {
-      const fetchLimit = Math.min(BATCH_SIZE, targetLimit - offset);
-      const res = await collection.get({
-        limit: fetchLimit,
-        offset,
-        include: ["embeddings", "documents", "metadatas"],
-      });
-
-      if (!res.ids || res.ids.length === 0) break;
-      allIds.push(...res.ids);
-      if (res.embeddings) allEmbeddings.push(...(res.embeddings as number[][]));
-      if (res.documents) allDocs.push(...res.documents);
-      if (res.metadatas) allMetas.push(...(res.metadatas as Record<string, unknown>[]));
-
-      if (res.ids.length < fetchLimit) break;
-    }
-
-    if (allIds.length === 0 || allEmbeddings.length === 0) {
-      return {
-        points: [],
-        stats: { totalPoints: 0, knowledgePoints: 0, personaVoicePoints: 0 },
-      };
-    }
-
-    const projected = computePCA3D(allEmbeddings, 30);
-    let knowledgePoints = 0;
-    let personaVoicePoints = 0;
-
-    const points: EmbeddingPoint3D[] = [];
-    for (let i = 0; i < allIds.length; i++) {
-      const meta = allMetas[i] ?? {};
-      const [x, y, z] = projected[i] ?? [0, 0, 0];
-      const type = (meta.type === "persona_voice" ? "persona_voice" : "knowledge") as "knowledge" | "persona_voice";
-      if (type === "knowledge") knowledgePoints++;
-      else personaVoicePoints++;
-
-      const rawDoc = allDocs[i] ?? "";
-      const preview = rawDoc.length > 200 ? `${rawDoc.slice(0, 200)}...` : rawDoc;
-
-      points.push({
-        id: allIds[i],
-        x: Number(x.toFixed(3)),
-        y: Number(y.toFixed(3)),
-        z: Number(z.toFixed(3)),
-        type,
-        title: String(meta.title ?? meta.sourceName ?? meta.source ?? "Untitled"),
-        source: String(meta.source ?? meta.sourceName ?? ""),
-        docId: meta.docId ? String(meta.docId) : undefined,
-        personaId: meta.personaId ? String(meta.personaId) : undefined,
-        chunkIndex: meta.chunkIndex !== undefined ? Number(meta.chunkIndex) : undefined,
-        action: meta.action ? String(meta.action) : undefined,
-        preview,
-      });
-    }
-
-    const result: Embeddings3DResponse = {
-      points,
-      stats: {
-        totalPoints: points.length,
-        knowledgePoints,
-        personaVoicePoints,
-      },
-    };
-    embeddingsCache.set(orgId, { data: result, timestamp: Date.now() });
-    return result;
   }
 }

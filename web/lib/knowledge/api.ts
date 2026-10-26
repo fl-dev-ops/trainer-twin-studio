@@ -1,6 +1,5 @@
 import type {
   ConnectorInfo,
-  EmbeddingPoint3D,
   KnowledgeDoc,
   KnowledgeSearchHit,
   KnowledgeStats,
@@ -32,15 +31,3 @@ export async function searchKnowledge(query: string): Promise<KnowledgeSearchHit
   return data.hits ?? [];
 }
 
-export async function fetchEmbeddings(
-  limit = 2000,
-  refresh = false,
-): Promise<{
-  points: EmbeddingPoint3D[];
-  stats: { totalPoints: number; knowledgePoints: number; personaVoicePoints: number };
-}> {
-  const url = `/api/knowledge/embeddings?limit=${limit}${refresh ? "&refresh=true" : ""}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("Failed to fetch embeddings");
-  return res.json();
-}

@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { MainCollectionService } from "@/lib/main-collection";
 import { deletePrefix, kbPrefix } from "@/lib/s3";
-import { invalidateOrgKnowledgeCache, OrganizationKnowledgeService, getOrCreateOrgKnowledgeBase } from "@/lib/org-knowledge";
+import { OrganizationKnowledgeService, getOrCreateOrgKnowledgeBase } from "@/lib/org-knowledge";
 import { queueNotionSync } from "@/lib/notion-ingestion";
 import { queueYouTubeSync } from "@/lib/youtube-ingestion";
 
@@ -253,7 +253,6 @@ export async function deleteSource(orgId: string, sourceId: string) {
     where: { id: source.id },
   });
 
-  invalidateOrgKnowledgeCache(orgId);
   return { ok: true, deletedSourceId: source.id, deletedDocCount: source.documents.length };
 }
 
@@ -308,6 +307,5 @@ export async function deleteConnection(
     });
   }
 
-  invalidateOrgKnowledgeCache(orgId);
   return { ok: true, connectionId, deletedSourceCount: dependentSources.length };
 }

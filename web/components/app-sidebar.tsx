@@ -26,7 +26,7 @@ const NAV_GROUPS = [
       { title: "Twin agents", href: "/twin", icon: SetupIcon },
       { title: "Twin sessions", href: "/twin/sessions", icon: SessionsIcon },
       { title: "Twin users", href: "/twin/users", icon: UsersIcon },
-      { title: "Twin’s brain", href: "/knowledge", icon: TwinIcon },
+      { title: "Twin’s brain", href: "/twin/knowledge", icon: TwinIcon },
     ],
   },
   {

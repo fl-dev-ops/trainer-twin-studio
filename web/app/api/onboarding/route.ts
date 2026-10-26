@@ -151,7 +151,7 @@ export async function POST(request: Request) {
         }
       } catch (connectorError) {
         console.error("Could not start onboarding connector:", connectorError);
-        redirect = `${dashboard}/knowledge?error=${encodeURIComponent("Workspace created, but the connector could not be started")}`;
+        redirect = `${dashboard}/twin/knowledge?error=${encodeURIComponent("Workspace created, but the connector could not be started")}`;
       }
     }
 

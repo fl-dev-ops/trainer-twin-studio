@@ -4,5 +4,4 @@ export const knowledgeKeys = {
   stats: () => [...knowledgeKeys.all, "stats"] as const,
   connectors: () => [...knowledgeKeys.all, "connectors"] as const,
   search: (query: string) => [...knowledgeKeys.all, "search", query] as const,
-  embeddings: (limit = 2000) => [...knowledgeKeys.all, "embeddings", limit] as const,
 };

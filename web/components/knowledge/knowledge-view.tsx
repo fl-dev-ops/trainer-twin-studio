@@ -9,14 +9,12 @@ import { KnowledgeActionBar } from "./knowledge-action-bar";
 import { DocumentList } from "./document-list";
 import { KnowledgeAddSourceDialog } from "./knowledge-add-source-dialog";
 import { DocumentDetailDrawer } from "./document-detail-drawer";
-import { Knowledge3DView } from "./knowledge-3d-view";
 import { fetchConnectors, fetchDocuments, fetchStats, searchKnowledge } from "@/lib/knowledge/api";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
 import type {
   KnowledgeDoc,
   KnowledgeSearchHit,
   KnowledgeStats,
-  ViewMode,
 } from "./types";
 
 export function KnowledgeView({
@@ -67,7 +65,7 @@ export function KnowledgeView({
     initialData: initialStats ?? undefined,
   });
 
-  // When active jobs finish, invalidate all queries including stats and 3D points
+  // When active jobs finish, invalidate all queries including stats
   const wasActiveRef = useRef(false);
   useEffect(() => {
     if (wasActiveRef.current && !hasActiveWork) {
@@ -104,24 +102,12 @@ export function KnowledgeView({
   const [searchedQuery, setSearchedQuery] = useState("");
   const [searchHits, setSearchHits] = useState<KnowledgeSearchHit[] | null>(null);
   const [searching, setSearching] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
-
   // Modals & Drawers
   const [addSourceOpen, setAddSourceOpen] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<KnowledgeDoc | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [reindexingId, setReindexingId] = useState<string | null>(null);
   const [refreshingSourceId, setRefreshingSourceId] = useState<string | null>(null);
-
-  // 3D View lazy mount state
-  const [hasOpened3D, setHasOpened3D] = useState(false);
-
-  const handleViewModeChange = useCallback((mode: ViewMode) => {
-    setViewMode(mode);
-    if (mode === "3d") {
-      setHasOpened3D(true);
-    }
-  }, []);
 
   const refreshData = useCallback(async () => {
     try {
@@ -222,7 +208,6 @@ export function KnowledgeView({
       });
       setSearchedQuery(query);
       setSearchHits(hits);
-      setViewMode("list");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Search failed");
     } finally {
@@ -262,15 +247,11 @@ export function KnowledgeView({
           onSearchChange={handleSearchInputChange}
           onSearch={handleSearch}
           searching={searching}
-          viewMode={viewMode}
-          onViewModeChange={handleViewModeChange}
           onRefresh={refreshData}
           refreshing={refreshing}
         />
 
-        {/* View Switcher: List or 3D Vector Space (persisted in DOM for instant 0ms toggle) */}
-        <div className={viewMode === "list" ? "block" : "hidden"}>
-          <DocumentList
+        <DocumentList
             documents={visibleDocuments}
             onSelectDoc={handleSelectDoc}
             onReindexDoc={handleReindex}
@@ -282,16 +263,6 @@ export function KnowledgeView({
             onClearSearch={clearSearch}
             hasSearch={Boolean(searchedQuery)}
           />
-        </div>
-
-        {hasOpened3D && (
-          <div className={viewMode === "3d" ? "block" : "hidden"}>
-            <Knowledge3DView
-              onSelectDocId={handleSelectDocId}
-              isVisible={viewMode === "3d"}
-            />
-          </div>
-        )}
 
         {/* Add Knowledge Source Dialog (Upload, Notion, YouTube, Connections) */}
         <KnowledgeAddSourceDialog

@@ -44,7 +44,7 @@ export default async function DashboardPage() {
   const stats = [
     { label: "Personas", value: personas, href: "/personas", icon: UserRound },
     { label: "Scenarios", value: agents, href: "/agents", icon: MessagesSquare },
-    { label: "Knowledge bases", value: kbs, href: "/knowledge", icon: BookOpen },
+    { label: "Knowledge bases", value: kbs, href: "/twin/knowledge", icon: BookOpen },
   ];
 
   return (

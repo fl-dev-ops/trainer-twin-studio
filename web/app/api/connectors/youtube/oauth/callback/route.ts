@@ -18,7 +18,7 @@ export async function GET(request: Request) {
 
   const redirectBase = isOnboarding
     ? new URL(`https://auth.${BASE_DOMAIN}${port}/onboarding`)
-    : new URL("/knowledge", url.origin);
+    : new URL("/twin/knowledge", url.origin);
 
   if (isOnboarding) {
     redirectBase.searchParams.set("step", "3");

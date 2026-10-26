@@ -50,7 +50,6 @@ export type KnowledgeSearchHit = {
   score: number;
 };
 
-export type ViewMode = "list" | "3d";
 
 export type ConnectorInfo = {
   notion: {

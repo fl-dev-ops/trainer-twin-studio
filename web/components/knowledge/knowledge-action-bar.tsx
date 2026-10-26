@@ -1,18 +1,15 @@
 "use client";
 
-import { Box, List, RefreshCw, Search, X } from "lucide-react";
+import { RefreshCw, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import type { ViewMode } from "./types";
 
 export function KnowledgeActionBar({
   searchQuery,
   onSearchChange,
   onSearch,
   searching,
-  viewMode,
-  onViewModeChange,
   onRefresh,
   refreshing = false,
 }: {
@@ -20,8 +17,6 @@ export function KnowledgeActionBar({
   onSearchChange: (query: string) => void;
   onSearch: () => void;
   searching: boolean;
-  viewMode: ViewMode;
-  onViewModeChange: (mode: ViewMode) => void;
   onRefresh: () => void;
   refreshing?: boolean;
 }) {
@@ -75,23 +70,6 @@ export function KnowledgeActionBar({
           <RefreshCw className={refreshing ? "animate-spin text-muted-foreground" : undefined} />
         </Button>
       </form>
-
-      <div className="flex items-center rounded-lg border bg-muted/40 p-0.5">
-        <Button
-          variant={viewMode === "list" ? "secondary" : "ghost"}
-          size="sm"
-          onClick={() => onViewModeChange("list")}
-        >
-          <List data-icon="inline-start" /> List
-        </Button>
-        <Button
-          variant={viewMode === "3d" ? "secondary" : "ghost"}
-          size="sm"
-          onClick={() => onViewModeChange("3d")}
-        >
-          <Box data-icon="inline-start" /> 3D space
-        </Button>
-      </div>
     </div>
   );
 }
