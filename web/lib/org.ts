@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 
@@ -69,6 +70,16 @@ export async function getTrainerOrg(): Promise<TrainerOrg | null> {
     role: member.role,
     user: { id: session.user.id, name: session.user.name, email: session.user.email },
   };
+}
+
+/**
+ * Page guard for studio pages (twin, calibration): admin and team only. Learners (`user`) and anyone
+ * outside an org are sent to the learner landing page. APIs use `studioProcedure` / `getTrainerOrg`.
+ */
+export async function requireStudioMember(): Promise<TrainerOrg> {
+  const org = await getTrainerOrg();
+  if (!org) redirect("/auth/no-org");
+  return org;
 }
 
 /** Org by subdomain slug — for learner-facing surfaces. */

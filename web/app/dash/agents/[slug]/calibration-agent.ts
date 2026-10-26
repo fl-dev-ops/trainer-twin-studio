@@ -1,12 +1,11 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { getTrainerOrg } from "@/lib/org";
+import { requireStudioMember } from "@/lib/org";
 import { agentDisplayName } from "@/lib/specs";
 
-/** The role play being calibrated and the persona it speaks as, scoped to the trainer's org. */
+/** The role play being calibrated and the persona it speaks as, scoped to the trainer's org (admin / team only). */
 export async function calibrationAgent(slug: string) {
-  const org = await getTrainerOrg();
-  if (!org) redirect("/auth/no-org");
+  const org = await requireStudioMember();
   const agent = await db.agent.findFirst({
     where: { slug, orgId: org.id },
     select: { slug: true, name: true, persona: { select: { name: true } } },
