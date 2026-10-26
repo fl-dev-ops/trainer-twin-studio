@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from "@/components/ui/item";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { CopyButton } from "@/components/users/copy-button";
 import { InviteUser } from "@/components/users/invite-user";
 import { authClient } from "@/lib/auth-client";
@@ -29,8 +28,8 @@ const inviteUrl = (id: string) => `https://auth.${BASE_DOMAIN}/invite?token=${id
 const day = (iso: string) => new Date(iso).toLocaleDateString();
 const PILL = "rounded-full border-0 px-2.5 font-medium";
 const AMBER = `${PILL} bg-amber-500/15 text-amber-700 dark:text-amber-300`;
-const BLUE = `${PILL} bg-blue-500/15 text-blue-700 dark:text-blue-300`;
 const ROSE = `${PILL} bg-rose-500/15 text-rose-700 dark:text-rose-300`;
+const ROLE = `${PILL} bg-muted text-muted-foreground`;
 // Divided rows (no boxes): avatar · name / email · status pill · actions on the right.
 const ROW = "rounded-none border-0 px-0 py-3";
 
@@ -46,7 +45,7 @@ function Initial({ text }: { text: string }) {
 
 /**
  * Org members and pending invites, split into the studio team (admin, team) and users (learners).
- * One admin per org (fixed); members are disabled, never removed. Better Auth enforces both server-side too.
+ * One admin per org (fixed); members are disabled, never removed. Roles are shown, not edited here.
  */
 export function TeamSection(props: {
   organizationId: string;
@@ -72,8 +71,6 @@ export function TeamSection(props: {
     router.refresh();
   }
 
-  const setRole = (member: TeamMember, role: string) =>
-    run(member.id, () => authClient.organization.updateMemberRole({ memberId: member.id, role: role as "team" | "user", organizationId: props.organizationId }), `${member.name} is now ${ROLE_LABEL[role]}`);
   const setDisabled = (member: TeamMember, disabled: boolean) => {
     if (disabled && !window.confirm(`Disable ${member.name}? They are signed out, lose their twin and role-play access, and any live session ends. Their history is kept.`)) return;
     return run(
@@ -103,26 +100,13 @@ export function TeamSection(props: {
               <span>{member.email}</span>
               {member.disabledAt ? (
                 <>· <Badge className={ROSE}>Disabled {day(member.disabledAt)}</Badge></>
-              ) : member.role === "admin" ? (
-                <>· <Badge className={BLUE}>Admin</Badge></>
               ) : null}
             </ItemDescription>
           </ItemContent>
           <ItemActions>
-            {locked || member.disabledAt ? null : (
-              <NativeSelect
-                size="sm"
-                aria-label={`Role of ${member.name}`}
-                value={member.role}
-                disabled={busy === member.id}
-                onChange={(event) => setRole(member, event.target.value)}
-              >
-                <NativeSelectOption value="team">Team</NativeSelectOption>
-                <NativeSelectOption value="user">User</NativeSelectOption>
-              </NativeSelect>
-            )}
+            <Badge className={ROLE}>{ROLE_LABEL[member.role] ?? member.role}</Badge>
             {locked ? null : (
-              <Button variant="outline" size="sm" disabled={busy === member.id} onClick={() => setDisabled(member, !member.disabledAt)}>
+              <Button variant="ghost" size="sm" disabled={busy === member.id} onClick={() => setDisabled(member, !member.disabledAt)}>
                 {member.disabledAt ? "Enable" : "Disable"}
               </Button>
             )}
@@ -144,6 +128,7 @@ export function TeamSection(props: {
           </ItemDescription>
         </ItemContent>
         <ItemActions>
+          <Badge className={ROLE}>{ROLE_LABEL[invitation.role] ?? invitation.role}</Badge>
           <CopyButton value={inviteUrl(invitation.id)} label="Copy link" />
           <Button variant="outline" size="sm" disabled={busy === invitation.id} onClick={() => resend(invitation)}>Resend</Button>
           <Button variant="ghost" size="sm" disabled={busy === invitation.id} onClick={() => cancel(invitation)}>Cancel</Button>
