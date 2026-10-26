@@ -79,7 +79,7 @@ export function SidebarAccountMenu() {
             <AudioLines />
             Voices
           </DropdownMenuItem>
-          <DropdownMenuItem render={<Link href="/settings#team" />}>
+          <DropdownMenuItem render={<Link href="/settings?tab=team" />}>
             <Users />
             Team
           </DropdownMenuItem>

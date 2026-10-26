@@ -5,13 +5,16 @@ import { SettingsIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { OrganizationForm, ProfileForm } from "@/components/profile-form";
 import { TeamSection } from "@/components/users/team-section";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isStudioRole } from "@/lib/org";
 
 export const dynamic = "force-dynamic";
 
-export default async function SettingsPage() {
+const TABS = ["account", "team", "branding"] as const;
+
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/auth/sign-in");
 
@@ -24,6 +27,9 @@ export default async function SettingsPage() {
   });
   if (!membership) redirect("/auth/no-org");
   const orgId = membership.organization.id;
+  const requested = (await searchParams).tab;
+  // Learners have no Team tab, so ?tab=team falls back to Account for them.
+  const tab = TABS.find((name) => name === requested && (name !== "team" || isStudioRole(membership.role))) ?? "account";
 
   // Team: studio only (admin, team). Everyone in the org plus pending invites; disabled members stay listed.
   const team = isStudioRole(membership.role)
@@ -61,37 +67,41 @@ export default async function SettingsPage() {
           description="Manage the details shown across your TrainerTwin workspace."
         />
 
-        <ProfileForm user={session.user} />
+        <Tabs defaultValue={tab} className="mt-6">
+          <TabsList variant="line">
+            <TabsTrigger value="account">Account</TabsTrigger>
+            {team ? <TabsTrigger value="team">Team</TabsTrigger> : null}
+            <TabsTrigger value="branding">Branding</TabsTrigger>
+          </TabsList>
 
-        <section className="mt-8" aria-labelledby="organization-heading">
-          <h2 id="organization-heading" className="text-lg font-semibold">
-            Organization
-          </h2>
-          <OrganizationForm organization={{ ...membership.organization, accentColor }} />
-        </section>
+          <TabsContent value="account">
+            <ProfileForm user={session.user} />
+          </TabsContent>
 
-        {team ? (
-          <section id="team" className="mt-8 scroll-mt-8" aria-labelledby="team-heading">
-            <h2 id="team-heading" className="text-lg font-semibold">
-              Team and users
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Invite people by email. Team members run the studio; users practise. Disabled people cannot sign in.
-            </p>
-            <TeamSection
-              organizationId={orgId}
-              currentUserId={session.user.id}
-              members={team[0].map(({ user, createdAt, disabledAt, ...member }) => ({
-                ...member,
-                name: user.name,
-                email: user.email,
-                createdAt: createdAt.toISOString(),
-                disabledAt: disabledAt?.toISOString() ?? null,
-              }))}
-              invitations={team[1].map((invitation) => ({ ...invitation, expiresAt: invitation.expiresAt.toISOString() }))}
-            />
-          </section>
-        ) : null}
+          {team ? (
+            <TabsContent value="team" className="mt-6">
+              <p className="text-muted-foreground">
+                Invite people by email. Team members run the studio; users practise. Disabled people cannot sign in.
+              </p>
+              <TeamSection
+                organizationId={orgId}
+                currentUserId={session.user.id}
+                members={team[0].map(({ user, createdAt, disabledAt, ...member }) => ({
+                  ...member,
+                  name: user.name,
+                  email: user.email,
+                  createdAt: createdAt.toISOString(),
+                  disabledAt: disabledAt?.toISOString() ?? null,
+                }))}
+                invitations={team[1].map((invitation) => ({ ...invitation, expiresAt: invitation.expiresAt.toISOString() }))}
+              />
+            </TabsContent>
+          ) : null}
+
+          <TabsContent value="branding" className="pt-3">
+            <OrganizationForm organization={{ ...membership.organization, accentColor }} />
+          </TabsContent>
+        </Tabs>
       </PageContainer>
     </main>
   );
