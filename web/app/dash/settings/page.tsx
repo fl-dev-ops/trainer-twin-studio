@@ -5,6 +5,7 @@ import { SettingsIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { OrganizationForm, ProfileForm } from "@/components/profile-form";
 import { TeamSection } from "@/components/users/team-section";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -13,6 +14,12 @@ import { isStudioRole } from "@/lib/org";
 export const dynamic = "force-dynamic";
 
 const TABS = ["account", "team", "branding"] as const;
+// Pill segmented control, same look as the twin agent page's Calibration / Sessions switch.
+const pillList = "h-auto rounded-full bg-(--sidebar) p-1";
+const pillTab =
+  "h-auto flex-none rounded-full border-0 px-4 py-1.5 text-[14px] leading-5 font-medium text-muted-foreground hover:text-(--foreground) " +
+  "data-active:bg-card data-active:text-(--foreground) group-data-[variant=default]/tabs-list:data-active:shadow-[0_1px_2px_rgb(30_28_25/0.06)] " +
+  "dark:text-muted-foreground dark:data-active:bg-card dark:data-active:text-(--foreground)";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -68,10 +75,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         />
 
         <Tabs defaultValue={tab} className="mt-6">
-          <TabsList variant="line">
-            <TabsTrigger value="account">Account</TabsTrigger>
-            {team ? <TabsTrigger value="team">Team</TabsTrigger> : null}
-            <TabsTrigger value="branding">Branding</TabsTrigger>
+          <TabsList className={pillList}>
+            <TabsTrigger value="account" className={pillTab}>Account</TabsTrigger>
+            {team ? <TabsTrigger value="team" className={pillTab}>Team</TabsTrigger> : null}
+            <TabsTrigger value="branding" className={pillTab}>Branding</TabsTrigger>
           </TabsList>
 
           <TabsContent value="account">
@@ -79,22 +86,26 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </TabsContent>
 
           {team ? (
-            <TabsContent value="team" className="mt-6">
-              <p className="text-muted-foreground">
-                Invite people by email. Team members run the studio; users practise. Disabled people cannot sign in.
-              </p>
-              <TeamSection
-                organizationId={orgId}
-                currentUserId={session.user.id}
-                members={team[0].map(({ user, createdAt, disabledAt, ...member }) => ({
-                  ...member,
-                  name: user.name,
-                  email: user.email,
-                  createdAt: createdAt.toISOString(),
-                  disabledAt: disabledAt?.toISOString() ?? null,
-                }))}
-                invitations={team[1].map((invitation) => ({ ...invitation, expiresAt: invitation.expiresAt.toISOString() }))}
-              />
+            <TabsContent value="team">
+              <Card className="mt-6">
+                <CardContent>
+                  <p className="text-muted-foreground">
+                    Invite people by email. Team members run the studio; users practise. Disabled people cannot sign in.
+                  </p>
+                  <TeamSection
+                    organizationId={orgId}
+                    currentUserId={session.user.id}
+                    members={team[0].map(({ user, createdAt, disabledAt, ...member }) => ({
+                      ...member,
+                      name: user.name,
+                      email: user.email,
+                      createdAt: createdAt.toISOString(),
+                      disabledAt: disabledAt?.toISOString() ?? null,
+                    }))}
+                    invitations={team[1].map((invitation) => ({ ...invitation, expiresAt: invitation.expiresAt.toISOString() }))}
+                  />
+                </CardContent>
+              </Card>
             </TabsContent>
           ) : null}
 
