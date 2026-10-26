@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CopyButton } from "@/components/users/copy-button";
@@ -135,41 +136,45 @@ export function TeamSection(props: {
   }
 
   const groups = [
-    { title: "Team", hint: "Run the studio: twins, role plays, sessions and settings.", studio: true },
-    { title: "Users", hint: "Practise with twins and role plays.", studio: false },
-  ];
+    { title: "Team", hint: "Run the studio: twins, role plays, sessions and settings.", role: "team", studio: true },
+    { title: "Users", hint: "Practise with twins and role plays. Disabled people cannot sign in.", role: "user", studio: false },
+  ] as const;
 
   return (
-    <div className="mt-4 grid gap-8">
-      <InviteUser organizationId={props.organizationId} />
+    <div className="mt-6 grid gap-6">
       {groups.map((group) => {
         const members = props.members.filter((member) => (member.role !== "user") === group.studio);
         const invitations = props.invitations.filter((invitation) => (invitation.role !== "user") === group.studio);
         return (
-          <div key={group.title}>
-            <h3 className="font-medium">
-              {group.title} <span className="text-muted-foreground font-normal">· {members.filter((m) => !m.disabledAt).length}</span>
-            </h3>
-            <p className="text-sm text-muted-foreground">{group.hint}</p>
-            {members.length || invitations.length ? (
-              <Table className="mt-2">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Person</TableHead>
-                    <TableHead className="w-40">Status</TableHead>
-                    <TableHead className="w-28">Role</TableHead>
-                    <TableHead className="w-48" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {memberRows(members)}
-                  {invitationRows(invitations)}
-                </TableBody>
-              </Table>
-            ) : (
-              <p className="mt-2 text-sm text-muted-foreground">No one yet.</p>
-            )}
-          </div>
+          <Card key={group.title}>
+            <CardHeader>
+              <CardTitle>
+                {group.title} <span className="text-muted-foreground font-normal">· {members.filter((m) => !m.disabledAt).length}</span>
+              </CardTitle>
+              <CardDescription>{group.hint}</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              <InviteUser organizationId={props.organizationId} role={group.role} />
+              {members.length || invitations.length ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Person</TableHead>
+                      <TableHead className="w-40">Status</TableHead>
+                      <TableHead className="w-28">Role</TableHead>
+                      <TableHead className="w-48" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {memberRows(members)}
+                    {invitationRows(invitations)}
+                  </TableBody>
+                </Table>
+              ) : (
+                <p className="text-sm text-muted-foreground">No one yet.</p>
+              )}
+            </CardContent>
+          </Card>
         );
       })}
     </div>

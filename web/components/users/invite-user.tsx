@@ -5,16 +5,14 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { authClient } from "@/lib/auth-client";
 import { BASE_DOMAIN } from "@/lib/base-domain";
 import { CopyButton } from "@/components/users/copy-button";
 
-/** Invites someone by email as team (runs the studio) or user (practises); no second admin. Shows the signup link too. */
-export function InviteUser({ organizationId }: { organizationId: string }) {
+/** Invites someone by email with a fixed role: team (runs the studio) or user (practises). Shows the signup link too. */
+export function InviteUser({ organizationId, role }: { organizationId: string; role: "team" | "user" }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"user" | "team">("user");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
@@ -51,12 +49,8 @@ export function InviteUser({ organizationId }: { organizationId: string }) {
           required
           className="max-w-xs"
         />
-        <NativeSelect aria-label="Role" value={role} onChange={(e) => setRole(e.target.value as "user" | "team")}>
-          <NativeSelectOption value="user">User</NativeSelectOption>
-          <NativeSelectOption value="team">Team</NativeSelectOption>
-        </NativeSelect>
         <Button type="submit" disabled={busy}>
-          {busy ? "Inviting…" : "Invite"}
+          {busy ? "Inviting…" : role === "team" ? "Invite team member" : "Invite user"}
         </Button>
       </form>
       {error ? <p className="text-destructive text-sm">{error}</p> : null}

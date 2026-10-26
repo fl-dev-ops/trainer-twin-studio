@@ -5,7 +5,6 @@ import { SettingsIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { OrganizationForm, ProfileForm } from "@/components/profile-form";
 import { TeamSection } from "@/components/users/team-section";
-import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -81,25 +80,18 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
           {team ? (
             <TabsContent value="team">
-              <Card className="mt-6">
-                <CardContent>
-                  <p className="text-muted-foreground">
-                    Invite people by email. Team members run the studio; users practise. Disabled people cannot sign in.
-                  </p>
-                  <TeamSection
-                    organizationId={orgId}
-                    currentUserId={session.user.id}
-                    members={team[0].map(({ user, createdAt, disabledAt, ...member }) => ({
-                      ...member,
-                      name: user.name,
-                      email: user.email,
-                      createdAt: createdAt.toISOString(),
-                      disabledAt: disabledAt?.toISOString() ?? null,
-                    }))}
-                    invitations={team[1].map((invitation) => ({ ...invitation, expiresAt: invitation.expiresAt.toISOString() }))}
-                  />
-                </CardContent>
-              </Card>
+              <TeamSection
+                organizationId={orgId}
+                currentUserId={session.user.id}
+                members={team[0].map(({ user, createdAt, disabledAt, ...member }) => ({
+                  ...member,
+                  name: user.name,
+                  email: user.email,
+                  createdAt: createdAt.toISOString(),
+                  disabledAt: disabledAt?.toISOString() ?? null,
+                }))}
+                invitations={team[1].map((invitation) => ({ ...invitation, expiresAt: invitation.expiresAt.toISOString() }))}
+              />
             </TabsContent>
           ) : null}
 
