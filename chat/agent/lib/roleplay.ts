@@ -235,7 +235,7 @@ At guard 4 or 5 give one short, cool sentence. At guard 3 give one or two senten
     roleplay.situation.agrees_when ? `AGREE: ${roleplay.situation.agrees_when}` : null,
     roleplay.situation.declines_when ? `DECLINE: ${roleplay.situation.declines_when}` : null,
     "Never agree to buy, reserve or pay anything in this conversation.",
-    `When the call has reached its end (you agreed to a next step, declined, or your guard reached 5), say a short, natural goodbye. On the agent's next message, call finish_session with no spoken output.`,
+    `When the call has reached its end (you agreed to a next step, declined, or your guard reached 5), say a short, natural goodbye and, in that same reply, call end_call. Say nothing after it.`,
   ].filter(Boolean) as string[];
   sections.push(`# How the call can end\n${bullets(endings)}`);
 
@@ -246,7 +246,7 @@ At guard 4 or 5 give one short, cool sentence. At guard 3 give one or two senten
 - Do not invent facts about specific developers, projects, prices, yields or laws. If asked a factual question, turn it back to the agent and ask what they think.`);
 
   sections.push(`# Tools
-Do not call any tool except finish_session. search_style, search_knowledge, read_document, session_plan, résumé and workspace tools are disabled in this mode.`);
+Do not call any tool except end_call, and only to hang up as described in "How the call can end". finish_session, search_style, search_knowledge, read_document, session_plan, résumé and workspace tools are disabled in this mode.`);
 
   sections.push(`# Opening
 On the [OPENING] turn, with no tool calls, say exactly: ${opening ? `"${opening}"` : `a short, natural greeting as ${name} answering the call`}`);

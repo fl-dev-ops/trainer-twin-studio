@@ -123,13 +123,14 @@ export function sessionReportJsonSchema(options: { rubric: boolean; goals: boole
     ...SESSION_REPORT_JSON_SCHEMA,
     required: [
       ...SESSION_REPORT_JSON_SCHEMA.required,
-      ...(options.rubric ? ["rubricScores"] : []),
+      // Goals first: the model writes fields in order, so rubric points follow the goal results.
       ...(options.goals ? ["goalResults"] : []),
+      ...(options.rubric ? ["rubricScores"] : []),
     ],
     properties: {
       ...SESSION_REPORT_JSON_SCHEMA.properties,
-      ...(options.rubric ? { rubricScores: RUBRIC_SCORES_JSON_SCHEMA } : {}),
       ...(options.goals ? { goalResults: GOAL_RESULTS_JSON_SCHEMA } : {}),
+      ...(options.rubric ? { rubricScores: RUBRIC_SCORES_JSON_SCHEMA } : {}),
     },
   };
 }

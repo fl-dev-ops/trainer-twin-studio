@@ -14,7 +14,6 @@ import {
   Pause,
   Play,
   RotateCcw,
-  Sparkles,
   UserPlus,
   Video as VideoIcon,
   Volume2,
@@ -78,22 +77,6 @@ function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
-
-function parseTimestampToSeconds(ts?: string, fallbackSeconds?: number): number {
-  if (typeof fallbackSeconds === "number" && !isNaN(fallbackSeconds) && fallbackSeconds >= 0) {
-    return fallbackSeconds;
-  }
-  if (!ts) return 0;
-  const clean = ts.replace(/[^\d:]/g, "");
-  const parts = clean.split(":").map(Number);
-  if (parts.length === 2) {
-    return (parts[0] || 0) * 60 + (parts[1] || 0);
-  }
-  if (parts.length === 3) {
-    return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
-  }
-  return 0;
 }
 
 const PLAYBACK_RATES = [1, 1.25, 1.5, 1.75, 2];
@@ -192,16 +175,6 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
     if (el) {
       el.currentTime = time;
     }
-  };
-
-  const handleJumpToMoment = (moment: KeyMoment) => {
-    const targetSeconds = parseTimestampToSeconds(moment.timestamp, moment.seconds);
-    handleSeek(targetSeconds);
-    const el = videoRef.current;
-    if (el) {
-      el.play().then(() => setIsPlaying(true)).catch(() => {});
-    }
-    playerContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   };
 
   const handleToggleMute = () => {
@@ -559,9 +532,6 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
                   <h3 className="text-sm font-semibold tracking-tight text-foreground">
                     Key moments to review
                   </h3>
-                  <Badge variant="outline" className="text-[10px] text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800">
-                    <Sparkles className="size-3 mr-1" /> Click moment to jump in video
-                  </Badge>
                 </div>
                 <span className="text-xs text-muted-foreground">
                   {selectedSession.keyMoments.length} moments selected
@@ -570,34 +540,18 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {selectedSession.keyMoments.map((moment) => {
-                  const momentSec = parseTimestampToSeconds(moment.timestamp, moment.seconds);
-                  const isCurrentMoment =
-                    currentTime >= momentSec &&
-                    currentTime < momentSec + 45;
-
                   return (
                     <div
                       key={moment.id}
-                      onClick={() => handleJumpToMoment(moment)}
-                      className={cn(
-                        "rounded-2xl border bg-card p-4 sm:p-5 shadow-2xs transition-all hover:shadow-xs cursor-pointer flex flex-col justify-between group",
-                        isCurrentMoment
-                          ? "border-indigo-500 ring-2 ring-indigo-500/20 bg-indigo-50/20 dark:bg-indigo-950/30"
-                          : "hover:border-indigo-300 dark:hover:border-indigo-800"
-                      )}
+                      className="rounded-2xl border bg-card p-4 sm:p-5 shadow-2xs flex flex-col"
                     >
                       <div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                            {moment.number}
-                          </span>
-                          <span className="inline-flex items-center gap-1 text-xs font-mono font-medium px-2 py-0.5 rounded-full bg-muted text-foreground group-hover:bg-indigo-100 dark:group-hover:bg-indigo-950/80 group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">
-                            {moment.timestamp}
-                          </span>
-                        </div>
+                        <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                          {moment.number}
+                        </span>
 
                         {/* Moment Subheading */}
-                        <h4 className="font-semibold text-sm text-foreground mt-2.5 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                        <h4 className="font-semibold text-sm text-foreground mt-2.5">
                           {moment.title}
                         </h4>
 
@@ -612,9 +566,6 @@ export function LearnersView({ initialLearners = [] }: { initialLearners?: Learn
                         </p>
                       </div>
 
-                      <div className="mt-4 pt-3 border-t border-border/40 flex items-center justify-between text-[11px] text-muted-foreground group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
-                        <span>Jump to timestamp</span>
-                      </div>
                     </div>
                   );
                 })}
