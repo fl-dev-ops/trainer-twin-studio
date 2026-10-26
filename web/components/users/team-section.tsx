@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "@/components/ui/item";
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from "@/components/ui/item";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { CopyButton } from "@/components/users/copy-button";
 import { InviteUser } from "@/components/users/invite-user";
@@ -27,6 +27,22 @@ export type TeamInvitation = { id: string; email: string; role: string; expiresA
 const ROLE_LABEL: Record<string, string> = { admin: "Admin", team: "Team", user: "User" };
 const inviteUrl = (id: string) => `https://auth.${BASE_DOMAIN}/invite?token=${id}`;
 const day = (iso: string) => new Date(iso).toLocaleDateString();
+const PILL = "rounded-full border-0 px-2.5 font-medium";
+const AMBER = `${PILL} bg-amber-500/15 text-amber-700 dark:text-amber-300`;
+const BLUE = `${PILL} bg-blue-500/15 text-blue-700 dark:text-blue-300`;
+const ROSE = `${PILL} bg-rose-500/15 text-rose-700 dark:text-rose-300`;
+// Divided rows (no boxes): avatar · name / email · status pill · actions on the right.
+const ROW = "rounded-none border-0 px-0 py-3";
+
+function Initial({ text }: { text: string }) {
+  return (
+    <ItemMedia className="translate-y-0! self-center!">
+      <span aria-hidden className="grid size-9 place-items-center rounded-full bg-(--brand)/15 text-sm font-semibold text-(--brand)">
+        {text.charAt(0).toUpperCase()}
+      </span>
+    </ItemMedia>
+  );
+}
 
 /**
  * Org members and pending invites, split into the studio team (admin, team) and users (learners).
@@ -76,21 +92,24 @@ export function TeamSection(props: {
       const you = member.userId === props.currentUserId;
       const locked = you || member.role === "admin";
       return (
-        <Item key={member.id} role="listitem" variant="outline" size="sm" className={member.disabledAt ? "opacity-60" : undefined}>
-          <ItemContent>
-            <ItemTitle>
+        <Item key={member.id} role="listitem" size="sm" className={ROW}>
+          <Initial text={member.name || member.email} />
+          <ItemContent className={member.disabledAt ? "opacity-60" : undefined}>
+            <ItemTitle className="text-[15px]">
               {member.name}
-              {you ? <span className="text-muted-foreground font-normal">(you)</span> : null}
-              {member.disabledAt ? <Badge variant="outline">Disabled {day(member.disabledAt)}</Badge> : null}
+              {you ? <span className="font-normal text-muted-foreground">(you)</span> : null}
             </ItemTitle>
-            <ItemDescription>
-              {member.email} · Joined {day(member.createdAt)}
+            <ItemDescription className="line-clamp-none flex flex-wrap items-center gap-1.5">
+              <span>{member.email}</span>
+              {member.disabledAt ? (
+                <>· <Badge className={ROSE}>Disabled {day(member.disabledAt)}</Badge></>
+              ) : member.role === "admin" ? (
+                <>· <Badge className={BLUE}>Admin</Badge></>
+              ) : null}
             </ItemDescription>
           </ItemContent>
           <ItemActions>
-            {locked || member.disabledAt ? (
-              <Badge variant="secondary">{ROLE_LABEL[member.role] ?? member.role}</Badge>
-            ) : (
+            {locked || member.disabledAt ? null : (
               <NativeSelect
                 size="sm"
                 aria-label={`Role of ${member.name}`}
@@ -115,13 +134,14 @@ export function TeamSection(props: {
 
   function invitationItems(invitations: TeamInvitation[]) {
     return invitations.map((invitation) => (
-      <Item key={invitation.id} role="listitem" variant="outline" size="sm">
+      <Item key={invitation.id} role="listitem" size="sm" className={ROW}>
+        <Initial text={invitation.email} />
         <ItemContent>
-          <ItemTitle>
-            {invitation.email}
-            <Badge variant="outline">Invited</Badge>
-          </ItemTitle>
-          <ItemDescription>Invite expires {day(invitation.expiresAt)}</ItemDescription>
+          <ItemTitle className="text-[15px]">{invitation.email.split("@")[0]}</ItemTitle>
+          <ItemDescription className="line-clamp-none flex flex-wrap items-center gap-1.5">
+            <span>{invitation.email}</span>· <Badge className={AMBER}>Invite sent</Badge>
+            <span className="text-xs">expires {day(invitation.expiresAt)}</span>
+          </ItemDescription>
         </ItemContent>
         <ItemActions>
           <CopyButton value={inviteUrl(invitation.id)} label="Copy link" />
@@ -152,7 +172,7 @@ export function TeamSection(props: {
             <CardContent className="grid gap-4">
               <InviteUser organizationId={props.organizationId} role={group.role} />
               {members.length || invitations.length ? (
-                <ItemGroup className="gap-2">
+                <ItemGroup className="gap-0 divide-y divide-(--border)">
                   {memberItems(members)}
                   {invitationItems(invitations)}
                 </ItemGroup>
