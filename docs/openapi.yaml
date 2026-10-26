@@ -4,7 +4,8 @@ info:
   version: 1.0.0
   description: |
     Organization-scoped API for managing learners, practice sessions, and role-play assignments.
-    The API covers role plays only; twins are not listed, startable or returned.
+    The API covers role plays only; twins are not listed or returned. Sessions are read-only:
+    practice happens in the TrainerTwin app.
     Scenarios can be listed via the API; scenario, persona, domain, knowledge, and voice
     configuration remains dashboard-only.
 servers:
@@ -428,41 +429,6 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '429':
           $ref: '#/components/responses/RateLimited'
-    post:
-      operationId: createSession
-      tags: [Sessions]
-      summary: Start a session
-      description: |
-        Activates a practice session for a learner against a published scenario (or an
-        active deployment key). The session is created in `active` state; the response
-        carries the credentials needed to connect.
-
-        Chat mode returns `conversationToken`; voice mode returns a LiveKit
-        `participantToken` and `room`. Repeat calls with the same `idempotencyKey`
-        return the same active session with a fresh token.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SessionCreate'
-      responses:
-        '201':
-          description: Session activated.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SessionActivation'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '429':
-          $ref: '#/components/responses/RateLimited'
   /sessions/{sessionId}:
     parameters:
       - $ref: '#/components/parameters/SessionId'
@@ -482,20 +448,6 @@ paths:
                 properties:
                   session:
                     $ref: '#/components/schemas/SessionDetail'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '429':
-          $ref: '#/components/responses/RateLimited'
-    delete:
-      operationId: deleteSession
-      tags: [Sessions]
-      summary: Delete a session
-      description: Soft-deletes the session. It is hidden from list and detail responses; the record is retained for auditing.
-      responses:
-        '204':
-          description: Session deleted.
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -931,61 +883,3 @@ components:
             audioUrl:
               description: Presigned recording download URL, valid for one hour. Null when no recording exists.
               type: [string, 'null']
-    SessionCreate:
-      type: object
-      required: [userId]
-      additionalProperties: false
-      description: >-
-        `deploymentKey` or `scenario` is required; `deploymentKey` takes precedence.
-      properties:
-        userId:
-          type: string
-          example: user_123
-        scenario:
-          type: string
-          pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'
-          example: react-mock-interview
-        deploymentKey:
-          description: Public key of an active deployment; takes precedence over `scenario`.
-          type: string
-        mode:
-          type: string
-          enum: [chat, voice]
-          default: chat
-        documentId:
-          description: Optional context document to attach to the session (an organization document or one uploaded by the learner).
-          type: string
-        idempotencyKey:
-          description: Retry-safe key scoped to the deployment; reusing it returns the same active session instead of creating a new one.
-          type: string
-    SessionActivation:
-      type: object
-      required: [session]
-      properties:
-        session:
-          type: object
-          required: [id, agentSlug, status, mode]
-          properties:
-            id:
-              type: string
-              example: session_123
-            agentSlug:
-              type: string
-              example: react-mock-interview
-            status:
-              $ref: '#/components/schemas/SessionStatus'
-            mode:
-              type: string
-              enum: [chat, voice]
-            runtimeToken:
-              description: Session-scoped token for runtime requests (commands, UI state, coverage).
-              type: string
-        conversationToken:
-          description: Chat-mode token for driving the session.
-          type: string
-        participantToken:
-          description: Voice-mode LiveKit access token for joining `room`.
-          type: string
-        room:
-          description: Voice-mode LiveKit room name.
-          type: string

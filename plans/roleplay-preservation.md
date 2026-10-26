@@ -12,7 +12,7 @@ twin calibration mock `/dash/calibration/[id]`). These are behaviour changes:
 | # | Change | Verdict |
 |---|---|---|
 | A1 | `/api/v1/users` returned `role: "user"`; the published contract (`docs/openapi.yaml` `User.role: const member`) says `member` | ✅ **Fixed** in the commit after `3a36916`: the API answers `member` (`API_LEARNER_ROLE`), the DB keeps `user`; test `v1-users-contract` |
-| A2 | `/api/v1/sessions` could start a twin (default mode `chat`) | ✅ **Decided: the public API is role play only.** A twin scenario or deployment key answers exactly like an unknown one (400 `Agent not found` / `Agent is required`); twin sessions are not listed, returned or deletable (404). Test `v1-roleplay-only` |
+| A2 | `/api/v1/sessions` could start a twin (default mode `chat`) | ✅ **Superseded: sessions are read-only in the public API.** `POST /sessions` and `DELETE /sessions/:id` removed (Next answers 405) and taken out of the docs and Postman collection; every session starts in the TrainerTwin app. List / get return role-play sessions only. Test `v1-roleplay-only` |
 | A3 | `/api/v1/scenarios` listed twins | ✅ **Fixed:** role plays only; a twin slug answers 404 like an unknown scenario. Docs say so (`docs/guides/scenarios.mdx`, `openapi.yaml`) |
 | A4 | `/agents`, `/sessions`, `/learners` show role plays only; twins moved to `/twin/*` | ✅ intended |
 | A5 | Public portal catalog lists role plays only | ✅ intended |
@@ -35,7 +35,7 @@ twin calibration mock `/dash/calibration/[id]`). These are behaviour changes:
 | Sessions list / detail, learners | `app/dash/sessions*`, `app/dash/learners`, `lib/learners.ts` | `learners.test.ts` |
 | Fidelity report | `app/dash/agents/fidelity` | manual check |
 | Role-play calibration pages (mock) | `app/dash/agents/[slug]/calibrate`, `/calibrations/[id]` | manual check |
-| Public API: scenarios, assignments, sessions, users | `app/api/v1/*`, `docs/openapi.yaml` | `v1-users-contract.test.ts` (users role); scenarios / assignments / sessions ⚠️ no contract tests yet |
+| Public API: scenarios (read), assignments, sessions (list / get only), users | `app/api/v1/*`, `docs/openapi.yaml` | `v1-users-contract.test.ts`, `v1-roleplay-only.test.ts`; assignments ⚠️ no contract tests yet |
 
 ## C. Roleplay branch features to carry over (none of these may be dropped)
 

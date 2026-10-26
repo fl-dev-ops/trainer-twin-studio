@@ -1,50 +1,9 @@
 ---
 title: "Sessions"
-description: "Start practice sessions, read results, and manage session lifecycle records."
+description: "Read practice sessions and their results."
 ---
 
-A session is a learner's practice run against a published scenario. Learners normally start practice themselves; integrations can also start a session server-to-server and receive the credentials to connect.
-
-## Start a session
-
-Activate a session for a learner against a published scenario slug:
-
-```bash
-curl "https://dash.trainertwin.com/api/v1/sessions" \
-  --request POST \
-  --header "x-api-key: $TRAINERTWIN_API_KEY" \
-  --header "content-type: application/json" \
-  --data '{
-    "userId": "user_123",
-    "scenario": "react-mock-interview",
-    "mode": "chat"
-  }'
-```
-
-The session is created in `active` state and the response carries the credentials to connect:
-
-```json
-{
-  "session": {
-    "id": "session_123",
-    "agentSlug": "react-mock-interview",
-    "status": "active",
-    "mode": "chat"
-  },
-  "conversationToken": "…"
-}
-```
-
-| Field | Behavior |
-| --- | --- |
-| `mode` | `chat` (default) returns `conversationToken`; `voice` returns a LiveKit `participantToken` and `room` for the learner to join |
-| `scenario` | Published scenario slug — or send `deploymentKey` of an active deployment instead (takes precedence) |
-| `documentId` | Optional context document (an organization document or one the learner uploaded) |
-| `idempotencyKey` | Retry-safe: repeating a call with the same key returns the same active session with a fresh token instead of creating a duplicate |
-
-Errors: `404` for an unknown user, `400` for invalid filters or a deployment that does not allow the requested mode, and `409` when the learner's earlier session for the same assignment can no longer be reactivated.
-
-Starting a new direct session abandons the learner's other `active` sessions for the same scenario.
+A session is a learner's practice run against a published role-play scenario. Sessions happen in the TrainerTwin app — learners start them from their assignment link or the learner portal. The API is **read-only** for sessions: list them and read their results.
 
 ## List sessions
 
@@ -111,15 +70,3 @@ The detail response includes:
 - Transcript data when available.
 - Evidence data when available.
 - `audioUrl` — a presigned download URL for the recording, valid for one hour (`null` when no recording exists).
-
-## Delete a session
-
-Deletion is a soft delete: the session is hidden from list and detail results, but the record (including transcript and audio) is retained for auditing.
-
-```bash
-curl "https://dash.trainertwin.com/api/v1/sessions/session_123" \
-  --request DELETE \
-  --header "x-api-key: $TRAINERTWIN_API_KEY"
-```
-
-A successful deletion returns `204 No Content`. Deleted sessions no longer appear in list or detail responses and cannot be restored through the API.

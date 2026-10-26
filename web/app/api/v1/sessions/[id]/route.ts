@@ -4,6 +4,7 @@ import { orgPrefix, presignedGetUrl } from "@/lib/s3";
 
 type Params = { params: Promise<{ id: string }> };
 
+/** Read-only in the public API (no DELETE): sessions are managed in the TrainerTwin app. */
 export async function GET(request: Request, { params }: Params) {
   const api = await requireExternalApi(request, "sessions", "read");
   if (isApiError(api)) return api;
@@ -52,16 +53,4 @@ export async function GET(request: Request, { params }: Params) {
   delete internal.s3AudioKey;
   delete internal.videoEgressId;
   return Response.json({ session: { ...session, audioUrl, videoUrl } });
-}
-
-export async function DELETE(request: Request, { params }: Params) {
-  const api = await requireExternalApi(request, "sessions", "write");
-  if (isApiError(api)) return api;
-  const { id } = await params;
-  const updated = await db.interviewSession.updateMany({
-    where: { id, orgId: api.org.id, deletedAt: null, agent: { kind: "ROLEPLAY" } },
-    data: { deletedAt: new Date() },
-  });
-  if (!updated.count) return Response.json({ error: "Session not found" }, { status: 404 });
-  return new Response(null, { status: 204 });
 }
