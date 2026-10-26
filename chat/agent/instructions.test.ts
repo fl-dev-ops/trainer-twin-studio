@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, test } from "node:test";
 
-const instructions = await readFile(new URL("./instructions.md", import.meta.url), "utf8");
+const instructions = await readFile(new URL("../prompts/base-instructions.md", import.meta.url), "utf8");
 const transport = await readFile(new URL("../../agent/src/prompt.md", import.meta.url), "utf8");
 const contextRenderer = await readFile(new URL("./lib/brain.ts", import.meta.url), "utf8");
 const contains = (source: string, text: string) => assert.ok(source.includes(text), `Missing prompt contract: ${text}`);

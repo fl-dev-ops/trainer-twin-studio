@@ -10,12 +10,12 @@ import { ensureStyleCache } from "../lib/ensure-style";
 import { planState, resumeCandidateState } from "../lib/plan-state";
 import { resumeClaimCandidates } from "../lib/resume-candidates";
 import { studioFetch } from "../lib/studio";
-import { scenarioPlaybook } from "../lib/brain";
+import { isTwinData, scenarioPlaybook } from "../lib/brain";
 
-/** Returned instead of a plan for scenario-ingest scenarios, which run from their playbook. */
+/** Returned instead of a plan for scenario-ingest scenarios (run from their playbook) and twins (open conversation). */
 export const PLAYBOOK_SESSION_NOTE = {
   playbookSession: true,
-  note: "This session follows the SCENARIO PLAYBOOK, so there is no interview plan. Do not call session_plan again; continue with the playbook's current step.",
+  note: "This session has no interview plan: it follows a playbook, or is an open conversation with the trainer's twin. Do not call session_plan again; carry on with the conversation.",
 };
 
 const evidenceStatus = z.enum(["untested", "partial", "sufficient", "weak", "unresolved"]);
@@ -46,7 +46,7 @@ async function initialize(ctx: any): Promise<ReturnType<typeof compileSessionPla
       agentSlug: attributes.agentSlug,
     });
     // A playbook scenario would compile into quota-bound rounds that fight its own step logic.
-    if (scenarioPlaybook(result.agent?.data ?? {})) return null;
+    if (scenarioPlaybook(result.agent?.data ?? {}) || isTwinData(result.agent?.data)) return null;
     const state = compileSessionPlan(result.agent?.data ?? {});
     planState.update(() => state);
     return state;

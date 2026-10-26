@@ -182,6 +182,8 @@ export async function listRunnableSpecs(type: "personas" | "agents", orgId: stri
  */
 export function isRunnableAgentData(data: Record<string, unknown>) {
   if (data.source === "scenario-ingest") return typeof data.skill === "string" && typeof data.objective === "string";
+  // A twin ("Ask Olga") is an open conversation over its persona's playbooks.
+  if (data.source === "twin") return typeof data.objective === "string";
   return typeof data.objective === "string" && typeof data.opening === "string" && isRecord(data.config);
 }
 

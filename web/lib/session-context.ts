@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
+import { TWIN_SOURCE, twinPlaybooks } from "@/lib/twins";
 
 const SHARED_KNOWLEDGE_BASE_SLUG = "acme-knowledge";
 
@@ -35,7 +36,7 @@ export async function buildSessionContext(input: {
   const snapshot = session?.compiledSnapshot as Snapshot | null;
   const [liveAgent, livePersona, liveDomain, sharedKnowledgeBase] = await Promise.all([
     agentSlug
-      ? db.agent.findFirst({ where: { slug: { equals: agentSlug, mode: "insensitive" }, orgId: input.orgId }, select: { slug: true, version: true, data: true } })
+      ? db.agent.findFirst({ where: { slug: { equals: agentSlug, mode: "insensitive" }, orgId: input.orgId }, select: { slug: true, version: true, data: true, personaId: true } })
       : null,
     personaSlug
       ? db.persona.findFirst({ where: { slug: { equals: personaSlug, mode: "insensitive" }, orgId: input.orgId }, select: { slug: true, version: true, data: true } })
@@ -130,9 +131,14 @@ export async function buildSessionContext(input: {
     ? { slug: snapshot.domain.slug ?? liveDomain?.slug ?? domainSlug, version: snapshot.domain.version ?? liveDomain?.version ?? 0, data: snapshot.domain.data }
     : liveDomain;
 
+  // A twin draws on every playbook of its persona; they are listed live so new ingests show up.
+  const isTwin = (agent?.data as Record<string, unknown> | undefined)?.source === TWIN_SOURCE;
+  const playbooks = isTwin && liveAgent?.personaId ? await twinPlaybooks(input.orgId, liveAgent.personaId) : undefined;
+
   return {
     sessionId: session?.id ?? input.sessionId ?? null,
-    agent: agent ?? null,
+    agent: agent ? { slug: agent.slug, version: agent.version, data: agent.data } : null,
+    ...(playbooks ? { twinPlaybooks: playbooks } : {}),
     persona: persona ?? null,
     domain: domain ?? null,
     knowledgeBases: sharedKnowledgeBase ? [sharedKnowledgeBase] : [],

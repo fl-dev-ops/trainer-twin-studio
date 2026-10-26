@@ -76,7 +76,7 @@ bunx tsc --noEmit             # typecheck
 |---|---|
 | `agent/agent.ts` | model wiring (OpenRouter) + session limits |
 | `agent/instrumentation.ts` | Eve OpenTelemetry export to Langfuse |
-| `agent/instructions.md` | trainer identity, move logic, persona fidelity, workspace conduct |
+| `prompts/base-instructions.md` (via `agent/instructions/session-spec.ts`) | trainer identity, move logic, persona fidelity, workspace conduct |
 | `agent/instructions/session-spec.ts` | dynamic per-session grounding from studio specs |
 | `agent/tools/search_style.ts` | trainer's real speech for the current move (studio) |
 | `agent/tools/search_knowledge.ts` | domain references for factual grounding (studio) |

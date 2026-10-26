@@ -485,15 +485,18 @@ export class MainCollectionService {
    */
   static async searchScenarioItems(
     orgId: string,
-    agentSlug: string,
+    /** One scenario, or several (a twin searches all of its persona's playbooks). */
+    agentSlug: string | string[],
     query: string,
     options: { step?: string; role?: "trainer" | "learner"; limit?: number; steps?: ScenarioStep[] } = {},
-  ): Promise<{ text: string; context: string; step?: string; move?: string; role: string; score: number }[]> {
+  ): Promise<{ text: string; context: string; step?: string; move?: string; role: string; score: number; scenario: string }[]> {
+    const slugs = Array.isArray(agentSlug) ? agentSlug : [agentSlug];
+    if (slugs.length === 0) return [];
     const collection = await this.getCollection(orgId);
     const [queryEmbedding] = await embedTexts([query]);
     const index = scenarioStepIndex(options.steps ?? []);
     const run = async (step?: string) => {
-      const conditions: Where[] = [{ type: "scenario_item" }, { agentSlug }];
+      const conditions: Where[] = [{ type: "scenario_item" }, slugs.length === 1 ? { agentSlug: slugs[0] } : ({ agentSlug: { $in: slugs } } as Where)];
       if (step) {
         const moves = index.movesOf(step);
         conditions.push(moves.length ? { $or: [{ step }, { move: { $in: moves } }, { action: { $in: moves } }] } as Where : { step });
@@ -519,6 +522,7 @@ export class MainCollectionService {
           move,
           role: String(meta.role ?? ""),
           score: typeof distance === "number" ? 1 - distance : 0,
+          scenario: String(meta.scenarioId ?? meta.agentSlug ?? ""),
         };
       });
     };

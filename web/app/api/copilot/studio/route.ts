@@ -5,6 +5,7 @@ import { searchKnowledge } from "@/lib/knowledge";
 import { specDraftBundleSchema } from "@/lib/spec-draft-schema";
 import { publishSpecDraft, readSpecDraft, saveSpecDraft } from "@/lib/spec-drafts";
 import { MainCollectionService, type ScenarioStep } from "@/lib/main-collection";
+import { TWIN_SOURCE, twinPlaybooks } from "@/lib/twins";
 import { redactLearnerNames } from "@/lib/persona-voice";
 import { enqueueWorkspaceCommand } from "@/lib/workspace-commands";
 import { buildSessionContext, getCachedSessionContext } from "@/lib/session-context";
@@ -45,6 +46,8 @@ const requestSchema = z.discriminatedUnion("action", [
     step: z.string().trim().min(1).max(100).optional(),
     role: z.enum(["trainer", "learner"]).optional(),
     limit: z.number().int().min(1).max(6).optional(),
+    /** Twin sessions: narrow to one playbook (its scenario id or slug). */
+    playbook: z.string().trim().min(1).max(200).optional(),
   }).strict(),
   z.object({
     action: z.literal("readDocument"),
@@ -230,13 +233,24 @@ export async function POST(request: Request) {
   // Real lines from a scenario-ingest scenario (items.json), for the chat tool scenario_examples.
   if (input.action === "searchScenarioItems") {
     // scenario.json's steps map the newer items' `action` to a step, and a step to its moves.
-    const agent = await db.agent.findFirst({ where: { slug: input.agentSlug, orgId }, select: { data: true } });
-    const scenario = (agent?.data as { scenario?: { steps?: unknown } } | null)?.scenario;
-    const examples = await MainCollectionService.searchScenarioItems(orgId, input.agentSlug, input.query, {
+    const agent = await db.agent.findFirst({ where: { slug: input.agentSlug, orgId }, select: { data: true, personaId: true } });
+    const data = agent?.data as { source?: unknown; scenario?: { steps?: unknown } } | null;
+    let scope: { slugs: string[]; steps: ScenarioStep[] };
+    if (agent && data?.source === TWIN_SOURCE) {
+      // A twin searches its persona's playbooks: all of them, or the one the model has loaded.
+      const all = await twinPlaybooks(orgId, agent.personaId);
+      const named = input.playbook ? all.filter((p) => p.id === input.playbook || p.slug === input.playbook) : [];
+      // An unknown name (e.g. a sanitised skill name) widens to all playbooks rather than finding nothing.
+      const chosen = named.length > 0 ? named : all;
+      scope = { slugs: chosen.map((p) => p.slug), steps: chosen.flatMap((p) => p.steps as ScenarioStep[]) };
+    } else {
+      scope = { slugs: [input.agentSlug], steps: Array.isArray(data?.scenario?.steps) ? (data.scenario.steps as ScenarioStep[]) : [] };
+    }
+    const examples = await MainCollectionService.searchScenarioItems(orgId, scope.slugs, input.query, {
       step: input.step,
       role: input.role,
       limit: input.limit,
-      steps: Array.isArray(scenario?.steps) ? (scenario.steps as ScenarioStep[]) : [],
+      steps: scope.steps,
     });
     return Response.json({ query: input.query, examples });
   }
