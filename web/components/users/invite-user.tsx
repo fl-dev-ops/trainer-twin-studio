@@ -47,10 +47,10 @@ export function InviteUser({ organizationId, role }: { organizationId: string; r
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          className="max-w-xs"
+          className="flex-1"
         />
         <Button type="submit" disabled={busy}>
-          {busy ? "Inviting…" : role === "team" ? "Invite team member" : "Invite user"}
+          {busy ? "Sending…" : "Send invite"}
         </Button>
       </form>
       {error ? <p className="text-destructive text-sm">{error}</p> : null}

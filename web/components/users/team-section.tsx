@@ -1,11 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { Plus, Search } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from "@/components/ui/item";
 import { CopyButton } from "@/components/users/copy-button";
 import { InviteUser } from "@/components/users/invite-user";
@@ -55,6 +58,7 @@ export function TeamSection(props: {
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
+  const [query, setQuery] = useState<Record<string, string>>({});
 
   async function run(key: string, action: () => Promise<{ error?: { message?: string } | null } | Response>, done: string) {
     setBusy(key);
@@ -138,31 +142,62 @@ export function TeamSection(props: {
   }
 
   const groups = [
-    { title: "Team", role: "team", studio: true },
-    { title: "Users", role: "user", studio: false },
+    { title: "Team", role: "team", studio: true, invite: "Invite team member", hint: "Team members run the studio: twins, role plays, sessions and settings." },
+    { title: "Users", role: "user", studio: false, invite: "Invite user", hint: "Users practise with the twins and role plays you give them." },
   ] as const;
+  const matches = (needle: string, ...fields: string[]) => fields.some((field) => field.toLowerCase().includes(needle));
 
   return (
     <div className="mt-6 grid gap-6">
       {groups.map((group) => {
-        const members = props.members.filter((member) => (member.role !== "user") === group.studio);
-        const invitations = props.invitations.filter((invitation) => (invitation.role !== "user") === group.studio);
+        const all = props.members.filter((member) => (member.role !== "user") === group.studio);
+        const pending = props.invitations.filter((invitation) => (invitation.role !== "user") === group.studio);
+        const needle = (query[group.role] ?? "").trim().toLowerCase();
+        const members = all.filter((member) => matches(needle, member.name, member.email));
+        const invitations = pending.filter((invitation) => matches(needle, invitation.email));
         return (
           <Card key={group.title}>
             <CardHeader>
               <CardTitle>
-                {group.title} <span className="text-muted-foreground font-normal">· {members.filter((m) => !m.disabledAt).length}</span>
+                {group.title} <span className="text-muted-foreground font-normal">· {all.filter((m) => !m.disabledAt).length}</span>
               </CardTitle>
+              <CardAction>
+                <Dialog>
+                  <DialogTrigger render={<Button size="sm" />}>
+                    <Plus />
+                    Invite
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>{group.invite}</DialogTitle>
+                      <DialogDescription>{group.hint} They get an email with a sign-up link.</DialogDescription>
+                    </DialogHeader>
+                    <InviteUser organizationId={props.organizationId} role={group.role} />
+                  </DialogContent>
+                </Dialog>
+              </CardAction>
             </CardHeader>
-            <CardContent className="grid gap-4">
-              <InviteUser organizationId={props.organizationId} role={group.role} />
+            <CardContent className="grid gap-3">
+              {all.length || pending.length ? (
+                <div className="relative">
+                  <Search aria-hidden className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    type="search"
+                    aria-label={`Search ${group.title.toLowerCase()}`}
+                    placeholder="Search by name or email"
+                    value={query[group.role] ?? ""}
+                    onChange={(event) => setQuery((current) => ({ ...current, [group.role]: event.target.value }))}
+                    className="pl-9"
+                  />
+                </div>
+              ) : null}
               {members.length || invitations.length ? (
                 <ItemGroup className="gap-0 divide-y divide-(--border)">
                   {memberItems(members)}
                   {invitationItems(invitations)}
                 </ItemGroup>
               ) : (
-                <p className="text-sm text-muted-foreground">No one yet.</p>
+                <p className="text-sm text-muted-foreground">{needle ? "No one matches that search." : "No one yet."}</p>
               )}
             </CardContent>
           </Card>
