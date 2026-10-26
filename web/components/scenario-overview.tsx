@@ -63,25 +63,30 @@ export function ScenarioOverview({ data }: { data: ScenarioOverviewData }) {
         <Card>
           <CardHeader><CardTitle>Report</CardTitle></CardHeader>
           <CardContent className="flex flex-col gap-6">
-            <div className="w-fit rounded-xl bg-muted px-5 py-3">
-              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Sessions</p>
-              <p className="text-2xl font-semibold tabular-nums">{data.totalSessions}</p>
+            <div className="w-fit min-w-32 rounded-xl bg-emerald-50 px-4 py-3.5 dark:bg-emerald-950/40">
+              <p className="text-[11px] font-medium tracking-[0.08em] text-emerald-800 uppercase dark:text-emerald-300">Sessions</p>
+              <p className="mt-1.5 text-2xl font-medium tabular-nums text-emerald-800 dark:text-emerald-300">{data.totalSessions}</p>
             </div>
 
             <div className="flex flex-col gap-2">
-              <p className="text-sm font-medium">Sessions this week</p>
-              <div className="flex h-24 items-end gap-2" role="img"
+              <p className="text-sm">Sessions this week</p>
+              <div className="flex flex-col gap-1" role="img"
                 aria-label={data.week.map((day) => `${day.label} ${day.count}`).join(", ")}>
-                {data.week.map((day) => (
-                  <div key={day.label} className="flex flex-1 flex-col items-center gap-1">
-                    <span className="text-[10px] tabular-nums text-muted-foreground">{day.count || ""}</span>
-                    <span
-                      className="w-full rounded-sm bg-primary"
-                      style={{ height: `${day.count ? Math.max(6, Math.round((day.count / weekMax) * 64)) : 2}px`, opacity: day.count ? 1 : 0.25 }}
-                    />
-                    <span className="text-[10px] text-muted-foreground">{day.label}</span>
-                  </div>
-                ))}
+                <div className="flex h-9 items-end gap-1.5">
+                  {data.week.map((day) => (
+                    <span key={day.label}
+                      className={day.count ? "flex-1 rounded-[3px] bg-[#2f62c4] dark:bg-[#5b8ae0]" : "flex-1 rounded-[3px] bg-[#2f62c4]/15 dark:bg-[#5b8ae0]/20"}
+                      style={{ height: day.count ? `${Math.max(18, Math.round((day.count / weekMax) * 100))}%` : "3px" }} />
+                  ))}
+                </div>
+                <div className="flex gap-1.5">
+                  {data.week.map((day, index) => (
+                    <span key={day.label}
+                      className={index === data.week.length - 1 ? "flex-1 text-center text-[8px] text-orange-600" : "flex-1 text-center text-[8px] text-muted-foreground"}>
+                      {day.label}
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -130,23 +135,35 @@ export function ScenarioOverview({ data }: { data: ScenarioOverviewData }) {
 }
 
 function ScoreTrend({ scores }: { scores: number[] }) {
-  const width = 300;
-  const height = 64;
-  const pad = 6;
+  const width = 400;
+  const height = 40;
+  const pad = 8;
   const step = (width - pad * 2) / (scores.length - 1);
+  const x = (index: number) => pad + index * step;
   const y = (score: number) => pad + (1 - Math.max(0, Math.min(100, score)) / 100) * (height - pad * 2);
-  const points = scores.map((score, index) => `${pad + index * step},${y(score)}`).join(" ");
+  const points = scores.map((score, index) => `${x(index)},${y(score)}`).join(" ");
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-sm font-medium">Session scores <span className="font-normal text-muted-foreground">(last {scores.length})</span></p>
-      <svg viewBox={`0 0 ${width} ${height}`} className="h-16 w-full" role="img"
-        aria-label={`Scores out of 100, oldest first: ${scores.join(", ")}`}>
-        <line x1={pad} x2={width - pad} y1={y(50)} y2={y(50)} className="stroke-border" strokeDasharray="3 3" />
-        <polyline points={points} fill="none" className="stroke-primary" strokeWidth={2} strokeLinejoin="round" />
-        {scores.map((score, index) => (
-          <circle key={index} cx={pad + index * step} cy={y(score)} r={3} className="fill-primary" />
-        ))}
-      </svg>
+      <p className="text-sm">Session scores <span className="text-muted-foreground">(last {scores.length})</span></p>
+      <div role="img" aria-label={`Scores out of 100, oldest first: ${scores.join(", ")}`}>
+        <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="h-10 w-full overflow-visible">
+          <polyline points={points} fill="none" className="stroke-emerald-800 dark:stroke-emerald-400" strokeWidth={1.25}
+            strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+        </svg>
+        {/* Dots and labels sit outside the stretched SVG so they stay round and readable. */}
+        <div className="relative -mt-10 h-10">
+          {scores.map((score, index) => (
+            <span key={index} className="absolute size-[5px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-800 dark:bg-emerald-400"
+              style={{ left: `${(x(index) / width) * 100}%`, top: `${(y(score) / height) * 100}%` }} />
+          ))}
+        </div>
+        <div className="relative mt-1.5 h-3">
+          {scores.map((_, index) => (
+            <span key={index} className="absolute -translate-x-1/2 text-[8px] text-[#2f62c4]/70 tabular-nums dark:text-blue-400/80"
+              style={{ left: `${(x(index) / width) * 100}%` }}>{index + 1}</span>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
