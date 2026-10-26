@@ -2,6 +2,12 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 export type ExternalApiResource = "users" | "sessions" | "assignments" | "scenarios";
+
+/**
+ * The public API's name for a learner's role. docs/openapi.yaml promises `User.role: const member`;
+ * the database calls the same role `user` (LEARNER_ROLE). Keep this value unless the API is versioned.
+ */
+export const API_LEARNER_ROLE = "member" as const;
 export type ExternalApiAction = "read" | "write";
 export type ExternalApiContext = {
   org: { id: string; slug: string; name: string };

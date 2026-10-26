@@ -3,7 +3,7 @@ import { z } from "zod";
 import { BASE_DOMAIN } from "@/lib/base-domain";
 import { db } from "@/lib/db";
 import { sendInvitationEmail } from "@/lib/email";
-import { isApiError, paginationFromUrl, requireExternalApi } from "@/lib/external-api";
+import { API_LEARNER_ROLE, isApiError, paginationFromUrl, requireExternalApi } from "@/lib/external-api";
 import { belongsToOtherOrg, ORG_LOCK_MESSAGE } from "@/lib/org-lock";
 import { LEARNER_ROLE, STUDIO_ROLES } from "@/lib/org";
 
@@ -23,7 +23,6 @@ export async function GET(request: Request) {
       take: page.limit,
       select: {
         id: true,
-        role: true,
         createdAt: true,
         user: { select: { id: true, name: true, email: true, emailVerified: true } },
       },
@@ -37,7 +36,8 @@ export async function GET(request: Request) {
   ]);
 
   return Response.json({
-    users: members.map(({ id: memberId, user, ...member }) => ({ ...user, ...member, memberId })),
+    // Every listed member is a learner; the API calls that role `member` (API_LEARNER_ROLE).
+    users: members.map(({ id: memberId, user, ...member }) => ({ ...user, ...member, role: API_LEARNER_ROLE, memberId })),
     invitations,
     pagination: { ...page, total },
   });

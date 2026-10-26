@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { isApiError, requireExternalApi } from "@/lib/external-api";
+import { API_LEARNER_ROLE, isApiError, requireExternalApi } from "@/lib/external-api";
 import { LEARNER_ROLE } from "@/lib/org";
 
 const updateSchema = z.object({ name: z.string().trim().min(1).max(100) }).strict();
@@ -14,13 +14,12 @@ export async function GET(request: Request, { params }: Params) {
     where: { organizationId: api.org.id, userId: id, role: LEARNER_ROLE },
     select: {
       id: true,
-      role: true,
       createdAt: true,
       user: { select: { id: true, name: true, email: true, emailVerified: true } },
     },
   });
   if (!member) return Response.json({ error: "User not found" }, { status: 404 });
-  return Response.json({ user: { ...member.user, memberId: member.id, role: member.role, createdAt: member.createdAt } });
+  return Response.json({ user: { ...member.user, memberId: member.id, role: API_LEARNER_ROLE, createdAt: member.createdAt } });
 }
 
 export async function PATCH(request: Request, { params }: Params) {
@@ -39,7 +38,7 @@ export async function PATCH(request: Request, { params }: Params) {
     data: { name: parsed.data.name },
     select: { id: true, name: true, email: true, emailVerified: true },
   });
-  return Response.json({ user: { ...user, memberId: member.id, role: LEARNER_ROLE } });
+  return Response.json({ user: { ...user, memberId: member.id, role: API_LEARNER_ROLE } });
 }
 
 export async function DELETE(request: Request, { params }: Params) {
