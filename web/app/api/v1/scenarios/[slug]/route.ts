@@ -4,14 +4,14 @@ import { isApiError, requireExternalApi } from "@/lib/external-api";
 type Params = { params: Promise<{ slug: string }> };
 
 /** Get one scenario, including its role-play configuration (`data`). Read-only:
- * scenario configuration itself stays dashboard-only. */
+ * scenario configuration itself stays dashboard-only. A twin answers like an unknown scenario. */
 export async function GET(request: Request, { params }: Params) {
   const api = await requireExternalApi(request, "scenarios", "read");
   if (isApiError(api)) return api;
   const { slug } = await params;
 
   const scenario = await db.agent.findFirst({
-    where: { orgId: api.org.id, slug },
+    where: { orgId: api.org.id, slug, kind: "ROLEPLAY" },
     select: {
       slug: true,
       name: true,

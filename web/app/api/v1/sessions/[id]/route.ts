@@ -9,7 +9,8 @@ export async function GET(request: Request, { params }: Params) {
   if (isApiError(api)) return api;
   const { id } = await params;
   const session = await db.interviewSession.findFirst({
-    where: { id, orgId: api.org.id, deletedAt: null },
+    // The public API serves role plays only: a twin session answers like an unknown one.
+    where: { id, orgId: api.org.id, deletedAt: null, agent: { kind: "ROLEPLAY" } },
     select: {
       id: true,
       userId: true,
@@ -58,7 +59,7 @@ export async function DELETE(request: Request, { params }: Params) {
   if (isApiError(api)) return api;
   const { id } = await params;
   const updated = await db.interviewSession.updateMany({
-    where: { id, orgId: api.org.id, deletedAt: null },
+    where: { id, orgId: api.org.id, deletedAt: null, agent: { kind: "ROLEPLAY" } },
     data: { deletedAt: new Date() },
   });
   if (!updated.count) return Response.json({ error: "Session not found" }, { status: 404 });

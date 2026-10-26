@@ -43,6 +43,7 @@ export async function GET(request: Request) {
   const where = {
     orgId: api.org.id,
     deletedAt: null,
+    agent: { kind: "ROLEPLAY" as const }, // the public API serves role plays only
     ...(parsed.data.status ? { status: parsed.data.status } : {}),
     ...(parsed.data.userId ? { userId: parsed.data.userId } : {}),
     ...(parsed.data.scenario ? { agentSlug: parsed.data.scenario } : {}),
@@ -86,13 +87,24 @@ export async function POST(request: Request) {
     select: { id: true, name: true, email: true },
   });
   if (!user) return Response.json({ error: "User not found" }, { status: 404 });
+  // The public API serves role plays only: a twin's scenario slug or deployment key is treated exactly like an
+  // unknown one (same status and message as today), so twins cannot be started through the API.
+  const [twinScenario, twinDeployment] = await Promise.all([
+    parsed.data.scenario
+      ? db.agent.findFirst({ where: { orgId: api.org.id, slug: parsed.data.scenario, kind: "TWIN" }, select: { id: true } })
+      : null,
+    parsed.data.deploymentKey
+      ? db.deployment.findFirst({ where: { orgId: api.org.id, publicKey: parsed.data.deploymentKey, agent: { kind: "TWIN" } }, select: { id: true } })
+      : null,
+  ]);
+  if (twinScenario) return Response.json({ error: "Agent not found" }, { status: 400 });
   try {
     const activation = await activateInterviewRuntime({
       orgId: api.org.id,
       userId: user.id,
       userName: user.name,
       userEmail: user.email,
-      deploymentKey: parsed.data.deploymentKey,
+      deploymentKey: twinDeployment ? undefined : parsed.data.deploymentKey,
       agentSlug: parsed.data.scenario,
       contextId: parsed.data.documentId,
       mode: parsed.data.mode,

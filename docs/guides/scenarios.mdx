@@ -5,6 +5,8 @@ description: "Read the organization's role-play scenarios and their configuratio
 
 Scenarios are the role-plays learners can practice (called agents in the dashboard). The API is **read-only** — creating or editing scenario configuration stays in the dashboard.
 
+The API covers role plays only. Twins (the trainer's own AI, used through twin assignments and links) are not listed, cannot be started through `/sessions`, and their sessions are not returned.
+
 ## List scenarios
 
 ```bash

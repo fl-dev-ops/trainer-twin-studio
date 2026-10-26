@@ -4,6 +4,7 @@ info:
   version: 1.0.0
   description: |
     Organization-scoped API for managing learners, practice sessions, and role-play assignments.
+    The API covers role plays only; twins are not listed, startable or returned.
     Scenarios can be listed via the API; scenario, persona, domain, knowledge, and voice
     configuration remains dashboard-only.
 servers:

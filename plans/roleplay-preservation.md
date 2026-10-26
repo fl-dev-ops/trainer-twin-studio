@@ -12,8 +12,8 @@ twin calibration mock `/dash/calibration/[id]`). These are behaviour changes:
 | # | Change | Verdict |
 |---|---|---|
 | A1 | `/api/v1/users` returned `role: "user"`; the published contract (`docs/openapi.yaml` `User.role: const member`) says `member` | ✅ **Fixed** in the commit after `3a36916`: the API answers `member` (`API_LEARNER_ROLE`), the DB keeps `user`; test `v1-users-contract` |
-| A2 | `/api/v1/sessions` (default mode `chat`) on a twin now fails: twins are voice only and need a twin assignment | ⚠️ **Public API behaviour change.** Decide: refuse with a clear 400 and document it, or keep twins out of the public API |
-| A3 | `/api/v1/scenarios` still lists twins, but `/api/v1/assignments` now refuses them (404) | ⚠️ Inconsistent. Decide: list role plays only (docs say "role-play scenarios") |
+| A2 | `/api/v1/sessions` could start a twin (default mode `chat`) | ✅ **Decided: the public API is role play only.** A twin scenario or deployment key answers exactly like an unknown one (400 `Agent not found` / `Agent is required`); twin sessions are not listed, returned or deletable (404). Test `v1-roleplay-only` |
+| A3 | `/api/v1/scenarios` listed twins | ✅ **Fixed:** role plays only; a twin slug answers 404 like an unknown scenario. Docs say so (`docs/guides/scenarios.mdx`, `openapi.yaml`) |
 | A4 | `/agents`, `/sessions`, `/learners` show role plays only; twins moved to `/twin/*` | ✅ intended |
 | A5 | Public portal catalog lists role plays only | ✅ intended |
 | A6 | Roles: owner/admin → `admin`, member → `user`; studio checks now admin/team | ✅ intended (API wording: see A1) |
