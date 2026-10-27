@@ -180,3 +180,18 @@ No new variables.
   - `autoAssignCustomDomains` off until the migration is done, then promote.
   - CLI deploys were blocked (the commit author isn't a team member), so builds come from GitHub.
 - **Voice agent:** stays on v1.
+
+**Done (28 Oct 2026, ~05:10 IST)**
+- **Migrations:** 13 applied, plus fixes #1–#3. One more than planned: `20261029030000_calibration_score` (3 nullable columns, part of v2).
+  - Fix #2 must run *after* `migrate deploy`. Before it, the session-org trigger rejects the UPDATE: the learners aren't members yet.
+  - Result: schema up to date; Domain table gone; assignment FK in place; careerwithvasanth's only admin is victorywithvasanth@gmail.com; its 10 role plays are intact (ROLEPLAY, with principles).
+- **Promoted:**
+  - web `dpl_BKcLWrnVbM6y1BFDLjakTcUpw26P` (dash, auth, `*.trainertwin.com`);
+  - chat `dpl_9eMRMSQnmEULTzDgLJfqQCJqMHeS`;
+  - copilot `dpl_4JFc4zSQjbDTVhaJdQdqNMAon3d5`.
+  - All built from v2 `bc663d0`.
+- `autoAssignCustomDomains` is back on. **Production branch = v2** on all three projects: every push to v2 now deploys production.
+- **Olga:** org `olga` (`bc657406-6209-4bb8-af6f-c0d8141a17a4`) with her own persona only (voice and avatar in the prod S3 prefix). No members, agents or documents yet.
+- **Rollback:**
+  - instant: promote the previous deployments (web `dpl_4UWrb75pumgSEXMuv5MQp4MogeFc`, chat `dpl_8o5uwaJdKmXjcQBgogrSEKud7QGq`, copilot `dpl_8G149rgZXByWQ7hRDBut6MGfbqnC`);
+  - database: restore from branch `backup-pre-v2-2026-10-28`. The old code does not run on the new schema.
