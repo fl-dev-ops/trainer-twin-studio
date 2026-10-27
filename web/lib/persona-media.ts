@@ -142,6 +142,23 @@ export async function setPersonaSettings(orgId: string | null, slug: string, inp
   return parsed.data;
 }
 
+/**
+ * Each agent's face for call screens: a presigned link to its persona's avatar photo (or null). Presigned rather than the
+ * same-site avatar route, so learners who are not yet org members (twin share links) can see it. Six hours covers a call.
+ */
+export async function agentPhotoUrls(orgId: string, agentSlugs: string[]): Promise<Record<string, string | null>> {
+  if (!agentSlugs.length) return {};
+  const agents = await db.agent.findMany({
+    where: { slug: { in: agentSlugs }, OR: [{ orgId }, { orgId: null }] },
+    select: { slug: true, persona: { select: { avatar: { select: { s3ImageKey: true } } } } },
+  });
+  const entries = await Promise.all(agents.map(async (agent) => {
+    const key = agent.persona.avatar?.s3ImageKey;
+    return [agent.slug, key ? await presignedGetUrl(key, 6 * 3600) : null] as const;
+  }));
+  return Object.fromEntries(entries);
+}
+
 /** Everything the program side needs: short-lived file links, the voice transcript and settings. */
 export async function getPersonaMedia(orgId: string | null, slug: string) {
   const persona = await db.persona.findFirst({

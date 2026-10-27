@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { assignmentMatchesUser } from "@/lib/assignments";
 import { signInUrl } from "@/lib/base-domain";
 import { db } from "@/lib/db";
+import { agentPhotoUrls } from "@/lib/persona-media";
 import { resolveSessionUser } from "@/lib/session-user";
 import { listAgentContextRequired, listAgentContextUploads, listScenarioIntroVideos } from "@/lib/specs";
 import { TwinAccessError, twinAccessByCode } from "@/lib/twin-access";
@@ -107,8 +108,9 @@ export default async function SharedSessionPage({ params }: { params: Promise<{ 
     );
   }
   const agent = assignment.deployment.agent;
-  const [introVideos, agentContextRequired, agentContextUploads] = await Promise.all([
+  const [introVideos, agentPhotos, agentContextRequired, agentContextUploads] = await Promise.all([
     listScenarioIntroVideos(org.id, [agent.slug]),
+    agentPhotoUrls(org.id, [agent.slug]),
     listAgentContextRequired(org.id, [agent.slug]),
     listAgentContextUploads(org.id, [agent.slug]),
   ]);
@@ -124,6 +126,7 @@ export default async function SharedSessionPage({ params }: { params: Promise<{ 
       agentContextRequired={agentContextRequired}
       agentContextUploads={agentContextUploads}
       introVideos={introVideos}
+      agentPhotos={agentPhotos}
       autoStart
       contexts={[]}
       sessionCode={code}

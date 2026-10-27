@@ -53,7 +53,7 @@ async function withRetries<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
  * the same session API as /talk. With `twin`, the call is saved as a twin calibration and every rating is stored
  * (twin tRPC); without it (role plays) ratings live only in this page.
  */
-type CallProps = { slug: string; scenarioName: string; twinName: string; twin?: boolean };
+type CallProps = { slug: string; scenarioName: string; twinName: string; twin?: boolean; photoUrl?: string | null };
 
 export function CalibrationCall(props: CallProps) {
   const room = useMemo(
@@ -68,7 +68,7 @@ export function CalibrationCall(props: CallProps) {
   );
 }
 
-function Call({ room, slug, scenarioName, twinName, twin = false }: CallProps & { room: Room }) {
+function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = null }: CallProps & { room: Room }) {
   const [phase, setPhase] = useState<Phase>("connecting");
   const [error, setError] = useState("");
   const [connection, setConnection] = useState<Connection | null>(null);
@@ -383,6 +383,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false }: CallProps & 
             backHref={backHref}
             backLabel={twin ? "All calibrations" : "Go to Roleplay"}
             twinName={twinName}
+            photoUrl={photoUrl}
             seconds={seconds}
             turns={turns}
             onRestart={() => void start()}
@@ -391,7 +392,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false }: CallProps & 
           <>
             <div ref={scrollRef} className={cn("flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-6 pt-8", composerOpen ? "pb-44" : "pb-28")}>
               <div className={cn("relative size-[320px] shrink-0 overflow-hidden rounded-[32px] bg-muted", SOFT_SHADOW, speaking && "ring-2 ring-emerald-500/70")}>
-                <TwinPortrait name={twinName} className="size-full text-8xl" />
+                <TwinPortrait name={twinName} photoUrl={photoUrl} className="size-full text-8xl" />
                 <span className="absolute bottom-3 left-3 rounded-full bg-white px-2.5 py-1 text-[13px] leading-[18px] font-medium text-neutral-900 shadow-[0_0_0_1px_#e9e9e9]">
                   {twinName}
                 </span>
@@ -563,6 +564,7 @@ function CallSummary({
   backHref,
   backLabel,
   twinName,
+  photoUrl,
   seconds,
   turns,
   onRestart,
@@ -571,6 +573,7 @@ function CallSummary({
   backHref: string;
   backLabel: string;
   twinName: string;
+  photoUrl: string | null;
   seconds: number;
   turns: CalibrationTurn[];
   onRestart: () => void;
@@ -581,7 +584,7 @@ function CallSummary({
         <CallEndedIcon className="size-[18px]" />
         Call ended
       </p>
-      <TwinPortrait name={twinName} className={cn("mt-6 size-60 rounded-[48px] text-7xl", SOFT_SHADOW)} />
+      <TwinPortrait name={twinName} photoUrl={photoUrl} className={cn("mt-6 size-60 rounded-[48px] text-7xl", SOFT_SHADOW)} />
       <h1 className="mt-6 text-lg font-semibold">{twinName}</h1>
       <p className="mt-0.5 text-sm text-foreground/75">Time spoke {clock(seconds)}</p>
       {transcriptHref ? (

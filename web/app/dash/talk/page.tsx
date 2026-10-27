@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { SessionView } from "@/components/session-view";
 import { db } from "@/lib/db";
+import { agentPhotoUrls } from "@/lib/persona-media";
 import { getSessionOrg, isStudioRole } from "@/lib/org";
 import { startableAgentSlugs } from "@/lib/twin-access";
 import { resolveSessionUser } from "@/lib/session-user";
@@ -26,10 +27,11 @@ export default async function TalkPage({
   // Learners see role plays plus only the twins assigned to them; admin and team see every agent.
   const agents = await startableAgentSlugs(org.id, user, runnable, isStudioRole(membership?.role));
   const initialAgent = query.agent && agents.includes(query.agent) ? query.agent : agents[0];
-  const [agentNames, agentPersonas, introVideos, agentContextRequired, agentContextUploads] = await Promise.all([
+  const [agentNames, agentPersonas, introVideos, agentPhotos, agentContextRequired, agentContextUploads] = await Promise.all([
     listAgentNames(org.id, agents),
     listAgentPersonas(org.id, agents),
     listScenarioIntroVideos(org.id, agents),
+    agentPhotoUrls(org.id, agents),
     listAgentContextRequired(org.id, agents),
     listAgentContextUploads(org.id, agents),
   ]);
@@ -41,6 +43,7 @@ export default async function TalkPage({
       initialAgent={initialAgent}
       agentPersonas={agentPersonas}
       introVideos={introVideos}
+      agentPhotos={agentPhotos}
       agentContextRequired={agentContextRequired}
       agentContextUploads={agentContextUploads}
       contexts={contexts.map((c) => ({ id: c.id, name: c.name, size: c.size }))}

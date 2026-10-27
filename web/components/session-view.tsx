@@ -104,6 +104,8 @@ type Props = {
   organizationLogo?: string | null;
   /** Playable intro video per scenario slug. */
   introVideos?: Record<string, string | null>;
+  /** Each agent's persona photo (presigned), shown on the trainer's tile. */
+  agentPhotos?: Record<string, string | null>;
   /** Learner-facing entries: no start button, the session starts on page load. */
   autoStart?: boolean;
 };
@@ -129,6 +131,7 @@ export function SessionView({
   organizationName,
   organizationLogo = null,
   introVideos = {},
+  agentPhotos = {},
   autoStart = false,
 }: Props) {
   // One stable Room instance for the whole mount
@@ -1346,7 +1349,7 @@ export function SessionView({
                         className="h-full min-h-0 w-full"
                       />
                     ) : (
-                      <AgentTile persona={persona} compact={surface !== null} />
+                      <AgentTile persona={persona} photoUrl={agentPhotos[agent] ?? null} compact={surface !== null} />
                     )}
                   </div>
                   <div className={cn("w-full shrink-0 aspect-[4/3]", !surface && "max-w-[340px] sm:min-w-0 sm:flex-[1_1_0]")}>

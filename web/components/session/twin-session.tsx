@@ -1,5 +1,6 @@
 import { SessionView } from "@/components/session-view";
 import { db } from "@/lib/db";
+import { agentPhotoUrls } from "@/lib/persona-media";
 import { listAgentContextRequired, listAgentContextUploads, listScenarioIntroVideos } from "@/lib/specs";
 
 /**
@@ -11,8 +12,9 @@ export async function TwinSession({ orgId, agentId, code, userName }: { orgId: s
     db.agent.findFirstOrThrow({ where: { id: agentId, orgId }, select: { slug: true, name: true, persona: { select: { slug: true } } } }),
     db.organization.findUniqueOrThrow({ where: { id: orgId }, select: { name: true, logo: true } }),
   ]);
-  const [introVideos, agentContextRequired, agentContextUploads] = await Promise.all([
+  const [introVideos, agentPhotos, agentContextRequired, agentContextUploads] = await Promise.all([
     listScenarioIntroVideos(orgId, [agent.slug]),
+    agentPhotoUrls(orgId, [agent.slug]),
     listAgentContextRequired(orgId, [agent.slug]),
     listAgentContextUploads(orgId, [agent.slug]),
   ]);
@@ -29,6 +31,7 @@ export async function TwinSession({ orgId, agentId, code, userName }: { orgId: s
       agentContextRequired={agentContextRequired}
       agentContextUploads={agentContextUploads}
       introVideos={introVideos}
+      agentPhotos={agentPhotos}
       autoStart
       contexts={[]}
       sessionCode={code}

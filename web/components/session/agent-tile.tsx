@@ -4,8 +4,8 @@ import Image from "next/image";
 import { useVoiceAssistant } from "@livekit/components-react";
 import { cn } from "@/lib/utils";
 
-/** The trainer's tile (V2 prototype): photo or initial on the light wash, a status pill and a name tag. */
-export function AgentTile({ persona, compact = false }: { persona: string; compact?: boolean }) {
+/** The trainer's tile (V2 prototype): the persona's photo, else an initial on the light wash; a status pill and a name tag. */
+export function AgentTile({ persona, photoUrl = null, compact = false }: { persona: string; photoUrl?: string | null; compact?: boolean }) {
   const { state } = useVoiceAssistant();
   const isSpeaking = state === "speaking";
   const isThinking = state === "thinking";
@@ -19,7 +19,10 @@ export function AgentTile({ persona, compact = false }: { persona: string; compa
         isSpeaking && "ring-2 ring-emerald-500/70",
       )}
     >
-      {persona.toLowerCase() === "vasanth" ? (
+      {photoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element -- presigned S3 link to the persona's avatar photo
+        <img src={photoUrl} alt="" className="absolute inset-0 size-full object-cover object-[center_20%]" />
+      ) : persona.toLowerCase() === "vasanth" ? (
         <Image src="/vasanth.png" alt="" fill sizes={compact ? "220px" : "360px"} className="object-cover" priority />
       ) : (
         <div aria-hidden className="grid size-full place-items-center">

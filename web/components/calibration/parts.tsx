@@ -9,11 +9,12 @@ export const SOFT_SHADOW = "shadow-[0_2px_4px_rgba(30,28,25,0.07),0_8px_20px_rgb
 export const PILL =
   "inline-flex h-8 items-center gap-2 rounded-full bg-card px-[18px] text-[13px] font-semibold shadow-[0_0_1px_rgba(0,0,0,0.4),0_1px_1px_rgba(0,0,0,0.04),0_2px_4px_rgba(0,0,0,0.04)] transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 outline-none dark:shadow-[0_0_0_1px_var(--border)]";
 
-/**
- * The twin's picture. Personas have no photo yet, so it's the role-play card's light wash with an initial.
- * shortcut: initial only, swap in the persona photo/video once personas have one.
- */
-export function TwinPortrait({ name, className }: { name: string; className?: string }) {
+/** The twin's picture: its persona's photo, else the role-play card's light wash with an initial. */
+export function TwinPortrait({ name, photoUrl = null, className }: { name: string; photoUrl?: string | null; className?: string }) {
+  if (photoUrl) {
+    // eslint-disable-next-line @next/next/no-img-element -- same-site avatar route (redirects to a presigned S3 URL)
+    return <img src={photoUrl} alt="" aria-hidden className={cn("object-cover object-[center_20%]", className)} />;
+  }
   return (
     <div
       aria-hidden
