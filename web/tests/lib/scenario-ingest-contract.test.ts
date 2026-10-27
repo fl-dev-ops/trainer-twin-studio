@@ -291,6 +291,19 @@ test("twin-creator: never the learner's words, never role-play structure, always
   expect(files).toEqual([]); // a failing skill is never published
 });
 
+test("twin-creator: a decision rule counts one per line, as a bullet, a numbered line or a plain paragraph", async () => {
+  const { io } = twinIo();
+  const rules = ["When a buyer says they will wait, I ask what they wait for, because the price is rarely the reason.", "If they talk about the market, I show how my payment plans spread the risk.", "When a buyer wants cashback, I explain what the developer gives instead, because chasing it makes me look desperate."];
+  for (const format of [(r: string) => `- ${r}`, (r: string, i: number) => `${i + 1}. ${r}`, (r: string) => `${r}\n`]) {
+    const body = twinBody.replace(/## How I decide\n[\s\S]*?\n## Patterns I see/, `## How I decide\n${rules.map(format).join("\n")}\n\n## Patterns I see`);
+    const saved = await saveTwinSkill(io, "olga", { user: "olga", skill: twinHead, trainer: { call0001: ["speaker_1"] }, names: [], items: twinItems as never, patterns: twinPatterns, body });
+    expect((saved as { check: { reasons: string[] } }).check.reasons).toEqual([]);
+  }
+  const twoRules = twinBody.replace(/## How I decide\n[\s\S]*?\n## Patterns I see/, `## How I decide\n${rules.slice(0, 2).join("\n\n")}\n\n## Patterns I see`);
+  const short = await saveTwinSkill(io, "olga", { user: "olga", skill: twinHead, trainer: { call0001: ["speaker_1"] }, names: [], items: twinItems as never, patterns: twinPatterns, body: twoRules });
+  expect((short as { check: { reasons: string[] } }).check.reasons.join("\n")).toContain('"## How I decide" has 2 rules');
+});
+
 test("twin skills endpoint: secret, org, and the trainer's words only", async () => {
   process.env.SCENARIO_INGEST_SECRET = "s3cret";
   const post = (body: unknown, headers: Record<string, string> = { authorization: "Bearer s3cret", "x-trainertwin-org-id": "org1" }) =>

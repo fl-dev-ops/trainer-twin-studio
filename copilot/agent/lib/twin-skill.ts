@@ -75,6 +75,8 @@ const linesUnder = (text: string, heading: string) => {
   return (j < 0 ? rest : rest.slice(0, j)).split("\n");
 };
 const bullets = (lines: string[]) => lines.filter((l) => /^\s*[-*] /.test(l));
+/** One rule per line: a bullet, a numbered line or a plain paragraph line all count (models write all three). */
+const ruleLines = (lines: string[]) => lines.map((l) => l.trim()).filter((l) => l && !l.startsWith("#")).map((l) => l.replace(/^([-*]|\d+[.)])\s+/, ""));
 export const twinSkillHeader = (head: TwinSkillHead) => `---\nname: ${head.skill}\ndescription: ${JSON.stringify(head.description)}\n---\n`;
 
 /** Builds items from the sources: only the trainer's own words, copied exactly. */
@@ -162,8 +164,8 @@ export async function checkTwinSkill(io: Io, user: string, id: string) {
   const firstPerson = (body.match(/\b(I|I'm|I've|I'd|I'll|my|me)\b/g) ?? []).length;
   if (firstPerson < TWIN.minFirstPerson) reasons.push(`SKILL.md uses the first person ${firstPerson} times; write it as the trainer ("I…", "my…"), not about them`);
   if (/\bthe trainer\b/i.test(body)) reasons.push('SKILL.md says "the trainer"; write as the trainer, in the first person');
-  const rules = bullets(linesUnder(body, "## How I decide"));
-  if (rules.length < TWIN.minDecisionRules) reasons.push(`"## How I decide" has ${rules.length} rules; it needs at least ${TWIN.minDecisionRules}, each "when …, I … because …"`);
+  const rules = ruleLines(linesUnder(body, "## How I decide"));
+  if (rules.length < TWIN.minDecisionRules) reasons.push(`"## How I decide" has ${rules.length} rules; it needs at least ${TWIN.minDecisionRules}, one per line, each "when …, I … because …"`);
   for (const rule of rules) if (!/\b(when|if|unless|once|before|after|until|as soon as)\b/i.test(rule)) reasons.push(`decision rule "${rule.trim().slice(0, 90)}" needs its condition: "when …" or "if …"`);
   const topic = linesUnder(body, "## Topic").join("\n").toLowerCase();
   for (const s of head.situations) if (!topic.includes(s.name.toLowerCase())) reasons.push(`"## Topic" should name the situation "${s.name}"`);
@@ -283,7 +285,7 @@ Know these before you read anything. Every number is a hard limit in code.
 ## SKILL.md (\`body\`)
 - Every section: ${TWIN_SKILL_SECTIONS.join(", ")}. At most ${TWIN.maxWords.skill} words, no refs. Code adds the name/description header.
 - Written as the trainer, in the first person ("I…", "my…"), at least ${TWIN.minFirstPerson} times; never "the trainer".
-- "## Topic" names every situation. "## How I decide" has at least ${TWIN.minDecisionRules} rules, each with its condition ("when …, I … because …").
+- "## Topic" names every situation. "## How I decide" has at least ${TWIN.minDecisionRules} rules, one per line (a "- " bullet is fine), each with its condition ("when …, I … because …").
 - No role-play structure: no roles, steps, moves or learner part.
 
 ## Everywhere
