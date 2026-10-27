@@ -51,7 +51,7 @@ export type ClientPersonaForm = {
 export const PERSONA_PRESETS: Array<{ id: string; label: string; avatar: string } & Omit<ClientPersonaForm, "look" | "knowledge">> = [
   {
     id: "daniel", label: "Daniel", avatar: "/roleplay/avatars/daniel.jpg",
-    name: "Daniel Whitfield", role: "Buyer", age: "44", basedIn: "London",
+    name: "Daniel Hart", role: "Buyer", age: "44", basedIn: "London",
     background: "Works in finance operations. Enquired about an off-plan project months ago, then put the idea on hold. Wants to wait for prices to hit the bottom.",
     behaviours: ["Warm but Cautious"], difficulty: "medium", openingStyle: "skeptical",
     formality: "neutral", answerLength: "short", interrupts: "never", pauses: true, fillers: false,
@@ -80,9 +80,9 @@ export const PERSONA_PRESETS: Array<{ id: string; label: string; avatar: string 
     voiceId: "charlotte-sample", pace: "normal",
   },
   {
-    id: "elena", label: "Elena", avatar: "/roleplay/avatars/elena.jpg",
-    name: "Elena Rossi", role: "Investor", age: "47", basedIn: "Zurich",
-    background: "Overseas investor with about two million dirhams and ten minutes. Wants a clear picture before booking anything.",
+    id: "priya", label: "Priya", avatar: "/roleplay/avatars/priya.jpg",
+    name: "Priya Shah", role: "Investor", age: "36", basedIn: "Manchester",
+    background: "NHS pharmacist looking at her first investment property, with about twenty thousand pounds to put down. Wants a clear picture before booking anything.",
     behaviours: ["Curious & Probing"], difficulty: "medium", openingStyle: "friendly",
     formality: "formal", answerLength: "medium", interrupts: "never", pauses: true, fillers: false,
     phrases: ["What would you show me?", "Walk me through the numbers."],

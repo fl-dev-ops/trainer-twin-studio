@@ -4,8 +4,8 @@
 # Voices point at the shared sample voices until real ones are linked in the dashboard.
 
 personas:
-  - slug: daniel-whitfield
-    name: Daniel Whitfield
+  - slug: daniel-hart
+    name: Daniel Hart
     role: Buyer
     age: 44
     based_in: London
@@ -47,18 +47,18 @@ personas:
     avatar: /roleplay/avatars/claire.jpg
     voiceId: charlotte-sample
 
-  - slug: elena-rossi
-    name: Elena Rossi
+  - slug: priya-shah
+    name: Priya Shah
     role: Investor
     age: 36
-    based_in: Milan
-    background: Overseas investor with two million dirhams
+    based_in: Manchester
+    background: NHS pharmacist looking at her first investment property, with about twenty thousand pounds to put down
     behaviours: [Curious & Probing]
     opening_style: friendly
     how_they_talk: Formal, measured pace. Asks pointed questions before sharing anything about herself.
     mannerisms: { formality: formal, answer_length: medium, interrupts: never, pauses: true, fillers: false }
     signature_phrases: ["How do you know that?", "Show me the numbers."]
-    avatar: /roleplay/avatars/elena.jpg
+    avatar: /roleplay/avatars/priya.jpg
     voiceId: priya-sample
 
   - slug: marcus-reid
@@ -78,7 +78,7 @@ personas:
 scenarios:
   - slug: wait-and-see-investor
     name: The wait-and-see investor
-    persona: daniel-whitfield
+    persona: daniel-hart
     clientName: Daniel Hart
     situation:
       scenario: >-
@@ -131,7 +131,7 @@ scenarios:
 
   - slug: options-collector
     name: The options-collector who ghosts
-    persona: elena-rossi
+    persona: priya-shah
     clientName: Priya Shah
     situation:
       scenario: >-
