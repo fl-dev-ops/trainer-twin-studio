@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { twinSettingsFromAgentData } from "@/lib/context-upload";
+import { beforeSettings, usesBeforeSettings } from "@/lib/context-upload";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { resolveSessionUser } from "@/lib/session-user";
@@ -29,7 +29,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const snapshot = asRecord(session.compiledSnapshot);
   const pinnedAgentData = asRecord(snapshot?.agent)?.data ?? session.agent.data;
-  if (session.agent.kind !== "TWIN" || !twinSettingsFromAgentData(pinnedAgentData).duringUpload) {
+  if (!usesBeforeSettings(pinnedAgentData, session.agent.kind) || !beforeSettings(pinnedAgentData).duringUpload) {
     return Response.json({ error: "Attaching files is turned off for this conversation" }, { status: 403 });
   }
 

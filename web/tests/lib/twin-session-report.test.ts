@@ -1,6 +1,6 @@
 import { beforeEach, expect, mock, test } from "bun:test";
 
-type Row = { agent: { kind: string }; twinCalibration: { id: string } | null };
+type Row = { agent: { kind: string; data?: unknown }; twinCalibration: { id: string } | null };
 let rows: Record<string, Row> = {};
 let claims: string[] = [];
 let roleplayScheduled: string[] = [];
@@ -18,7 +18,7 @@ mock.module("@/lib/session-report-jobs", () => ({
   scheduleSessionReport: async (id: string) => { roleplayScheduled.push(id); return true; },
 }));
 
-const { processCompletedSession } = await import("@/lib/session-processing");
+const { processCompletedSession, reportKindOf } = await import("@/lib/session-processing");
 const { isTwinReport, toTwinReport } = await import("@/lib/twin/session-report");
 const { mostAsked } = await import("@/lib/twin/stats");
 
@@ -36,6 +36,16 @@ test("completed sessions go to the report for their kind; calibrations get none"
   expect(await processCompletedSession("missing")).toBe(false);
   expect(roleplayScheduled).toEqual(["rp"]);
   expect(claims).toEqual(["tw"]);
+});
+
+test("after.report decides the processing; without it twins get the twin report, others the session report", async () => {
+  expect(reportKindOf({}, "TWIN")).toBe("twin");
+  expect(reportKindOf({}, "ROLEPLAY")).toBe("session");
+  expect(reportKindOf({ after: { report: "roleplay" } }, "ROLEPLAY")).toBe("roleplay");
+  expect(reportKindOf({ after: { report: "nonsense" } }, "ROLEPLAY")).toBe("session");
+  rows = { rp2: { agent: { kind: "ROLEPLAY", data: { after: { report: "roleplay" } } }, twinCalibration: null } };
+  await processCompletedSession("rp2");
+  expect(roleplayScheduled).toEqual(["rp2"]); // role-play processing moves to its own path in the next step
 });
 
 test("model reply becomes a twin report: trimmed, empties dropped, capped", () => {

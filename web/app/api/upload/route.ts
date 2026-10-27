@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { assignmentMatchesUser } from "@/lib/assignments";
 import { db } from "@/lib/db";
 import { getSessionOrg } from "@/lib/org";
-import { twinSettingsFromAgentData } from "@/lib/context-upload";
+import { beforeSettings } from "@/lib/context-upload";
 import { resolveSessionUser } from "@/lib/session-user";
 import { listUploads, saveUpload } from "@/lib/specs";
 import { twinAccessByCode } from "@/lib/twin-access";
@@ -15,7 +15,7 @@ async function twinCodeAllowsUpload(orgId: string, user: { id: string; email: st
   const access = await twinAccessByCode({ orgId, user, code, join: false }).catch(() => null);
   if (!access) return false;
   const agent = await db.agent.findFirst({ where: { id: access.agentId, orgId, kind: "TWIN" }, select: { data: true } });
-  const settings = twinSettingsFromAgentData(agent?.data);
+  const settings = beforeSettings(agent?.data);
   return Boolean(agent) && (settings.preUpload || settings.duringUpload);
 }
 

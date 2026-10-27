@@ -14,8 +14,12 @@ export type AgentContextUpload = {
   duringSession: boolean;
 };
 
-/** Twin conversation settings (Agent.data.twinSettings), set on the twin's configure page. Off unless turned on. */
-export type TwinSettings = {
+/**
+ * Before the call: what the learner may bring (Agent.data.before; twins saved earlier: data.twinSettings).
+ * Set on the twin's configure page. Off unless turned on. One of the three phases (before / during / after,
+ * plans/roleplay-skill.md).
+ */
+export type BeforeSettings = {
   preScreenshare: boolean;
   preUpload: boolean;
   duringUpload: boolean;
@@ -108,8 +112,13 @@ export function resolveContextUpload(context: unknown): AgentContextUpload {
   };
 }
 
-export function twinSettingsFromAgentData(data: unknown): TwinSettings {
-  const settings = asRecord(asRecord(data)?.twinSettings);
+const storedBefore = (data: unknown) => asRecord(asRecord(data)?.before) ?? asRecord(asRecord(data)?.twinSettings);
+
+/** Twins always follow their before settings; any other agent only once it has a `before` block. */
+export const usesBeforeSettings = (data: unknown, kind?: string | null) => kind === "TWIN" || asRecord(asRecord(data)?.before) !== null;
+
+export function beforeSettings(data: unknown): BeforeSettings {
+  const settings = storedBefore(data);
   return {
     preScreenshare: settings?.preScreenshare === true,
     preUpload: settings?.preUpload === true,
@@ -119,10 +128,10 @@ export function twinSettingsFromAgentData(data: unknown): TwinSettings {
   };
 }
 
-/** What the session screen offers for this agent. Twins follow their settings; everything else the role play rules. */
+/** What the session screen offers for this agent: its before settings, else the older role-play rules. */
 export function contextUploadFromAgentData(data: unknown, kind?: string | null): AgentContextUpload {
-  if (kind !== "TWIN") return resolveContextUpload(contextConfigFromAgentData(data));
-  const settings = twinSettingsFromAgentData(data);
+  if (!usesBeforeSettings(data, kind)) return resolveContextUpload(contextConfigFromAgentData(data));
+  const settings = beforeSettings(data);
   return {
     required: false,
     prompt: settings.uploadInstruction,

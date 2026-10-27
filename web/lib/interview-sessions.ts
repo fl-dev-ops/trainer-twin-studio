@@ -9,7 +9,7 @@ import { assertUserInOrg } from "@/lib/org-lock";
 import { isStudioRole, LEARNER_ROLE } from "@/lib/org";
 import { TwinAccessError, twinAccessByAgent, twinAccessByCode } from "@/lib/twin-access";
 import { pinTwinSkills, TWIN_SOURCE } from "@/lib/twins";
-import { twinSettingsFromAgentData } from "@/lib/context-upload";
+import { beforeSettings, usesBeforeSettings } from "@/lib/context-upload";
 
 const shareCode = () => randomBytes(18).toString("base64url");
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
@@ -308,9 +308,9 @@ export async function activateSession(input: {
   for (const document of snapshot.documents) {
     if (document.ownerUserId && document.ownerUserId !== input.userId) throw new Error("Context not found");
   }
-  // A twin takes documents at the start only when its configure page turns pre-session uploads on.
-  if (snapshot.agent.kind === "TWIN" && snapshot.docIds.length && !twinSettingsFromAgentData(snapshot.agent.data).preUpload) {
-    throw new TwinAccessError("This twin does not take documents", 400);
+  // Documents at the start only when the agent's before settings turn pre-session uploads on (twins, new role plays).
+  if (snapshot.docIds.length && usesBeforeSettings(snapshot.agent.data, snapshot.agent.kind) && !beforeSettings(snapshot.agent.data).preUpload) {
+    throw new TwinAccessError(snapshot.agent.kind === "TWIN" ? "This twin does not take documents" : "This role play does not take documents", 400);
   }
   // An invited learner (role-play invite, twin assignment or twin link) joins the org as a `user` on first start.
   // The single-org lock above already refused people bound to another org.

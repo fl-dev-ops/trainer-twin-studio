@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   applyLearnerUpload,
+  beforeSettings,
   contextUploadFromAgentData,
   resolveContextUpload,
+  usesBeforeSettings,
 } from "@/lib/context-upload";
 
 test("resume mode uses the default documents label", () => {
@@ -78,6 +80,21 @@ test("twins follow their configure page; an unconfigured twin asks for nothing",
   assert.equal(on.label, "Brochure");
   assert.equal(on.prompt, "Add the listing brochure.");
   assert.equal(contextUploadFromAgentData({ twinSettings: { preUpload: true } }, "TWIN").label, "Documents");
+});
+
+test("before settings: `before` wins over an older twinSettings; a role play follows them once it has a before block", () => {
+  const twin = contextUploadFromAgentData({ twinSettings: { preUpload: true }, before: { preUpload: false, duringUpload: true } }, "TWIN");
+  assert.equal(twin.allowed, false);
+  assert.equal(twin.duringSession, true);
+  assert.equal(usesBeforeSettings({}, "TWIN"), true);
+  assert.equal(usesBeforeSettings({}, "ROLEPLAY"), false);
+  assert.equal(usesBeforeSettings({ twinSettings: { preUpload: true } }, "ROLEPLAY"), false);
+  const roleplay = contextUploadFromAgentData({ before: { preScreenshare: false, preUpload: true, uploadTitle: "Listing" } }, "ROLEPLAY");
+  assert.deepEqual(
+    { offered: roleplay.offered, screenShare: roleplay.screenShare, label: roleplay.label, duringSession: roleplay.duringSession },
+    { offered: true, screenShare: false, label: "Listing", duringSession: false },
+  );
+  assert.deepEqual(beforeSettings({}), { preScreenshare: false, preUpload: false, duringUpload: false, uploadTitle: "", uploadInstruction: "" });
 });
 
 test("generate overlay stamps résumé upload on resume interviews", () => {

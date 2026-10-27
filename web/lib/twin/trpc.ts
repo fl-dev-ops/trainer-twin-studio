@@ -2,7 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
-import { twinSettingsFromAgentData } from "@/lib/context-upload";
+import { beforeSettings } from "@/lib/context-upload";
 import { LEARNER_ROLE } from "@/lib/org";
 import { studioProcedure, t } from "@/lib/trpc";
 import {
@@ -203,7 +203,7 @@ const agentsRouter = t.router({
       description: text(data.objective),
       whoAsks: whoAsks(data),
       allSkills: data.source === TWIN_SOURCE,
-      settings: twinSettingsFromAgentData(data),
+      settings: beforeSettings(data),
       credit: {
         minutes: active.reduce((sum, row) => sum + row.minutesLimit, 0),
         used: Math.round(active.reduce((sum, row) => sum + row.minutesUsed, 0)),
@@ -252,8 +252,9 @@ const agentsRouter = t.router({
     .mutation(({ ctx, input }) => twinCall(async () => {
       const found = await findTwinAgent(ctx.user.orgId, input.slug);
       const current = await db.agent.findUniqueOrThrow({ where: { id: found.id }, select: { version: true, data: true } });
-      // Read by the session screen (lib/context-upload) and enforced by session start and the attach route.
-      const data = { ...asRecord(current.data), name: input.name, objective: input.description, twinSettings: input.settings };
+      // Before settings: read by the session screen (lib/context-upload), enforced by session start and the attach
+      // route. An older `twinSettings` key is left as is; `before` wins.
+      const data = { ...asRecord(current.data), name: input.name, objective: input.description, before: input.settings };
       if (JSON.stringify(data) === JSON.stringify(current.data) && input.name === found.name) return { version: current.version };
       const json = (value: unknown) => value as Prisma.InputJsonValue;
       await db.$transaction([
