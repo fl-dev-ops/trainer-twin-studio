@@ -3,9 +3,14 @@
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import {
-  ArrowLeft, BookOpen, Check, FileText, HardDrive, Minus, Pause, Pencil, Play, Plus, Sparkles, Video,
+  ArrowLeft, BookOpen, Check, FileText, HardDrive, LoaderCircle, Minus, Pause, Pencil, Play, Plus, Sparkles, Video,
 } from "lucide-react";
+import { toast } from "sonner";
+import { generateSpeech, playPcmStream, stopPlayback } from "@/lib/audio-playback";
 import { cn } from "@/lib/utils";
+
+/** What the play button says in her cloned voice. */
+const SAMPLE_LINE = "Hi, this is my twin. Tell me what is going on with your client, and I will help you with the next step.";
 
 export type BrainKnowledge = {
   connectors: { id: string; kind: "drive" | "notion" | "youtube"; label: string; status: string }[];
@@ -14,7 +19,7 @@ export type BrainKnowledge = {
 };
 
 /** Voice and avatar as set up on /twin/brain/voice (null: the org has no own persona yet). */
-export type BrainAvatar = { photoUrl: string | null; voiceName: string | null; updatedAt: string | null } | null;
+export type BrainAvatar = { photoUrl: string | null; voiceId: string | null; voiceName: string | null; updatedAt: string | null } | null;
 
 const CONNECTOR_ICONS = { drive: HardDrive, notion: BookOpen, youtube: Video };
 
@@ -67,6 +72,27 @@ function Edge() {
 export function TwinBrainPage({ knowledge, avatar }: { knowledge: BrainKnowledge; avatar: BrainAvatar }) {
   const [zoom, setZoom] = useState(100);
   const [playing, setPlaying] = useState(false);
+  const [loadingVoice, setLoadingVoice] = useState(false);
+
+  /** Her cloned voice saying one line (the voice service generates it); a second click stops it. */
+  async function playVoice() {
+    stopPlayback();
+    if (playing || !avatar?.voiceId) return setPlaying(false);
+    setLoadingVoice(true);
+    try {
+      const response = await generateSpeech(avatar.voiceId, SAMPLE_LINE);
+      setPlaying(true);
+      setLoadingVoice(false);
+      await playPcmStream(response);
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "";
+      // The voice service resolves voices through its own environment's web app: a voice only in this database is unknown there.
+      toast.error(/\b404\b/.test(message) ? "The voice service doesn't have this voice yet (it only exists in this environment)." : message || "Couldn't play the voice.");
+    } finally {
+      setLoadingVoice(false);
+      setPlaying(false);
+    }
+  }
   const zoomBy = (delta: number) => setZoom((value) => Math.min(ZOOM.max, Math.max(ZOOM.min, value + delta)));
 
   return (
@@ -172,12 +198,13 @@ export function TwinBrainPage({ knowledge, avatar }: { knowledge: BrainKnowledge
                 <div className="mt-1 flex items-center gap-3">
                   <button
                     type="button"
-                    onClick={() => setPlaying((value) => !value)}
+                    onClick={() => void playVoice()}
+                    disabled={!avatar?.voiceId || loadingVoice}
                     aria-label={playing ? "Pause voice sample" : "Play voice sample"}
                     aria-pressed={playing}
                     className="grid size-8 place-items-center rounded-full bg-(--tone-control) text-foreground transition-colors hover:bg-(--border) focus-visible:ring-2 focus-visible:ring-(--brand) outline-none"
                   >
-                    {playing ? <Pause className="size-3.5" aria-hidden /> : <Play className="size-3.5" aria-hidden />}
+                    {loadingVoice ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden /> : playing ? <Pause className="size-3.5" aria-hidden /> : <Play className="size-3.5" aria-hidden />}
                   </button>
                   <Waveform playing={playing} />
                 </div>

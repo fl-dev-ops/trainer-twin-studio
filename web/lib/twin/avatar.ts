@@ -50,6 +50,7 @@ export async function avatarState(orgId: string) {
     personaName: persona.name,
     photoUrl: avatarPhotoUrl(persona.slug, persona.avatar),
     hasReference: Boolean(persona.avatar?.s3VideoKey),
+    voiceId: persona.voiceId,
     voiceName: persona.voice?.name ?? null,
     updatedAt: persona.avatar?.updatedAt.toISOString() ?? null,
   };
