@@ -110,3 +110,14 @@ export function titleFrom(text: string | null | undefined, fallback: string): st
   if (!line) return fallback;
   return line.length > 80 ? `${line.slice(0, 77)}…` : line;
 }
+
+/** A calibration's counts: the trainer's real turns, and the "Feels off" they meant. */
+export type CalibrationScore = { turns: number; off: number };
+
+/** What the "Feels off" button sends as the trainer's message; never a turn of its own. */
+export const isFeelsOffMessage = (text: string) => /^feels off[.!]?$/i.test(text.trim());
+
+/** Accuracy in %: turns whose reply wasn't meant as "Feels off", out of the trainer's turns. Null with no turns. */
+export function accuracyOf({ turns, off }: CalibrationScore): number | null {
+  return turns > 0 ? Math.round((Math.max(0, turns - off) / turns) * 100) : null;
+}

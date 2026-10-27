@@ -923,9 +923,14 @@ model TwinAssignment {
 /// One calibration call: 1:1 with its session.
 model TwinCalibration {
   id              String   @id @default(cuid())
-  sessionId       String   @unique
+  sessionId       String    @unique
   createdByUserId String
-  createdAt       DateTime @default(now())
+  createdAt       DateTime  @default(now())
+  /// Jev's count after the call: the trainer's real turns (not feedback or noise) and the "Feels off" they meant
+  /// (mis-clicks left out). Accuracy = (turns - offTurns) / turns. Null until scored (lists fall back to raw counts).
+  turns           Int?
+  offTurns        Int?
+  scoredAt        DateTime?
 
   session InterviewSession        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   ratings TwinCalibrationRating[]

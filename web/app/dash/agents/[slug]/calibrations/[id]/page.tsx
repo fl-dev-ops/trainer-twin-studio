@@ -16,6 +16,7 @@ export default async function CalibrationPage({ params }: { params: Promise<{ sl
       twinName={agent.twinName}
       startedAt={DEMO_CALIBRATION.startedAt}
       turns={DEMO_CALIBRATION.turns}
+      score={{ turns: DEMO_CALIBRATION.turns.filter((turn) => turn.speaker === "you").length, off: 0 }}
     />
   );
 }

@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { FeelsLikeMeIcon, FeelsOffIcon } from "@/components/calibration/call-icons";
 import type { CalibrationTurn, Rating } from "@/components/calibration/mock";
+import { Spinner } from "@/components/ui/spinner";
+import { accuracyOf, type CalibrationScore } from "@/lib/twin/stats";
 import { cn } from "@/lib/utils";
 
 /** Shared prototype shadows. */
@@ -56,17 +58,17 @@ export function RatingLabel({ rating, className }: { rating: Rating; className?:
   );
 }
 
-const plural = (n: number) => (n === 1 ? "response" : "responses");
-
-/** Feels like me / Feels off / Response accuracy, as on the prototype's call summary. */
-export function CalibrationStats({ turns }: { turns: Pick<CalibrationTurn, "rating">[] }) {
-  const like = turns.filter((t) => t.rating === "like").length;
-  const off = turns.filter((t) => t.rating === "off").length;
-  const accuracy = like + off ? Math.round((like / (like + off)) * 100) : null;
+/**
+ * Turns / Feels off / Accuracy for a calibration: the trainer's real turns, the "Feels off" they meant (both counted by
+ * Jev after the call), and the share of turns that felt like them. `score` null: still counting.
+ */
+export function CalibrationStats({ score }: { score: CalibrationScore | null }) {
+  const accuracy = score ? accuracyOf(score) : null;
+  const counting = <Spinner className="size-5 text-muted-foreground" />;
   const stats = [
-    { label: "Feels like me", value: like, note: plural(like) },
-    { label: "Feels off", value: off, note: plural(off) },
-    { label: "Response accuracy", value: accuracy === null ? "—" : `${accuracy}%`, note: "Rated “Feels like me”" },
+    { label: "Turns", value: score ? score.turns : counting, note: score?.turns === 1 ? "turn" : "turns" },
+    { label: "Feels off", value: score ? score.off : counting, note: score?.off === 1 ? "response" : "responses" },
+    { label: "Accuracy", value: score ? (accuracy === null ? "—" : `${accuracy}%`) : counting, note: "Turns that felt like you" },
   ];
   return (
     <dl className="grid w-full grid-cols-1 gap-3 sm:grid-cols-3">
@@ -77,7 +79,7 @@ export function CalibrationStats({ turns }: { turns: Pick<CalibrationTurn, "rati
         >
           <dt className="text-[11px] leading-3 font-medium tracking-[0.06em] text-muted-foreground uppercase">{stat.label}</dt>
           <dd className="flex flex-col gap-1">
-            <span className="text-[28px] leading-[34px] font-semibold tracking-[-0.015em]">{stat.value}</span>
+            <span className="flex h-[34px] items-center text-[28px] leading-[34px] font-semibold tracking-[-0.015em] tabular-nums">{stat.value}</span>
             <span className="text-[13px] leading-[18px] text-muted-foreground">{stat.note}</span>
           </dd>
         </div>

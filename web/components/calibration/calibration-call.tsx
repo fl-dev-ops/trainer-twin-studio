@@ -21,6 +21,7 @@ import { RoleplayIcon } from "@/components/icons";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { LiveKitWorkspaceProvider } from "@/lib/livekit-workspaces";
 import { twinClient } from "@/lib/twin/client";
+import { isFeelsOffMessage, type CalibrationScore } from "@/lib/twin/stats";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -100,6 +101,8 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
   const [composerOpen, setComposerOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [confirmEnd, setConfirmEnd] = useState(false);
+  /** Ending: ratings flushing, transcript saving, leaving the room (the End dialog shows it). */
+  const [ending, setEnding] = useState(false);
 
   const turnsRef = useRef<CalibrationTurn[]>([]);
   /** Twin calls: the stored calibration this call's ratings go to. Rating waits until it exists. */
@@ -162,6 +165,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
     async (status: "completed" | "abandoned", unloading = false) => {
       if (endingRef.current) return;
       endingRef.current = true;
+      setEnding(true);
       // Ratings first: the summary and the review must show every rating that was made.
       await Promise.allSettled([...pendingRatings.current]);
       const saved = await closeSession(status, unloading);
@@ -169,6 +173,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
       await room.disconnect().catch(() => {});
       setComposerOpen(false);
       setConfirmEnd(false);
+      setEnding(false);
       setPhase("ended");
     },
     [room, closeSession],
@@ -406,6 +411,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
             photoUrl={photoUrl}
             seconds={seconds}
             turns={turns}
+            calibrationId={twin ? calibrationId : null}
             onRestart={() => void start()}
           />
         ) : (
@@ -565,16 +571,17 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
             </div>
             </div>
 
-            <AlertDialog open={confirmEnd} onOpenChange={setConfirmEnd}>
+            <AlertDialog open={confirmEnd} onOpenChange={(open) => !ending && setConfirmEnd(open)}>
               <AlertDialogContent className="flex max-w-[420px]! flex-col items-center gap-6 rounded-3xl px-6 pt-8 pb-6">
                 <AlertDialogTitle className="max-w-[300px] text-center text-xl leading-7 font-semibold tracking-[-0.015em]">
                   Do you want to end the conversation?
                 </AlertDialogTitle>
                 <div className="grid w-full grid-cols-2 gap-2">
-                  <button type="button" className={cn(PILL, "h-10 justify-center px-4 text-sm")} onClick={() => void end(learner ? "completed" : "abandoned")}>
-                    Yes, end the call
+                  <button type="button" disabled={ending} className={cn(PILL, "h-10 justify-center px-4 text-sm disabled:opacity-70")} onClick={() => void end(learner ? "completed" : "abandoned")}>
+                    {ending ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}
+                    {ending ? "Ending the call\u2026" : "Yes, end the call"}
                   </button>
-                  <AlertDialogCancel variant="default" className="h-10 rounded-full px-4 text-sm font-semibold">
+                  <AlertDialogCancel variant="default" disabled={ending} className="h-10 rounded-full px-4 text-sm font-semibold">
                     No, I’ll continue
                   </AlertDialogCancel>
                 </div>
@@ -596,6 +603,7 @@ function CallSummary({
   photoUrl,
   seconds,
   turns,
+  calibrationId,
   onRestart,
 }: {
   transcriptHref?: string;
@@ -605,8 +613,30 @@ function CallSummary({
   photoUrl: string | null;
   seconds: number;
   turns: CalibrationTurn[];
+  /** Twin calibrations: Jev counts the turns and the meant "Feels off" from the saved call. */
+  calibrationId: string | null;
   onRestart: () => void;
 }) {
+  // What the call itself shows: every line of yours except the Feels off button's, every Feels off.
+  const raw = useMemo<CalibrationScore>(() => ({
+    turns: turns.filter((turn) => turn.speaker === "you" && !isFeelsOffMessage(turn.text)).length,
+    off: turns.filter((turn) => turn.rating === "off").length,
+  }), [turns]);
+  /** Jev's count for a twin calibration (the raw count if it fails); null while counting. */
+  const [counted, setCounted] = useState<CalibrationScore | null>(null);
+  useEffect(() => {
+    if (!calibrationId) return;
+    let live = true;
+    twinClient.calibrations.score
+      .mutate({ calibrationId })
+      .then((result) => live && setCounted({ turns: result.turns, off: result.off }))
+      .catch(() => live && setCounted(raw));
+    return () => {
+      live = false;
+    };
+  }, [calibrationId, raw]);
+  const score = calibrationId ? counted : raw;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-6 pt-20 pb-10">
       <p className="flex items-center gap-2 rounded-full bg-muted px-4 py-1.5 text-sm font-medium text-foreground/75">
@@ -626,7 +656,7 @@ function CallSummary({
         </Link>
       ) : null}
       <div className="mt-6 w-full max-w-[560px]">
-        <CalibrationStats turns={turns} />
+        <CalibrationStats score={score} />
       </div>
       <div className="mt-6 flex flex-wrap justify-center gap-3">
         <button

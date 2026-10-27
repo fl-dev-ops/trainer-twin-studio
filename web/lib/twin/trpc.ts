@@ -17,6 +17,7 @@ import { TWIN_SOURCE } from "@/lib/twins";
 import { AVATAR_VIDEO_TYPES, AvatarError, avatarPhotoUrl, avatarState, avatarVideoUpload, saveAvatar, type AvatarVideoType } from "@/lib/twin/avatar";
 import { getRun } from "workflow/api";
 import { isTwinReport, reportState } from "@/lib/twin/session-report";
+import { rawScore, scoreCalibration, type CalibrationScore } from "@/lib/twin/calibration-score";
 import { attachRatings, durationSeconds, firstExchange, lastSevenDays, likeRateByWeek, mostAsked, titleFrom, transcriptTurns } from "@/lib/twin/stats";
 
 /**
@@ -96,8 +97,10 @@ async function calibrationRows(orgId: string, agentId: string) {
     select: {
       id: true,
       createdAt: true,
+      turns: true,
+      offTurns: true,
       session: { select: { startedAt: true, endedAt: true, transcript: true } },
-      ratings: { select: { rating: true, question: true, createdAt: true } },
+      ratings: { select: { turnIndex: true, reply: true, rating: true, question: true, createdAt: true } },
     },
   });
   return rows.map((row) => {
@@ -107,12 +110,19 @@ async function calibrationRows(orgId: string, agentId: string) {
       title: titleFrom(turns.find((turn) => turn.who === "learner")?.text ?? row.ratings[0]?.question, "Calibration"),
       at: (row.session.startedAt ?? row.createdAt).toISOString(),
       seconds: durationSeconds(row.session.startedAt, row.session.endedAt),
-      turns: turns.length,
-      like: row.ratings.filter((rating) => rating.rating === "like").length,
-      off: row.ratings.filter((rating) => rating.rating === "off").length,
+      ...savedScore(row, turns),
       ratings: row.ratings,
     };
   });
+}
+
+/** Jev's saved turns / meant "Feels off" for a calibration; the raw counts until it has been scored. */
+function savedScore(
+  row: { turns: number | null; offTurns: number | null; ratings: { turnIndex: number; question: string | null; reply: string; rating: string }[] },
+  turns: ReturnType<typeof transcriptTurns>,
+): CalibrationScore {
+  if (row.turns !== null && row.offTurns !== null) return { turns: row.turns, off: row.offTurns };
+  return rawScore(attachRatings(turns, row.ratings));
 }
 
 /** A calibration row for the client: rating details stay on the server. */
@@ -432,6 +442,8 @@ const calibrationsRouter = t.router({
       where: { id: input.id, session: { orgId: ctx.user.orgId } },
       select: {
         createdAt: true,
+        turns: true,
+        offTurns: true,
         session: { select: { startedAt: true, transcript: true, agent: { select: { slug: true, name: true, persona: personaFace } } } },
         ratings: { orderBy: { turnIndex: "asc" }, select: { turnIndex: true, question: true, reply: true, rating: true } },
       },
@@ -441,6 +453,7 @@ const calibrationsRouter = t.router({
     const turns = attachRatings(transcriptTurns(row.session.transcript), row.ratings)
       .map((turn, i) => ({ id: String(i), speaker: turn.who === "twin" ? "twin" as const : "you" as const, text: turn.text, rating: turn.rating }));
     return {
+      score: savedScore(row, transcriptTurns(row.session.transcript)),
       slug: row.session.agent.slug,
       twinName: row.session.agent.name,
       photoUrl: aiAvatarUrl(row.session.agent.persona),
@@ -467,6 +480,18 @@ const calibrationsRouter = t.router({
       });
       return { calibrationId: calibration.id };
     })),
+
+  /**
+   * Right after a calibration call ends: Jev counts the trainer's real turns and the "Feels off" they meant (mis-clicks
+   * and feedback lines left out), saved on the calibration. Raw counts if Jev can't be reached.
+   */
+  score: studioProcedure
+    .input(z.object({ calibrationId: z.string().min(1).max(100) }))
+    .mutation(async ({ ctx, input }) => {
+      const found = await db.twinCalibration.findFirst({ where: { id: input.calibrationId, session: { orgId: ctx.user.orgId } }, select: { id: true } });
+      if (!found) throw new TRPCError({ code: "NOT_FOUND", message: "Calibration not found" });
+      return scoreCalibration(ctx.user.orgId, found.id);
+    }),
 
   /** Rates one twin reply; rating the same turn again replaces it. */
   rate: studioProcedure

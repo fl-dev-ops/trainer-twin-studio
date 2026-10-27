@@ -5,15 +5,18 @@ import { ArrowLeft, ArrowUpRight } from "lucide-react";
 import { SessionTime } from "@/components/sessions/session-time";
 import { TwinFace } from "@/components/twin/twin-face";
 import type { TwinOutputs } from "@/lib/twin/trpc";
+import { accuracyOf } from "@/lib/twin/stats";
 import { cn } from "@/lib/utils";
 
 export function TwinCalibrationOverviewPage({ id, data }: { id: string; data: TwinOutputs["calibrations"]["list"] }) {
   const twinTitle = data.name;
   const calibrations = data.calibrations;
 
-  const totalLike = calibrations.reduce((acc, c) => acc + c.like, 0);
+  // Jev's counts per calibration (raw until scored): the trainer's real turns, and the "Feels off" they meant.
+  const totalTurns = calibrations.reduce((acc, c) => acc + c.turns, 0);
   const totalOff = calibrations.reduce((acc, c) => acc + c.off, 0);
-  const accuracy = totalLike + totalOff ? `${Math.round((totalLike / (totalLike + totalOff)) * 100)}%` : "—";
+  const overall = accuracyOf({ turns: totalTurns, off: totalOff });
+  const accuracy = overall === null ? "—" : `${overall}%`;
 
   return (
     <div className="h-full w-full overflow-y-auto">
@@ -44,9 +47,9 @@ export function TwinCalibrationOverviewPage({ id, data }: { id: string; data: Tw
           </article>
 
           <article className="flex flex-col justify-between rounded-[12px] border border-(--card-border) bg-card p-4 text-left shadow-xs">
-            <p className="m-0 text-[11px] font-medium tracking-[0.08em] uppercase text-muted-foreground">Feels like me</p>
-            <p className="mt-2 text-2xl font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">{totalLike}</p>
-            <p className="m-0 mt-1 text-xs text-muted-foreground">responses</p>
+            <p className="m-0 text-[11px] font-medium tracking-[0.08em] uppercase text-muted-foreground">Turns</p>
+            <p className="mt-2 text-2xl font-semibold tabular-nums">{totalTurns}</p>
+            <p className="m-0 mt-1 text-xs text-muted-foreground">your turns</p>
           </article>
 
           <article className="flex flex-col justify-between rounded-[12px] border border-(--card-border) bg-card p-4 text-left shadow-xs">
@@ -58,7 +61,7 @@ export function TwinCalibrationOverviewPage({ id, data }: { id: string; data: Tw
           <article className="flex flex-col justify-between rounded-[12px] border border-(--card-border) bg-card p-4 text-left shadow-xs">
             <p className="m-0 text-[11px] font-medium tracking-[0.08em] uppercase text-muted-foreground">Overall accuracy</p>
             <p className="mt-2 text-2xl font-semibold tabular-nums">{accuracy}</p>
-            <p className="m-0 mt-1 text-xs text-muted-foreground">Rated “Feels like me”</p>
+            <p className="m-0 mt-1 text-xs text-muted-foreground">Turns that felt like you</p>
           </article>
         </div>
 
