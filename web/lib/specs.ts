@@ -154,6 +154,20 @@ export async function listAgentSpeakers(orgId: string, slugs: string[]) {
   );
 }
 
+/** Client-persona avatar per scenario slug, for the call tile. */
+export async function listAgentAvatars(orgId: string, slugs: string[]) {
+  const agents = await db.agent.findMany({
+    where: { orgId, slug: { in: slugs } },
+    select: { slug: true, persona: { select: { data: true } } },
+  });
+  return Object.fromEntries(
+    agents.flatMap((agent) => {
+      const avatar = (agent.persona.data as { avatar?: unknown } | null)?.avatar;
+      return typeof avatar === "string" && avatar ? [[agent.slug, avatar]] : [];
+    }),
+  );
+}
+
 export async function listAgentNames(orgId: string, slugs: string[]) {
   const agents = await db.agent.findMany({
     where: { orgId, slug: { in: slugs } },

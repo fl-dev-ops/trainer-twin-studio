@@ -40,7 +40,7 @@ import {
 } from "@/components/ui/select";
 import { AgentTile } from "@/components/session/agent-tile";
 import { CandidateTile } from "@/components/session/candidate-tile";
-import { SessionControlBar } from "@/components/session/session-control-bar";
+import { EndSessionButton, SessionControlBar } from "@/components/session/session-control-bar";
 import { SessionSidebar } from "@/components/session/session-sidebar";
 import { ReportIssueButton } from "@/components/report-issue-button";
 import { LiveSubtitles } from "@/components/session/live-subtitles";
@@ -97,6 +97,8 @@ type Props = {
   agentPersonas?: Record<string, string>;
   /** Display name of who speaks on the call (role-play client or persona name). */
   agentSpeakers?: Record<string, string>;
+  /** Client-persona photo per scenario slug, shown on the call tile. */
+  agentAvatars?: Record<string, string>;
   agentContextRequired?: Record<string, boolean>;
   agentContextUploads?: Record<string, AgentContextUpload>;
   sessionCode?: string;
@@ -124,6 +126,7 @@ export function SessionView({
   initialAgent,
   agentPersonas = {},
   agentSpeakers = {},
+  agentAvatars = {},
   agentContextRequired = {},
   agentContextUploads = {},
   sessionCode,
@@ -1100,10 +1103,13 @@ export function SessionView({
     );
   }
 
-  const elapsedLabel = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
+  const elapsedLabel = [Math.floor(elapsed / 3600), Math.floor(elapsed / 60) % 60, elapsed % 60]
+    .map((part) => String(part).padStart(2, "0"))
+    .join(":");
+  const title = scenarioName ?? agentNames[agent] ?? agent.replaceAll("-", " ");
 
   return (
-    <div className="dark flex h-dvh w-dvw flex-col overflow-hidden bg-[#14161a] text-foreground">
+    <div className="flex h-dvh w-dvw flex-col overflow-hidden bg-white text-neutral-900">
       <RoomContext.Provider value={room}>
         <LiveKitWorkspaceProvider
           sessionId={connection?.sessionId}
@@ -1112,37 +1118,32 @@ export function SessionView({
           onEndSession={() => void handleDisconnect("completed")}
           active={introSrc ? introDone : true}
         >
-          {/* Topbar Navigation: Clean Logo Left, Live Badge Right */}
-          <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/[0.035] bg-[#14161a]/85 px-6 backdrop-blur-xl">
+          {/* Top bar: logo left, scenario title centre, actions right */}
+          <header className="flex h-16 shrink-0 items-center justify-between gap-4 px-4 sm:grid sm:grid-cols-[1fr_auto_1fr] sm:px-6">
             {sessionCode ? (
               <div className="flex items-center gap-2.5">
                 <Image src="/trainertwin-mark.svg" alt="" width={22} height={17} priority />
-                <span className="font-bold text-lg tracking-tight text-white">TrainerTwin</span>
+                <span className="font-bold text-lg tracking-tight text-neutral-900">TrainerTwin</span>
               </div>
             ) : (
               <Link href="/" className="flex items-center gap-2.5">
                 <Image src="/trainertwin-mark.svg" alt="" width={22} height={17} priority />
-                <span className="font-bold text-lg tracking-tight text-white">TrainerTwin</span>
+                <span className="font-bold text-lg tracking-tight text-neutral-900">TrainerTwin</span>
               </Link>
             )}
 
-            <div className="flex items-center gap-3">
+            <h1 className="hidden truncate text-center text-base font-medium text-neutral-900 sm:block">{title}</h1>
+
+            <div className="flex items-center justify-end gap-3">
               {sessionCode ? <ReportIssueButton /> : null}
-              {isScreenSharing && (
-                <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium">
-                  <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
-                  Screen sharing live
-                </div>
-              )}
-              <time className="font-mono text-xs font-medium text-white">{elapsedLabel}</time>
             </div>
           </header>
 
           {/* Main Body: Stage (Left) & Chat Sidebar (Right) — EQUAL HEIGHT */}
-          <main className="relative flex min-h-0 flex-1 gap-4 p-4 pb-2">
+          <main className="relative flex min-h-0 flex-1 gap-4 px-4 sm:px-6">
             {/* Blocking overlay when screen sharing is stopped */}
             {connected && !isScreenSharing && screenShareAttempted && !isScreenSharePending && (
-              <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/85 p-6 backdrop-blur-md">
+              <div className="dark absolute inset-0 z-50 flex items-center justify-center bg-black/85 p-6 backdrop-blur-md">
                 <div className="max-w-md w-full rounded-2xl border border-brand/40 bg-[#191b22] p-7 text-center shadow-2xl flex flex-col items-center animate-in fade-in zoom-in-95 duration-200">
                   <div className="size-16 rounded-2xl bg-brand/15 border border-brand/30 text-brand flex items-center justify-center mb-4">
                     <ScreenShare className="size-8" />
@@ -1167,9 +1168,9 @@ export function SessionView({
               </div>
             )}
 
-            {/* Stage Section */}
-            <div className="relative flex min-h-0 flex-1">
-              <div className="flex min-h-0 w-full gap-4 transition-all duration-300">
+            {/* Stage Section: soft gradient canvas */}
+            <div className="relative flex min-h-0 flex-1 overflow-hidden rounded-3xl bg-[#f6f6f7] bg-[radial-gradient(ellipse_at_0%_100%,rgba(252,213,190,0.85),transparent_45%),radial-gradient(ellipse_at_55%_105%,rgba(176,200,245,0.9),transparent_45%),radial-gradient(ellipse_at_100%_85%,rgba(160,222,190,0.9),transparent_50%)]">
+              <div className="flex min-h-0 w-full gap-4 p-4 transition-all duration-300">
                 {/* Surface Presentation Mode (Left Large Workspace) */}
                 {surface && (
                   <motion.section
@@ -1179,7 +1180,7 @@ export function SessionView({
                     animate={{ opacity: 1, scale: 1 }}
                     exit={reduceMotion ? undefined : { opacity: 0, scale: 0.98 }}
                     transition={reduceMotion ? { duration: 0 } : { duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-                    className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/[0.035] bg-[#15181f]"
+                    className="dark flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/[0.035] bg-[#15181f] text-foreground"
                   >
                     <div className="min-h-0 flex-1">
                       {surface.tool === "code" && (
@@ -1264,16 +1265,18 @@ export function SessionView({
                 )}
 
                 {/* Participant Tiles:
-                    - Normal Mode: 2 equal side-by-side columns
-                    - Presenting Mode: Stacked vertically on the right side!
+                    - Normal Mode: two fixed-size tiles centred on the canvas
+                    - Presenting Mode: stacked vertically on the right side
                 */}
                 <div
                   className={cn(
-                    surface ? "flex w-[280px] shrink-0 flex-col gap-3.5" : "grid flex-1 grid-cols-2 gap-4",
+                    surface
+                      ? "flex w-[280px] shrink-0 flex-col justify-center gap-3.5"
+                      : "flex flex-1 flex-wrap content-center items-center justify-center gap-8",
                     "min-h-0 transition-all duration-300",
                   )}
                 >
-                  <div className="min-h-0 flex-1">
+                  <div className="aspect-[4/3] w-full max-w-[300px]">
                     {introSrc && !introDone ? (
                       <ScenarioIntro
                         key={agent}
@@ -1283,11 +1286,11 @@ export function SessionView({
                         className="h-full min-h-0 w-full"
                       />
                     ) : (
-                      <AgentTile persona={speaker} compact={surface !== null} />
+                      <AgentTile persona={speaker} avatar={agentAvatars[agent]} />
                     )}
                   </div>
-                  <div className="min-h-0 flex-1">
-                    <CandidateTile compact={surface !== null} />
+                  <div className="aspect-[4/3] w-full max-w-[300px]">
+                    <CandidateTile name={userName ?? "You"} />
                   </div>
                 </div>
               </div>
@@ -1308,6 +1311,7 @@ export function SessionView({
                 >
                   <SessionSidebar
                     speakerName={speaker}
+                    learnerName={userName ?? "You"}
                     entries={entries}
                     onSendMessage={handleSendMessage}
                     onClose={() => setSidebarOpen(false)}
@@ -1319,19 +1323,25 @@ export function SessionView({
             </AnimatePresence>
           </main>
 
-          {/* Common Footer across full width */}
-          <footer className="flex h-16 shrink-0 items-center justify-center pb-2">
+          {/* Footer: timer left, controls centre, end right */}
+          <footer className="grid h-20 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 sm:gap-4 sm:px-6">
+            <time className="font-mono text-sm text-neutral-900">{elapsedLabel}</time>
             <SessionControlBar
               room={room}
               isConnected={connected}
               chatOpen={sidebarOpen}
               onChatToggle={() => setSidebarOpen((v) => !v)}
-              onEnd={() => void handleDisconnect("manual")}
+              screenSharing={isScreenSharing}
+              screenSharePending={isScreenSharePending}
+              onScreenShare={() => void handleEnableScreenShare()}
             />
+            <div className="flex justify-end">
+              {connected && <EndSessionButton onEnd={() => void handleDisconnect("manual")} />}
+            </div>
           </footer>
 
           {error && (
-            <div className="absolute inset-0 z-50 grid place-items-center bg-[#14161a]/85 p-6 backdrop-blur-md">
+            <div className="dark absolute inset-0 z-50 grid place-items-center bg-[#14161a]/85 p-6 backdrop-blur-md">
               <Card className="w-full max-w-md border border-white/[0.06] bg-[#1c1f26] text-center shadow-2xl">
                 <CardHeader>
                   <CardTitle>{saveFailed ? "Could not save session" : "Session problem"}</CardTitle>

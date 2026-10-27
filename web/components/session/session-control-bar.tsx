@@ -8,6 +8,7 @@ import {
   Mic,
   MicOff,
   PhoneOff,
+  ScreenShare,
   Video,
   VideoOff,
   Volume2,
@@ -26,21 +27,28 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 
+const controlClass = "grid size-10 shrink-0 place-items-center rounded-full transition-colors";
+const idleClass = "text-neutral-700 hover:bg-neutral-200/70";
+const offClass = "bg-[#e03b3b] text-white hover:bg-[#c52b2b]";
+
 export function SessionControlBar({
   room,
   isConnected,
   chatOpen,
   onChatToggle,
-  onEnd,
+  screenSharing,
+  screenSharePending,
+  onScreenShare,
 }: {
   room?: Room;
   isConnected: boolean;
   chatOpen: boolean;
   onChatToggle: () => void;
-  onEnd: () => void;
+  screenSharing: boolean;
+  screenSharePending: boolean;
+  /** Starts the whole-screen share; stopping is not offered because the session requires it. */
+  onScreenShare: () => void;
 }) {
-  const [confirmOpen, setConfirmOpen] = useState(false);
-
   const { buttonProps: cameraProps, enabled: cameraOn, pending: cameraPending } = useTrackToggle({
     room,
     source: Track.Source.Camera,
@@ -59,79 +67,73 @@ export function SessionControlBar({
   if (!isConnected) return null;
 
   return (
-    <>
-      <div
-        className="flex items-center gap-2.5 rounded-full border border-white/[0.08] bg-[#1b1e24] p-1.5 px-3.5 shadow-[0_16px_36px_-4px_rgba(0,0,0,0.6)] backdrop-blur-xl"
-        aria-label="Session controls"
+    <div
+      className="flex items-center gap-2 rounded-full border border-neutral-200 bg-neutral-100/90 p-1.5 shadow-sm backdrop-blur-xl"
+      aria-label="Session controls"
+    >
+      {!canPlayAudio && (
+        <Button {...audioProps} variant="outline" size="sm" className="rounded-full">
+          <Volume2 className="size-4" />
+          Enable audio
+        </Button>
+      )}
+
+      <button
+        {...cameraProps}
+        type="button"
+        title={cameraOn ? "Turn off camera" : "Turn on camera"}
+        className={cn(controlClass, cameraOn ? idleClass : offClass)}
       >
-        {!canPlayAudio && (
-          <Button {...audioProps} variant="outline" size="sm" className="rounded-full">
-            <Volume2 className="size-4" />
-            Enable audio
-          </Button>
-        )}
+        {cameraPending ? <LoaderCircle className="size-5 animate-spin" /> : cameraOn ? <Video className="size-5" /> : <VideoOff className="size-5" />}
+      </button>
 
-        {/* 1. Camera / Video */}
-        <button
-          {...cameraProps}
-          type="button"
-          title={cameraOn ? "Turn off camera" : "Turn on camera"}
-          className={cn(
-            "grid size-10 shrink-0 place-items-center rounded-full transition-colors hover:bg-white/10",
-            cameraOn ? "bg-white/15 text-white" : "bg-red-500/20 text-red-400 hover:bg-red-500/30",
-          )}
-        >
-          {cameraPending ? (
-            <LoaderCircle className="size-5 animate-spin" />
-          ) : cameraOn ? (
-            <Video className="size-5" />
-          ) : (
-            <VideoOff className="size-5" />
-          )}
-        </button>
+      <button
+        {...micProps}
+        type="button"
+        title={micOn ? "Mute microphone" : "Unmute microphone"}
+        className={cn(controlClass, micOn ? idleClass : offClass)}
+      >
+        {micPending ? <LoaderCircle className="size-5 animate-spin" /> : micOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}
+      </button>
 
-        {/* 2. Microphone */}
-        <button
-          {...micProps}
-          type="button"
-          title={micOn ? "Mute microphone" : "Unmute microphone"}
-          className={cn(
-            "grid size-10 shrink-0 place-items-center rounded-full transition-colors hover:bg-white/10",
-            micOn ? "bg-white/15 text-white" : "bg-red-500/20 text-red-400 hover:bg-red-500/30",
-          )}
-        >
-          {micPending ? (
-            <LoaderCircle className="size-5 animate-spin" />
-          ) : micOn ? (
-            <Mic className="size-5" />
-          ) : (
-            <MicOff className="size-5" />
-          )}
-        </button>
+      <button
+        type="button"
+        onClick={screenSharing ? undefined : onScreenShare}
+        disabled={screenSharePending}
+        aria-pressed={screenSharing}
+        title={screenSharing ? "Sharing your entire screen" : "Share entire screen"}
+        className={cn(controlClass, idleClass, screenSharing && "bg-neutral-200 text-emerald-600")}
+      >
+        {screenSharePending ? <LoaderCircle className="size-5 animate-spin" /> : <ScreenShare className="size-5" />}
+      </button>
 
-        {/* 3. Chat Toggle */}
-        <button
-          type="button"
-          onClick={onChatToggle}
-          title="Toggle chat panel"
-          className={cn(
-            "grid size-10 shrink-0 place-items-center rounded-full text-white transition-colors hover:bg-white/10",
-            chatOpen && "bg-white/15",
-          )}
-        >
-          <MessageSquare className="size-5" />
-        </button>
+      <button
+        type="button"
+        onClick={onChatToggle}
+        aria-pressed={chatOpen}
+        title="Toggle chat panel"
+        className={cn(controlClass, idleClass, chatOpen && "bg-neutral-200")}
+      >
+        <MessageSquare className="size-5" />
+      </button>
+    </div>
+  );
+}
 
-        {/* 4. Red Circular End Call Button */}
-        <button
-          type="button"
-          onClick={() => setConfirmOpen(true)}
-          title="End session"
-          className="ml-0.5 grid size-10 shrink-0 place-items-center rounded-full bg-[#e03b3b] text-white shadow-md transition-transform duration-100 hover:scale-105 hover:bg-[#c52b2b]"
-        >
-          <PhoneOff className="size-5" />
-        </button>
-      </div>
+export function EndSessionButton({ onEnd }: { onEnd: () => void }) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setConfirmOpen(true)}
+        aria-label="End session"
+        className="flex h-10 items-center gap-2 rounded-full bg-[#e03b3b] px-3.5 text-sm sm:px-6 font-semibold text-white shadow-md transition-colors hover:bg-[#c52b2b]"
+      >
+        <PhoneOff className="size-4" />
+        <span className="hidden sm:inline">End</span>
+      </button>
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>

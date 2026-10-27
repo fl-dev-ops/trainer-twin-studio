@@ -2,11 +2,9 @@
 
 import { useLocalParticipant, VideoTrack } from "@livekit/components-react";
 import { Track } from "livekit-client";
-import { Mic, MicOff, Video, VideoOff } from "lucide-react";
-import { motion } from "motion/react";
-import { cn } from "@/lib/utils";
+import { MicOff, VideoOff } from "lucide-react";
 
-export function CandidateTile({ compact = false }: { compact?: boolean }) {
+export function CandidateTile({ name }: { name: string }) {
   const {
     isMicrophoneEnabled: micOn,
     isCameraEnabled: cameraOn,
@@ -15,11 +13,7 @@ export function CandidateTile({ compact = false }: { compact?: boolean }) {
   } = useLocalParticipant();
 
   return (
-    <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-2xl border border-white/[0.035] bg-[#1c1f26]">
-      {/* Radial atmosphere */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,#222630_0%,#15171d_100%)]" />
-
-      {/* Video Feed when Camera is Enabled */}
+    <div className="relative size-full overflow-hidden rounded-2xl bg-[#1f1f1f] shadow-[0_12px_32px_-12px_rgba(0,0,0,0.35)]">
       {cameraOn && cameraTrack ? (
         <VideoTrack
           trackRef={{
@@ -27,52 +21,23 @@ export function CandidateTile({ compact = false }: { compact?: boolean }) {
             publication: cameraTrack,
             source: Track.Source.Camera,
           }}
-          className="absolute inset-0 h-full w-full object-cover scale-x-[-1]"
+          className="absolute inset-0 size-full scale-x-[-1] object-cover"
         />
       ) : (
-        /* Center Audio Circle with Pulsing Glow when Camera is Off */
-        <div className="relative flex items-center justify-center">
-          {micOn && (
-            <>
-              <div className="pointer-events-none absolute size-24 rounded-full bg-indigo-500/20 [animation:agent-halo-pulse_2.2s_infinite_cubic-bezier(0.2,0.6,0.35,1)]" />
-              <div className="pointer-events-none absolute size-36 rounded-full bg-indigo-500/10 [animation:agent-halo-pulse_2.2s_infinite_cubic-bezier(0.2,0.6,0.35,1)] [animation-delay:0.5s]" />
-            </>
-          )}
-
-          <motion.div
-            layout
-            animate={{
-              width: compact ? 48 : 64,
-              height: compact ? 48 : 64,
-            }}
-            transition={{ type: "spring", stiffness: 300, damping: 32, mass: 0.8 }}
-            className={cn(
-              "relative z-10 grid place-items-center rounded-full border border-white/20 text-white shadow-lg transition-colors duration-200",
-              micOn ? "bg-[#323742] shadow-[0_8px_24px_rgba(0,0,0,0.45)]" : "bg-[#252830] text-muted-foreground",
-            )}
-          >
-            {micOn ? (
-              <Mic className={compact ? "size-5" : "size-6"} strokeWidth={2} />
-            ) : (
-              <MicOff className={compact ? "size-5" : "size-6"} strokeWidth={2} />
-            )}
-          </motion.div>
+        <div className="grid size-full place-items-center">
+          <span className="grid size-24 place-items-center rounded-full bg-white/10 text-4xl font-medium text-white">
+            {name.charAt(0).toUpperCase()}
+          </span>
         </div>
       )}
 
-      {/* Name Pill (Bottom Left) */}
-      <div className="absolute bottom-3.5 left-3.5 z-20 flex items-center gap-1.5 rounded-md border border-white/[0.04] bg-[#121419]/85 px-2.5 py-1 text-xs font-medium text-foreground backdrop-blur-md">
-        <span>You</span>
-        <span className={cn("size-1.5 rounded-full", micOn ? "bg-emerald-500" : "bg-red-500")} />
+      <div className="absolute bottom-3 left-3 rounded-full bg-black/55 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-md">
+        {name}
       </div>
 
-      {/* Camera Indicator (Bottom Right) */}
-      <div className="absolute bottom-3.5 right-3.5 z-20 grid size-6.5 place-items-center rounded-md border border-white/[0.04] bg-[#121419]/65 text-muted-foreground backdrop-blur-md">
-        {cameraOn ? (
-          <Video className="size-3.5 text-emerald-400" strokeWidth={1.75} />
-        ) : (
-          <VideoOff className="size-3.5 text-muted-foreground" strokeWidth={1.75} />
-        )}
+      <div className="absolute right-3 bottom-3 flex items-center gap-2 text-white/80">
+        {!micOn && <MicOff className="size-4" strokeWidth={1.75} aria-label="Microphone off" />}
+        {!cameraOn && <VideoOff className="size-4" strokeWidth={1.75} aria-label="Camera off" />}
       </div>
     </div>
   );
