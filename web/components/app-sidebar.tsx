@@ -51,7 +51,7 @@ const navButton = cn(
   "dark:data-active:text-foreground dark:data-active:[&_svg]:text-foreground",
   // Collapsed: 40px square row, centered (reference overrides the ui 32px collapse).
   "group-data-[collapsible=icon]:size-10! group-data-[collapsible=icon]:min-h-0! group-data-[collapsible=icon]:p-0!",
-  "group-data-[collapsible=icon]:justify-center",
+  "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:[&>span]:hidden",
 );
 
 type NavItem = { title: string; href: string; icon: typeof TwinIcon; also?: string[] };
@@ -97,7 +97,7 @@ export function AppSidebar() {
   return (
     <Sidebar variant="sidebar" collapsible="icon" className="border-r-0">
       {/* Reference "rail-scroll": padded 16/12/12, children stacked with an 8px gap. */}
-      <div className="flex h-full min-h-0 flex-col gap-2 px-3 pt-4 pb-3 group-data-[collapsible=icon]:px-2">
+      <div className="flex h-full min-h-0 flex-col gap-2 px-3 pt-4 pb-3 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-2">
         <Brand />
         <nav aria-label="Sections" className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
           {NAV_GROUPS.map((group, index) => (
