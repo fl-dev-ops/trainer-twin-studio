@@ -24,6 +24,7 @@ port() {
 }
 
 ORG_ID="md5('local:' || id)::uuid::text"
+local_org() { echo "md5('local:' || \"$1\")::uuid::text"; }
 
 case "${1:-}" in
   orgs)
@@ -31,5 +32,21 @@ case "${1:-}" in
     port organization 'id, name, slug, logo, "createdAt", metadata, "chromaDatabase", "chromaTenantId", "websiteUrl"' \
       "SELECT $ORG_ID, name, slug, logo, \"createdAt\", metadata, 'org_' || $ORG_ID, NULL, \"websiteUrl\" FROM organization"
     ;;
-  *) echo "usage: port-prod.sh orgs" >&2; exit 1 ;;
+  users)
+    port user 'id, name, email, "emailVerified", image, "createdAt", "updatedAt"' \
+      "SELECT id, name, email, \"emailVerified\", image, \"createdAt\", \"updatedAt\" FROM \"user\""
+    # Password hashes kept (people sign in with their prod password); prod OAuth tokens are not copied.
+    port account 'id, "accountId", "providerId", "userId", "accessToken", "refreshToken", "idToken", "accessTokenExpiresAt", "refreshTokenExpiresAt", scope, password, "createdAt", "updatedAt", issuer' \
+      "SELECT id, \"accountId\", \"providerId\", \"userId\", NULL, NULL, NULL, NULL, NULL, scope, password, \"createdAt\", \"updatedAt\", issuer FROM account"
+    # One admin per org: the earliest admin keeps the role, any later one becomes team (prod's careerwithvasanth had
+    # both an owner and an ADMIN, which the org_roles migration both maps to admin).
+    port member 'id, "organizationId", "userId", role, "createdAt", "disabledAt"' \
+      "SELECT id, $(local_org organizationId), \"userId\",
+         CASE WHEN role = 'admin' AND row_number() OVER (PARTITION BY \"organizationId\", role ORDER BY \"createdAt\") > 1 THEN 'team' ELSE role END,
+         \"createdAt\", \"disabledAt\" FROM member"
+    # Org API keys: referenceId is the org id.
+    port apikey 'id, "configId", name, start, "referenceId", prefix, key, "refillInterval", "refillAmount", "lastRefillAt", enabled, "rateLimitEnabled", "rateLimitTimeWindow", "rateLimitMax", "requestCount", remaining, "lastRequest", "expiresAt", "createdAt", "updatedAt", permissions, metadata' \
+      "SELECT id, \"configId\", name, start, $(local_org referenceId), prefix, key, \"refillInterval\", \"refillAmount\", \"lastRefillAt\", enabled, \"rateLimitEnabled\", \"rateLimitTimeWindow\", \"rateLimitMax\", \"requestCount\", remaining, \"lastRequest\", \"expiresAt\", \"createdAt\", \"updatedAt\", permissions, metadata FROM apikey"
+    ;;
+  *) echo "usage: port-prod.sh orgs|users" >&2; exit 1 ;;
 esac
