@@ -47,7 +47,7 @@ export type ClientPersonaForm = {
   knowledge: { documentIds: string[]; sourceIds: string[] };
 };
 
-/** The five ready-made people. Picking one fills the form; everything stays editable. */
+/** The ready-made people. Picking one fills the form; everything stays editable. */
 export const PERSONA_PRESETS: Array<{ id: string; label: string; avatar: string } & Omit<ClientPersonaForm, "look" | "knowledge">> = [
   {
     id: "daniel", label: "Daniel", avatar: "/roleplay/avatars/daniel.jpg",
@@ -98,6 +98,26 @@ export const PERSONA_PRESETS: Array<{ id: string; label: string; avatar: string 
     phrases: ["I just need to think about it.", "It was nice, to be honest."],
     howTheyTalk: "Friendly but hesitant. Opens up quickly once the agent asks a good question.",
     voiceId: "ethan-sample", pace: "normal",
+  },
+  {
+    id: "faisal", label: "Faisal", avatar: "/roleplay/avatars/faisal.webp",
+    name: "Faisal", role: "Investor", age: "47", basedIn: "Riyadh",
+    background: "Works for a government institution in Riyadh. Married with four children. Owns two short-term rental properties in Saudi Arabia and recently sold a two-bedroom apartment in Dubai; visits Dubai often. Clicked a Google ad for \"Dubai Airbnb investment\". Budget AED 2 to 3 million, timeline two to four months. Areas only if justified: Business Bay, JLT or Dubai Marina. His brother in Dubai is involved in the decision. Thinks in numbers.",
+    behaviours: ["Direct & Challenging", "Skeptical & Reserved"], difficulty: "medium", openingStyle: "skeptical",
+    formality: "neutral", answerLength: "short", interrupts: "sometimes", pauses: false, fillers: false,
+    phrases: ["What's the real net yield after service charges?", "I already sold in Dubai. Why would I buy again now?", "Just send me two or three options with the numbers.", "My brother will look at it too."],
+    howTheyTalk: "Calm, direct, businesslike. Polite but short with weak answers. Short answers at first, one to three sentences.",
+    voiceId: "ethan-sample", pace: "normal",
+  },
+  {
+    id: "ravi", label: "Ravi", avatar: "/roleplay/avatars/ravi.webp",
+    name: "Ravi", role: "Investor", age: "39", basedIn: "Oman",
+    background: "Works in a bank in Oman. Married with two children and owns his home. Clicked an Instagram ad about passive income in Dubai. Has saved for three years; thinking of AED 1.5 to 2 million with a mortgage, could start lower. Timeline three to six months. First investment property and first purchase in Dubai. Open to guidance on areas (has heard of JVC and Dubai Hills). His wife is part of the decision.",
+    behaviours: ["Warm but Cautious"], difficulty: "medium", openingStyle: "friendly",
+    formality: "formal", answerLength: "short", interrupts: "never", pauses: true, fillers: false,
+    phrases: ["How much can I actually make?", "What returns are guaranteed?", "I need to discuss it with my wife first.", "Can you just send me what fits my budget?"],
+    howTheyTalk: "Polite, careful, a little formal. Thinks before answering. Short answers at first, one to three sentences; opens up only when the agent earns it.",
+    voiceId: "oliver-sample", pace: "normal",
   },
 ];
 
