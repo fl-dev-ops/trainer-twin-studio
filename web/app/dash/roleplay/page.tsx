@@ -1,16 +1,10 @@
-import { RoleplayIcon } from "@/components/icons";
-import { PageContainer } from "@/components/page-container";
-import { PageHeader } from "@/components/page-header";
+import { RoleplayLibraryPage } from "@/components/roleplay/roleplay-library-page";
+import { roleplayServer } from "@/lib/roleplay/server";
 
-/** Role play landing — the beta rail's "Role play" surface. */
-export default function RoleplayPage() {
-  return (
-    <PageContainer>
-      <PageHeader
-        icon={RoleplayIcon}
-        title="Role play"
-        description="Scenarios and role play sessions for your learners."
-      />
-    </PageContainer>
-  );
+export const dynamic = "force-dynamic";
+
+/** Scenarios — the role-play library. */
+export default async function RoleplayPage() {
+  const roleplay = await roleplayServer();
+  return <RoleplayLibraryPage scenarios={await roleplay.scenarios.list()} />;
 }

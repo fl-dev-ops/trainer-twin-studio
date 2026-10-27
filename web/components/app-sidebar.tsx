@@ -33,7 +33,9 @@ const NAV_GROUPS = [
   {
     label: "Role play",
     items: [
-      { title: "Scenarios", href: "/agents", icon: RoleplayIcon },
+      { title: "Scenarios", href: "/roleplay", icon: RoleplayIcon },
+      { title: "Role play sessions", href: "/roleplay/sessions", icon: SessionsIcon },
+      { title: "Roleplay users", href: "/roleplay/users", icon: UsersIcon },
       { title: "Personas", href: "/personas", icon: PersonaIcon },
     ],
   },

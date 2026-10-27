@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { MainCollectionService } from "@/lib/main-collection";
 import { putObject, s3Configured, scenarioArtifactsPrefix, scenarioRunPrefix } from "@/lib/s3";
+import type { BeforeSettings } from "@/lib/context-upload";
 import { renderRoleplay, roleplayBuilderSchema, type RoleplayItem } from "@/lib/roleplay/skill";
 import { validSlug } from "@/lib/specs";
 
@@ -270,7 +271,7 @@ export async function ingestScenario(orgId: string, input: ScenarioIngestInput) 
  * after (lib/roleplay/skill.ts), stored like a skill twin with kind ROLEPLAY. The client is any persona of the org.
  * Returns the agent's slug (org-prefixed, like skill twins).
  */
-export async function saveRoleplay(orgId: string, builder: unknown, slug?: string) {
+export async function saveRoleplay(orgId: string, builder: unknown, slug?: string, before?: BeforeSettings) {
   const parsed = roleplayBuilderSchema.safeParse(builder);
   if (!parsed.success) throw new ScenarioIngestError(parsed.error.issues[0]?.message ?? "Invalid role play", 400);
   const [org, persona] = await Promise.all([
@@ -288,7 +289,8 @@ export async function saveRoleplay(orgId: string, builder: unknown, slug?: strin
   return storeSkillAgent({
     org, kind: "ROLEPLAY", personaId: persona.id,
     manifest: scenarioManifestSchema.parse(rendered.scenario), skill: rendered.skill, items: rendered.items,
-    data: { source: ROLEPLAY_SOURCE, after: rendered.after },
+    // Before is saved with the builder when given (the builder edits all three phases); otherwise the agent's is kept.
+    data: { source: ROLEPLAY_SOURCE, after: rendered.after, ...(before ? { before } : {}) },
   });
 }
 
