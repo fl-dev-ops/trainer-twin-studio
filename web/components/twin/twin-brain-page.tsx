@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import {
-  ArrowLeft, BookOpen, Check, FileText, HardDrive, Minus, Pause, Pencil, Play, Plus, SlidersHorizontal, Sparkles, Video,
+  ArrowLeft, BookOpen, Check, FileText, HardDrive, Minus, Pause, Pencil, Play, Plus, Sparkles, Video,
 } from "lucide-react";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 export type BrainKnowledge = {
@@ -60,8 +59,6 @@ function Edge() {
     </svg>
   );
 }
-
-const soon = (what: string) => () => toast(`${what} is coming soon.`);
 
 /** Twin's brain: the twin as a graph of what it knows, how it trains and how it sounds. */
 export function TwinBrainPage({ knowledge }: { knowledge: BrainKnowledge }) {
@@ -153,14 +150,6 @@ export function TwinBrainPage({ knowledge }: { knowledge: BrainKnowledge }) {
 
             <Node
               tag="Voice and avatar" tone="green" title="Voice and avatar"
-              footer={(
-                <>
-                  <EditButton onClick={soon("Editing the voice and avatar")} />
-                  <button type="button" onClick={soon("Calibration from here")} className={pill}>
-                    <SlidersHorizontal className="size-4" aria-hidden /> Calibrate
-                  </button>
-                </>
-              )}
             >
               <div className="flex flex-col items-center gap-2 text-center">
                 <video
@@ -209,9 +198,6 @@ function EditLink({ href }: { href: string }) {
   return <Link href={href} className={pill}><Pencil className="size-4" aria-hidden /> Edit</Link>;
 }
 
-function EditButton({ onClick }: { onClick: () => void }) {
-  return <button type="button" onClick={onClick} className={pill}><Pencil className="size-4" aria-hidden /> Edit</button>;
-}
 
 /** Decorative voice bars; they pulse while the sample "plays". */
 function Waveform({ playing }: { playing: boolean }) {
