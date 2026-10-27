@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, ArrowUp, Flag, LoaderCircle, Volume2 } from "lucide-react";
+import { ArrowUp, Flag, LoaderCircle, Volume2 } from "lucide-react";
 import { RoomAudioRenderer, RoomContext, useStartAudio, useVoiceAssistant } from "@livekit/components-react";
 import { Room, RoomEvent, type TranscriptionSegment } from "livekit-client";
 import {
@@ -102,7 +101,6 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
   const [draft, setDraft] = useState("");
   const [confirmEnd, setConfirmEnd] = useState(false);
 
-  const router = useRouter();
   const turnsRef = useRef<CalibrationTurn[]>([]);
   /** Twin calls: the stored calibration this call's ratings go to. Rating waits until it exists. */
   const [calibrationId, setCalibrationId] = useState<string | null>(null);
@@ -341,14 +339,6 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
     pendingRatings.current.add(write);
   };
 
-  /** Back during a call: end it properly (ratings flushed, transcript saved) before leaving. */
-  async function leave(event: React.MouseEvent) {
-    if (phase !== "live" && phase !== "connecting") return;
-    event.preventDefault();
-    await end("abandoned");
-    router.push(backHref);
-  }
-
   /** A typed message: the agent reads lk.chat like speech and replies; it counts as your turn here. */
   async function sendMessage(event: React.FormEvent) {
     event.preventDefault();
@@ -400,10 +390,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
         {learner ? (
           learner.header
         ) : (
-          <Link href={backHref} onClick={(event) => void leave(event)} className="flex w-fit items-center gap-2 px-8 pt-6 text-sm text-foreground/90 hover:text-foreground">
-            <ArrowLeft className="size-4" aria-hidden />
-            Calibrate · {scenarioName}
-          </Link>
+          <h1 className="m-0 truncate px-8 pt-6 text-sm font-medium text-foreground/90">{scenarioName}</h1>
         )}
 
         {phase === "ended" && learner ? null : phase === "ended" ? (
@@ -426,9 +413,6 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
             <div ref={scrollRef} className={cn("flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-6 pt-8", composerOpen ? "pb-44" : "pb-28")}>
               <div className={cn("relative size-[320px] shrink-0 overflow-hidden rounded-[32px] bg-muted", SOFT_SHADOW, speaking && "ring-2 ring-emerald-500/70")}>
                 <TwinPortrait name={twinName} photoUrl={photoUrl} className="size-full text-8xl" />
-                <span className="absolute bottom-3 left-3 rounded-full bg-white px-2.5 py-1 text-[13px] leading-[18px] font-medium text-neutral-900 shadow-[0_0_0_1px_#e9e9e9]">
-                  {twinName}
-                </span>
                 <span className="absolute right-3 bottom-3 rounded-full bg-black/45 px-2.5 py-1 text-[13px] leading-[18px] font-medium text-white tabular-nums">
                   <span className="sr-only">Call time </span>
                   {clock(seconds)}
