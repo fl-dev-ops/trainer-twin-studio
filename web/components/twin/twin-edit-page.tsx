@@ -42,10 +42,16 @@ function CopyShareLinkButton({ slug }: { slug: string }) {
     }
   }
   return (
-    <Button variant="secondary" onClick={() => void copy()} disabled={state === "busy"}>
-      {state === "copied" ? <Check /> : <Copy />}
-      {state === "copied" ? "Copied" : "Copy link"}
-    </Button>
+    // Same shape as "Save changes" below; only the colours differ.
+    <button
+      type="button"
+      onClick={() => void copy()}
+      disabled={state === "busy"}
+      className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full bg-secondary px-5 text-sm font-medium text-secondary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
+    >
+      {state === "copied" ? <Check className="size-4" /> : <Copy className="size-4" />}
+      <span>{state === "copied" ? "Copied" : "Copy link"}</span>
+    </button>
   );
 }
 
