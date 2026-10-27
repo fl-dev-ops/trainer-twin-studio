@@ -26,7 +26,8 @@ const NAV_GROUPS = [
       { title: "Twin agents", href: "/twin", icon: SetupIcon },
       { title: "Twin sessions", href: "/twin/sessions", icon: SessionsIcon },
       { title: "Twin users", href: "/twin/users", icon: UsersIcon },
-      { title: "Twin’s brain", href: "/twin/knowledge", icon: TwinIcon },
+      // Knowledge opens from the brain canvas, so it lights this item too.
+      { title: "Twin’s brain", href: "/twin/brain", icon: TwinIcon, also: ["/twin/knowledge"] },
     ],
   },
   {
@@ -48,14 +49,18 @@ const navButton = cn(
   "group-data-[collapsible=icon]:justify-center",
 );
 
-const NAV_HREFS = [...NAV_GROUPS.flatMap((group) => group.items.map((item) => item.href)), "/settings"];
+type NavItem = { title: string; href: string; icon: typeof TwinIcon; also?: string[] };
+const NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((group) => group.items);
+const NAV_HREFS = [...NAV_ITEMS.flatMap((item) => [item.href, ...(item.also ?? [])]), "/settings"];
 
 const matches = (pathname: string, href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
 /** Only the most specific link is active: /twin/sessions lights "Twin sessions", not "Twin agents" too. */
 function isActive(pathname: string, href: string) {
-  if (!matches(pathname, href)) return false;
-  return !NAV_HREFS.some((other) => other.length > href.length && matches(pathname, other));
+  const own = [href, ...(NAV_ITEMS.find((item) => item.href === href)?.also ?? [])];
+  const hit = own.filter((path) => matches(pathname, path)).sort((a, b) => b.length - a.length)[0];
+  if (!hit) return false;
+  return !NAV_HREFS.some((other) => !own.includes(other) && other.length > hit.length && matches(pathname, other));
 }
 
 /** Brand lockup: mark + wordmark; clicking toggles the rail (reference behaviour). */

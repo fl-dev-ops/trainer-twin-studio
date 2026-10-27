@@ -1,0 +1,219 @@
+"use client";
+
+import Link from "next/link";
+import { useState, type ReactNode } from "react";
+import {
+  ArrowLeft, BookOpen, Camera, Check, Globe, HardDrive, Minus, Newspaper, Pause, Pencil, Play, Plus, SlidersHorizontal, Sparkles, Video,
+} from "lucide-react";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+
+// shortcut: static mock content (UI only, per the reference design); replace with twin data when the backend lands.
+const SOURCES = [
+  { label: "Website", count: "14 pages", icon: Globe },
+  { label: "LinkedIn", count: "36 posts", icon: Newspaper },
+  { label: "YouTube", count: "48 videos", icon: Video },
+  { label: "Instagram", count: "120 reels", icon: Camera },
+];
+const CONNECTIONS = [
+  { label: "Google Drive", icon: HardDrive },
+  { label: "Notion", icon: BookOpen },
+];
+const TRAITS = [
+  "Frames selling as a process, not motivation",
+  "Plays the difficult buyer herself before teaching the fix",
+  "Gives word-for-word lines agents can use on the call",
+];
+
+const ZOOM = { min: 50, max: 150, step: 10 };
+
+/** Coloured tag that sits above each node, like the reference canvas. */
+function NodeTag({ tone, children }: { tone: "blue" | "amber" | "green"; children: ReactNode }) {
+  const tones = {
+    blue: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
+    amber: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+    green: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  };
+  return <span className={cn("inline-flex h-7 items-center rounded-full px-3 text-[13px] font-medium", tones[tone])}>{children}</span>;
+}
+
+function Node({ tag, tone, title, children, footer, className }: {
+  tag: string; tone: "blue" | "amber" | "green"; title: string; children: ReactNode; footer: ReactNode; className?: string;
+}) {
+  return (
+    <section aria-label={title} className={cn("flex w-[300px] shrink-0 flex-col gap-3", className)}>
+      <NodeTag tone={tone}>{tag}</NodeTag>
+      <div className="flex flex-col gap-4 rounded-[16px] border border-(--card-border) bg-card p-5 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
+        <h2 className="m-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{title}</h2>
+        {children}
+        <div className="flex flex-wrap gap-2 pt-1">{footer}</div>
+      </div>
+    </section>
+  );
+}
+
+/** Curved edge between two nodes, with the hollow port dots at each end. */
+function Edge() {
+  return (
+    <svg viewBox="0 0 80 40" width={80} height={40} aria-hidden className="mt-24 shrink-0 self-start text-(--text-secondary)">
+      <path d="M4 32 C 36 32, 44 8, 76 8" fill="none" stroke="currentColor" strokeWidth={1.25} />
+      <circle cx="4" cy="32" r="3" className="fill-background" stroke="currentColor" strokeWidth={1.25} />
+      <circle cx="76" cy="8" r="3" className="fill-background" stroke="currentColor" strokeWidth={1.25} />
+    </svg>
+  );
+}
+
+const soon = (what: string) => () => toast(`${what} is coming soon.`);
+
+/** Twin's brain: the twin as a graph of what it knows, how it trains and how it sounds. */
+export function TwinBrainPage() {
+  const [zoom, setZoom] = useState(100);
+  const [playing, setPlaying] = useState(false);
+  const zoomBy = (delta: number) => setZoom((value) => Math.min(ZOOM.max, Math.max(ZOOM.min, value + delta)));
+
+  return (
+    <div className="relative h-full w-full overflow-hidden bg-[radial-gradient(circle,var(--tone-control)_1px,transparent_1px)] bg-size-[20px_20px]">
+      <header className="relative z-10 flex h-16 items-center justify-between gap-4 px-5">
+        <Link href="/twin" className="inline-flex items-center gap-2 text-sm text-foreground transition-colors hover:text-muted-foreground">
+          <ArrowLeft className="size-4" aria-hidden />
+          Back
+        </Link>
+        <h1 className="m-0 text-sm font-normal text-muted-foreground">
+          Twin’s brain <span aria-hidden>·</span> Last updated 2 days ago
+        </h1>
+        <Link
+          href="/twin"
+          className="inline-flex h-9 items-center rounded-full bg-(--brand) px-5 text-sm font-medium text-white transition-colors hover:bg-[#e04d00] dark:hover:bg-[#ff7e33]"
+        >
+          Done
+        </Link>
+      </header>
+
+      <div className="absolute inset-0 top-16 overflow-auto">
+        <div className="flex min-h-full min-w-max items-center justify-center p-12">
+          <div
+            className="flex origin-center items-start transition-transform duration-200 ease-out motion-reduce:transition-none"
+            style={{ transform: `scale(${zoom / 100})` }}
+          >
+            <Node
+              tag="Knowledge" tone="blue" title="Knowledge"
+              footer={<EditLink href="/twin/knowledge" />}
+            >
+              <ul className="m-0 flex list-none flex-col gap-2 p-0 text-sm">
+                {SOURCES.map(({ label, count, icon: Icon }) => (
+                  <li key={label} className="flex items-center justify-between gap-3">
+                    <span className="flex items-center gap-2.5">
+                      <span className="grid size-6 place-items-center rounded-full bg-(--tone-control)"><Icon className="size-3.5" aria-hidden /></span>
+                      {label}
+                    </span>
+                    <span className="tabular-nums text-muted-foreground">{count}</span>
+                  </li>
+                ))}
+              </ul>
+              <ul className="m-0 flex list-none flex-col gap-2 p-0">
+                {CONNECTIONS.map(({ label, icon: Icon }) => (
+                  <li key={label} className="flex items-center justify-between gap-3 rounded-[12px] bg-(--tone-control)/60 px-3 py-2.5 text-sm">
+                    <span className="flex items-center gap-2.5"><Icon className="size-4" aria-hidden />{label}</span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                      <Check className="size-3" aria-hidden /> Connected
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Node>
+
+            <Edge />
+
+            <Node
+              tag="Training style" tone="amber" title="Training style"
+              footer={<EditButton onClick={soon("Editing the training style")} />}
+            >
+              <ul className="m-0 flex list-none flex-col gap-3 p-0 text-sm leading-5">
+                {TRAITS.map((trait) => (
+                  <li key={trait} className="flex gap-2">
+                    <Sparkles className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+                    {trait}
+                  </li>
+                ))}
+              </ul>
+            </Node>
+
+            <Edge />
+
+            <Node
+              tag="Voice and avatar" tone="green" title="Voice and avatar"
+              footer={(
+                <>
+                  <EditButton onClick={soon("Editing the voice and avatar")} />
+                  <button type="button" onClick={soon("Calibration from here")} className={pill}>
+                    <SlidersHorizontal className="size-4" aria-hidden /> Calibrate
+                  </button>
+                </>
+              )}
+            >
+              <div className="flex flex-col items-center gap-2 text-center">
+                <video
+                  src="/media/twin-listening.mp4" autoPlay muted loop playsInline preload="metadata" aria-hidden
+                  className="size-16 rounded-full bg-(--tone-control) object-cover object-[center_18%]"
+                />
+                <p className="m-0 text-base font-semibold">Walkthrough</p>
+                <p className="m-0 text-sm text-muted-foreground">Your voice · Cloned from your videos</p>
+                <div className="mt-1 flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setPlaying((value) => !value)}
+                    aria-label={playing ? "Pause voice sample" : "Play voice sample"}
+                    aria-pressed={playing}
+                    className="grid size-8 place-items-center rounded-full bg-(--tone-control) text-foreground transition-colors hover:bg-(--border) focus-visible:ring-2 focus-visible:ring-(--brand) outline-none"
+                  >
+                    {playing ? <Pause className="size-3.5" aria-hidden /> : <Play className="size-3.5" aria-hidden />}
+                  </button>
+                  <Waveform playing={playing} />
+                </div>
+              </div>
+            </Node>
+          </div>
+        </div>
+      </div>
+
+      <div className="absolute right-5 bottom-5 z-10 flex items-center gap-1 rounded-full border border-(--card-border) bg-card p-1 shadow-[0_2px_8px_rgb(30_28_25/0.08)]">
+        <button type="button" onClick={() => zoomBy(-ZOOM.step)} disabled={zoom <= ZOOM.min} aria-label="Zoom out" className={zoomButton}>
+          <Minus className="size-4" aria-hidden />
+        </button>
+        <button type="button" onClick={() => setZoom(100)} aria-label="Reset zoom" className="min-w-14 rounded-full px-1 text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-(--brand)">
+          {zoom}%
+        </button>
+        <button type="button" onClick={() => zoomBy(ZOOM.step)} disabled={zoom >= ZOOM.max} aria-label="Zoom in" className={zoomButton}>
+          <Plus className="size-4" aria-hidden />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const pill = "inline-flex h-9 items-center gap-2 rounded-full border border-(--card-border) px-4 text-sm font-medium transition-colors hover:bg-(--tone-control) outline-none focus-visible:ring-2 focus-visible:ring-(--brand)";
+const zoomButton = "grid size-8 place-items-center rounded-full transition-colors hover:bg-(--tone-control) disabled:opacity-40 outline-none focus-visible:ring-2 focus-visible:ring-(--brand)";
+
+function EditLink({ href }: { href: string }) {
+  return <Link href={href} className={pill}><Pencil className="size-4" aria-hidden /> Edit</Link>;
+}
+
+function EditButton({ onClick }: { onClick: () => void }) {
+  return <button type="button" onClick={onClick} className={pill}><Pencil className="size-4" aria-hidden /> Edit</button>;
+}
+
+/** Decorative voice bars; they pulse while the sample "plays". */
+function Waveform({ playing }: { playing: boolean }) {
+  const bars = [6, 14, 9, 18, 12, 20, 8, 15, 10];
+  return (
+    <span aria-hidden className="flex h-6 items-center gap-[3px]">
+      {bars.map((height, index) => (
+        <span
+          key={index}
+          className={cn("w-[3px] rounded-full bg-foreground/70", playing && "animate-pulse motion-reduce:animate-none")}
+          style={{ height, animationDelay: `${index * 90}ms` }}
+        />
+      ))}
+    </span>
+  );
+}
