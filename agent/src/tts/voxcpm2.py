@@ -27,6 +27,8 @@ from livekit.agents import (
 )
 
 DEFAULT_SAMPLE_RATE = 48_000
+# A shared sample voice that every environment's TTS service can resolve (web's default voice).
+DEFAULT_FALLBACK_VOICE = "charlotte-sample"
 DEFAULT_NUM_CHANNELS = 1
 PCM_CONTENT_TYPE = "audio/pcm"
 
@@ -39,6 +41,7 @@ class VoxCPM2TTS(tts.TTS):
         *,
         endpoint: str,
         voice: str = "",
+        fallback_voice: str = DEFAULT_FALLBACK_VOICE,
         api_key: str = "",
         sample_rate: int = DEFAULT_SAMPLE_RATE,
         connect_timeout: float = 10.0,
@@ -57,6 +60,7 @@ class VoxCPM2TTS(tts.TTS):
 
         self.endpoint = endpoint
         self.voice = voice
+        self.fallback_voice = fallback_voice
         self.api_key = api_key
         self.model_label = "voxcpm2"
         self.connect_timeout = connect_timeout
@@ -131,72 +135,88 @@ class VoxCPM2Stream(tts.ChunkedStream):
         if vox.api_key:
             headers["Authorization"] = f"Bearer {vox.api_key}"
 
-        payload = {
-            "model": vox.model,
-            "voice": vox.voice or "default",
-            "input": self.input_text,
-            "stream": True,
-            "response_format": "pcm",
-        }
-
         try:
-            async with vox.session().post(
-                vox.endpoint,
-                headers=headers,
-                json=payload,
-                timeout=aiohttp.ClientTimeout(
-                    total=vox.total_timeout,
-                    sock_connect=vox.connect_timeout,
-                ),
-            ) as response:
-                server_request_id = response.headers.get("X-Request-ID")
-                if server_request_id:
-                    request_id = server_request_id
+            # Two attempts at most: a voice the TTS service cannot resolve (e.g. one that only exists in another
+            # environment's database) falls back to a shared voice instead of leaving the agent silent.
+            for attempt in (1, 2):
+                payload = {
+                    "model": vox.model,
+                    "voice": vox.voice or vox.fallback_voice,
+                    "input": self.input_text,
+                    "stream": True,
+                    "response_format": "pcm",
+                }
+                async with vox.session().post(
+                    vox.endpoint,
+                    headers=headers,
+                    json=payload,
+                    timeout=aiohttp.ClientTimeout(
+                        total=vox.total_timeout,
+                        sock_connect=vox.connect_timeout,
+                    ),
+                ) as response:
+                    server_request_id = response.headers.get("X-Request-ID")
+                    if server_request_id:
+                        request_id = server_request_id
 
-                if response.status != 200:
-                    body = (await response.read()).decode(errors="replace")[:300]
-                    raise APIStatusError(
-                        f"VoxCPM2 TTS request failed: {body}",
-                        status_code=response.status,
+                    if response.status != 200:
+                        body = (await response.read()).decode(errors="replace")[:300]
+                        if (
+                            attempt == 1
+                            and response.status == 404
+                            and "unknown voice" in body.lower()
+                            and payload["voice"] != vox.fallback_voice
+                        ):
+                            logger.warning(
+                                "[TTS:voxcpm2] unknown voice %s; speaking with fallback voice %s for the rest of this session",
+                                payload["voice"],
+                                vox.fallback_voice,
+                            )
+                            vox.voice = vox.fallback_voice
+                            continue
+                        raise APIStatusError(
+                            f"VoxCPM2 TTS request failed: {body}",
+                            status_code=response.status,
+                            request_id=request_id,
+                            retryable=response.status in {408, 429} or response.status >= 500,
+                        )
+
+                    sample_rate = vox.sample_rate
+                    if "X-Sample-Rate" in response.headers:
+                        try:
+                            sample_rate = int(response.headers["X-Sample-Rate"])
+                        except ValueError:
+                            pass
+
+                    output.initialize(
                         request_id=request_id,
-                        retryable=response.status in {408, 429} or response.status >= 500,
+                        sample_rate=sample_rate,
+                        num_channels=DEFAULT_NUM_CHANNELS,
+                        mime_type=PCM_CONTENT_TYPE,
                     )
 
-                sample_rate = vox.sample_rate
-                if "X-Sample-Rate" in response.headers:
-                    try:
-                        sample_rate = int(response.headers["X-Sample-Rate"])
-                    except ValueError:
-                        pass
+                    async for chunk in response.content.iter_any():
+                        if not chunk:
+                            continue
+                        if first_audio_at is None:
+                            first_audio_at = time.perf_counter()
+                        output.push(chunk)
+                        emitted_bytes += len(chunk)
 
-                output.initialize(
-                    request_id=request_id,
-                    sample_rate=sample_rate,
-                    num_channels=DEFAULT_NUM_CHANNELS,
-                    mime_type=PCM_CONTENT_TYPE,
-                )
+                    if emitted_bytes == 0:
+                        raise APIConnectionError(
+                            "VoxCPM2 TTS returned an empty audio stream",
+                            retryable=True,
+                        )
 
-                async for chunk in response.content.iter_any():
-                    if not chunk:
-                        continue
-                    if first_audio_at is None:
-                        first_audio_at = time.perf_counter()
-                    output.push(chunk)
-                    emitted_bytes += len(chunk)
-
-                if emitted_bytes == 0:
-                    raise APIConnectionError(
-                        "VoxCPM2 TTS returned an empty audio stream",
-                        retryable=True,
+                    output.flush()
+                    logger.info(
+                        "[TTS:voxcpm2] complete request_id=%s elapsed_ms=%.1f audio_bytes=%d",
+                        request_id,
+                        (time.perf_counter() - started_at) * 1000,
+                        emitted_bytes,
                     )
-
-                output.flush()
-                logger.info(
-                    "[TTS:voxcpm2] complete request_id=%s elapsed_ms=%.1f audio_bytes=%d",
-                    request_id,
-                    (time.perf_counter() - started_at) * 1000,
-                    emitted_bytes,
-                )
+                    return
         except (APIStatusError, APIConnectionError):
             raise
         except TimeoutError as error:
@@ -226,10 +246,12 @@ def build_voxcpm2_tts(*, voice: str = "") -> VoxCPM2TTS:
     ).strip()
 
     api_key = os.getenv("TTS_API_KEY") or os.getenv("TTS_SERVICE_KEY", "")
+    fallback_voice = (os.getenv("AGENT_FALLBACK_VOICE_ID") or DEFAULT_FALLBACK_VOICE).strip()
 
     return VoxCPM2TTS(
         endpoint=endpoint,
         voice=resolved_voice,
+        fallback_voice=fallback_voice,
         api_key=api_key,
         sample_rate=DEFAULT_SAMPLE_RATE,
     )
