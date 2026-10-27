@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { AudioLines, BookOpenText, KeyRound, LogOut, UserCog, Users } from "lucide-react";
+import { AudioLines, BookOpenText, KeyRound, LogOut, Users } from "lucide-react";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/user-avatar";
 import {
@@ -71,10 +71,6 @@ export function SidebarAccountMenu() {
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem render={<Link href="/personas" />}>
-            <UserCog />
-            Personas
-          </DropdownMenuItem>
           <DropdownMenuItem render={<Link href="/voice" />}>
             <AudioLines />
             Voices

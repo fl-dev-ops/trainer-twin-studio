@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { RoleplayIcon, SessionsIcon, SettingsIcon, SetupIcon, TwinIcon, UsersIcon } from "@/components/icons";
+import { PersonaIcon, RoleplayIcon, SessionsIcon, SettingsIcon, SetupIcon, TwinIcon, UsersIcon } from "@/components/icons";
 import { SidebarAccountMenu } from "@/components/sidebar-account-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
@@ -32,7 +32,10 @@ const NAV_GROUPS = [
   },
   {
     label: "Role play",
-    items: [{ title: "Scenarios", href: "/agents", icon: RoleplayIcon }],
+    items: [
+      { title: "Scenarios", href: "/agents", icon: RoleplayIcon },
+      { title: "Personas", href: "/personas", icon: PersonaIcon },
+    ],
   },
 ];
 

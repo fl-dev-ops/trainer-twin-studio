@@ -1,12 +1,11 @@
-import { redirect } from "next/navigation";
-import { SpecResourceIndex } from "@/components/spec-resource";
-import { getSessionOrg } from "@/lib/org";
-import { listSpecSummaries } from "@/lib/specs";
+import { PersonaLibrary } from "@/components/persona/persona-library";
+import { requireStudioMember } from "@/lib/org";
+import { listRolePlayPersonas } from "@/lib/personas";
 
 export const dynamic = "force-dynamic";
 
+/** Persona Library: the role-play personas (isOwn = false). Studio only. */
 export default async function PersonasPage() {
-  const org = await getSessionOrg();
-  if (!org) redirect("/auth/no-org");
-  return <SpecResourceIndex type="personas" specs={await listSpecSummaries("personas", org.id)} />;
+  const org = await requireStudioMember();
+  return <PersonaLibrary personas={await listRolePlayPersonas(org.id)} />;
 }
