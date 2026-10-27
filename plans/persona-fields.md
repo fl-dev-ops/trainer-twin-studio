@@ -82,7 +82,7 @@ Today the prompt sends most options as bare labels ("Formality: casual."), so th
 ### Answer length (how much they say at a time)
 - **Short:** A few words or one sentence. You make the agent ask follow-up questions.
 - **Medium:** One or two sentences. You answer the question with a little context.
-- **Long:** Two to four sentences. You share context and small stories, and sometimes drift.
+- **Long:** Three to four sentences. You share context and small stories, and sometimes drift.
 
 > ⚠ "Long" conflicts with the base speaking rule (one to three sentences).
 
@@ -186,3 +186,9 @@ flowchart LR
 
 - Prompt fields stay in `Persona.data` (versioned spec); program settings go in `settings`; media live in their own tables.
 - Global presets (`orgId` null) store files under `<base>/global/…`.
+
+## Decisions (2026-10-27)
+
+- **Difficulty belongs to the role play**, not the persona. The persona form drops it; the meanings above live with the role play.
+- **Answer length "long" = three to four sentences.** It overrides the base "one to three sentences" rule for that persona.
+- Roles: pending (keep / replace the B2B roles Decision maker, Customer, Champion / drop them).
