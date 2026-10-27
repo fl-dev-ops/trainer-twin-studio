@@ -13,18 +13,27 @@ const AI_GATEWAY_API_KEY =
   process.env.AI_GATEWAY_API_KEY ?? process.env.VERCEL_OIDC_TOKEN ?? process.env.OPENROUTER_API_KEY ?? process.env.LLM_API_KEY ?? "";
 const HEADSHOT_MODEL = process.env.AVATAR_IMAGE_MODEL ?? "google/gemini-3.1-flash-image";
 
-const PROMPT =
-  "Turn this into a professional headshot of the same person. Keep their face, features, skin tone, hair, glasses and " +
-  "expression exactly; do not change who they are, their age or their body. Business attire that suits them, soft " +
-  "studio light, plain neutral background, head and shoulders, centred, square crop, photorealistic.";
-
 /** The looks offered side by side after a photo (same person every time; only clothes, light and setting change). */
 export const HEADSHOT_STYLES = [
-  "Navy blazer over a white shirt, plain light grey studio background.",
-  "Dark tailored suit, softly blurred modern office behind them, warm light.",
-  "Smart-casual knit or open-collar shirt, plain white background, bright even light.",
-  "Business attire, natural daylight outdoors, softly blurred greenery behind them.",
+  "wearing a smart black blazer over a plain light top, soft natural daylight, softly blurred bright modern office background",
+  "wearing a navy blazer over a white shirt, soft studio light, plain light grey background",
+  "wearing a smart-casual knit or open-collar shirt, bright even light, plain white background",
+  "wearing smart business clothes, natural daylight outdoors, softly blurred green trees behind",
 ] as const;
+
+/**
+ * Identity first, in the words that worked for Olga's own headshots: name every feature that must stay, ask for a
+ * real-photo look, and rule out text, logos and watermarks (casual photos often have screens or graphics behind).
+ */
+export function headshotPrompt(style = 0) {
+  return (
+    "This photo shows a real person. Create a photorealistic professional headshot of exactly this person: keep their " +
+    "identity, face shape, eyes, nose, mouth, smile, skin tone, age, hair colour, length and texture, and glasses " +
+    "(if any) exactly as in the photo. Head and shoulders, facing the camera, warm confident slight smile, " +
+    `${HEADSHOT_STYLES[style] ?? HEADSHOT_STYLES[0]}. Square 1:1 portrait, 85mm lens look, realistic skin texture. ` +
+    "Ignore any text, graphics or screens in the photo; no text, no logos, no watermark."
+  );
+}
 
 const IMAGE_TYPES: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
 
@@ -40,7 +49,7 @@ export async function professionalHeadshot(photo: Uint8Array, mime = "image/jpeg
       messages: [{
         role: "user",
         content: [
-          { type: "text", text: `${PROMPT} ${HEADSHOT_STYLES[style] ?? HEADSHOT_STYLES[0]}` },
+          { type: "text", text: headshotPrompt(style) },
           { type: "image_url", image_url: { url: `data:${mime};base64,${Buffer.from(photo).toString("base64")}` } },
         ],
       }],
