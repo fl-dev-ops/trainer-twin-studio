@@ -9,6 +9,7 @@ import { twinClient } from "@/lib/twin/client";
 import type { TwinOutputs } from "@/lib/twin/trpc";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SwitchToggle } from "@/components/switch-toggle";
 
 type LearnerAssign = TwinOutputs["assignments"]["list"][number];
 
@@ -19,37 +20,6 @@ const AVATAR_TONES = [
   "bg-rose-500/15 text-rose-600 dark:text-rose-400",
   "bg-orange-500/15 text-orange-600 dark:text-orange-400",
 ];
-
-function SwitchToggle({
-  checked,
-  onChange,
-  label,
-}: {
-  checked: boolean;
-  onChange: (val: boolean) => void;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={() => onChange(!checked)}
-      className={cn(
-        "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",
-        checked ? "bg-(--brand)" : "bg-(--tone-control)"
-      )}
-    >
-      <span
-        className={cn(
-          "pointer-events-none inline-block size-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out",
-          checked ? "translate-x-5" : "translate-x-0"
-        )}
-      />
-    </button>
-  );
-}
 
 export function TwinEditPage({
   twin,
