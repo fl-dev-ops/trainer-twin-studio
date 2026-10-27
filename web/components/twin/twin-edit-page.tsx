@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ArrowLeft, Check, UserPlus } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, Check, Copy, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { twinClient } from "@/lib/twin/client";
 import type { TwinOutputs } from "@/lib/twin/trpc";
@@ -15,6 +16,38 @@ import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
 
 type LearnerAssign = TwinOutputs["assignments"]["list"][number];
+
+/**
+ * Copies the twin's /t/ share link. Same call and cache as the Share dialog; fetched on click, so viewing the page never
+ * creates a link. The link opens only for learners assigned to the twin.
+ */
+function CopyShareLinkButton({ slug }: { slug: string }) {
+  const queryClient = useQueryClient();
+  const [state, setState] = useState<"idle" | "busy" | "copied">("idle");
+  async function copy() {
+    setState("busy");
+    try {
+      const { url } = await queryClient.fetchQuery({
+        queryKey: ["twin-share-link", slug],
+        queryFn: () => twinClient.agents.shareLink.mutate({ slug }),
+        staleTime: Infinity,
+      });
+      await navigator.clipboard.writeText(url);
+      setState("copied");
+      toast.success("Link copied. Only learners assigned to this twin can open it.");
+      setTimeout(() => setState("idle"), 2000);
+    } catch {
+      setState("idle");
+      toast.error("Could not copy the share link. Try again.");
+    }
+  }
+  return (
+    <Button variant="outline" size="sm" onClick={() => void copy()} disabled={state === "busy"}>
+      {state === "copied" ? <Check /> : <Copy />}
+      {state === "copied" ? "Copied" : "Copy link"}
+    </Button>
+  );
+}
 
 export function TwinEditPage({
   twin,
@@ -99,6 +132,7 @@ export function TwinEditPage({
             <ArrowLeft className="size-4" />
             <span>Back</span>
           </Link>
+          <CopyShareLinkButton slug={id} />
         </header>
 
         <div className="mt-6">
