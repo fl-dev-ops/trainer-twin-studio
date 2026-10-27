@@ -207,6 +207,15 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
               </DropdownMenuContent>
             </DropdownMenu>
 
+            {/* Configure button: same shape as Calibrate, secondary colours */}
+            <Link
+              href={`/twin/${id}/edit`}
+              className="inline-flex h-8 items-center gap-2 rounded-full bg-secondary px-4 text-[13px] font-medium text-secondary-foreground shadow-none transition-opacity hover:opacity-90"
+            >
+              <Settings2 className="size-3.5" />
+              <span>Configure</span>
+            </Link>
+
             {/* Calibrate button */}
             <Link
               href={`/twin/${id}/calibration`}
