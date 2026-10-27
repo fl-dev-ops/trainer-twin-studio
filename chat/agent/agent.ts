@@ -14,12 +14,13 @@ export default defineAgent({
         let options: AgentModelOptionsDefinition | undefined;
         if (requestedModel.startsWith("google/")) {
           // Role-play clients answer in a sentence or two. With thinking on, Gemini
-          // wrote its guard-level reasoning into the spoken reply, so it is off there.
-          const thinkingBudget = (await isRoleplaySession(ctx)) ? 0 : 512;
+          // wrote its guard-level reasoning into the spoken reply, so it is minimal
+          // there (Gemini now rejects a thinking budget of 0).
+          const thinkingConfig: Record<string, string | number> = (await isRoleplaySession(ctx)) ? { thinkingLevel: "minimal" } : { thinkingBudget: 512 };
           options = {
             providerOptions: {
               gateway: { only: ["google"] },
-              google: { thinkingConfig: { thinkingBudget } },
+              google: { thinkingConfig },
             },
           };
         } else if (requestedModel.startsWith("openai/gpt-5")) {
