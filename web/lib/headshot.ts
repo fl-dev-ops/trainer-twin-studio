@@ -18,10 +18,18 @@ const PROMPT =
   "expression exactly; do not change who they are, their age or their body. Business attire that suits them, soft " +
   "studio light, plain neutral background, head and shoulders, centred, square crop, photorealistic.";
 
+/** The looks offered side by side after a photo (same person every time; only clothes, light and setting change). */
+export const HEADSHOT_STYLES = [
+  "Navy blazer over a white shirt, plain light grey studio background.",
+  "Dark tailored suit, softly blurred modern office behind them, warm light.",
+  "Smart-casual knit or open-collar shirt, plain white background, bright even light.",
+  "Business attire, natural daylight outdoors, softly blurred greenery behind them.",
+] as const;
+
 const IMAGE_TYPES: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
 
 /** The headshot as image bytes, or throws (no key, gateway error, no image in the reply). */
-export async function professionalHeadshot(photo: Uint8Array, mime = "image/jpeg"): Promise<{ bytes: Uint8Array; mime: string; ext: string }> {
+export async function professionalHeadshot(photo: Uint8Array, mime = "image/jpeg", style = 0): Promise<{ bytes: Uint8Array; mime: string; ext: string }> {
   if (!AI_GATEWAY_API_KEY) throw new Error("AI_GATEWAY_API_KEY is not configured");
   const res = await fetch(`${AI_GATEWAY_BASE_URL}/chat/completions`, {
     method: "POST",
@@ -32,7 +40,7 @@ export async function professionalHeadshot(photo: Uint8Array, mime = "image/jpeg
       messages: [{
         role: "user",
         content: [
-          { type: "text", text: PROMPT },
+          { type: "text", text: `${PROMPT} ${HEADSHOT_STYLES[style] ?? HEADSHOT_STYLES[0]}` },
           { type: "image_url", image_url: { url: `data:${mime};base64,${Buffer.from(photo).toString("base64")}` } },
         ],
       }],

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
-import { avatarPrefix, deleteObject, deletePrefix, presignedPutUrl, putObject, voicePrefix } from "@/lib/s3";
+import { avatarPrefix, deleteObject, deletePrefix, getObjectBytes, presignedGetUrl, presignedPutUrl, putObject, voicePrefix } from "@/lib/s3";
 import { professionalHeadshot } from "@/lib/headshot";
 import { TWIN_SOURCE } from "@/lib/twins";
 
@@ -69,6 +69,26 @@ async function ensureAvatar(orgId: string, persona: NonNullable<Awaited<ReturnTy
 }
 
 const videoFolder = (orgId: string, avatarId: string) => `${avatarPrefix(orgId, avatarId)}/video/`;
+/** AI versions of a new photo wait here until one is chosen (moved into place) or the folder is cleared on save. */
+const candidateFolder = (orgId: string, avatarId: string) => `${avatarPrefix(orgId, avatarId)}/image/candidates/`;
+
+/**
+ * One AI version of a just-taken photo, in one of the HEADSHOT_STYLES looks: stored as a candidate, returned with a
+ * short-lived URL to show it. The trainer picks between their photo and these before saving.
+ */
+export async function makeHeadshot(orgId: string, input: { photo: string; style: number }) {
+  const persona = await ownTwinPersona(orgId);
+  if (!persona) throw new AvatarError("Set up your twin first");
+  const photo = decodePhoto(input.photo);
+  const avatar = await ensureAvatar(orgId, persona);
+  const headshot = await professionalHeadshot(photo, "image/jpeg", input.style).catch((error) => {
+    console.warn("[avatar] headshot failed", error);
+    throw new AvatarError("We couldn't make this version");
+  });
+  const key = `${candidateFolder(orgId, avatar.id)}${randomUUID()}.${headshot.ext}`;
+  await putObject(key, headshot.bytes, headshot.mime);
+  return { key, url: await presignedGetUrl(key, 3600) };
+}
 
 /** Where the browser uploads the reference video (straight to S3), inside the persona's avatar folder. */
 export async function avatarVideoUpload(orgId: string, contentType: AvatarVideoType) {
@@ -92,7 +112,7 @@ export function decodePhoto(photo: string) {
  * Twins then speak with it: their old copied `voiceId` is cleared (versioned), so the persona's voice applies.
  * A previous voice that nothing else uses is deleted with its files.
  */
-export async function saveAvatar(orgId: string, input: { photo: string; videoKey: string; voiceId: string }) {
+export async function saveAvatar(orgId: string, input: { photo: string; videoKey: string; voiceId: string; headshotKey?: string | null }) {
   const persona = await ownTwinPersona(orgId);
   if (!persona) throw new AvatarError("Set up your twin first");
   const avatar = persona.avatar;
@@ -107,17 +127,22 @@ export async function saveAvatar(orgId: string, input: { photo: string; videoKey
   if (!voice) throw new AvatarError("Unknown voice");
   const photo = decodePhoto(input.photo);
 
-  // The photo as taken is kept; the one shown everywhere is a professional headshot made from it, or the original
-  // when the image model fails (the save never depends on it).
+  // The chosen AI version must be one of this avatar's candidates.
+  const candidates = candidateFolder(orgId, avatar.id);
+  const chosen = input.headshotKey ?? null;
+  const ext = chosen?.startsWith(candidates) ? /^[0-9a-f-]{36}\.(png|jpg|webp)$/.exec(chosen.slice(candidates.length))?.[1] : null;
+  if (chosen && !ext) throw new AvatarError("Unknown photo");
+
+  // The photo as taken (or uploaded) is kept; the one shown everywhere is the AI version chosen, else that photo.
   const stamp = randomUUID();
   const originalKey = `${avatarPrefix(orgId, avatar.id)}/image/original-${stamp}.jpg`;
   await putObject(originalKey, photo, "image/jpeg");
-  const headshot = await professionalHeadshot(photo).catch((error) => {
-    console.warn("[avatar] professional headshot failed; using the original photo", error);
-    return null;
-  });
-  const imageKey = headshot ? `${avatarPrefix(orgId, avatar.id)}/image/${stamp}.${headshot.ext}` : originalKey;
-  if (headshot) await putObject(imageKey, headshot.bytes, headshot.mime);
+  const imageKey = chosen ? `${avatarPrefix(orgId, avatar.id)}/image/${stamp}.${ext}` : originalKey;
+  if (chosen) {
+    const bytes = await getObjectBytes(chosen).catch(() => null);
+    if (!bytes) throw new AvatarError("That AI photo has expired. Choose again.");
+    await putObject(imageKey, bytes, ext === "jpg" ? "image/jpeg" : `image/${ext}`);
+  }
 
   const previousVoiceId = persona.voiceId && persona.voiceId !== voice.id ? persona.voiceId : null;
   const twins = await db.agent.findMany({
@@ -142,10 +167,10 @@ export async function saveAvatar(orgId: string, input: { photo: string; videoKey
   // Replaced files and an unused previous voice: best effort, the DB already points at the new ones.
   const replaced = [avatar.s3ImageKey, avatar.s3OriginalImageKey, avatar.s3VideoKey !== input.videoKey ? avatar.s3VideoKey : null]
     .filter((key): key is string => Boolean(key) && key !== imageKey && key !== originalKey);
-  await Promise.all(replaced.map((key) => deleteObject(key).catch(() => {})));
+  await Promise.all([...replaced.map((key) => deleteObject(key).catch(() => {})), deletePrefix(candidates).catch(() => {})]);
   if (previousVoiceId) await removeUnusedVoice(orgId, previousVoiceId);
 
-  return { avatarUrl: avatarPhotoUrl(persona.slug, { s3ImageKey: imageKey, updatedAt: new Date() }), twins: copied.length, professional: Boolean(headshot) };
+  return { avatarUrl: avatarPhotoUrl(persona.slug, { s3ImageKey: imageKey, updatedAt: new Date() }), twins: copied.length, professional: Boolean(chosen) };
 }
 
 /** Deletes a voice no persona owns and no agent names (e.g. the one a re-recording replaced). */

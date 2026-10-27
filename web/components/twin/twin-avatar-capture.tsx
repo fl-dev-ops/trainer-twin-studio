@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Camera, RefreshCw, RotateCcw, Square } from "lucide-react";
+import { ArrowLeft, Camera, Check, LoaderCircle, RefreshCw, RotateCcw, Sparkles, Square, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { twinClient } from "@/lib/twin/client";
@@ -19,6 +19,9 @@ const VIDEO_TYPES = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus",
 
 type Stage = "photo" | "record" | "review" | "saving";
 type Take = { video: Blob; audio: Blob; contentType: "video/webm" | "video/mp4"; url: string };
+/** An AI version of the photo: being made, ready (stored candidate + URL to show it), or failed. */
+type Version = { state: "loading" } | { state: "ready"; key: string; url: string } | { state: "failed" };
+const VERSIONS = 4; // one per HEADSHOT_STYLES look
 
 const fmt = (value: number) => `0:${String(Math.min(59, Math.floor(value))).padStart(2, "0")}`;
 
@@ -41,6 +44,12 @@ export function TwinAvatarCapture({ personaName }: { personaName: string | null 
   const [seconds, setSeconds] = useState(0);
   const [take, setTake] = useState<Take | null>(null);
   const [progress, setProgress] = useState("");
+  const [versions, setVersions] = useState<Version[]>([]);
+  /** Which picture becomes the twin's: the photo as taken/uploaded, or an AI version (index). */
+  const [choice, setChoice] = useState<"original" | number>("original");
+  /** Bumped on every new photo, so versions of an earlier photo don't land on this one. */
+  const photoRun = useRef(0);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   async function openCamera() {
     setCameraError("");
@@ -89,7 +98,55 @@ export function TwinAvatarCapture({ personaName }: { personaName: string | null 
     context.translate(PHOTO_SIZE, 0);
     context.scale(-1, 1);
     context.drawImage(video, (video.videoWidth - side) / 2, (video.videoHeight - side) / 2, side, side, 0, 0, PHOTO_SIZE, PHOTO_SIZE);
-    setPhoto(canvas.toDataURL("image/jpeg", 0.9));
+    choosePhoto(canvas.toDataURL("image/jpeg", 0.9));
+  }
+
+  /** An uploaded picture: centre square crop at the same size and format as a camera photo. */
+  async function uploadPhoto(file: File | undefined) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return void toast.error("Choose an image file.");
+    const url = URL.createObjectURL(file);
+    try {
+      const image = new Image();
+      image.src = url;
+      await image.decode();
+      const side = Math.min(image.naturalWidth, image.naturalHeight);
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = PHOTO_SIZE;
+      const context = canvas.getContext("2d");
+      if (!context || !side) throw new Error("empty image");
+      context.drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, 0, 0, PHOTO_SIZE, PHOTO_SIZE);
+      choosePhoto(canvas.toDataURL("image/jpeg", 0.9));
+    } catch {
+      toast.error("That image couldn't be opened. Try a JPEG or PNG.");
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  /** A new photo: show it, and ask for the AI versions (each look in parallel, each tile fills in when ready). */
+  function choosePhoto(dataUrl: string) {
+    const run = ++photoRun.current;
+    setPhoto(dataUrl);
+    setChoice("original");
+    setVersions(Array.from({ length: VERSIONS }, () => ({ state: "loading" })));
+    for (let style = 0; style < VERSIONS; style++) {
+      void twinClient.avatar.headshot
+        .mutate({ photo: dataUrl, style })
+        .then((made): Version => ({ state: "ready", ...made }))
+        .catch((): Version => ({ state: "failed" }))
+        .then((version) => {
+          if (photoRun.current !== run) return;
+          setVersions((prev) => prev.map((v, i) => (i === style ? version : v)));
+        });
+    }
+  }
+
+  function clearPhoto() {
+    photoRun.current++;
+    setPhoto(null);
+    setVersions([]);
+    setChoice("original");
   }
 
   function startRecording() {
@@ -162,10 +219,15 @@ export function TwinAvatarCapture({ personaName }: { personaName: string | null 
       const body = await cloned.json().catch(() => ({}));
       if (!cloned.ok || !body.voice?.id) throw new Error(body.error ?? "Your voice could not be saved.");
 
-      setProgress("Making your professional photo\u2026");
-      const saved = await twinClient.avatar.save.mutate({ photo, videoKey: upload.key, voiceId: body.voice.id });
+      setProgress("Saving your photo\u2026");
+      const picked = typeof choice === "number" ? versions[choice] : null;
+      await twinClient.avatar.save.mutate({
+        photo,
+        videoKey: upload.key,
+        voiceId: body.voice.id,
+        headshotKey: picked?.state === "ready" ? picked.key : null,
+      });
       toast.success("Your photo, voice and video are saved.");
-      if (!saved.professional) toast.warning("We couldn't make a professional photo this time, so your own photo is used. Record again to retry.");
       router.push("/twin/brain");
       router.refresh();
     } catch (error) {
@@ -175,6 +237,9 @@ export function TwinAvatarCapture({ personaName }: { personaName: string | null 
   }
 
   const live = stage === "photo" ? !photo : stage === "record";
+  const picked = typeof choice === "number" ? versions[choice] : null;
+  const shown = picked?.state === "ready" ? picked.url : photo;
+  const making = versions.some((v) => v.state === "loading");
 
   return (
     <main className="min-h-svh bg-muted p-2">
@@ -198,11 +263,13 @@ export function TwinAvatarCapture({ personaName }: { personaName: string | null 
             <>
               <div className="flex flex-col items-center gap-2 text-center">
                 <h1 className="text-2xl font-semibold tracking-[-0.015em]">
-                  {stage === "photo" ? "Take a photo" : "Read this out aloud"}
+                  {stage === "photo" ? (photo ? "Choose your twin's picture" : "Take or upload a photo") : "Read this out aloud"}
                 </h1>
                 <p className="text-sm text-muted-foreground">
                   {stage === "photo"
-                    ? "This becomes your twin's picture. Face the camera in good light."
+                    ? photo
+                      ? "Your photo, or one of the AI versions made from it: same face, only clothes, light and background change."
+                      : "This becomes your twin's picture. Face the camera in good light, or upload one."
                     : "Look at the camera and read the passage. We clone your voice from it and keep the video for your AI avatar."}
                 </p>
               </div>
@@ -216,8 +283,8 @@ export function TwinAvatarCapture({ personaName }: { personaName: string | null 
                 {stage === "review" || stage === "saving" ? (
                   <video key="take" src={take?.url} controls playsInline className="size-full object-cover" />
                 ) : stage === "photo" && photo ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- local data URL preview
-                  <img src={photo} alt="Your photo" className="size-full object-cover" />
+                  // eslint-disable-next-line @next/next/no-img-element -- local data URL / presigned candidate
+                  <img src={shown ?? photo} alt="Your twin's picture" className="size-full object-cover" />
                 ) : (
                   <video key="live" ref={attachPreview} autoPlay muted playsInline className="size-full -scale-x-100 object-cover" aria-label="Camera preview" />
                 )}
@@ -231,6 +298,38 @@ export function TwinAvatarCapture({ personaName }: { personaName: string | null 
                   </span>
                 ) : null}
               </div>
+
+              {stage === "photo" && photo ? (
+                <div role="radiogroup" aria-label="Your twin's picture" className="flex flex-wrap justify-center gap-3">
+                  <PictureOption label="Your photo" selected={choice === "original"} onSelect={() => setChoice("original")}>
+                    {/* eslint-disable-next-line @next/next/no-img-element -- local data URL */}
+                    <img src={photo} alt="" className="size-full object-cover" />
+                  </PictureOption>
+                  {versions.map((version, i) => (
+                    <PictureOption
+                      key={i}
+                      label={`AI version ${i + 1}`}
+                      selected={choice === i}
+                      disabled={version.state !== "ready"}
+                      onSelect={() => setChoice(i)}
+                    >
+                      {version.state === "ready" ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- presigned candidate
+                        <img src={version.url} alt="" className="size-full object-cover" />
+                      ) : version.state === "loading" ? (
+                        <span className="grid size-full place-items-center bg-muted text-muted-foreground"><LoaderCircle className="size-5 animate-spin" /></span>
+                      ) : (
+                        <span className="grid size-full place-items-center bg-muted px-2 text-center text-[11px] text-muted-foreground">Couldn&apos;t make this one</span>
+                      )}
+                    </PictureOption>
+                  ))}
+                </div>
+              ) : null}
+              {stage === "photo" && making ? (
+                <p className="-mt-4 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Sparkles className="size-3.5" /> Making AI versions of your photo… you can pick yours meanwhile.
+                </p>
+              ) : null}
 
               {stage !== "photo" ? (
                 <div className="w-full">
@@ -256,15 +355,21 @@ export function TwinAvatarCapture({ personaName }: { personaName: string | null 
                 {stage === "photo" ? (
                   photo ? (
                     <>
-                      <Button variant="outline" className="rounded-full" onClick={() => setPhoto(null)}>
+                      <Button variant="outline" className="rounded-full" onClick={clearPhoto}>
                         <RotateCcw data-icon="inline-start" /> Retake
                       </Button>
-                      <Button className="rounded-full" onClick={() => setStage("record")}>Use this photo</Button>
+                      <Button className="rounded-full" onClick={() => setStage("record")}>Use this picture</Button>
                     </>
                   ) : (
-                    <Button className="rounded-full" disabled={!cameraReady} onClick={takePhoto}>
-                      <Camera data-icon="inline-start" /> Take photo
-                    </Button>
+                    <>
+                      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(event) => { void uploadPhoto(event.target.files?.[0]); event.target.value = ""; }} />
+                      <Button variant="outline" className="rounded-full" onClick={() => fileRef.current?.click()}>
+                        <Upload data-icon="inline-start" /> Upload photo
+                      </Button>
+                      <Button className="rounded-full" disabled={!cameraReady} onClick={takePhoto}>
+                        <Camera data-icon="inline-start" /> Take photo
+                      </Button>
+                    </>
                   )
                 ) : stage === "record" ? (
                   recording ? (
@@ -276,7 +381,7 @@ export function TwinAvatarCapture({ personaName }: { personaName: string | null 
                     </>
                   ) : (
                     <>
-                      <Button variant="ghost" className="rounded-full" onClick={() => { setPhoto(null); setStage("photo"); }}>Back to photo</Button>
+                      <Button variant="ghost" className="rounded-full" onClick={() => setStage("photo")}>Back to photo</Button>
                       <Button className="rounded-full" disabled={!cameraReady} onClick={startRecording}>Start recording</Button>
                     </>
                   )
@@ -301,5 +406,35 @@ export function TwinAvatarCapture({ personaName }: { personaName: string | null 
         </section>
       </div>
     </main>
+  );
+}
+
+/** One choice in the picture strip: a square thumbnail, outlined in the brand colour when chosen. */
+function PictureOption({ label, selected, disabled = false, onSelect, children }: {
+  label: string;
+  selected: boolean;
+  disabled?: boolean;
+  onSelect: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onSelect}
+      className={cn(
+        "relative size-20 overflow-hidden rounded-2xl outline-none ring-offset-2 ring-offset-background transition focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-default",
+        selected ? "ring-2 ring-(--brand)" : "ring-1 ring-border hover:ring-foreground/30",
+      )}
+    >
+      {children}
+      {selected ? (
+        <span className="absolute top-1 right-1 grid size-5 place-items-center rounded-full bg-(--brand) text-white"><Check className="size-3" /></span>
+      ) : null}
+    </button>
   );
 }

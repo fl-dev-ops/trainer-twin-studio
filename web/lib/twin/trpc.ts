@@ -14,7 +14,8 @@ import {
   twinShareUrl,
 } from "@/lib/twin-access";
 import { TWIN_SOURCE } from "@/lib/twins";
-import { AVATAR_VIDEO_TYPES, AvatarError, avatarPhotoUrl, avatarState, avatarVideoUpload, saveAvatar, type AvatarVideoType } from "@/lib/twin/avatar";
+import { HEADSHOT_STYLES } from "@/lib/headshot";
+import { AVATAR_VIDEO_TYPES, AvatarError, avatarPhotoUrl, avatarState, avatarVideoUpload, makeHeadshot, saveAvatar, type AvatarVideoType } from "@/lib/twin/avatar";
 import { getRun } from "workflow/api";
 import { isTwinReport, reportState } from "@/lib/twin/session-report";
 import { rawScore, scoreCalibration, type CalibrationScore } from "@/lib/twin/calibration-score";
@@ -525,11 +526,17 @@ const avatarRouter = t.router({
   videoUploadUrl: studioProcedure
     .input(z.object({ contentType: z.enum(Object.keys(AVATAR_VIDEO_TYPES) as [AvatarVideoType, ...AvatarVideoType[]]) }))
     .mutation(({ ctx, input }) => twinCall(() => avatarVideoUpload(ctx.user.orgId, input.contentType))),
+  /** One AI version of the new photo (style 0..3); the page asks for each look in parallel. */
+  headshot: studioProcedure
+    .input(z.object({ photo: z.string().min(1).max(3_000_000), style: z.number().int().min(0).max(HEADSHOT_STYLES.length - 1) }))
+    .mutation(({ ctx, input }) => twinCall(() => makeHeadshot(ctx.user.orgId, input))),
   save: studioProcedure
     .input(z.object({
       photo: z.string().min(1).max(3_000_000),
       videoKey: z.string().min(1).max(500),
       voiceId: z.string().min(1).max(100),
+      /** The chosen AI version (a key from headshot); null keeps the photo as taken. */
+      headshotKey: z.string().min(1).max(500).nullable().optional(),
     }))
     .mutation(({ ctx, input }) => twinCall(() => saveAvatar(ctx.user.orgId, input))),
 });
