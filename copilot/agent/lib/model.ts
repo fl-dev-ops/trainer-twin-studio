@@ -39,7 +39,9 @@ const qwen = {
       wrapStream: ({ doStream, params }) => waitOnRateLimit(doStream, params.abortSignal),
     },
   }),
-  context: 65_536,
+  // Paid (developer) tier: 128K context. At 64K the copilot compacted every few calls, losing what it had read and
+  // missing Cerebras's prompt cache, so every call counted as fresh tokens and hit the per-minute limit.
+  context: 128_000,
 };
 
 export const MODELS = { main: qwen, scout: qwen, pattern: qwen, skill: qwen, items: qwen };

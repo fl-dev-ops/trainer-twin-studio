@@ -20,4 +20,5 @@ Never invent what the trainer said or did, and never expose personal details.
 Call `files` first: it copies the trainer's sources into the sandbox under `users/<user>/data/`. In a studio session these are the organization's knowledge-base uploads, under `data/uploads/` (recordings and method docs together; `files` tells them apart).
 - `grep`, `glob`, `read_file` and `bash` (for example `rg -n -i 'objection' users/olga/data`) find where something happens fast. Use them to locate what you need, not to read whole files.
 - Their line numbers are not turn numbers. Items cite turns, so read the turns you will use with `read` (`from_turn`, `turns`) or `search`, which report `[n]` turn numbers.
+- **Turn numbers come only from `read` and `search`.** The raw files have no turn numbers: never work them out with `bash`, `awk`, `grep`, `wc` or by counting lines. If an item is rejected, re-read that turn with `read` and copy its words.
 - `bash` is for looking only: never write, move or delete files with it.
