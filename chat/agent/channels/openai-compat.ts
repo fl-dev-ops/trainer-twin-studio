@@ -334,6 +334,8 @@ export default defineChannel({
 
       void (async () => {
         let sawActivity = false;
+        /** Leading blank lines (Qwen opens replies with "\n\n") are dropped so bubbles don't start with empty space. */
+        let textStarted = false;
         let sawTurnStarted = false;
         let ttftMs: number | null = null;
         let tFirstEvent = 0;
@@ -412,8 +414,13 @@ export default defineChannel({
             // Text deltas
             if (ev.type === "message.appended" && typeof ev.data.messageDelta === "string") {
               sawActivity = true;
-              const content = questionBridge.onModelText(ev.data.messageDelta);
+              let content = questionBridge.onModelText(ev.data.messageDelta);
               if (content === null) continue;
+              if (!textStarted) {
+                content = content.trimStart();
+                if (!content) continue;
+                textStarted = true;
+              }
               markSpoken();
               await writeText(content);
               continue;

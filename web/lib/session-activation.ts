@@ -16,6 +16,8 @@ export async function activateInterviewRuntime(input: {
   contextId?: string;
   mode: DeliveryMode;
   idempotencyKey?: string;
+  /** The page releases the opening itself ("begin-opening"), e.g. after its get-ready countdown. */
+  holdOpening?: boolean;
 }) {
   const session = await activateSession(input);
   if (!session) return null;
@@ -61,7 +63,7 @@ export async function activateInterviewRuntime(input: {
       runtimeToken: session.runtimeToken,
       orgId: input.orgId,
       agentSlug: row.agentSlug,
-      holdOpening: Boolean(agentData?.introVideo),
+      holdOpening: Boolean(agentData?.introVideo) || Boolean(input.holdOpening),
       voice: configuredVoice?.id ?? sharedDefault?.id,
       // Twin minutes: the voice agent ends the call at this moment (absolute, so agent and web count the same span).
       endsAt: "twinSecondsLeft" in session && session.twinSecondsLeft != null

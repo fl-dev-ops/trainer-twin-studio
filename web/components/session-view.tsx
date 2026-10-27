@@ -286,8 +286,8 @@ export function SessionView({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
           sessionCode
-            ? { shareCode: sessionCode, contextId: ids[0] || undefined, contextIds: ids }
-            : { agentSlug: agent, contextId: ids[0] || undefined, contextIds: ids },
+            ? { shareCode: sessionCode, contextId: ids[0] || undefined, contextIds: ids, holdOpening: true }
+            : { agentSlug: agent, contextId: ids[0] || undefined, contextIds: ids, holdOpening: true },
         ),
       });
       const launch = await launchResponse.json().catch(() => ({}));
@@ -328,15 +328,16 @@ export function SessionView({
     void Promise.resolve().then(() => setCountdown(GET_READY_SECONDS));
   }, [autoStart, prejoinComplete, ended, agent, persona, launched, countdown, isContextRequired, contextIds]);
 
-  // "Get ready": a short pause so the learner isn't talked at the moment the page opens.
-  // The session is only requested when it ends, so the trainer can't start speaking underneath it.
+  // "Get ready": a short pause so the learner isn't talked at the moment the page opens. The session (room,
+  // agent dispatch, join) starts with the countdown; the agent holds its opening until "begin-opening", which is
+  // sent only once the countdown is over, so the trainer can't start speaking underneath it.
   useEffect(() => {
     if (countdown === null) return;
+    void Promise.resolve().then(handleStartSession); // once: startedRef guards repeat calls
     const id = setTimeout(() => {
       if (countdown > 1) return setCountdown(countdown - 1);
       setCountdown(null);
       setLaunched(true);
-      void handleStartSession();
     }, 1000);
     return () => clearTimeout(id);
   }, [countdown, handleStartSession]);
@@ -433,7 +434,7 @@ export function SessionView({
   }, [room, connected]);
 
   useEffect(() => {
-    if (!connected || !agentInRoom || ended) return;
+    if (!connected || !agentInRoom || ended || !launched) return;
     if (introSrc && !introDone) return;
     if (releasedRef.current) return;
     releasedRef.current = true;
@@ -463,7 +464,7 @@ export function SessionView({
         console.error("Could not release agent opening:", dataError);
       }
     })();
-  }, [room, connected, agentInRoom, ended, introSrc, introDone, prejoinMedia]);
+  }, [room, connected, agentInRoom, ended, launched, introSrc, introDone, prejoinMedia]);
 
   const finalizeSession = useCallback(
     async (status: "completed" | "abandoned") => {
@@ -1440,7 +1441,7 @@ export function SessionView({
 }
 
 const RAISED = "shadow-[0_0_0_1px_var(--border),0_4px_8px_rgba(30,28,25,0.05),0_16px_40px_rgba(30,28,25,0.1)] ring-0";
-const GET_READY_SECONDS = 3;
+const GET_READY_SECONDS = 5;
 /** The stage card: #f7f7f7 with the prototype's aurora, light in both themes like the role-play cards. */
 function Stage({ aurora = true, children }: { aurora?: boolean; children: React.ReactNode }) {
   return (

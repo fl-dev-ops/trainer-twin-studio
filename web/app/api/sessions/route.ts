@@ -44,6 +44,7 @@ export async function POST(req: Request) {
       contextId: typeof body.contextId === "string" ? body.contextId : undefined,
       mode: body.mode === "chat" ? "chat" : "voice",
       idempotencyKey: typeof body.idempotencyKey === "string" ? body.idempotencyKey : undefined,
+      holdOpening: body.holdOpening === true,
     });
     if (!activation) return NextResponse.json({ error: "Invalid or already used session URL" }, { status: 403 });
     return NextResponse.json(activation);
