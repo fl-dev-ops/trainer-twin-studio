@@ -108,11 +108,44 @@ export function decodePhoto(photo: string) {
 }
 
 /**
- * Saves the photo and the reference video on the persona's avatar and makes the cloned voice the persona's own.
- * Twins then speak with it: their old copied `voiceId` is cleared (versioned), so the persona's voice applies.
- * A previous voice that nothing else uses is deleted with its files.
+ * Saves the twin's picture on the persona's avatar (/twin/brain/avatar). The photo as taken (or uploaded) is kept as
+ * the original; the one shown everywhere is the chosen AI version, else that photo.
  */
-export async function saveAvatar(orgId: string, input: { photo: string; videoKey: string; voiceId: string; headshotKey?: string | null }) {
+export async function saveAvatar(orgId: string, input: { photo: string; headshotKey?: string | null }) {
+  const persona = await ownTwinPersona(orgId);
+  if (!persona) throw new AvatarError("Set up your twin first");
+  const photo = decodePhoto(input.photo);
+  const avatar = { ...persona.avatar, ...(await ensureAvatar(orgId, persona)) };
+  // The chosen AI version must be one of this avatar's candidates.
+  const candidates = candidateFolder(orgId, avatar.id);
+  const chosen = input.headshotKey ?? null;
+  const ext = chosen?.startsWith(candidates) ? /^[0-9a-f-]{36}\.(png|jpg|webp)$/.exec(chosen.slice(candidates.length))?.[1] : null;
+  if (chosen && !ext) throw new AvatarError("Unknown photo");
+
+  const stamp = randomUUID();
+  const originalKey = `${avatarPrefix(orgId, avatar.id)}/image/original-${stamp}.jpg`;
+  await putObject(originalKey, photo, "image/jpeg");
+  const imageKey = chosen ? `${avatarPrefix(orgId, avatar.id)}/image/${stamp}.${ext}` : originalKey;
+  if (chosen) {
+    const bytes = await getObjectBytes(chosen).catch(() => null);
+    if (!bytes) throw new AvatarError("That AI photo has expired. Choose again.");
+    await putObject(imageKey, bytes, ext === "jpg" ? "image/jpeg" : `image/${ext}`);
+  }
+  await db.avatar.update({ where: { id: avatar.id }, data: { s3ImageKey: imageKey, s3OriginalImageKey: originalKey } });
+
+  // Replaced files and every candidate: best effort, the DB already points at the new ones.
+  const replaced = [avatar.s3ImageKey, avatar.s3OriginalImageKey]
+    .filter((key): key is string => Boolean(key) && key !== imageKey && key !== originalKey);
+  await Promise.all([...replaced.map((key) => deleteObject(key).catch(() => {})), deletePrefix(candidates).catch(() => {})]);
+  return { avatarUrl: avatarPhotoUrl(persona.slug, { s3ImageKey: imageKey, updatedAt: new Date() }), professional: Boolean(chosen) };
+}
+
+/**
+ * Saves the on-camera take from /twin/brain/voice: its cloned voice becomes the persona's own and its video is kept on
+ * the persona's avatar as the AI avatar reference. Twins then speak with the voice: their old copied `voiceId` is
+ * cleared (versioned), so the persona's voice applies. A previous voice / video nothing else uses is deleted.
+ */
+export async function savePersonaVoice(orgId: string, input: { voiceId: string; videoKey: string }) {
   const persona = await ownTwinPersona(orgId);
   if (!persona) throw new AvatarError("Set up your twin first");
   const avatar = persona.avatar;
@@ -125,24 +158,6 @@ export async function saveAvatar(orgId: string, input: { photo: string; videoKey
     select: { id: true },
   });
   if (!voice) throw new AvatarError("Unknown voice");
-  const photo = decodePhoto(input.photo);
-
-  // The chosen AI version must be one of this avatar's candidates.
-  const candidates = candidateFolder(orgId, avatar.id);
-  const chosen = input.headshotKey ?? null;
-  const ext = chosen?.startsWith(candidates) ? /^[0-9a-f-]{36}\.(png|jpg|webp)$/.exec(chosen.slice(candidates.length))?.[1] : null;
-  if (chosen && !ext) throw new AvatarError("Unknown photo");
-
-  // The photo as taken (or uploaded) is kept; the one shown everywhere is the AI version chosen, else that photo.
-  const stamp = randomUUID();
-  const originalKey = `${avatarPrefix(orgId, avatar.id)}/image/original-${stamp}.jpg`;
-  await putObject(originalKey, photo, "image/jpeg");
-  const imageKey = chosen ? `${avatarPrefix(orgId, avatar.id)}/image/${stamp}.${ext}` : originalKey;
-  if (chosen) {
-    const bytes = await getObjectBytes(chosen).catch(() => null);
-    if (!bytes) throw new AvatarError("That AI photo has expired. Choose again.");
-    await putObject(imageKey, bytes, ext === "jpg" ? "image/jpeg" : `image/${ext}`);
-  }
 
   const previousVoiceId = persona.voiceId && persona.voiceId !== voice.id ? persona.voiceId : null;
   const twins = await db.agent.findMany({
@@ -152,7 +167,7 @@ export async function saveAvatar(orgId: string, input: { photo: string; videoKey
   // Twins that carry their own copy of a voice (written by the earlier setup) would override the persona's.
   const copied = twins.filter((twin) => typeof asRecord(twin.data).voiceId === "string");
   await db.$transaction([
-    db.avatar.update({ where: { id: avatar.id }, data: { s3ImageKey: imageKey, s3OriginalImageKey: originalKey, s3VideoKey: input.videoKey } }),
+    db.avatar.update({ where: { id: avatar.id }, data: { s3VideoKey: input.videoKey } }),
     db.persona.update({ where: { id: persona.id }, data: { voiceId: voice.id } }),
     ...copied.flatMap((twin) => {
       const { voiceId: _dropped, ...data } = asRecord(twin.data);
@@ -163,14 +178,9 @@ export async function saveAvatar(orgId: string, input: { photo: string; videoKey
       ];
     }),
   ]);
-
-  // Replaced files and an unused previous voice: best effort, the DB already points at the new ones.
-  const replaced = [avatar.s3ImageKey, avatar.s3OriginalImageKey, avatar.s3VideoKey !== input.videoKey ? avatar.s3VideoKey : null]
-    .filter((key): key is string => Boolean(key) && key !== imageKey && key !== originalKey);
-  await Promise.all([...replaced.map((key) => deleteObject(key).catch(() => {})), deletePrefix(candidates).catch(() => {})]);
+  if (avatar.s3VideoKey && avatar.s3VideoKey !== input.videoKey) await deleteObject(avatar.s3VideoKey).catch(() => {});
   if (previousVoiceId) await removeUnusedVoice(orgId, previousVoiceId);
-
-  return { avatarUrl: avatarPhotoUrl(persona.slug, { s3ImageKey: imageKey, updatedAt: new Date() }), twins: copied.length, professional: Boolean(chosen) };
+  return { twins: copied.length };
 }
 
 /** Deletes a voice no persona owns and no agent names (e.g. the one a re-recording replaced). */

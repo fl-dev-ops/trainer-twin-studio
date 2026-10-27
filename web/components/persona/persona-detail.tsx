@@ -106,7 +106,7 @@ export function PersonaDetail({ item }: { item: PersonaView }) {
 function MissingMedia({ href, text }: { href: string | null; text: string }) {
   return (
     <p className="m-0 text-muted-foreground">
-      {text} · <Link href={href ? `${href}?tab=media` : "/twin/brain/voice"} className="text-foreground underline-offset-4 hover:underline">{href ? "Add" : "Set up on Twin’s brain"}</Link>
+      {text} · <Link href={href ? `${href}?tab=media` : "/twin/brain"} className="text-foreground underline-offset-4 hover:underline">{href ? "Add" : "Set up on Twin’s brain"}</Link>
     </p>
   );
 }

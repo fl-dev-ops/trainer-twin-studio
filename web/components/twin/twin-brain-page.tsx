@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import {
-  ArrowLeft, BookOpen, Check, FileText, HardDrive, LoaderCircle, Minus, Pause, Pencil, Play, Plus, Sparkles, Video,
+  ArrowLeft, BookOpen, Camera, Check, FileText, HardDrive, LoaderCircle, Mic, Minus, Pause, Pencil, Play, Plus, Sparkles, Video,
 } from "lucide-react";
 import { toast } from "sonner";
 import { generateSpeech, playPcmStream, stopPlayback } from "@/lib/audio-playback";
@@ -18,7 +18,7 @@ export type BrainKnowledge = {
   total: number;
 };
 
-/** Voice and avatar as set up on /twin/brain/voice (null: the org has no own persona yet). */
+/** Voice and avatar as set up on /twin/brain/voice and /twin/brain/avatar (null: the org has no own persona yet). */
 export type BrainAvatar = { photoUrl: string | null; voiceId: string | null; voiceName: string | null; updatedAt: string | null } | null;
 
 const CONNECTOR_ICONS = { drive: HardDrive, notion: BookOpen, youtube: Video };
@@ -179,7 +179,12 @@ export function TwinBrainPage({ knowledge, avatar }: { knowledge: BrainKnowledge
 
             <Node
               tag="Voice and avatar" tone="green" title="Voice and avatar"
-              footer={<EditLink href="/twin/brain/voice" />}
+              footer={
+                <div className="flex gap-2">
+                  <Link href="/twin/brain/voice" className={pill}><Mic className="size-4" aria-hidden /> Voice</Link>
+                  <Link href="/twin/brain/avatar" className={pill}><Camera className="size-4" aria-hidden /> Avatar</Link>
+                </div>
+              }
             >
               <div className="flex flex-col items-center gap-2 text-center">
                 {avatar?.photoUrl ? (
@@ -193,7 +198,7 @@ export function TwinBrainPage({ knowledge, avatar }: { knowledge: BrainKnowledge
                 )}
                 <p className="m-0 text-base font-semibold">{avatar?.voiceName ?? "Not set up yet"}</p>
                 <p className="m-0 text-sm text-muted-foreground">
-                  {avatar?.voiceName ? "Your voice · Recorded on camera" : "Record a photo and your voice from Edit"}
+                  {avatar?.voiceName ? "Your voice · Recorded on camera" : "Record your voice and set up your avatar below"}
                 </p>
                 <div className="mt-1 flex items-center gap-3">
                   <button

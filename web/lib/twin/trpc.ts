@@ -15,7 +15,7 @@ import {
 } from "@/lib/twin-access";
 import { TWIN_SOURCE } from "@/lib/twins";
 import { HEADSHOT_STYLES } from "@/lib/headshot";
-import { AVATAR_VIDEO_TYPES, AvatarError, avatarPhotoUrl, avatarState, avatarVideoUpload, makeHeadshot, saveAvatar, type AvatarVideoType } from "@/lib/twin/avatar";
+import { AVATAR_VIDEO_TYPES, AvatarError, avatarPhotoUrl, avatarState, avatarVideoUpload, makeHeadshot, saveAvatar, savePersonaVoice, type AvatarVideoType } from "@/lib/twin/avatar";
 import { getRun } from "workflow/api";
 import { isTwinReport, reportState } from "@/lib/twin/session-report";
 import { rawScore, scoreCalibration, type CalibrationScore } from "@/lib/twin/calibration-score";
@@ -533,12 +533,14 @@ const avatarRouter = t.router({
   save: studioProcedure
     .input(z.object({
       photo: z.string().min(1).max(3_000_000),
-      videoKey: z.string().min(1).max(500),
-      voiceId: z.string().min(1).max(100),
       /** The chosen AI version (a key from headshot); null keeps the photo as taken. */
       headshotKey: z.string().min(1).max(500).nullable().optional(),
     }))
     .mutation(({ ctx, input }) => twinCall(() => saveAvatar(ctx.user.orgId, input))),
+  /** The on-camera take from /twin/brain/voice: its cloned voice becomes the persona's (every twin's), its video the avatar reference. */
+  saveVoice: studioProcedure
+    .input(z.object({ voiceId: z.string().min(1).max(100), videoKey: z.string().min(1).max(500) }))
+    .mutation(({ ctx, input }) => twinCall(() => savePersonaVoice(ctx.user.orgId, input))),
 });
 
 export const twinRouter = t.router({

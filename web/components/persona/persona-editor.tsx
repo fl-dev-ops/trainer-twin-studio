@@ -178,7 +178,7 @@ export function PersonaEditor({ slug, initial, media, voices = [], isOwn = false
               <Section>
                 <p className="m-0 text-sm text-(--text-secondary)">
                   This is your own persona: your photo, reference video and cloned voice are set up on{" "}
-                  <Link href="/twin/brain/voice" className="font-medium text-foreground underline-offset-4 hover:underline">Twin’s brain</Link>.
+                  <Link href="/twin/brain" className="font-medium text-foreground underline-offset-4 hover:underline">Twin’s brain</Link>.
                   {media?.voiceName ? ` Current voice: ${media.voiceName}.` : ""}
                 </p>
               </Section>

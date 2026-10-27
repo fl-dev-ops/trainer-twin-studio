@@ -11,6 +11,8 @@ const FULLSCREEN = [
   "/dash/voice/cloning",
   "/twin/brain/voice",
   "/dash/twin/brain/voice",
+  "/twin/brain/avatar",
+  "/dash/twin/brain/avatar",
   "/talk",
   "/dash/talk",
   "/calibration",
