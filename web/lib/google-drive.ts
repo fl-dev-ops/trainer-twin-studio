@@ -2,6 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { encryptToken, decryptToken } from "@shared/youtube/tokens.server";
 import { ALL_DOCUMENT_EXTENSIONS } from "@/lib/documents";
+import { BASE_DOMAIN } from "@/lib/base-domain";
 
 export const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 export const DRIVE_PATH = "/api/connectors/google-drive";
@@ -25,16 +26,21 @@ export function driveConfig() {
   if (redirect.protocol !== "https:" && !(redirect.protocol === "http:" && ["localhost", "127.0.0.1"].includes(redirect.hostname))) {
     throw new DriveError("Google Drive redirect must use HTTPS", 503);
   }
+  const localBridge = ["localhost", "127.0.0.1"].includes(redirect.hostname);
+  if (localBridge && (process.env.NODE_ENV === "production" || !BASE_DOMAIN.endsWith(".localhost") || redirect.pathname !== `${DRIVE_PATH}/oauth/local-callback`)) {
+    throw new DriveError("The localhost callback bridge is only available for a local development studio.", 503);
+  }
+  const studioOrigin = localBridge ? `https://dash.${BASE_DOMAIN}` : redirect.origin;
   const encryptionKey = required("GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY");
   if (Buffer.from(encryptionKey, "base64").length !== 32) throw new DriveError("Google Drive encryption key must contain 32 bytes", 503);
   return {
     clientId: required("GOOGLE_DRIVE_CLIENT_ID"), clientSecret: required("GOOGLE_DRIVE_CLIENT_SECRET"),
     pickerKey: required("GOOGLE_DRIVE_PICKER_API_KEY"), projectNumber: required("GOOGLE_DRIVE_PROJECT_NUMBER"),
-    redirectUri: redirect.toString(), encryptionKey,
+    redirectUri: redirect.toString(), studioOrigin, localBridge, encryptionKey,
   };
 }
 
-export const driveCookieOptions = () => ({ httpOnly: true, sameSite: "lax" as const, secure: new URL(driveConfig().redirectUri).protocol === "https:", path: DRIVE_PATH });
+export const driveCookieOptions = () => ({ httpOnly: true, sameSite: "lax" as const, secure: new URL(driveConfig().studioOrigin).protocol === "https:", path: DRIVE_PATH });
 const binding = (actor: DriveActor, purpose: string) => `${actor.id}:${actor.user.id}:google-drive:${purpose}`;
 const stateSchema = z.object({ state: z.string(), verifier: z.string(), expires: z.number() });
 const tokenSchema = z.object({ accessToken: z.string().min(1), expires: z.number() });
@@ -91,7 +97,7 @@ export async function finishDriveOAuth(value: string | undefined, actor: DriveAc
 
 /** Picker gets only the narrow, short-lived access token; never the client secret or a refresh token. */
 export function assertDriveOrigin(request: Request) {
-  const expected = new URL(driveConfig().redirectUri).origin;
+  const expected = driveConfig().studioOrigin;
   if (new URL(request.url).origin !== expected || request.headers.get("origin") !== expected) throw new DriveError("Request must come from this studio.", 403);
 }
 

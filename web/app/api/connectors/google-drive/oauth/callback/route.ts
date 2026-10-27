@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   // Fixed configured origin: never redirect to a callback-supplied URL or reflect its authorization code.
-  const target = new URL("/twin/knowledge", driveConfig().redirectUri);
+  const target = new URL("/twin/knowledge", driveConfig().studioOrigin);
   const response = NextResponse.redirect(target);
   response.headers.set("Cache-Control", "no-store");
   response.headers.set("Referrer-Policy", "no-referrer");

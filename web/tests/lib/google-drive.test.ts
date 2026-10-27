@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { decryptToken, encryptToken } from "@shared/youtube/tokens.server";
-import { assertDriveOrigin, downloadDriveFile, driveAccess, driveConfig, DRIVE_SCOPE, finishDriveOAuth, startDriveOAuth } from "@/lib/google-drive";
+import { assertDriveOrigin, downloadDriveFile, driveAccess, driveConfig, driveCookieOptions, DRIVE_SCOPE, finishDriveOAuth, startDriveOAuth } from "@/lib/google-drive";
+import { BASE_DOMAIN } from "@/lib/base-domain";
 
 const actor = { id: "org-1", user: { id: "user-1" } };
 const realFetch = globalThis.fetch;
 const env = {
+  NODE_ENV: "test",
   GOOGLE_DRIVE_CLIENT_ID: "drive-client",
   GOOGLE_DRIVE_CLIENT_SECRET: "drive-secret",
   GOOGLE_DRIVE_PICKER_API_KEY: "picker-key",
@@ -33,6 +35,7 @@ function connectResponse(response: object) {
     const flow = JSON.parse(decryptToken(started.cookie, env.GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY, oauthBinding));
     expect(form.get("code_verifier")).toBe(flow.verifier);
     expect(form.get("client_secret")).toBe("drive-secret");
+    expect(form.get("redirect_uri")).toBe(process.env.GOOGLE_DRIVE_REDIRECT_URI!);
     return Response.json(response);
   }) as typeof fetch;
   return { started, params };
@@ -90,6 +93,34 @@ test("requires same-origin mutations and a valid Google configuration", () => {
   process.env.GOOGLE_DRIVE_REDIRECT_URI = env.GOOGLE_DRIVE_REDIRECT_URI;
   process.env.GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY = "invalid";
   expect(driveConfig).toThrow(/32 bytes/);
+});
+
+test("localhost callback keeps the HTTPS studio as the origin for requests and secure cookies", () => {
+  const redirect = "http://localhost:3000/api/connectors/google-drive/oauth/local-callback";
+  process.env.GOOGLE_DRIVE_REDIRECT_URI = redirect;
+  expect(driveConfig()).toMatchObject({ redirectUri: redirect, studioOrigin: `https://dash.${BASE_DOMAIN}`, localBridge: true });
+  expect(driveCookieOptions().secure).toBe(true);
+  const url = new URL(startDriveOAuth(actor).url);
+  expect(url.searchParams.get("redirect_uri")).toBe(redirect);
+  const origin = `https://dash.${BASE_DOMAIN}`;
+  assertDriveOrigin(new Request(`${origin}/api/connectors/google-drive/import`, { headers: { origin } }));
+  expect(() => assertDriveOrigin(new Request(redirect, { headers: { origin: "http://localhost:3000" } }))).toThrow(/studio/);
+});
+
+test("bridged token exchange still uses the exact registered localhost redirect URI", async () => {
+  process.env.GOOGLE_DRIVE_REDIRECT_URI = "http://localhost:3000/api/connectors/google-drive/oauth/local-callback";
+  const { started, params } = connectResponse({ access_token: "local-token", expires_in: 300, scope: DRIVE_SCOPE });
+  const result = await finishDriveOAuth(started.cookie, actor, params);
+  expect(driveAccess(result.cookie, actor).accessToken).toBe("local-token");
+});
+
+test("loopback bridges are refused in production and must use the dedicated callback path", () => {
+  process.env.GOOGLE_DRIVE_REDIRECT_URI = "http://localhost:3000/api/connectors/google-drive/oauth/local-callback";
+  process.env.NODE_ENV = "production";
+  expect(driveConfig).toThrow(/local development studio/);
+  process.env.NODE_ENV = "test";
+  process.env.GOOGLE_DRIVE_REDIRECT_URI = "http://localhost:3000/api/connectors/google-drive/oauth/callback";
+  expect(driveConfig).toThrow(/local development studio/);
 });
 
 test("downloads binary files unchanged using server-fetched metadata", async () => {

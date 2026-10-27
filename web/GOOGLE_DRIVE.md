@@ -25,7 +25,25 @@ The Knowledge → Add source → Google Drive option imports selected files once
 
 6. Restart the web app. Sign in as an admin/team member, open **Twin’s brain → Add source → Google Drive**, connect, select files, and click Import.
 
-For local testing, use a Google-accepted HTTPS staging/tunnel domain that serves the studio (configure the app's base domain and auth URLs consistently). Google may reject custom `*.localhost` OAuth callback domains. The callback origin and the page serving Picker must match `GOOGLE_DRIVE_REDIRECT_URI`. Set the corresponding authorized origins, redirect URI and API-key website restrictions for that test domain.
+## Local testing (no tunnel)
+
+1. Leave the app on `https://dash.trainertwin.localhost` and keep Next dev listening on port 3000.
+2. In the OAuth client's **Authorized redirect URIs**, add exactly:
+   `http://localhost:3000/api/connectors/google-drive/oauth/local-callback`
+   Keep the production callback too if you use the same client for both environments. Google accepts literal `localhost`; do not register `dash.trainertwin.localhost` as an OAuth redirect.
+3. Add `https://dash.trainertwin.localhost/*` to the Picker browser API key's allowed website referrers. This is an API-key restriction, not an OAuth redirect or an OAuth JavaScript origin. The authorization-code flow runs server-side, not through Google's browser sign-in SDK.
+4. Ensure your Google account is on the consent screen's **Test users** list while the app is in testing mode.
+5. Set in local `web/.env`:
+
+   ```dotenv
+   GOOGLE_DRIVE_REDIRECT_URI=http://localhost:3000/api/connectors/google-drive/oauth/local-callback
+   ```
+
+6. Restart `next dev`, sign in at the normal local studio, and open **Knowledge → Add source → Google Drive → Connect Google Drive**. Finish consent, choose a small file, and import it. Confirm it appears in Knowledge and that both S3 copies exist.
+
+The local bridge redirects Google's code/state back to the fixed HTTPS studio callback. Only that callback reads the existing studio session/state cookies, validates state + PKCE, exchanges the code (using the registered localhost redirect URI), and sets the encrypted access cookie. No token or cookie is issued on plain-HTTP localhost. Cancellation takes the same return path. The bridge is disabled in production, only works when the app's base domain ends in `.localhost`, and rejects requests on any origin other than the configured loopback origin. Treat OAuth callback URLs as sensitive and do not paste them into logs or chat.
+
+For a staging/tunnel setup, use an HTTPS studio origin consistently for the app, OAuth redirect and browser API-key referrer restrictions instead; the bridge isn't needed.
 
 No database migration or extra package is needed. Google API script loads only when someone chooses Drive files.
 

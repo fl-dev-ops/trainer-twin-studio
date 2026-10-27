@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, mock, test } from "bun:test";
 import { NextRequest } from "next/server";
 import { encryptToken } from "@shared/youtube/tokens.server";
+import { BASE_DOMAIN } from "@/lib/base-domain";
 
 const originalFetch = globalThis.fetch;
 let actor: { id: string; user: { id: string } } | null;
@@ -25,9 +26,11 @@ const { POST } = await import("@/app/api/connectors/google-drive/import/route");
 const { GET: session } = await import("@/app/api/connectors/google-drive/session/route");
 const { POST: start } = await import("@/app/api/connectors/google-drive/oauth/start/route");
 const { GET: callback } = await import("@/app/api/connectors/google-drive/oauth/callback/route");
+const { GET: localCallback } = await import("@/app/api/connectors/google-drive/oauth/local-callback/route");
 const { startDriveOAuth, DRIVE_SCOPE } = await import("@/lib/google-drive");
 const key = Buffer.alloc(32, 9).toString("base64");
 const env = {
+  NODE_ENV: "test",
   GOOGLE_DRIVE_CLIENT_ID: "drive-client", GOOGLE_DRIVE_CLIENT_SECRET: "drive-secret", GOOGLE_DRIVE_PICKER_API_KEY: "picker-key",
   GOOGLE_DRIVE_PROJECT_NUMBER: "12345", GOOGLE_DRIVE_REDIRECT_URI: "https://dash.test/api/connectors/google-drive/oauth/callback", GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY: key,
 };
@@ -100,6 +103,70 @@ test("OAuth start sets an HttpOnly cookie and refuses cross-origin requests", as
   const data = await response.json();
   expect(data.url).not.toContain("drive-secret");
   expect((await start(new Request("https://dash.test/api/connectors/google-drive/oauth/start", { method: "POST", headers: { origin: "https://evil.test" } }))).status).toBe(403);
+});
+
+test("local bridge forwards only code/state to the fixed studio, then the normal callback validates and exchanges", async () => {
+  const redirect = "http://localhost:3000/api/connectors/google-drive/oauth/local-callback";
+  process.env.GOOGLE_DRIVE_REDIRECT_URI = redirect;
+  const flow = startDriveOAuth(actor!);
+  const state = new URL(flow.url).searchParams.get("state")!;
+  const bridge = await localCallback(new NextRequest(`${redirect}?code=one-use-code&state=${state}&redirect_uri=https://evil.test&access_token=ignored`));
+  expect(bridge.status).toBe(303);
+  expect(bridge.headers.get("Cache-Control")).toBe("no-store");
+  expect(bridge.headers.get("Referrer-Policy")).toBe("no-referrer");
+  expect(bridge.headers.get("set-cookie")).toBeNull();
+  const target = new URL(bridge.headers.get("location")!);
+  expect(target.origin).toBe(`https://dash.${BASE_DOMAIN}`);
+  expect(target.pathname).toBe("/api/connectors/google-drive/oauth/callback");
+  expect([...target.searchParams.keys()].sort()).toEqual(["code", "state"]);
+  let exchanges = 0;
+  globalThis.fetch = (async (_input, init) => {
+    exchanges++;
+    expect((init!.body as URLSearchParams).get("redirect_uri")).toBe(redirect);
+    return Response.json({ access_token: "local-access-token", expires_in: 3600, scope: DRIVE_SCOPE });
+  }) as typeof fetch;
+  const response = await callback(new NextRequest(target, { headers: { cookie: `tt_drive_oauth=${flow.cookie}` } }));
+  expect(exchanges).toBe(1);
+  expect(response.headers.get("location")).toBe(`https://dash.${BASE_DOMAIN}/twin/knowledge?drive=connected`);
+  const saved = response.headers.get("set-cookie")!;
+  expect(saved).toContain("tt_drive_access=");
+  expect(saved).toContain("Secure");
+  expect(saved).not.toContain("local-access-token");
+});
+
+test("local bridge forwards cancellation, but the normal callback still needs the original state cookie", async () => {
+  const redirect = "http://localhost:3000/api/connectors/google-drive/oauth/local-callback";
+  process.env.GOOGLE_DRIVE_REDIRECT_URI = redirect;
+  const flow = startDriveOAuth(actor!);
+  const state = new URL(flow.url).searchParams.get("state")!;
+  const bridge = await localCallback(new NextRequest(`${redirect}?error=access_denied&state=${state}`));
+  const target = new URL(bridge.headers.get("location")!);
+  expect(target.searchParams.get("error")).toBe("access_denied");
+  const cancelled = await callback(new NextRequest(target, { headers: { cookie: `tt_drive_oauth=${flow.cookie}` } }));
+  expect(new URL(cancelled.headers.get("location")!).searchParams.get("error")).toMatch(/cancelled/);
+  target.searchParams.delete("error"); target.searchParams.set("code", "one-use-code");
+  let exchanges = 0;
+  globalThis.fetch = (async () => { exchanges++; throw new Error("Must not exchange without the original cookie"); }) as typeof fetch;
+  const missing = await callback(new NextRequest(target));
+  expect(new URL(missing.headers.get("location")!).searchParams.has("error")).toBe(true);
+  expect(missing.headers.get("set-cookie")).not.toContain("tt_drive_access=");
+  actor = { id: "other-org", user: { id: "user-1" } };
+  const crossOrg = await callback(new NextRequest(target, { headers: { cookie: `tt_drive_oauth=${flow.cookie}` } }));
+  expect(new URL(crossOrg.headers.get("location")!).searchParams.has("error")).toBe(true);
+  expect(exchanges).toBe(0);
+});
+
+test("local bridge refuses production, other origins, malformed params and production callback configurations", async () => {
+  const redirect = "http://localhost:3000/api/connectors/google-drive/oauth/local-callback";
+  process.env.GOOGLE_DRIVE_REDIRECT_URI = redirect;
+  expect((await localCallback(new NextRequest(redirect))).status).toBe(400);
+  expect((await localCallback(new NextRequest(`${redirect}?state=x&code=a&error=denied`))).status).toBe(400);
+  expect((await localCallback(new NextRequest(`https://evil.test/api/connectors/google-drive/oauth/local-callback?state=x&code=a`))).status).toBe(404);
+  process.env.NODE_ENV = "production";
+  expect((await localCallback(new NextRequest(`${redirect}?state=x&code=a`))).status).toBe(404);
+  process.env.NODE_ENV = "test";
+  process.env.GOOGLE_DRIVE_REDIRECT_URI = env.GOOGLE_DRIVE_REDIRECT_URI;
+  expect((await localCallback(new NextRequest(`${redirect}?state=x&code=a`))).status).toBe(404);
 });
 
 test("OAuth callback clears state, stores access privately and returns to the Drive import panel", async () => {
