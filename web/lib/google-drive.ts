@@ -105,10 +105,42 @@ export function assertDriveOrigin(request: Request) {
   }
 }
 
+const driveFailureSchema = z.object({
+  error: z.object({
+    errors: z.array(z.object({ reason: z.string().optional() })).optional(),
+    details: z.array(z.object({ reason: z.string().optional() })).optional(),
+  }),
+});
+
 async function driveFetch(url: URL, token: string) {
   const response = await fetch(url, { headers: { authorization: `Bearer ${token}` }, redirect: "error", signal: AbortSignal.timeout(60_000) });
   if (!response.ok) {
-    if ([401, 403, 404].includes(response.status)) throw new DriveError("This file is unavailable. Reconnect Google Drive and select it again.", response.status);
+    const parsed = driveFailureSchema.safeParse(await response.json().catch(() => null));
+    // Use reason codes, not Google's raw message/body, which can contain private file details.
+    const reasons = parsed.success
+      ? [...(parsed.data.error.errors ?? []), ...(parsed.data.error.details ?? [])].map((error) => error.reason ?? "")
+      : [];
+    if (reasons.some((reason) => ["SERVICE_DISABLED", "accessNotConfigured"].includes(reason))) {
+      throw new DriveError("Google Drive API is not enabled for this Google Cloud project. Enable Google Drive API (not just Google Picker API), then retry the import.", 503);
+    }
+    if (reasons.includes("exportSizeLimitExceeded")) {
+      throw new DriveError("This Google document exceeds Google’s 10 MB export limit. Export a smaller document or upload a downloaded copy.", 413);
+    }
+    if (reasons.some((reason) => ["ACCESS_TOKEN_SCOPE_INSUFFICIENT", "insufficientPermissions"].includes(reason))) {
+      throw new DriveError("Google has not granted the required Drive access. Use another account to reconnect, allow file access, and choose the file again.", 403);
+    }
+    if (reasons.includes("appNotAuthorizedToFile")) {
+      throw new DriveError("This file has not been shared with this app. Choose it again in the Google picker; the Picker key and OAuth client must belong to the same project.", 403);
+    }
+    if (reasons.includes("fileNotDownloadable")) {
+      throw new DriveError("Google does not allow downloading this file. Ask its owner for a downloadable copy.", 403);
+    }
+    if (response.status === 401) throw new DriveError("Google Drive authorization expired or was revoked. Reconnect Google Drive and select the file again.", 401);
+    if (response.status === 404) throw new DriveError("Google could not find this file or your account cannot access it. Choose it again from the correct Google account.", 404);
+    if (response.status === 403) {
+      const reason = reasons.find((reason) => /^[A-Za-z_]{1,80}$/.test(reason));
+      throw new DriveError(`Google Drive denied access${reason ? ` (${reason})` : ""}. Check this file’s sharing and download permissions, then retry.`, 403);
+    }
     throw new DriveError("Google Drive could not download this file. Try again.", 502);
   }
   return response;

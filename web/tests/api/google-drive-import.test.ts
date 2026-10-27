@@ -98,6 +98,15 @@ test("repeat imports return the existing org document without creating another",
   expect(imported).toHaveLength(0);
 });
 
+test("disabled Drive API is reported as setup failure before any file is stored", async () => {
+  globalThis.fetch = (async () => Response.json({ error: { details: [{ reason: "SERVICE_DISABLED" }] } }, { status: 403 })) as typeof fetch;
+  const response = await POST(request());
+  expect(response.status).toBe(503);
+  expect((await response.json()).error).toContain("Enable Google Drive API");
+  expect(imported).toHaveLength(0);
+  expect(updates).toHaveLength(0);
+});
+
 test("a failed storage call stays a failure, with no provenance marked as saved", async () => {
   uploadFailure = true;
   expect((await POST(request())).status).toBe(500);

@@ -47,6 +47,14 @@ For a staging/tunnel setup, use an HTTPS studio origin consistently for the app,
 
 No database migration or extra package is needed. Google API script loads only when someone chooses Drive files.
 
+## Troubleshooting
+
+- **Picker opens but import fails:** Google Picker API and Google Drive API are separate. `SERVICE_DISABLED` / `accessNotConfigured` means enable **Google Drive API** in the OAuth client's project, then retry. Backend downloads use OAuth, not the browser API key, so adding Drive API to the browser key's allowed services isn't required.
+- **Missing permission:** choose the file again through Picker. For `appNotAuthorizedToFile`, confirm the OAuth client, Picker key and numeric project number all belong to the same Cloud project. The app doesn't request whole-Drive access as a workaround.
+- **Export too large:** Google Workspace exports have a 10 MB limit; use a smaller document or download and upload a supported copy.
+- **Remove a selection:** click the × beside the file before importing or after a failed import. This removes only that list entry, never the Drive original or any already saved knowledge document. Removal is disabled while an import is running.
+- **Picker key works only with application restrictions set to None:** this isolates a browser-referrer issue. Keep API restrictions enabled and restore appropriate website restrictions before production use.
+
 ## Behavior and limits
 
 - Only admin/team studio members may authorize or import. Authorization is bound to the initiating org and user.

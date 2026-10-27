@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CloudDownload, RefreshCw } from "lucide-react";
+import { CloudDownload, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { chooseDriveFiles } from "@/lib/google-drive-picker";
@@ -109,7 +109,20 @@ export function GoogleDriveImport({ onSuccess, onPickerOpenChange }: { onSuccess
             {files.map((file) => (
               <li key={file.id} className="flex items-start justify-between gap-3 py-3 text-sm">
                 <div className="min-w-0"><p className="truncate font-medium">{file.name}</p>{file.error ? <p className="mt-1 text-destructive">{file.error}</p> : null}</div>
-                <span className="shrink-0 text-muted-foreground">{file.status === "importing" ? <Spinner /> : ({ pending: "Ready", done: "Saved", failed: "Failed", existing: "Already imported" } as const)[file.status]}</span>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="text-muted-foreground">{file.status === "importing" ? <Spinner /> : ({ pending: "Ready", done: "Saved", failed: "Failed", existing: "Already imported" } as const)[file.status]}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={busy}
+                    aria-label={`Remove ${file.name} from selection`}
+                    title="Remove from selection (does not delete saved files)"
+                    onClick={() => setFiles((current) => current.filter((item) => item.id !== file.id))}
+                  >
+                    <X aria-hidden />
+                  </Button>
+                </div>
               </li>
             ))}
           </ul>

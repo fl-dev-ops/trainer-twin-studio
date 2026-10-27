@@ -180,7 +180,48 @@ test("rejects oversized, non-downloadable, unsupported and unauthorized files", 
     await expect(downloadDriveFile("file-1", "token")).rejects.toThrow();
   }
   globalThis.fetch = (async () => new Response("permission denied", { status: 403 })) as typeof fetch;
-  await expect(downloadDriveFile("file-1", "token")).rejects.toThrow(/unavailable/);
+  await expect(downloadDriveFile("file-1", "token")).rejects.toThrow(/denied/);
+});
+
+for (const [reason, status, expected] of [
+  ["SERVICE_DISABLED", 503, "Enable Google Drive API"],
+  ["accessNotConfigured", 503, "Enable Google Drive API"],
+  ["exportSizeLimitExceeded", 413, "10 MB export limit"],
+  ["ACCESS_TOKEN_SCOPE_INSUFFICIENT", 403, "required Drive access"],
+  ["insufficientPermissions", 403, "required Drive access"],
+  ["appNotAuthorizedToFile", 403, "Choose it again"],
+  ["fileNotDownloadable", 403, "does not allow downloading"],
+  ["domainPolicy", 403, "denied access (domainPolicy)"],
+] as const) {
+  test(`explains Google ${reason} failures without leaking its raw error or blaming expired auth`, async () => {
+    globalThis.fetch = (async () => Response.json({ error: {
+      message: "private file name and other details",
+      ...(reason === "SERVICE_DISABLED" || reason === "ACCESS_TOKEN_SCOPE_INSUFFICIENT"
+        ? { details: [{ "@type": "type.googleapis.com/google.rpc.ErrorInfo", reason }] }
+        : { errors: [{ reason }] }),
+    } }, { status: 403 })) as typeof fetch;
+    const error = await downloadDriveFile("file-1", "token").then(() => null, (error: Error & { status: number }) => error);
+    expect(error?.status).toBe(status);
+    expect(error?.message).toContain(expected);
+    expect(error?.message).not.toContain("private file name");
+    expect(error?.message).not.toContain("authorization expired");
+  });
+}
+
+test("explains an export failure after metadata was successfully downloaded", async () => {
+  let requests = 0;
+  globalThis.fetch = (async () => ++requests === 1
+    ? Response.json({ id: "file-1", name: "Large document", mimeType: "application/vnd.google-apps.document" })
+    : Response.json({ error: { errors: [{ reason: "exportSizeLimitExceeded" }] } }, { status: 403 })) as typeof fetch;
+  await expect(downloadDriveFile("file-1", "token")).rejects.toThrow(/10 MB export limit/);
+  expect(requests).toBe(2);
+});
+
+test("keeps expired authorization and missing files distinct", async () => {
+  globalThis.fetch = (async () => new Response("not JSON", { status: 401 })) as typeof fetch;
+  await expect(downloadDriveFile("file-1", "token")).rejects.toThrow(/expired or was revoked/);
+  globalThis.fetch = (async () => new Response("not JSON", { status: 404 })) as typeof fetch;
+  await expect(downloadDriveFile("file-1", "token")).rejects.toThrow(/could not find this file/);
 });
 
 test("bounds streamed downloads even when Google metadata omits size", async () => {
