@@ -4,7 +4,11 @@ import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { MainCollectionService } from "@/lib/main-collection";
 import { putObject, s3Configured, scenarioArtifactsPrefix, scenarioRunPrefix } from "@/lib/s3";
+import { renderRoleplay, roleplayBuilderSchema, type RoleplayItem } from "@/lib/roleplay/skill";
 import { validSlug } from "@/lib/specs";
+
+/** Agent.data.source of a role play built in the builder (twin skills: "scenario-ingest"). */
+export const ROLEPLAY_SOURCE = "roleplay-skill";
 
 /**
  * Stores a scenario produced by the scenario-ingest agent (SKILL.md + scenario.json + items.json)
@@ -166,19 +170,30 @@ async function requireOrg(orgId: string) {
 }
 
 /**
- * Creates or updates the scenario. Order: S3 files, then Chroma items, then the Postgres rows, so a
- * failure never leaves a published scenario without its files or items. Safe to call again.
+ * Data a During write carries over from the agent it replaces: Before and After belong to their own phases (configure
+ * page, builder), and the intro video is provisioned separately. Without this a re-ingest dropped them.
  */
-export async function ingestScenario(orgId: string, input: ScenarioIngestInput) {
-  const [org, persona] = await Promise.all([
-    requireOrg(orgId),
-    // Case-insensitive like the session context lookup: the ingest agent sends its source folder name ("vasanth").
-    // A skill twin speaks as the user's own persona (also enforced by a DB trigger).
-    db.persona.findFirst({ where: { orgId, isOwn: true, slug: { equals: input.personaSlug, mode: "insensitive" } }, select: { id: true } }),
-  ]);
-  if (!persona) throw new ScenarioIngestError(`Persona "${input.personaSlug}" was not found in this organization`, 404);
+const KEPT_ACROSS_DURING_WRITES = ["introVideo", "before", "twinSettings", "after"] as const;
 
-  const { slug, domainSlug, agentData, domainData } = buildScenario(org.slug, input.scenario, input.skill);
+/**
+ * Writes a skill package as an Agent of `kind` (twin skill or role play): S3 files, then Chroma items, then the
+ * Postgres rows, so a failure never leaves a published agent without its files or items. Safe to call again:
+ * unchanged content keeps the version. A twin and a role play never overwrite each other.
+ */
+async function storeSkillAgent(input: {
+  org: { id: string; slug: string };
+  kind: "TWIN" | "ROLEPLAY";
+  personaId: string;
+  manifest: ScenarioManifest;
+  skill: string;
+  items: (ScenarioItem | RoleplayItem)[];
+  patterns?: string;
+  /** Agent.data keys on top of the derived ones (role play: source, after). */
+  data?: Record<string, unknown>;
+  runId?: string | null;
+}) {
+  const { org, kind } = input;
+  const { slug, domainSlug, agentData, domainData } = buildScenario(org.slug, input.manifest, input.skill);
   if (!validSlug(slug)) throw new ScenarioIngestError(`"${slug}" is not a valid scenario id`, 400);
 
   // Slugs are global: refuse to touch another org's rows before writing anything.
@@ -189,28 +204,27 @@ export async function ingestScenario(orgId: string, input: ScenarioIngestInput) 
   if ((currentAgent && currentAgent.orgId !== org.id) || (currentDomain && currentDomain.orgId !== org.id)) {
     throw new ScenarioIngestError(`Scenario "${slug}" belongs to another organization`, 409);
   }
-  // Ingested scenarios are skill twins; never overwrite a role play that happens to share the slug.
-  if (currentAgent && currentAgent.kind !== "TWIN") {
-    throw new ScenarioIngestError(`"${slug}" is a role play, not a twin skill`, 409);
+  if (currentAgent && currentAgent.kind !== kind) {
+    throw new ScenarioIngestError(kind === "TWIN" ? `"${slug}" is a role play, not a twin skill` : `"${slug}" is a twin skill, not a role play`, 409);
   }
 
-  // An intro video is provisioned separately, so a re-ingest carries it forward (as publishSpecDraft does).
-  const previous = currentAgent?.data as Record<string, unknown> | null | undefined;
-  const content = { ...agentData, ...(typeof previous?.introVideo === "string" ? { introVideo: previous.introVideo } : {}) };
+  const previous = (currentAgent?.data ?? {}) as Record<string, unknown>;
+  const kept = Object.fromEntries(KEPT_ACROSS_DURING_WRITES.filter((key) => previous[key] !== undefined).map((key) => [key, previous[key]]));
+  const content = { ...agentData, ...kept, ...input.data };
   // Decide the version first: the S3 folder and the Agent row must carry the same number.
-  const previousContent = Object.fromEntries(Object.entries(previous ?? {}).filter(([key]) => key !== "artifacts"));
-  const unchanged = Boolean(currentAgent) && currentAgent!.personaId === persona.id && stableJson(previousContent) === stableJson(content);
+  const previousContent = Object.fromEntries(Object.entries(previous).filter(([key]) => key !== "artifacts"));
+  const unchanged = Boolean(currentAgent) && currentAgent!.personaId === input.personaId && stableJson(previousContent) === stableJson(content);
   const version = currentAgent ? (unchanged ? currentAgent.version : currentAgent.version + 1) : 1;
   const artifacts = scenarioArtifactsPrefix(org.id, slug, version);
   const data = { ...content, artifacts };
 
   await Promise.all([
     putObject(`${artifacts}/SKILL.md`, input.skill, "text/markdown; charset=utf-8"),
-    putObject(`${artifacts}/scenario.json`, fileText.scenario(input.scenario), "application/json"),
+    putObject(`${artifacts}/scenario.json`, fileText.scenario(input.manifest), "application/json"),
     putObject(`${artifacts}/items.json`, fileText.items(input.items), "application/json"),
     ...(input.patterns !== undefined ? [putObject(`${artifacts}/patterns.md`, input.patterns, "text/markdown; charset=utf-8")] : []),
   ]);
-  const itemCount = await MainCollectionService.replaceScenarioItems(org.id, slug, input.scenario.scenario, input.items);
+  const itemCount = await MainCollectionService.replaceScenarioItems(org.id, slug, input.manifest.scenario, input.items);
 
   await db.$transaction(async (tx) => {
     if (!currentDomain) {
@@ -218,7 +232,7 @@ export async function ingestScenario(orgId: string, input: ScenarioIngestInput) 
     }
     if (!currentAgent) {
       await tx.agent.create({
-        data: { slug, name: agentData.name, version, domainSlug, personaId: persona.id, kind: "TWIN", data: json(data), orgId: org.id },
+        data: { slug, name: agentData.name, version, domainSlug, personaId: input.personaId, kind, data: json(data), orgId: org.id },
       });
       return;
     }
@@ -229,12 +243,58 @@ export async function ingestScenario(orgId: string, input: ScenarioIngestInput) 
     });
     await tx.agent.update({
       where: { id: currentAgent.id },
-      data: { name: agentData.name, version, domainSlug, personaId: persona.id, data: json(data) },
+      data: { name: agentData.name, version, domainSlug, personaId: input.personaId, data: json(data) },
     });
   });
 
   return { slug, name: agentData.name, version, created: !currentAgent, items: itemCount, artifacts, runId: input.runId ?? null };
 }
+
+/** Creates or updates a skill twin from the scenario-ingest agent's files. */
+export async function ingestScenario(orgId: string, input: ScenarioIngestInput) {
+  const [org, persona] = await Promise.all([
+    requireOrg(orgId),
+    // Case-insensitive like the session context lookup: the ingest agent sends its source folder name ("vasanth").
+    // A skill twin speaks as the user's own persona (also enforced by a DB trigger).
+    db.persona.findFirst({ where: { orgId, isOwn: true, slug: { equals: input.personaSlug, mode: "insensitive" } }, select: { id: true } }),
+  ]);
+  if (!persona) throw new ScenarioIngestError(`Persona "${input.personaSlug}" was not found in this organization`, 404);
+  return storeSkillAgent({
+    org, kind: "TWIN", personaId: persona.id, manifest: input.scenario, skill: input.skill, items: input.items,
+    patterns: input.patterns, runId: input.runId,
+  });
+}
+
+/**
+ * Creates (no slug) or updates a role play from the builder: rendered into SKILL.md + scenario.json + items.json +
+ * after (lib/roleplay/skill.ts), stored like a skill twin with kind ROLEPLAY. The client is any persona of the org.
+ * Returns the agent's slug (org-prefixed, like skill twins).
+ */
+export async function saveRoleplay(orgId: string, builder: unknown, slug?: string) {
+  const parsed = roleplayBuilderSchema.safeParse(builder);
+  if (!parsed.success) throw new ScenarioIngestError(parsed.error.issues[0]?.message ?? "Invalid role play", 400);
+  const [org, persona] = await Promise.all([
+    requireOrg(orgId),
+    db.persona.findFirst({ where: { orgId, slug: parsed.data.persona }, select: { id: true, data: true } }),
+  ]);
+  if (!persona) throw new ScenarioIngestError(`Persona "${parsed.data.persona}" was not found in this organization`, 404);
+  let shortSlug = slug ? slug.replace(new RegExp(`^${org.slug}-`), "") : roleplaySlug(parsed.data.name);
+  if (!slug) {
+    // New role play: never land on an existing agent (twin or role play) with the same name.
+    for (let n = 2; await db.agent.findUnique({ where: { slug: `${org.slug}-${shortSlug}` } }); n++) shortSlug = `${roleplaySlug(parsed.data.name)}-${n}`;
+  }
+  const role = (persona.data as { role?: unknown } | null)?.role;
+  const rendered = renderRoleplay(shortSlug, parsed.data, typeof role === "string" && role.trim() ? role.trim() : "Client");
+  return storeSkillAgent({
+    org, kind: "ROLEPLAY", personaId: persona.id,
+    manifest: scenarioManifestSchema.parse(rendered.scenario), skill: rendered.skill, items: rendered.items,
+    data: { source: ROLEPLAY_SOURCE, after: rendered.after },
+  });
+}
+
+/** kebab-case id from a role play's name ("The wait-and-see investor" → "the-wait-and-see-investor"). */
+const roleplaySlug = (name: string) =>
+  name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60).replace(/-+$/, "") || "role-play";
 
 /** Archives one ingest run's files (plan.json, report.md, specs/*.md) to S3. Re-sending overwrites them. */
 export async function ingestScenarioRun(orgId: string, input: ScenarioRunInput) {

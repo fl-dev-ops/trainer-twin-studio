@@ -44,7 +44,7 @@ const requestSchema = z.discriminatedUnion("action", [
     agentSlug: slug,
     query: z.string().trim().min(2).max(500),
     step: z.string().trim().min(1).max(100).optional(),
-    role: z.enum(["trainer", "learner"]).optional(),
+    role: z.enum(["trainer", "learner", "client"]).optional(),
     limit: z.number().int().min(1).max(6).optional(),
     /** Twin sessions: narrow to one playbook (its scenario id or slug). */
     playbook: z.string().trim().min(1).max(200).optional(),

@@ -3,7 +3,11 @@ import { unstable_cache, revalidateTag } from "next/cache";
 import { ChromaTenantService } from "@/lib/chroma-tenant";
 import { embedTexts } from "@/lib/knowledge";
 import type { PersonaVoiceMoment } from "@/lib/persona-voice";
+import type { RoleplayItem } from "@/lib/roleplay/skill";
 import type { ScenarioItem } from "@/lib/scenario-ingest";
+
+/** Item roles depend on the kind: twin skills trainer | learner, role plays client | learner. */
+export type ScenarioItemRole = "trainer" | "learner" | "client";
 
 export const aiGatewayEmbeddings: EmbeddingFunction = {
   generate: embedTexts,
@@ -62,7 +66,7 @@ export type ScenarioItemMetadata = {
   scenarioId: string;
   itemId: string;
   itemIndex: number;
-  role: "trainer" | "learner";
+  role: ScenarioItemRole;
   context: string;
 } & Record<string, string | number | boolean>;
 
@@ -439,7 +443,7 @@ export class MainCollectionService {
    * items.json leaves the same records. Embeds the situation with the line, so retrieval can
    * match "what just happened" to "what the trainer said next".
    */
-  static async replaceScenarioItems(orgId: string, agentSlug: string, scenarioId: string, items: ScenarioItem[]): Promise<number> {
+  static async replaceScenarioItems(orgId: string, agentSlug: string, scenarioId: string, items: (ScenarioItem | RoleplayItem)[]): Promise<number> {
     const collection = await this.getCollection(orgId);
     try {
       await collection.delete({ where: { $and: [{ type: "scenario_item" }, { agentSlug }] } as Where });
@@ -488,7 +492,7 @@ export class MainCollectionService {
     /** One scenario, or several (a twin searches all of its persona's playbooks). */
     agentSlug: string | string[],
     query: string,
-    options: { step?: string; role?: "trainer" | "learner"; limit?: number; steps?: ScenarioStep[] } = {},
+    options: { step?: string; role?: ScenarioItemRole; limit?: number; steps?: ScenarioStep[] } = {},
   ): Promise<{ text: string; context: string; step?: string; move?: string; role: string; score: number; scenario: string }[]> {
     const slugs = Array.isArray(agentSlug) ? agentSlug : [agentSlug];
     if (slugs.length === 0) return [];

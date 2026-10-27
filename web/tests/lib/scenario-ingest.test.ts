@@ -14,9 +14,11 @@ const fakeDb = {
       ({ org1: { id: "org1", slug: "acme" }, org2: { id: "org2", slug: "other" } })[where.id] ?? null,
   },
   persona: {
-    // Only the org's own persona can back a skill twin.
-    findFirst: async ({ where }: { where: { orgId: string; isOwn?: boolean; slug: { equals: string; mode: string } } }) =>
-      where.orgId === "org1" && where.isOwn === true && where.slug.mode === "insensitive" && where.slug.equals.toLowerCase() === "vasanth" ? { id: "p1" } : null,
+    // Skill twin: only the org's own persona (case-insensitive). Role play: any persona of the org, by exact slug.
+    findFirst: async ({ where }: { where: { orgId: string; isOwn?: boolean; slug: string | { equals: string; mode: string } } }) => {
+      if (typeof where.slug === "string") return where.orgId === "org1" && where.slug === "rohan" ? { id: "p-rohan", data: { role: "Prospect" } } : null;
+      return where.orgId === "org1" && where.isOwn === true && where.slug.mode === "insensitive" && where.slug.equals.toLowerCase() === "vasanth" ? { id: "p1" } : null;
+    },
   },
   agent: {
     findUnique: async ({ where }: { where: { slug: string } }) => agents.find((a) => a.slug === where.slug) ?? null,
@@ -64,7 +66,9 @@ mock.module("@/lib/main-collection", () => ({
   },
 }));
 
-const { buildScenario, fileText, ingestScenario, scenarioIngestSchema, skillBody, stepGoal } = await import("@/lib/scenario-ingest");
+const { buildScenario, fileText, ingestScenario, ROLEPLAY_SOURCE, saveRoleplay, scenarioIngestSchema, skillBody, stepGoal } = await import("@/lib/scenario-ingest");
+const { readFileSync } = await import("node:fs");
+const roleplayBuilder = { ...JSON.parse(readFileSync(new URL("../../data/roleplay/skills/wait-and-see-investor/builder.json", import.meta.url), "utf8")), persona: "rohan" };
 const { POST } = await import("@/app/api/internal/scenarios/route");
 const { POST: POST_RUN } = await import("@/app/api/internal/scenario-runs/route");
 
@@ -233,4 +237,42 @@ test("run route: archives plan.json, report.md and specs as ingest wrote them", 
   expect(s3.get("p/org1/scenario-ingest/runs/run-1/plan.json")).toBe(fileText.plan(plan));
   expect(s3.get("p/org1/scenario-ingest/runs/run-1/report.md")).toBe("# Report\n");
   expect(s3.get("p/org1/scenario-ingest/runs/run-1/specs/fundamental-depth.md")).toBe("# Spec\n");
+});
+
+test("re-ingesting a skill twin keeps its Before and After settings and intro video (they belong to other phases)", async () => {
+  await ingestScenario("org1", input());
+  Object.assign(agents[0].data as Row, { before: { preUpload: true }, after: { report: "twin" }, introVideo: "v.mp4" });
+  const changed = await ingestScenario("org1", input({ skill: `${SKILL}\nmore` }));
+  expect(changed.version).toBe(2);
+  expect(agents[0].data).toMatchObject({ before: { preUpload: true }, after: { report: "twin" }, introVideo: "v.mp4" });
+});
+
+test("role play: rendered from the builder and stored like a skill twin, kind ROLEPLAY, on any org persona", async () => {
+  const saved = await saveRoleplay("org1", roleplayBuilder);
+  expect(saved).toMatchObject({ slug: "acme-the-wait-and-see-investor", version: 1, created: true, items: 1 + roleplayBuilder.exampleLines.length });
+  const agent = agents[0];
+  expect(agent).toMatchObject({ kind: "ROLEPLAY", personaId: "p-rohan", domainSlug: "domain-acme-the-wait-and-see-investor" });
+  const data = agent.data as Row;
+  expect(data.source).toBe(ROLEPLAY_SOURCE);
+  expect(data.after).toEqual({ report: "roleplay", goals: roleplayBuilder.learnerGoals, rubric: roleplayBuilder.rubric });
+  expect((data.scenario as Row).trainer_role).toBe("Prospect");
+  expect(log).toEqual(["s3", "chroma", "agent.create"]);
+  expect(s3.get(`${saved.artifacts}/SKILL.md`)).toContain("## What is really going on");
+  expect(JSON.parse(s3.get(`${saved.artifacts}/items.json`)!)[0]).toMatchObject({ role: "client" });
+
+  // Editing (slug given, short or full) updates the same agent; unchanged saves keep the version.
+  expect((await saveRoleplay("org1", roleplayBuilder, saved.slug)).version).toBe(1);
+  const edited = await saveRoleplay("org1", { ...roleplayBuilder, opening: "Hello?" }, "the-wait-and-see-investor");
+  expect(edited).toMatchObject({ slug: saved.slug, version: 2, created: false });
+  expect(agents).toHaveLength(1);
+  // A second new role play with the same name gets its own slug.
+  expect((await saveRoleplay("org1", roleplayBuilder)).slug).toBe("acme-the-wait-and-see-investor-2");
+});
+
+test("role play and twin skill never overwrite each other; bad input and unknown personas write nothing", async () => {
+  await ingestScenario("org1", input());
+  await expect(saveRoleplay("org1", roleplayBuilder, "fundamental-depth")).rejects.toThrow("is a twin skill, not a role play");
+  await expect(saveRoleplay("org1", { ...roleplayBuilder, persona: "nobody" })).rejects.toThrow("was not found");
+  await expect(saveRoleplay("org1", { ...roleplayBuilder, learnerGoals: [] })).rejects.toThrow("learner goal");
+  expect(agents).toHaveLength(1);
 });
