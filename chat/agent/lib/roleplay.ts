@@ -233,7 +233,6 @@ At guard 4 or 5 give one short, cool sentence. At guard 3 give one or two senten
 
   const endings = [
     roleplay.situation.agrees_when ? `AGREE: ${roleplay.situation.agrees_when}` : null,
-    "A next step counts as agreed only once the agent has named an exact day and time and you have both confirmed it. If they suggest something vague (\"later\", \"this evening\", \"next week\"), stay on the call and ask what day and time exactly.",
     roleplay.situation.declines_when ? `DECLINE: ${roleplay.situation.declines_when}` : null,
     "Never agree to buy, reserve or pay anything in this conversation.",
     `When the call has reached its end (you agreed to a next step, declined, or your guard reached 5), say a short, natural goodbye and, in that same reply, call end_call. Say nothing after it.`,
