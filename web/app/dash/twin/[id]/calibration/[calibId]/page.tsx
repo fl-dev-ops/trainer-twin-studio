@@ -13,6 +13,7 @@ export default async function TwinCalibrationReviewRoute({ params }: { params: P
     <CalibrationReview
       backHref={`/twin/${id}/calibration`}
       twinName={calibration.twinName}
+      photoUrl={calibration.photoUrl}
       startedAt={calibration.startedAt}
       turns={calibration.turns}
     />

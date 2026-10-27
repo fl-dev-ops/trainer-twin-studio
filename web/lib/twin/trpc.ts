@@ -432,7 +432,7 @@ const calibrationsRouter = t.router({
       where: { id: input.id, session: { orgId: ctx.user.orgId } },
       select: {
         createdAt: true,
-        session: { select: { startedAt: true, transcript: true, agent: { select: { slug: true, name: true } } } },
+        session: { select: { startedAt: true, transcript: true, agent: { select: { slug: true, name: true, persona: personaFace } } } },
         ratings: { orderBy: { turnIndex: "asc" }, select: { turnIndex: true, question: true, reply: true, rating: true } },
       },
     });
@@ -443,6 +443,7 @@ const calibrationsRouter = t.router({
     return {
       slug: row.session.agent.slug,
       twinName: row.session.agent.name,
+      photoUrl: aiAvatarUrl(row.session.agent.persona),
       startedAt: (row.session.startedAt ?? row.createdAt).toISOString(),
       turns,
     };

@@ -8,11 +8,14 @@ import { SessionTime } from "@/components/sessions/session-time";
 export function CalibrationReview({
   backHref,
   twinName,
+  photoUrl = null,
   startedAt,
   turns,
 }: {
   backHref: string;
   twinName: string;
+  /** The twin's persona photo; without it, the initial on a wash. */
+  photoUrl?: string | null;
   startedAt: string;
   turns: CalibrationTurn[];
 }) {
@@ -24,7 +27,7 @@ export function CalibrationReview({
       </Link>
 
       <div className="mx-auto flex w-full max-w-[656px] flex-col items-center pt-8 pb-10">
-        <TwinPortrait name={twinName} className="size-16 rounded-2xl text-2xl" />
+        <TwinPortrait name={twinName} photoUrl={photoUrl} className="size-16 rounded-2xl text-2xl" />
         <h1 className="mt-3 text-lg font-semibold">{twinName}</h1>
 
         <div className="mt-6 w-full">
