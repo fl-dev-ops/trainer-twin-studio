@@ -111,7 +111,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"scenarios\": [\n    {\n      \"slug\": \"<string>\",\n      \"name\": \"<string>\",\n      \"version\": \"<integer>\",\n      \"visibility\": \"private\",\n      \"domainSlug\": \"<string>\",\n      \"order\": \"<integer>\",\n      \"assignmentCount\": \"<integer>\",\n      \"createdAt\": \"<dateTime>\",\n      \"updatedAt\": \"<dateTime>\"\n    },\n    {\n      \"slug\": \"<string>\",\n      \"name\": \"<string>\",\n      \"version\": \"<integer>\",\n      \"visibility\": \"public\",\n      \"domainSlug\": \"<string>\",\n      \"order\": \"<integer>\",\n      \"assignmentCount\": \"<integer>\",\n      \"createdAt\": \"<dateTime>\",\n      \"updatedAt\": \"<dateTime>\"\n    }\n  ],\n  \"pagination\": {\n    \"limit\": \"<integer>\",\n    \"offset\": \"<integer>\",\n    \"total\": \"<integer>\"\n  }\n}",
+              "body": "{\n  \"scenarios\": [\n    {\n      \"slug\": \"<string>\",\n      \"name\": \"<string>\",\n      \"version\": \"<integer>\",\n      \"visibility\": \"private\",\n      \"order\": \"<integer>\",\n      \"assignmentCount\": \"<integer>\",\n      \"createdAt\": \"<dateTime>\",\n      \"updatedAt\": \"<dateTime>\"\n    },\n    {\n      \"slug\": \"<string>\",\n      \"name\": \"<string>\",\n      \"version\": \"<integer>\",\n      \"visibility\": \"public\",\n      \"order\": \"<integer>\",\n      \"assignmentCount\": \"<integer>\",\n      \"createdAt\": \"<dateTime>\",\n      \"updatedAt\": \"<dateTime>\"\n    }\n  ],\n  \"pagination\": {\n    \"limit\": \"<integer>\",\n    \"offset\": \"<integer>\",\n    \"total\": \"<integer>\"\n  }\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             },
@@ -342,7 +342,7 @@
                       "value": "application/json"
                     }
                   ],
-                  "body": "{\n  \"scenario\": {\n    \"slug\": \"<string>\",\n    \"name\": \"<string>\",\n    \"version\": \"<integer>\",\n    \"visibility\": \"public\",\n    \"domainSlug\": \"<string>\",\n    \"order\": \"<integer>\",\n    \"assignmentCount\": \"<integer>\",\n    \"createdAt\": \"<dateTime>\",\n    \"updatedAt\": \"<dateTime>\",\n    \"data\": {\n      \"key_0\": false\n    }\n  }\n}",
+                  "body": "{\n  \"scenario\": {\n    \"slug\": \"<string>\",\n    \"name\": \"<string>\",\n    \"version\": \"<integer>\",\n    \"visibility\": \"public\",\n    \"order\": \"<integer>\",\n    \"assignmentCount\": \"<integer>\",\n    \"createdAt\": \"<dateTime>\",\n    \"updatedAt\": \"<dateTime>\",\n    \"data\": {\n      \"key_0\": false\n    }\n  }\n}",
                   "cookie": [],
                   "_postman_previewlanguage": "json"
                 },
@@ -4160,7 +4160,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"sessions\": [\n    {\n      \"id\": \"<string>\",\n      \"personaSlug\": \"<string>\",\n      \"personaVersion\": \"<integer>\",\n      \"agentSlug\": \"<string>\",\n      \"agentVersion\": \"<integer>\",\n      \"domainSlug\": \"<string>\",\n      \"domainVersion\": \"<integer>\",\n      \"status\": \"abandoned\",\n      \"startedAt\": \"<dateTime>\",\n      \"userId\": \"<string,null>\",\n      \"mode\": \"voice\",\n      \"contextName\": \"<string,null>\",\n      \"createdAt\": \"<dateTime>\",\n      \"endedAt\": \"<string,null-date-time>\"\n    },\n    {\n      \"id\": \"<string>\",\n      \"personaSlug\": \"<string>\",\n      \"personaVersion\": \"<integer>\",\n      \"agentSlug\": \"<string>\",\n      \"agentVersion\": \"<integer>\",\n      \"domainSlug\": \"<string>\",\n      \"domainVersion\": \"<integer>\",\n      \"status\": \"revoked\",\n      \"startedAt\": \"<dateTime>\",\n      \"userId\": \"<string,null>\",\n      \"mode\": \"voice\",\n      \"contextName\": \"<string,null>\",\n      \"createdAt\": \"<dateTime>\",\n      \"endedAt\": \"<string,null-date-time>\"\n    }\n  ],\n  \"pagination\": {\n    \"limit\": \"<integer>\",\n    \"offset\": \"<integer>\",\n    \"total\": \"<integer>\"\n  }\n}",
+              "body": "{\n  \"sessions\": [\n    {\n      \"id\": \"<string>\",\n      \"personaSlug\": \"<string>\",\n      \"personaVersion\": \"<integer>\",\n      \"agentSlug\": \"<string>\",\n      \"agentVersion\": \"<integer>\",\n      \"status\": \"abandoned\",\n      \"startedAt\": \"<dateTime>\",\n      \"userId\": \"<string,null>\",\n      \"mode\": \"voice\",\n      \"contextName\": \"<string,null>\",\n      \"createdAt\": \"<dateTime>\",\n      \"endedAt\": \"<string,null-date-time>\"\n    },\n    {\n      \"id\": \"<string>\",\n      \"personaSlug\": \"<string>\",\n      \"personaVersion\": \"<integer>\",\n      \"agentSlug\": \"<string>\",\n      \"agentVersion\": \"<integer>\",\n      \"status\": \"revoked\",\n      \"startedAt\": \"<dateTime>\",\n      \"userId\": \"<string,null>\",\n      \"mode\": \"voice\",\n      \"contextName\": \"<string,null>\",\n      \"createdAt\": \"<dateTime>\",\n      \"endedAt\": \"<string,null-date-time>\"\n    }\n  ],\n  \"pagination\": {\n    \"limit\": \"<integer>\",\n    \"offset\": \"<integer>\",\n    \"total\": \"<integer>\"\n  }\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             },
@@ -4588,7 +4588,7 @@
                       "value": "application/json"
                     }
                   ],
-                  "body": "{\n  \"session\": {\n    \"id\": \"<string>\",\n    \"personaSlug\": \"<string>\",\n    \"personaVersion\": \"<integer>\",\n    \"agentSlug\": \"<string>\",\n    \"agentVersion\": \"<integer>\",\n    \"domainSlug\": \"<string>\",\n    \"domainVersion\": \"<integer>\",\n    \"status\": \"abandoned\",\n    \"startedAt\": \"<dateTime>\",\n    \"userId\": \"<string,null>\",\n    \"mode\": \"chat\",\n    \"contextName\": \"<string,null>\",\n    \"createdAt\": \"<dateTime>\",\n    \"endedAt\": \"<string,null-date-time>\",\n    \"transcript\": null,\n    \"evidence\": null,\n    \"audioUrl\": \"<string,null>\"\n  }\n}",
+                  "body": "{\n  \"session\": {\n    \"id\": \"<string>\",\n    \"personaSlug\": \"<string>\",\n    \"personaVersion\": \"<integer>\",\n    \"agentSlug\": \"<string>\",\n    \"agentVersion\": \"<integer>\",\n    \"status\": \"abandoned\",\n    \"startedAt\": \"<dateTime>\",\n    \"userId\": \"<string,null>\",\n    \"mode\": \"chat\",\n    \"contextName\": \"<string,null>\",\n    \"createdAt\": \"<dateTime>\",\n    \"endedAt\": \"<string,null-date-time>\",\n    \"transcript\": null,\n    \"evidence\": null,\n    \"audioUrl\": \"<string,null>\"\n  }\n}",
                   "cookie": [],
                   "_postman_previewlanguage": "json"
                 },
@@ -4806,7 +4806,7 @@
     "name": "TrainerTwin API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "description": {
-      "content": "Organization-scoped API for managing learners, practice sessions, and role-play assignments.\nScenarios can be listed via the API; scenario, persona, domain, knowledge, and voice\nconfiguration remains dashboard-only.\n",
+      "content": "Organization-scoped API for managing learners, practice sessions, and role-play assignments.\nScenarios can be listed via the API; scenario, persona, knowledge, and voice\nconfiguration remains dashboard-only.\n",
       "type": "text/plain"
     }
   }

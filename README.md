@@ -43,7 +43,7 @@ application/
   render) over the Studio's `/api/v1` chat endpoint; responses are spoken through the
   configured TTS provider (voxcpm2 or Sarvam).
 - Evidence coverage streams to the UI; audio egress lands in S3 as the session recording.
-- `InterviewSession` rows in Postgres pin the exact persona/agent/domain versions used.
+- `InterviewSession` rows in Postgres pin the exact persona/agent versions used.
 
 ## Run (four processes)
 
@@ -78,9 +78,9 @@ uv run python src/agent.py dev
 
 ## Versioning model
 
-- Persona/Agent/Domain each carry a `version` int; a changed save snapshots the old data
+- Persona/Agent each carry a `version` int; a changed save snapshots the old data
   into `SpecVersion` (immutable) and increments. The editor restores any snapshot.
-- `InterviewSession` rows pin persona/agent/domain versions per session.
+- `InterviewSession` rows pin persona/agent versions per session.
 
 ## Deployment
 

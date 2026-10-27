@@ -6,7 +6,7 @@ info:
     Organization-scoped API for managing learners, practice sessions, and role-play assignments.
     The API covers role plays only; twins are not listed or returned. Sessions are read-only:
     practice happens in the TrainerTwin app.
-    Scenarios can be listed via the API; scenario, persona, domain, knowledge, and voice
+    Scenarios can be listed via the API; scenario, persona, knowledge, and voice
     configuration remains dashboard-only.
 servers:
   - url: https://dash.trainertwin.com/api/v1
@@ -659,7 +659,7 @@ components:
           enum: [public, private]
     ScenarioSummary:
       type: object
-      required: [slug, name, version, visibility, domainSlug, order, assignmentCount, createdAt, updatedAt]
+      required: [slug, name, version, visibility, order, assignmentCount, createdAt, updatedAt]
       properties:
         slug:
           type: string
@@ -673,9 +673,6 @@ components:
         visibility:
           type: string
           enum: [public, private]
-        domainSlug:
-          type: string
-          example: frontend-engineering
         order:
           type: integer
           description: Dashboard display order (ascending).
@@ -692,7 +689,7 @@ components:
           format: date-time
     ScenarioDetail:
       type: object
-      required: [slug, name, version, visibility, domainSlug, order, assignmentCount, createdAt, updatedAt, data]
+      required: [slug, name, version, visibility, order, assignmentCount, createdAt, updatedAt, data]
       properties:
         slug:
           type: string
@@ -706,9 +703,6 @@ components:
         visibility:
           type: string
           enum: [public, private]
-        domainSlug:
-          type: string
-          example: frontend-engineering
         order:
           type: integer
           description: Dashboard display order (ascending).
@@ -828,8 +822,6 @@ components:
         - personaVersion
         - agentSlug
         - agentVersion
-        - domainSlug
-        - domainVersion
         - status
         - startedAt
       properties:
@@ -847,10 +839,6 @@ components:
           type: string
           example: react-mock-interview
         agentVersion:
-          type: integer
-        domainSlug:
-          type: string
-        domainVersion:
           type: integer
         status:
           $ref: '#/components/schemas/SessionStatus'

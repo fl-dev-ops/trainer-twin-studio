@@ -18,7 +18,7 @@ Success means a trainer can move from source material and a plain-language reque
 
 ## Positioning
 
-Conversation is the primary control surface; Agent, Domain, and knowledge-policy specifications are compiled, inspectable artifacts. TrainerTwin links each trainer decision to authoritative knowledge and executes published specifications through a deterministic interview runtime rather than allowing an LLM to improvise the whole workflow.
+Conversation is the primary control surface; Agent and knowledge-policy specifications are compiled, inspectable artifacts. TrainerTwin links each trainer decision to authoritative knowledge and executes published specifications through a deterministic interview runtime rather than allowing an LLM to improvise the whole workflow.
 
 ## Operating Context
 
@@ -27,7 +27,7 @@ A new trainer typically uploads documents into a knowledge base, asks the Copilo
 ## Capabilities and Constraints
 
 - Knowledge ingestion and hybrid retrieval use the existing Chroma/OpenRouter pipeline.
-- The Copilot creates Agent and Domain specs; it reuses an existing Persona until Persona onboarding is designed separately.
+- The Copilot creates Agent specs; it reuses an existing Persona until Persona onboarding is designed separately.
 - A Persona is a reusable, versioned trainer-style profile, not a singleton and not copied into every Agent. A trainer or organization may choose a default Persona and attach it to many Agents.
 - Published Agents pin a Persona version. Stage-specific pacing, probing, evidence, and completion remain Agent policy; a materially different teaching or interviewing style should create or fork a Persona.
 - Persona cloning may use behavioral examples but never technical knowledge as evidence of personality.
@@ -40,7 +40,7 @@ A new trainer typically uploads documents into a knowledge base, asks the Copilo
 
 ## Evidence on Hand
 
-- Existing canonical Persona, Agent, and Domain YAML files under `web/data/`.
+- Existing canonical Persona and Agent YAML files under `web/data/`.
 - Existing TypeScript knowledge ingestion and retrieval in `web/lib/knowledge.ts`.
 - Existing Pipecat voice runtime in `agent/` and deterministic policy/runtime in `synthesizer/poc/`.
 - Existing TrainerTwin studio, spec version history, knowledge manager, and interview sessions in `web/`.
