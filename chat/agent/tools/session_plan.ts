@@ -11,6 +11,7 @@ import { planState, resumeCandidateState } from "../lib/plan-state";
 import { resumeClaimCandidates } from "../lib/resume-candidates";
 import { studioFetch } from "../lib/studio";
 import { isAllSkillsTwin, scenarioPlaybook } from "../lib/brain";
+import { roleplayGuard } from "../lib/roleplay";
 
 /** Returned instead of a plan for scenario-ingest scenarios (run from their playbook) and twins (open conversation). */
 export const PLAYBOOK_SESSION_NOTE = {
@@ -80,6 +81,8 @@ For a resume pose_main_question, the result includes resumeClaimCandidates (elig
 Never substitute a different question type, exceed a follow-up allowance, or ask an interview question after closing starts.`,
   inputSchema,
   async execute(input, ctx) {
+    const disabled = await roleplayGuard(ctx);
+    if (disabled) return disabled;
     const current = planState.get() ?? await initialize(ctx);
     if (!current) return PLAYBOOK_SESSION_NOTE;
     let state = current;

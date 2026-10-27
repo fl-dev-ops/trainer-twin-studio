@@ -25,7 +25,7 @@ export default defineDynamic({
 
       try {
         const specs = await loadSessionContext(orgId, sessionId, agentSlug, personaSlug, mode, clientTools);
-        const base = baseInstructions(BASE, Boolean(specs.twin || specs.playbook));
+        const base = baseInstructions(BASE, Boolean(specs.twin || specs.playbook || specs.roleplay));
         return defineInstructions({ content: `${base}\n\n${formatSessionSpec(specs)}` });
       } catch (err) {
         console.error("Failed to load session context for brain grounding:", err);

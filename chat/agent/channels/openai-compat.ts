@@ -40,11 +40,19 @@ const CALIBRATION_FEELS_OFF =
 const PURE_SIDE_EFFECT_TOOLS = new Set([
   "surface",
   "finish_session",
+  "end_call",
   "clear_canvas",
   "highlight_code",
   "highlight_whiteboard",
   "highlight_canvas_element",
 ]);
+
+/** Spoken when the role-play client hangs up (end_call) without a goodbye, so the call never cuts off mid-sentence. */
+const END_CALL_FALLBACK_GOODBYE: Record<string, string> = {
+  agreed: "Okay, speak then. Bye for now.",
+  declined: "Sorry, I have to go. Bye.",
+  guard_ran_out: "Sorry, I have to go. Bye.",
+};
 
 type ChatMessage = {
   role: "system" | "developer" | "user" | "assistant" | "tool";
@@ -439,6 +447,15 @@ export default defineChannel({
                 if (action.kind === "tool-call") {
                   allToolsCalled.push({ name: action.toolName, callId: action.callId, input: action.input });
                   toolExecutionTimes[action.callId] = { start: Date.now() };
+                }
+                // The browser disconnects ~5s after end_call, so a missing goodbye must go out now.
+                if (action.kind === "tool-call" && action.toolName === "end_call" && !textStarted) {
+                  const outcome = String((action.input as { outcome?: unknown } | null)?.outcome ?? "");
+                  console.warn("[openai-compat] end_call without goodbye; speaking fallback", { sessionId, mode, outcome });
+                  sawActivity = true;
+                  textStarted = true;
+                  markSpoken();
+                  await writeText(END_CALL_FALLBACK_GOODBYE[outcome] ?? END_CALL_FALLBACK_GOODBYE.declined);
                 }
               }
               const bridged = questionBridge.onToolCalls(ev.data.actions);

@@ -1,6 +1,7 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { studioFetch } from "../lib/studio";
+import { roleplayGuard } from "../lib/roleplay";
 
 export default defineTool({
   description:
@@ -12,6 +13,8 @@ export default defineTool({
     limit: z.number().int().min(1).max(6).default(4),
   }),
   async execute(input, ctx) {
+    const disabled = await roleplayGuard(ctx);
+    if (disabled) return disabled;
     const orgId = ctx.session.auth.initiator?.principalId ?? ctx.session.auth.current?.principalId;
     if (!orgId) throw new Error("No organization principal attached to session");
     return studioFetch(orgId, {

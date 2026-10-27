@@ -1,6 +1,7 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { studioFetch } from "../lib/studio";
+import { roleplayGuard } from "../lib/roleplay";
 
 export default defineTool({
   description:
@@ -11,6 +12,8 @@ export default defineTool({
     section: z.string().trim().optional().describe("Section heading if known, e.g. 'EXPERIENCE', 'TECHNICAL SKILLS', 'EDUCATION'"),
   }),
   async execute(input, ctx) {
+    const disabled = await roleplayGuard(ctx);
+    if (disabled) return disabled;
     const orgId = ctx.session.auth.initiator?.principalId ?? ctx.session.auth.current?.principalId;
     if (!orgId) throw new Error("No organization attached to session");
     return studioFetch(orgId, {

@@ -1,3 +1,4 @@
+import { formatRoleplaySession, primeRoleplayCache, roleplaySkill, type RoleplaySkill } from "./roleplay";
 import { studioFetch } from "./studio";
 
 /**
@@ -105,6 +106,8 @@ export type SessionSpecs = {
   twin?: { playbooks: TwinPlaybook[] };
   /** Set for scenario-ingest scenarios: the session runs from this playbook instead of the interview spec. */
   playbook?: ScenarioPlaybook;
+  /** Set for client role plays (kind ROLEPLAY with a SKILL.md): the AI plays the client. */
+  roleplay?: RoleplaySkill;
   agentName: string;
   agentSlug: string;
   agentVersion?: number;
@@ -352,6 +355,9 @@ export async function loadSessionContext(
     personaSlug,
   });
 
+  const roleplay = roleplaySkill(result.agent?.kind, result.agent?.data);
+  // Tools check "is this a role play?" per call; answer from the context already loaded.
+  primeRoleplayCache(orgId, sessionId, agentSlug, roleplay !== undefined);
   const agentData = (result.agent?.data ?? {}) as {
     name?: string;
     objective?: string;
@@ -407,6 +413,7 @@ export async function loadSessionContext(
   return {
     sessionId: result.sessionId ?? sessionId,
     playbook: scenarioPlaybook(result.agent?.kind, agentData as Record<string, unknown>),
+    roleplay,
     twin: isAllSkillsTwin(result.agent?.kind, agentData as Record<string, unknown>) ? { playbooks: result.twinPlaybooks ?? [] } : undefined,
     agentName: agentData.name ?? result.agent?.slug ?? agentSlug ?? "Training Session",
     agentSlug: result.agent?.slug ?? agentSlug ?? "session",
@@ -542,6 +549,7 @@ ${claimList}\n`;
     ? (specs.knowledgeBases ?? []).map((kb) => `- "${kb.name}" (slug: "${kb.slug}")`).join("\n")
     : "- None";
 
+  if (specs.roleplay) return formatRoleplaySession(specs, specs.roleplay, { learnerBlock });
   if (specs.twin) return formatTwinSession(specs, specs.twin.playbooks, { learnerBlock, uiStateBlock, warmBlock, docsBlock });
   if (specs.playbook) return formatPlaybookSession(specs, specs.playbook, { learnerBlock, uiStateBlock, warmBlock, docsBlock });
 

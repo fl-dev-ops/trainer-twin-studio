@@ -1,5 +1,6 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
+import { roleplayGuard } from "../lib/roleplay";
 import { callStudio } from "../lib/studio";
 
 const SHARED_KNOWLEDGE_BASE_SLUG = "acme-knowledge";
@@ -12,7 +13,9 @@ export default defineTool({
     limit: z.number().int().min(1).max(8).default(4),
     topics: z.array(z.string().trim().min(1)).optional(),
   }),
-  execute(input, ctx) {
+  async execute(input, ctx) {
+    const disabled = await roleplayGuard(ctx);
+    if (disabled) return disabled;
     return callStudio<Record<string, unknown>>({
       action: "searchKnowledge",
       knowledgeBase: SHARED_KNOWLEDGE_BASE_SLUG,

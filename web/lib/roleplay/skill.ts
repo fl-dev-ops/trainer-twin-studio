@@ -125,7 +125,8 @@ export function renderRoleplay(slug: string, builder: RoleplayBuilder, clientRol
   };
   const items: RoleplayItem[] = [
     { id: `${slug}-opening`, role: "client", context: "", text: input.opening, metadata: { step: "opening", move: "answer_call", kind: "opening" } },
-    ...input.exampleLines.map((text, index) => ({ id: `${slug}-line-${index + 1}`, role: "client" as const, context: "", text, metadata: { kind: "example" } })),
+    // The opening is already an item; an example line repeating it would be returned twice.
+    ...input.exampleLines.filter((text) => text !== input.opening).map((text, index) => ({ id: `${slug}-line-${index + 1}`, role: "client" as const, context: "", text, metadata: { kind: "example" } })),
   ];
   return {
     skill: renderSkillMarkdown(slug, input, description),

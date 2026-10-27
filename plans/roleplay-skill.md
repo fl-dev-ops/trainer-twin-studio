@@ -80,7 +80,7 @@ closest v2 presets: wait-and-see → `off-plan-lead-waiting-for-prices`, options
    Convert the 2 seeds. Tests: stable render, round trip, goals ≤ 5, rubric = 100.
 4. ✅ **During: storage** — generalise `ingestScenario` to `kind ROLEPLAY` (any org persona; a twin and a role play never
    overwrite each other); same S3 + Chroma + SpecVersion flow; seed import script. Contract tests for both kinds.
-5. **During: runtime (`chat/`)** — role-play module: `kind ROLEPLAY` + `data.skill` → `formatRoleplaySession`
+5. ✅ **During: runtime (`chat/`)** — role-play module: `kind ROLEPLAY` + `data.skill` → `formatRoleplaySession`
    = the branch's fixed client rules (stay in character, guard levels by difficulty, speech only) + PERSONA block +
    `<roleplay>` SKILL.md + steps. Tools: `end_call` (ported), `scenario_examples` (role `client`); trainer tools
    hidden. Port `chat/tests/agent/lib/roleplay.test.ts`, adapted.

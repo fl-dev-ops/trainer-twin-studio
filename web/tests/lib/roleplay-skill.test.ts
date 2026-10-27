@@ -57,4 +57,5 @@ test("limits: at least one goal, at most five; rubric 1..8; slug must be kebab-c
   expect(bare.skill).not.toContain("## Reactions");
   expect(bare.skill).toContain("You are the persona described in PERSONA.");
   expect(bare.items).toHaveLength(1);
+  expect(renderRoleplay("dup", { ...builder, exampleLines: [builder.opening, "Other"] }).items.map((i) => i.text)).toEqual([builder.opening, "Other"]);
 });

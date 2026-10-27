@@ -6,6 +6,7 @@ import { fetchProjectKnowledge, projectKnowledgeEnabled } from "../lib/project-k
 import { studioFetch } from "../lib/studio";
 import { moveToNextMainQuestion, recordAnswerOnce, summarizeSessionPlan } from "../lib/session-plan";
 import { executeWorkspaceTool } from "../lib/workspace-tools";
+import { roleplayGuard } from "../lib/roleplay";
 
 const evidenceStatus = z.enum(["untested", "partial", "sufficient", "weak", "unresolved"]);
 
@@ -20,6 +21,8 @@ export default defineTool({
       .describe("Evidence supported by that answer, as in session_plan record_answer."),
   }),
   async execute(input, ctx) {
+    const disabled = await roleplayGuard(ctx);
+    if (disabled) return disabled;
     // One-call turn: record the answer first (local, instant) so the plan moves to this new question.
     let alreadyRecorded = false;
     const current = planState.get();
