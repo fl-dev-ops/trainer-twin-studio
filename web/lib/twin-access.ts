@@ -161,12 +161,12 @@ export async function twinAccessByCode(input: { orgId: string; user: Person; cod
 
 /**
  * /t/<path> access: the user's own active assignment on that twin (minutes left, bound on first use). Returns its
- * personal code, which the session screen starts with; throws TwinAccessError when not assigned / revoked / used up.
+ * personal code, which the call starts with, and the minutes left / given; throws TwinAccessError when not assigned / revoked / used up.
  */
 export async function twinAssignmentCode(input: { orgId: string; user: Person; agentId: string }) {
   const access = await twinAccessByAgent(input);
-  const assignment = await db.twinAssignment.findUniqueOrThrow({ where: { id: access.assignmentId }, select: { shareCode: true } });
-  return assignment.shareCode;
+  const assignment = await db.twinAssignment.findUniqueOrThrow({ where: { id: access.assignmentId }, select: { shareCode: true, minutesLimit: true } });
+  return { code: assignment.shareCode, secondsLeft: access.secondsLeft, minutesLimit: assignment.minutesLimit };
 }
 
 /** Twin access for a direct start (portal / talk page): the user's own assignment on that twin. */

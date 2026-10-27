@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowUp, LoaderCircle, Volume2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { ArrowLeft, ArrowUp, Flag, LoaderCircle, Volume2 } from "lucide-react";
 import { RoomAudioRenderer, RoomContext, useStartAudio, useVoiceAssistant } from "@livekit/components-react";
 import { Room, RoomEvent, type TranscriptionSegment } from "livekit-client";
 import {
@@ -53,7 +53,28 @@ async function withRetries<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
  * the same session API as /talk. With `twin`, the call is saved as a twin calibration and every rating is stored
  * (twin tRPC); without it (role plays) ratings live only in this page.
  */
-type CallProps = { slug: string; scenarioName: string; twinName: string; twin?: boolean; photoUrl?: string | null };
+type CallProps = {
+  slug: string;
+  scenarioName: string;
+  twinName: string;
+  twin?: boolean;
+  photoUrl?: string | null;
+  /**
+   * A learner's conversation (the /t/ link) instead of a calibration: started with their assignment code (minutes
+   * enforced), no ratings, the learner page's header, minutes left on the portrait, Report issue, and the result
+   * handed back when it ends (End completes the call, so its minutes and report count).
+   */
+  learner?: LearnerCall;
+};
+
+export type CallResult = { sessionId: string | null; seconds: number; turns: CalibrationTurn[] };
+export type LearnerCall = {
+  code: string;
+  minutesLeft: number;
+  header: ReactNode;
+  onReport: (sessionId: string | null) => void;
+  onEnded: (result: CallResult) => void;
+};
 
 export function CalibrationCall(props: CallProps) {
   const room = useMemo(
@@ -68,7 +89,7 @@ export function CalibrationCall(props: CallProps) {
   );
 }
 
-function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = null }: CallProps & { room: Room }) {
+function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = null, learner }: CallProps & { room: Room }) {
   const [phase, setPhase] = useState<Phase>("connecting");
   const [error, setError] = useState("");
   const [connection, setConnection] = useState<Connection | null>(null);
@@ -177,7 +198,8 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
       const response = await fetch("/api/sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agentSlug: slug, idempotencyKey: crypto.randomUUID() }),
+        // A learner starts with their assignment code: access and minutes are checked by the session start.
+        body: JSON.stringify(learner ? { shareCode: learner.code, idempotencyKey: crypto.randomUUID() } : { agentSlug: slug, idempotencyKey: crypto.randomUUID() }),
       });
       const launch = await response.json().catch(() => ({}));
       if (!response.ok || !launch.session?.id || !launch.participantToken) {
@@ -188,7 +210,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
       const active = { sessionId: launch.session.id as string, runtimeToken: launch.session.runtimeToken as string };
       connectionRef.current = active;
       setConnection(active);
-      if (twin) {
+      if (twin && !learner) {
         // Saved as a calibration before anything can be rated (rating stays off until then); a failure only
         // loses the ratings, not the call. Creating it is idempotent, so retrying is safe.
         void withRetries(() => twinClient.calibrations.start.mutate({ slug, sessionId: active.sessionId }))
@@ -222,7 +244,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
       setError(startError instanceof Error ? startError.message : "Could not start the call.");
       setPhase("error");
     }
-  }, [room, slug, closeSession, twin]);
+  }, [room, slug, closeSession, twin, learner]);
 
   // Start once on open; the ref stops React's dev double-mount from starting a second session.
   useEffect(() => {
@@ -238,6 +260,13 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
     },
     [end],
   );
+
+  // A learner's call hands its result to the learner page (which shows the summary and feedback).
+  const onEnded = learner?.onEnded;
+  useEffect(() => {
+    if (phase === "ended" && onEnded) onEnded({ sessionId: connectionRef.current?.sessionId ?? null, seconds, turns: turnsRef.current });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per ended call, with the values at that moment
+  }, [phase, onEnded]);
 
   useEffect(() => {
     if (phase !== "live") return;
@@ -368,12 +397,16 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
       active={phase === "live"}
     >
       <div className="relative flex h-dvh max-h-dvh flex-col overflow-hidden">
-        <Link href={backHref} onClick={(event) => void leave(event)} className="flex w-fit items-center gap-2 px-8 pt-6 text-sm text-foreground/90 hover:text-foreground">
-          <ArrowLeft className="size-4" aria-hidden />
-          Calibrate · {scenarioName}
-        </Link>
+        {learner ? (
+          learner.header
+        ) : (
+          <Link href={backHref} onClick={(event) => void leave(event)} className="flex w-fit items-center gap-2 px-8 pt-6 text-sm text-foreground/90 hover:text-foreground">
+            <ArrowLeft className="size-4" aria-hidden />
+            Calibrate · {scenarioName}
+          </Link>
+        )}
 
-        {phase === "ended" ? (
+        {phase === "ended" && learner ? null : phase === "ended" ? (
           <CallSummary
             transcriptHref={
               twin
@@ -399,6 +432,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                 <span className="absolute right-3 bottom-3 rounded-full bg-black/45 px-2.5 py-1 text-[13px] leading-[18px] font-medium text-white tabular-nums">
                   <span className="sr-only">Call time </span>
                   {clock(seconds)}
+                  {learner ? ` · ${Math.max(0, learner.minutesLeft - Math.ceil(seconds / 60))} min left` : ""}
                 </span>
               </div>
 
@@ -439,7 +473,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                           </p>
                         ) : null}
                         <Bubble speaker="twin">{turn.text}</Bubble>
-                        {turn.streaming ? null : turn.rating ? (
+                        {turn.streaming || learner ? null : turn.rating ? (
                           <RatingLabel rating={turn.rating} className="text-[13px]" />
                         ) : turn.id !== latestTwinId ? null : (
                           <div className="flex flex-wrap items-center gap-2">
@@ -524,6 +558,17 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
               >
                 <ChatIcon />
               </button>
+              {learner ? (
+                <button
+                  type="button"
+                  aria-label="Report an issue"
+                  title="Report an issue"
+                  onClick={() => learner.onReport(connectionRef.current?.sessionId ?? null)}
+                  className={cn(CONTROL, "border bg-muted hover:bg-border")}
+                >
+                  <Flag />
+                </button>
+              ) : null}
               <button
                 type="button"
                 aria-label="End call"
@@ -542,7 +587,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                   Do you want to end the conversation?
                 </AlertDialogTitle>
                 <div className="grid w-full grid-cols-2 gap-2">
-                  <button type="button" className={cn(PILL, "h-10 justify-center px-4 text-sm")} onClick={() => void end("abandoned")}>
+                  <button type="button" className={cn(PILL, "h-10 justify-center px-4 text-sm")} onClick={() => void end(learner ? "completed" : "abandoned")}>
                     Yes, end the call
                   </button>
                   <AlertDialogCancel variant="default" className="h-10 rounded-full px-4 text-sm font-semibold">

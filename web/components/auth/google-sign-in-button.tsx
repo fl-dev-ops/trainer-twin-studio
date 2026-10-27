@@ -28,7 +28,8 @@ function GoogleIcon(props: React.ComponentProps<"svg">) {
   );
 }
 
-export function GoogleSignInButton({ label = "Continue with Google" }: { label?: string }) {
+/** `callbackURL`: where Google returns to (default: this page as it is now). */
+export function GoogleSignInButton({ label = "Continue with Google", callbackURL, className }: { label?: string; callbackURL?: string; className?: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,7 +40,7 @@ export function GoogleSignInButton({ label = "Continue with Google" }: { label?:
       const result = await authClient.signIn.social({
         provider: "google",
         // Return to this page so its existing redirect/invitation logic can finish.
-        callbackURL: window.location.href,
+        callbackURL: callbackURL ?? window.location.href,
       });
       if (result.error) setError(result.error.message ?? "Google sign-in failed. Try again.");
     } catch {
@@ -56,7 +57,7 @@ export function GoogleSignInButton({ label = "Continue with Google" }: { label?:
         variant="outline"
         onClick={signIn}
         disabled={busy}
-        className="w-full"
+        className={className ?? "w-full"}
       >
         {busy ? <Spinner data-icon="inline-start" /> : <GoogleIcon data-icon="inline-start" />}
         {busy ? "Connecting to Google…" : label}
