@@ -23,7 +23,15 @@ After it returns, say nothing more.`,
     const orgId = ctx.session.auth.initiator?.principalId ?? ctx.session.auth.current?.principalId;
     const sessionId = String(ctx.session.auth.current?.attributes?.sessionId ?? "");
     if (!orgId || !sessionId) throw new Error("No session attached to this conversation");
-    await studioFetch(orgId, { action: "finishSession", sessionId });
+    const startedAt = Date.now();
+    console.info("[TOOL:end_call] start", { sessionId, outcome: input.outcome });
+    try {
+      await studioFetch(orgId, { action: "finishSession", sessionId });
+    } catch (error) {
+      console.error("[TOOL:end_call] failed", { sessionId, outcome: input.outcome, elapsedMs: Date.now() - startedAt, error });
+      throw error;
+    }
+    console.info("[TOOL:end_call] done", { sessionId, outcome: input.outcome, elapsedMs: Date.now() - startedAt });
     return { status: "ended", outcome: input.outcome, instruction: "The call has ended. Say nothing more." };
   },
 });
