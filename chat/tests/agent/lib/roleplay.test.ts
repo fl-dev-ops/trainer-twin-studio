@@ -74,7 +74,7 @@ describe("client role play (kind ROLEPLAY with a SKILL.md)", () => {
     assert.ok(prompt.startsWith("CLIENT ROLE-PLAY MODE"));
     assert.match(prompt, /You are Daniel Hart, a CLIENT\. The person talking to you plays Agent calling a wait-and-see investor/);
     assert.match(prompt, /- Behaviour: Skeptical & Reserved/);
-    assert.match(prompt, /On this call you are Daniel Hart\. Where the role play below says who you are .* it wins over the lines above/);
+    assert.match(prompt, /On this call you are Daniel Hart\. The lines above are your defaults\. Where the role play below says something different for this call .*or how you talk\), the role play wins\./);
     assert.match(prompt, /<roleplay>\n---\nname: wait-and-see-investor[\s\S]*Inflation and taxes[\s\S]*<\/roleplay>/);
     assert.match(prompt, /# Difficulty: hard\nConfident and testing/);
     assert.match(prompt, /You start at guard level 3/);

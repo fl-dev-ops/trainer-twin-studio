@@ -220,19 +220,20 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, pers
 
         <div className="mt-6">
           <h1 className="m-0 text-[20px] leading-7 font-semibold tracking-[-0.015em]">{slug ? "Edit role play" : "Build role play"}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Before the call, the call itself, and how the learner is scored after it.</p>
+          <p className="mt-1 text-sm text-muted-foreground">The call the learner practises, how they’re scored, and what they set up first.</p>
         </div>
 
         <Tabs value={tab} onValueChange={(value) => setTab(value as Phase)} className="mt-6 gap-4">
           <TabsList>
-            <TabsTrigger value="before">Before</TabsTrigger>
-            <TabsTrigger value="during">During</TabsTrigger>
-            <TabsTrigger value="after">After</TabsTrigger>
+            {/* Build order: the call first, then how it's scored, then optional learner setup. */}
+            <TabsTrigger value="during">Scenario</TabsTrigger>
+            <TabsTrigger value="after">Scoring</TabsTrigger>
+            <TabsTrigger value="before">Learner setup</TabsTrigger>
           </TabsList>
 
           <TabsContent value="before">
             <article className={card}>
-              <Section title="Before the call" sub="What the learner brings before the client picks up.">
+              <Section title="Before the call" sub="Optional: what the learner shares or uploads before the client picks up.">
                 <div className="flex flex-col divide-y divide-(--border) rounded-[12px] border border-(--border) bg-(--sidebar) px-4">
                   <div className="flex items-center justify-between gap-4 py-3.5">
                     <div className="flex flex-col gap-0.5">
@@ -275,17 +276,17 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, pers
 
           <TabsContent value="during">
             <article className={card}>
-              <Section title="The client" sub="Who the learner talks to. The persona sets the voice, photo and how they talk.">
+              <Section title="The client" sub="The persona sets the voice, photo, background and how they talk. The two optional fields below change them for this role play only.">
                 <Field id="rp-name" label="Role play name">
                   <input id="rp-name" maxLength={120} value={b.name} placeholder="Example: The wait-and-see investor" onChange={(e) => set("name", e.target.value)} className={cn(input, "h-10")} />
                 </Field>
                 <Field label="Persona">
                   <PersonaPicker personas={personas} value={b.persona} onChange={(slug) => set("persona", slug)} />
                 </Field>
-                <Field id="rp-client" label="Client name on this call" hint="Optional. Leave empty to use the persona's name.">
+                <Field id="rp-client" label="Client name on this call" hint="Optional. Replaces the persona's name; describe who they are in the scenario below.">
                   <input id="rp-client" maxLength={120} value={b.clientName ?? ""} onChange={(e) => set("clientName", e.target.value)} className={cn(input, "h-10")} />
                 </Field>
-                <Field id="rp-talk" label="How they talk on this call" hint="Optional. Only when it differs from the persona.">
+                <Field id="rp-talk" label="How they talk on this call" hint="Optional. Replaces the persona's speaking style for this role play.">
                   <textarea id="rp-talk" rows={2} maxLength={2000} value={b.howTheyTalk ?? ""} onChange={(e) => set("howTheyTalk", e.target.value)} className={cn(input, "py-2")} />
                 </Field>
               </Section>
