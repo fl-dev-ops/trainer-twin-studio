@@ -12,6 +12,7 @@ set -eu
 SOURCE_URL=${SOURCE_URL:-postgresql://localhost:5432/trainertwin_prod_rehearsal}
 TARGET_URL=${TARGET_URL:-postgresql://localhost:5432/trainertwin}
 case "$TARGET_URL" in *neon.tech*|*amazonaws.com*) echo "refusing: TARGET_URL must be a local database" >&2; exit 1 ;; esac
+LOCAL_S3_BASE=${LOCAL_S3_BASE:-trainertwin-dev/kb}   # must match web/.env S3_BASE_PREFIX
 
 # port <table> <column list> <select returning those columns, in order, from the source>
 port() {
@@ -48,5 +49,28 @@ case "${1:-}" in
     port apikey 'id, "configId", name, start, "referenceId", prefix, key, "refillInterval", "refillAmount", "lastRefillAt", enabled, "rateLimitEnabled", "rateLimitTimeWindow", "rateLimitMax", "requestCount", remaining, "lastRequest", "expiresAt", "createdAt", "updatedAt", permissions, metadata' \
       "SELECT id, \"configId\", name, start, $(local_org referenceId), prefix, key, \"refillInterval\", \"refillAmount\", \"lastRefillAt\", enabled, \"rateLimitEnabled\", \"rateLimitTimeWindow\", \"rateLimitMax\", \"requestCount\", remaining, \"lastRequest\", \"expiresAt\", \"createdAt\", \"updatedAt\", permissions, metadata FROM apikey"
     ;;
-  *) echo "usage: port-prod.sh orgs|users" >&2; exit 1 ;;
+  kb)
+    # Knowledge bases, sources and documents. Files are copied from prod's S3 prefix to the replica org's local one
+    # (prod objects are only read), so a local delete can never remove a prod file. Documents become "uploaded": their
+    # prod vectors live in prod's Chroma, and the replica orgs' Chroma databases are empty.
+    # Skipped: Notion/YouTube connections (tokens encrypted with prod's key) and ingestion job history.
+    # Prod keys are <base>/<prod org id>/...; the base is usually prod's, but prod's latencytest was created from a dev
+    # environment and its files sit under the dev base. Whatever follows /<prod org id>/ is kept.
+    newkey() { echo "CASE WHEN $1 IS NULL THEN NULL ELSE '$LOCAL_S3_BASE/' || md5('local:' || kb.\"orgId\")::uuid::text || substr($1, strpos($1, '/' || kb.\"orgId\" || '/') + length(kb.\"orgId\") + 1) END"; }
+    docs="FROM \"KnowledgeDocument\" d JOIN \"KnowledgeBase\" kb ON kb.id = d.\"kbId\""
+    bad=$(psql "$SOURCE_URL" -At -c "SELECT count(*) $docs WHERE NOT (strpos(d.\"s3SourceKey\", '/' || kb.\"orgId\" || '/') > 0
+      AND strpos(coalesce(d.\"s3MarkdownKey\", '/' || kb.\"orgId\" || '/'), '/' || kb.\"orgId\" || '/') > 0 AND d.\"s3QuestionsKey\" IS NULL)")
+    [ "$bad" = 0 ] || { echo "refusing: $bad documents have keys outside <base>/<their org id>/ (or questions files)" >&2; exit 1; }
+    psql "$SOURCE_URL" -q -v ON_ERROR_STOP=1 -c "COPY (
+        SELECT DISTINCT k, $(newkey k) FROM (SELECT kb.\"orgId\", unnest(array[d.\"s3SourceKey\", d.\"s3MarkdownKey\"]) k $docs) kb
+        WHERE k IS NOT NULL) TO STDOUT" | bun scripts/port-prod-s3.ts
+    port KnowledgeBase 'id, slug, name, "createdAt", "orgId"' \
+      "SELECT id, slug, name, \"createdAt\", $(local_org orgId) FROM \"KnowledgeBase\""
+    port KnowledgeSource 'id, "orgId", "kbId", connector, "externalId", "identityKey", "sourceUrl", status, "lastSyncedAt", error, "createdAt", "updatedAt"' \
+      "SELECT id, $(local_org orgId), \"kbId\", connector, \"externalId\", \"identityKey\", \"sourceUrl\", status, \"lastSyncedAt\", error, \"createdAt\", \"updatedAt\" FROM \"KnowledgeSource\""
+    port KnowledgeDocument 'id, "kbId", slug, title, "createdAt", "updatedAt", error, ext, "indexedAt", "s3MarkdownKey", "s3SourceKey", size, status, "sourceId", "externalId", "externalUpdatedAt", "parentExternalId", "s3QuestionsKey"' \
+      "SELECT d.id, d.\"kbId\", d.slug, d.title, d.\"createdAt\", d.\"updatedAt\", d.error, d.ext, NULL, $(newkey 'd."s3MarkdownKey"'), $(newkey 'd."s3SourceKey"'), d.size,
+         CASE WHEN d.status = 'failed' THEN 'failed' ELSE 'uploaded' END, d.\"sourceId\", d.\"externalId\", d.\"externalUpdatedAt\", d.\"parentExternalId\", NULL $docs"
+    ;;
+  *) echo "usage: port-prod.sh orgs|users|kb" >&2; exit 1 ;;
 esac
