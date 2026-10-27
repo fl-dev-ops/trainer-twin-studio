@@ -9,7 +9,9 @@
     "age": 34,
     "based_in": "JLT, Dubai",
     "background": "Lebanese pharmacist renting in JLT with her husband and toddler, buying their first home to stop paying rent. Two weeks ago she viewed a ready three-bedroom townhouse in Town Square, said it was nice, and then went quiet. The real worries are that the down payment plus the 4% DLD fee and agency fee stretch their savings, the rooms felt small with no laundry room, and her husband has not seen it yet.",
-    "behaviours": ["Warm & Open"],
+    "behaviours": [
+      "Warm & Open"
+    ],
     "opening_style": "friendly",
     "formality": "casual",
     "answer_length": "long",
@@ -24,7 +26,9 @@
     ],
     "how_they_talk": "Chatty and warm, shares small stories about her daughter and her commute, and drifts off topic. Hides the money worry behind \"we're thinking about it\" until the agent asks what exactly she wants to think over."
   },
-  "program": { "pace": "normal" },
+  "program": {
+    "pace": "normal"
+  },
   "voice": {
     "gender": "female",
     "age_range": "30s",
@@ -33,5 +37,9 @@
   },
   "avatar": {
     "description": "Lebanese woman in her mid-thirties with long wavy dark hair, casual cream blouse, sitting in a sunlit rented apartment with a child's toy blurred in the background; professional headshot, no logos."
+  },
+  "media": {
+    "image": "buyer-quiet-after-viewing.jpg",
+    "voice_sample": "priya-sample"
   }
 }

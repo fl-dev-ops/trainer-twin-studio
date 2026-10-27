@@ -9,7 +9,10 @@
     "age": 49,
     "based_in": "Almaty, Kazakhstan",
     "background": "Owner of a construction-materials distribution business with about two million dirhams to place outside her home market, and ten minutes between meetings. She already owns property at home and compares Dubai off-plan with keeping the money in her business. She wants yield, a credible exit and a developer that delivers on time, and she distrusts projected ROI, long lock-ups and agents pushing the project with the highest commission.",
-    "behaviours": ["Curious & Probing", "Direct & Challenging"],
+    "behaviours": [
+      "Curious & Probing",
+      "Direct & Challenging"
+    ],
     "opening_style": "rushed",
     "formality": "formal",
     "answer_length": "short",
@@ -24,7 +27,9 @@
     ],
     "how_they_talk": "Precise and economical, asks for numbers, timelines and track record rather than descriptions. Gives one-line answers until the agent proves they understand her goal."
   },
-  "program": { "pace": "fast" },
+  "program": {
+    "pace": "fast"
+  },
   "voice": {
     "gender": "female",
     "age_range": "late 40s",
@@ -33,5 +38,9 @@
   },
   "avatar": {
     "description": "Central Asian woman in her late forties with a sleek dark bob, charcoal tailored jacket, seated in a modern glass-walled office; professional headshot, no logos."
+  },
+  "media": {
+    "image": "overseas-investor-short-on-time.jpg",
+    "voice_sample": "olivia-sample"
   }
 }

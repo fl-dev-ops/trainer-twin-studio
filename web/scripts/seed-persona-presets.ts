@@ -1,17 +1,20 @@
 /**
  * Seeds the preset personas (web/data/personas/presets/<client>/*.json) into one organization.
  *
- *   bun scripts/seed-persona-presets.ts --org <org id or slug> [--client olga|vasanth] [--dry-run]
+ *   bun scripts/seed-persona-presets.ts --org <org id or slug> [--client olga|vasanth] [--media] [--dry-run]
  *
  * Presets are not the user's own persona (isOwn = false). Prompt fields go to Persona.data in the shape the
- * role-play brain reads; pace goes to Persona.settings. Voice/avatar briefs stay in the JSON (media comes later).
+ * role-play brain reads; pace goes to Persona.settings. Voice/avatar briefs stay in the JSON.
+ * --media also gives each persona its own avatar photo (`media.image`, next to the JSON) and its own voice, cloned
+ * from a sample voice's reference audio + transcript (`media.voice_sample`). Media a persona already has is kept.
  * Idempotent: a changed preset gets a new version (the previous data is kept in SpecVersion), an unchanged one is skipped.
  */
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
-import { personaSettingsSchema } from "@/lib/persona-media";
+import { personaSettingsSchema, setPersonaAvatar, setPersonaVoice } from "@/lib/persona-media";
+import { getObjectBytes, getObjectText } from "@/lib/s3";
 
 type Preset = {
   slug: string;
@@ -24,6 +27,7 @@ type Preset = {
     signature_phrases: string[]; how_they_talk: string;
   };
   program: { pace: string };
+  media?: { image?: string; voice_sample?: string };
 };
 
 const arg = (name: string) => {
@@ -31,6 +35,7 @@ const arg = (name: string) => {
   return index > -1 ? process.argv[index + 1] : undefined;
 };
 const dryRun = process.argv.includes("--dry-run");
+const withMedia = process.argv.includes("--media");
 const root = join(import.meta.dir, "../data/personas/presets");
 
 /** Postgres jsonb reorders keys, so compare by content, not by text. */
@@ -56,6 +61,26 @@ function personaData(preset: Preset) {
     mannerisms: { formality: p.formality, answer_length: p.answer_length, interrupts: p.interrupts, pauses: p.pauses, fillers: p.fillers },
     signature_phrases: p.signature_phrases,
   };
+}
+
+/** Gives the persona its own photo and voice from the preset, unless it already has them. */
+async function attachMedia(orgId: string, client: string, preset: Preset) {
+  const row = await db.persona.findFirstOrThrow({ where: { orgId, slug: preset.slug }, select: { voiceId: true, avatar: { select: { s3ImageKey: true } } } });
+  if (preset.media?.image && !row.avatar?.s3ImageKey) {
+    const bytes = await readFile(join(root, client, preset.media.image));
+    await setPersonaAvatar(orgId, preset.slug, { image: new File([bytes], preset.media.image, { type: "image/jpeg" }) });
+    console.log(`  photo   ${preset.media.image}`);
+  }
+  if (preset.media?.voice_sample && !row.voiceId) {
+    const sample = await db.voice.findFirst({ where: { id: preset.media.voice_sample, orgId: null, status: "ready" } });
+    if (!sample) throw new Error(`Sample voice not found: ${preset.media.voice_sample}`);
+    const [audio, transcript] = await Promise.all([
+      getObjectBytes(sample.s3AudioKey),
+      sample.s3TranscriptKey ? getObjectText(sample.s3TranscriptKey) : Promise.resolve(""),
+    ]);
+    await setPersonaVoice(orgId, preset.slug, { audio: new File([audio], "reference.wav", { type: "audio/wav" }), transcript });
+    console.log(`  voice   from ${sample.id}`);
+  }
 }
 
 async function main() {
@@ -89,6 +114,7 @@ async function main() {
         }
         console.log(`updated  ${client}/${preset.slug} -> v${existing.version + 1}`);
       }
+      if (withMedia && !dryRun) await attachMedia(org.id, client, preset);
     }
   }
   console.log(`${dryRun ? "[dry run] " : ""}done for org ${org.slug}`);

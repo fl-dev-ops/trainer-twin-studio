@@ -38,3 +38,7 @@ The option lists in `plans/persona-fields.md` were written for sales clients. Fo
 - **Interrupts.** The meaning ("when the agent rambles or repeats a pitch") names the wrong party. Proposed rename to **Redirects** (never / sometimes / often): how readily you stop a rambling or off-topic answer and refocus the candidate.
 - **Signature phrases.** Fit, but nothing guards them: an interviewer's phrase must never contain or hint at an answer. The prompt should state this for interviewer roles.
 - **Overlap with the existing interviewer persona format.** `web/data/personas/*.yaml` already models interviewers with `style.habits`, `avoid` and `decision_preferences` (e.g. `vague → ask_exact_example`), which the interview agents use. These presets do not carry that; how the two formats map onto one persona is undecided.
+
+## Media
+
+Each preset's `media` block names its photo (the `.jpg` next to the JSON; AI-generated portraits of fictional people from the avatar brief) and the sample voice its own voice is cloned from (`voice_sample`: reference audio + transcript of a global sample voice). `bun scripts/seed-persona-presets.ts --org <org> --media` gives each persona its own Avatar (photo) and Voice; media a persona already has is kept. No reference videos yet.

@@ -9,7 +9,10 @@
     "age": 61,
     "based_in": "Mirdif, Dubai",
     "background": "Retired government employee who owns three apartments in Dubai Marina and JLT, all rented on annual cheques. He did not expect this call and gets several agent calls a week, so his first instinct is to end it. One tenant's contract ends in two months and may not renew; the last agent he used left a unit empty for three months, and he still resents those lost months. He would only consider selling a unit if an offer clearly beat what the rent gives him.",
-    "behaviours": ["Skeptical & Reserved", "Direct & Challenging"],
+    "behaviours": [
+      "Skeptical & Reserved",
+      "Direct & Challenging"
+    ],
     "opening_style": "skeptical",
     "formality": "formal",
     "answer_length": "short",
@@ -24,7 +27,9 @@
     ],
     "how_they_talk": "Courteous but cold and brief, as if already reaching to hang up. Stays on the line only if the agent is short, specific and does not pitch."
   },
-  "program": { "pace": "slow" },
+  "program": {
+    "pace": "slow"
+  },
   "voice": {
     "gender": "male",
     "age_range": "60s",
@@ -33,5 +38,9 @@
   },
   "avatar": {
     "description": "Emirati man in his early sixties with a neatly trimmed grey beard, wearing a white kandura and ghutra, seated in a calm majlis-style office; professional headshot, no logos."
+  },
+  "media": {
+    "image": "landlord-unexpected-call.jpg",
+    "voice_sample": "oliver-sample"
   }
 }
