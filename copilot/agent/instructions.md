@@ -7,7 +7,7 @@ For a scenario request, load `build-scenario` and follow it. You do all the work
 If fewer than three real sessions exist, report that instead of inventing practice.
 
 ## Looking at sources
-Call `files` first: it copies the trainer's sources into the sandbox under `users/<user>/data/`.
+Call `files` first: it copies the trainer's sources into the sandbox under `users/<user>/data/`. In a studio session these are the organization's knowledge-base uploads, under `data/uploads/` (recordings and method docs together; `files` tells them apart).
 - `grep`, `glob`, `read_file` and `bash` (for example `rg -n -i 'role play' users/olga/data`) find where something happens fast. Use them to locate the practice, not to read whole files.
 - Their line numbers are not turn numbers. Items cite turns, so read the turns you will use with `read` (`from_turn`, `turns`) or `search`, which report `[n]` turn numbers.
 - `bash` is for looking only: never write, move or delete files with it. `build_scenario` writes the scenario files; `write` writes the spec and report.

@@ -57,9 +57,17 @@ Checked: of Olga's 46 Loom transcripts, 39 count as sessions (two or more real s
 
 Deploy order: web (endpoint, collection, backfill), then copilot.
 
-## 4. Open questions
+**Step 1 done.**
+- `GET /api/internal/knowledge-sources` (web) and `pullKnowledgeBase` + `sessionIo` (copilot): every tool's first source access in a studio session syncs the org's knowledge base into the sandbox. An unconfigured org session fails loudly; it never falls back to the users folder.
+- Uploads without two speakers are classed as method docs.
+- Contract tests are in `web/tests/lib/scenario-ingest-contract.test.ts`.
+- Live check (acme, a real eve session as the org): 48 files; 39 candidates, 4 docs, 5 other recordings.
+- Sessions must be in `speaker_N:` format; other transcript formats count as docs.
+- Copilot needs `SCENARIO_INGEST_SECRET` and `STUDIO_URL`.
 
-| # | Question | Proposal |
+## 4. Decisions (all four agreed)
+
+| # | Question | Decision |
 |---|---|---|
 | S1 | How is a skill requested: a short form, or a chat with the copilot? | **Short form**: "What should this skill cover?" (one line) plus Create. The run takes minutes; we show its status |
 | S2 | Which uploads does a run read? | **All of them**; the copilot picks the relevant sessions itself |

@@ -6,6 +6,8 @@ type Row = Record<string, unknown>;
 const agents: Row[] = [];
 const s3 = new Map<string, string>();
 let chroma: { agentSlug: string; count: number } | null = null;
+let knowledgeWhere: Row | null = null;
+const knowledgeDocs: { id: string; title: string; s3MarkdownKey: string }[] = [];
 
 const fakeDb = {
   organization: { findUnique: async () => ({ id: "org1", slug: "acme" }) },
@@ -19,6 +21,12 @@ const fakeDb = {
   },
   domain: { findUnique: async () => null, create: async () => {} },
   specVersion: { create: async () => {} },
+  knowledgeDocument: {
+    findMany: async (args: { where: Row }) => {
+      knowledgeWhere = args.where;
+      return knowledgeDocs;
+    },
+  },
   $transaction: async (fn: (tx: unknown) => unknown) => fn(fakeDb),
 };
 mock.module("@/lib/db", () => ({ db: fakeDb }));
@@ -30,7 +38,7 @@ mock.module("@/lib/s3", () => ({
   deletePrefix: async () => {},
   getObjectText: async () => "",
   kbPrefix: () => "",
-  presignedGetUrl: async () => "",
+  presignedGetUrl: async (key: string) => `https://s3.test/${key}`,
 }));
 mock.module("@/lib/main-collection", () => ({
   invalidateCollectionCache: () => {},
@@ -114,4 +122,65 @@ test("failures come back per call instead of throwing", async () => {
   process.env.SCENARIO_INGEST_SECRET = "s3cret";
   const unknown = await publishToStudio({ url: "http://web", secret: "s3cret", orgId: "org1", persona: "nobody", runId: "r1" }, files, fetcher);
   expect(unknown.scenarios[0]).toMatchObject({ ok: false, error: expect.stringContaining("Persona") });
+});
+
+
+// Knowledge base → copilot sandbox: the copilot's loader against the real web route, then into the sandbox inventory.
+const { GET: knowledgeSources } = await import("@/app/api/internal/knowledge-sources/route");
+const { pullKnowledgeBase } = await import("../../../copilot/agent/lib/origin");
+const { ensureSynced } = await import("../../../copilot/agent/lib/ingest");
+const { knowledgeBaseFor } = await import("../../../copilot/agent/lib/session-io");
+
+const kbFetch = async (url: string, init?: RequestInit) => {
+  const parsed = new URL(url);
+  if (parsed.host === "s3.test") {
+    const text = s3.get(parsed.pathname.slice(1));
+    return text == null ? new Response("missing", { status: 404 }) : new Response(text);
+  }
+  return knowledgeSources(new Request(url, init));
+};
+const kb = { url: "https://dash.test", secret: "s3cret", orgId: "org1" };
+const session = (n: number) => Array.from({ length: n }, (_, i) => (i % 2 ? "speaker_2: Fine, the viewing went well and the client liked it a lot." : "speaker_1: So what did the client say after the viewing?")).join("\n");
+
+test("the copilot pulls every Markdown copy in the org's knowledge base into its sandbox", async () => {
+  process.env.SCENARIO_INGEST_SECRET = "s3cret";
+  knowledgeDocs.splice(0, knowledgeDocs.length,
+    { id: "d1", title: "Lesson 2: role play", s3MarkdownKey: "p/org1/ingest/files/d1/content.md" },
+    { id: "d2", title: "Pricing [2026] / guide", s3MarkdownKey: "p/org1/ingest/files/d2/content.md" },
+  );
+  s3.set("p/org1/ingest/files/d1/content.md", session(24));
+  s3.set("p/org1/ingest/files/d2/content.md", "# Pricing guide\n\nOff-plan payment plans explained.");
+
+  const files = await pullKnowledgeBase(kb, kbFetch);
+  expect(knowledgeWhere).toEqual({ kb: { orgId: "org1" }, s3MarkdownKey: { not: null }, status: { not: "failed" } });
+  expect(files.map((f) => f.path)).toEqual(["data/uploads/Lesson 2: role play [d1].md", "data/uploads/Pricing 2026 guide [d2].md"]);
+
+  // Synced once into users/<user>/, then told apart: two speakers = a recording, none = method material.
+  const disk = new Map<string, string>();
+  const io = {
+    read: async (rel: string) => disk.get(rel) ?? null,
+    write: async (rel: string, content: string) => void disk.set(rel, content),
+    list: async () => [],
+    grep: async () => [],
+    sources: () => pullKnowledgeBase(kb, kbFetch),
+  };
+  const inventory = await ensureSynced(io, "olga");
+  expect(disk.get("users/olga/data/uploads/Pricing 2026 guide [d2].md")).toContain("Off-plan payment plans");
+  expect(inventory.map((f) => [f.id, f.kind, f.candidate ?? false])).toEqual([["d1", "media", true], ["d2", "doc", false]]);
+});
+
+test("knowledge sources: secret and org required; a failed download fails the pull", async () => {
+  process.env.SCENARIO_INGEST_SECRET = "s3cret";
+  expect((await knowledgeSources(new Request("https://dash.test/api/internal/knowledge-sources", { headers: { authorization: "Bearer wrong", "x-trainertwin-org-id": "org1" } }))).status).toBe(401);
+  expect((await knowledgeSources(new Request("https://dash.test/api/internal/knowledge-sources", { headers: { authorization: `Bearer ${kb.secret}` } }))).status).toBe(400);
+  knowledgeDocs.splice(0, knowledgeDocs.length, { id: "d9", title: "Gone", s3MarkdownKey: "p/org1/ingest/files/d9/content.md" });
+  await expect(pullKnowledgeBase(kb, kbFetch)).rejects.toThrow('could not download "Gone"');
+});
+
+test("only studio (organization) sessions read the knowledge base, and never fall back to the users folder", () => {
+  const org = { principalId: "org1", principalType: "organization" };
+  expect(knowledgeBaseFor(org, { STUDIO_URL: "https://dash.test", SCENARIO_INGEST_SECRET: "s" })).toEqual({ url: "https://dash.test", secret: "s", orgId: "org1" });
+  expect(knowledgeBaseFor(org, {})).toBe("unconfigured");
+  expect(knowledgeBaseFor({ principalId: "me", principalType: "user" }, {})).toBeNull();
+  expect(knowledgeBaseFor(null, {})).toBeNull();
 });

@@ -39,6 +39,30 @@ export async function pullSources(user: string): Promise<{ path: string; text: s
   return pool(files, 32, async (rel) => ({ path: rel.split(path.sep).join("/"), text: await readFile(path.join(root, rel), "utf8") }));
 }
 
+/** A studio session's organization: its knowledge base is read through the TrainerTwin web app. */
+export type KnowledgeBaseSource = { url: string; secret: string; orgId: string };
+type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
+
+/** Folder-safe title for a source path; the [docId] suffix keeps ids and item refs stable. */
+const safeTitle = (title: string) => title.replace(/[\\/\[\]\x00-\x1f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 120) || "document";
+
+/**
+ * Every Markdown copy in the org's knowledge base (web /api/internal/knowledge-sources), as data/uploads/<title> [<docId>].md.
+ * Throws on any failed download: a run must never work from a silently partial knowledge base.
+ */
+export async function pullKnowledgeBase(kb: KnowledgeBaseSource, fetcher: Fetch = fetch): Promise<{ path: string; text: string }[]> {
+  const response = await fetcher(new URL("/api/internal/knowledge-sources", kb.url).toString(), {
+    headers: { authorization: `Bearer ${kb.secret}`, "x-trainertwin-org-id": kb.orgId },
+  });
+  const body = (await response.json().catch(() => null)) as { files?: { docId: string; title: string; url: string }[]; error?: string } | null;
+  if (!response.ok || !Array.isArray(body?.files)) throw new Error(`knowledge base unavailable: ${body?.error ?? `HTTP ${response.status}`}`);
+  return pool(body.files, 16, async (file) => {
+    const doc = await fetcher(file.url);
+    if (!doc.ok) throw new Error(`could not download "${file.title}" (HTTP ${doc.status})`);
+    return { path: `data/uploads/${safeTitle(file.title)} [${file.docId}].md`, text: await doc.text() };
+  });
+}
+
 /** Copies one finished output file out of the sandbox. */
 export async function pushOutput(user: string, rel: string, content: string) {
   const id = userId(user);

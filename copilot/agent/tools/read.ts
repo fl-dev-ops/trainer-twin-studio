@@ -2,7 +2,8 @@ import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { ensureSynced, readSourceText } from "../lib/ingest";
 import { pool } from "../lib/origin";
-import { type Io, outPath, sandboxIo } from "../lib/paths";
+import { type Io, outPath } from "../lib/paths";
+import { sessionIo } from "../lib/session-io";
 import { parseDoc, render } from "../lib/turns";
 
 const one = z.object({
@@ -39,7 +40,7 @@ export default defineTool({
     files: z.array(one).optional().describe("Read all of these in one call."),
   }),
   async execute({ user, from, files, ...single }, ctx) {
-    const io = sandboxIo(await ctx.getSandbox());
+    const io = await sessionIo(ctx);
     if (!files?.length) {
       if (!single.path) return { error: "pass path, or files for several at once" };
       return readOne(io, user, from, single as z.infer<typeof one>);

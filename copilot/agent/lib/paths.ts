@@ -9,6 +9,8 @@ export type Io = {
   list(dir: string): Promise<string[]>;
   /** Case-insensitive regex search under dir: every matching line as {path, line (1-based), text}. */
   grep(patterns: string[], dir: string): Promise<{ path: string; line: number; text: string }[]>;
+  /** Where this session's sources come from (the org's knowledge base); unset: the user folder (pullSources). */
+  sources?: () => Promise<{ path: string; text: string }[]>;
 };
 
 type Sandbox = {

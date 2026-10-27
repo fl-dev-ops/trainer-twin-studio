@@ -1,7 +1,7 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { check } from "../lib/ingest";
-import { sandboxIo } from "../lib/paths";
+import { sessionIo } from "../lib/session-io";
 
 export default defineTool({
   description:
@@ -10,6 +10,6 @@ export default defineTool({
   async execute({ user, scenario, stage }, ctx) {
     // Without a scenario, check runs the plan check; a stage there would silently check the wrong thing.
     if (stage && !scenario) return { pass: false, reasons: [`stage "${stage}" needs scenario: pass the scenario id`] };
-    return check(sandboxIo(await ctx.getSandbox()), user, scenario, stage ?? "all");
+    return check(await sessionIo(ctx), user, scenario, stage ?? "all");
   },
 });

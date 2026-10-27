@@ -21,6 +21,7 @@ const MAX_MOVE_DEF_WORDS = 30; // a move needing a longer definition is several 
 const MIN_RULE_SESSIONS = 2; // an always/never rule needs a pattern seen in at least this many sessions
 const POSTS = /^data\/(linkedin|medium|twitter|instagram)\//;
 const DOCS = /^data\/(docs|website)\//;
+const UPLOADS = /^data\/uploads\//; // knowledge-base uploads: recordings and method docs mixed, told apart by speakers
 const PII = /[\w.+-]+@[\w-]+\.[\w.-]+|\bhttps?:\/\/\S+|\bwww\.\S+|\+?\d(?:[ .-]?\d){9,}/i;
 // Evidence refs in patterns.md: [[<file id>#<turn>]] for a session turn, [[<file id>]] for a doc or post.
 const REF = /\[\[([^\]#]+?)(?:#(\d+))?\]\]/g;
@@ -46,6 +47,8 @@ export function buildInventory(files: { path: string; text: string }[]): Invento
     const total = ranked.reduce((s, x) => s + x.words, 0) || 1;
     // Two people, the second with real share: >=20 turns, >=10% of words, >=8 turns.
     const candidate = turns.length >= 20 && ranked.length >= 2 && ranked[1].words / total >= 0.1 && ranked[1].turns >= 8;
+    // An upload without two speakers (a PDF, a solo lesson) is method material, not a recording to mine for practice.
+    if (UPLOADS.test(rel) && !candidate && ranked.length < 2) return { id: fileId(rel), path: rel, kind: "doc", title: meta.title };
     return { id: fileId(rel), path: rel, kind: "media", title: meta.title, turns: turns.length, speakers, candidate };
   }).sort((a, b) => a.path.localeCompare(b.path));
 }
@@ -55,7 +58,7 @@ export async function ensureSynced(io: Io, user: string): Promise<InventoryFile[
   const marker = srcPath(user, ".inventory.json");
   const cached = await io.read(marker);
   if (cached) return JSON.parse(cached);
-  const files = await pullSources(user);
+  const files = await (io.sources ? io.sources() : pullSources(user));
   if (!files.length) throw new Error(`no sources found for ${userId(user)}`);
   await pool(files, 16, (f) => io.write(srcPath(user, f.path), f.text));
   const inv = buildInventory(files);

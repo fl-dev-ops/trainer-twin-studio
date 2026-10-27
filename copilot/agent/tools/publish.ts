@@ -2,7 +2,7 @@ import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { pool, pushOutput, staleOutputs } from "../lib/origin";
 import { preparePublication } from "../lib/publication";
-import { sandboxIo } from "../lib/paths";
+import { sessionIo } from "../lib/session-io";
 import { publishToStudio, runIdFor } from "../lib/studio-publish";
 
 export default defineTool({
@@ -12,7 +12,7 @@ export default defineTool({
     persona: z.string().optional().describe("TrainerTwin persona the scenarios are played by. Defaults to user."),
   }),
   async execute({ user, persona }, ctx) {
-    const { files, rejected } = await preparePublication(sandboxIo(await ctx.getSandbox()), user);
+    const { files, rejected } = await preparePublication(await sessionIo(ctx), user);
     const published = await pool(files, 16, (f) => pushOutput(user, f.path, f.text));
     return {
       published: published.length,
