@@ -25,6 +25,16 @@ const PURE_SIDE_EFFECT_TOOLS = new Set([
   "highlight_canvas_element",
 ]);
 
+/**
+ * Spoken when the role-play client hangs up (end_call) without saying anything
+ * first, so the learner never hears the call cut off mid-conversation.
+ */
+const END_CALL_FALLBACK_GOODBYE: Record<string, string> = {
+  agreed: "Okay, speak then. Bye for now.",
+  declined: "Sorry, I have to go. Bye.",
+  guard_ran_out: "Sorry, I have to go. Bye.",
+};
+
 type ChatMessage = {
   role: "system" | "developer" | "user" | "assistant" | "tool";
   content?: unknown;
@@ -318,6 +328,23 @@ export default defineChannel({
               for (const action of ev.data.actions) {
                 if (action.kind === "tool-call") {
                   allToolsCalled.push({ name: action.toolName, callId: action.callId, input: action.input });
+                }
+                // The browser disconnects ~5s after end_call, so the goodbye must go out now.
+                if (action.kind === "tool-call" && action.toolName === "end_call" && !sawActivity) {
+                  const outcome = String((action.input as { outcome?: unknown } | null)?.outcome ?? "");
+                  console.warn("[openai-compat] end_call without goodbye; speaking fallback", { sessionId, mode, outcome });
+                  sawActivity = true;
+                  await writeChunk({
+                    id: completionId,
+                    object: "chat.completion.chunk",
+                    created,
+                    model,
+                    choices: [{
+                      index: 0,
+                      delta: { content: END_CALL_FALLBACK_GOODBYE[outcome] ?? END_CALL_FALLBACK_GOODBYE.declined },
+                      finish_reason: null,
+                    }],
+                  });
                 }
               }
               continue;

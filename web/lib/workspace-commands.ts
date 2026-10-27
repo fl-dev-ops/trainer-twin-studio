@@ -81,7 +81,12 @@ export async function enqueueWorkspaceCommand(input: {
     });
     if (command && command.status !== "pending") {
       console.info(`[JOB:workspace-command] action=${input.tool} status=${command.status} elapsed_ms=${Date.now() - startedAt}`);
-      if (input.tool === "finish_session") await closeInterviewSession(session.id, "completed");
+      if (input.tool === "finish_session") {
+        // The browser acks at once, then waits 5s for the goodbye TTS before leaving.
+        // Closing the room now would cut that speech off, so close only as a backstop.
+        await new Promise((resolve) => setTimeout(resolve, FINISH_SESSION_CLOSE_DELAY_MS));
+        await closeInterviewSession(session.id, "completed");
+      }
       return { status: command.status, result: command.result ?? { ok: command.status === "completed" } };
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -93,6 +98,9 @@ export async function enqueueWorkspaceCommand(input: {
   }
   return { status: "pending", result: { ok: false, error: "Timed out waiting for the browser" } };
 }
+
+/** Longer than the browser's 5s goodbye grace (lib/livekit-workspaces.tsx), so the browser ends the call first. */
+const FINISH_SESSION_CLOSE_DELAY_MS = 6_000;
 
 export async function listPendingWorkspaceCommands(sessionId: string) {
   return db.workspaceCommand.findMany({
