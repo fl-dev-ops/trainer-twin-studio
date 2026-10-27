@@ -83,6 +83,8 @@ export interface RuntimeState {
   operational_end_reason?: string;
   current_surface?: string | null;
   learner_name?: string | null;
+  /** Calibration: the twin just asked what felt off; the next turn is the trainer's explanation. */
+  calibration_feedback_pending?: boolean;
   primer?: { statistics: CorpusStyleStats } | null;
   recent_style_docs?: string[];
   pending_document_lookup?: {

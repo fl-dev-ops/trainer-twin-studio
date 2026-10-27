@@ -93,6 +93,10 @@ const requestSchema = z.discriminatedUnion("action", [
     action: z.literal("finishSession"),
     sessionId: z.string().trim().min(1),
   }).strict(),
+  z.object({
+    action: z.literal("isCalibrationSession"),
+    sessionId: z.string().trim().min(1),
+  }).strict(),
 ]);
 
 function authorized(request: Request) {
@@ -210,6 +214,14 @@ export async function POST(request: Request) {
       data: { result: { status: input.candidateLocated ? "located" : "claim_cancelled" } },
     });
     return Response.json({ status: input.candidateLocated ? "ready" : "claim_cancelled", question: input.candidateLocated ? question : null });
+  }
+
+  if (input.action === "isCalibrationSession") {
+    const calibration = await db.twinCalibration.findFirst({
+      where: { sessionId: input.sessionId, session: { orgId } },
+      select: { id: true },
+    });
+    return Response.json({ calibration: Boolean(calibration) });
   }
 
   if (input.action === "enqueueWorkspaceCommand" || input.action === "finishSession") {

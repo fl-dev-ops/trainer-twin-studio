@@ -5,6 +5,7 @@ import { createQuestionBridge } from "../lib/question-bridge";
 import { followUpGradesFor } from "../lib/turn-grades";
 import { summarizeToolInput, summarizeToolOutput } from "../lib/tool-trace";
 import { thinkingBudgetSchema } from "../lib/thinking-budget";
+import { studioFetch } from "../lib/studio";
 
 /** Resume claims already highlighted per session, so the bridge never speaks a spent claim's question. */
 // ponytail: unbounded Map, one small Set per voice session; a process restart clears it.
@@ -28,6 +29,12 @@ function usedClaimsFor(sessionId: string) {
  */
 
 const USER_INACTIVE_SIGNAL = "__TRAINERTWIN_USER_INACTIVE__";
+/** Calibration: the trainer pressed "Feels off" on the twin's reply (the page sends it as their message). */
+const isFeelsOff = (text: string) => /^feels? off$/.test(text.toLowerCase().replace(/[^a-z ]/g, "").replace(/\s+/g, " ").trim());
+const CALIBRATION_FEELS_OFF =
+  "[CALIBRATION FEEDBACK] The trainer is calibrating you, their twin, and pressed \"Feels off\" on your last reply: it did not sound like them. " +
+  "Do not continue the session, do not answer it as a learner message, and call no tools. Ask them in one short sentence, in your own voice, what felt off about that reply. " +
+  "When they explain on their next turn, thank them in a few words and continue with your next question, picking up where the session was.";
 
 /** Pure side-effect tools that do not require conversational follow-up speech. */
 const PURE_SIDE_EFFECT_TOOLS = new Set([
@@ -224,7 +231,16 @@ export default defineChannel({
         });
       }
 
-      const message = mapLatestMessage(body?.messages ?? []);
+      let message = mapLatestMessage(body?.messages ?? []);
+      const calibrationSessionId = request.headers.get("x-trainertwin-session-id")?.trim();
+      if (message && calibrationSessionId && isFeelsOff(message)) {
+        const { calibration } = await studioFetch<{ calibration: boolean }>(orgId, { action: "isCalibrationSession", sessionId: calibrationSessionId })
+          .catch((error) => {
+            console.error("[openai-compat] calibration check failed", error);
+            return { calibration: false };
+          });
+        if (calibration) message = CALIBRATION_FEELS_OFF;
+      }
       // One line per transport request (before any early return) so dropped/rejected turns are visible.
       console.info("[openai-compat] request " + JSON.stringify({
         sessionId: request.headers.get("x-trainertwin-session-id")?.trim() ?? null,
@@ -280,7 +296,9 @@ export default defineChannel({
           ? "tool_result"
           : message.startsWith("[USER INACTIVE]")
             ? "inactivity_nudge"
-            : "learner";
+            : message.startsWith("[CALIBRATION FEEDBACK]")
+              ? "calibration_feedback"
+              : "learner";
       const t_start = Date.now();
       const source = from(address);
       const existing = await resolveSession(address);

@@ -5,8 +5,6 @@ import { cn } from "@/lib/utils";
 
 /** Shared prototype shadows. */
 export const SOFT_SHADOW = "shadow-[0_2px_4px_rgba(30,28,25,0.07),0_8px_20px_rgba(30,28,25,0.11)]";
-export const PANEL_SHADOW =
-  "shadow-[0_0_0_1px_var(--border),0_4px_8px_rgba(30,28,25,0.067),0_16px_40px_rgba(30,28,25,0.12)]";
 /** The prototype's white pill button (Feels like me, Show more, secondary actions). */
 export const PILL =
   "inline-flex h-8 items-center gap-2 rounded-full bg-card px-[18px] text-[13px] font-semibold shadow-[0_0_1px_rgba(0,0,0,0.4),0_1px_1px_rgba(0,0,0,0.04),0_2px_4px_rgba(0,0,0,0.04)] transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 outline-none dark:shadow-[0_0_0_1px_var(--border)]";

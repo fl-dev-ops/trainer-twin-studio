@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, ArrowUpRight, Sliders } from "lucide-react";
+import { ArrowLeft, ArrowUpRight } from "lucide-react";
 import { SessionTime } from "@/components/sessions/session-time";
+import { TwinFace } from "@/components/twin/twin-face";
 import type { TwinOutputs } from "@/lib/twin/trpc";
 import { cn } from "@/lib/utils";
 
@@ -16,7 +17,7 @@ export function TwinCalibrationOverviewPage({ id, data }: { id: string; data: Tw
 
   return (
     <div className="h-full w-full overflow-y-auto">
-      <div className="mx-auto w-full max-w-[800px] px-4 md:px-0 pt-5 pb-24">
+      <div className="mx-auto w-full max-w-[800px] px-4 md:px-0 pt-5 pb-10">
         {/* Header Back navigation */}
         <header className="flex min-h-10 items-center justify-between gap-4">
           <Link
@@ -30,17 +31,7 @@ export function TwinCalibrationOverviewPage({ id, data }: { id: string; data: Tw
 
         {/* Profile Card / Heading matching reference cal-who */}
         <div className="mt-6 flex flex-col items-center text-center">
-          <div className="size-16 overflow-hidden rounded-[20px] bg-(--tone-control) shadow-sm">
-            <video
-              src="/media/twin-listening.mp4"
-              autoPlay
-              muted
-              loop
-              playsInline
-              preload="auto"
-              className="size-full object-cover object-[center_18%]"
-            />
-          </div>
+          <TwinFace face={data.face} className="size-16 text-2xl rounded-[20px] shadow-sm after:rounded-[20px] *:rounded-[20px]" />
           <h1 className="mt-3 text-xl font-semibold leading-7">{twinTitle}</h1>
         </div>
 
@@ -73,8 +64,18 @@ export function TwinCalibrationOverviewPage({ id, data }: { id: string; data: Tw
 
         {/* Calibrations List section matching reference cal-list */}
         <div className="mt-10">
-          <h2 className="m-0 text-[18px] font-semibold leading-6 tracking-[-0.015em]">Calibrations</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Conversations you’ve had with this twin</p>
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <h2 className="m-0 text-[18px] font-semibold leading-6 tracking-[-0.015em]">Calibrations</h2>
+              <p className="mt-1 text-sm text-muted-foreground">Conversations you’ve had with this twin</p>
+            </div>
+            <Link
+              href={`/twin/${id}/calibrate`}
+              className="inline-flex h-9 shrink-0 items-center rounded-full bg-(--brand) px-4 text-sm font-medium text-white transition-colors hover:bg-[#e04d00] outline-none focus-visible:ring-2 focus-visible:ring-(--brand) focus-visible:ring-offset-2"
+            >
+              Calibrate now
+            </Link>
+          </div>
 
           <div className="mt-4 flex flex-col overflow-hidden rounded-[16px] border border-(--card-border) bg-card p-0 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
             {calibrations.length === 0 ? (
@@ -102,16 +103,6 @@ export function TwinCalibrationOverviewPage({ id, data }: { id: string; data: Tw
           </div>
         </div>
 
-        {/* Floating / Sticky Footer CTA matching reference cal-foot */}
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-20">
-          <Link
-            href={`/twin/${id}/calibrate`}
-            className="inline-flex h-11 items-center gap-2.5 rounded-full bg-(--brand) px-6 text-[14px] font-medium text-white shadow-lg transition-transform hover:scale-105 hover:bg-[#e04d00]"
-          >
-            <Sliders className="size-4" />
-            <span>Calibrate now</span>
-          </Link>
-        </div>
       </div>
     </div>
   );

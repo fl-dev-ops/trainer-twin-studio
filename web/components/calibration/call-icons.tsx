@@ -83,14 +83,6 @@ export function FeelsOffIcon(props: P) {
   );
 }
 
-export function CloseIcon(props: P) {
-  return (
-    <svg {...base} {...props}>
-      <path d="m6 6 12 12M18 6 6 18" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" />
-    </svg>
-  );
-}
-
 export function ArrowUpRightIcon(props: P) {
   return (
     <svg {...base} {...line} strokeWidth={1.8} {...props}>

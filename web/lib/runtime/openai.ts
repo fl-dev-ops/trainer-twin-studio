@@ -61,6 +61,11 @@ const RUNTIME_MODEL = env.INTERVIEW_LLM_MODEL;
 const MCQ_SUBMISSION_PREFIX = "__TRAINERTWIN_MCQ_SUBMISSION__:";
 const CODE_SUBMISSION_PREFIX = "__TRAINERTWIN_CODE_SUBMISSION__:";
 const WHITEBOARD_SUBMISSION_PREFIX = "__TRAINERTWIN_WHITEBOARD_SUBMISSION__:";
+/** Calibration: the trainer pressed "Feels off" on a reply (the page sends it as their message). */
+const CALIBRATION_OFF_QUESTION = "Okay. What felt off about that?";
+const isFeelsOff = (text: string) => /^feels? off$/.test(text.toLowerCase().replace(/[^a-z ]/g, "").replace(/\s+/g, " ").trim());
+const isCalibrationSession = async (sessionId: string) =>
+  Boolean(await db.twinCalibration.findUnique({ where: { sessionId }, select: { id: true } }));
 
 type TechnicalSubmission =
   | { kind: "mcq"; questionId: string; optionId: string; optionText: string }
@@ -2658,12 +2663,25 @@ async function runCompletionPipeline(
     const requestedSurface = explicitSurfaceRequest(latestUserText, state.current_surface);
     const visionClarification = screenVisionClarification(latestUserText, state.current_surface);
     const explicit = explicitCommunicationRecovery(latestUserText);
+    // Calibration only: "Feels off" makes the twin ask what felt off (it does not move on); the trainer's
+    // explanation that follows is acknowledged and the twin continues with its next question.
+    const calibrationOff = !technicalSubmission && isFeelsOff(latestUserText) && (await isCalibrationSession(session.id));
+    const calibrationExplanation = !calibrationOff && Boolean(state.calibration_feedback_pending);
+    state.calibration_feedback_pending = calibrationOff;
     let intent: "answer" | "question" | "clarification" | "off_topic" | "stop";
     let move: string;
     let retrievalQuery: string;
     let knowledgeLookup: KnowledgeLookup = { needed: false, query: "" };
     let classifiedDocumentLookup: DocumentLookup | null = null;
-    if (technicalSubmission) {
+    if (calibrationOff) {
+      intent = "clarification";
+      move = "clarify";
+      retrievalQuery = "trainer flagged the last reply as off";
+    } else if (calibrationExplanation) {
+      intent = "answer";
+      move = "acknowledge_advance";
+      retrievalQuery = "trainer explained what felt off in the last reply; acknowledge briefly and move to the next question";
+    } else if (technicalSubmission) {
       intent = "answer";
       move = "acknowledge_advance";
       retrievalQuery = `candidate submitted a ${technicalSubmission.kind} answer; acknowledge and advance`;
@@ -2796,6 +2814,31 @@ async function runCompletionPipeline(
           choices: [{ index: 0, message: { role: "assistant", content: closingText }, finish_reason: "stop" }],
         };
       }
+    } else if (calibrationOff) {
+      turnSpokenText = CALIBRATION_OFF_QUESTION;
+      sseChunks = [
+        {
+          id: completionId,
+          object: "chat.completion.chunk",
+          created: timestamp,
+          model,
+          choices: [{ index: 0, delta: { role: "assistant", content: CALIBRATION_OFF_QUESTION }, finish_reason: null }],
+        },
+        {
+          id: completionId,
+          object: "chat.completion.chunk",
+          created: timestamp,
+          model,
+          choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+        },
+      ];
+      fullResponse = {
+        id: completionId,
+        object: "chat.completion",
+        created: timestamp,
+        model,
+        choices: [{ index: 0, message: { role: "assistant", content: CALIBRATION_OFF_QUESTION }, finish_reason: "stop" }],
+      };
     } else if (repeatRequested) {
       // Repeat requests replay the pending question without spending a learner turn.
       const repeatText = state.pending_question ?? specs.agent.opening;

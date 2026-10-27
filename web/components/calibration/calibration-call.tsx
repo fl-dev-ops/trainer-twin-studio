@@ -3,14 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, LoaderCircle, Volume2 } from "lucide-react";
+import { ArrowLeft, ArrowUp, LoaderCircle, Volume2 } from "lucide-react";
 import { RoomAudioRenderer, RoomContext, useStartAudio, useVoiceAssistant } from "@livekit/components-react";
 import { Room, RoomEvent, type TranscriptionSegment } from "livekit-client";
 import {
   ArrowUpRightIcon,
   CallEndedIcon,
   ChatIcon,
-  CloseIcon,
   FeelsLikeMeIcon,
   FeelsOffIcon,
   HangUpIcon,
@@ -18,7 +17,7 @@ import {
   PhoneIcon,
 } from "@/components/calibration/call-icons";
 import type { CalibrationTurn, Rating } from "@/components/calibration/mock";
-import { Bubble, CalibrationStats, PANEL_SHADOW, PILL, RatingLabel, SOFT_SHADOW, TwinPortrait } from "@/components/calibration/parts";
+import { Bubble, CalibrationStats, PILL, RatingLabel, SOFT_SHADOW, TwinPortrait } from "@/components/calibration/parts";
 import { RoleplayIcon } from "@/components/icons";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { LiveKitWorkspaceProvider } from "@/lib/livekit-workspaces";
@@ -77,7 +76,9 @@ function Call({ room, slug, scenarioName, twinName, twin = false }: CallProps & 
   const [liveText, setLiveText] = useState("");
   const [seconds, setSeconds] = useState(0);
   const [muted, setMuted] = useState(false);
-  const [panelOpen, setPanelOpen] = useState(false);
+  /** Typing instead of speaking: the message box above the call controls. */
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [draft, setDraft] = useState("");
   const [confirmEnd, setConfirmEnd] = useState(false);
 
   const router = useRouter();
@@ -94,6 +95,8 @@ function Call({ room, slug, scenarioName, twinName, twin = false }: CallProps & 
   /** True once the room has connected; a disconnect before that is a failed start, not the end of a call. */
   const joinedRef = useRef(false);
   const nextId = useRef(0);
+  /** Typed messages already shown; the agent echoes each back as your transcript once, which is skipped. */
+  const typedEchoes = useRef<string[]>([]);
   const { state: agentState } = useVoiceAssistant();
   const { mergedProps: audioProps, canPlayAudio } = useStartAudio({ room, props: {} });
 
@@ -145,7 +148,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false }: CallProps & 
       const saved = await closeSession(status, unloading);
       if (!saved && !unloading) toast.error("The call's transcript could not be saved.");
       await room.disconnect().catch(() => {});
-      setPanelOpen(false);
+      setComposerOpen(false);
       setConfirmEnd(false);
       setPhase("ended");
     },
@@ -159,6 +162,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false }: CallProps & 
     turnsRef.current = [];
     // A new call keeps nothing from the previous one.
     nextId.current = 0;
+    typedEchoes.current = [];
     pendingRatings.current.clear();
     setCalibrationId(null);
     setCalibrationFailed(false);
@@ -252,6 +256,11 @@ function Call({ room, slug, scenarioName, twinName, twin = false }: CallProps & 
         }
         if (!isYou) setLiveText("");
         const text = segment.text;
+        const echo = isYou ? typedEchoes.current.indexOf(text.trim()) : -1;
+        if (echo >= 0) {
+          typedEchoes.current.splice(echo, 1);
+          continue;
+        }
         updateTurns((prev) => {
           const last = prev[prev.length - 1];
           // The agent re-sends a growing final for one utterance; keep it as one turn (as /talk does).
@@ -311,6 +320,24 @@ function Call({ room, slug, scenarioName, twinName, twin = false }: CallProps & 
     router.push(backHref);
   }
 
+  /** A typed message: the agent reads lk.chat like speech and replies; it counts as your turn here. */
+  async function sendMessage(event: React.FormEvent) {
+    event.preventDefault();
+    const text = draft.trim();
+    setDraft("");
+    await say(text);
+  }
+
+  async function say(text: string) {
+    if (!text || phase !== "live") return;
+    typedEchoes.current.push(text);
+    updateTurns((prev) => [...prev, { id: `t${nextId.current++}`, speaker: "you", text }]);
+    await room.localParticipant.sendText(text, { topic: "lk.chat" }).catch((sendError) => {
+      console.error("Could not send the message:", sendError);
+      toast.error("That message was not sent.");
+    });
+  }
+
   async function toggleMute() {
     const next = !muted;
     setMuted(next);
@@ -322,6 +349,15 @@ function Call({ room, slug, scenarioName, twinName, twin = false }: CallProps & 
     ? [...turns, { id: "streaming", speaker: "twin", text: liveText, streaming: true }]
     : turns;
   const speaking = agentState === "speaking";
+  /** Only the twin's latest finished answer can be rated; earlier ones keep their rating (or none). */
+  const latestTwinId = turns.findLast((t) => t.speaker === "twin")?.id;
+
+  // Follow the conversation: keep the newest turn in view as it grows.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [turns.length, liveText]);
 
   return (
     <LiveKitWorkspaceProvider
@@ -331,7 +367,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false }: CallProps & 
       onEndSession={() => void end("completed")}
       active={phase === "live"}
     >
-      <div className="relative flex min-h-0 flex-1 flex-col">
+      <div className="relative flex h-dvh max-h-dvh flex-col overflow-hidden">
         <Link href={backHref} onClick={(event) => void leave(event)} className="flex w-fit items-center gap-2 px-8 pt-6 text-sm text-foreground/90 hover:text-foreground">
           <ArrowLeft className="size-4" aria-hidden />
           Calibrate · {scenarioName}
@@ -353,7 +389,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false }: CallProps & 
           />
         ) : (
           <>
-            <div className={cn("flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-6 pt-8 pb-32", panelOpen && "lg:pr-[440px]")}>
+            <div ref={scrollRef} className={cn("flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-6 pt-8", composerOpen ? "pb-44" : "pb-28")}>
               <div className={cn("relative size-[320px] shrink-0 overflow-hidden rounded-[32px] bg-muted", SOFT_SHADOW, speaking && "ring-2 ring-emerald-500/70")}>
                 <TwinPortrait name={twinName} className="size-full text-8xl" />
                 <span className="absolute bottom-3 left-3 rounded-full bg-white px-2.5 py-1 text-[13px] leading-[18px] font-medium text-neutral-900 shadow-[0_0_0_1px_#e9e9e9]">
@@ -388,7 +424,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false }: CallProps & 
                 ) : captions.length === 0 ? (
                   <p className="text-center text-sm text-muted-foreground">{twinName} will start in a moment.</p>
                 ) : (
-                  captions.slice(-2).map((turn, index, shown) =>
+                  captions.map((turn, index, shown) =>
                     turn.speaker === "you" ? (
                       <Bubble key={turn.id} speaker="you" className="max-w-[440px]">
                         {turn.text}
@@ -404,13 +440,22 @@ function Call({ room, slug, scenarioName, twinName, twin = false }: CallProps & 
                         <Bubble speaker="twin">{turn.text}</Bubble>
                         {turn.streaming ? null : turn.rating ? (
                           <RatingLabel rating={turn.rating} className="text-[13px]" />
-                        ) : (
+                        ) : turn.id !== latestTwinId ? null : (
                           <div className="flex flex-wrap items-center gap-2">
                             <button type="button" className={cn(PILL, "disabled:opacity-50")} disabled={!canRate} onClick={() => rate(turn.id, "like")}>
                               <FeelsLikeMeIcon className="size-4" />
                               Feels like me
                             </button>
-                            <button type="button" className={cn(PILL, "disabled:opacity-50")} disabled={!canRate} onClick={() => rate(turn.id, "off")}>
+                            <button
+                              type="button"
+                              className={cn(PILL, "disabled:opacity-50")}
+                              disabled={!canRate}
+                              // The twin then asks what felt off, and moves on once you've explained.
+                              onClick={() => {
+                                rate(turn.id, "off");
+                                void say("Feels off");
+                              }}
+                            >
                               <FeelsOffIcon className="size-4" />
                               Feels off
                             </button>
@@ -428,7 +473,36 @@ function Call({ room, slug, scenarioName, twinName, twin = false }: CallProps & 
               </div>
             </div>
 
-            <div className={cn("absolute inset-x-0 bottom-6 flex justify-center gap-4", panelOpen && "lg:pr-[440px]")}>
+            {/* Pinned to the bottom of the window; the area above leaves room for it. */}
+            <div className="fixed inset-x-0 bottom-0 z-10 flex flex-col items-center gap-4 bg-background px-6 pt-3 pb-6">
+              {composerOpen ? (
+                <form onSubmit={(event) => void sendMessage(event)} className="flex w-full max-w-[440px] items-center gap-2 rounded-full border bg-card p-1.5 pl-4">
+                  <label htmlFor="calibration-message" className="sr-only">
+                    Message {twinName}
+                  </label>
+                  <input
+                    id="calibration-message"
+                    autoFocus
+                    autoComplete="off"
+                    value={draft}
+                    onChange={(event) => setDraft(event.target.value)}
+                    onKeyDown={(event) => event.key === "Escape" && setComposerOpen(false)}
+                    placeholder={`Type a message to ${twinName}`}
+                    disabled={phase !== "live"}
+                    maxLength={2000}
+                    className="h-9 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:opacity-60"
+                  />
+                  <button
+                    type="submit"
+                    aria-label="Send message"
+                    disabled={phase !== "live" || !draft.trim()}
+                    className="grid size-9 shrink-0 place-items-center rounded-full bg-foreground text-background outline-none transition-opacity focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-40"
+                  >
+                    <ArrowUp className="size-4" />
+                  </button>
+                </form>
+              ) : null}
+            <div className="flex justify-center gap-4">
               <button
                 type="button"
                 aria-label={muted ? "Unmute" : "Mute"}
@@ -441,11 +515,11 @@ function Call({ room, slug, scenarioName, twinName, twin = false }: CallProps & 
               </button>
               <button
                 type="button"
-                aria-label="View conversation"
-                aria-pressed={panelOpen}
-                onClick={() => setPanelOpen(!panelOpen)}
-                style={{ "--call-chat-lines": panelOpen ? "var(--card)" : "var(--muted)" } as React.CSSProperties}
-                className={cn(CONTROL, "border", panelOpen ? "bg-card" : "bg-muted hover:bg-border")}
+                aria-label={composerOpen ? "Close message box" : "Type a message"}
+                aria-pressed={composerOpen}
+                onClick={() => setComposerOpen(!composerOpen)}
+                style={{ "--call-chat-lines": composerOpen ? "var(--card)" : "var(--muted)" } as React.CSSProperties}
+                className={cn(CONTROL, "border", composerOpen ? "bg-card" : "bg-muted hover:bg-border")}
               >
                 <ChatIcon />
               </button>
@@ -459,8 +533,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false }: CallProps & 
                 <HangUpIcon />
               </button>
             </div>
-
-            {panelOpen ? <ConversationPanel turns={turns} twinName={twinName} onClose={() => setPanelOpen(false)} /> : null}
+            </div>
 
             <AlertDialog open={confirmEnd} onOpenChange={setConfirmEnd}>
               <AlertDialogContent className="flex max-w-[420px]! flex-col items-center gap-6 rounded-3xl px-6 pt-8 pb-6">
@@ -481,46 +554,6 @@ function Call({ room, slug, scenarioName, twinName, twin = false }: CallProps & 
         )}
       </div>
     </LiveKitWorkspaceProvider>
-  );
-}
-
-/** Full transcript so far, in a floating panel (prototype "Conversation"). */
-function ConversationPanel({ turns, twinName, onClose }: { turns: CalibrationTurn[]; twinName: string; onClose: () => void }) {
-  return (
-    <section
-      aria-label="Conversation"
-      className={cn(
-        "absolute right-6 bottom-6 z-20 flex h-[450px] max-h-[calc(100%-3rem)] w-[360px] flex-col overflow-hidden rounded-2xl bg-card max-sm:inset-x-4 max-sm:w-auto",
-        PANEL_SHADOW,
-      )}
-    >
-      <header className="flex h-11 shrink-0 items-center justify-between bg-muted/60 px-4">
-        <h2 className="text-base font-semibold tracking-[-0.015em]">Conversation</h2>
-        <button
-          type="button"
-          aria-label="Close conversation"
-          onClick={onClose}
-          className="grid size-7 place-items-center rounded-full outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
-        >
-          <CloseIcon className="size-5" />
-        </button>
-      </header>
-      {turns.length === 0 ? (
-        <p className="m-auto px-6 text-center text-sm text-muted-foreground">What you and {twinName} say appears here.</p>
-      ) : (
-        <ol className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-          {turns.map((turn) => (
-            <li key={turn.id} className={cn("flex flex-col gap-1.5", turn.speaker === "you" && "items-end")}>
-              <span className="text-xs text-foreground/75">{turn.speaker === "you" ? "You" : twinName}</span>
-              <Bubble speaker={turn.speaker} className="text-[15px] leading-[22px]">
-                {turn.text}
-              </Bubble>
-              {turn.rating ? <RatingLabel rating={turn.rating} /> : null}
-            </li>
-          ))}
-        </ol>
-      )}
-    </section>
   );
 }
 

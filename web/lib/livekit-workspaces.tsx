@@ -108,6 +108,13 @@ export function LiveKitWorkspaceProvider({
 }) {
   const handlers = useRef(new Map<WorkspaceMethod, WorkspaceHandler>());
   const seen = useRef(new Set<string>());
+  // Latest callbacks, read at call time: callers pass inline functions, which must not restart polling each render.
+  const onSurfaceRef = useRef(onSurface);
+  const onEndSessionRef = useRef(onEndSession);
+  useEffect(() => {
+    onSurfaceRef.current = onSurface;
+    onEndSessionRef.current = onEndSession;
+  });
 
   const register = useCallback(
     (method: WorkspaceMethod, handler: WorkspaceHandler) => {
@@ -141,13 +148,13 @@ export function LiveKitWorkspaceProvider({
             body: JSON.stringify({ result: { ok: true } }),
           });
           await new Promise((resolve) => setTimeout(resolve, 5000));
-          onEndSession?.();
+          onEndSessionRef.current?.();
           return;
         }
         if (command.tool === "surface" || command.tool === "start_resume_question") {
           const parsed = parseWorkspaceCommandSurface(command);
           if (command.tool === "start_resume_question" && !parsed) throw new Error("Resume question has no PDF surface");
-          const surfaceResult = parsed ? await onSurface(parsed.surface) : undefined;
+          const surfaceResult = parsed ? await onSurfaceRef.current(parsed.surface) : undefined;
           const action = String(input.action ?? input.type ?? "");
           await fetch(`/api/sessions/${sessionId}/commands/${command.id}`, {
             method: "POST",
@@ -194,7 +201,7 @@ export function LiveKitWorkspaceProvider({
     }
     void poll();
     return () => { cancelled = true; };
-  }, [sessionId, runtimeToken, onSurface, onEndSession, active]);
+  }, [sessionId, runtimeToken, active]);
 
   const value = useMemo(() => register, [register]);
   return <WorkspaceContext value={value}>{children}</WorkspaceContext>;

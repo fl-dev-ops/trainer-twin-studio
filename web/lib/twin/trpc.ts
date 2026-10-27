@@ -7,12 +7,11 @@ import { LEARNER_ROLE } from "@/lib/org";
 import { studioProcedure, t } from "@/lib/trpc";
 import {
   assignTwinAndInvite,
-  createTwinShareLink,
-  DEFAULT_TWIN_MINUTES,
   findTwinAgent,
   listTwinAssignments,
   TwinAccessError,
-  twinUrl,
+  twinSharePath,
+  twinShareUrl,
 } from "@/lib/twin-access";
 import { TWIN_SOURCE } from "@/lib/twins";
 import { getRun } from "workflow/api";
@@ -124,6 +123,12 @@ function omitRatings<T extends { ratings: unknown }>(row: T): Omit<T, "ratings">
 /** Persona-level label of who talks to the twin ("Agent", "Learner"...), from the skill's scenario.json. */
 const whoAsks = (data: Record<string, unknown>) => text(asRecord(data.scenario).learner_role) ?? "Learner";
 
+/** A twin is the org admin's own AI: their avatar stands in when no AI avatar is configured. */
+async function orgAdmin(orgId: string) {
+  const admin = await db.member.findFirst({ where: { organizationId: orgId, role: "admin" }, select: { user: { select: { name: true, email: true, image: true } } } });
+  return admin?.user ?? null;
+}
+
 /** The twin's AI avatar (image or video), set on its own persona as `data.avatarUrl`; https or same-site paths only. */
 function aiAvatarUrl(personaData: unknown): string | null {
   const url = text(asRecord(personaData).avatarUrl);
@@ -151,8 +156,7 @@ const agentsRouter = t.router({
         distinct: ["agentId"],
         select: { agentId: true, transcript: true },
       }),
-      // A twin is the org admin's own AI: their avatar stands in when no AI avatar is configured.
-      db.member.findFirst({ where: { organizationId: orgId, role: "admin" }, select: { user: { select: { name: true, email: true, image: true } } } }),
+      orgAdmin(orgId),
     ]);
     const questionOf = new Map(latest.map((row) => [row.agentId, firstExchange(transcriptTurns(row.transcript)).question]));
     const cards = agents.map((agent) => {
@@ -164,7 +168,7 @@ const agentsRouter = t.router({
         quote: questionOf.get(agent.id) ?? null,
         updatedAt: agent.updatedAt.toISOString(),
         allSkills: data.source === TWIN_SOURCE,
-        face: { person: admin?.user ?? null, avatarUrl: aiAvatarUrl(agent.persona.data) },
+        face: { person: admin, avatarUrl: aiAvatarUrl(agent.persona.data) },
         learners: assignments
           .filter((row) => row.agentId === agent.id)
           .map((row) => ({ name: row.user?.name || row.recipientEmail, email: row.recipientEmail, image: row.user?.image ?? null })),
@@ -197,6 +201,7 @@ const agentsRouter = t.router({
       name: found.name,
       description: text(data.objective),
       whoAsks: whoAsks(data),
+      allSkills: data.source === TWIN_SOURCE,
       settings: twinSettingsFromAgentData(data),
       credit: {
         minutes: active.reduce((sum, row) => sum + row.minutesLimit, 0),
@@ -257,18 +262,14 @@ const agentsRouter = t.router({
       return { version: current.version + 1 };
     })),
 
-  /** The twin's common link (created with the default minutes the first time). */
+  /**
+   * The twin's readable link (/t/<username> or /t/<short slug>). Creates nothing: the link only opens for people in
+   * the org with an active assignment on this twin (their own minutes), so sharing it grants no access.
+   */
   shareLink: studioProcedure.input(slugInput).mutation(({ ctx, input }) => twinCall(async () => {
     const found = await findTwinAgent(ctx.user.orgId, input.slug);
-    const existing = await db.twinShareLink.findFirst({
-      where: { orgId: ctx.user.orgId, agentId: found.id, status: "active" },
-      orderBy: { createdAt: "asc" },
-      select: { code: true, minutesPerUser: true },
-    });
-    const link = existing ?? await createTwinShareLink({
-      orgId: ctx.user.orgId, agentId: found.id, minutesPerUser: DEFAULT_TWIN_MINUTES, createdByUserId: ctx.user.id,
-    });
-    return { url: twinUrl(ctx.user.orgSlug, link.code), minutesPerUser: link.minutesPerUser };
+    const path = await twinSharePath(ctx.user.orgId, ctx.user.orgSlug, found.id);
+    return { url: twinShareUrl(ctx.user.orgSlug, path) };
   })),
 });
 
@@ -411,8 +412,16 @@ const calibrationsRouter = t.router({
   /** One twin's calibrations with their like/off counts. */
   list: studioProcedure.input(slugInput).query(({ ctx, input }) => twinCall(async () => {
     const found = await findTwinAgent(ctx.user.orgId, input.slug);
-    const rows = await calibrationRows(ctx.user.orgId, found.id);
-    return { name: found.name, calibrations: rows.map((row) => omitRatings(row)) };
+    const [rows, persona, admin] = await Promise.all([
+      calibrationRows(ctx.user.orgId, found.id),
+      db.agent.findUniqueOrThrow({ where: { id: found.id }, select: { persona: { select: { data: true } } } }),
+      orgAdmin(ctx.user.orgId),
+    ]);
+    return {
+      name: found.name,
+      face: { person: admin, avatarUrl: aiAvatarUrl(persona.persona.data) },
+      calibrations: rows.map((row) => omitRatings(row)),
+    };
   })),
 
   /** One calibration: the call's transcript with the ratings on the replies that were rated. */

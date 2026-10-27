@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { SwitchAccountButton } from "@/components/auth/switch-account-button";
 import { HomeRedirect } from "@/components/session/home-redirect";
 import { SessionView } from "@/components/session-view";
+import { TwinSession } from "@/components/session/twin-session";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { assignmentMatchesUser } from "@/lib/assignments";
 import { signInUrl } from "@/lib/base-domain";
@@ -119,37 +120,6 @@ export default async function SharedSessionPage({ params }: { params: Promise<{ 
       userName={user.name}
       organizationName={assignment.organization.name}
       organizationLogo={/^data:image\/(?:png|jpeg|webp);base64,/.test(assignment.organization.logo ?? "") ? assignment.organization.logo : null}
-      agentPersonas={{ [agent.slug]: agent.persona.slug }}
-      agentContextRequired={agentContextRequired}
-      agentContextUploads={agentContextUploads}
-      introVideos={introVideos}
-      autoStart
-      contexts={[]}
-      sessionCode={code}
-    />
-  );
-}
-
-/** A twin opened from its link: same voice session screen; minutes are enforced when the session starts. */
-async function TwinSession({ orgId, agentId, code, userName }: { orgId: string; agentId: string; code: string; userName: string }) {
-  const [agent, organization] = await Promise.all([
-    db.agent.findFirstOrThrow({ where: { id: agentId, orgId }, select: { slug: true, name: true, persona: { select: { slug: true } } } }),
-    db.organization.findUniqueOrThrow({ where: { id: orgId }, select: { name: true, logo: true } }),
-  ]);
-  const [introVideos, agentContextRequired, agentContextUploads] = await Promise.all([
-    listScenarioIntroVideos(orgId, [agent.slug]),
-    listAgentContextRequired(orgId, [agent.slug]),
-    listAgentContextUploads(orgId, [agent.slug]),
-  ]);
-  const logo = organization.logo ?? "";
-  return (
-    <SessionView
-      personas={[agent.persona.slug]}
-      agents={[agent.slug]}
-      scenarioName={agent.name}
-      userName={userName}
-      organizationName={organization.name}
-      organizationLogo={/^data:image\/(?:png|jpeg|webp);base64,/.test(logo) ? logo : null}
       agentPersonas={{ [agent.slug]: agent.persona.slug }}
       agentContextRequired={agentContextRequired}
       agentContextUploads={agentContextUploads}

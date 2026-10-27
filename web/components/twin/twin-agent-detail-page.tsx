@@ -23,7 +23,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SessionTime } from "@/components/sessions/session-time";
-import { copyTwinLink } from "@/components/twin/copy-twin-link";
+import { ShareTwinDialog } from "@/components/twin/share-twin-dialog";
 import { TwinSessionItem } from "@/components/twin/twin-session-item";
 import { usePendingReports } from "@/components/twin/use-report-polling";
 import type { TwinOutputs } from "@/lib/twin/trpc";
@@ -153,6 +153,7 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
   const id = twin.slug;
   const [dateFilter, setDateFilter] = useState("30");
   const [tab, setTab] = useState<"calibration" | "sessions">("calibration");
+  const [shareOpen, setShareOpen] = useState(false);
 
   const dateLabel = DATE_OPTIONS.find((o) => o.value === dateFilter)?.label || "Last 30 days";
   const calibrations = twin.calibrations.filter((item) => inRange(item.at, dateFilter));
@@ -242,7 +243,7 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
                     <UserPlus className="size-4" />
                     <span>Assign</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => void copyTwinLink(id)}>
+                  <DropdownMenuItem onClick={() => setShareOpen(true)}>
                     <Share2 className="size-4" />
                     <span>Share</span>
                   </DropdownMenuItem>
@@ -258,6 +259,7 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
             </DropdownMenu>
           </div>
         </header>
+        <ShareTwinDialog open={shareOpen} onOpenChange={setShareOpen} slug={id} name={twin.name} allSkills={twin.allSkills} />
 
         {/* 2-Column Layout matching Reference Grid */}
         <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">

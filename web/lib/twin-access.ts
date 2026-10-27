@@ -3,6 +3,7 @@ import { BASE_DOMAIN } from "@/lib/base-domain";
 import { db } from "@/lib/db";
 import { sendTwinAssignmentEmail } from "@/lib/email";
 import { homeOrgsByEmail } from "@/lib/org-lock";
+import { TWIN_SOURCE } from "@/lib/twins";
 
 /**
  * Twin access (migration twin_access). A twin is used through a TwinAssignment: one per user per twin
@@ -22,6 +23,52 @@ export const newTwinShareCode = () => randomBytes(18).toString("base64url");
 
 /** The learner-facing link for a twin assignment or share link code. */
 export const twinUrl = (orgSlug: string, code: string) => `https://${orgSlug}.${BASE_DOMAIN}/s/${code}`;
+
+/** The readable shared link: /t/<username> for the main twin, /t/<short slug> for a skill twin. */
+export const twinShareUrl = (orgSlug: string, path: string) => `https://${orgSlug}.${BASE_DOMAIN}/t/${path}`;
+
+/** A skill twin's slug without the org prefix ("acme-off-plan" in org "acme" \u2192 "off-plan"). */
+export const shortTwinSlug = (orgSlug: string, slug: string) =>
+  slug.startsWith(`${orgSlug}-`) && slug.length > orgSlug.length + 1 ? slug.slice(orgSlug.length + 1) : slug;
+
+const isAllSkillsTwin = (data: unknown) => (data as Record<string, unknown> | null)?.source === TWIN_SOURCE;
+
+/**
+ * The /t/<path> of a twin. Main twin (all skills): its trainer's own persona slug (the username). Skill twin: the
+ * short slug, or the full slug when the short one is someone's username (usernames win when resolving).
+ */
+export async function twinSharePath(orgId: string, orgSlug: string, agentId: string) {
+  const agent = await db.agent.findFirst({
+    where: { id: agentId, orgId, kind: "TWIN" },
+    select: { slug: true, data: true, persona: { select: { slug: true, isOwn: true } } },
+  });
+  if (!agent) throw new TwinAccessError("Twin not found", 404);
+  if (isAllSkillsTwin(agent.data) && agent.persona.isOwn) return agent.persona.slug;
+  const short = shortTwinSlug(orgSlug, agent.slug);
+  if (short === agent.slug) return agent.slug;
+  const username = await db.persona.findFirst({ where: { orgId, isOwn: true, slug: { equals: short, mode: "insensitive" } }, select: { id: true } });
+  return username ? agent.slug : short;
+}
+
+/**
+ * Which twin a /t/<path> opens in this org: a username (own persona slug) opens that trainer's main twin; otherwise
+ * a skill twin by short slug, then by full slug. Null: nothing here.
+ */
+export async function resolveTwinPath(orgId: string, orgSlug: string, path: string): Promise<{ agentId: string } | null> {
+  const value = path.trim().toLowerCase();
+  if (!value || value.length > 200) return null;
+  const persona = await db.persona.findFirst({ where: { orgId, isOwn: true, slug: { equals: value, mode: "insensitive" } }, select: { id: true } });
+  if (persona) {
+    const twins = await db.agent.findMany({ where: { orgId, kind: "TWIN", personaId: persona.id }, select: { id: true, data: true } });
+    const main = twins.find((twin) => isAllSkillsTwin(twin.data));
+    if (main) return { agentId: main.id };
+  }
+  for (const slug of [`${orgSlug}-${value}`, value]) {
+    const agent = await db.agent.findFirst({ where: { orgId, kind: "TWIN", slug }, select: { id: true } });
+    if (agent) return { agentId: agent.id };
+  }
+  return null;
+}
 
 /** Minutes a learner gets when nobody chose otherwise (assign screen default, share links). */
 export const DEFAULT_TWIN_MINUTES = 30;
@@ -110,6 +157,16 @@ export async function twinAccessByCode(input: { orgId: string; user: Person; cod
     throw error;
   });
   return usable(created, input.user);
+}
+
+/**
+ * /t/<path> access: the user's own active assignment on that twin (minutes left, bound on first use). Returns its
+ * personal code, which the session screen starts with; throws TwinAccessError when not assigned / revoked / used up.
+ */
+export async function twinAssignmentCode(input: { orgId: string; user: Person; agentId: string }) {
+  const access = await twinAccessByAgent(input);
+  const assignment = await db.twinAssignment.findUniqueOrThrow({ where: { id: access.assignmentId }, select: { shareCode: true } });
+  return assignment.shareCode;
 }
 
 /** Twin access for a direct start (portal / talk page): the user's own assignment on that twin. */

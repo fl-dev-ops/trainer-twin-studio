@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { ChevronDown, Play, Settings2, Share2, Sliders, Trash2, UserPlus } from "lucide-react";
 import { SetupIcon } from "@/components/icons";
 import { SessionTime } from "@/components/sessions/session-time";
-import { copyTwinLink } from "@/components/twin/copy-twin-link";
-import { UserAvatar, UserAvatarGroup } from "@/components/user-avatar";
+import { ShareTwinDialog } from "@/components/twin/share-twin-dialog";
+import { TwinFace } from "@/components/twin/twin-face";
+import { UserAvatarGroup } from "@/components/user-avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,23 +25,6 @@ import { cn } from "@/lib/utils";
  */
 
 type TwinCard = TwinOutputs["agents"]["list"]["twins"][number];
-
-/**
- * The twin's face: its AI avatar (image, or a looping video) when one is configured on its persona,
- * otherwise the org admin's avatar (their photo, or their initial). `className` sets the size; a non-round shape must
- * also round the avatar's border overlay and contents (after:/*: variants), which default to a circle.
- */
-function TwinFace({ face, className }: { face: TwinCard["face"]; className: string }) {
-  if (face.avatarUrl) {
-    return /\.(mp4|webm|mov)(\?|$)/i.test(face.avatarUrl) ? (
-      <video className={cn("shrink-0 bg-(--tone-control) object-cover", className)} src={face.avatarUrl} autoPlay muted loop playsInline preload="auto" aria-hidden />
-    ) : (
-      // eslint-disable-next-line @next/next/no-img-element -- remote avatar URL of unknown host; next/image would need it allow-listed
-      <img className={cn("shrink-0 bg-(--tone-control) object-cover", className)} src={face.avatarUrl} alt="" aria-hidden />
-    );
-  }
-  return <UserAvatar user={face.person ?? { name: "Twin" }} className={className} />;
-}
 
 /** Learners assigned to the twin (avatars with a +N chip), or a quiet note when nobody is. */
 function LearnerAvatars({ learners, className }: { learners: TwinCard["learners"]; className?: string }) {
@@ -64,6 +49,7 @@ function DotsIcon() {
 
 /** The "Twin for all use cases" card: video avatar + title + meta + learners. */
 function TwinAllCard({ twin }: { twin: TwinCard }) {
+  const [shareOpen, setShareOpen] = useState(false);
   return (
     <article className="mt-4 flex items-center justify-between gap-4 rounded-[12px] border border-(--card-border) bg-card p-4 px-5 text-left shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)] transition-shadow hover:shadow-[0_2px_4px_rgb(30_28_25/0.07),0_8px_20px_rgb(30_28_25/0.11)]">
       <Link href={`/twin/${twin.slug}`} className="flex flex-1 items-center gap-4 min-w-0 outline-none">
@@ -107,7 +93,7 @@ function TwinAllCard({ twin }: { twin: TwinCard }) {
                 <UserPlus className="size-4" />
                 <span>Assign</span>
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => void copyTwinLink(twin.slug)}>
+              <DropdownMenuItem onClick={() => setShareOpen(true)}>
                 <Share2 className="size-4" />
                 <span>Share</span>
               </DropdownMenuItem>
@@ -115,6 +101,7 @@ function TwinAllCard({ twin }: { twin: TwinCard }) {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      <ShareTwinDialog open={shareOpen} onOpenChange={setShareOpen} slug={twin.slug} name={twin.name} allSkills={twin.allSkills} />
     </article>
   );
 }
@@ -135,6 +122,7 @@ const GRADIENTS = [
 
 /** "Twin agents for specific use cases" card: art + quote, body, learners + dots. */
 function TwinBotCard({ bot, index }: { bot: TwinCard; index: number }) {
+  const [shareOpen, setShareOpen] = useState(false);
   return (
     <article className="flex flex-col overflow-visible rounded-[12px] border border-(--card-border) bg-card text-left shadow-[0_1px_2px_rgb(30_28_25/0.04)] transition-shadow hover:shadow-[0_2px_4px_rgb(30_28_25/0.07),0_8px_20px_rgb(30_28_25/0.11)]">
       {/* Top gradient banner with centered quote bubble (reference rp-art--twin + rp-quote) */}
@@ -209,7 +197,7 @@ function TwinBotCard({ bot, index }: { bot: TwinCard; index: number }) {
                 <UserPlus className="size-4" />
                 <span>Assign</span>
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => void copyTwinLink(bot.slug)}>
+              <DropdownMenuItem onClick={() => setShareOpen(true)}>
                 <Share2 className="size-4" />
                 <span>Share</span>
               </DropdownMenuItem>
@@ -224,6 +212,7 @@ function TwinBotCard({ bot, index }: { bot: TwinCard; index: number }) {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      <ShareTwinDialog open={shareOpen} onOpenChange={setShareOpen} slug={bot.slug} name={bot.name} allSkills={bot.allSkills} />
     </article>
   );
 }
