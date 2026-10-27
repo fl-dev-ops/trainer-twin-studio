@@ -292,16 +292,47 @@ test("twin-creator: never the learner's words, never role-play structure, always
 });
 
 test("twin-creator: a decision rule counts one per line, as a bullet, a numbered line or a plain paragraph", async () => {
-  const { io } = twinIo();
+  // A fresh sandbox per build: a session allows only 3 builds of one skill.
   const rules = ["When a buyer says they will wait, I ask what they wait for, because the price is rarely the reason.", "If they talk about the market, I show how my payment plans spread the risk.", "When a buyer wants cashback, I explain what the developer gives instead, because chasing it makes me look desperate."];
   for (const format of [(r: string) => `- ${r}`, (r: string, i: number) => `${i + 1}. ${r}`, (r: string) => `${r}\n`]) {
     const body = twinBody.replace(/## How I decide\n[\s\S]*?\n## Patterns I see/, `## How I decide\n${rules.map(format).join("\n")}\n\n## Patterns I see`);
-    const saved = await saveTwinSkill(io, "olga", { user: "olga", skill: twinHead, trainer: { call0001: ["speaker_1"] }, names: [], items: twinItems as never, patterns: twinPatterns, body });
+    const saved = await saveTwinSkill(twinIo().io, "olga", { user: "olga", skill: twinHead, trainer: { call0001: ["speaker_1"] }, names: [], items: twinItems as never, patterns: twinPatterns, body });
     expect((saved as { check: { reasons: string[] } }).check.reasons).toEqual([]);
   }
   const twoRules = twinBody.replace(/## How I decide\n[\s\S]*?\n## Patterns I see/, `## How I decide\n${rules.slice(0, 2).join("\n\n")}\n\n## Patterns I see`);
-  const short = await saveTwinSkill(io, "olga", { user: "olga", skill: twinHead, trainer: { call0001: ["speaker_1"] }, names: [], items: twinItems as never, patterns: twinPatterns, body: twoRules });
+  const short = await saveTwinSkill(twinIo().io, "olga", { user: "olga", skill: twinHead, trainer: { call0001: ["speaker_1"] }, names: [], items: twinItems as never, patterns: twinPatterns, body: twoRules });
   expect((short as { check: { reasons: string[] } }).check.reasons.join("\n")).toContain('"## How I decide" has 2 rules');
+});
+
+test("twin-creator: start/end match the turn ignoring case and punctuation; the stored text is still the source's", async () => {
+  const { io } = twinIo();
+  // Turn 0: "When a buyer tells me they will wait for prices to drop, I ask what they are really waiting for."
+  const part = { source: "call0001", n: 0, start: "i ASK what they", end: "really waiting", situation: "buyer-waits", kind: "decision", context: "what to ask a waiting buyer" };
+  const saved = await saveTwinSkill(io, "olga", { user: "olga", skill: twinHead, trainer: { call0001: ["speaker_1"] }, names: [], items: [...twinItems.slice(1), part] as never, patterns: twinPatterns, body: twinBody });
+  expect((saved as { check: { reasons: string[] } }).check.reasons).toEqual([]);
+  const items = JSON.parse(io ? (await io.read("output/olga/twin-skills/off-plan-waiting/items.json"))! : "[]") as { text: string }[];
+  // From "i ASK what they" to "really waiting", with the turn's own casing and punctuation.
+  expect(items.map((x) => x.text)).toContain("I ask what they are really waiting");
+  const missing = await saveTwinSkill(twinIo().io, "olga", { user: "olga", skill: twinHead, trainer: { call0001: ["speaker_1"] }, names: [], items: [...twinItems, { ...part, start: "words that were never said" }] as never, patterns: twinPatterns, body: twinBody });
+  expect(JSON.stringify(missing)).toContain("start is not in this turn");
+});
+
+test("twin-creator: Topic names a situation by its key words; a missing one is still reported", async () => {
+  const paraphrase = twinBody.replace("I handle two situations here: Buyer waits for prices, and Buyer asks for cashback.", "Two cases: a buyer who waits for lower prices, and a buyer who asks me about cashback.");
+  const ok = await saveTwinSkill(twinIo().io, "olga", { user: "olga", skill: twinHead, trainer: { call0001: ["speaker_1"] }, names: [], items: twinItems as never, patterns: twinPatterns, body: paraphrase });
+  expect((ok as { check: { reasons: string[] } }).check.reasons).toEqual([]);
+  const gone = twinBody.replace("I handle two situations here: Buyer waits for prices, and Buyer asks for cashback.", "I handle the buyer who waits for prices.");
+  const bad = await saveTwinSkill(twinIo().io, "olga", { user: "olga", skill: twinHead, trainer: { call0001: ["speaker_1"] }, names: [], items: twinItems as never, patterns: twinPatterns, body: gone });
+  expect((bad as { check: { reasons: string[] } }).check.reasons).toEqual(['"## Topic" should name the situation "Buyer asks for cashback"']);
+});
+
+test("twin-creator: a 4th build of the same skill is refused, so the copilot reports and stops instead of looping", async () => {
+  const { io } = twinIo();
+  const build = () => saveTwinSkill(io, "olga", { user: "olga", skill: twinHead, trainer: { call0001: ["speaker_1"] }, names: [], items: twinItems as never, patterns: twinPatterns, body: twinBody });
+  for (let i = 0; i < 3; i++) expect((await build()).saved).toBe(true);
+  const fourth = await build();
+  expect(fourth).toMatchObject({ saved: false, stop: true });
+  expect(JSON.stringify(fourth)).toContain("the limit is 3");
 });
 
 test("twin skills endpoint: secret, org, and the trainer's words only", async () => {

@@ -24,7 +24,8 @@ export const TWIN = {
   situations: { min: 2, max: 6 },
   maxWords: { skill: 2000, patterns: 2000, context: 25 },
   minFirstPerson: 8, // "I", "my", "me" in SKILL.md: it is written as the trainer
-  minDecisionRules: 3, // bullets under "## How I decide"
+  minDecisionRules: 3, // rules under "## How I decide"
+  maxBuilds: 3, // build_twin_skill calls per skill per session; then report and stop instead of looping
 } as const;
 export const TWIN_SKILL_SECTIONS = ["## Topic", "## What I know", "## How I decide", "## Patterns I see", "## My approach", "## What I say", "## Gaps"];
 export const TWIN_PATTERN_SECTIONS = ["## What I know", "## How I decide", "## Patterns I see", "## My approach", "## What I say", "## Gaps"];
@@ -67,6 +68,32 @@ export type TwinItem = {
 export const trainerLabels = z.record(z.string(), z.array(z.string()).min(1));
 
 const squash = (s: string) => s.replace(/\s+/g, " ").trim();
+
+/**
+ * Finds `needle` in `text` ignoring case, punctuation and spacing (transcripts have little punctuation and odd casing,
+ * so a model rarely retypes words exactly) and returns the match's positions in the ORIGINAL text, so what is stored
+ * is still copied from the source. -1 when the words are not there.
+ */
+export function looseIndex(text: string, needle: string, from = 0): { start: number; end: number } | -1 {
+  const norm: string[] = [];
+  const at: number[] = []; // index in `text` of each kept character
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i].toLowerCase();
+    if (/[\p{L}\p{N}]/u.test(c)) { norm.push(c); at.push(i); }
+    else if (norm.length && norm[norm.length - 1] !== " ") { norm.push(" "); at.push(i); }
+  }
+  const key = needle.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  if (!key) return -1;
+  const hay = norm.join("");
+  let k = hay.indexOf(key, Math.max(0, at.findIndex((i) => i >= from)));
+  // Only whole-word starts, so "art" never matches inside "start".
+  while (k > 0 && hay[k - 1] !== " ") k = hay.indexOf(key, k + 1);
+  if (k < 0) return -1;
+  return { start: at[k], end: at[k + key.length - 1] + 1 };
+}
+
+/** Content words of a phrase, for "is this situation named?" (exact wording not required). */
+const keyWords = (s: string) => new Set(s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").split(" ").filter((w) => w.length > 3));
 const linesUnder = (text: string, heading: string) => {
   const i = text.indexOf(heading);
   if (i < 0) return [];
@@ -110,12 +137,12 @@ export async function makeTwinItems(io: Io, user: string, head: TwinSkillHead, t
       if (!mine.includes(t.speaker)) { bad(`turn ${p.n} is spoken by ${t.speaker}, not the trainer. A twin skill holds only the trainer's own words`); continue; }
       const whole = squash(t.text);
       if (p.start || p.end) {
-        const a = p.start ? whole.indexOf(squash(p.start)) : 0;
-        if (a < 0) { bad("start is not in this turn; copy its first words exactly"); continue; }
-        const e = p.end ? whole.indexOf(squash(p.end), a) : -1;
-        if (p.end && e < 0) { bad("end is not in this turn after start; copy its last words exactly"); continue; }
-        text = redact(whole.slice(a, p.end ? e + squash(p.end).length : whole.length).trim());
-        span = text === redact(whole) ? null : a;
+        const a = p.start ? looseIndex(whole, p.start) : { start: 0, end: 0 };
+        if (a === -1) { bad("start is not in this turn; copy its first words from the turn"); continue; }
+        const e = p.end ? looseIndex(whole, p.end, a.start) : -1;
+        if (p.end && e === -1) { bad("end is not in this turn after start; copy its last words from the turn"); continue; }
+        text = redact(whole.slice(a.start, e === -1 ? whole.length : e.end).trim());
+        span = text === redact(whole) ? null : a.start;
       } else text = redact(t.text);
     } else {
       // Docs and posts are the trainer's own writing.
@@ -167,8 +194,12 @@ export async function checkTwinSkill(io: Io, user: string, id: string) {
   const rules = ruleLines(linesUnder(body, "## How I decide"));
   if (rules.length < TWIN.minDecisionRules) reasons.push(`"## How I decide" has ${rules.length} rules; it needs at least ${TWIN.minDecisionRules}, one per line, each "when …, I … because …"`);
   for (const rule of rules) if (!/\b(when|if|unless|once|before|after|until|as soon as)\b/i.test(rule)) reasons.push(`decision rule "${rule.trim().slice(0, 90)}" needs its condition: "when …" or "if …"`);
-  const topic = linesUnder(body, "## Topic").join("\n").toLowerCase();
-  for (const s of head.situations) if (!topic.includes(s.name.toLowerCase())) reasons.push(`"## Topic" should name the situation "${s.name}"`);
+  // Named = most of the situation's key words appear in Topic; exact wording is not required.
+  const topic = keyWords(linesUnder(body, "## Topic").join(" "));
+  for (const s of head.situations) {
+    const words = [...keyWords(s.name)];
+    if (words.length && words.filter((w) => topic.has(w)).length / words.length < 0.6) reasons.push(`"## Topic" should name the situation "${s.name}"`);
+  }
 
   // patterns.md: every observation cites the trainer's material.
   reasons.push(...TWIN_PATTERN_SECTIONS.filter((h) => !patterns!.includes(h)).map((h) => `patterns.md: missing section "${h}"`));
@@ -196,7 +227,11 @@ export async function checkTwinSkill(io: Io, user: string, id: string) {
   const rebuilt = await makeTwinItems(io, user, head, trainer, picks);
   reasons.push(...rebuilt.errors);
   for (const it of items!) if (it.role !== "trainer") reasons.push(`${it.id}: role must be trainer; a twin skill holds only the trainer's words`);
-  for (const it of items!) if (!rebuilt.items.some((r) => r.id === it.id && r.text === it.text)) reasons.push(`${it.id}: does not rebuild from its source`);
+  // A part of a turn (id "…#n@offset") is checked against its whole turn: the stored text must be in it.
+  for (const it of items!) {
+    const whole = it.id.replace(/@\d+$/, "");
+    if (!rebuilt.items.some((r) => r.id === whole && squash(r.text).includes(squash(it.text)))) reasons.push(`${it.id}: does not rebuild from its source`);
+  }
   const seen = new Map<string, string>();
   for (const it of items!) { const key = squash(it.text).toLowerCase(); if (seen.has(key)) reasons.push(`${it.id} repeats ${seen.get(key)}`); else seen.set(key, it.id); }
   if (sources.size < TWIN.minSources) reasons.push(`items come from ${sources.size} sources; a twin skill needs at least ${TWIN.minSources}. If the material has no more, report it and stop`);
@@ -232,12 +267,17 @@ export const twinBuildInput = z.object({
 /** Saves every file of one twin skill (replacing an earlier attempt), then runs the full check. Writes nothing if an item is rejected. */
 export async function saveTwinSkill(io: Io, user: string, input: z.infer<typeof twinBuildInput>) {
   const { skill: head, trainer, names, items: picks, patterns, body } = input;
+  const dir = twinDir(head.skill);
+  const builds = Number((await io.read(outPath(user, `${dir}/builds`))) ?? 0) + 1;
+  if (builds > TWIN.maxBuilds) {
+    return { saved: false, stop: true, rejected: [`This is build ${builds}; the limit is ${TWIN.maxBuilds}. Do not build again: write report.md with the open reasons and stop without publishing.`] };
+  }
+  await io.write(outPath(user, `${dir}/builds`), String(builds));
   if (body.trimStart().startsWith("---")) return { saved: false, rejected: ["Pass the SKILL.md body without front matter; code creates the header."] };
   if (names.length) await addNames(io, user, `twin:${head.skill}`, names);
   const { items, errors } = await makeTwinItems(io, user, head, trainer, picks);
   if (errors.length) return { saved: false, rejected: errors };
   const redact = redactor(await knownNames(io, user));
-  const dir = twinDir(head.skill);
   await io.write(outPath(user, `${dir}/sources.json`), JSON.stringify({ trainer }, null, 1) + "\n");
   await io.write(outPath(user, `${dir}/skill.json`), JSON.stringify(head, null, 2) + "\n");
   await io.write(outPath(user, `${dir}/SKILL.md`), twinSkillHeader(head) + body.trim() + "\n");
@@ -274,9 +314,12 @@ Know these before you read anything. Every number is a hard limit in code.
 
 ## Items (the trainer's own words)
 - Only the trainer's words. A recording with one speaker is the trainer. For a two-person recording, list the trainer's speaker labels in \`trainer\` ({ "<file id>": ["speaker_1"] }); a turn by anyone else is rejected. Docs and posts: \`quote\` copied exactly.
-- Each item: \`source\` (file id), \`n\` (turn, recordings) or \`quote\` (docs), optional exact \`start\`/\`end\`, \`situation\` (a skill situation id), \`kind\` (${ITEM_KINDS.join(", ")}), \`context\` (1 to ${TWIN.maxWords.context} words: what the passage is about or answers, no personal details).
+- Each item: \`source\` (file id), \`n\` (turn, recordings) or \`quote\` (docs), optional \`start\`/\`end\` (the turn's own words; case and punctuation may differ), \`situation\` (a skill situation id), \`kind\` (${ITEM_KINDS.join(", ")}), \`context\` (1 to ${TWIN.maxWords.context} words: what the passage is about or answers, no personal details).
 - At least ${TWIN.minItemWords} words per item. No two items with the same text.
 - At least ${TWIN.minSources} different sources. ${TWIN.minItemsPerSituation} to ${TWIN.maxItemsPerSituation} items per situation. At least ${TWIN.minDecisions} \`decision\` items.
+
+## Builds
+- At most ${TWIN.maxBuilds} \`build_twin_skill\` calls per skill. After that the tool refuses: write report.md with the open reasons and stop.
 
 ## patterns.md
 - Every section: ${TWIN_PATTERN_SECTIONS.join(", ")}. At most ${TWIN.maxWords.patterns} words, refs not counted.
