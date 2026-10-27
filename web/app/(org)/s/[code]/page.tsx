@@ -9,7 +9,7 @@ import { assignmentMatchesUser } from "@/lib/assignments";
 import { signInUrl } from "@/lib/base-domain";
 import { db } from "@/lib/db";
 import { resolveSessionUser } from "@/lib/session-user";
-import { listAgentContextRequired, listAgentContextUploads, listScenarioIntroVideos } from "@/lib/specs";
+import { listAgentAvatars, listAgentContextRequired, listAgentContextUploads, listScenarioIntroVideos } from "@/lib/specs";
 
 export const dynamic = "force-dynamic";
 
@@ -82,10 +82,11 @@ export default async function SharedSessionPage({ params }: { params: Promise<{ 
     );
   }
   const agent = assignment.deployment.agent;
-  const [introVideos, agentContextRequired, agentContextUploads] = await Promise.all([
+  const [introVideos, agentContextRequired, agentContextUploads, agentAvatars] = await Promise.all([
     listScenarioIntroVideos(org.id, [agent.slug]),
     listAgentContextRequired(org.id, [agent.slug]),
     listAgentContextUploads(org.id, [agent.slug]),
+    listAgentAvatars(org.id, [agent.slug]),
   ]);
   return (
     <SessionView
@@ -97,6 +98,7 @@ export default async function SharedSessionPage({ params }: { params: Promise<{ 
       organizationLogo={/^data:image\/(?:png|jpeg|webp);base64,/.test(assignment.organization.logo ?? "") ? assignment.organization.logo : null}
       agentPersonas={{ [agent.slug]: agent.persona.slug }}
       agentSpeakers={{ [agent.slug]: getStoredRoleplay(agent.data)?.client_name ?? agent.persona.name }}
+      agentAvatars={agentAvatars}
       agentContextRequired={agentContextRequired}
       agentContextUploads={agentContextUploads}
       introVideos={introVideos}

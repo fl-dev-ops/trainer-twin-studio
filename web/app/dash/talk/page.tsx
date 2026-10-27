@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { SessionView } from "@/components/session-view";
 import { getSessionOrg } from "@/lib/org";
 import { resolveSessionUser } from "@/lib/session-user";
-import { listAgentContextRequired, listAgentContextUploads, listAgentNames, listAgentPersonas,
+import { listAgentAvatars, listAgentContextRequired, listAgentContextUploads, listAgentNames, listAgentPersonas,
   listAgentSpeakers, listRunnableSpecs, listScenarioIntroVideos, listUploads } from "@/lib/specs";
 
 export const dynamic = "force-dynamic";
@@ -22,13 +22,14 @@ export default async function TalkPage({
     searchParams,
   ]);
   const initialAgent = query.agent && agents.includes(query.agent) ? query.agent : agents[0];
-  const [agentNames, agentPersonas, agentSpeakers, introVideos, agentContextRequired, agentContextUploads] = await Promise.all([
+  const [agentNames, agentPersonas, agentSpeakers, introVideos, agentContextRequired, agentContextUploads, agentAvatars] = await Promise.all([
     listAgentNames(org.id, agents),
     listAgentPersonas(org.id, agents),
     listAgentSpeakers(org.id, agents),
     listScenarioIntroVideos(org.id, agents),
     listAgentContextRequired(org.id, agents),
     listAgentContextUploads(org.id, agents),
+    listAgentAvatars(org.id, agents),
   ]);
   return (
     <SessionView
@@ -38,6 +39,7 @@ export default async function TalkPage({
       initialAgent={initialAgent}
       agentPersonas={agentPersonas}
       agentSpeakers={agentSpeakers}
+      agentAvatars={agentAvatars}
       introVideos={introVideos}
       agentContextRequired={agentContextRequired}
       agentContextUploads={agentContextUploads}
