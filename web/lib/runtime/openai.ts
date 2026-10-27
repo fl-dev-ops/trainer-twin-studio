@@ -1041,7 +1041,7 @@ export async function runDirectionCheck(
 Use the complete transcript, not only the latest message.
 Agent objective: ${specs.agent.objective}
 Active phase: ${JSON.stringify(phase ? { name: phase.name, objective: phase.objective, opening: phase.opening } : null)}
-Domain principles: ${JSON.stringify(specs.domain.principles ?? [])}
+Domain principles: ${JSON.stringify(specs.agent.principles)}
 Current topic: ${state.current_topic ?? "not established"}
 Pending trainer question: ${state.pending_question ?? "none"}
 Relevant domain references: ${JSON.stringify(knowledgeHits)}
@@ -1309,7 +1309,7 @@ SESSION SPEC
 Scenario: ${specs.agent.name ?? "interview session"}
 Objective: ${specs.agent.objective}
 Active phase: ${JSON.stringify(phase ? { name: phase.name, objective: phase.objective, opening: phase.opening } : null)}
-Domain principles: ${JSON.stringify(specs.domain.principles ?? [])}
+Domain principles: ${JSON.stringify(specs.agent.principles)}
 ${formatSessionFacts(specs)}
 ${resumeContextBlock(state)}
 ${documentEvidence?.text ?? "No targeted document evidence was selected for this turn."}

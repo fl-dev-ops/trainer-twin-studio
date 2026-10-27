@@ -17,13 +17,12 @@ import { prepareContextDocument, type DocumentManifest } from "@/lib/context-doc
 import { scheduleResumeClaimExtraction } from "@/lib/resume-claims";
 import { contextUploadFromAgentData, type AgentContextUpload } from "@/lib/context-upload";
 
-export type SpecType = "personas" | "agents" | "domains";
+export type SpecType = "personas" | "agents";
 
-const SPEC_TYPES: SpecType[] = ["personas", "agents", "domains"];
+const SPEC_TYPES: SpecType[] = ["personas", "agents"];
 const ENTITY_KEY: Record<SpecType, string> = {
   personas: "persona",
   agents: "agent",
-  domains: "domain",
 };
 
 export function isSpecType(value: string): value is SpecType {
@@ -38,13 +37,13 @@ type SpecRow = { id?: string; slug: string; name: string; version: number; data:
 type SpecDelegate = {
   findUnique(args: { where: { slug: string } }): Promise<SpecRow | null>;
   findMany(args: { where?: { orgId: string }; orderBy: { slug: "asc" }; select: { slug: true } }): Promise<{ slug: string }[]>;
-  create(args: { data: { slug: string; name: string; version: number; data: unknown; orgId: string; domainSlug?: string } }): Promise<{ version: number }>;
-  update(args: { where: { slug: string }; data: { name: string; version: number; data: unknown; orgId?: string; domainSlug?: string } }): Promise<unknown>;
+  create(args: { data: { slug: string; name: string; version: number; data: unknown; orgId: string } }): Promise<{ version: number }>;
+  update(args: { where: { slug: string }; data: { name: string; version: number; data: unknown; orgId?: string } }): Promise<unknown>;
   delete(args: { where: { slug: string } }): Promise<unknown>;
 };
 
 function modelFor(type: SpecType): SpecDelegate {
-  const model = type === "personas" ? db.persona : type === "agents" ? db.agent : db.domain;
+  const model = type === "personas" ? db.persona : db.agent;
   return model as unknown as SpecDelegate;
 }
 
@@ -302,15 +301,7 @@ export async function saveSpec(type: SpecType, slug: string, text: string, orgId
   }
   const data = entity as Prisma.InputJsonValue & Record<string, unknown>;
   const name = typeof data.name === "string" ? data.name : slug;
-  let domainSlug: string | undefined;
   if (type === "agents") {
-    domainSlug = typeof data.domain === "string" ? data.domain : undefined;
-    if (!domainSlug || !validSlug(domainSlug)) {
-      throw new Error('Agent requires a valid "domain" slug');
-    }
-    if (!(await db.domain.findUnique({ where: { slug: domainSlug }, select: { id: true } }))) {
-      throw new Error(`Domain "${domainSlug}" does not exist`);
-    }
     if (typeof data.voiceId === "string" && data.voiceId) {
       const voice = await db.voice.findFirst({
         where: {
@@ -330,7 +321,6 @@ export async function saveSpec(type: SpecType, slug: string, text: string, orgId
       if (!knowledge) throw new Error(`Knowledge base "${data.knowledgeBase}" is not available`);
     }
   }
-  const relation = domainSlug ? { domainSlug } : {};
 
   const existing: SpecRow | null = type === "personas"
     ? await db.persona.findUnique({ where: { orgId_slug: { orgId, slug } } })
@@ -340,7 +330,7 @@ export async function saveSpec(type: SpecType, slug: string, text: string, orgId
     const created = type === "personas"
       // Studio and synthesis personas are the user's own (real people); role-play characters come later.
       ? await db.persona.create({ data: { slug, name, version: 1, data, orgId, isOwn: true } })
-      : await modelFor(type).create({ data: { slug, name, version: 1, data, orgId, ...relation } });
+      : await modelFor(type).create({ data: { slug, name, version: 1, data, orgId } });
     return { created: true, versionBumped: false, version: created.version };
   }
 
@@ -357,8 +347,7 @@ export async function saveSpec(type: SpecType, slug: string, text: string, orgId
     if (type === "personas") {
       await tx.persona.update({ where: { orgId_slug: { orgId, slug } }, data: { name, version: nextVersion, data } });
     } else {
-      const model = (type === "agents" ? tx.agent : tx.domain) as unknown as SpecDelegate;
-      await model.update({ where: { slug }, data: { name, version: nextVersion, data, ...relation } });
+      await tx.agent.update({ where: { slug }, data: { name, version: nextVersion, data: data as Prisma.InputJsonValue } });
     }
   });
   return { created: false, versionBumped: true, version: nextVersion };
@@ -679,27 +668,23 @@ export async function getAgentConfigForAgent(agentId: string, orgId: string, con
   if (!agent) return null;
 
   const docIds = Array.from(new Set([...(contextIds ?? []), ...(contextId ? [contextId] : [])])).filter(Boolean);
-  const [domain, contextDocs] = await Promise.all([
-    db.domain.findFirst({ where: { slug: agent.domainSlug, orgId } }),
-    docIds.length
-      ? db.contextDocument.findMany({
-          where: { id: { in: docIds }, orgId },
-          select: { id: true, name: true, mimeType: true, kind: true, size: true, manifest: true },
-        })
-      : Promise.resolve([]),
-  ]);
+  const contextDocs = docIds.length
+    ? await db.contextDocument.findMany({
+        where: { id: { in: docIds }, orgId },
+        select: { id: true, name: true, mimeType: true, kind: true, size: true, manifest: true },
+      })
+    : [];
   const persona = agent.persona;
-  if (!domain) return null;
 
-  // An agent attachment narrows retrieval to exactly one collection. Legacy
-  // agents keep their Domain's selected collections until explicitly configured.
+  // An agent attachment narrows retrieval to exactly one collection; otherwise the agent's selected collections
+  // (data.knowledge_bases, carried over from its former domain).
   const attachedKnowledge = isRecord(agent.data) && typeof agent.data.knowledgeBase === "string"
     ? [agent.data.knowledgeBase]
     : [];
-  const domainKnowledge = isRecord(domain.data) && Array.isArray(domain.data.knowledge_bases)
-    ? domain.data.knowledge_bases.filter((value): value is string => typeof value === "string")
+  const selectedKnowledge = isRecord(agent.data) && Array.isArray(agent.data.knowledge_bases)
+    ? agent.data.knowledge_bases.filter((value): value is string => typeof value === "string")
     : [];
-  const configuredKnowledge = attachedKnowledge.length ? attachedKnowledge : domainKnowledge;
+  const configuredKnowledge = attachedKnowledge.length ? attachedKnowledge : selectedKnowledge;
   const indexed = await db.knowledgeDocument.findMany({
     where: {
       status: "indexed",
@@ -731,7 +716,6 @@ export async function getAgentConfigForAgent(agentId: string, orgId: string, con
   return {
     persona: { id: persona.id, slug: persona.slug, version: persona.version, data: persona.data },
     agent: { id: agent.id, slug: agent.slug, version: agent.version, data: agent.data },
-    domain: { slug: domain.slug, version: domain.version, data: domain.data },
     knowledgeBases,
     personaVoiceAvailable,
     personaVoiceCoverage,

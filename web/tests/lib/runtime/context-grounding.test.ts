@@ -52,11 +52,6 @@ describe("Context Grounding & Document Ingestion", () => {
         ],
       },
     },
-    domain: {
-      slug: "software-engineering",
-      version: 1,
-      data: { principles: ["Ask follow-ups."] },
-    },
   };
 
   it("buildSpecs extracts contextDocument when present in configuration", () => {

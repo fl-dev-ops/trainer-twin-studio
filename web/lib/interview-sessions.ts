@@ -124,12 +124,7 @@ async function sessionSnapshot(orgId: string, agentId: string, contextId?: strin
   ]);
   if (!agent) throw new Error("Agent not found");
   if (documents.length !== docIds.length) throw new Error("Context not found");
-  const domain = await db.domain.findFirst({
-    where: { slug: agent.domainSlug, orgId },
-    select: { slug: true, version: true },
-  });
-  if (!domain) throw new Error("Agent domain not found");
-  return { agent, domain, documents, docIds };
+  return { agent, documents, docIds };
 }
 
 async function initializeChatSession(input: { sessionId: string; orgId: string; mode: DeliveryMode }) {
@@ -169,8 +164,6 @@ export async function createAssignedSession(input: {
         personaVersion: snapshot.agent.persona.version,
         agentSlug: snapshot.agent.slug,
         agentVersion: snapshot.agent.version,
-        domainSlug: snapshot.domain.slug,
-        domainVersion: snapshot.domain.version,
         contextId: primary?.id,
         contextName: primary?.name,
         status: "assigned",
@@ -345,8 +338,6 @@ export async function activateSession(input: {
         personaVersion: snapshot.agent.persona.version,
         agentSlug: snapshot.agent.slug,
         agentVersion: snapshot.agent.version,
-        domainSlug: snapshot.domain.slug,
-        domainVersion: snapshot.domain.version,
         contextId: primary?.id,
         contextName: primary?.name,
         status: "activating",

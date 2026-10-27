@@ -162,14 +162,13 @@ export function AgentEditor(initial: AgentEditorProps) {
       );
       const result = await response.json().catch(() => null);
       if (!response.ok) throw new Error(result?.error ?? GENERIC_SAVE_ERROR);
-      if (result.agent && result.domain) {
+      if (result.agent) {
         setSpecYaml(
           yaml.dump(
             {
               schema_version: 1,
               kind: "agent",
               agent: result.agent,
-              domain: result.domain,
             },
             { lineWidth: -1, noRefs: true },
           ),

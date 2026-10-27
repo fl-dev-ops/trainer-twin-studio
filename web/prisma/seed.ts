@@ -13,7 +13,7 @@ const prisma = new PrismaClient({
 });
 const DATA = path.join(import.meta.dirname, "../data");
 
-async function seedSpec(dir: "personas" | "agents" | "domains", key: string) {
+async function seedSpec(dir: "personas" | "agents", key: string) {
   const files = (await fs.readdir(path.join(DATA, dir))).filter((f) => f.endsWith(".yaml"));
   type SeedDelegate = {
     findFirst(args: { where: { slug: string; orgId: null } }): Promise<{ id: string } | null>;
@@ -26,9 +26,8 @@ async function seedSpec(dir: "personas" | "agents" | "domains", key: string) {
     const entity = doc[key];
     if (typeof entity !== "object" || entity === null || Array.isArray(entity)) continue;
     const data = entity as Record<string, unknown>;
-    const raw = dir === "personas" ? prisma.persona : dir === "agents" ? prisma.agent : prisma.domain;
+    const raw = dir === "personas" ? prisma.persona : prisma.agent;
     const model = raw as unknown as SeedDelegate;
-    const domainSlug = key === "agent" && typeof data.domain === "string" ? data.domain : undefined;
     const persona = key === "agent"
       ? await prisma.persona.findFirst({ where: { orgId: null }, orderBy: { createdAt: "asc" }, select: { id: true } })
       : null;
@@ -37,7 +36,8 @@ async function seedSpec(dir: "personas" | "agents" | "domains", key: string) {
       name: typeof data.name === "string" ? data.name : slug,
       version: typeof data.version === "number" ? data.version : 1,
       data,
-      ...(domainSlug ? { domainSlug, personaId: persona!.id } : {}),
+      // Seeded agents are the global interview role plays.
+      ...(key === "agent" ? { personaId: persona!.id, kind: "ROLEPLAY" } : {}),
     };
     const existing = await model.findFirst({ where: { slug, orgId: null } });
     if (existing) await model.update({ where: { id: existing.id }, data: values });
@@ -93,7 +93,6 @@ async function seedKnowledge() {
 
 async function main() {
   await seedSpec("personas", "persona");
-  await seedSpec("domains", "domain");
   await seedSpec("agents", "agent");
   await seedKnowledge();
 }

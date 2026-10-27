@@ -46,7 +46,6 @@ describe("SSE Streaming Contract (LiveKit openai.LLM parity)", () => {
   const config = {
     persona: { version: 1, data: { id: "vasanth", version: 1 } },
     agent: { version: 1, data: null as unknown as Record<string, unknown> },
-    domain: { version: 1, data: null as unknown as Record<string, unknown> },
     knowledgeBases: [],
     personaVoiceAvailable: false,
   };
@@ -63,12 +62,8 @@ describe("SSE Streaming Contract (LiveKit openai.LLM parity)", () => {
     const personaData = (yaml.load(
       fs.readFileSync(path.join(DATA_DIR, "personas/vasanth.yaml"), "utf8")
     ) as any).persona;
-    const domainData = (yaml.load(
-      fs.readFileSync(path.join(DATA_DIR, "domains/software-engineering-resume.yaml"), "utf8")
-    ) as any).domain;
     config.persona.data = personaData;
     config.agent.data = agentData;
-    config.domain.data = domainData;
 
     const existingAgent = await db.agent.findFirstOrThrow();
     agentId = existingAgent.id;
@@ -88,8 +83,6 @@ describe("SSE Streaming Contract (LiveKit openai.LLM parity)", () => {
         personaVersion: 1,
         agentSlug: "resume-mastery",
         agentVersion: 1,
-        domainSlug: "software-engineering-resume",
-        domainVersion: 1,
         status: "active",
         compiledSnapshot: config,
         runtimeState: {

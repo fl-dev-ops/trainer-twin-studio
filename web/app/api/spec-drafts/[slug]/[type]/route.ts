@@ -76,7 +76,6 @@ export async function PATCH(
     name,
     personaSlug: draft.personaSlug,
     agent,
-    domain: draft.domain,
     grounding: draft.grounding,
     assumptions: draft.assumptions,
     gaps: draft.gaps,

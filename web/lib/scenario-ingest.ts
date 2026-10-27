@@ -132,18 +132,16 @@ export function stepGoal(body: string, stepId: string): string | undefined {
 }
 
 /**
- * The Agent + Domain rows for a scenario. `skill` and `scenario` are the ingestion files verbatim;
+ * The Agent row for a scenario. `skill` and `scenario` are the ingestion files verbatim;
  * name/objective/stages are derived copies so the dashboard can list and describe the scenario.
  */
 export function buildScenario(orgSlug: string, manifest: ScenarioManifest, skill: string) {
   const slug = `${orgSlug}-${manifest.scenario}`.toLowerCase();
-  const domainSlug = `domain-${slug}`;
   const body = skillBody(skill);
   const agentData = {
     id: slug,
     name: manifest.name,
     objective: manifest.description,
-    domain: domainSlug,
     stages: manifest.steps.map((step) => ({ id: step.id, name: step.name, objective: stepGoal(body, step.id) ?? step.name })),
     config: { context: { mode: "none", required: false } },
     // The chat runtime runs these scenarios from the playbook (see chat/agent/lib/brain.ts).
@@ -151,8 +149,7 @@ export function buildScenario(orgSlug: string, manifest: ScenarioManifest, skill
     skill,
     scenario: manifest,
   };
-  const domainData = { id: domainSlug, name: manifest.name, description: manifest.description };
-  return { slug, domainSlug, agentData, domainData };
+  return { slug, agentData };
 }
 
 export class ScenarioIngestError extends Error {
@@ -194,15 +191,12 @@ async function storeSkillAgent(input: {
   runId?: string | null;
 }) {
   const { org, kind } = input;
-  const { slug, domainSlug, agentData, domainData } = buildScenario(org.slug, input.manifest, input.skill);
+  const { slug, agentData } = buildScenario(org.slug, input.manifest, input.skill);
   if (!validSlug(slug)) throw new ScenarioIngestError(`"${slug}" is not a valid scenario id`, 400);
 
   // Slugs are global: refuse to touch another org's rows before writing anything.
-  const [currentAgent, currentDomain] = await Promise.all([
-    db.agent.findUnique({ where: { slug } }),
-    db.domain.findUnique({ where: { slug: domainSlug }, select: { orgId: true } }),
-  ]);
-  if ((currentAgent && currentAgent.orgId !== org.id) || (currentDomain && currentDomain.orgId !== org.id)) {
+  const currentAgent = await db.agent.findUnique({ where: { slug } });
+  if (currentAgent && currentAgent.orgId !== org.id) {
     throw new ScenarioIngestError(`Scenario "${slug}" belongs to another organization`, 409);
   }
   if (currentAgent && currentAgent.kind !== kind) {
@@ -228,12 +222,9 @@ async function storeSkillAgent(input: {
   const itemCount = await MainCollectionService.replaceScenarioItems(org.id, slug, input.manifest.scenario, input.items);
 
   await db.$transaction(async (tx) => {
-    if (!currentDomain) {
-      await tx.domain.create({ data: { slug: domainSlug, name: domainData.name, version: 1, data: json(domainData), orgId: org.id } });
-    }
     if (!currentAgent) {
       await tx.agent.create({
-        data: { slug, name: agentData.name, version, domainSlug, personaId: input.personaId, kind, data: json(data), orgId: org.id },
+        data: { slug, name: agentData.name, version, personaId: input.personaId, kind, data: json(data), orgId: org.id },
       });
       return;
     }
@@ -244,7 +235,7 @@ async function storeSkillAgent(input: {
     });
     await tx.agent.update({
       where: { id: currentAgent.id },
-      data: { name: agentData.name, version, domainSlug, personaId: input.personaId, data: json(data) },
+      data: { name: agentData.name, version, personaId: input.personaId, data: json(data) },
     });
   });
 

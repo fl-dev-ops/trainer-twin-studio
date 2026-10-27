@@ -143,7 +143,7 @@ test("stores the ingestion files verbatim: SKILL.md with its header, unknown key
 test("builds an org-prefixed agent the runtime can read", () => {
   const built = buildScenario("acme", scenario, SKILL);
   expect(built.slug).toBe("acme-fundamental-depth");
-  expect(built.domainSlug).toBe("domain-acme-fundamental-depth");
+  expect("domain" in built.agentData).toBe(false); // v2 has no domains
   expect(built.agentData).toMatchObject({
     name: "Fundamental depth",
     objective: "Run a progressive technical mock interview.",
@@ -155,7 +155,7 @@ test("builds an org-prefixed agent the runtime can read", () => {
   expect("instruction" in built.agentData).toBe(false);
 });
 
-test("first ingest creates domain + agent after storing items (duplicate item ids allowed)", async () => {
+test("first ingest creates the agent (no domain) after storing items (duplicate item ids allowed)", async () => {
   // The agent sends its source folder name; the persona is "Vasanth".
   const result = await ingestScenario("org1", input({ personaSlug: "vasanth", patterns: "# Patterns\n", runId: "run-1" }));
   const prefix = "p/org1/scenario-ingest/scenarios/acme-fundamental-depth/v1";
@@ -168,8 +168,9 @@ test("first ingest creates domain + agent after storing items (duplicate item id
   expect(JSON.parse(s3.get(`${prefix}/items.json`)!)).toEqual([item("x#1"), item("x#1")]);
   expect((agents[0].data as Row).artifacts).toBe(prefix);
   expect(storedItems).toEqual({ orgId: "org1", agentSlug: "acme-fundamental-depth", count: 2 });
-  expect(domains).toHaveLength(1);
-  expect(agents[0]).toMatchObject({ personaId: "p1", domainSlug: "domain-acme-fundamental-depth", orgId: "org1", kind: "TWIN" });
+  expect(domains).toHaveLength(0);
+  expect(agents[0]).toMatchObject({ personaId: "p1", orgId: "org1", kind: "TWIN" });
+  expect("domainSlug" in agents[0]).toBe(false);
 });
 
 test("re-ingest is a no-op when unchanged, and versions the spec when changed", async () => {
@@ -251,7 +252,8 @@ test("role play: rendered from the builder and stored like a skill twin, kind RO
   const saved = await saveRoleplay("org1", roleplayBuilder);
   expect(saved).toMatchObject({ slug: "acme-the-wait-and-see-investor", version: 1, created: true, items: 1 + roleplayBuilder.exampleLines.length });
   const agent = agents[0];
-  expect(agent).toMatchObject({ kind: "ROLEPLAY", personaId: "p-rohan", domainSlug: "domain-acme-the-wait-and-see-investor" });
+  expect(agent).toMatchObject({ kind: "ROLEPLAY", personaId: "p-rohan" });
+  expect("domainSlug" in agent).toBe(false);
   const data = agent.data as Row;
   expect(data.source).toBe(ROLEPLAY_SOURCE);
   expect(data.after).toEqual({ report: "roleplay", goals: roleplayBuilder.learnerGoals, rubric: roleplayBuilder.rubric });

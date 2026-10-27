@@ -4,7 +4,6 @@ agent:
   id: system-design-solution
   name: System Design - Solution Development
   version: 1
-  domain: software-engineering-system-design
   objective: Build and justify a coherent end-to-end design from established requirements.
   opening: Ask for a high-level architecture, then progressively deepen the same design.
   config:
@@ -104,3 +103,18 @@ agent:
       turns:
         minimum: 5
         maximum: 7
+  principles:
+  - Evaluate clarification and reasoning, not resemblance to a canonical diagram.
+  - Require requirements before architecture.
+  - Prefer coherent flows over disconnected technology lists.
+  - Introduce one changed constraint at a time.
+  - Treat hypothetical failures and adaptations as valid design evidence.
+  - Require explicit costs and trade-offs for every adaptation.
+  classifications:
+    strong: The design claim is coherent, constraint-aware, and technically reasoned.
+    partial: The direction is plausible but misses an important dependency or trade-off.
+    vague: Lists technologies without responsibilities or data flow.
+    unsupported: Makes a feasibility claim without mechanism or reasoning.
+    contradictory: Conflicts with an earlier requirement or design decision.
+    unknown: The candidate clearly cannot continue the design reasoning.
+    role_violation: The candidate leaves the assigned design role.

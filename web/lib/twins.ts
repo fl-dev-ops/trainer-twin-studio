@@ -96,14 +96,10 @@ export async function ensureTwin(orgId: string, personaSlug: string) {
   if (!persona) throw new TwinError(`Persona "${personaSlug}" was not found in this organization`, 404);
 
   const slug = `${org.slug}-${persona.slug}-twin`.toLowerCase();
-  const domainSlug = `domain-${slug}`;
   if (!validSlug(slug)) throw new TwinError(`"${slug}" is not a valid twin id`, 400);
 
-  const [existing, existingDomain] = await Promise.all([
-    db.agent.findUnique({ where: { slug }, select: { orgId: true, name: true } }),
-    db.domain.findUnique({ where: { slug: domainSlug }, select: { orgId: true } }),
-  ]);
-  if ((existing && existing.orgId !== orgId) || (existingDomain && existingDomain.orgId !== orgId)) {
+  const existing = await db.agent.findUnique({ where: { slug }, select: { orgId: true, name: true } });
+  if (existing && existing.orgId !== orgId) {
     throw new TwinError(`Twin "${slug}" belongs to another organization`, 409);
   }
   if (existing) return { slug, name: existing.name, created: false };
@@ -113,17 +109,11 @@ export async function ensureTwin(orgId: string, personaSlug: string) {
     id: slug,
     name,
     objective: `Helps with real client situations: what to do and say next, the way ${persona.name} would.`,
-    domain: domainSlug,
     source: TWIN_SOURCE,
     config: { context: { mode: "none", required: false } },
   };
   const json = (value: unknown) => value as Prisma.InputJsonValue;
-  await db.$transaction(async (tx) => {
-    if (!existingDomain) {
-      await tx.domain.create({ data: { slug: domainSlug, name, version: 1, data: json({ id: domainSlug, name }), orgId } });
-    }
-    await tx.agent.create({ data: { slug, name, version: 1, domainSlug, personaId: persona.id, kind: "TWIN", data: json(data), orgId } });
-  });
+  await db.agent.create({ data: { slug, name, version: 1, personaId: persona.id, kind: "TWIN", data: json(data), orgId } });
   return { slug, name, created: true };
 }
 

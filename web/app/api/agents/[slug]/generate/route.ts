@@ -79,13 +79,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       db.agent.findFirst({ where: { slug: agentSlug, orgId: org.id } }),
       readSpecDraft(agentSlug, org.id).catch(() => null),
     ]);
-    const publishedDomain = published
-      ? await db.domain.findFirst({ where: { slug: published.domainSlug, orgId: org.id } })
-      : null;
-
-    // Domain id is invisible to the user; keep the published one so versions stay comparable.
-    const domainId = published?.domainSlug ?? `domain-${agentSlug}`;
-
     const generated = await generateSpecBundle({
       meter: { source: "spec", orgId: org.id, userId: org.user.id },
       slug: agentSlug,
@@ -99,9 +92,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       contextLabel: input.data.contextLabel,
       contextMaxFiles: input.data.contextMaxFiles,
       previous: draft
-        ? { instruction: draft.agent.instruction, agent: draft.agent, domain: draft.domain }
+        ? { instruction: draft.agent.instruction, agent: draft.agent }
         : published
-          ? { agent: published.data, domain: publishedDomain?.data ?? {} }
+          ? { agent: published.data }
           : null,
     });
 
@@ -115,16 +108,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
         name,
         version: published?.version ?? 1,
         opening,
-        domain: domainId,
         instruction,
+        knowledge_bases: knowledgeBase ? [knowledgeBase] : [],
         ...(knowledgeBase ? { knowledgeBase } : {}),
         ...(voiceId ? { voiceId } : {}),
-      },
-      domain: {
-        ...generated.domain,
-        id: domainId,
-        version: publishedDomain?.version ?? 1,
-        knowledge_bases: knowledgeBase ? [knowledgeBase] : [],
       },
       grounding: knowledgeBase
         ? generated.grounding.filter((reference) => reference.knowledgeBase === knowledgeBase)
@@ -140,9 +127,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       status: publish ? "published" : "draft",
       revision: saved?.revision ?? 1,
       agentVersion: publication?.agentVersion,
-      domainVersion: publication?.domainVersion,
       agent: publication ? { ...bundle.agent, version: publication.agentVersion } : bundle.agent,
-      domain: publication ? { ...bundle.domain, version: publication.domainVersion } : bundle.domain,
     });
   } catch (error) {
     console.error("Scenario generation failed", error);

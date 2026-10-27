@@ -113,7 +113,6 @@ export const agentSpecSchema = z.object({
   id: slug,
   name: nonEmpty,
   version: z.number().int().positive(),
-  domain: slug,
   objective: nonEmpty,
   opening: nonEmpty,
   // The trainer's instruction/requirements this spec was generated from.
@@ -143,6 +142,10 @@ export const agentSpecSchema = z.object({
   }).strict(),
   voiceId: z.string().min(1).optional(),
   knowledgeBase: slug.optional(),
+  // The assessment rubric (formerly the scenario's domain) and the knowledge bases retrieval may use.
+  principles: z.array(nonEmpty).min(1),
+  classifications: z.record(slug, nonEmpty),
+  knowledge_bases: z.array(slug),
   stages: z.array(stageSchema).min(1),
 }).strict().superRefine((agent, ctx) => {
   const ids = new Set<string>();
@@ -182,15 +185,6 @@ export const agentSpecSchema = z.object({
   }
 });
 
-export const domainSpecSchema = z.object({
-  id: slug,
-  name: nonEmpty,
-  version: z.number().int().positive(),
-  knowledge_bases: z.array(slug),
-  principles: z.array(nonEmpty).min(1),
-  classifications: z.record(slug, nonEmpty),
-}).strict();
-
 export const groundingSchema = z.object({
   knowledgeBase: slug,
   source: nonEmpty,
@@ -206,15 +200,13 @@ export const specDraftBundleSchema = z.object({
   name: nonEmpty,
   personaSlug: slug.optional(),
   agent: agentSpecSchema,
-  domain: domainSpecSchema,
   grounding: z.array(groundingSchema),
   assumptions: z.array(nonEmpty).default([]),
   gaps: z.array(nonEmpty).default([]),
 }).strict().superRefine((bundle, ctx) => {
   if (bundle.agent.id !== bundle.slug) ctx.addIssue({ code: "custom", message: "Agent id must match draft slug", path: ["agent", "id"] });
-  if (bundle.agent.domain !== bundle.domain.id) ctx.addIssue({ code: "custom", message: "Agent domain must match Domain id", path: ["agent", "domain"] });
   const stageIds = new Set(bundle.agent.stages.map((stage) => stage.id));
-  const knowledgeBases = new Set(bundle.domain.knowledge_bases);
+  const knowledgeBases = new Set(bundle.agent.knowledge_bases);
   bundle.grounding.forEach((reference, index) => {
     if (!knowledgeBases.has(reference.knowledgeBase)) ctx.addIssue({ code: "custom", message: "Grounding references an unselected knowledge base", path: ["grounding", index, "knowledgeBase"] });
     reference.stageIds.forEach((stageId, stageIndex) => {

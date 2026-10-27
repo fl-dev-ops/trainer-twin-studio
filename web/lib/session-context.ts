@@ -9,7 +9,6 @@ const SHARED_KNOWLEDGE_BASE_SLUG = "acme-knowledge";
 type Snapshot = {
   agent?: { slug?: string; version?: number; data?: Record<string, unknown> };
   persona?: { slug?: string; version?: number; data?: Record<string, unknown> };
-  domain?: { slug?: string; version?: number; data?: Record<string, unknown> };
   /** All-skills twin sessions: the skill twins pinned when the session started. */
   twinSkills?: PinnedTwinSkill[];
 };
@@ -36,17 +35,13 @@ export async function buildSessionContext(input: {
 
   const agentSlug = session?.agentSlug ?? input.agentSlug;
   const personaSlug = session?.personaSlug ?? input.personaSlug;
-  const domainSlug = session?.domainSlug;
   const snapshot = session?.compiledSnapshot as Snapshot | null;
-  const [liveAgent, livePersona, liveDomain, sharedKnowledgeBase] = await Promise.all([
+  const [liveAgent, livePersona, sharedKnowledgeBase] = await Promise.all([
     agentSlug
       ? db.agent.findFirst({ where: { slug: { equals: agentSlug, mode: "insensitive" }, orgId: input.orgId }, select: { slug: true, version: true, data: true, personaId: true, kind: true } })
       : null,
     personaSlug
       ? findOrgOrGlobalPersona(input.orgId, { equals: personaSlug, mode: "insensitive" }, { slug: true, version: true, data: true, isOwn: true })
-      : null,
-    domainSlug
-      ? db.domain.findFirst({ where: { slug: domainSlug, orgId: input.orgId }, select: { slug: true, version: true, data: true } })
       : null,
     db.knowledgeBase.findFirst({
       where: {
@@ -131,9 +126,6 @@ export async function buildSessionContext(input: {
   const persona = snapshot?.persona?.data
     ? { slug: snapshot.persona.slug ?? livePersona?.slug ?? personaSlug, version: snapshot.persona.version ?? livePersona?.version ?? 0, data: snapshot.persona.data }
     : livePersona;
-  const domain = snapshot?.domain?.data
-    ? { slug: snapshot.domain.slug ?? liveDomain?.slug ?? domainSlug, version: snapshot.domain.version ?? liveDomain?.version ?? 0, data: snapshot.domain.data }
-    : liveDomain;
 
   // The all-skills twin draws on its persona's skill twins: the ones pinned when the session started (older
   // sessions without a pin get the live list). kind is immutable, so the live row's kind is the session's module.
@@ -149,7 +141,6 @@ export async function buildSessionContext(input: {
     persona: persona ?? null,
     // The trainer's own persona speaks as herself (identity only); any other persona is a character to play.
     personaBrief: persona ? personaBrief(persona.data, livePersona?.isOwn ? "self" : "character") : null,
-    domain: domain ?? null,
     knowledgeBases: sharedKnowledgeBase ? [sharedKnowledgeBase] : [],
     documents: Array.from(docMap.values()),
     learnerName,

@@ -126,7 +126,7 @@ export async function SpecResourcePage({
         personaSlug={draft?.personaSlug ?? personas[0]?.slug ?? ""}
         knowledgeBase={typeof working.knowledgeBase === "string" ? working.knowledgeBase : ""}
         voiceId={typeof working.voiceId === "string" ? working.voiceId : ""}
-        specYaml={yaml.dump({ schema_version: 1, kind: "agent", agent: working, domain: draft?.domain ?? null }, { lineWidth: -1, noRefs: true })}
+        specYaml={yaml.dump({ schema_version: 1, kind: "agent", agent: working }, { lineWidth: -1, noRefs: true })}
         revision={draft?.status === "draft" ? draft.revision : undefined}
         publishedVersion={current.version}
         versions={versions}

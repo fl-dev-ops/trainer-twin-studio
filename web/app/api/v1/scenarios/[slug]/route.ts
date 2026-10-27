@@ -17,7 +17,6 @@ export async function GET(request: Request, { params }: Params) {
       name: true,
       version: true,
       visibility: true,
-      domainSlug: true,
       order: true,
       data: true,
       createdAt: true,

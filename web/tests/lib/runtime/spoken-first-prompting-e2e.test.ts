@@ -13,13 +13,10 @@ function loadConfig(agentSlug = "resume-mastery", personaSlug = "vasanth") {
   const personaYaml = fs.readFileSync(path.join(DATA_DIR, `personas/${personaSlug}.yaml`), "utf8");
   const agentData = (yaml.load(agentYaml) as any).agent;
   const personaData = (yaml.load(personaYaml) as any).persona;
-  const domainYaml = fs.readFileSync(path.join(DATA_DIR, `domains/${agentData.domain}.yaml`), "utf8");
-  const domainData = (yaml.load(domainYaml) as any).domain;
 
   return {
     persona: { id: "test-vasanth", slug: personaSlug, version: 1, data: personaData },
     agent: { id: "test-agent", slug: agentSlug, version: 1, data: agentData },
-    domain: { slug: agentData.domain, version: 1, data: domainData },
     knowledgeBases: [],
   };
 }
@@ -57,8 +54,6 @@ describe("Spoken-First Prompting & Deictic Show-and-Tell E2E", () => {
         personaVersion: 1,
         agentSlug: "resume-mastery",
         agentVersion: 1,
-        domainSlug: "software-engineering-resume",
-        domainVersion: 1,
         status: "active",
         compiledSnapshot: baseConfig,
         runtimeState: {

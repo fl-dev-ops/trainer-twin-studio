@@ -33,7 +33,6 @@ describe("formatSessionReportGrounding", () => {
           }],
         },
       },
-      domain: { slug: "engineering", version: 1, data: {} },
     };
 
     const result = formatSessionReportGrounding(snapshot, { ownership: "partial" });

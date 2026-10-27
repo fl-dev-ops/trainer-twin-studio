@@ -6,7 +6,6 @@ const listSelect = {
   name: true,
   version: true,
   visibility: true,
-  domainSlug: true,
   order: true,
   createdAt: true,
   updatedAt: true,

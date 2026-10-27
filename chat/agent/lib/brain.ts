@@ -8,7 +8,7 @@ import { studioFetch } from "./studio";
 
 type SpecRow = { slug: string; version: number; data: Record<string, unknown> };
 
-/** Which module an agent belongs to (web `Agent.kind`). Missing on persona/domain rows. */
+/** Which module an agent belongs to (web `Agent.kind`). Missing on persona rows. */
 export type AgentKind = "TWIN" | "ROLEPLAY";
 
 export type AttachedDocument = {
@@ -118,10 +118,6 @@ export type SessionSpecs = {
   interviewSettings?: string;
   interviewType?: string;
   agentPolicy?: string;
-  domainName?: string;
-  domainSlug?: string;
-  domainVersion?: number;
-  domainPolicy?: string;
   personaName?: string;
   personaSlug?: string;
   personaVersion?: number;
@@ -323,7 +319,6 @@ export async function loadSessionContext(
     sessionId: string | null;
     agent: (SpecRow & { kind?: AgentKind | null }) | null;
     persona: SpecRow | null;
-    domain?: SpecRow | null;
     documents: AttachedDocument[];
     resume?: {
       documentId: string;
@@ -363,7 +358,6 @@ export async function loadSessionContext(
     objective?: string;
     opening?: string;
     instruction?: string;
-    domain?: string;
     config?: unknown;
     completion?: unknown;
     phases?: Record<string, unknown>[];
@@ -407,7 +401,6 @@ export async function loadSessionContext(
     decision_preferences: personaData.decision_preferences,
   };
   const hasPersonaProfile = Object.values(personaProfile).some((value) => value !== undefined);
-  const domainData = (result.domain?.data ?? {}) as Record<string, unknown>;
   const agentPolicy = Object.keys(agentData).length > 0 ? JSON.stringify(agentData, null, 2) : undefined;
 
   return {
@@ -426,10 +419,6 @@ export async function loadSessionContext(
     interviewType: (agentData.config as { interview?: { type?: string } } | null)?.interview?.type,
     behavioralRules: formatBehavioralRules(agentData, phases),
     agentPolicy,
-    domainName: typeof domainData.name === "string" ? domainData.name : result.domain?.slug,
-    domainSlug: result.domain?.slug,
-    domainVersion: result.domain?.version,
-    domainPolicy: Object.keys(domainData).length > 0 ? JSON.stringify(domainData) : undefined,
     personaName: personaData.name ?? result.persona?.slug ?? personaSlug,
     personaSlug: result.persona?.slug ?? personaSlug,
     personaVersion: result.persona?.version,
@@ -580,12 +569,6 @@ PERSONA
 - Slug: ${specs.personaSlug ?? "trainer"}
 - Version: ${specs.personaVersion ?? "not specified"}
 ${personaLines(specs)}
-
-DOMAIN
-- Name: ${specs.domainName ?? "not specified"}
-- Slug: ${specs.domainSlug ?? "not specified"}
-- Version: ${specs.domainVersion ?? "not specified"}
-- Policy data: ${specs.domainPolicy ?? "none supplied"}
 
 APPROVED KNOWLEDGE BASES
 ${knowledgeBlock}

@@ -68,8 +68,9 @@ export interface AgentSpec {
   id: string;
   name: string;
   version: number;
-  domain: string;
   objective: string;
+  /** The interview rubric's principles (Agent.data.principles; formerly the agent's domain). */
+  principles: string[];
   opening: string;
   phases: PhaseSpec[];
   claim_handling: ClaimHandling;
@@ -87,15 +88,6 @@ export interface AgentSpec {
   interview: InterviewConfig;
 }
 
-export interface DomainSpec {
-  id: string;
-  name: string;
-  version: number;
-  knowledge_bases: string[];
-  principles?: string[];
-  classifications?: Record<string, string>;
-}
-
 export interface ContextDocumentSpec {
   id: string;
   name: string;
@@ -105,7 +97,6 @@ export interface ContextDocumentSpec {
 export interface CompiledSpecs {
   persona: PersonaSpec;
   agent: AgentSpec;
-  domain: DomainSpec;
   knowledgeBases: string[];
   contextDocument?: ContextDocumentSpec | null;
   documentManifests?: DocumentManifest[];
@@ -155,26 +146,9 @@ export function buildSpecs(config: Record<string, any>): CompiledSpecs {
     follow_ups_per_main_question: 1,
     main_questions: 4,
   });
-  const domainData = structuredClone(config.domain?.data ?? {});
-  domainData.version = config.domain?.version ?? 1;
-
   const kbs = config.knowledgeBases ?? [];
   if (!Array.isArray(kbs) || !kbs.every((k) => typeof k === "string" && k.length > 0)) {
     throw new Error("knowledgeBases must be a list of indexed collection names");
-  }
-  domainData.knowledge_bases = kbs;
-
-  const domain: DomainSpec = {
-    id: domainData.id,
-    name: domainData.name,
-    version: domainData.version,
-    knowledge_bases: kbs,
-    principles: domainData.principles ?? [],
-    classifications: domainData.classifications ?? {},
-  };
-
-  if (agentData.domain !== domain.id) {
-    throw new Error("Agent's domain does not match supplied Domain");
   }
 
   const phases: PhaseSpec[] = [];
@@ -314,8 +288,8 @@ export function buildSpecs(config: Record<string, any>): CompiledSpecs {
     id: agentData.id,
     name: agentData.name,
     version: config.agent?.version ?? 1,
-    domain: domain.id,
     objective: agentData.objective,
+    principles: Array.isArray(agentData.principles) ? agentData.principles.filter((p: unknown): p is string => typeof p === "string") : [],
     opening: (typeof agentData.spoken_opening === "string" && agentData.spoken_opening) || agentData.opening,
     phases,
     claim_handling: defaults.claim_handling ?? "conceptual",
@@ -353,5 +327,5 @@ export function buildSpecs(config: Record<string, any>): CompiledSpecs {
     ? config.sessionDocumentIds.filter((id): id is string => typeof id === "string")
     : documentManifests.map((m) => m.id);
 
-  return { persona, agent, domain, knowledgeBases: kbs, contextDocument, documentManifests, sessionDocumentIds };
+  return { persona, agent, knowledgeBases: kbs, contextDocument, documentManifests, sessionDocumentIds };
 }

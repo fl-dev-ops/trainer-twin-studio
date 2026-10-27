@@ -19,7 +19,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ sl
 
   try {
     const result = await publishSpecDraft(slug, org.id);
-    return Response.json({ status: result.status, agentVersion: result.agentVersion, domainVersion: result.domainVersion });
+    return Response.json({ status: result.status, agentVersion: result.agentVersion });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Publish failed" }, { status: 400 });
   }

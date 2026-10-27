@@ -22,13 +22,10 @@ function loadConfig(agentSlug = "resume-mastery", personaSlug = "vasanth") {
   const personaYaml = fs.readFileSync(path.join(DATA_DIR, `personas/${personaSlug}.yaml`), "utf8");
   const agentData = (yaml.load(agentYaml) as any).agent;
   const personaData = (yaml.load(personaYaml) as any).persona;
-  const domainYaml = fs.readFileSync(path.join(DATA_DIR, `domains/${agentData.domain}.yaml`), "utf8");
-  const domainData = (yaml.load(domainYaml) as any).domain;
 
   return {
     persona: { version: personaData.version ?? 1, data: personaData },
     agent: { version: agentData.version ?? 1, data: agentData },
-    domain: { version: domainData.version ?? 1, data: domainData },
     knowledgeBases: [],
     personaVoiceAvailable: false,
   };
@@ -109,8 +106,6 @@ describe("Interview Runtime End-to-End Suite", () => {
         personaVersion: 1,
         agentSlug: "resume-mastery",
         agentVersion: 1,
-        domainSlug: "software-engineering-resume",
-        domainVersion: 1,
         status: "active",
         compiledSnapshot: config,
         runtimeState: {
@@ -443,8 +438,6 @@ describe("Interview Runtime End-to-End Suite", () => {
         personaVersion: 1,
         agentSlug: "resume-mastery",
         agentVersion: 1,
-        domainSlug: "software-engineering-resume",
-        domainVersion: 1,
         status: "active",
         compiledSnapshot: config,
         runtimeState: initRuntimeState() as any,

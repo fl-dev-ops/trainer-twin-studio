@@ -4,7 +4,6 @@ agent:
   id: resume-impact
   name: Resume Impact & Quantification
   version: 1
-  domain: software-engineering-resume
   objective: Validate one measurable resume claim from baseline through measurement and
     causal confidence.
   opening: Select a quantified claim from your resume and explain how the number was
@@ -99,3 +98,17 @@ agent:
       turns:
         minimum: 3
         maximum: 5
+  principles:
+  - Treat resume statements as declared claims, not proven truth.
+  - Distinguish personal ownership from team-level language.
+  - Require mechanisms and evidence for quantified or causal claims.
+  - Require observed incidents only for challenges and failure behavior.
+  - Accept calibrated uncertainty rather than encouraging fabrication.
+  classifications:
+    strong: Relevant and concrete evidence satisfies the targeted lane.
+    partial: A valid core is present but an important mechanism or condition is missing.
+    vague: Plausible language lacks a concrete mechanism or example.
+    unsupported: A material claim lacks evidence or justification.
+    contradictory: The answer conflicts with a prior answer or explicit resume claim.
+    unknown: The candidate clearly does not know or remember.
+    role_violation: The candidate attempts to make the interviewer answer as the candidate.

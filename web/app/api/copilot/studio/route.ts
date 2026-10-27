@@ -16,7 +16,7 @@ export const runtime = "nodejs";
 const slug = z.string().regex(/^[a-z0-9][a-z0-9._-]*$/i);
 const requestSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("inventory") }).strict(),
-  z.object({ action: z.literal("readSpec"), type: z.enum(["persona", "agent", "domain"]), slug }).strict(),
+  z.object({ action: z.literal("readSpec"), type: z.enum(["persona", "agent"]), slug }).strict(),
   z.object({ action: z.literal("readDraft"), slug }).strict(),
   z.object({ action: z.literal("saveDraft"), bundle: specDraftBundleSchema }).strict(),
   z.object({ action: z.literal("publishDraft"), slug }).strict(),
@@ -323,10 +323,9 @@ export async function POST(request: Request) {
 
   try {
     if (input.action === "inventory") {
-      const [personas, agents, domains, knowledgeBases, drafts] = await Promise.all([
+      const [personas, agents, knowledgeBases, drafts] = await Promise.all([
         db.persona.findMany({ where: { orgId }, orderBy: { slug: "asc" }, select: { slug: true, name: true, version: true } }),
-        db.agent.findMany({ where: { orgId }, orderBy: [{ order: "asc" }, { slug: "asc" }], select: { slug: true, name: true, version: true, domainSlug: true } }),
-        db.domain.findMany({ where: { orgId }, orderBy: { slug: "asc" }, select: { slug: true, name: true, version: true } }),
+        db.agent.findMany({ where: { orgId }, orderBy: [{ order: "asc" }, { slug: "asc" }], select: { slug: true, name: true, version: true } }),
         db.knowledgeBase.findMany({
           where: { orgId },
           orderBy: { slug: "asc" },
@@ -341,7 +340,6 @@ export async function POST(request: Request) {
       return Response.json({
         personas,
         agents,
-        domains,
         knowledgeBases,
         drafts: drafts.map((draft) => ({ ...draft, updatedAt: draft.updatedAt.toISOString() })),
       });
@@ -350,9 +348,7 @@ export async function POST(request: Request) {
     if (input.action === "readSpec") {
       const row = input.type === "persona"
         ? await db.persona.findFirst({ where: { slug: input.slug, orgId }, select: { slug: true, version: true, data: true } })
-        : input.type === "agent"
-          ? await db.agent.findFirst({ where: { slug: input.slug, orgId }, select: { slug: true, version: true, data: true } })
-          : await db.domain.findFirst({ where: { slug: input.slug, orgId }, select: { slug: true, version: true, data: true } });
+        : await db.agent.findFirst({ where: { slug: input.slug, orgId }, select: { slug: true, version: true, data: true } });
       return Response.json(row ?? { error: `${input.type} "${input.slug}" was not found` });
     }
 

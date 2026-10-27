@@ -8,7 +8,6 @@ import {
   type ClaimHandling,
   type ClaimProvenance,
   type Classification,
-  type DomainSpec,
   type PersonaSpec,
   type PhaseSpec,
 } from "./compiler";

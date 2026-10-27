@@ -56,7 +56,6 @@ export async function POST(request: Request) {
           id: true,
           agentSlug: true,
           personaSlug: true,
-          domainSlug: true,
           status: true,
         },
       }),

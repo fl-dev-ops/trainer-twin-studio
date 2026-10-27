@@ -26,7 +26,7 @@ export type GenerationInput = {
   contextPrompt?: string;
   contextLabel?: string;
   contextMaxFiles?: number;
-  previous: { instruction?: string; agent: unknown; domain: unknown } | null;
+  previous: { instruction?: string; agent: unknown } | null;
 };
 
 // Loose JSON schema: it guarantees parseable JSON from the model; the zod
@@ -36,17 +36,16 @@ const ACTION_LIST = "ask_exact_example, ask_reflection, ask_reflective_walkthrou
 const responseSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["agent", "domain", "grounding", "assumptions"],
+  required: ["agent", "rubric", "grounding", "assumptions"],
   properties: {
     agent: {
       type: "object",
       additionalProperties: false,
-      required: ["id", "name", "version", "domain", "objective", "opening", "config", "stages"],
+      required: ["id", "name", "version", "objective", "opening", "config", "stages"],
       properties: {
         id: { type: "string" },
         name: { type: "string" },
         version: { type: "integer" },
-        domain: { type: "string" },
         objective: { type: "string", description: "One-sentence overall objective of the scenario." },
         opening: { type: "string" },
         config: {
@@ -159,15 +158,11 @@ const responseSchema = {
         },
       },
     },
-    domain: {
+    rubric: {
       type: "object",
       additionalProperties: false,
-      required: ["id", "name", "version", "knowledge_bases", "principles", "classifications"],
+      required: ["principles", "classifications"],
       properties: {
-        id: { type: "string" },
-        name: { type: "string" },
-        version: { type: "integer" },
-        knowledge_bases: { type: "array", items: { type: "string" } },
         principles: { type: "array", minItems: 3, maxItems: 6, items: { type: "string" } },
         classifications: {
           type: "object",
@@ -205,12 +200,12 @@ const responseSchema = {
   },
 } as const;
 
-const SYSTEM_PROMPT = `You compile TrainerTwin interview scenarios. The trainer gives requirements in plain language; you return one JSON bundle containing an Agent spec, a Domain spec, and knowledge grounding records. The deterministic voice runtime executes the Agent spec literally — it never improvises. Encode everything the trainer asked for into spec fields; do not leave requirements only implied.
+const SYSTEM_PROMPT = `You compile TrainerTwin interview scenarios. The trainer gives requirements in plain language; you return one JSON bundle containing an Agent spec, its assessment rubric, and knowledge grounding records. The deterministic voice runtime executes the Agent spec literally — it never improvises. Encode everything the trainer asked for into spec fields; do not leave requirements only implied.
 
 ## Output contract
-Return ONLY a JSON object with keys: agent, domain, grounding, assumptions.
+Return ONLY a JSON object with keys: agent, rubric, grounding, assumptions.
 - agent.id / agent.name: echo the provided slug and name unchanged. agent.opening: echo the provided first message unchanged.
-- domain: the assessment rules for this scenario's subject area. Use the provided domain id.
+- rubric: the assessment rules for this scenario's subject area.
 - grounding: one record per attached knowledge base (knowledgeBase, source, stageIds, purpose, queryGuidance, tags). Empty array when no knowledge base is attached.
 - assumptions: 1-5 short statements of decisions you made that the trainer should review.
 
@@ -231,7 +226,7 @@ Return ONLY a JSON object with keys: agent, domain, grounding, assumptions.
   - stage.config.scenario: {} unless the trainer defines a simulated environment.
 - Everything the trainer's instruction requires must be expressible through stages, evidence keys, and actions. If the instruction names topics or behaviors, they appear as evidence keys, knowledge tags, or stage objectives — never as prose only.
 
-## Domain spec rules
+## Rubric rules
 - principles: 3-6 assessment principles as one-sentence rules.
 - classifications: exactly these keys, each with a one-sentence meaning: strong, partial, vague, unsupported, contradictory, unknown, role_violation.
 
@@ -245,8 +240,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** An agent's rubric, shown to the model as its own section (the agent carries it as principles + classifications). */
+function rubricOf(value: unknown): { principles: unknown; classifications: unknown } {
+  return isRecord(value) ? { principles: value.principles ?? [], classifications: value.classifications ?? {} } : { principles: [], classifications: {} };
+}
+
 function agentForGeneration(value: unknown): unknown {
   const agent = structuredClone(value);
+  if (isRecord(agent)) {
+    // Shown separately as the rubric; knowledge_bases is set from the attached knowledge base, never generated.
+    delete agent.principles;
+    delete agent.classifications;
+    delete agent.knowledge_bases;
+  }
   if (!isRecord(agent) || !Array.isArray(agent.stages)) return agent;
 
   for (const stage of agent.stages) {
@@ -297,13 +303,9 @@ function normalizeGeneratedEvidence(
 async function referenceExample(): Promise<string> {
   // A real published bundle grounds the format; fall back to prompt-only if missing.
   try {
-    const [agentRaw, domainRaw] = await Promise.all([
-      fs.readFile(path.join(process.cwd(), "data/agents/resume-mastery.yaml"), "utf8"),
-      fs.readFile(path.join(process.cwd(), "data/domains/software-engineering-resume.yaml"), "utf8"),
-    ]);
+    const agentRaw = await fs.readFile(path.join(process.cwd(), "data/agents/resume-mastery.yaml"), "utf8");
     const agent = (yaml.load(agentRaw) as { agent: unknown }).agent;
-    const domain = (yaml.load(domainRaw) as { domain: unknown }).domain;
-    return `## Format reference (real published bundle, abbreviated)\nAgent:\n${yaml.dump(agentForGeneration(agent), { lineWidth: 100 })}\nDomain:\n${yaml.dump(domain, { lineWidth: 100 })}\n`;
+    return `## Format reference (real published bundle, abbreviated)\nAgent:\n${yaml.dump(agentForGeneration(agent), { lineWidth: 100 })}\nRubric:\n${yaml.dump(rubricOf(agent), { lineWidth: 100 })}\n`;
   } catch {
     return "";
   }
@@ -336,7 +338,7 @@ async function callModel(messages: { role: string; content: string }[], meter?: 
   return JSON.parse(content);
 }
 
-/** Generates a validated Agent+Domain bundle from the trainer's instruction. */
+/** Generates a validated agent bundle (rubric on the agent) from the trainer's instruction. */
 export async function generateSpecBundle(input: GenerationInput): Promise<SpecDraftBundle> {
   const userLines = [
     `Scenario slug: ${input.slug}`,
@@ -353,7 +355,7 @@ export async function generateSpecBundle(input: GenerationInput): Promise<SpecDr
       "",
       "## Previous version (iterate from this; keep structure and evidence keys unless the instruction requires a change)",
       input.previous.instruction ? `Previous instruction:\n${input.previous.instruction}\n` : "",
-      yaml.dump({ agent: agentForGeneration(input.previous.agent), domain: input.previous.domain }, { lineWidth: 100, noRefs: true }),
+      yaml.dump({ agent: agentForGeneration(input.previous.agent), rubric: rubricOf(input.previous.agent) }, { lineWidth: 100, noRefs: true }),
     );
   }
 
@@ -372,12 +374,19 @@ export async function generateSpecBundle(input: GenerationInput): Promise<SpecDr
       lastError = error;
       continue;
     }
-    const modelBundle = parsed as {
+    const { rubric, ...modelBundle } = parsed as {
+      rubric?: { principles?: unknown; classifications?: unknown };
       agent?: {
         config?: Record<string, unknown>;
         stages?: Array<{ config?: Record<string, unknown> }>;
+        [key: string]: unknown;
       };
     };
+    if (modelBundle.agent) {
+      modelBundle.agent.principles = rubric?.principles;
+      modelBundle.agent.classifications = rubric?.classifications;
+      modelBundle.agent.knowledge_bases = input.knowledgeBase ? [input.knowledgeBase] : [];
+    }
     if (modelBundle.agent?.config) {
       modelBundle.agent.config.interview = input.interviewConfig;
       modelBundle.agent.config.context = applyLearnerUpload(

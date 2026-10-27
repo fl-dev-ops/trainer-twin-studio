@@ -51,7 +51,7 @@ model Agent {
   slug            String             @unique
   name            String
   version         Int                @default(1)
-  domainSlug      String
+  domainSlug      String? // unused: domains are dropped (plans/drop-domains.md, phase 2 removes it)
   personaId       String
   persona         Persona            @relation(fields: [personaId], references: [id], onDelete: Restrict)
   // No default: every writer must choose the module.
@@ -111,7 +111,7 @@ model SpecDraft {
   // Copied onto the Agent when published. No default: every writer must choose.
   kind          AgentKind
   agentData     Json
-  domainData    Json
+  domainData    Json? // unused: the rubric lives in agentData (plans/drop-domains.md, phase 2 removes it)
   groundingData Json
   assumptions   Json
   gaps          Json
@@ -341,8 +341,8 @@ model InterviewSession {
   personaVersion   Int
   agentSlug        String
   agentVersion     Int
-  domainSlug       String
-  domainVersion    Int
+  domainSlug       String? // unused (plans/drop-domains.md, phase 2 removes it)
+  domainVersion    Int?
   status           String    @default("assigned") // assigned | activating | active | closing | completed | abandoned | revoked | failed
   contextId        String?
   contextName      String?

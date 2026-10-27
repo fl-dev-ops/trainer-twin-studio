@@ -19,8 +19,6 @@ export async function GET(request: Request, { params }: Params) {
       personaVersion: true,
       agentSlug: true,
       agentVersion: true,
-      domainSlug: true,
-      domainVersion: true,
       status: true,
       mode: true,
       contextName: true,
