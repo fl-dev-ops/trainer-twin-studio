@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
-import { ArrowLeft, Check, Plus, Upload, X } from "lucide-react";
+import { ArrowLeft, Check, LoaderCircle, Play, Plus, Square, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { CARD, PersonaPhoto } from "@/components/persona/persona-parts";
 import { Button } from "@/components/ui/button";
@@ -16,13 +16,15 @@ import {
   ANSWER_LENGTH, BEHAVIOURS, FORMALITY, INTERRUPTS, MAX_BEHAVIOURS, MAX_PHRASES, OPENING_STYLES, PACE, PERSONA_ROLES,
   meaningOf, type PersonaInput,
 } from "@/lib/persona";
+import { generateSpeech, playPcmStream, stopPlayback } from "@/lib/audio-playback";
 import { cn } from "@/lib/utils";
 
 type Media = { photoUrl: string | null; hasVideo: boolean; voiceName: string | null };
+type LibraryVoice = { id: string; name: string; kind: string };
 export type PersonaTab = "look" | "talk" | "media";
 
 /** Create or edit a role-play persona: who they are, how they talk, and their voice and avatar. One Save for all tabs. */
-export function PersonaEditor({ slug, initial, media, isOwn = false, defaultTab = "look" }: { slug?: string; initial: PersonaInput; media?: Media; isOwn?: boolean; defaultTab?: PersonaTab }) {
+export function PersonaEditor({ slug, initial, media, voices = [], isOwn = false, defaultTab = "look" }: { slug?: string; initial: PersonaInput; media?: Media; voices?: LibraryVoice[]; isOwn?: boolean; defaultTab?: PersonaTab }) {
   const router = useRouter();
   const [form, setForm] = useState<PersonaInput>(initial);
   const [phrase, setPhrase] = useState("");
@@ -180,7 +182,7 @@ export function PersonaEditor({ slug, initial, media, isOwn = false, defaultTab 
                   {media?.voiceName ? ` Current voice: ${media.voiceName}.` : ""}
                 </p>
               </Section>
-            ) : slug && media ? <MediaSection slug={slug} name={form.name} media={media} /> : (
+            ) : slug && media ? <MediaSection slug={slug} name={form.name} media={media} voices={voices} /> : (
               <Section>
                 <p className="m-0 text-sm text-muted-foreground">Save the persona first, then add its voice and avatar here.</p>
               </Section>
@@ -246,12 +248,10 @@ function ToggleRow({ label, help, checked, onChange }: { label: string; help: st
   );
 }
 
-/** Voice (reference audio + transcript) and avatar (photo + video) uploads for a saved persona. */
-function MediaSection({ slug, name, media }: { slug: string; name: string; media: Media }) {
+/** Voice (picked from the voice library) and avatar (photo + video uploads) for a saved role-play persona. */
+function MediaSection({ slug, name, media, voices }: { slug: string; name: string; media: Media; voices: LibraryVoice[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState<"voice" | "avatar" | null>(null);
-  const [audio, setAudio] = useState<File | null>(null);
-  const [transcript, setTranscript] = useState("");
   const [image, setImage] = useState<File | null>(null);
   const [video, setVideo] = useState<File | null>(null);
 
@@ -264,7 +264,7 @@ function MediaSection({ slug, name, media }: { slug: string; name: string; media
       const result = await response.json().catch(() => null);
       if (!response.ok) throw new Error(result?.error ?? "Upload failed");
       toast.success(kind === "voice" ? "Voice saved" : "Avatar saved");
-      if (kind === "voice") { setAudio(null); setTranscript(""); } else { setImage(null); setVideo(null); }
+      if (kind === "avatar") { setImage(null); setVideo(null); }
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Upload failed");
@@ -278,18 +278,10 @@ function MediaSection({ slug, name, media }: { slug: string; name: string; media
       <Section>
         <div>
           <h2 className="m-0 text-sm font-semibold uppercase tracking-wide">Voice</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">A clear recording of this person talking. It is the reference the voice is cloned from.</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Pick how this person sounds. Play a voice to hear it, then use it.</p>
         </div>
-        <p className="m-0 text-sm">{media.voiceName ? <>Current voice: <b className="font-semibold">{media.voiceName}</b></> : <span className="text-muted-foreground">No voice yet.</span>}</p>
-        <Field label="Reference audio" htmlFor="p-audio" help="WAV, MP3, M4A, WebM or OGG, up to 25 MB.">
-          <Input id="p-audio" type="file" accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/webm,audio/ogg" onChange={(e) => setAudio(e.target.files?.[0] ?? null)} />
-        </Field>
-        <Field label="What is said in the recording" htmlFor="p-transcript" help="Optional. Improves the cloned voice.">
-          <Textarea id="p-transcript" rows={2} value={transcript} onChange={(e) => setTranscript(e.target.value)} />
-        </Field>
-        <Button className="w-fit" disabled={!audio || busy !== null} onClick={() => void upload("voice", { audio, transcript })}>
-          <Upload /> {busy === "voice" ? "Uploading…" : media.voiceName ? "Replace voice" : "Save voice"}
-        </Button>
+        <p className="m-0 text-sm">{media.voiceName ? <>Current voice: <b className="font-semibold capitalize">{media.voiceName}</b></> : <span className="text-muted-foreground">No voice yet.</span>}</p>
+        <VoicePicker voices={voices} current={media.voiceName} busy={busy === "voice"} onPick={(voiceId) => void upload("voice", { voiceId })} />
       </Section>
 
       <Section>
@@ -314,5 +306,69 @@ function MediaSection({ slug, name, media }: { slug: string; name: string; media
         </Button>
       </Section>
     </div>
+  );
+}
+
+const PREVIEW_SENTENCE = "Hi, thanks for calling. I've got a few minutes, so tell me what this is about.";
+
+/** The voice library as a list: play a short preview, then use a voice for this persona (its current one is marked). */
+function VoicePicker({ voices, current, busy, onPick }: { voices: LibraryVoice[]; current: string | null; busy: boolean; onPick: (voiceId: string) => void }) {
+  const [playing, setPlaying] = useState<string | null>(null);
+  const [loading, setLoading] = useState<string | null>(null);
+
+  async function preview(voice: LibraryVoice) {
+    stopPlayback();
+    if (playing === voice.id) return setPlaying(null);
+    setLoading(voice.id);
+    try {
+      const response = await generateSpeech(voice.id, PREVIEW_SENTENCE);
+      setPlaying(voice.id);
+      setLoading(null);
+      await playPcmStream(response);
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Preview failed. Is the voice service running?");
+    } finally {
+      setLoading(null);
+      setPlaying((now) => (now === voice.id ? null : now));
+    }
+  }
+
+  if (!voices.length) {
+    return (
+      <p className="m-0 text-sm text-muted-foreground">
+        No voices yet. <Link href="/voice" className="text-foreground underline underline-offset-4">Add one in Voice</Link>.
+      </p>
+    );
+  }
+  return (
+    <ul className="m-0 flex list-none flex-col divide-y divide-(--border) rounded-[12px] border border-(--border) p-0">
+      {voices.map((voice) => {
+        const inUse = current === voice.name;
+        return (
+          <li key={voice.id} className="flex items-center gap-3 px-3 py-2.5">
+            <button
+              type="button"
+              onClick={() => void preview(voice)}
+              disabled={loading !== null && loading !== voice.id}
+              aria-label={playing === voice.id ? `Stop ${voice.name}` : `Play ${voice.name}`}
+              className="grid size-9 shrink-0 place-items-center rounded-full bg-(--tone-control) transition-colors outline-none hover:bg-foreground hover:text-background focus-visible:ring-2 focus-visible:ring-(--brand) disabled:opacity-50"
+            >
+              {loading === voice.id ? <LoaderCircle className="size-4 animate-spin" /> : playing === voice.id ? <Square className="size-3.5" /> : <Play className="size-4" />}
+            </button>
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-sm font-medium capitalize">{voice.name}</span>
+              <span className="text-xs text-muted-foreground">{voice.kind === "sample" ? "Built-in voice" : "Cloned voice"}</span>
+            </span>
+            {inUse ? (
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-(--brand)"><Check className="size-3.5" /> In use</span>
+            ) : (
+              <Button size="sm" variant="outline" className="rounded-full" disabled={busy} onClick={() => onPick(voice.id)}>
+                {busy ? "Saving…" : "Use"}
+              </Button>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }

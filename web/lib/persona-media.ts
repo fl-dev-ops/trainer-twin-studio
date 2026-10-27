@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
-import { avatarPrefix, deleteObject, getObjectText, presignedGetUrl, putObject, voicePrefix } from "@/lib/s3";
+import { avatarPrefix, deleteObject, getObjectBytes, getObjectText, presignedGetUrl, putObject, voicePrefix } from "@/lib/s3";
 
 /**
  * A persona = voice + avatar + prompt fields (Persona.data) + program settings (Persona.settings).
@@ -94,6 +94,37 @@ export async function setPersonaVoice(orgId: string | null, slug: string, input:
   await removeOld(voice.s3AudioKey);
   if (voice.s3TranscriptKey !== transcriptKey) await removeOld(voice.s3TranscriptKey);
   return { voiceId: voice.id };
+}
+
+/**
+ * Voices a role-play persona can take from the voice library: built-in samples and the org's cloned voices that no
+ * persona owns (a persona's own voice is not offered to another).
+ */
+export function pickableVoices(orgId: string) {
+  return db.voice.findMany({
+    where: { status: "ready", persona: null, OR: [{ orgId: null, kind: "sample" }, { orgId, kind: "cloned" }] },
+    orderBy: [{ kind: "desc" }, { name: "asc" }],
+    select: { id: true, name: true, kind: true },
+  });
+}
+
+/**
+ * Gives the persona a voice from the library. A persona owns its voice (one persona per voice, same org), so the
+ * chosen voice's reference audio + transcript are copied into the persona's own voice, which takes its name.
+ */
+export async function setPersonaVoiceFrom(orgId: string, slug: string, sourceVoiceId: string) {
+  const source = (await pickableVoices(orgId)).find((voice) => voice.id === sourceVoiceId);
+  if (!source) throw new PersonaMediaError("That voice is not available.", 404);
+  const row = await db.voice.findUniqueOrThrow({ where: { id: source.id }, select: { s3AudioKey: true, s3TranscriptKey: true } });
+  const [audio, transcript] = await Promise.all([
+    getObjectBytes(row.s3AudioKey),
+    row.s3TranscriptKey ? getObjectText(row.s3TranscriptKey) : Promise.resolve(""),
+  ]);
+  const ext = row.s3AudioKey.split(".").pop()?.toLowerCase() ?? "wav";
+  const type = Object.entries(EXTENSION).find(([mime, e]) => e === ext && MEDIA_LIMITS.audio.types.includes(mime as never))?.[0] ?? "audio/wav";
+  const { voiceId } = await setPersonaVoice(orgId, slug, { audio: new File([new Uint8Array(audio)], `reference.${ext}`, { type }), transcript });
+  await db.voice.update({ where: { id: voiceId }, data: { name: source.name } });
+  return { voiceId, name: source.name };
 }
 
 /** Sets the persona's avatar reference image and/or video. Creates the avatar on first use. */
