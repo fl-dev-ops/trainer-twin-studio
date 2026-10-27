@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { callReportModel, markReportFailed, ReportError } from "@/lib/report-model";
+import { MAX_GOALS, MAX_RUBRIC_CRITERIA } from "@/lib/roleplay/skill";
 import { skillBody } from "@/lib/scenario-ingest";
 import { reportKindOf } from "@/lib/session-after";
 import {
@@ -19,8 +20,6 @@ import { transcriptTurns, type Turn } from "@/lib/twin/stats";
  * so the existing session pages read it.
  */
 
-export const MAX_GOALS = 5;
-export const MAX_RUBRIC_CRITERIA = 8;
 export type RubricCriterion = { name: string; points: number };
 export type RoleplayAfter = { goals: string[]; rubric: RubricCriterion[] };
 export type RoleplayReport = SessionReport & { kind: "roleplay" };

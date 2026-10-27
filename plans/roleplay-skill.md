@@ -63,7 +63,9 @@ collection, `kind = ROLEPLAY`, any persona of the org (Persona Library client, o
 | — (new) | During | `items.json`: the builder's optional **Example lines** (may be empty); real lines later from recordings |
 
 The two seed role plays (`wait-and-see-investor`, `options-collector`, branch `data/roleplay/seed.yaml`) are converted
-once into `web/data/roleplay/skills/<slug>/` (SKILL.md, scenario.json, items.json, after.json) on the v2 presets.
+once into `web/data/roleplay/skills/<slug>/builder.json` (the builder input; files are rendered from it) on the
+closest v2 presets: wait-and-see → `off-plan-lead-waiting-for-prices`, options-collector → `overseas-investor-short-on-time`
+(each keeps its own client name and situation).
 
 ## 3. Work, one commit each
 
@@ -73,7 +75,7 @@ once into `web/data/roleplay/skills/<slug>/` (SKILL.md, scenario.json, items.jso
    moves onto the same Workflow + `reportStatus` + quiet polling as twin; scorer = the branch's role-play prompt
    (goals → rubric consistency, pass, biggest opportunity), goals and rubric from `data.after`. Legacy interview
    reports keep `scheduleSessionReport`. Port the branch's report tests.
-3. **During: format** — `web/lib/roleplay-skill.ts`: `renderRoleplaySkill(builder)` → `{ skill, scenario, items }`
+3. ✅ **During: format** — `web/lib/roleplay-skill.ts`: `renderRoleplaySkill(builder)` → `{ skill, scenario, items }`
    + `after`, deterministic (no LLM); `roleplayBuilderFrom(data)` reads it back for editing; items schema per kind.
    Convert the 2 seeds. Tests: stable render, round trip, goals ≤ 5, rubric = 100.
 4. **During: storage** — generalise `ingestScenario` to `kind ROLEPLAY` (any org persona; a twin and a role play never
