@@ -42,7 +42,7 @@ function CopyShareLinkButton({ slug }: { slug: string }) {
     }
   }
   return (
-    <Button variant="outline" size="sm" onClick={() => void copy()} disabled={state === "busy"}>
+    <Button variant="secondary" onClick={() => void copy()} disabled={state === "busy"}>
       {state === "copied" ? <Check /> : <Copy />}
       {state === "copied" ? "Copied" : "Copy link"}
     </Button>
