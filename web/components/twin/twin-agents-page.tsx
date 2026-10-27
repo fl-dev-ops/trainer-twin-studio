@@ -1,12 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ChevronDown, Play, Settings2, Share2, Sliders, Trash2, UserPlus } from "lucide-react";
 import { SetupIcon } from "@/components/icons";
 import { SessionTime } from "@/components/sessions/session-time";
 import { ShareTwinDialog } from "@/components/twin/share-twin-dialog";
 import { TwinFace } from "@/components/twin/twin-face";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { seedCopilot } from "@/lib/copilot-handoff";
 import { DotsIcon, GRADIENTS, LearnerAvatars } from "@/components/library-card-parts";
 import {
   DropdownMenu,
@@ -182,8 +187,75 @@ function TwinBotCard({ bot, index }: { bot: TwinCard; index: number }) {
   );
 }
 
+/**
+ * "Create new": a twin skill is built by the copilot from the trainer's knowledge-base sessions on request
+ * (plans/twin-skill-ingest.md). The request is handed to the copilot chat, which shows the run until it publishes.
+ */
+function CreateSkillDialog({ personaSlug }: { personaSlug: string | null }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [what, setWhat] = useState("");
+  // The copilot names its source folder after USER (lowercase letters, digits, dashes).
+  const user = personaSlug?.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") ?? "";
+
+  function create(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!personaSlug || !what.trim()) return;
+    seedCopilot(
+      `USER=${user}\nBuild a twin skill from my knowledge base: ${what.trim()}\nPublish it for persona ${personaSlug}.`,
+    );
+    router.push("/");
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger
+        render={
+          <button
+            type="button"
+            className="inline-flex h-8 items-center gap-2 rounded-full bg-(--brand) px-3.5 text-[13px] leading-5 font-medium text-white shadow-none transition-colors hover:bg-[#e04d00] dark:hover:bg-[#ff7e33]"
+          />
+        }
+      >
+        <svg viewBox="0 0 16 16" width={16} height={16} fill="none" aria-hidden>
+          <path d="M8 3.5v9M3.5 8h9" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" />
+        </svg>
+        Create new
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Create a twin skill</DialogTitle>
+          <DialogDescription>
+            {personaSlug
+              ? "The copilot builds it from the sessions in your knowledge base, then it appears here. It takes a few minutes."
+              : "Set up your own persona first (Personas), so the skill knows whose twin it belongs to."}
+          </DialogDescription>
+        </DialogHeader>
+        {personaSlug ? (
+          <form onSubmit={create} className="grid gap-3">
+            <Textarea
+              autoFocus
+              value={what}
+              onChange={(event) => setWhat(event.target.value)}
+              placeholder="What should this skill cover? e.g. Handling an off-plan buyer who wants to wait for prices to drop"
+              rows={4}
+              maxLength={1000}
+              aria-label="What should this skill cover?"
+            />
+            <DialogFooter>
+              <Button type="submit" disabled={!what.trim()}>
+                Create
+              </Button>
+            </DialogFooter>
+          </form>
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /** Full Twin Agents library page (beta `page--twin-profile`). */
-export function TwinAgentsPage({ data }: { data: TwinOutputs["agents"]["list"] }) {
+export function TwinAgentsPage({ data, personaSlug = null }: { data: TwinOutputs["agents"]["list"]; personaSlug?: string | null }) {
   return (
     <div className="h-full w-full overflow-y-auto">
       {/* Reference .page.page--library: max-width 1024px centered, padding 20px top, 32px bottom. */}
@@ -195,15 +267,7 @@ export function TwinAgentsPage({ data }: { data: TwinOutputs["agents"]["list"] }
             </span>
             Twin Agents
           </h1>
-          <button
-            type="button"
-            className="inline-flex h-8 items-center gap-2 rounded-full bg-(--brand) px-3.5 text-[13px] leading-5 font-medium text-white shadow-none transition-colors hover:bg-[#e04d00] dark:hover:bg-[#ff7e33]"
-          >
-            <svg viewBox="0 0 16 16" width={16} height={16} fill="none" aria-hidden>
-              <path d="M8 3.5v9M3.5 8h9" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" />
-            </svg>
-            Create new
-          </button>
+          <CreateSkillDialog personaSlug={personaSlug} />
         </header>
 
         <h2 className="mt-10 max-w-none text-[18px] font-semibold leading-6 tracking-[-0.015em]">Twin for all use cases</h2>
