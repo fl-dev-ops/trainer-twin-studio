@@ -2,8 +2,7 @@ import type { Where } from "chromadb";
 import { db } from "@/lib/db";
 import { ChromaTenantService } from "@/lib/chroma-tenant";
 import { MainCollectionService } from "@/lib/main-collection";
-import { chunkMarkdown } from "@/lib/knowledge";
-import { deletePrefix, getObjectText, kbPrefix, presignedGetUrl, putObject } from "@/lib/s3";
+import { deletePrefix, kbPrefix, orgPrefix, presignedGetUrl, putObject } from "@/lib/s3";
 import { documentToMarkdown } from "@/lib/documents";
 import { enqueueIngestionWork } from "@/lib/ingestion-queue";
 
@@ -81,7 +80,9 @@ export class OrganizationKnowledgeService {
       sourceId: d.sourceId,
       externalId: d.externalId,
       sourceUrl: d.source?.sourceUrl ?? null,
-      connector: d.source?.connector ?? (d.ext === "json" ? "youtube" : "upload"),
+      connector: d.source?.connector ?? (
+        d.s3SourceKey.startsWith(`${orgPrefix(orgId)}/knowledge/files/`) ? "upload" : d.ext === "json" ? "youtube" : "upload"
+      ),
       sourceStatus: d.source?.status ?? null,
       indexedAt: d.indexedAt ? d.indexedAt.toISOString() : null,
       createdAt: d.createdAt.toISOString(),
@@ -147,13 +148,10 @@ export class OrganizationKnowledgeService {
     };
   }
 
-  /**
-   * Uploads a document to S3 and queues background ingestion through SQS.
-   * Returns immediately with 202 Accepted and queued status.
-   */
-  static async uploadDocument(orgId: string, file: File): Promise<OrgKnowledgeDoc & { jobId: string }> {
-    const kb = await getOrCreateOrgKnowledgeBase(orgId);
+  /** Stores the original and Markdown separately. Upload is complete after both writes; ingestion is paused. */
+  static async uploadDocument(orgId: string, file: File): Promise<OrgKnowledgeDoc & { jobId: string | null }> {
     const { ext, bytes, markdown } = await documentToMarkdown(file);
+    const kb = await getOrCreateOrgKnowledgeBase(orgId);
 
     const baseSlug = file.name
       .replace(/\.[^.]+$/, "")
@@ -173,48 +171,35 @@ export class OrganizationKnowledgeService {
         ext,
         size: file.size,
         s3SourceKey: "pending",
-        s3MarkdownKey: "pending",
-        status: "uploaded",
+        status: "uploading",
       },
     });
 
-    const sourceKey = `${kbPrefix(orgId, kb.id, doc.id)}/source-${slug}`;
-    const markdownKey = `${kbPrefix(orgId, kb.id, doc.id)}/content.md`;
+    // Per-document folders prevent filename collisions and let deletion remove both copies safely.
+    const sourceKey = `${orgPrefix(orgId)}/knowledge/files/${doc.id}/${slug}`;
+    const markdownKey = `${orgPrefix(orgId)}/ingest/files/${doc.id}/content.md`;
+    try {
+      await putObject(sourceKey, bytes, file.type || "application/octet-stream");
+      await putObject(markdownKey, markdown, "text/markdown; charset=utf-8");
+      await db.knowledgeDocument.update({
+        where: { id: doc.id },
+        data: { s3SourceKey: sourceKey, s3MarkdownKey: markdownKey, status: "uploaded" },
+      });
+    } catch (error) {
+      // Keep the keys for cleanup if only one copy made it to S3; never report a partial upload as complete.
+      await db.knowledgeDocument.update({
+        where: { id: doc.id },
+        data: {
+          s3SourceKey: sourceKey,
+          s3MarkdownKey: markdownKey,
+          status: "failed",
+          error: error instanceof Error ? error.message : "Upload failed",
+        },
+      });
+      throw error;
+    }
 
-    await Promise.all([
-      putObject(sourceKey, bytes, file.type || "application/octet-stream"),
-      putObject(markdownKey, markdown, "text/markdown; charset=utf-8"),
-    ]);
-
-    await db.knowledgeDocument.update({
-      where: { id: doc.id },
-      data: { s3SourceKey: sourceKey, s3MarkdownKey: markdownKey },
-    });
-
-    // Ensure org tenant exists before enqueuing work
-    await ChromaTenantService.createOrgDatabase(orgId);
-
-    // Enqueue background ingestion through SQS
-    const queueResult = await enqueueIngestionWork({
-      orgId,
-      kbId: kb.id,
-      connector: "upload",
-      externalId: doc.id,
-      sourceUrl: `upload://${slug}`,
-      rootWorkItem: {
-        workKey: doc.id,
-        kind: "resource",
-        payload: { docId: doc.id, title: doc.title, slug: doc.slug },
-      },
-    });
-
-    await db.knowledgeDocument.update({
-      where: { id: doc.id },
-      data: { sourceId: queueResult.sourceId, status: "queued" },
-    });
-
-
-    return {
+    const result: OrgKnowledgeDoc & { jobId: string | null } = {
       id: doc.id,
       kbId: kb.id,
       kbSlug: kb.slug,
@@ -222,16 +207,39 @@ export class OrganizationKnowledgeService {
       title: doc.title,
       ext: doc.ext,
       size: doc.size,
-      status: "queued",
+      status: "uploaded",
       error: null,
       chunkCount: 0,
-      sourceId: queueResult.sourceId,
+      sourceId: null,
       connector: "upload",
-      sourceStatus: "syncing",
-      jobId: queueResult.jobId,
+      sourceStatus: null,
+      jobId: null,
       indexedAt: null,
       createdAt: doc.createdAt.toISOString(),
     };
+
+    // Ingestion paused: uncomment this block to queue processing after both files have been stored.
+    // await ChromaTenantService.createOrgDatabase(orgId);
+    // const queueResult = await enqueueIngestionWork({
+    //   orgId,
+    //   kbId: kb.id,
+    //   connector: "upload",
+    //   externalId: doc.id,
+    //   sourceUrl: `upload://${slug}`,
+    //   rootWorkItem: {
+    //     workKey: doc.id,
+    //     kind: "resource",
+    //     payload: { docId: doc.id, title: doc.title, slug: doc.slug },
+    //   },
+    // });
+    // await db.knowledgeDocument.update({
+    //   where: { id: doc.id },
+    //   data: { sourceId: queueResult.sourceId, status: "queued" },
+    // });
+
+    // return { ...result, status: "queued", sourceId: queueResult.sourceId, sourceStatus: "syncing", jobId: queueResult.jobId };
+
+    return result;
   }
 
   /**
@@ -261,9 +269,12 @@ export class OrganizationKnowledgeService {
       });
     }
 
+    const storedOnly = doc.s3SourceKey.startsWith(`${orgPrefix(orgId)}/knowledge/files/`) && !doc.sourceId && !doc.indexedAt;
     await Promise.all([
-      MainCollectionService.removeKnowledgeDoc(orgId, doc.id),
-      deletePrefix(kbPrefix(orgId, doc.kbId, doc.id)),
+      storedOnly ? Promise.resolve() : MainCollectionService.removeKnowledgeDoc(orgId, doc.id),
+      deletePrefix(`${kbPrefix(orgId, doc.kbId, doc.id)}/`), // Existing documents keep their original keys.
+      deletePrefix(`${orgPrefix(orgId)}/knowledge/files/${doc.id}/`),
+      deletePrefix(`${orgPrefix(orgId)}/ingest/files/${doc.id}/`),
     ]);
 
     await db.knowledgeDocument.delete({ where: { id: doc.id } });

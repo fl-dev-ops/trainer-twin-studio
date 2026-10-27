@@ -15,8 +15,8 @@ export async function POST(req: Request) {
 
     const doc = await OrganizationKnowledgeService.uploadDocument(trainer.id, file);
     return NextResponse.json(
-      { ok: true, status: "queued", document: doc, jobId: doc.jobId },
-      { status: 202 },
+      { ok: true, status: doc.status, document: doc, jobId: doc.jobId },
+      { status: 201 },
     );
   } catch (error) {
     console.error("Upload failed:", error);

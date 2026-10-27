@@ -123,7 +123,7 @@ export function KnowledgeUploadModal({
 
     if (successCount > 0) {
       toast.success(
-        `Successfully indexed ${successCount} document${successCount > 1 ? "s" : ""}`,
+        `Successfully uploaded ${successCount} document${successCount > 1 ? "s" : ""}`,
       );
       onSuccess();
     }
@@ -145,7 +145,7 @@ export function KnowledgeUploadModal({
         <DialogHeader>
           <DialogTitle>Upload Grounding Documents</DialogTitle>
           <DialogDescription>
-            Files are converted to markdown, stored in S3, chunked, and indexed into your organization vector space.
+            Original files and converted Markdown are stored separately in S3. No indexing runs yet.
           </DialogDescription>
         </DialogHeader>
 

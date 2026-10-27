@@ -189,7 +189,7 @@ export function KnowledgeAddSourceDialog({
     setIsUploading(false);
     if (successCount > 0) {
       toast.success(
-        `Uploaded ${successCount} file${successCount > 1 ? "s" : ""}. Processing in background.`,
+        `Uploaded ${successCount} file${successCount > 1 ? "s" : ""}. Originals and Markdown saved.`,
       );
       onSuccess();
     }
