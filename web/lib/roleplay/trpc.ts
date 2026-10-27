@@ -248,7 +248,7 @@ const sessionsRouter = t.router({
       where: roleplaySessions(ctx.user.orgId, { id: input.id }),
       select: { status: true, reportStatus: true, report: true, endedAt: true },
     });
-    return row ? reportState(row) : "unavailable";
+    return { state: row ? reportState(row) : ("unavailable" as const) };
   }),
 });
 

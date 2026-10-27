@@ -84,7 +84,7 @@ closest v2 presets: wait-and-see → `off-plan-lead-waiting-for-prices`, options
    = the branch's fixed client rules (stay in character, guard levels by difficulty, speech only) + PERSONA block +
    `<roleplay>` SKILL.md + steps. Tools: `end_call` (ported), `scenario_examples` (role `client`); trainer tools
    hidden. Port `chat/tests/agent/lib/roleplay.test.ts`, adapted.
-6. **Pages (/twin style)** — Scenarios list + overview; builder in three sections **Before / During / After**
+6. ✅ **Pages (/twin style)** — Scenarios list + overview; builder in three sections **Before / During / After**
    (create / edit → step 4); role-play sessions; session report; role-play users; sidebar ("Role play sessions",
    "Roleplay users").
 7. **Later** — builder assistant, org type, copilot `save_roleplay_draft`, role plays ingested from real role-play
