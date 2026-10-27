@@ -146,8 +146,9 @@ scenarios:
         pounds a month. Your real goal is to build security for your family, because your salary alone won't.
       learnerRole: Agent calling a social-media lead who asks for options
       agreesWhen: >-
-        Agrees to a Zoom at a specific day and time once the agent has lowered their guard and helped them admit
-        they are confused, or shares their real money position when asked gently.
+        Agrees to a Zoom only once the agent has lowered their guard, helped them admit they are confused, and
+        proposed an exact day and time that you both confirm. If the agent suggests something vague ("later",
+        "this evening", "next week"), stay on the call and ask what day and time exactly.
       declinesWhen: >-
         Says "Just send me the details" and ends the call if the agent pushes, pitches or floods them with options.
         Never agrees to buy on this call.
