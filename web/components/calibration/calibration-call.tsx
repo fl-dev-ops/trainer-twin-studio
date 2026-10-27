@@ -69,8 +69,10 @@ type CallProps = {
 
 export type CallResult = { sessionId: string | null; seconds: number; turns: CalibrationTurn[] };
 export type LearnerCall = {
-  code: string;
-  minutesLeft: number;
+  /** The learner's assignment code; null for a studio member's preview (started by slug: no minutes, not counted). */
+  code: string | null;
+  /** Null in a preview (no minutes). */
+  minutesLeft: number | null;
   header: ReactNode;
   onReport: (sessionId: string | null) => void;
   onEnded: (result: CallResult) => void;
@@ -202,7 +204,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // A learner starts with their assignment code: access and minutes are checked by the session start.
-        body: JSON.stringify(learner ? { shareCode: learner.code, idempotencyKey: crypto.randomUUID() } : { agentSlug: slug, idempotencyKey: crypto.randomUUID() }),
+        body: JSON.stringify(learner?.code ? { shareCode: learner.code, idempotencyKey: crypto.randomUUID() } : { agentSlug: slug, idempotencyKey: crypto.randomUUID() }),
       });
       const launch = await response.json().catch(() => ({}));
       if (!response.ok || !launch.session?.id || !launch.participantToken) {
@@ -429,7 +431,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                 <span className="absolute right-3 bottom-3 rounded-full bg-black/45 px-2.5 py-1 text-[13px] leading-[18px] font-medium text-white tabular-nums">
                   <span className="sr-only">Call time </span>
                   {clock(seconds)}
-                  {learner ? ` · ${Math.max(0, learner.minutesLeft - Math.ceil(seconds / 60))} min left` : ""}
+                  {learner?.minutesLeft != null ? ` · ${Math.max(0, learner.minutesLeft - Math.ceil(seconds / 60))} min left` : ""}
                 </span>
               </div>
 

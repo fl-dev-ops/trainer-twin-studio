@@ -28,7 +28,9 @@ import { cn } from "@/lib/utils";
 
 /** The signed-in person's access to this twin (null: signed out). */
 export type LearnerAccess =
-  | { ok: true; name: string; email: string; code: string; minutesLeft: number; minutesTotal: number }
+  | { ok: true; preview: false; name: string; email: string; code: string; minutesLeft: number; minutesTotal: number }
+  /** A studio member (admin, team): the learner page as learners see it; calls use no minutes and aren't counted. */
+  | { ok: true; preview: true; name: string; email: string }
   | { ok: false; name: string; email: string; reason: "unassigned" | "ended" | "used" }
   | null;
 
@@ -65,7 +67,8 @@ export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string;
   const [signingIn, setSigningIn] = useState(false);
   const [result, setResult] = useState<CallResult | null>(null);
   const [reportFor, setReportFor] = useState<{ sessionId: string | null } | null>(null);
-  const minutesLeft = access?.ok ? access.minutesLeft : null;
+  const minutesLeft = access?.ok && !access.preview ? access.minutesLeft : null;
+  const preview = access?.ok === true && access.preview;
   const coach = firstName(trainer.name);
 
   function switchAccount() {
@@ -81,6 +84,7 @@ export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string;
       <span className="flex items-center gap-1.5">
         <BrandMark className="size-5 text-primary" />
         <span className="text-base leading-none font-semibold tracking-[-0.02em]">TrainerTwin</span>
+        {preview ? <span className="ml-2 rounded-full bg-(--brand)/10 px-2.5 py-0.5 text-xs font-medium text-(--brand)">Preview</span> : null}
       </span>
       {step !== "profile" && minutesLeft !== null ? (
         <span className="rounded-full bg-(--tone-control) px-3 py-1 text-xs font-medium tabular-nums">{minutesLeft} min left</span>
@@ -124,8 +128,8 @@ export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string;
           twin
           photoUrl={trainer.photoUrl}
           learner={{
-            code: access.code,
-            minutesLeft: access.minutesLeft,
+            code: access.preview ? null : access.code,
+            minutesLeft: access.preview ? null : access.minutesLeft,
             header: topBar,
             onReport: (sessionId) => setReportFor({ sessionId }),
             onEnded: (ended) => {
@@ -151,6 +155,7 @@ export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string;
             trainer={trainer}
             result={result}
             minutesLeft={minutesLeft}
+            preview={preview}
             onReport={() => setReportFor({ sessionId: result.sessionId })}
             onAgain={() => setStep("call")}
           />
@@ -170,7 +175,11 @@ export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string;
             <article className={cn(CARD, "flex flex-col p-5")}>
               <h3 className={TITLE}>{twin.name}</h3>
               {twin.description ? <p className={cn(BODY, "mt-2 line-clamp-4")}>{twin.description}</p> : null}
-              {access?.ok ? (
+              {preview ? (
+                <p className="mt-5 mb-0 border-t border-(--card-border) pt-4 text-sm text-muted-foreground">
+                  You&apos;re previewing what learners see. Your calls here use no minutes and aren&apos;t counted as learner sessions.
+                </p>
+              ) : access?.ok && !access.preview ? (
                 // Your minutes, as the twin overview's usage meter.
                 <div className="mt-5 flex flex-col gap-2 border-t border-(--card-border) pt-4">
                   <p className="m-0 flex items-baseline justify-between gap-3 text-sm">
@@ -205,14 +214,13 @@ export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string;
         )}
       </main>
 
-      {/* Call dock (Delphi's bottom bar): one clear action, minutes beside it. Hidden when there's nothing to start. */}
+      {/* Call dock (Delphi's bottom bar): one clear action (minutes are on the card above). Hidden when there's nothing to start. */}
       {step === "profile" && !blocked ? (
         <div className="fixed inset-x-0 bottom-0 z-10 flex flex-col items-center gap-2 bg-linear-to-t from-background via-background/90 to-transparent px-5 pt-10 pb-5">
           <div className="flex items-center gap-3 rounded-full border border-(--card-border) bg-card p-1.5 shadow-[0_2px_4px_rgb(30_28_25/0.06),0_8px_24px_rgb(30_28_25/0.12)]">
-            {access?.ok ? <span className="pl-3 text-sm text-muted-foreground tabular-nums">{access.minutesLeft} min left</span> : null}
             <Button
               className="h-11 bg-(--brand) px-6 text-[15px] font-semibold text-white hover:bg-[#e04d00]"
-              disabled={access?.ok === true && access.minutesLeft <= 0}
+              disabled={minutesLeft !== null && minutesLeft <= 0}
               onClick={() => (access?.ok ? setStep("call") : setSigningIn(true))}
             >
               <PhoneIcon className="size-[18px]" />
@@ -239,11 +247,13 @@ export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string;
 }
 
 /** After the call (reference learnerSummary): minutes, a 1–5 rating with a note, report a problem, transcript. */
-function Summary({ twin, trainer, result, minutesLeft, onReport, onAgain }: {
+function Summary({ twin, trainer, result, minutesLeft, preview, onReport, onAgain }: {
   twin: Twin;
   trainer: Trainer;
   result: CallResult;
   minutesLeft: number | null;
+  /** A studio member's preview: no minutes were used. */
+  preview: boolean;
   onReport: () => void;
   onAgain: () => void;
 }) {
@@ -288,9 +298,9 @@ function Summary({ twin, trainer, result, minutesLeft, onReport, onAgain }: {
             <p className="m-0 text-xs opacity-80 tabular-nums">{clock(result.seconds)} talked</p>
           </div>
           <div className="rounded-[12px] bg-(--sidebar) p-4">
-            <p className={cn(LABEL, "text-muted-foreground")}>Minutes left</p>
-            <p className="mt-2 mb-0 text-2xl font-semibold tabular-nums">{minutesLeft ?? "—"}</p>
-            <p className="m-0 text-xs text-muted-foreground">with this twin</p>
+            <p className={cn(LABEL, "text-muted-foreground")}>{preview ? "Preview" : "Minutes left"}</p>
+            <p className="mt-2 mb-0 text-2xl font-semibold tabular-nums">{preview ? "0 min" : (minutesLeft ?? "—")}</p>
+            <p className="m-0 text-xs text-muted-foreground">{preview ? "used: not counted" : "with this twin"}</p>
           </div>
         </div>
         <Button className={cn(BRAND, "mt-6")} onClick={onAgain} disabled={minutesLeft !== null && minutesLeft <= 0}>

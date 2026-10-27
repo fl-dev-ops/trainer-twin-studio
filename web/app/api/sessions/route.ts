@@ -5,6 +5,7 @@ import { activateInterviewRuntime } from "@/lib/session-activation";
 import { getTrainerOrg } from "@/lib/org";
 import { resolveSessionUser } from "@/lib/session-user";
 import { db } from "@/lib/db";
+import { isStudioRole } from "@/lib/org";
 import { listSessions } from "@/lib/specs";
 import { processCompletedSession } from "@/lib/session-processing";
 import { OrgLockError } from "@/lib/org-lock";
@@ -27,9 +28,11 @@ export async function POST(req: Request) {
   if (!body.shareCode) {
     const member = await db.member.findFirst({
       where: { organizationId: org.id, userId: user.id },
-      select: { id: true },
+      select: { role: true },
     });
     if (!member) return NextResponse.json({ error: "Invalid session URL" }, { status: 403 });
+    // Starting an agent by slug skips assignments and minutes: studio members (admin, team) trying it only.
+    if (!body.deploymentKey && !isStudioRole(member.role)) return NextResponse.json({ error: "Invalid session URL" }, { status: 403 });
   }
 
   try {
