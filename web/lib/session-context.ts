@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
+import { personaBrief } from "@/lib/persona";
 import { findOrgOrGlobalPersona } from "@/lib/specs";
 import { type PinnedTwinSkill, TWIN_SOURCE, twinPlaybooks } from "@/lib/twins";
 
@@ -42,7 +43,7 @@ export async function buildSessionContext(input: {
       ? db.agent.findFirst({ where: { slug: { equals: agentSlug, mode: "insensitive" }, orgId: input.orgId }, select: { slug: true, version: true, data: true, personaId: true, kind: true } })
       : null,
     personaSlug
-      ? findOrgOrGlobalPersona(input.orgId, { equals: personaSlug, mode: "insensitive" }, { slug: true, version: true, data: true })
+      ? findOrgOrGlobalPersona(input.orgId, { equals: personaSlug, mode: "insensitive" }, { slug: true, version: true, data: true, isOwn: true })
       : null,
     domainSlug
       ? db.domain.findFirst({ where: { slug: domainSlug, orgId: input.orgId }, select: { slug: true, version: true, data: true } })
@@ -146,6 +147,8 @@ export async function buildSessionContext(input: {
     agent: agent ? { slug: agent.slug, version: agent.version, kind: liveAgent?.kind ?? null, data: agent.data } : null,
     ...(playbooks ? { twinPlaybooks: playbooks } : {}),
     persona: persona ?? null,
+    // The trainer's own persona speaks as herself (identity only); any other persona is a character to play.
+    personaBrief: persona ? personaBrief(persona.data, livePersona?.isOwn ? "self" : "character") : null,
     domain: domain ?? null,
     knowledgeBases: sharedKnowledgeBase ? [sharedKnowledgeBase] : [],
     documents: Array.from(docMap.values()),

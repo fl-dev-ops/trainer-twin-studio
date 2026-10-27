@@ -74,9 +74,13 @@ Deploy order: web, then chat (chat tolerates a missing brief).
 - Ingestion (separate plan, after the questions in chat are answered).
 - Tool gating (`plans/chat-twin-roleplay.md`).
 
-## 5. Open decisions
+## 5. Decisions
 
-| # | Question | Proposal |
+| # | Question | Decision |
 |---|---|---|
-| P1 | If the persona and the skill disagree on style (e.g. SKILL.md "## Style" says short answers, persona says long), which wins? | **Persona wins on manner** (length, formality, phrases); **skill wins on content** (steps, rules) |
-| P2 | Client-worded meanings ("won't decide on this call", "wants to know who is calling") make no sense for Olga as herself. For own / coach personas: | **Show labels only plus `how_they_talk`**, skip the client meanings, until the coach option set exists |
+| P1 | If persona and skill disagree on style, which wins? | **Persona wins on manner** (length, formality, phrases); **skill wins on content** (steps, rules) |
+| P2 | What does the trainer's own persona (`isOwn`) send? | **Identity only** (who, role, based in, background), everywhere (twin and role play). Her voice is the cloned voice and her behaviour comes from her skills; manner fields would only conflict |
+
+The brief kind comes from `Persona.isOwn` (own → `self`, otherwise `character`), not from the agent kind.
+
+**Done:** web `personaBrief` + session context (tests in `tests/lib/persona.test.ts`); chat `personaLines` in all three formats (tests in `chat/tests/agent/lib/playbook.test.ts`).

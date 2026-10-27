@@ -146,3 +146,46 @@ export const optionLabel = label;
 export const meaningOf = (options: readonly { value: string; meaning: string }[], value: string) => options.find((o) => o.value === value)?.meaning ?? "";
 
 export const slugify = (name: string) => name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "persona";
+
+/**
+ * The persona as prompt lines for the chat brain (plans/persona-in-chat.md), from stored Persona.data.
+ * "character": a role-play persona the AI plays; the full brief, using each option's meaning.
+ * "self": the trainer's own persona (isOwn). Identity only: her voice is the cloned voice and her behaviour comes from
+ * her ingested skills, so manner fields would only conflict with them.
+ * Null for data without the editor's shape (e.g. global interview personas), so chat keeps its older line.
+ */
+export function personaBrief(data: unknown, as: "character" | "self"): string | null {
+  const d = asRecord(data);
+  const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : undefined);
+  const role = text(d.role);
+  if (!role) return null;
+  const meaning = (options: readonly { value: string; meaning: string }[], value: unknown) => options.find((o) => o.value === value)?.meaning;
+  const basedIn = text(d.based_in);
+  const who = [text(d.name), role, typeof d.age === "number" ? String(d.age) : undefined, basedIn && `based in ${basedIn}`].filter(Boolean).join(", ");
+  const lines = [`- Who: ${who}.`];
+  const background = text(d.background);
+  if (background) lines.push(`- Background: ${background}`);
+  if (as === "self") return lines.join("\n");
+
+  const behaviours = (Array.isArray(d.behaviours) ? d.behaviours : [])
+    .map((value) => (meaning(BEHAVIOURS, value) ? `${value}: ${meaning(BEHAVIOURS, value)}` : undefined))
+    .filter(Boolean);
+  if (behaviours.length) lines.push(`- Personality: ${behaviours.join(" ")}`);
+  const opening = meaning(OPENING_STYLES, d.opening_style);
+  if (opening) lines.push(`- When the conversation opens: ${opening}`);
+  const m = asRecord(d.mannerisms);
+  const manner = [
+    meaning(FORMALITY, m.formality),
+    meaning(ANSWER_LENGTH, m.answer_length),
+    meaning(INTERRUPTS, m.interrupts),
+    m.pauses === true ? "Pauses to think before answering." : undefined,
+    m.fillers === true ? "Uses everyday fillers (um, well, you know)." : undefined,
+  ].filter(Boolean);
+  if (manner.length) lines.push(`- How they talk: ${manner.join(" ")}`);
+  const ownWords = text(d.how_they_talk);
+  if (ownWords) lines.push(`- In their own words: ${ownWords}`);
+  const phrases = (Array.isArray(d.signature_phrases) ? d.signature_phrases : []).map(text).filter(Boolean);
+  if (phrases.length) lines.push(`- Lines they come back to, in their own words and not every turn: ${phrases.map((p) => `"${p}"`).join(", ")}`);
+  lines.push("- Stay in character. This person decides HOW you speak (length, tone, phrases); the scenario or skill decides WHAT you do (steps, rules).");
+  return lines.join("\n");
+}

@@ -1,7 +1,7 @@
 import { beforeEach, expect, mock, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { emptyPersona, personaFromStored, personaInputSchema, speakingTags, storedFromPersona, type PersonaInput } from "@/lib/persona";
+import { emptyPersona, personaBrief, personaFromStored, personaInputSchema, speakingTags, storedFromPersona, type PersonaInput } from "@/lib/persona";
 
 // Role-play persona model: prompt fields in Persona.data (brain shape), pace in Persona.settings.
 // No knowledge and no difficulty (the role play owns both).
@@ -95,4 +95,40 @@ test("updating is versioned; the trainer's own persona keeps its recorded style"
   await expect(savePersona("o1", amira, "missing")).rejects.toBeInstanceOf(PersonaError);
   await expect(savePersona("o2", amira, slug)).rejects.toThrow(/not found/);
   await expect(savePersona("o1", { ...amira, behaviours: [] }, slug)).rejects.toThrow(/behaviour/);
+});
+
+const rohan = storedFromPersona("rohan-mehta", {
+  ...emptyPersona(),
+  name: "Rohan Mehta", role: "Prospect", age: 36, basedIn: "Al Barsha, Dubai", background: "First-time off-plan investor.",
+  behaviours: ["Skeptical & Reserved"], openingStyle: "skeptical", formality: "casual", answerLength: "short", interrupts: "often",
+  pauses: true, fillers: false, phrases: ["Just send me the details on WhatsApp."], howTheyTalk: "Tired of agents.", pace: "fast",
+}).data;
+
+test("personaBrief: a character gets the full brief, with each option's meaning and no pace", () => {
+  const brief = personaBrief(rohan, "character")!;
+  expect(brief).toContain("- Who: Rohan Mehta, Prospect, 36, based in Al Barsha, Dubai.");
+  expect(brief).toContain("- Background: First-time off-plan investor.");
+  expect(brief).toContain("Skeptical & Reserved: Doubts what they hear");
+  expect(brief).toContain("- When the conversation opens: Guarded; wants to know who is calling");
+  expect(brief).toContain("Relaxed, everyday language");
+  expect(brief).toContain("A few words or one sentence");
+  expect(brief).toContain("Cuts in regularly");
+  expect(brief).toContain("Pauses to think before answering.");
+  expect(brief).not.toContain("fillers");
+  expect(brief).toContain("- In their own words: Tired of agents.");
+  expect(brief).toContain('"Just send me the details on WhatsApp."');
+  expect(brief).toContain("decides WHAT you do");
+  expect(brief).not.toMatch(/fast|clipped/i); // pace is a program setting
+});
+
+test("personaBrief: the trainer's own persona gets identity only (her skills carry her behaviour)", () => {
+  expect(personaBrief(rohan, "self")).toBe("- Who: Rohan Mehta, Prospect, 36, based in Al Barsha, Dubai.\n- Background: First-time off-plan investor.");
+});
+
+test("personaBrief: empty fields are left out; data without the editor's shape gives null", () => {
+  expect(personaBrief({ name: "Sam", role: "Buyer" }, "character")).toBe(
+    "- Who: Sam, Buyer.\n- Stay in character. This person decides HOW you speak (length, tone, phrases); the scenario or skill decides WHAT you do (steps, rules).",
+  );
+  expect(personaBrief({ name: "Interviewer", style: { tone: "calm" } }, "character")).toBeNull();
+  expect(personaBrief(null, "self")).toBeNull();
 });
