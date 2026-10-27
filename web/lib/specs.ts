@@ -184,15 +184,17 @@ export async function listRunnableSpecs(type: "personas" | "agents", orgId: stri
 }
 
 /**
- * Whether an agent can start a session. A role play needs a copilot spec (objective, opening, config).
+ * Whether an agent can start a session. A role play is either built in the role-play builder (a SKILL.md, like a
+ * skill twin: its opening lives in scenario.json) or an older copilot spec (objective, opening, config).
  * A twin is either one skill (its SKILL.md opens the session, so no `opening`) or the all-skills twin,
  * an open conversation over its persona's skills; `data.source` tells the two apart inside the twin module.
  */
 export function isRunnableAgentData(kind: AgentKind, data: Record<string, unknown>) {
-  if (kind === "TWIN") {
-    return typeof data.objective === "string" && (data.source === "twin" || typeof data.skill === "string");
-  }
-  return typeof data.objective === "string" && typeof data.opening === "string" && isRecord(data.config);
+  if (typeof data.objective !== "string") return false;
+  if (kind === "TWIN") return data.source === "twin" || typeof data.skill === "string";
+  // "roleplay-skill" = ROLEPLAY_SOURCE (lib/scenario-ingest.ts imports this file, so not imported here).
+  if (data.source === "roleplay-skill") return typeof data.skill === "string";
+  return typeof data.opening === "string" && isRecord(data.config);
 }
 
 /**
