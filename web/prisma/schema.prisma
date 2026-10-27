@@ -19,6 +19,14 @@ model Persona {
   // The user's own persona (a real person: recordings, style, cloned voice). Never true for a
   // global persona (orgId null). Immutable; twins require it (DB triggers, see migration split_twin_roleplay).
   isOwn     Boolean         @default(false)
+  // Persona = voice + avatar + prompt fields (data) + program settings. It owns its voice and avatar
+  // (unique); both share its org (trigger, migration persona_media).
+  voiceId   String?         @unique
+  voice     Voice?          @relation(fields: [voiceId], references: [id], onDelete: SetNull)
+  avatarId  String?         @unique
+  avatar    Avatar?         @relation(fields: [avatarId], references: [id], onDelete: SetNull)
+  // Program settings: runtime behaviour the agent never reads (e.g. { pace }). JSON object (CHECK).
+  settings  Json?
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
   sources   PersonaSource[]
@@ -206,6 +214,23 @@ model Voice {
   s3TranscriptKey String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  persona         Persona?
+
+  @@index([orgId])
+}
+
+// Reference files for the AI avatar model: an image and a video (whichever the model needs).
+// Owned by one persona; files under {basePrefix}/{org}/avatars/{id}/ (or global/avatars for presets).
+model Avatar {
+  id           String        @id @default(cuid())
+  orgId        String?
+  name         String
+  s3ImageKey   String?
+  s3VideoKey   String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  organization Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  persona      Persona?
 
   @@index([orgId])
 }
@@ -497,6 +522,7 @@ model Organization {
   youtubeConnections YouTubeConnection[]
   youtubeOAuthStates YouTubeOAuthState[]
   issueReports       IssueReport[]
+  avatars            Avatar[]
 
   @@unique([slug])
   @@map("organization")

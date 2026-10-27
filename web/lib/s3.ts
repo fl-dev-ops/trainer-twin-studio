@@ -1,4 +1,5 @@
 import {
+  DeleteObjectCommand,
   DeleteObjectsCommand,
   GetObjectCommand,
   ListObjectsV2Command,
@@ -36,8 +37,13 @@ export function kbPrefix(orgId: string, knowledgeBaseId: string, docId?: string)
     : `${orgPrefix(orgId)}/knowledge/${knowledgeBaseId}`;
 }
 
-export function voicePrefix(orgId: string, voiceId: string) {
-  return `${orgPrefix(orgId)}/tts-voices/${voiceId}`;
+export function voicePrefix(orgId: string | null, voiceId: string) {
+  return `${orgId ? orgPrefix(orgId) : `${basePrefix}/global`}/tts-voices/${voiceId}`;
+}
+
+/** Persona avatar reference files (image + video). Global presets (no org) live under `global/`. */
+export function avatarPrefix(orgId: string | null, avatarId: string) {
+  return `${orgId ? orgPrefix(orgId) : `${basePrefix}/global`}/avatars/${avatarId}`;
 }
 
 export function recordingKey(orgId: string, sessionId: string) {
@@ -95,6 +101,10 @@ export async function presignedGetUrl(key: string, expiresIn = 3600) {
 /** Browser uploads straight to S3 (files too large to pass through the app); the bucket's CORS allows PUT. */
 export async function presignedPutUrl(key: string, contentType: string, expiresIn = 600) {
   return getSignedUrl(client(), new PutObjectCommand({ Bucket: bucket, Key: key, ContentType: contentType }), { expiresIn });
+}
+
+export async function deleteObject(key: string) {
+  await client().send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
 }
 
 /** Deletes every object under the given prefix with full pagination beyond 1,000 keys. */
