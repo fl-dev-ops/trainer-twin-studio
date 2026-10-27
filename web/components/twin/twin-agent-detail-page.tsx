@@ -209,7 +209,7 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
 
             {/* Calibrate button */}
             <Link
-              href={`/twin/${id}/calibrate`}
+              href={`/twin/${id}/calibration`}
               className="inline-flex h-8 items-center gap-2 rounded-full bg-(--brand) px-4 text-[13px] font-medium text-white shadow-none transition-colors hover:bg-[#e04d00] dark:hover:bg-[#ff7e33]"
             >
               <Sliders className="size-3.5" />
