@@ -114,3 +114,45 @@ A different shape, built from recordings rather than the form: `name`, `style`, 
 2. **Role list:** keep the three B2B roles, or replace them with real-estate ones (e.g. Tenant, Developer)?
 3. **Long answers vs. the 1–3 sentence rule:** which wins?
 4. **Pace:** wire it to the TTS speed in the voice agent?
+
+## Prompt vs program
+
+**Prompt:** text the agent reads; it shapes what the persona says.
+**Program:** code and runtime behaviour; the agent never reads it.
+
+| Field | Prompt | Program |
+|---|---|---|
+| name, role, age, based in, background | ✅ identity | — |
+| behaviours | ✅ meaning sentences | — |
+| difficulty | ✅ meaning + starting guard level | — |
+| opening style | ✅ | — |
+| formality | ✅ | — |
+| answer length | ✅ | could also cap reply length (max tokens) |
+| interrupts | ✅ ("let me stop you there") | could also shorten the voice agent's end-of-turn wait, so it cuts in sooner |
+| pauses | ✅ ("hmm… let me think") | could also add a short delay before the voice reply |
+| fillers | ✅ | — |
+| signature phrases | ✅ | — |
+| how they talk | ✅ | — |
+| **voice** | — | ✅ TTS voice: reference audio + transcript → the voice agent speaks as this person |
+| **pace** | — | ✅ TTS speaking rate (today only a prompt line; needs TTS speed support) |
+| **avatar image** | — | ✅ UI: persona cards, role-play builder, call screen |
+| **avatar video clip** | — | ✅ UI: the call screen's live/listening loop (like `twin-listening.mp4`) |
+| look (preset) | — | ✅ editor only: fills the form and the default media |
+| isOwn | — | ✅ twins require it; decides how the persona is built (recordings vs form) |
+
+## Media: voice, avatar image, avatar video (files in S3)
+
+How voices already work on v2: a `Voice` row points to a reference audio clip and its transcript in S3 (`<org>/tts-voices/<voiceId>/`). The TTS service resolves a voice id through `/api/tts/voices/{id}` into a presigned audio URL plus transcript, and clones from it. The voice agent receives the voice id in the LiveKit metadata.
+
+Proposal (additive DB change):
+
+| Media | Stored in S3 at | DB |
+|---|---|---|
+| Voice (reference audio + transcript) | `<org>/tts-voices/<voiceId>/`, reusing the TTS pipeline | `Persona.voiceId` → `Voice` (new nullable FK) |
+| Avatar image | `<org>/personas/<personaId>/avatar/<file>` | `Persona.avatarImageKey` (new nullable column) |
+| Avatar video clip | `<org>/personas/<personaId>/video/<file>` | `Persona.avatarVideoKey` (new nullable column) |
+
+- Media lives in columns, not in `Persona.data`. `data` is the versioned, prompt-facing spec; media is program-level and is replaced by uploading a new file. This also keeps the prompt/program split visible in the schema.
+- Files are served through short-lived presigned URLs, like recordings and knowledge previews.
+- Global personas (`orgId` null, e.g. presets) need a non-org prefix such as `<base>/global/personas/<personaId>/`.
+- The 5 preset photos (`/roleplay/avatars/*.jpg`) become the default avatar images of preset personas, uploaded once.
