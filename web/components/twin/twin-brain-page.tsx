@@ -32,7 +32,7 @@ function NodeTag({ tone, children }: { tone: "blue" | "amber" | "green"; childre
     amber: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
     green: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
   };
-  return <span className={cn("inline-flex h-7 items-center rounded-full px-3 text-[13px] font-medium", tones[tone])}>{children}</span>;
+  return <span className={cn("inline-flex h-7 items-center self-start rounded-full px-3 text-[13px] font-medium", tones[tone])}>{children}</span>;
 }
 
 function Node({ tag, tone, title, children, footer, className }: {
@@ -41,7 +41,7 @@ function Node({ tag, tone, title, children, footer, className }: {
   return (
     <section aria-label={title} className={cn("flex w-[340px] shrink-0 flex-col gap-3", className)}>
       <NodeTag tone={tone}>{tag}</NodeTag>
-      <div className="flex flex-col gap-5 rounded-[16px] border border-(--card-border) bg-card p-7 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
+      <div className="flex flex-col gap-5 rounded-[16px] border border-(--card-border) bg-card p-5 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
         <h2 className="m-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{title}</h2>
         {children}
         <div className="flex flex-wrap gap-2 pt-1">{footer}</div>
