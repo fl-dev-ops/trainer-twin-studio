@@ -3,23 +3,18 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ArrowLeft, Check, Search } from "lucide-react";
+import { ArrowLeft, Check, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { twinClient } from "@/lib/twin/client";
 import type { TwinOutputs } from "@/lib/twin/trpc";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SwitchToggle } from "@/components/switch-toggle";
+import { AssignDialog } from "@/components/assign-dialog";
+import { Button } from "@/components/ui/button";
+import { UserAvatar } from "@/components/user-avatar";
 
 type LearnerAssign = TwinOutputs["assignments"]["list"][number];
-
-const AVATAR_TONES = [
-  "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-  "bg-sky-500/15 text-sky-600 dark:text-sky-400",
-  "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-  "bg-rose-500/15 text-rose-600 dark:text-rose-400",
-  "bg-orange-500/15 text-orange-600 dark:text-orange-400",
-];
 
 export function TwinEditPage({
   twin,
@@ -49,67 +44,26 @@ export function TwinEditPage({
   // During conversation
   const [duringUpload, setDuringUpload] = useState(twin.settings.duringUpload);
 
-  // Assign learners (selection is by email). Assigning only: existing assignments are not changed here.
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [minutes, setMinutes] = useState(String(defaultMinutes));
-  const [query, setQuery] = useState("");
+  const [assignOpen, setAssignOpen] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const assignedCount = learners.filter((l) => l.assigned).length;
-  const minutesValue = Number(minutes);
-  const minutesValid = Number.isInteger(minutesValue) && minutesValue >= 1 && minutesValue <= 10_000;
+  const assigned = learners.filter((l) => l.assigned);
+  const assignable = learners.filter((l) => !l.assigned);
 
-  // People typed in by email who are not in the list yet (not in the org): shown first, selected.
-  const [invite, setInvite] = useState("");
-  const [invited, setInvited] = useState<string[]>([]);
-  const [assigning, setAssigning] = useState(false);
-  const rows: LearnerAssign[] = [
-    ...invited.map((email) => ({ email, name: email, image: null, assigned: false, minutes: null, minutesUsed: 0 })),
-    ...learners,
-  ];
-  const inviteEmails = invite.split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter(Boolean);
-  const inviteValid = inviteEmails.length > 0 && inviteEmails.every((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
-
-  /** Adds typed emails to the list (new people) and selects everyone not already assigned. */
-  function addInvites() {
-    if (!inviteValid) return;
-    const known = new Map(learners.map((l) => [l.email.toLowerCase(), l]));
-    setInvited((prev) => [...prev, ...inviteEmails.filter((e) => !known.has(e) && !prev.includes(e))]);
-    setSelectedIds((prev) => [...new Set([...prev, ...inviteEmails.filter((e) => !known.get(e)?.assigned)])]);
-    setInvite("");
-  }
-
-  /** Assigns the selected people now, with the minutes above (reference "Assign" button). */
-  async function assignNow() {
-    if (!selectedIds.length || !minutesValid) return;
-    setAssigning(true);
+  /** The dialog's Assign: minutes per person; already-active people are skipped server-side. */
+  async function assignLearners(emails: string[], minutes: number | null) {
     try {
-      // Already-active people are skipped server-side, so a retry sends no second invite.
-      const result = await twinClient.assignments.assign.mutate({ slug: id, emails: selectedIds, minutes: minutesValue });
-      toast.success(`${selectedIds.length} ${selectedIds.length === 1 ? "learner" : "learners"} assigned`);
+      const result = await twinClient.assignments.assign.mutate({ slug: id, emails, minutes: minutes ?? defaultMinutes });
+      toast.success(`${emails.length} ${emails.length === 1 ? "learner" : "learners"} assigned`);
       if (result.blocked) toast.warning(`${result.blocked} learner(s) belong to another organization and were not assigned.`);
       if (result.emailFailures) toast.warning(`${result.emailFailures} invite email(s) could not be sent.`);
-      setSelectedIds([]);
-      setInvited([]);
       router.refresh();
+      return true;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not assign");
-    } finally {
-      setAssigning(false);
+      return false;
     }
-  }
-
-  const filtered = rows.filter(
-    (l) =>
-      l.name.toLowerCase().includes(query.toLowerCase()) ||
-      l.email.toLowerCase().includes(query.toLowerCase())
-  );
-
-  function togglePick(learnerId: string) {
-    setSelectedIds((prev) =>
-      prev.includes(learnerId) ? prev.filter((i) => i !== learnerId) : [...prev, learnerId]
-    );
   }
 
   async function handleSave() {
@@ -123,19 +77,10 @@ export function TwinEditPage({
         settings: { preScreenshare, preUpload, duringUpload, uploadTitle, uploadInstruction },
       });
       settingsSaved = true;
-      if (selectedIds.length) {
-        // Already-active people are skipped server-side, so retrying after a failure sends no second invite.
-        const result = await twinClient.assignments.assign.mutate({ slug: id, emails: selectedIds, minutes: minutesValue });
-        if (result.blocked) toast.warning(`${result.blocked} learner(s) belong to another organization and were not assigned.`);
-        if (result.emailFailures) toast.warning(`${result.emailFailures} invite email(s) could not be sent.`);
-        setSelectedIds([]);
-      }
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not save";
-      // The selection is kept so assigning can be retried.
-      toast.error(settingsSaved ? `Settings saved, but the learners were not assigned: ${message}` : message);
+      toast.error(error instanceof Error ? error.message : "Could not save");
     } finally {
       setSaving(false);
       if (settingsSaved) router.refresh();
@@ -172,7 +117,7 @@ export function TwinEditPage({
             <TabsTrigger value="conversation">Conversation</TabsTrigger>
             <TabsTrigger value="learners">
               Learners
-              {selectedIds.length > 0 ? <span className="text-(--brand) tabular-nums">· {selectedIds.length}</span> : null}
+              <span className="text-muted-foreground tabular-nums">· {assigned.length}</span>
             </TabsTrigger>
           </TabsList>
 
@@ -321,157 +266,50 @@ export function TwinEditPage({
         </article>
         </TabsContent>
 
-        {/* Card 3: assign learners */}
+        {/* Card 3: learners assigned to this twin; Assign opens the shared dialog */}
         <TabsContent value="learners">
-        <article id="assign" className="flex flex-col gap-6 rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <div>
-                <h2 className="m-0 text-sm font-semibold uppercase tracking-wide text-(--foreground)">
-                  Assign learners
-                </h2>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Give learners practice access to this twin agent.
-                </p>
-              </div>
-              <span className="text-xs text-muted-foreground">
-                <span className="text-(--foreground) font-semibold">{assignedCount}</span> assigned
-                {selectedIds.length > 0 && <span className="text-(--brand)"> · {selectedIds.length} newly selected</span>}
-              </span>
+        <article id="assign" className="flex flex-col gap-4 rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="m-0 text-sm font-semibold uppercase tracking-wide text-(--foreground)">Learners</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {assigned.length} assigned. Each gets their own minutes with this twin.
+              </p>
             </div>
-
-            {/* Minutes for the people being assigned now */}
-            <div className="flex items-center justify-between gap-4">
-              <label htmlFor="assign-minutes" className="text-sm font-medium">
-                Minutes per selected learner
-              </label>
-              <input
-                id="assign-minutes"
-                type="number"
-                inputMode="numeric"
-                min={1}
-                max={10_000}
-                value={minutes}
-                onChange={(e) => setMinutes(e.target.value)}
-                aria-invalid={!minutesValid}
-                className="h-9 w-28 rounded-lg border border-(--border) bg-transparent px-3 text-sm tabular-nums text-(--foreground) outline-none focus:border-(--brand) focus:ring-1 focus:ring-(--brand) aria-invalid:border-destructive"
-              />
-            </div>
-
-            {/* Search box */}
-            <div className="relative">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-              <input
-                type="search"
-                placeholder="Search by name or email"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="h-10 w-full rounded-full border border-(--border) bg-(--sidebar) pl-10 pr-4 text-sm text-(--foreground) outline-none focus:border-(--brand) focus:ring-1 focus:ring-(--brand)"
-              />
-            </div>
-
-            {/* Someone not in the list yet: add them by email (they get an invite) */}
-            <div className="flex gap-2">
-              <label htmlFor="invite-email" className="sr-only">Invite by email</label>
-              <input
-                id="invite-email"
-                type="text"
-                inputMode="email"
-                autoComplete="off"
-                placeholder="Invite by email, e.g. name@company.com"
-                value={invite}
-                onChange={(e) => setInvite(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addInvites();
-                  }
-                }}
-                aria-invalid={invite.trim() !== "" && !inviteValid}
-                className="h-10 min-w-0 flex-1 rounded-full border border-(--border) bg-transparent px-4 text-sm text-(--foreground) outline-none focus:border-(--brand) focus:ring-1 focus:ring-(--brand) aria-invalid:border-destructive"
-              />
-              <button
-                type="button"
-                onClick={addInvites}
-                disabled={!inviteValid}
-                className="inline-flex h-10 shrink-0 items-center rounded-full border border-(--border) px-4 text-sm font-medium hover:bg-(--tone-control) disabled:opacity-50"
-              >
-                Add
-              </button>
-            </div>
-
-            {/* Learner checklist */}
-            <div className="flex flex-col overflow-hidden rounded-[12px] border border-(--border)">
-              {filtered.length === 0 ? (
-                <p className="p-6 text-center text-sm text-muted-foreground">
-                  {rows.length ? "No one matches that search." : "No learners yet. Invite someone by email above."}
-                </p>
-              ) : (
-                filtered.map((u, i) => {
-                  const isSelected = selectedIds.includes(u.email);
-                  return (
-                    <label
-                      key={u.email}
-                      className={cn(
-                        "flex items-center justify-between gap-3 p-3.5 px-4 cursor-pointer transition-colors hover:bg-(--sidebar)",
-                        i > 0 && "border-t border-(--border)",
-                        u.assigned && "opacity-80"
-                      )}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <input
-                          type="checkbox"
-                          checked={u.assigned || isSelected}
-                          disabled={u.assigned}
-                          onChange={() => togglePick(u.email)}
-                          className="size-4 rounded accent-(--brand) cursor-pointer"
-                        />
-                        <span
-                          className={cn(
-                            "grid size-8 shrink-0 place-items-center rounded-full text-xs font-semibold",
-                            AVATAR_TONES[i % AVATAR_TONES.length]
-                          )}
-                          aria-hidden
-                        >
-                          {u.name.charAt(0).toUpperCase()}
-                        </span>
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-sm font-semibold truncate text-(--foreground)">{u.name}</span>
-                          <span className="text-xs text-muted-foreground truncate">{u.email}</span>
-                        </div>
-                      </div>
-
-                      <div className="shrink-0">
-                        {u.assigned ? (
-                          <span className="inline-flex items-center rounded-full bg-(--sidebar) border border-(--border) px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                            Assigned · {u.minutesUsed} of {u.minutes} min used
-                          </span>
-                        ) : isSelected ? (
-                          <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                            Selected ({minutesValid ? minutesValue : "?"} min)
-                          </span>
-                        ) : null}
-                      </div>
-                    </label>
-                  );
-                })
-              )}
-            </div>
+            <Button onClick={() => setAssignOpen(true)} className="bg-(--brand) text-white hover:bg-[#e04d00]">
+              <UserPlus data-icon="inline-start" /> Assign learners
+            </Button>
           </div>
-
-          <div className="flex items-center justify-end gap-3 border-t border-(--border) pt-4">
-            <span className="text-xs text-muted-foreground">
-              {selectedIds.length ? `${selectedIds.length} selected · ${minutesValid ? minutesValue : "?"} min each` : "Select learners to assign"}
-            </span>
-            <button
-              type="button"
-              onClick={() => void assignNow()}
-              disabled={assigning || !selectedIds.length || !minutesValid}
-              className="inline-flex h-9 items-center gap-2 rounded-full bg-(--brand) px-5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-            >
-              {assigning ? "Assigning…" : selectedIds.length > 1 ? `Assign ${selectedIds.length}` : "Assign"}
-            </button>
-          </div>
+          {assigned.length ? (
+            <ul className="m-0 flex list-none flex-col overflow-hidden rounded-[12px] border border-(--border) p-0">
+              {assigned.map((u, i) => (
+                <li key={u.email} className={cn("flex items-center justify-between gap-3 px-4 py-3", i > 0 && "border-t border-(--border)")}>
+                  <span className="flex min-w-0 items-center gap-3">
+                    <UserAvatar user={u} className="size-8 text-xs" />
+                    <span className="flex min-w-0 flex-col">
+                      <span className="truncate text-sm font-semibold">{u.name}</span>
+                      <span className="truncate text-xs text-muted-foreground">{u.email}</span>
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                    {u.minutesUsed} of {u.minutes} min used
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="m-0 rounded-[12px] border border-dashed border-(--border) p-6 text-center text-sm text-muted-foreground">Nobody is assigned yet.</p>
+          )}
+          <AssignDialog
+            variant="twin"
+            open={assignOpen}
+            onOpenChange={setAssignOpen}
+            title={twin.name}
+            assignedCount={assigned.length}
+            people={assignable}
+            defaultMinutes={defaultMinutes}
+            onAssign={assignLearners}
+          />
         </article>
         </TabsContent>
         </Tabs>
@@ -487,7 +325,7 @@ export function TwinEditPage({
             <button
               type="button"
               onClick={() => void handleSave()}
-              disabled={saving || !name.trim() || (selectedIds.length > 0 && !minutesValid)}
+              disabled={saving || !name.trim()}
               className="inline-flex h-9 items-center gap-2 rounded-full bg-(--brand) px-5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
             >
               {saved && <Check className="size-4" />}
