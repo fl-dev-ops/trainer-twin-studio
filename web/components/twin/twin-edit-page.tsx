@@ -132,16 +132,18 @@ export function TwinEditPage({
             <ArrowLeft className="size-4" />
             <span>Back</span>
           </Link>
-          <CopyShareLinkButton slug={id} />
         </header>
 
-        <div className="mt-6">
-          <h1 className="m-0 text-[20px] font-semibold leading-7 tracking-[-0.015em]">
-            Configure twin agent
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Set conversation permissions and manage learner access for this twin.
-          </p>
+        <div className="mt-6 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="m-0 text-[20px] font-semibold leading-7 tracking-[-0.015em]">
+              Configure twin agent
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Set conversation permissions and manage learner access for this twin.
+            </p>
+          </div>
+          <CopyShareLinkButton slug={id} />
         </div>
 
         <div className="mt-6 flex flex-col gap-4">
