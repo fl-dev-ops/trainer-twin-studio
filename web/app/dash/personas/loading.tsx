@@ -5,7 +5,7 @@ export default function PersonasLoading() {
     <LoadingPage>
       <LoadingHeader action />
       <div className="mt-6">
-        <LoadingCards count={6} />
+        <LoadingCards count={8} cols="sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" />
       </div>
     </LoadingPage>
   );

@@ -45,7 +45,7 @@ export function PersonaLibrary({ personas, voices }: { personas: LibraryPersona[
           <p className="mt-1 text-sm text-muted-foreground">Create the first person your learners will speak with.</p>
         </div>
       ) : (
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {personas.map(({ slug, data }) => {
             const form = formFromPersonaData(data);
             const avatar = (data as { avatar?: unknown })?.avatar;
