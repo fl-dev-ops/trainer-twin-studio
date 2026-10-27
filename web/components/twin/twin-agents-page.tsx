@@ -270,14 +270,15 @@ export function TwinAgentsPage({ data, personaSlug = null }: { data: TwinOutputs
           <CreateSkillDialog personaSlug={personaSlug} />
         </header>
 
-        <h2 className="mt-10 max-w-none text-[18px] font-semibold leading-6 tracking-[-0.015em]">Twin for all use cases</h2>
+        {/* Only when there's a main twin; otherwise the page starts with the skill twins. */}
         {data.twins.length ? (
-          data.twins.map((twin) => <TwinAllCard key={twin.slug} twin={twin} />)
-        ) : (
-          <p className="mt-4 text-sm text-muted-foreground">No twin yet.</p>
-        )}
+          <>
+            <h2 className="mt-10 max-w-none text-[18px] font-semibold leading-6 tracking-[-0.015em]">Twin for all use cases</h2>
+            {data.twins.map((twin) => <TwinAllCard key={twin.slug} twin={twin} />)}
+          </>
+        ) : null}
 
-        <h2 className="mt-8 max-w-none text-[18px] font-semibold leading-6 tracking-[-0.015em]">
+        <h2 className={cn(data.twins.length ? "mt-8" : "mt-10", "max-w-none text-[18px] font-semibold leading-6 tracking-[-0.015em]")}>
           Twin agents for specific use cases
         </h2>
         <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
