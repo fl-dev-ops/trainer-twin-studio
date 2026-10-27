@@ -173,7 +173,8 @@ def register_inactivity_nudge(session: Any, agent: TrainerAgent) -> None:
         if event.new_state != "away" or not agent.opening_complete:
             return
         logger.info("User inactive for 60s in room %s; sending nudge", agent.room_name)
-        asyncio.create_task(session.generate_reply(instructions=USER_INACTIVE_SIGNAL))
+        # generate_reply schedules the reply itself and returns a SpeechHandle, not a coroutine.
+        session.generate_reply(instructions=USER_INACTIVE_SIGNAL)
 
 
 def register_latency_logging(session: Any, *, session_id: str, room_name: str) -> None:
