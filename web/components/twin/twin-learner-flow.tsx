@@ -168,15 +168,7 @@ export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string;
 
             <h2 className="mt-6 mb-0 text-[18px] leading-6 font-semibold tracking-[-0.015em]">Talk to {coach}&apos;s twin</h2>
             <article className={cn(CARD, "flex flex-col p-5")}>
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex min-w-0 flex-col gap-1">
-                  <p className={cn(LABEL, "text-muted-foreground")}>Voice call</p>
-                  <h3 className={TITLE}>{twin.name}</h3>
-                </div>
-                <span className="grid size-10 shrink-0 place-items-center rounded-[12px] bg-(--brand)/10 text-(--brand)">
-                  <PhoneIcon className="size-5" />
-                </span>
-              </div>
+              <h3 className={TITLE}>{twin.name}</h3>
               {twin.description ? <p className={cn(BODY, "mt-2 line-clamp-4")}>{twin.description}</p> : null}
               {access?.ok ? (
                 // Your minutes, as the twin overview's usage meter.
