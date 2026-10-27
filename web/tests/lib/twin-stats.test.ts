@@ -30,10 +30,22 @@ test("transcripts become learner / twin turns; empty and malformed lines are dro
   ]);
   expect(turns).toEqual([
     { who: "twin", text: "Hi, what's going on?" },
-    { who: "learner", text: "My client went quiet." },
-    { who: "learner", text: "After the viewing." },
+    { who: "learner", text: "My client went quiet. After the viewing." }, // consecutive learner lines: one turn
   ]);
   expect(transcriptTurns(null)).toEqual([]);
+});
+
+test("the Feels off button's message stays its own turn", () => {
+  expect(transcriptTurns([
+    { role: "trainer", text: "Tell them prices only go up." },
+    { role: "user", text: "Feels off" },
+    { role: "user", text: "I'd never promise prices." },
+    { role: "user", text: "I ask what they're waiting for." },
+  ])).toEqual([
+    { who: "twin", text: "Tell them prices only go up." },
+    { who: "learner", text: "Feels off" },
+    { who: "learner", text: "I'd never promise prices. I ask what they're waiting for." },
+  ]);
 });
 
 test("the first exchange skips the twin's greeting", () => {

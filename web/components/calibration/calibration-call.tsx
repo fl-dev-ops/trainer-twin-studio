@@ -21,7 +21,7 @@ import { RoleplayIcon } from "@/components/icons";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { LiveKitWorkspaceProvider } from "@/lib/livekit-workspaces";
 import { twinClient } from "@/lib/twin/client";
-import { isFeelsOffMessage, type CalibrationScore } from "@/lib/twin/stats";
+import { isFeelsOffMessage, joinsLearnerTurn, type CalibrationScore } from "@/lib/twin/stats";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -299,6 +299,8 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
           if (!isYou && last?.speaker === "twin" && (last.text === text || text.startsWith(last.text))) {
             return [...prev.slice(0, -1), { ...last, text }];
           }
+          // Your speech arrives in pieces: keep adding to your bubble until the twin replies.
+          if (isYou && joinsLearnerTurn(last, text)) return [...prev.slice(0, -1), { ...last, text: `${last.text} ${text}` }];
           return [...prev, { id: `t${nextId.current++}`, speaker: isYou ? "you" : "twin", text }];
         });
       }
@@ -355,7 +357,12 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
   async function say(text: string) {
     if (!text || phase !== "live") return;
     typedEchoes.current.push(text);
-    updateTurns((prev) => [...prev, { id: `t${nextId.current++}`, speaker: "you", text }]);
+    updateTurns((prev) => {
+      const last = prev[prev.length - 1];
+      return joinsLearnerTurn(last, text)
+        ? [...prev.slice(0, -1), { ...last, text: `${last.text} ${text}` }]
+        : [...prev, { id: `t${nextId.current++}`, speaker: "you", text }];
+    });
     await room.localParticipant.sendText(text, { topic: "lk.chat" }).catch((sendError) => {
       console.error("Could not send the message:", sendError);
       toast.error("That message was not sent.");

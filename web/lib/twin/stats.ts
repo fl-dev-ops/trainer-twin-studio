@@ -2,16 +2,29 @@
 
 export type Turn = { who: "learner" | "twin"; text: string };
 
-/** A saved transcript as turns. Learner lines are `role: "user"`; everything else is the twin speaking. */
+/**
+ * A saved transcript as turns. Learner lines are `role: "user"`; everything else is the twin speaking. Consecutive
+ * learner lines are one turn (speech arrives in pieces), except the "Feels off" button's message, kept on its own.
+ */
 export function transcriptTurns(transcript: unknown): Turn[] {
   if (!Array.isArray(transcript)) return [];
-  return transcript.flatMap((item) => {
+  const turns: Turn[] = [];
+  for (const item of transcript) {
     const turn = item as { role?: unknown; speaker?: unknown; text?: unknown };
     const text = typeof turn.text === "string" ? turn.text.trim() : "";
-    if (!text) return [];
-    const learner = turn.role === "user" || turn.speaker === "learner";
-    return [{ who: learner ? "learner" as const : "twin" as const, text }];
-  });
+    if (!text) continue;
+    const who = turn.role === "user" || turn.speaker === "learner" ? "learner" as const : "twin" as const;
+    const last = turns[turns.length - 1];
+    if (who === "learner" && joinsLearnerTurn(last, text)) last.text = `${last.text} ${text}`;
+    else turns.push({ who, text });
+  }
+  return turns;
+}
+
+/** Whether a learner line continues the previous turn (both the learner's, neither the Feels off button's). */
+export function joinsLearnerTurn(last: { who?: string; speaker?: string; text: string } | undefined, text: string) {
+  if (!last || (last.who ?? last.speaker) !== (last.who ? "learner" : "you")) return false;
+  return !isFeelsOffMessage(last.text) && !isFeelsOffMessage(text);
 }
 
 /** The learner's first question and the twin's reply to it (for list rows). */
