@@ -166,3 +166,17 @@ No new variables.
 | R2 | Ship with knowledge ingestion paused, or re-enable it for role-play knowledge first? |
 | R3 | Release Olga's org at the same time? It doesn't exist in prod: founder invite, uploads, persona, then twin-creator runs |
 | R4 | Build "Create twin" (all-skills twin) before release? |
+
+## 7. Release log (28 Oct 2026)
+
+- **Backups:**
+  - Neon branch `backup-pre-v2-2026-10-28` (`br-wandering-cherry-azgw2nr5`);
+  - `~/Backups/trainertwin/prod-neondb-20261027T2245Z.dump`, verified (39 tables, 2,576 rows).
+- **Production env vars added:**
+  - web: `SCENARIO_INGEST_SECRET` and the 6 `GOOGLE_DRIVE_*`;
+  - copilot: `SCENARIO_INGEST_SECRET`, `CEREBRAS_API_KEY`, `INGEST_S3_*`, `AWS_*`.
+- **Vercel:**
+  - web, chat and copilot: Production branch `main` → **`v2`**;
+  - `autoAssignCustomDomains` off until the migration is done, then promote.
+  - CLI deploys were blocked (the commit author isn't a team member), so builds come from GitHub.
+- **Voice agent:** stays on v1.
