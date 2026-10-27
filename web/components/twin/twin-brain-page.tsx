@@ -3,22 +3,21 @@
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import {
-  ArrowLeft, BookOpen, Camera, Check, Globe, HardDrive, Minus, Newspaper, Pause, Pencil, Play, Plus, SlidersHorizontal, Sparkles, Video,
+  ArrowLeft, BookOpen, Check, FileText, HardDrive, Minus, Pause, Pencil, Play, Plus, SlidersHorizontal, Sparkles, Video,
 } from "lucide-react";
 import { toast } from "sonner";
+import { SessionTime } from "@/components/sessions/session-time";
 import { cn } from "@/lib/utils";
 
-// shortcut: static mock content (UI only, per the reference design); replace with twin data when the backend lands.
-const SOURCES = [
-  { label: "Website", count: "14 pages", icon: Globe },
-  { label: "LinkedIn", count: "36 posts", icon: Newspaper },
-  { label: "YouTube", count: "48 videos", icon: Video },
-  { label: "Instagram", count: "120 reels", icon: Camera },
-];
-const CONNECTIONS = [
-  { label: "Google Drive", icon: HardDrive },
-  { label: "Notion", icon: BookOpen },
-];
+export type BrainKnowledge = {
+  connectors: { id: string; kind: "drive" | "notion" | "youtube"; label: string; status: string }[];
+  recent: { id: string; title: string; ext: string; createdAt: string }[];
+  total: number;
+};
+
+const CONNECTOR_ICONS = { drive: HardDrive, notion: BookOpen, youtube: Video };
+
+// shortcut: training style and voice are mock content (UI only); replace with twin data when that backend lands.
 const TRAITS = [
   "Frames selling as a process, not motivation",
   "Plays the difficult buyer herself before teaching the fix",
@@ -41,9 +40,9 @@ function Node({ tag, tone, title, children, footer, className }: {
   tag: string; tone: "blue" | "amber" | "green"; title: string; children: ReactNode; footer: ReactNode; className?: string;
 }) {
   return (
-    <section aria-label={title} className={cn("flex w-[300px] shrink-0 flex-col gap-3", className)}>
+    <section aria-label={title} className={cn("flex w-[340px] shrink-0 flex-col gap-3", className)}>
       <NodeTag tone={tone}>{tag}</NodeTag>
-      <div className="flex flex-col gap-4 rounded-[16px] border border-(--card-border) bg-card p-5 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
+      <div className="flex flex-col gap-5 rounded-[16px] border border-(--card-border) bg-card p-7 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
         <h2 className="m-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{title}</h2>
         {children}
         <div className="flex flex-wrap gap-2 pt-1">{footer}</div>
@@ -66,7 +65,7 @@ function Edge() {
 const soon = (what: string) => () => toast(`${what} is coming soon.`);
 
 /** Twin's brain: the twin as a graph of what it knows, how it trains and how it sounds. */
-export function TwinBrainPage() {
+export function TwinBrainPage({ knowledge }: { knowledge: BrainKnowledge }) {
   const [zoom, setZoom] = useState(100);
   const [playing, setPlaying] = useState(false);
   const zoomBy = (delta: number) => setZoom((value) => Math.min(ZOOM.max, Math.max(ZOOM.min, value + delta)));
@@ -99,27 +98,47 @@ export function TwinBrainPage() {
               tag="Knowledge" tone="blue" title="Knowledge"
               footer={<EditLink href="/twin/knowledge" />}
             >
-              <ul className="m-0 flex list-none flex-col gap-2 p-0 text-sm">
-                {SOURCES.map(({ label, count, icon: Icon }) => (
-                  <li key={label} className="flex items-center justify-between gap-3">
-                    <span className="flex items-center gap-2.5">
-                      <span className="grid size-6 place-items-center rounded-full bg-(--tone-control)"><Icon className="size-3.5" aria-hidden /></span>
-                      {label}
-                    </span>
-                    <span className="tabular-nums text-muted-foreground">{count}</span>
-                  </li>
-                ))}
-              </ul>
-              <ul className="m-0 flex list-none flex-col gap-2 p-0">
-                {CONNECTIONS.map(({ label, icon: Icon }) => (
-                  <li key={label} className="flex items-center justify-between gap-3 rounded-[12px] bg-(--tone-control)/60 px-3 py-2.5 text-sm">
-                    <span className="flex items-center gap-2.5"><Icon className="size-4" aria-hidden />{label}</span>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                      <Check className="size-3" aria-hidden /> Connected
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              {knowledge.connectors.length ? (
+                <ul aria-label="Connected sources" className="m-0 flex list-none flex-col gap-2 p-0">
+                  {knowledge.connectors.map((connector) => {
+                    const Icon = CONNECTOR_ICONS[connector.kind];
+                    return (
+                      <li key={connector.id} className="flex items-center justify-between gap-3 rounded-[12px] bg-(--tone-control)/60 px-3 py-2.5 text-sm">
+                        <span className="flex min-w-0 items-center gap-2.5"><Icon className="size-4 shrink-0" aria-hidden /><span className="truncate">{connector.label}</span></span>
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                          <Check className="size-3" aria-hidden /> {connector.status}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="m-0 rounded-[12px] bg-(--tone-control)/60 px-3 py-2.5 text-sm text-muted-foreground">No connectors yet. Connect Google Drive, Notion or YouTube from Edit.</p>
+              )}
+              <div className="flex flex-col gap-2.5">
+                <p className="m-0 flex items-baseline justify-between gap-3 text-sm">
+                  <span className="font-medium">Recent files</span>
+                  <span className="tabular-nums text-muted-foreground">{knowledge.total} {knowledge.total === 1 ? "file" : "files"}</span>
+                </p>
+                {knowledge.recent.length ? (
+                  <ul className="m-0 flex list-none flex-col gap-2 p-0 text-sm">
+                    {knowledge.recent.map((file) => (
+                      <li key={file.id} className="flex items-center gap-2.5">
+                        <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                        <span className="min-w-0 flex-1 truncate" title={file.title}>{file.title}</span>
+                        <span className="shrink-0 text-xs text-muted-foreground"><SessionTime iso={file.createdAt} /></span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="m-0 text-sm text-muted-foreground">No files uploaded yet.</p>
+                )}
+                {knowledge.total > knowledge.recent.length ? (
+                  <Link href="/twin/knowledge" className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+                    View all {knowledge.total} files
+                  </Link>
+                ) : null}
+              </div>
             </Node>
 
             <Edge />
