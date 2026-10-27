@@ -5,7 +5,7 @@ import { OrganizationKnowledgeService } from "@/lib/org-knowledge";
 
 export const dynamic = "force-dynamic";
 
-export default async function KnowledgePage() {
+export default async function KnowledgePage({ searchParams }: { searchParams: Promise<{ drive?: string }> }) {
   const org = await getSessionOrg();
   if (!org) redirect("/auth/no-org");
 
@@ -14,5 +14,5 @@ export default async function KnowledgePage() {
     OrganizationKnowledgeService.getStats(org.id),
   ]);
 
-  return <KnowledgeView initialDocs={initialDocs} initialStats={initialStats} />;
+  return <KnowledgeView initialDocs={initialDocs} initialStats={initialStats} initialDriveConnected={(await searchParams).drive === "connected"} />;
 }

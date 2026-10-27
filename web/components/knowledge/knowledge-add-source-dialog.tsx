@@ -5,6 +5,7 @@ import {
   AlertCircle,
   BookOpen,
   CheckCircle2,
+  CloudDownload,
   ChevronRight,
   FileText,
   Plus,
@@ -26,6 +27,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import type { ConnectorInfo } from "./types";
+import { GoogleDriveImport } from "./google-drive-import";
 
 type UploadQueueItem = {
   id: string;
@@ -46,7 +48,7 @@ type YouTubePreviewData = {
   alreadyIndexed: boolean;
 };
 
-type NavCategory = "popular" | "files" | "youtube" | "notion";
+type NavCategory = "popular" | "files" | "youtube" | "notion" | "drive";
 
 const SUPPORTED_EXTS = ["pdf", "docx", "doc", "pptx", "ppsx", "csv", "txt", "md"];
 const ACCEPT_STRING =
@@ -79,13 +81,16 @@ export function KnowledgeAddSourceDialog({
   onOpenChange,
   connectors,
   onSuccess,
+  initialDriveConnected = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   connectors?: ConnectorInfo;
   onSuccess: () => void;
+  initialDriveConnected?: boolean;
 }) {
-  const [activeCategory, setActiveCategory] = useState<NavCategory>("popular");
+  const [activeCategory, setActiveCategory] = useState<NavCategory>(initialDriveConnected ? "drive" : "popular");
+  const [drivePickerOpen, setDrivePickerOpen] = useState(false);
 
   const [queue, setQueue] = useState<UploadQueueItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -345,6 +350,7 @@ export function KnowledgeAddSourceDialog({
   const NAV_ITEMS: { id: NavCategory; label: string }[] = [
     { id: "popular", label: "Popular" },
     { id: "files", label: "Files" },
+    { id: "drive", label: "Google Drive" },
     { id: "youtube", label: "YouTube" },
     { id: "notion", label: "Notion" },
   ];
@@ -352,13 +358,14 @@ export function KnowledgeAddSourceDialog({
   const titles: Record<NavCategory, string> = {
     popular: "Popular",
     files: "Upload Files",
+    drive: "Google Drive",
     youtube: "YouTube",
     notion: "Notion",
   };
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} modal={!drivePickerOpen} onOpenChange={(next) => { if (!drivePickerOpen) onOpenChange(next); }}>
         <DialogContent
           showCloseButton={false}
           className="sm:max-w-4xl md:max-w-5xl h-[620px] max-h-[90vh] p-0 gap-0 overflow-hidden rounded-2xl border border-border/80 shadow-2xl bg-background"
@@ -406,6 +413,20 @@ export function KnowledgeAddSourceDialog({
                 {activeCategory === "popular" && (
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-3.5">
+                      <button
+                        type="button"
+                        onClick={() => setActiveCategory("drive")}
+                        className="group flex items-center justify-between p-4 rounded-xl border border-border/70 bg-card hover:border-orange-500/50 hover:shadow-xs transition-all text-left col-span-2"
+                      >
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          <CloudDownload className="size-5 shrink-0 text-muted-foreground" />
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-foreground">Google Drive</div>
+                            <div className="text-xs text-muted-foreground mt-0.5">Choose documents, spreadsheets and presentations to import</div>
+                          </div>
+                        </div>
+                        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                      </button>
                       <button
                         type="button"
                         onClick={() => setActiveCategory("files")}
@@ -464,6 +485,10 @@ export function KnowledgeAddSourceDialog({
                       </button>
                     </div>
                   </div>
+                )}
+
+                {activeCategory === "drive" && (
+                  <GoogleDriveImport onSuccess={onSuccess} onPickerOpenChange={setDrivePickerOpen} />
                 )}
 
                 {activeCategory === "files" && (

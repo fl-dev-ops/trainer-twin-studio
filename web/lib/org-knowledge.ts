@@ -79,7 +79,8 @@ export class OrganizationKnowledgeService {
       error: d.error,
       sourceId: d.sourceId,
       externalId: d.externalId,
-      sourceUrl: d.source?.sourceUrl ?? null,
+      sourceUrl: d.source?.sourceUrl ?? (d.externalId?.startsWith("google-drive:")
+        ? `https://drive.google.com/file/d/${encodeURIComponent(d.externalId.slice("google-drive:".length))}/view` : null),
       connector: d.source?.connector ?? (
         d.s3SourceKey.startsWith(`${orgPrefix(orgId)}/knowledge/files/`) ? "upload" : d.ext === "json" ? "youtube" : "upload"
       ),

@@ -20,9 +20,11 @@ import type {
 export function KnowledgeView({
   initialDocs = [],
   initialStats = null,
+  initialDriveConnected = false,
 }: {
   initialDocs?: KnowledgeDoc[];
   initialStats?: KnowledgeStats | null;
+  initialDriveConnected?: boolean;
 }) {
   const queryClient = useQueryClient();
 
@@ -81,17 +83,20 @@ export function KnowledgeView({
     const connected = params.get("connected");
     const error = params.get("error");
 
-    if (connector && connected === "true") {
+    if (params.get("drive") === "connected") {
+      toast.success("Google Drive connected. Choose files to import.");
+    } else if (connector && connected === "true") {
       toast.success(`Successfully connected ${connector === "notion" ? "Notion" : "YouTube"}`);
     } else if (error) {
       toast.error(`Connection failed: ${error}`);
     }
 
-    if (connector || connected || error) {
+    if (connector || connected || error || params.has("drive")) {
       const url = new URL(window.location.href);
       url.searchParams.delete("connector");
       url.searchParams.delete("connected");
       url.searchParams.delete("error");
+      url.searchParams.delete("drive");
       window.history.replaceState({}, "", url.pathname);
     }
   }, []);
@@ -103,7 +108,7 @@ export function KnowledgeView({
   const [searchHits, setSearchHits] = useState<KnowledgeSearchHit[] | null>(null);
   const [searching, setSearching] = useState(false);
   // Modals & Drawers
-  const [addSourceOpen, setAddSourceOpen] = useState(false);
+  const [addSourceOpen, setAddSourceOpen] = useState(initialDriveConnected);
   const [selectedDoc, setSelectedDoc] = useState<KnowledgeDoc | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [reindexingId, setReindexingId] = useState<string | null>(null);
@@ -269,6 +274,7 @@ export function KnowledgeView({
           open={addSourceOpen}
           onOpenChange={setAddSourceOpen}
           connectors={connectors}
+          initialDriveConnected={initialDriveConnected}
           onSuccess={refreshData}
         />
 
