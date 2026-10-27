@@ -36,7 +36,7 @@ function NodeTag({ tone, children }: { tone: "blue" | "amber" | "green"; childre
 }
 
 function Node({ tag, tone, title, children, footer, className }: {
-  tag: string; tone: "blue" | "amber" | "green"; title: string; children: ReactNode; footer: ReactNode; className?: string;
+  tag: string; tone: "blue" | "amber" | "green"; title: string; children: ReactNode; footer?: ReactNode; className?: string;
 }) {
   return (
     <section aria-label={title} className={cn("flex w-[340px] shrink-0 flex-col gap-3", className)}>
@@ -44,7 +44,7 @@ function Node({ tag, tone, title, children, footer, className }: {
       <div className="flex flex-col gap-5 rounded-[16px] border border-(--card-border) bg-card p-5 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
         <h2 className="m-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{title}</h2>
         {children}
-        <div className="flex flex-wrap gap-2 pt-1">{footer}</div>
+        {footer ? <div className="flex flex-wrap gap-2 pt-1">{footer}</div> : null}
       </div>
     </section>
   );
@@ -138,7 +138,6 @@ export function TwinBrainPage({ knowledge }: { knowledge: BrainKnowledge }) {
 
             <Node
               tag="Training style" tone="amber" title="Training style"
-              footer={<EditButton onClick={soon("Editing the training style")} />}
             >
               <ul className="m-0 flex list-none flex-col gap-3 p-0 text-sm leading-5">
                 {TRAITS.map((trait) => (
