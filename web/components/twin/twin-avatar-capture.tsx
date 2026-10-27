@@ -162,9 +162,10 @@ export function TwinAvatarCapture({ personaName }: { personaName: string | null 
       const body = await cloned.json().catch(() => ({}));
       if (!cloned.ok || !body.voice?.id) throw new Error(body.error ?? "Your voice could not be saved.");
 
-      setProgress("Saving\u2026");
-      await twinClient.avatar.save.mutate({ photo, videoKey: upload.key, voiceId: body.voice.id });
+      setProgress("Making your professional photo\u2026");
+      const saved = await twinClient.avatar.save.mutate({ photo, videoKey: upload.key, voiceId: body.voice.id });
       toast.success("Your photo, voice and video are saved.");
+      if (!saved.professional) toast.warning("We couldn't make a professional photo this time, so your own photo is used. Record again to retry.");
       router.push("/twin/brain");
       router.refresh();
     } catch (error) {

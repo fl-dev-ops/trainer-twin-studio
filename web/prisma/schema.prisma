@@ -225,7 +225,10 @@ model Avatar {
   id           String        @id @default(cuid())
   orgId        String?
   name         String
+  // The photo shown everywhere; for a trainer's own capture, the professional headshot generated from the original.
   s3ImageKey   String?
+  // The photo as taken (Twin's brain capture), kept for regenerating the headshot.
+  s3OriginalImageKey String?
   s3VideoKey   String?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt

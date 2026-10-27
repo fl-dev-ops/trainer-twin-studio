@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { avatarPrefix, deleteObject, deletePrefix, presignedPutUrl, putObject, voicePrefix } from "@/lib/s3";
+import { professionalHeadshot } from "@/lib/headshot";
 import { TWIN_SOURCE } from "@/lib/twins";
 
 /**
@@ -20,7 +21,7 @@ export class AvatarError extends Error {}
 
 const personaSelect = {
   id: true, slug: true, name: true, isOwn: true, voiceId: true,
-  avatar: { select: { id: true, s3ImageKey: true, s3VideoKey: true, updatedAt: true } },
+  avatar: { select: { id: true, s3ImageKey: true, s3OriginalImageKey: true, s3VideoKey: true, updatedAt: true } },
   voice: { select: { name: true } },
 } as const;
 const json = (value: unknown) => value as Prisma.InputJsonValue;
@@ -105,8 +106,17 @@ export async function saveAvatar(orgId: string, input: { photo: string; videoKey
   if (!voice) throw new AvatarError("Unknown voice");
   const photo = decodePhoto(input.photo);
 
-  const imageKey = `${avatarPrefix(orgId, avatar.id)}/image/${randomUUID()}.jpg`;
-  await putObject(imageKey, photo, "image/jpeg");
+  // The photo as taken is kept; the one shown everywhere is a professional headshot made from it, or the original
+  // when the image model fails (the save never depends on it).
+  const stamp = randomUUID();
+  const originalKey = `${avatarPrefix(orgId, avatar.id)}/image/original-${stamp}.jpg`;
+  await putObject(originalKey, photo, "image/jpeg");
+  const headshot = await professionalHeadshot(photo).catch((error) => {
+    console.warn("[avatar] professional headshot failed; using the original photo", error);
+    return null;
+  });
+  const imageKey = headshot ? `${avatarPrefix(orgId, avatar.id)}/image/${stamp}.${headshot.ext}` : originalKey;
+  if (headshot) await putObject(imageKey, headshot.bytes, headshot.mime);
 
   const previousVoiceId = persona.voiceId && persona.voiceId !== voice.id ? persona.voiceId : null;
   const twins = await db.agent.findMany({
@@ -116,7 +126,7 @@ export async function saveAvatar(orgId: string, input: { photo: string; videoKey
   // Twins that carry their own copy of a voice (written by the earlier setup) would override the persona's.
   const copied = twins.filter((twin) => typeof asRecord(twin.data).voiceId === "string");
   await db.$transaction([
-    db.avatar.update({ where: { id: avatar.id }, data: { s3ImageKey: imageKey, s3VideoKey: input.videoKey } }),
+    db.avatar.update({ where: { id: avatar.id }, data: { s3ImageKey: imageKey, s3OriginalImageKey: originalKey, s3VideoKey: input.videoKey } }),
     db.persona.update({ where: { id: persona.id }, data: { voiceId: voice.id } }),
     ...copied.flatMap((twin) => {
       const { voiceId: _dropped, ...data } = asRecord(twin.data);
@@ -129,11 +139,12 @@ export async function saveAvatar(orgId: string, input: { photo: string; videoKey
   ]);
 
   // Replaced files and an unused previous voice: best effort, the DB already points at the new ones.
-  const replaced = [avatar.s3ImageKey, avatar.s3VideoKey !== input.videoKey ? avatar.s3VideoKey : null].filter((key): key is string => Boolean(key));
+  const replaced = [avatar.s3ImageKey, avatar.s3OriginalImageKey, avatar.s3VideoKey !== input.videoKey ? avatar.s3VideoKey : null]
+    .filter((key): key is string => Boolean(key) && key !== imageKey && key !== originalKey);
   await Promise.all(replaced.map((key) => deleteObject(key).catch(() => {})));
   if (previousVoiceId) await removeUnusedVoice(orgId, previousVoiceId);
 
-  return { avatarUrl: avatarPhotoUrl(persona.slug, { s3ImageKey: imageKey, updatedAt: new Date() }), twins: copied.length };
+  return { avatarUrl: avatarPhotoUrl(persona.slug, { s3ImageKey: imageKey, updatedAt: new Date() }), twins: copied.length, professional: Boolean(headshot) };
 }
 
 /** Deletes a voice no persona owns and no agent names (e.g. the one a re-recording replaced). */

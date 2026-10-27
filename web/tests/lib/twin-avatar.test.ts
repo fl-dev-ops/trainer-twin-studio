@@ -65,6 +65,14 @@ mock.module("@/lib/s3", () => ({
   deletePrefix: async (prefix: string) => void deleted.push(prefix),
 }));
 
+let headshotFails = false;
+mock.module("@/lib/headshot", () => ({
+  professionalHeadshot: async () => {
+    if (headshotFails) throw new Error("image model down");
+    return { bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47]), mime: "image/png", ext: "png" };
+  },
+}));
+
 const { AvatarError, avatarImageKey, avatarState, avatarVideoUpload, decodePhoto, saveAvatar } = await import("@/lib/twin/avatar");
 const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]).toString("base64");
 
@@ -84,6 +92,7 @@ beforeEach(() => {
   writes = [];
   puts = [];
   deleted = [];
+  headshotFails = false;
 });
 
 test("photo must be a JPEG under the size limit", () => {
@@ -115,8 +124,11 @@ test("save stores photo + video on the Avatar, the voice on the persona, and cle
   const { key } = await avatarVideoUpload("o1", "video/webm");
   const result = await saveAvatar("o1", { photo: jpeg, videoKey: key, voiceId: "v1" });
   const avatar = avatars.get(persona.avatarId!)!;
-  expect(puts[0]).toMatch(new RegExp(`/avatars/${persona.avatarId}/image/[0-9a-f-]{36}\\.jpg$`));
-  expect(avatar).toMatchObject({ s3ImageKey: puts[0], s3VideoKey: key });
+  // The photo as taken is kept; the professional headshot made from it is the one shown everywhere.
+  expect(puts[0]).toMatch(new RegExp(`/avatars/${persona.avatarId}/image/original-[0-9a-f-]{36}\\.jpg$`));
+  expect(puts[1]).toMatch(new RegExp(`/avatars/${persona.avatarId}/image/[0-9a-f-]{36}\\.png$`));
+  expect(avatar).toMatchObject({ s3ImageKey: puts[1], s3OriginalImageKey: puts[0], s3VideoKey: key });
+  expect(result.professional).toBe(true);
   expect(persona.voiceId).toBe("v1");
   expect(result.avatarUrl).toMatch(/^\/api\/personas\/olga\/avatar\?v=\d+$/);
   // Only the twin that carried its own voiceId is rewritten (versioned); its other data is kept.
@@ -127,7 +139,7 @@ test("save stores photo + video on the Avatar, the voice on the persona, and cle
   expect(writes.filter((w) => w.op === "specVersion.create")).toHaveLength(1);
   expect(writes.some((w) => w.op === "persona.update" && "data" in (w.args.data as Row))).toBe(false); // prompt data untouched
 
-  expect(await avatarImageKey("o1", "olga")).toBe(puts[0]);
+  expect(await avatarImageKey("o1", "olga")).toBe(puts[1]);
   expect(await avatarState("o1")).toMatchObject({ photoUrl: expect.stringMatching(/\/api\/personas\/olga\/avatar\?v=/), hasReference: true, voiceName: "Olga voice" });
 });
 
@@ -135,11 +147,11 @@ test("re-recording replaces old files and deletes the previous voice when nothin
   voices.push({ id: "v2", orgId: "o1", status: "ready" });
   const first = await avatarVideoUpload("o1", "video/webm");
   await saveAvatar("o1", { photo: jpeg, videoKey: first.key, voiceId: "v1" });
-  const oldImage = avatars.get(persona.avatarId!)!.s3ImageKey;
+  const { s3ImageKey: oldImage, s3OriginalImageKey: oldOriginal } = avatars.get(persona.avatarId!)! as Avatar & { s3OriginalImageKey: string };
   const second = await avatarVideoUpload("o1", "video/webm");
   await saveAvatar("o1", { photo: jpeg, videoKey: second.key, voiceId: "v2" });
   expect(persona.voiceId).toBe("v2");
-  expect(deleted).toEqual(expect.arrayContaining([oldImage, first.key]));
+  expect(deleted).toEqual(expect.arrayContaining([oldImage, oldOriginal, first.key]));
   expect(voices.find((v) => v.id === "v1")).toBeUndefined();
   expect(deleted.some((key) => key.includes("/tts-voices/v1/"))).toBe(true);
 });
@@ -152,4 +164,15 @@ test("a previous voice still named by an agent is kept", async () => {
   const second = await avatarVideoUpload("o1", "video/webm");
   await saveAvatar("o1", { photo: jpeg, videoKey: second.key, voiceId: "v2" });
   expect(voices.find((v) => v.id === "v1")).toBeDefined();
+});
+
+test("when the image model fails, the original photo is shown and the save still goes through", async () => {
+  headshotFails = true;
+  const { key } = await avatarVideoUpload("o1", "video/webm");
+  const result = await saveAvatar("o1", { photo: jpeg, videoKey: key, voiceId: "v1" });
+  const avatar = avatars.get(persona.avatarId!)!;
+  expect(result.professional).toBe(false);
+  expect(puts).toHaveLength(1);
+  expect(avatar).toMatchObject({ s3ImageKey: puts[0], s3OriginalImageKey: puts[0] });
+  expect(persona.voiceId).toBe("v1");
 });
