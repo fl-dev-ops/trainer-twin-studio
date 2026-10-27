@@ -156,3 +156,33 @@ Proposal (additive DB change):
 - Files are served through short-lived presigned URLs, like recordings and knowledge previews.
 - Global personas (`orgId` null, e.g. presets) need a non-org prefix such as `<base>/global/personas/<personaId>/`.
 - The 5 preset photos (`/roleplay/avatars/*.jpg`) become the default avatar images of preset personas, uploaded once.
+
+## The model (agreed)
+
+```mermaid
+flowchart LR
+  V["Voice<br/>reference audio + transcript"] --> P
+  A["Avatar<br/>reference image + video"] --> P
+  PR["Prompt fields<br/>(identity, behaviour, mannerisms…)"] --> P
+  PG["Program settings<br/>(pace, …)"] --> P
+  P["Persona"] --> RP["Role play scenario"]
+  P --> TW["Twin scenario"]
+```
+
+- **Voice** and **Avatar** are separate items. Each persona **owns** its voice and its avatar (one-to-one, not shared).
+- **Voice:** the reference audio (+ transcript) sent to voice cloning, as on v2 today.
+- **Avatar:** reference files for the AI avatar model, both an **image** and a **video**. Whichever the chosen model needs is used.
+- **Persona** = voice + avatar + prompt fields + program settings.
+- **Scenario** (role play or twin agent) = its own config + one persona.
+- Program settings (pace and later levers) are **stored now**. The backend (TTS speed etc.) comes later.
+
+### Schema proposal (additive only)
+
+| Table | Change |
+|---|---|
+| `Voice` (exists) | unchanged: `s3AudioKey`, `s3TranscriptKey` |
+| `Avatar` (**new**) | `id`, `orgId?`, `name`, `s3ImageKey?`, `s3VideoKey?`, timestamps. Files at `<org>/avatars/<avatarId>/{image,video}/<file>` |
+| `Persona` | + `voiceId?` (unique → owns its voice), + `avatarId?` (unique → owns its avatar), + `settings Json?` for program settings (`{ pace }` now) |
+
+- Prompt fields stay in `Persona.data` (versioned spec); program settings go in `settings`; media live in their own tables.
+- Global presets (`orgId` null) store files under `<base>/global/…`.
