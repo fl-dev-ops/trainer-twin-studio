@@ -81,3 +81,16 @@ The situations are what the twin's catalog lists and what examples are searched 
 | T1 | SKILL.md voice: first person ("I…") or about the trainer ("She…")? | **First person**: the twin speaks as the trainer |
 | T2 | Can solo lessons and method docs be sources, alongside coaching sessions? | **Yes**: knowledge lives there too |
 | T3 | Existing role-play-shaped skill twins (acme): keep readable, or delete and rebuild? | **Keep readable**; rebuild in the olga org with the new copilot |
+
+## Status
+
+**Built.** The copilot has two skills:
+- `roleplay-creator`: today's role-play builder, publishing kind ROLEPLAY;
+- `twin-creator`: `lib/twin-skill.ts`, the `build_twin_skill` and `publish_twin_skill` tools, and web `/api/internal/twin-skills`.
+
+T1–T3 as proposed: first person; any of the trainer's material counts (sources of every kind); older role-play-shaped skill twins stay readable.
+
+- **Storage:** `Agent.data.source = "twin-creator"`, with `skill.json` under `data.scenario` and situations as stages.
+- **Items:** `role: trainer`, `metadata.step` = situation, `metadata.type` = kind.
+- **Chat:** a single twin skill advises from its own topic (D1) via `twinSessionPlaybooks`, with no session plan.
+- **Tests:** contract tests in `web/tests/lib/scenario-ingest-contract.test.ts`; chat tests in `chat/tests/agent/lib/twin.test.ts`.

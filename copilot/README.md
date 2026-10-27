@@ -3,7 +3,7 @@
 [eve](https://eve.dev) agent that builds from a trainer's knowledge base, through one of two skills. They are different
 products and never mixed:
 
-- `twin-creator` (coming): a **twin skill**, the trainer's knowledge, decisions, patterns and approach on one topic,
+- `twin-creator`: a **twin skill**, the trainer's knowledge, decisions, patterns and approach on one topic,
   which their twin uses to advise learners. Not a role play. See `plans/twin-skill-format.md`.
 - `roleplay-creator`: a **role play**, a practice session the AI leads, built from recordings where the trainer runs that
   practice. It writes `SKILL.md`, `scenario.json`, `items.json` and `patterns.md`, checks them and publishes them as a

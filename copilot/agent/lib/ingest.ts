@@ -11,7 +11,7 @@ const MIN_MODE_ITEMS = 30; // a mode needs this many real session lines for its 
 export const MAX_ITEMS = 15; // per side and action, so one long session cannot dominate
 const MIN_PRACTICE = { turns: 20, perSide: 5 }; // a session counts only with this much two-sided practice inside its spans
 const MAX_WORDS = { patterns: 2000, skill: 2000, context: 25 }; // hard limits; instructions aim lower so trimming is rare
-const words = (s: string) => s.split(/\s+/).filter(Boolean).length;
+export const words = (s: string) => s.split(/\s+/).filter(Boolean).length;
 const STEPS = { min: 3, max: 6 };
 // Move and item bars; tune per trainer later.
 export const MAX_MOVES = 5; // per side per step
@@ -24,7 +24,7 @@ const DOCS = /^data\/(docs|website)\//;
 const UPLOADS = /^data\/uploads\//; // knowledge-base uploads: recordings and method docs mixed, told apart by speakers
 const PII = /[\w.+-]+@[\w-]+\.[\w.-]+|\bhttps?:\/\/\S+|\bwww\.\S+|\+?\d(?:[ .-]?\d){9,}/i;
 // Evidence refs in patterns.md: [[<file id>#<turn>]] for a session turn, [[<file id>]] for a doc or post.
-const REF = /\[\[([^\]#]+?)(?:#(\d+))?\]\]/g;
+export const REF = /\[\[([^\]#]+?)(?:#(\d+))?\]\]/g;
 const COUNT = /\((\d+) of (\d+) sessions?\)/g;
 // Any count, including the bare "(3 of 3)" that COUNT misses; only the full form may be written.
 const ANY_COUNT = /\((\d+) of (\d+)(?: sessions?)?\)/g;
@@ -133,7 +133,7 @@ export async function knownNames(io: Io, user: string) {
   return [...new Set(Object.values(await readJson<Record<string, string[]>>(io, user, NAMES, {})).flat())];
 }
 
-async function addNames(io: Io, user: string, key: string, names: string[]) {
+export async function addNames(io: Io, user: string, key: string, names: string[]) {
   const all = await readJson<Record<string, string[]>>(io, user, NAMES, {});
   all[key] = [...new Set([...(all[key] ?? []), ...names.map((n) => n.trim()).filter((n) => n.length >= 2)])];
   await io.write(outPath(user, NAMES), JSON.stringify(all, null, 1) + "\n");

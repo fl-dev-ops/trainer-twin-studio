@@ -47,7 +47,8 @@ const strings = (value: unknown) => (Array.isArray(value) ? value.filter((v): v 
  * (source "scenario-ingest", run the same way). Undefined for client role plays (their own runtime) and the all-skills twin.
  */
 export function scenarioPlaybook(kind: AgentKind | null | undefined, agentData: Record<string, unknown>): ScenarioPlaybook | undefined {
-  if (typeof agentData.skill !== "string") return undefined;
+  // A twin-creator skill is the trainer's judgment on a topic, not a session to run (see twinSessionPlaybooks).
+  if (typeof agentData.skill !== "string" || agentData.source === TWIN_SKILL_SOURCE) return undefined;
   if (kind !== "TWIN" && !(kind === "ROLEPLAY" && agentData.source === "scenario-ingest")) return undefined;
   const manifest = (agentData.scenario ?? {}) as Record<string, unknown>;
   const steps = Array.isArray(manifest.steps) ? manifest.steps as Record<string, unknown>[] : [];
@@ -67,6 +68,33 @@ export function scenarioPlaybook(kind: AgentKind | null | undefined, agentData: 
 }
 
 /** One playbook of a twin: an ingested scenario of the twin's persona (sent by web's getSessionContext). */
+/** Agent.data.source of a twin skill from the copilot's twin-creator: knowledge, decisions and approach on one topic. */
+export const TWIN_SKILL_SOURCE = "twin-creator";
+
+/**
+ * The playbooks a twin session advises from: the all-skills twin gets every skill of its persona (web sends them); a
+ * single twin-creator skill advises on its own topic, so it is its only playbook (decision D1). Undefined otherwise.
+ */
+export function twinSessionPlaybooks(
+  agent: { slug?: string; kind?: AgentKind | null; data?: Record<string, unknown> | null } | null | undefined,
+  twinPlaybooks: TwinPlaybook[] | undefined,
+): TwinPlaybook[] | undefined {
+  const data = agent?.data ?? {};
+  if (isAllSkillsTwin(agent?.kind, data)) return twinPlaybooks ?? [];
+  if (agent?.kind !== "TWIN" || data.source !== TWIN_SKILL_SOURCE || typeof data.skill !== "string") return undefined;
+  const manifest = (data.scenario ?? {}) as Record<string, unknown>;
+  const text = (value: unknown, fallback: string) => (typeof value === "string" && value.trim() ? value : fallback);
+  const slug = agent.slug ?? text(data.id, "skill");
+  return [{
+    slug,
+    id: text(manifest.skill, slug),
+    name: text(manifest.name, text(data.name, slug)),
+    description: text(manifest.description, ""),
+    steps: Array.isArray(manifest.situations) ? (manifest.situations as TwinPlaybook["steps"]) : [],
+    skill: data.skill,
+  }];
+}
+
 export type TwinPlaybook = {
   slug: string;
   id: string;
@@ -411,7 +439,10 @@ export async function loadSessionContext(
     sessionId: result.sessionId ?? sessionId,
     playbook: scenarioPlaybook(result.agent?.kind, agentData as Record<string, unknown>),
     roleplay,
-    twin: isAllSkillsTwin(result.agent?.kind, agentData as Record<string, unknown>) ? { playbooks: result.twinPlaybooks ?? [] } : undefined,
+    twin: (() => {
+      const playbooks = twinSessionPlaybooks(result.agent ? { ...result.agent, data: agentData as Record<string, unknown> } : null, result.twinPlaybooks);
+      return playbooks ? { playbooks } : undefined;
+    })(),
     agentName: agentData.name ?? result.agent?.slug ?? agentSlug ?? "Training Session",
     agentSlug: result.agent?.slug ?? agentSlug ?? "session",
     agentVersion: result.agent?.version,
@@ -677,7 +708,7 @@ You are ${who}'s twin. The learner works in the field and comes to you with a re
 - Do not explain frameworks, name techniques or describe how you run training. The playbooks are your judgment, not something to recite.
 - Do not offer practice or a role play. Run one only if the learner asks to rehearse; then follow that playbook's steps.
 - When they come back with what happened, build on it and give the next move.
-- Each playbook below is how ${who} handles one kind of situation, and is available as a skill. When their situation touches one, load it with eve__skill before you advise, without mentioning it. A loaded playbook stays available for later turns. The playbooks are written as coaching sessions; turn what the coach would teach into what the learner should do with their client.
+- Each playbook below is how ${who} handles one kind of situation, and is available as a skill. When their situation touches one, load it with eve__skill before you advise, without mentioning it. A loaded playbook stays available for later turns. A playbook holds your knowledge, decisions, patterns and approach on one topic; advise from it. Some older playbooks are written as coaching sessions; for those, turn what the coach would teach into what the learner should do with their client.
 - To hear how ${who} actually phrased something, call scenario_examples({ playbook, situation }) with that playbook's name. Use the lines for tone, length and shape only: never repeat them word for word, and never reuse details about past learners.
 - Ground what you say only in your playbooks and their examples. Do not call search_knowledge. If no playbook covers the situation, say so plainly and give only advice you are sure of.
 - There is no agenda, question quota or evidence grading. Do not call session_plan.

@@ -10,7 +10,7 @@ import { ensureStyleCache } from "../lib/ensure-style";
 import { planState, resumeCandidateState } from "../lib/plan-state";
 import { resumeClaimCandidates } from "../lib/resume-candidates";
 import { studioFetch } from "../lib/studio";
-import { isAllSkillsTwin, scenarioPlaybook } from "../lib/brain";
+import { scenarioPlaybook, twinSessionPlaybooks } from "../lib/brain";
 import { roleplayGuard } from "../lib/roleplay";
 
 /** Returned instead of a plan for scenario-ingest scenarios (run from their playbook) and twins (open conversation). */
@@ -47,7 +47,8 @@ async function initialize(ctx: any): Promise<ReturnType<typeof compileSessionPla
       agentSlug: attributes.agentSlug,
     });
     // A playbook scenario would compile into quota-bound rounds that fight its own step logic.
-    if (scenarioPlaybook(result.agent?.kind, result.agent?.data ?? {}) || isAllSkillsTwin(result.agent?.kind, result.agent?.data)) return null;
+    // Playbook sessions and twin sessions (all-skills twin or a single twin skill) have no agenda.
+    if (scenarioPlaybook(result.agent?.kind, result.agent?.data ?? {}) || twinSessionPlaybooks(result.agent, undefined)) return null;
     const state = compileSessionPlan(result.agent?.data ?? {});
     planState.update(() => state);
     return state;

@@ -90,3 +90,28 @@ export async function publishToStudio(target: StudioTarget, files: File[], fetch
   }
   return result;
 }
+
+/**
+ * A twin skill (twin-creator) into the TrainerTwin web app: /api/internal/twin-skills stores it as a skill of the
+ * trainer's twin (kind TWIN). Never a role play.
+ */
+export async function publishTwinSkillToStudio(target: StudioTarget, skill: string, files: File[], fetcher: Fetch = fetch, signal?: AbortSignal) {
+  const byName = new Map(files.map((f) => [f.path.split("/").pop()!, f.text]));
+  const response = await fetcher(new URL("/api/internal/twin-skills", target.url).toString(), {
+    method: "POST",
+    headers: { authorization: `Bearer ${target.secret}`, "content-type": "application/json", "x-trainertwin-org-id": target.orgId },
+    body: JSON.stringify({
+      personaSlug: target.persona,
+      skill: byName.get("SKILL.md"),
+      manifest: JSON.parse(byName.get("skill.json") ?? "null"),
+      items: JSON.parse(byName.get("items.json") ?? "[]"),
+      patterns: byName.get("patterns.md"),
+      runId: target.runId,
+    }),
+    signal,
+  });
+  const result = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+  if (!response.ok) return { ok: false, skill, error: String(result?.error ?? `HTTP ${response.status}`) };
+  const stored = (result?.skill ?? {}) as Record<string, unknown>;
+  return { ok: true, skill, slug: stored.slug as string, version: stored.version as number, created: stored.created as boolean, items: stored.items as number };
+}

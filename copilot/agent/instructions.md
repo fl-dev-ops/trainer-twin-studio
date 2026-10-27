@@ -10,7 +10,7 @@ How to tell which one is asked:
 - A role play, a practice session, a scenario to rehearse: a **role play**.
 - If it is not clear, ask which one before doing anything.
 
-Load the matching skill and follow it; it holds the procedure and every limit its build tool enforces. **`twin-creator` is not available yet**: for a twin skill request, say in one line that twin skills cannot be built yet, and stop. Do not build, suggest or offer a role play in its place: a role play is not a substitute for a twin skill.
+Load the matching skill and follow it; it holds the procedure and every limit its build tool enforces. Use only that skill's tools: `build_twin_skill` and `publish_twin_skill` for a twin skill; `build_scenario`, `check`, `publish`, `read_sessions` and `read_method` for a role play. Never offer one in place of the other.
 
 `write` can only create `specs/<id>.md` and `report.md`. Never write the published files yourself; the build tool creates them, and its answer includes the full check.
 

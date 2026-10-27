@@ -248,7 +248,7 @@ export async function POST(request: Request) {
   if (input.action === "searchScenarioItems") {
     // scenario.json's steps map the newer items' `action` to a step, and a step to its moves.
     const agent = await db.agent.findFirst({ where: { slug: input.agentSlug, orgId }, select: { data: true, personaId: true, kind: true } });
-    const data = agent?.data as { source?: unknown; scenario?: { steps?: unknown } } | null;
+    const data = agent?.data as { source?: unknown; scenario?: { steps?: unknown; situations?: unknown } } | null;
     let scope: { slugs: string[]; steps: ScenarioStep[] };
     if (agent?.kind === "TWIN" && data?.source === TWIN_SOURCE) {
       // The all-skills twin searches its persona's skill twins: all of them, or the one the model has loaded.
@@ -262,7 +262,9 @@ export async function POST(request: Request) {
       const chosen = named.length > 0 ? named : all;
       scope = { slugs: chosen.map((p) => p.slug), steps: chosen.flatMap((p) => p.steps as ScenarioStep[]) };
     } else {
-      scope = { slugs: [input.agentSlug], steps: Array.isArray(data?.scenario?.steps) ? (data.scenario.steps as ScenarioStep[]) : [] };
+      // A twin-creator skill lists situations where a scenario lists steps.
+      const steps = data?.scenario?.steps ?? data?.scenario?.situations;
+      scope = { slugs: [input.agentSlug], steps: Array.isArray(steps) ? (steps as ScenarioStep[]) : [] };
     }
     const examples = await MainCollectionService.searchScenarioItems(orgId, scope.slugs, input.query, {
       step: input.step,

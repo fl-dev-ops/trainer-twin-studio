@@ -185,3 +185,118 @@ test("only studio (organization) sessions read the knowledge base, and never fal
   expect(knowledgeBaseFor({ principalId: "me", principalType: "user" }, {})).toBeNull();
   expect(knowledgeBaseFor(null, {})).toBeNull();
 });
+
+// ---- twin-creator: the trainer's knowledge, decisions and approach on one topic (not a role play) ----
+const { saveTwinSkill, prepareTwinPublication } = await import("../../../copilot/agent/lib/twin-skill");
+const { publishTwinSkillToStudio } = await import("../../../copilot/agent/lib/studio-publish");
+const { POST: twinSkills } = await import("@/app/api/internal/twin-skills/route");
+
+const twinSources = [
+  { path: "data/uploads/Coaching call [call0001].md", text: [
+    "---\ntitle: Coaching call\n---",
+    "speaker_1: When a buyer tells me they will wait for prices to drop, I ask what they are really waiting for.",
+    "speaker_2: Okay so I should just ask them what they wait for then?",
+    "speaker_1: If they talk about the market, I show them how payment plans spread the risk over years.",
+    "speaker_1: I never chase a buyer who wants cashback, I explain what the developer gives instead.",
+    "speaker_2: And what if they still insist on the cashback offer from the other agent?",
+    "speaker_1: Then I tell them that a discount today often costs more in the payment plan later.",
+  ].join("\n") },
+  { path: "data/uploads/Lesson [lesson01].md", text: "speaker_1: Most buyers who wait are afraid of losing money, not of the price itself.\nspeaker_1: Cashback requests usually mean the buyer compares agents rather than properties." },
+  { path: "data/uploads/Method [method01].md", text: "# Method\n\nPrices in off-plan projects rarely drop once the launch phase has sold out.\n\nA developer cashback is usually priced into the unit already, so it is rarely a real saving." },
+];
+const twinIo = () => {
+  const disk = new Map<string, string>();
+  return {
+    disk,
+    io: { read: async (p: string) => disk.get(p) ?? null, write: async (p: string, c: string) => void disk.set(p, c), list: async () => [], grep: async () => [], sources: async () => twinSources },
+  };
+};
+const twinHead = { skill: "off-plan-waiting", name: "Buyers who wait for prices", description: "When an off-plan buyer wants to wait for prices to drop or asks for cashback.", situations: [{ id: "buyer-waits", name: "Buyer waits for prices" }, { id: "wants-cashback", name: "Buyer asks for cashback" }] };
+const twinItems = [
+  { source: "call0001", n: 0, situation: "buyer-waits", kind: "decision", context: "buyer says they will wait for prices" },
+  { source: "call0001", n: 2, situation: "buyer-waits", kind: "decision", context: "buyer worries about the market" },
+  { source: "call0001", n: 3, situation: "wants-cashback", kind: "decision", context: "buyer wants a cashback offer" },
+  { source: "call0001", n: 5, situation: "wants-cashback", kind: "approach", context: "buyer insists on another agent's cashback" },
+  { source: "lesson01", quote: "Most buyers who wait are afraid of losing money, not of the price itself.", situation: "buyer-waits", kind: "pattern", context: "why buyers wait" },
+  { source: "lesson01", quote: "Cashback requests usually mean the buyer compares agents rather than properties.", situation: "wants-cashback", kind: "pattern", context: "what a cashback request means" },
+  { source: "method01", quote: "Prices in off-plan projects rarely drop once the launch phase has sold out.", situation: "buyer-waits", kind: "knowledge", context: "how off-plan prices move" },
+  { source: "method01", quote: "A developer cashback is usually priced into the unit already, so it is rarely a real saving.", situation: "wants-cashback", kind: "knowledge", context: "what a developer cashback is worth" },
+];
+const twinPatterns = `## What I know\n- Off-plan prices rarely drop after launch [[method01]]\n## How I decide\n- Ask what the buyer waits for [[call0001#0]]\n## Patterns I see\n- Waiting is fear of loss [[lesson01]]\n## My approach\n- Explain payment plans [[call0001#2]]\n## What I say\n- A discount today costs more later [[call0001#5]]\n## Gaps\n- Nothing on resale buyers\n`;
+const twinBody = `## Topic
+I handle two situations here: Buyer waits for prices, and Buyer asks for cashback.
+
+## What I know
+- Off-plan prices rarely drop once the launch phase has sold out.
+- A developer cashback is usually priced into the unit already.
+
+## How I decide
+- When a buyer says they will wait, I ask what they are really waiting for, because the price is rarely the reason.
+- If they talk about the market, I show how my payment plans spread the risk.
+- When a buyer wants cashback, I explain what the developer gives instead, because chasing it makes me look desperate.
+
+## Patterns I see
+- My buyers who wait are usually afraid of losing money.
+
+## My approach
+I slow down, I ask, and I show the numbers of the plan.
+
+## What I say
+- "A discount today often costs more in the payment plan later."
+
+## Gaps
+- My material says nothing about resale buyers.
+`;
+
+test("twin-creator: builds a twin skill from the trainer's own words, and publishes it as a TWIN skill", async () => {
+  process.env.SCENARIO_INGEST_SECRET = "s3cret";
+  const { io } = twinIo();
+  const saved = await saveTwinSkill(io, "olga", { user: "olga", skill: twinHead, trainer: { call0001: ["speaker_1"] }, names: [], items: twinItems as never, patterns: twinPatterns, body: twinBody });
+  expect(saved.saved).toBe(true);
+  expect((saved as { check: { reasons: string[] } }).check.reasons).toEqual([]);
+  expect((saved as { check: { pass: boolean; sources: number } }).check).toMatchObject({ pass: true, sources: 3 });
+
+  const { files, rejected } = await prepareTwinPublication(io, "olga", "off-plan-waiting");
+  expect(rejected).toEqual([]);
+  agents.length = 0;
+  const fetcher = async (url: string, init: RequestInit) => twinSkills(new Request(url, init));
+  const result = await publishTwinSkillToStudio({ url: "https://dash.test", secret: "s3cret", orgId: "org1", persona: "vasanth", runId: "run-twin" }, "off-plan-waiting", files, fetcher);
+  expect(result).toMatchObject({ ok: true, slug: "acme-off-plan-waiting", created: true, items: 8 });
+  const agent = agents[0];
+  expect(agent).toMatchObject({ kind: "TWIN", personaId: "p1", slug: "acme-off-plan-waiting" });
+  const data = agent.data as Row;
+  expect(data.source).toBe("twin-creator");
+  expect((data.scenario as Row).situations).toEqual(twinHead.situations);
+  expect(data.stages).toEqual([{ id: "buyer-waits", name: "Buyer waits for prices", objective: "Buyer waits for prices" }, { id: "wants-cashback", name: "Buyer asks for cashback", objective: "Buyer asks for cashback" }]);
+  expect([...s3.keys()].some((k) => k.endsWith("acme-off-plan-waiting/v1/skill.json"))).toBe(true);
+  expect(chroma).toEqual({ agentSlug: "acme-off-plan-waiting", count: 8 });
+});
+
+test("twin-creator: never the learner's words, never role-play structure, always first person", async () => {
+  const { io } = twinIo();
+  const learnerTurn = await saveTwinSkill(io, "olga", { user: "olga", skill: twinHead, trainer: { call0001: ["speaker_1"] }, names: [], items: [...twinItems, { source: "call0001", n: 1, situation: "buyer-waits", kind: "approach", context: "the agent asks" }] as never, patterns: twinPatterns, body: twinBody });
+  expect(learnerTurn.saved).toBe(false);
+  expect(JSON.stringify(learnerTurn)).toContain("not the trainer");
+
+  const noLabels = await saveTwinSkill(io, "olga", { user: "olga", skill: twinHead, trainer: {}, names: [], items: twinItems as never, patterns: twinPatterns, body: twinBody });
+  expect(JSON.stringify(noLabels)).toContain("list the trainer's labels");
+
+  const rolePlayish = twinBody.replace("## Gaps", "## Playing the learner side\n- The learner pushes back.\n\n## Gaps").replaceAll(/\b(I|my|me)\b/g, "the trainer");
+  const bad = await saveTwinSkill(io, "olga", { user: "olga", skill: twinHead, trainer: { call0001: ["speaker_1"] }, names: [], items: twinItems as never, patterns: twinPatterns, body: rolePlayish });
+  const reasons = (bad as { check: { pass: boolean; reasons: string[] } }).check;
+  expect(reasons.pass).toBe(false);
+  expect(reasons.reasons.join("\n")).toContain("role-play structure");
+  expect(reasons.reasons.join("\n")).toContain("first person");
+  const { files } = await prepareTwinPublication(io, "olga", "off-plan-waiting");
+  expect(files).toEqual([]); // a failing skill is never published
+});
+
+test("twin skills endpoint: secret, org, and the trainer's words only", async () => {
+  process.env.SCENARIO_INGEST_SECRET = "s3cret";
+  const post = (body: unknown, headers: Record<string, string> = { authorization: "Bearer s3cret", "x-trainertwin-org-id": "org1" }) =>
+    twinSkills(new Request("https://dash.test/api/internal/twin-skills", { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) }));
+  expect((await post({}, { authorization: "Bearer wrong", "x-trainertwin-org-id": "org1" })).status).toBe(401);
+  expect((await post({}, { authorization: "Bearer s3cret" })).status).toBe(400);
+  const learnerItem = { id: "x", role: "learner", context: "c", text: "the learner says something here", metadata: {} };
+  expect((await post({ personaSlug: "vasanth", skill: "---\n---\n", manifest: twinHead, items: [learnerItem] })).status).toBe(400);
+});

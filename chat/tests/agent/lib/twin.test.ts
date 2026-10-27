@@ -65,3 +65,37 @@ describe("twin", () => {
     assert.ok(!prompt.includes("INTERVIEW SETTINGS"));
   });
 });
+
+describe("twin-creator skills", () => {
+  const skillData = {
+    source: "twin-creator",
+    skill: "---\nname: off-plan-waiting\n---\n## Topic\nI help when a buyer waits for prices.",
+    scenario: { skill: "off-plan-waiting", name: "Buyers who wait for prices", description: "When a buyer says they will wait", situations: [{ id: "buyer-waits", name: "The buyer waits" }] },
+  };
+
+  test("a single twin skill advises from its own topic: it is its only playbook, and never a scenario runner", async () => {
+    const { scenarioPlaybook, twinSessionPlaybooks } = await import("../../../agent/lib/brain");
+    assert.equal(scenarioPlaybook("TWIN", skillData), undefined);
+    const [own] = twinSessionPlaybooks({ slug: "olga-off-plan-waiting", kind: "TWIN", data: skillData }, undefined)!;
+    assert.deepEqual(own, {
+      slug: "olga-off-plan-waiting", id: "off-plan-waiting", name: "Buyers who wait for prices", description: "When a buyer says they will wait",
+      steps: [{ id: "buyer-waits", name: "The buyer waits" }], skill: skillData.skill,
+    });
+    // Not a twin skill: a role play, an older scenario-ingest skill twin, or no agent.
+    assert.equal(twinSessionPlaybooks({ kind: "ROLEPLAY", data: { ...skillData } }, undefined), undefined);
+    assert.equal(twinSessionPlaybooks({ kind: "TWIN", data: { ...skillData, source: "scenario-ingest" } }, undefined), undefined);
+    assert.equal(twinSessionPlaybooks(null, undefined), undefined);
+    // The all-skills twin keeps every playbook web sends.
+    assert.deepEqual(twinSessionPlaybooks({ kind: "TWIN", data: { source: "twin" } }, [own]), [own]);
+  });
+
+  test("the twin prompt treats playbooks as judgment on a topic, not as a role play", () => {
+    const prompt = formatSessionSpec({
+      agentName: "Buyers who wait", agentSlug: "olga-off-plan-waiting", objective: "x", personaName: "Olga", personaSlug: "olga",
+      mode: "voice", documents: [], phases: [], twin: { playbooks: [playbook("off-plan-waiting", "Buyers who wait for prices")] },
+    } as unknown as SessionSpecs);
+    assert.ok(prompt.startsWith("TWIN — OPERATING INSTRUCTIONS FOR THIS SESSION"));
+    assert.ok(prompt.includes("This is not a lesson and not a role play."));
+    assert.ok(prompt.includes("A playbook holds your knowledge, decisions, patterns and approach on one topic"));
+  });
+});

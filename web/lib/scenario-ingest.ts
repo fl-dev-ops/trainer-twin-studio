@@ -10,6 +10,8 @@ import { validSlug } from "@/lib/specs";
 
 /** Agent.data.source of a role play built in the builder (twin skills: "scenario-ingest"). */
 export const ROLEPLAY_SOURCE = "roleplay-skill";
+/** Agent.data.source of a twin skill from the copilot's twin-creator (knowledge, decisions, approach on one topic). */
+export const TWIN_SKILL_SOURCE = "twin-creator";
 
 /**
  * Stores a scenario produced by the scenario-ingest agent (SKILL.md + scenario.json + items.json)
@@ -183,11 +185,16 @@ const KEPT_ACROSS_DURING_WRITES = ["introVideo", "before", "twinSettings", "afte
  * Postgres rows, so a failure never leaves a published agent without its files or items. Safe to call again:
  * unchanged content keeps the version. A twin and a role play never overwrite each other.
  */
+/** What storeSkillAgent writes besides SKILL.md and the items: the agent's slug and data, and its manifest file. */
+type SkillPackage = { slug: string; scenarioId: string; agentData: { name: string } & Record<string, unknown>; manifestFile: string; manifest: unknown };
+
 async function storeSkillAgent(input: {
   org: { id: string; slug: string };
   kind: "TWIN" | "ROLEPLAY";
   personaId: string;
-  manifest: ScenarioManifest;
+  /** A scenario (role play or older skill twin); or `built` for any other package (twin-creator skills). */
+  manifest?: ScenarioManifest;
+  built?: SkillPackage;
   skill: string;
   items: (ScenarioItem | RoleplayItem)[];
   patterns?: string;
@@ -196,7 +203,10 @@ async function storeSkillAgent(input: {
   runId?: string | null;
 }) {
   const { org, kind } = input;
-  const { slug, agentData } = buildScenario(org.slug, input.manifest, input.skill);
+  const pkg: SkillPackage = input.built ?? {
+    ...buildScenario(org.slug, input.manifest!, input.skill), scenarioId: input.manifest!.scenario, manifestFile: "scenario.json", manifest: input.manifest,
+  };
+  const { slug, agentData } = pkg;
   if (!validSlug(slug)) throw new ScenarioIngestError(`"${slug}" is not a valid scenario id`, 400);
 
   // Slugs are global: refuse to touch another org's rows before writing anything.
@@ -220,11 +230,11 @@ async function storeSkillAgent(input: {
 
   await Promise.all([
     putObject(`${artifacts}/SKILL.md`, input.skill, "text/markdown; charset=utf-8"),
-    putObject(`${artifacts}/scenario.json`, fileText.scenario(input.manifest), "application/json"),
+    putObject(`${artifacts}/${pkg.manifestFile}`, fileText.scenario(pkg.manifest), "application/json"),
     putObject(`${artifacts}/items.json`, fileText.items(input.items), "application/json"),
     ...(input.patterns !== undefined ? [putObject(`${artifacts}/patterns.md`, input.patterns, "text/markdown; charset=utf-8")] : []),
   ]);
-  const itemCount = await MainCollectionService.replaceScenarioItems(org.id, slug, input.manifest.scenario, input.items);
+  const itemCount = await MainCollectionService.replaceScenarioItems(org.id, slug, pkg.scenarioId, input.items);
 
   await db.$transaction(async (tx) => {
     if (!currentAgent) {
@@ -259,6 +269,65 @@ export async function ingestScenario(orgId: string, input: ScenarioIngestInput) 
   return storeSkillAgent({
     org, kind: input.kind ?? "TWIN", personaId: persona.id, manifest: input.scenario, skill: input.skill, items: input.items,
     patterns: input.patterns, runId: input.runId,
+  });
+}
+
+/** skill.json, as written by the copilot's twin-creator: one topic and the situations it answers. No roles, no moves. */
+export const twinSkillManifestSchema = z.looseObject({
+  skill: kebab,
+  name: z.string().min(1).max(200),
+  description: z.string().min(1).max(1024),
+  situations: z.array(z.looseObject({ id: kebab, name: z.string().min(1).max(200) })).min(1).max(30),
+});
+export type TwinSkillManifest = z.infer<typeof twinSkillManifestSchema>;
+
+export const twinSkillIngestSchema = z.object({
+  /** The trainer's own persona the skill belongs to. */
+  personaSlug: z.string().min(1),
+  /** SKILL.md exactly as published. */
+  skill: z.string().min(1).max(200_000),
+  manifest: twinSkillManifestSchema,
+  /** The trainer's own words only. */
+  items: z.array(scenarioItemSchema.refine((item) => item.role === "trainer", "a twin skill holds only the trainer's words")).max(5000),
+  patterns: z.string().max(1_000_000).optional(),
+  runId: runId.optional(),
+});
+export type TwinSkillIngestInput = z.infer<typeof twinSkillIngestSchema>;
+
+/**
+ * The Agent row for a twin skill: its situations stand where a scenario's steps would (stages, playbook steps,
+ * retrieval filters), and skill.json is kept under data.scenario, the agent's manifest.
+ */
+export function buildTwinSkill(orgSlug: string, manifest: TwinSkillManifest, skill: string): SkillPackage {
+  const slug = `${orgSlug}-${manifest.skill}`.toLowerCase();
+  return {
+    slug,
+    scenarioId: manifest.skill,
+    manifestFile: "skill.json",
+    manifest,
+    agentData: {
+      id: slug,
+      name: manifest.name,
+      objective: manifest.description,
+      stages: manifest.situations.map((s) => ({ id: s.id, name: s.name, objective: s.name })),
+      config: { context: { mode: "none", required: false } },
+      source: TWIN_SKILL_SOURCE,
+      skill,
+      scenario: manifest,
+    },
+  };
+}
+
+/** Creates or updates a twin skill from the copilot's twin-creator. Always a TWIN of the trainer's own persona. */
+export async function ingestTwinSkill(orgId: string, input: TwinSkillIngestInput) {
+  const [org, persona] = await Promise.all([
+    requireOrg(orgId),
+    db.persona.findFirst({ where: { orgId, isOwn: true, slug: { equals: input.personaSlug, mode: "insensitive" } }, select: { id: true } }),
+  ]);
+  if (!persona) throw new ScenarioIngestError(`Persona "${input.personaSlug}" was not found in this organization`, 404);
+  return storeSkillAgent({
+    org, kind: "TWIN", personaId: persona.id, built: buildTwinSkill(org.slug, input.manifest, input.skill),
+    skill: input.skill, items: input.items, patterns: input.patterns, runId: input.runId,
   });
 }
 

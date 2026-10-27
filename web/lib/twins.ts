@@ -34,12 +34,13 @@ function toPlaybook(slug: string, name: string, agentData: unknown): TwinPlayboo
   if (typeof data?.skill !== "string" || !manifest) return null;
   return {
     slug,
-    id: typeof manifest.scenario === "string" ? manifest.scenario : slug,
+    // scenario.json names it `scenario`; a twin-creator skill.json names it `skill` and lists situations, not steps.
+    id: typeof manifest.scenario === "string" ? manifest.scenario : typeof manifest.skill === "string" ? manifest.skill : slug,
     name: typeof manifest.name === "string" ? manifest.name : name,
     description: typeof manifest.description === "string" ? manifest.description : "",
     trainerRole: typeof manifest.trainer_role === "string" ? manifest.trainer_role : undefined,
     learnerRole: typeof manifest.learner_role === "string" ? manifest.learner_role : undefined,
-    steps: Array.isArray(manifest.steps) ? (manifest.steps as TwinPlaybook["steps"]) : [],
+    steps: Array.isArray(manifest.steps) ? (manifest.steps as TwinPlaybook["steps"]) : Array.isArray(manifest.situations) ? (manifest.situations as TwinPlaybook["steps"]) : [],
     skill: data.skill,
   };
 }
