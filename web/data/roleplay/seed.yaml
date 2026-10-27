@@ -146,9 +146,11 @@ scenarios:
         pounds a month. Your real goal is to build security for your family, because your salary alone won't.
       learnerRole: Agent calling a social-media lead who asks for options
       agreesWhen: >-
-        Agrees to a Zoom only once the agent has lowered their guard, helped them admit they are confused, and
-        proposed an exact day and time that you both confirm. If the agent suggests something vague ("later",
-        "this evening", "next week"), stay on the call and ask what day and time exactly.
+        Agrees to a Zoom once the agent has lowered their guard and helped them admit they are confused. If the
+        agent suggests a vague time ("later", "this evening", "next week"), just go along ("Okay, sure") and never
+        ask them for a day or time yourself: pinning it down is the agent's job. It counts as agreed only once the
+        agent names an exact day and time and you confirm it. If the agent wraps up without one, say a short
+        goodbye; the call ends with no Zoom booked.
       declinesWhen: >-
         Says "Just send me the details" and ends the call if the agent pushes, pitches or floods them with options.
         Never agrees to buy on this call.
