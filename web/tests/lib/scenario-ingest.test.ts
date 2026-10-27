@@ -278,3 +278,11 @@ test("role play and twin skill never overwrite each other; bad input and unknown
   await expect(saveRoleplay("org1", { ...roleplayBuilder, learnerGoals: [] })).rejects.toThrow("learner goal");
   expect(agents).toHaveLength(1);
 });
+
+test("the copilot's roleplay-creator publishes a ROLEPLAY (same package, kind ROLEPLAY); default stays TWIN", async () => {
+  const result = await ingestScenario("org1", input({ kind: "ROLEPLAY" }));
+  expect(result.created).toBe(true);
+  expect(agents[0]).toMatchObject({ kind: "ROLEPLAY", personaId: "p1" });
+  expect((agents[0].data as Row).source).toBe("scenario-ingest");
+  expect(() => input({ kind: "DOMAIN" })).toThrow();
+});

@@ -110,7 +110,8 @@ test("an ingest publication lands in S3, Chroma and Postgres, files byte for byt
   expect(s3.get("p/org1/runs/sess-01-abc/report.md")).toBe("# Report\n");
   expect(s3.get("p/org1/runs/sess-01-abc/specs/fundamental-depth.md")).toBe("# Spec\n");
   expect(chroma).toEqual({ agentSlug: "acme-fundamental-depth", count: 1 });
-  expect(agents[0]).toMatchObject({ slug: "acme-fundamental-depth", personaId: "p1", orgId: "org1" });
+  // The copilot's roleplay-creator publishes role plays, never twin skills.
+  expect(agents[0]).toMatchObject({ slug: "acme-fundamental-depth", personaId: "p1", orgId: "org1", kind: "ROLEPLAY" });
   expect((agents[0].data as Row).skill).toBe(skill);
 });
 

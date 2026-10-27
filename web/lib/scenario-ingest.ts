@@ -79,6 +79,11 @@ export const scenarioIngestSchema = z.object({
   patterns: z.string().max(1_000_000).optional(),
   /** The ingest run this scenario came from (see /api/internal/scenario-runs). */
   runId: runId.optional(),
+  /**
+   * Which module the copilot built it for: its roleplay-creator publishes ROLEPLAY (a practice session the AI leads),
+   * anything else a TWIN skill. Default TWIN, so an older copilot keeps working.
+   */
+  kind: z.enum(["TWIN", "ROLEPLAY"]).optional(),
 });
 export type ScenarioIngestInput = z.infer<typeof scenarioIngestSchema>;
 
@@ -252,7 +257,7 @@ export async function ingestScenario(orgId: string, input: ScenarioIngestInput) 
   ]);
   if (!persona) throw new ScenarioIngestError(`Persona "${input.personaSlug}" was not found in this organization`, 404);
   return storeSkillAgent({
-    org, kind: "TWIN", personaId: persona.id, manifest: input.scenario, skill: input.skill, items: input.items,
+    org, kind: input.kind ?? "TWIN", personaId: persona.id, manifest: input.scenario, skill: input.skill, items: input.items,
     patterns: input.patterns, runId: input.runId,
   });
 }

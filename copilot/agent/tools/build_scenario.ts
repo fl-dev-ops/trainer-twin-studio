@@ -5,7 +5,7 @@ import { outPath, readJson } from "../lib/paths";
 import { sessionIo } from "../lib/session-io";
 const plan = z.object({ id: z.string(), name: z.string(), goal: z.string(), spec: z.string().optional(), method: z.array(z.string()).default([]), sessions: z.array(z.object({ id: z.string(), trainer: z.array(z.string()).min(1), learner: z.array(z.string()).min(1), plays: z.record(z.string(), z.string()), spans: z.array(z.tuple([z.number().int(), z.number().int()])).min(1) })) });
 export default defineTool({
-  description: "Save one scenario's plan, patterns, classified evidence and playbook in one call, then run the full check. Returns the first rejection, or the saved result with every check reason, so fix all reasons in the next call.",
+  description: "Role play only (roleplay-creator), never a twin skill. Save one scenario's plan, patterns, classified evidence and playbook in one call, then run the full check. Returns the first rejection, or the saved result with every check reason, so fix all reasons in the next call.",
   inputSchema: z.object({ user: z.string(), plan, names: z.array(z.string()).default([]), patterns: z.string().min(1), items: z.array(itemInput).min(1), skill: skillHead, body: z.string().min(1) }),
   async execute({ user, plan, names, patterns, items, skill, body }, ctx) {
     try {

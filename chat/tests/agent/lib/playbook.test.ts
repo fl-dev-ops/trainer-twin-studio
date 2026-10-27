@@ -42,10 +42,12 @@ const base: SessionSpecs = {
 };
 
 describe("scenario-ingest playbook sessions", () => {
-  test("only skill twins (TWIN with a skill) are playbooks", () => {
+  test("skill twins and copilot-built role plays (scenario-ingest) are playbooks", () => {
     assert.equal(scenarioPlaybook("ROLEPLAY", { name: "copilot spec", stages: [] }), undefined);
     assert.equal(scenarioPlaybook("TWIN", { source: "scenario-ingest" }), undefined);
-    assert.equal(scenarioPlaybook("ROLEPLAY", ingestData), undefined); // kind decides the module
+    // A role play built by the copilot's roleplay-creator runs the same way; a client role play (builder) does not.
+    assert.deepEqual(scenarioPlaybook("ROLEPLAY", ingestData), scenarioPlaybook("TWIN", ingestData));
+    assert.equal(scenarioPlaybook("ROLEPLAY", { ...ingestData, source: "roleplay-skill" }), undefined);
     assert.deepEqual(scenarioPlaybook("TWIN", ingestData), {
       skill: SKILL,
       trainerRole: "interviewer",

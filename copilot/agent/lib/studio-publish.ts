@@ -67,6 +67,8 @@ export async function publishToStudio(target: StudioTarget, files: File[], fetch
     try {
       const body = await post("/api/internal/scenarios", {
         personaSlug: target.persona,
+        // The roleplay-creator's output: stored as a role play (web /api/internal/scenarios, kind).
+        kind: "ROLEPLAY",
         skill,
         scenario: JSON.parse(scenario),
         items: JSON.parse(items),

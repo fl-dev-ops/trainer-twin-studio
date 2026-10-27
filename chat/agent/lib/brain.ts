@@ -42,9 +42,13 @@ export type ScenarioPlaybook = {
 
 const strings = (value: unknown) => (Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : []);
 
-/** The playbook of a skill twin (an ingested SKILL.md), or undefined for role plays and the all-skills twin. */
+/**
+ * The playbook of an ingested SKILL.md: a skill twin, or a role play built by the copilot's roleplay-creator
+ * (source "scenario-ingest", run the same way). Undefined for client role plays (their own runtime) and the all-skills twin.
+ */
 export function scenarioPlaybook(kind: AgentKind | null | undefined, agentData: Record<string, unknown>): ScenarioPlaybook | undefined {
-  if (kind !== "TWIN" || typeof agentData.skill !== "string") return undefined;
+  if (typeof agentData.skill !== "string") return undefined;
+  if (kind !== "TWIN" && !(kind === "ROLEPLAY" && agentData.source === "scenario-ingest")) return undefined;
   const manifest = (agentData.scenario ?? {}) as Record<string, unknown>;
   const steps = Array.isArray(manifest.steps) ? manifest.steps as Record<string, unknown>[] : [];
   return {

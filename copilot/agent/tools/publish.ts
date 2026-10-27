@@ -6,7 +6,7 @@ import { sessionIo } from "../lib/session-io";
 import { publishToStudio, runIdFor } from "../lib/studio-publish";
 
 export default defineTool({
-  description: "Validate and publish a snapshot. Copies only passing scenarios (both modes and full move coverage), a filtered plan, and privacy-checked report/specs. Never copies work files or unknown outputs. Returns rejected reasons for anything withheld; report them rather than claiming it was published. stale lists older output files this run did not write (for example a scenario no longer in the plan); they are left in place, so report them as out of date. studio reports what TrainerTwin stored (each scenario's slug and version, or why it failed); report failures honestly.",
+  description: "Role play only (roleplay-creator): publishes it as a role play. Validate and publish a snapshot. Copies only passing scenarios (both modes and full move coverage), a filtered plan, and privacy-checked report/specs. Never copies work files or unknown outputs. Returns rejected reasons for anything withheld; report them rather than claiming it was published. stale lists older output files this run did not write (for example a scenario no longer in the plan); they are left in place, so report them as out of date. studio reports what TrainerTwin stored (each scenario's slug and version, or why it failed); report failures honestly.",
   inputSchema: z.object({
     user: z.string(),
     persona: z.string().optional().describe("TrainerTwin persona the scenarios are played by. Defaults to user."),
