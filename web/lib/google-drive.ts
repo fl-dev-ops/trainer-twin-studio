@@ -98,7 +98,11 @@ export async function finishDriveOAuth(value: string | undefined, actor: DriveAc
 /** Picker gets only the narrow, short-lived access token; never the client secret or a refresh token. */
 export function assertDriveOrigin(request: Request) {
   const expected = driveConfig().studioOrigin;
-  if (new URL(request.url).origin !== expected || request.headers.get("origin") !== expected) throw new DriveError("Request must come from this studio.", 403);
+  // TLS proxies can leave request.url pointing at localhost; Host still identifies the public studio.
+  const host = request.headers.get("host") ?? new URL(request.url).host;
+  if (host !== new URL(expected).host || request.headers.get("origin") !== expected) {
+    throw new DriveError("Request must come from this studio.", 403);
+  }
 }
 
 async function driveFetch(url: URL, token: string) {

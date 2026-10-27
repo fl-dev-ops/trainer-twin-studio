@@ -23,7 +23,7 @@ mock.module("@/lib/org-knowledge", () => ({ OrganizationKnowledgeService: {
   },
 } }));
 const { POST } = await import("@/app/api/connectors/google-drive/import/route");
-const { GET: session } = await import("@/app/api/connectors/google-drive/session/route");
+const { GET: session, DELETE: forget } = await import("@/app/api/connectors/google-drive/session/route");
 const { POST: start } = await import("@/app/api/connectors/google-drive/oauth/start/route");
 const { GET: callback } = await import("@/app/api/connectors/google-drive/oauth/callback/route");
 const { GET: localCallback } = await import("@/app/api/connectors/google-drive/oauth/local-callback/route");
@@ -59,6 +59,20 @@ test("only studio users with their own org-bound cookie may import", async () =>
   expect((await POST(request(undefined, ""))).status).toBe(401);
   expect((await POST(request(undefined, cookie(), "https://evil.test"))).status).toBe(403);
   expect(imported).toHaveLength(0);
+});
+
+test("proxy-rewritten requests work for connect, import and forgetting access without trusting forwarded headers", async () => {
+  const headers = { host: "dash.test", origin: "https://dash.test", cookie: `tt_drive_access=${cookie()}` };
+  const base = "https://localhost:3000/api/connectors/google-drive";
+  const connected = await start(new Request(`${base}/oauth/start`, { method: "POST", headers }));
+  expect(connected.status).toBe(200);
+  expect(connected.headers.get("set-cookie")).toContain("Secure");
+  const imported = await POST(new NextRequest(`${base}/import`, {
+    method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify({ fileId: "file-1" }),
+  }));
+  expect(imported.status).toBe(201);
+  expect((await forget(new NextRequest(`${base}/session`, { method: "DELETE", headers }))).status).toBe(200);
+  expect((await start(new Request(`${base}/oauth/start`, { method: "POST", headers: { ...headers, origin: "https://evil.test" } }))).status).toBe(403);
 });
 
 test("validates IDs and ignores no caller-provided download URLs or metadata", async () => {

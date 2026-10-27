@@ -107,6 +107,20 @@ test("localhost callback keeps the HTTPS studio as the origin for requests and s
   expect(() => assertDriveOrigin(new Request(redirect, { headers: { origin: "http://localhost:3000" } }))).toThrow(/studio/);
 });
 
+test("origin checks accept a proxy's internal URL only when Host and browser Origin both match the studio", () => {
+  const path = "/api/connectors/google-drive/oauth/start";
+  const headers = { host: "dash.test", origin: "https://dash.test" };
+  assertDriveOrigin(new Request(`https://localhost:3000${path}`, { headers }));
+  assertDriveOrigin(new Request(`http://127.0.0.1:3000${path}`, { headers }));
+  expect(() => assertDriveOrigin(new Request(`https://localhost:3000${path}`, { headers: { ...headers, origin: "https://evil.test" } }))).toThrow(/studio/);
+  expect(() => assertDriveOrigin(new Request(`https://localhost:3000${path}`, { headers: { ...headers, host: "evil.test", "x-forwarded-host": "dash.test", "x-forwarded-proto": "https" } }))).toThrow(/studio/);
+  expect(() => assertDriveOrigin(new Request(`https://localhost:3000${path}`, { headers: { origin: headers.origin } }))).toThrow(/studio/);
+
+  process.env.GOOGLE_DRIVE_REDIRECT_URI = "http://localhost:3000/api/connectors/google-drive/oauth/local-callback";
+  const local = { host: `dash.${BASE_DOMAIN}`, origin: `https://dash.${BASE_DOMAIN}` };
+  assertDriveOrigin(new Request(`https://localhost:3000${path}`, { headers: local }));
+});
+
 test("bridged token exchange still uses the exact registered localhost redirect URI", async () => {
   process.env.GOOGLE_DRIVE_REDIRECT_URI = "http://localhost:3000/api/connectors/google-drive/oauth/local-callback";
   const { started, params } = connectResponse({ access_token: "local-token", expires_in: 300, scope: DRIVE_SCOPE });
