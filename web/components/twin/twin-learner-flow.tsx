@@ -2,14 +2,16 @@
 
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Flag, Star } from "lucide-react";
+import { Check, ChevronDown, Flag, Star } from "lucide-react";
 import { toast } from "sonner";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { CalibrationCall, type CallResult } from "@/components/calibration/calibration-call";
+import { CallEndedIcon, PhoneIcon } from "@/components/calibration/call-icons";
+import { Bubble, PILL, TwinPortrait } from "@/components/calibration/parts";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { UserAvatar } from "@/components/user-avatar";
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
@@ -23,9 +25,12 @@ type Trainer = { name: string; title: string | null; photoUrl: string | null };
 type Twin = { slug: string; name: string; description: string | null };
 type Step = "landing" | "signin" | "check" | "call" | "summary";
 
-const card = "rounded-[16px] border border-(--card-border) bg-card p-5";
-const primary = "h-12 w-full rounded-full bg-(--brand) text-[15px] font-semibold text-white hover:bg-[#e04d00]";
-const link = "text-sm font-medium text-(--brand) hover:underline";
+// The dash's own scale (twin overview cards): 16px cards with the soft shadow, 11px labels, 18px titles, 15px body.
+const CARD = "rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]";
+const LABEL = "m-0 text-[11px] font-medium tracking-[0.08em] uppercase";
+const TITLE = "m-0 text-[18px] leading-7 font-semibold tracking-[-0.015em]";
+const BODY = "m-0 text-[15px] leading-6 text-(--text-secondary)";
+const BRAND = "h-10 w-full bg-(--brand) px-4 text-sm font-semibold text-white hover:bg-[#e04d00]";
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 const firstName = (name: string) => name.split(/[\s@]/)[0] || name;
 const ISSUES = ["Wrong or made-up answer", "Didn't understand me", "Audio or connection", "Too slow", "Something else"];
@@ -42,17 +47,18 @@ export function TwinLearnerFlow({ path, trainer, twin, access, startAtAccess = f
   const [reportFor, setReportFor] = useState<{ sessionId: string | null } | null>(null);
   const minutesLeft = access?.ok ? access.minutesLeft : null;
 
+  // Same row as a dash page header (min-h-10, 1024px column): the trainer on the left, minutes on the right.
   const header = (
-    <header className="mx-auto flex w-full max-w-[600px] items-center justify-between gap-3 px-5 pt-6">
-      <span className="flex min-w-0 items-center gap-3">
-        <UserAvatar user={{ name: trainer.name, image: trainer.photoUrl }} className="size-11 text-sm" />
+    <header className="mx-auto flex min-h-10 w-full max-w-[560px] items-center justify-between gap-3 px-4 pt-5 md:px-0">
+      <span className="flex min-w-0 items-center gap-2.5">
+        <TwinPortrait name={trainer.name} photoUrl={trainer.photoUrl} className="size-8 shrink-0 rounded-full text-xs" />
         <span className="flex min-w-0 flex-col">
-          <b className="truncate text-[15px] font-semibold">{trainer.name}</b>
-          {trainer.title ? <small className="truncate text-[13px] text-muted-foreground">{trainer.title}</small> : null}
+          <b className="truncate text-sm leading-5 font-semibold">{trainer.name}</b>
+          {trainer.title ? <small className="truncate text-xs leading-4 text-muted-foreground">{trainer.title}</small> : null}
         </span>
       </span>
-      {minutesLeft !== null && step !== "landing" ? (
-        <span className="shrink-0 rounded-full border border-(--card-border) px-3 py-1.5 text-[13px] font-semibold tabular-nums">{minutesLeft} min left</span>
+      {minutesLeft !== null && step !== "landing" && step !== "signin" ? (
+        <span className="shrink-0 rounded-full bg-(--tone-control) px-3 py-1 text-xs font-medium tabular-nums">{minutesLeft} min left</span>
       ) : null}
     </header>
   );
@@ -95,47 +101,65 @@ export function TwinLearnerFlow({ path, trainer, twin, access, startAtAccess = f
   return (
     <div className="flex min-h-svh flex-col bg-background">
       {header}
-      <main className="mx-auto flex w-full max-w-[600px] flex-1 flex-col gap-4 px-5 pt-8 pb-12">
+      <main className="mx-auto flex w-full max-w-[560px] flex-1 flex-col gap-4 px-4 pt-10 pb-16 md:px-0">
         {step === "landing" ? (
-          <>
-            <TwinCard trainer={trainer} twin={twin} />
-            <Button className={primary} onClick={() => setStep(access ? "check" : "signin")}>Start conversation</Button>
-            <p className="m-0 text-center text-[13px] text-muted-foreground">
-              You&apos;ll sign in with Google so {firstName(trainer.name)} knows it&apos;s you. Conversations are recorded to help you and {firstName(trainer.name)}.
+          <article className={cn(CARD, "flex flex-col")}>
+            <TwinHeading trainer={trainer} twin={twin} />
+            {twin.description ? (
+              <div className="mt-6">
+                <p className={cn(LABEL, "text-muted-foreground")}>What it does</p>
+                <p className={cn(BODY, "mt-1 line-clamp-5")}>{twin.description}</p>
+              </div>
+            ) : null}
+            <Button className={cn(BRAND, "mt-6")} onClick={() => setStep(access ? "check" : "signin")}>
+              <PhoneIcon className="size-[18px]" />
+              Start conversation
+            </Button>
+            <p className="mt-3 text-center text-xs text-muted-foreground">
+              Conversations are recorded to help you and {firstName(trainer.name)}.
             </p>
-          </>
+          </article>
         ) : step === "signin" ? (
-          <>
-            <h1 className="m-0 text-[26px] leading-8 font-semibold tracking-[-0.015em]">Who&apos;s practising?</h1>
-            <p className="m-0 text-[15px] text-muted-foreground">Sign in with the Google account {firstName(trainer.name)} has for you.</p>
-            <GoogleSignInButton callbackURL={`${typeof window === "undefined" ? "" : window.location.origin}${path}?start=1`} className="h-12 w-full rounded-full text-[15px]" />
-            <button type="button" className={cn(link, "self-center")} onClick={() => setStep("landing")}>Back</button>
-          </>
+          <article className={cn(CARD, "flex flex-col")}>
+            <p className={cn(LABEL, "text-muted-foreground")}>Sign in</p>
+            <h1 className={cn(TITLE, "mt-1")}>Who&apos;s practising?</h1>
+            <p className={cn(BODY, "mt-1")}>Use the Google account {firstName(trainer.name)} invited, so your minutes and sessions are yours.</p>
+            <div className="mt-6">
+              <GoogleSignInButton callbackURL={`${typeof window === "undefined" ? "" : window.location.origin}${path}?start=1`} className="h-10 w-full text-sm" />
+            </div>
+            <Button variant="ghost" className="mt-2 h-9 self-center" onClick={() => setStep("landing")}>Back</Button>
+          </article>
         ) : step === "check" && access ? (
-          <>
-            <TwinCard trainer={trainer} twin={twin} />
+          <article className={cn(CARD, "flex flex-col")}>
+            <TwinHeading trainer={trainer} twin={twin} />
             {access.ok ? (
               <>
-                <div className={cn(card, "flex flex-col gap-3")}>
-                  <span className="text-[13px] font-semibold tracking-[0.06em] text-emerald-600 uppercase dark:text-emerald-400">You&apos;re in, {firstName(access.name)}</span>
-                  <span className="block h-1.5 overflow-hidden rounded-full bg-(--tone-control)">
-                    <span className="block h-full rounded-full bg-emerald-500" style={{ width: `${Math.round((access.minutesLeft / Math.max(1, access.minutesTotal)) * 100)}%` }} />
+                {/* The twin overview's Usage credit box, for this person. */}
+                <div className="mt-6 flex flex-col gap-2 rounded-[12px] bg-(--sidebar) p-5">
+                  <p className={cn(LABEL, "text-emerald-700 dark:text-emerald-400")}>You&apos;re in, {firstName(access.name)}</p>
+                  <p className="m-0 text-[20px] leading-6 font-semibold tabular-nums">
+                    {access.minutesLeft} <span className="text-sm font-normal text-muted-foreground">of {access.minutesTotal} min left</span>
+                  </p>
+                  <span className="mt-1 block h-1.5 w-full overflow-hidden rounded-full bg-card">
+                    <span className="block h-full rounded-full bg-(--foreground)" style={{ width: `${Math.min(100, Math.round((access.minutesLeft / Math.max(1, access.minutesTotal)) * 100))}%` }} />
                   </span>
-                  <p className="m-0 text-[15px] font-medium tabular-nums">{access.minutesLeft} of {access.minutesTotal} minutes left</p>
-                  <small className="text-[13px] text-muted-foreground">Minutes count for the whole conversation, from start to end.</small>
+                  <p className="m-0 text-xs text-muted-foreground">Minutes count for the whole conversation, from start to end.</p>
                 </div>
-                <Button className={primary} onClick={() => setStep("call")}>Start voice call</Button>
-                <p className="m-0 text-center text-[13px] text-muted-foreground">We&apos;ll ask for your microphone.</p>
+                <Button className={cn(BRAND, "mt-6")} disabled={access.minutesLeft <= 0} onClick={() => setStep("call")}>
+                  <PhoneIcon className="size-[18px]" />
+                  Start voice call
+                </Button>
+                <p className="mt-3 text-center text-xs text-muted-foreground">We&apos;ll ask for your microphone.</p>
               </>
             ) : (
-              <div className={cn(card, "flex flex-col gap-2")}>
-                <span className="text-[13px] font-semibold tracking-[0.06em] text-amber-600 uppercase dark:text-amber-400">Not available</span>
-                <p className="m-0 text-[15px]">{access.reason}.</p>
-                <small className="text-[13px] text-muted-foreground">Signed in as {access.email}. Ask {firstName(trainer.name)} for access, or use the account they invited.</small>
+              <div className="mt-6 flex flex-col gap-1.5 rounded-[12px] bg-amber-500/10 p-5 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
+                <p className={LABEL}>Not available</p>
+                <p className="m-0 text-[15px] leading-6 font-medium">{access.reason}.</p>
+                <p className="m-0 text-xs opacity-80">Signed in as {access.email}. Ask {firstName(trainer.name)} for access, or use the account they invited.</p>
               </div>
             )}
-            <button type="button" className={cn(link, "self-center")} onClick={signOutAndRestart}>Use a different account</button>
-          </>
+            <Button variant="ghost" className="mt-2 h-9 self-center text-muted-foreground" onClick={signOutAndRestart}>Use a different account</Button>
+          </article>
         ) : step === "summary" && result ? (
           <Summary
             twin={twin}
@@ -146,22 +170,25 @@ export function TwinLearnerFlow({ path, trainer, twin, access, startAtAccess = f
             onAgain={() => setStep("check")}
           />
         ) : (
-          <TwinCard trainer={trainer} twin={twin} />
+          <article className={CARD}>
+            <TwinHeading trainer={trainer} twin={twin} />
+          </article>
         )}
       </main>
-      <footer className="pb-6 text-center text-[13px] text-muted-foreground">{trainer.name}</footer>
       {report}
     </div>
   );
 }
 
-function TwinCard({ trainer, twin }: { trainer: Trainer; twin: Twin }) {
+/** The twin's photo, kind and name, as at the top of each card. */
+function TwinHeading({ trainer, twin }: { trainer: Trainer; twin: Twin }) {
   return (
-    <div className={cn(card, "flex flex-col gap-3")}>
-      <UserAvatar user={{ name: trainer.name, image: trainer.photoUrl }} className="size-20 text-2xl" />
-      <span className="text-[13px] font-semibold tracking-[0.06em] text-(--brand) uppercase">Twin · voice call</span>
-      <h1 className="m-0 text-[22px] leading-7 font-semibold tracking-[-0.015em]">{twin.name}</h1>
-      {twin.description ? <p className="m-0 text-[15px] leading-6 text-muted-foreground">{twin.description}</p> : null}
+    <div className="flex items-center gap-4">
+      <TwinPortrait name={trainer.name} photoUrl={trainer.photoUrl} className="size-16 shrink-0 rounded-[16px] text-2xl" />
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <p className={cn(LABEL, "text-(--brand)")}>Twin · voice call</p>
+        <h1 className={cn(TITLE, "line-clamp-2")} title={twin.name}>{twin.name}</h1>
+      </div>
     </div>
   );
 }
@@ -201,24 +228,36 @@ function Summary({ twin, trainer, result, minutesLeft, onReport, onAgain }: {
 
   return (
     <>
-      <h1 className="m-0 text-[26px] leading-8 font-semibold tracking-[-0.015em]">Conversation complete</h1>
-      <p className="m-0 text-[15px] text-muted-foreground">{twin.name}</p>
-      <div className="grid grid-cols-2 gap-3">
-        <div className={cn(card, "flex flex-col gap-1")}>
-          <span className="text-[12px] font-semibold tracking-[0.06em] text-muted-foreground uppercase">This session</span>
-          <b className="text-[26px] font-semibold tabular-nums">{used} min</b>
-          <small className="text-[13px] text-muted-foreground tabular-nums">{clock(result.seconds)} talked</small>
+      <article className={cn(CARD, "flex flex-col")}>
+        <p className="m-0 flex w-fit items-center gap-2 rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground/75">
+          <CallEndedIcon className="size-4" />
+          Call ended
+        </p>
+        <h1 className={cn(TITLE, "mt-3")}>Conversation complete</h1>
+        <p className="m-0 text-sm text-muted-foreground">{twin.name}</p>
+        {/* The twin overview's stat tiles. */}
+        <div className="mt-6 grid grid-cols-2 gap-3">
+          <div className="rounded-[12px] bg-emerald-500/10 p-4 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400">
+            <p className={LABEL}>This session</p>
+            <p className="mt-2 mb-0 text-2xl font-semibold tabular-nums">{used} min</p>
+            <p className="m-0 text-xs opacity-80 tabular-nums">{clock(result.seconds)} talked</p>
+          </div>
+          <div className="rounded-[12px] bg-(--sidebar) p-4">
+            <p className={cn(LABEL, "text-muted-foreground")}>Minutes left</p>
+            <p className="mt-2 mb-0 text-2xl font-semibold tabular-nums">{minutesLeft ?? "—"}</p>
+            <p className="m-0 text-xs text-muted-foreground">with this twin</p>
+          </div>
         </div>
-        <div className={cn(card, "flex flex-col gap-1")}>
-          <span className="text-[12px] font-semibold tracking-[0.06em] text-muted-foreground uppercase">Minutes left</span>
-          <b className="text-[26px] font-semibold tabular-nums">{minutesLeft ?? "—"}</b>
-          <small className="text-[13px] text-muted-foreground">with this twin</small>
-        </div>
-      </div>
+        <Button className={cn(BRAND, "mt-6")} onClick={onAgain} disabled={minutesLeft !== null && minutesLeft <= 0}>
+          <PhoneIcon className="size-[18px]" />
+          Start another
+        </Button>
+      </article>
 
-      <section className={cn(card, "flex flex-col gap-3")}>
-        <h2 className="m-0 text-[17px] font-semibold">How helpful was this?</h2>
-        <div role="radiogroup" aria-label="Rating" className="flex gap-2">
+      <section className={cn(CARD, "flex flex-col")}>
+        <h2 className="m-0 text-[17px] font-semibold tracking-[-0.015em]">How helpful was this?</h2>
+        <p className="m-0 text-sm text-muted-foreground">Only {firstName(trainer.name)}&apos;s team sees your rating.</p>
+        <div role="radiogroup" aria-label="Rating" className="mt-4 flex gap-2">
           {[1, 2, 3, 4, 5].map((n) => (
             <button
               key={n}
@@ -228,32 +267,39 @@ function Summary({ twin, trainer, result, minutesLeft, onReport, onAgain }: {
               aria-label={`${n} star${n === 1 ? "" : "s"}`}
               disabled={sent}
               onClick={() => setRating(n)}
-              className={cn("grid size-11 place-items-center rounded-xl border border-(--card-border) transition-colors disabled:opacity-60", n <= rating ? "bg-amber-400/15 text-amber-500" : "text-muted-foreground hover:bg-(--tone-control)")}
+              className={cn(PILL, "size-10 justify-center px-0 disabled:opacity-60", n <= rating && "text-amber-500")}
             >
-              <Star className={cn("size-5", n <= rating && "fill-current")} />
+              <Star className={cn("size-[18px]", n <= rating && "fill-current")} />
             </button>
           ))}
         </div>
-        <Textarea rows={2} maxLength={500} value={note} disabled={sent} onChange={(e) => setNote(e.target.value)} placeholder={`Anything to tell ${firstName(trainer.name)}? (optional)`} />
-        <Button variant="outline" className="h-11 rounded-full" disabled={!rating || sending || sent || !result.sessionId} onClick={() => void send()}>
-          {sent ? <><Check data-icon="inline-start" /> Thanks, sent</> : sending ? "Sending…" : "Send rating"}
-        </Button>
+        <Textarea className="mt-4" rows={2} maxLength={500} value={note} disabled={sent} onChange={(e) => setNote(e.target.value)} placeholder={`Anything to tell ${firstName(trainer.name)}? (optional)`} />
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <Button variant="ghost" className="h-9 text-muted-foreground" onClick={onReport}>
+            <Flag data-icon="inline-start" />
+            Report a problem
+          </Button>
+          <Button variant="outline" className="h-9 px-4" disabled={!rating || sending || sent || !result.sessionId} onClick={() => void send()}>
+            {sent ? <><Check data-icon="inline-start" /> Sent</> : sending ? "Sending…" : "Send rating"}
+          </Button>
+        </div>
       </section>
 
-      <button type="button" className={cn(link, "self-center inline-flex items-center gap-1.5")} onClick={onReport}>
-        <Flag className="size-3.5" /> Report a problem with this session
-      </button>
-
-      <details className={cn(card, "group")}>
-        <summary className="cursor-pointer text-[17px] font-semibold">Transcript</summary>
-        <div className="mt-3 flex flex-col gap-2 text-sm">
-          {result.turns.length ? result.turns.map((turn) => (
-            <p key={turn.id} className="m-0"><b>{turn.speaker === "you" ? "You" : twin.name}:</b> {turn.text}</p>
-          )) : <p className="m-0 text-muted-foreground">Nothing was said.</p>}
-        </div>
-      </details>
-
-      <Button className={primary} onClick={onAgain} disabled={minutesLeft !== null && minutesLeft <= 0}>Start another</Button>
+      <Collapsible className={cn(CARD, "flex flex-col")}>
+        <CollapsibleTrigger className="group flex items-center justify-between text-left text-[17px] font-semibold tracking-[-0.015em] outline-none">
+          Transcript
+          <ChevronDown className="size-4 text-muted-foreground transition-transform group-data-panel-open:rotate-180" />
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="mt-4 flex flex-col gap-3">
+            {result.turns.length ? (
+              result.turns.map((turn) => <Bubble key={turn.id} speaker={turn.speaker}>{turn.text}</Bubble>)
+            ) : (
+              <p className="m-0 text-sm text-muted-foreground">Nothing was said.</p>
+            )}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
     </>
   );
 }
@@ -309,8 +355,9 @@ function ReportDialog({ twin, sessionId, onClose }: { twin: Twin; sessionId: str
                     type="button"
                     aria-pressed={on}
                     onClick={() => setReasons((prev) => (on ? prev.filter((r) => r !== reason) : [...prev, reason]))}
-                    className={cn("rounded-full border px-3 py-1.5 text-sm transition-colors", on ? "border-(--brand) bg-(--brand)/10 text-(--brand)" : "border-(--card-border) hover:bg-(--tone-control)")}
+                    className={cn(PILL, on && "bg-foreground text-background hover:bg-foreground/85")}
                   >
+                    {on ? <Check className="size-3.5" /> : null}
                     {reason}
                   </button>
                 );
@@ -319,7 +366,9 @@ function ReportDialog({ twin, sessionId, onClose }: { twin: Twin; sessionId: str
             <Textarea rows={3} maxLength={2000} value={text} onChange={(e) => setText(e.target.value)} placeholder="Tell us more (optional)" />
             <DialogFooter>
               <Button variant="ghost" onClick={onClose}>Cancel</Button>
-              <Button disabled={sending || (!reasons.length && text.trim().length < 5)} onClick={() => void send()}>{sending ? "Sending…" : "Send report"}</Button>
+              <Button className="bg-(--brand) text-white hover:bg-[#e04d00]" disabled={sending || (!reasons.length && text.trim().length < 5)} onClick={() => void send()}>
+                {sending ? "Sending…" : "Send report"}
+              </Button>
             </DialogFooter>
           </>
         )}

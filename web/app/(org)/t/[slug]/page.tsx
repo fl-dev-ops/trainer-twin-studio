@@ -6,7 +6,7 @@ import { BASE_DOMAIN } from "@/lib/base-domain";
 import { db } from "@/lib/db";
 import { isStudioRole } from "@/lib/org";
 import { resolveSessionUser } from "@/lib/session-user";
-import { avatarPhotoUrl } from "@/lib/twin/avatar";
+import { presignedGetUrl } from "@/lib/s3";
 import { resolveTwinPath, TwinAccessError, twinAssignmentCode } from "@/lib/twin-access";
 
 export const dynamic = "force-dynamic";
@@ -44,7 +44,7 @@ export default async function TwinLinkPage({ params, searchParams }: { params: P
       slug: true,
       name: true,
       data: true,
-      persona: { select: { slug: true, name: true, data: true, avatar: { select: { s3ImageKey: true, updatedAt: true } } } },
+      persona: { select: { name: true, data: true, avatar: { select: { s3ImageKey: true } } } },
     },
   });
 
@@ -68,12 +68,15 @@ export default async function TwinLinkPage({ params, searchParams }: { params: P
     }
   }
 
+  // Presigned here: the avatar route is for org members, and visitors on this page may not be signed in yet.
+  const photoKey = agent.persona.avatar?.s3ImageKey;
+  const photoUrl = photoKey ? await presignedGetUrl(photoKey, 3600).catch(() => null) : null;
   const persona = agent.persona.data && typeof agent.persona.data === "object" ? (agent.persona.data as Record<string, unknown>) : {};
   const data = agent.data && typeof agent.data === "object" ? (agent.data as Record<string, unknown>) : {};
   return (
     <TwinLearnerFlow
       path={`/t/${encodeURIComponent(slug)}`}
-      trainer={{ name: text(persona.name) ?? agent.persona.name, title: text(persona.role), photoUrl: avatarPhotoUrl(agent.persona.slug, agent.persona.avatar) }}
+      trainer={{ name: text(persona.name) ?? agent.persona.name, title: text(persona.role), photoUrl }}
       twin={{ slug: agent.slug, name: agent.name, description: text(data.objective) }}
       access={access}
       // Back from Google sign-in (?start=1): straight to their access.
