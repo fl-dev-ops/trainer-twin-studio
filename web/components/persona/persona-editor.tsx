@@ -22,7 +22,7 @@ type Media = { photoUrl: string | null; hasVideo: boolean; voiceName: string | n
 export type PersonaTab = "look" | "talk" | "media";
 
 /** Create or edit a role-play persona: who they are, how they talk, and their voice and avatar. One Save for all tabs. */
-export function PersonaEditor({ slug, initial, media, defaultTab = "look" }: { slug?: string; initial: PersonaInput; media?: Media; defaultTab?: PersonaTab }) {
+export function PersonaEditor({ slug, initial, media, isOwn = false, defaultTab = "look" }: { slug?: string; initial: PersonaInput; media?: Media; isOwn?: boolean; defaultTab?: PersonaTab }) {
   const router = useRouter();
   const [form, setForm] = useState<PersonaInput>(initial);
   const [phrase, setPhrase] = useState("");
@@ -172,7 +172,15 @@ export function PersonaEditor({ slug, initial, media, defaultTab = "look" }: { s
           </TabsContent>
 
           <TabsContent value="media">
-            {slug && media ? <MediaSection slug={slug} name={form.name} media={media} /> : (
+            {isOwn ? (
+              <Section>
+                <p className="m-0 text-sm text-(--text-secondary)">
+                  This is your own persona: your photo, reference video and cloned voice are set up on{" "}
+                  <Link href="/twin/brain/voice" className="font-medium text-foreground underline-offset-4 hover:underline">Twin’s brain</Link>.
+                  {media?.voiceName ? ` Current voice: ${media.voiceName}.` : ""}
+                </p>
+              </Section>
+            ) : slug && media ? <MediaSection slug={slug} name={form.name} media={media} /> : (
               <Section>
                 <p className="m-0 text-sm text-muted-foreground">Save the persona first, then add its voice and avatar here.</p>
               </Section>

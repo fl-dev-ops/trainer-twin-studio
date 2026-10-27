@@ -6,8 +6,13 @@ import { speakingTags } from "@/lib/persona";
 import type { PersonaView } from "@/lib/personas";
 import { cn } from "@/lib/utils";
 
-/** Persona Library: the characters learners practise with in role plays (photo, role, behaviour, how they talk, voice). */
+/**
+ * Persona Library: the characters learners practise with in role plays (photo, role, behaviour, how they talk, voice).
+ * The trainer's own persona comes first ("You"): a role play can use them too, e.g. as the manager.
+ */
 export function PersonaLibrary({ personas }: { personas: PersonaView[] }) {
+  const own = personas.filter((item) => item.isOwn);
+  const others = personas.filter((item) => !item.isOwn);
   return (
     <div className="h-full w-full overflow-y-auto">
       <div className="mx-auto w-full max-w-[1024px] px-4 pt-5 pb-16 md:px-0">
@@ -33,10 +38,23 @@ export function PersonaLibrary({ personas }: { personas: PersonaView[] }) {
           <b className="font-semibold text-foreground">These are the people your learners practise with.</b> The AI plays them in role plays. Pick one for a role play, or create your own.
         </p>
 
-        {personas.length ? (
-          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {personas.map((item) => <PersonaCard key={item.slug} item={item} />)}
-          </div>
+        {own.length ? (
+          <section aria-labelledby="persona-you" className="mt-8">
+            <h2 id="persona-you" className="m-0 text-[18px] leading-6 font-semibold tracking-[-0.015em]">You</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Your own persona. A role play can use you as the manager, mentor or senior agent, with your photo and cloned voice.</p>
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {own.map((item) => <PersonaCard key={item.slug} item={item} />)}
+            </div>
+          </section>
+        ) : null}
+
+        {others.length ? (
+          <section aria-labelledby="persona-others" className="mt-8">
+            {own.length ? <h2 id="persona-others" className="m-0 mb-4 text-[18px] leading-6 font-semibold tracking-[-0.015em]">Clients and interviewers</h2> : null}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {others.map((item) => <PersonaCard key={item.slug} item={item} />)}
+            </div>
+          </section>
         ) : (
           <div className={cn(CARD, "mt-6 flex flex-col items-center gap-3 px-6 py-14 text-center")}>
             <p className="m-0 text-sm font-medium">No personas yet</p>
@@ -64,7 +82,7 @@ function PersonaCard({ item }: { item: PersonaView }) {
       />
       <div className="flex items-start justify-between gap-3">
         <PersonaPhoto name={persona.name} photoUrl={item.photoUrl} className="size-[72px] text-2xl" />
-        <RoleChip>{persona.role}</RoleChip>
+        <RoleChip className={item.isOwn ? "bg-(--brand)/15 text-(--brand-strong) dark:text-(--brand)" : undefined}>{item.isOwn ? "Your persona" : persona.role}</RoleChip>
       </div>
       <div>
         <h2 className="m-0 text-[20px] leading-7 font-semibold tracking-[-0.01em]">{persona.name}</h2>

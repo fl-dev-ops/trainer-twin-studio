@@ -1,7 +1,8 @@
 import { z } from "zod";
 
 /**
- * Role-play persona (Persona.isOwn = false): the character a learner talks to. Persona = voice + avatar (own rows,
+ * Persona as a role play uses it: the character a learner talks to. Usually a role-play persona (isOwn = false); the
+ * trainer's own persona (isOwn = true) can take part too (e.g. as the manager), keeping its own voice and photo. Persona = voice + avatar (own rows,
  * lib/persona-media) + these prompt fields (Persona.data) + program settings (Persona.settings).
  * No knowledge (the role play owns it) and no difficulty (the role play owns it). See plans/persona-fields.md.
  * Client-safe: no server imports.
@@ -10,6 +11,8 @@ import { z } from "zod";
 export const PERSONA_ROLES = {
   Clients: ["Buyer", "Seller", "Landlord", "Investor", "Prospect", "Tenant"],
   Interviewers: ["Technical interviewer", "Senior engineer", "Engineering manager", "Hiring manager"],
+  // The trainer's own persona in a role play (e.g. Olga as the manager reviewing an agent).
+  Coaches: ["Sales coach", "Sales manager", "Mentor", "Senior agent"],
 } as const;
 export const ALL_ROLES: string[] = Object.values(PERSONA_ROLES).flat();
 

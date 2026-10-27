@@ -3,7 +3,11 @@ import type { Prisma } from "@/lib/generated/prisma/client";
 import { personaFromStored, personaInputSchema, slugify, storedFromPersona, type PersonaInput } from "@/lib/persona";
 import { avatarPhotoUrl } from "@/lib/twin/avatar";
 
-/** Role-play personas (isOwn = false) of an org: the characters learners talk to. */
+/**
+ * Personas of an org as the Persona Library shows them: role-play personas (isOwn = false) and the trainer's own
+ * persona (isOwn = true), which a role play can also use. Own personas are never created here (they come from the
+ * trainer's setup) and their voice and photo come from Twin's brain.
+ */
 
 export class PersonaError extends Error {
   constructor(message: string, readonly status = 400) {
@@ -22,6 +26,7 @@ type Row = Prisma.PersonaGetPayload<{ select: typeof select }>;
 function view(row: Row) {
   return {
     slug: row.slug,
+    isOwn: row.isOwn,
     version: row.version,
     updatedAt: row.updatedAt.toISOString(),
     persona: personaFromStored(row.name, row.data, row.settings),
@@ -32,15 +37,16 @@ function view(row: Row) {
 }
 export type PersonaView = ReturnType<typeof view>;
 
-export async function listRolePlayPersonas(orgId: string): Promise<PersonaView[]> {
-  const rows = await db.persona.findMany({ where: { orgId, isOwn: false }, orderBy: { name: "asc" }, select });
+/** The org's personas: the trainer's own first, then role-play personas by name. */
+export async function listPersonas(orgId: string): Promise<PersonaView[]> {
+  const rows = await db.persona.findMany({ where: { orgId }, orderBy: [{ isOwn: "desc" }, { name: "asc" }], select });
   return rows.map(view);
 }
 
-/** One role-play persona, or null (missing, or someone's own persona, which keeps its own page). */
-export async function getRolePlayPersona(orgId: string, slug: string): Promise<PersonaView | null> {
+/** One of the org's personas (own or role-play), or null. Global personas keep the spec page. */
+export async function getPersona(orgId: string, slug: string): Promise<PersonaView | null> {
   const row = await db.persona.findFirst({ where: { orgId, slug }, select });
-  return row && !row.isOwn ? view(row) : null;
+  return row ? view(row) : null;
 }
 
 /** Creates (no slug) or updates a role-play persona. Updates are versioned like spec edits (SpecVersion). */
@@ -60,8 +66,9 @@ export async function savePersona(orgId: string, input: unknown, slug?: string):
     return { slug: created.slug, version: created.version };
   }
 
-  const existing = await db.persona.findFirst({ where: { orgId, slug }, select: { id: true, version: true, data: true, isOwn: true } });
-  if (!existing || existing.isOwn) throw new PersonaError("Persona not found", 404);
+  // Updates keep every other key (an own persona's recorded style, decision preferences…).
+  const existing = await db.persona.findFirst({ where: { orgId, slug }, select: { id: true, version: true, data: true } });
+  if (!existing) throw new PersonaError("Persona not found", 404);
   const stored = storedFromPersona(slug, value, existing.data);
   const version = existing.version + 1;
   await db.$transaction([

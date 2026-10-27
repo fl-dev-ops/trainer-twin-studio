@@ -49,7 +49,10 @@ export function PersonaDetail({ item }: { item: PersonaView }) {
 
         <article className={cn(CARD, "relative mt-6 flex flex-col items-start gap-3 p-6")}>
           <PersonaPhoto name={persona.name} photoUrl={item.photoUrl} className="size-24 text-3xl" />
-          <RoleChip className="absolute top-4 right-4">{persona.role}</RoleChip>
+          <div className="absolute top-4 right-4 flex gap-2">
+            {item.isOwn ? <RoleChip className="bg-(--brand)/15 text-(--brand-strong) dark:text-(--brand)">Your persona</RoleChip> : null}
+            <RoleChip>{persona.role}</RoleChip>
+          </div>
           <div>
             <h1 className="m-0 text-[28px] leading-9 font-semibold tracking-[-0.02em]">{persona.name}</h1>
             {place ? <p className="m-0 text-sm text-muted-foreground">{place}</p> : null}
@@ -78,23 +81,32 @@ export function PersonaDetail({ item }: { item: PersonaView }) {
           {persona.howTheyTalk ? <Row label="In their words"><p className="m-0">{persona.howTheyTalk}</p></Row> : null}
           <Row label="Pace"><Option options={PACE} value={persona.pace} /></Row>
           <Row label="Voice">
-            {item.voice ? <p className="m-0 font-medium">{item.voice.name}</p> : <MissingMedia href={editHref} text="No voice yet" />}
+            {item.voice ? <p className="m-0 font-medium">{item.voice.name}</p> : <MissingMedia href={item.isOwn ? null : editHref} text="No voice yet" />}
           </Row>
           <Row label="Avatar">
             {item.photoUrl || item.hasVideo ? (
               <p className="m-0">{[item.photoUrl ? "Photo" : null, item.hasVideo ? "Video" : null].filter(Boolean).join(" and ")} added</p>
-            ) : <MissingMedia href={editHref} text="No photo or video yet" />}
+            ) : <MissingMedia href={item.isOwn ? null : editHref} text="No photo or video yet" />}
           </Row>
+          {item.isOwn ? (
+            <Row label="Recorded style">
+              <p className="m-0">
+                Built from your recordings.{" "}
+                <Link href={`/personas/${encodeURIComponent(item.slug)}?view=spec`} className="font-medium underline-offset-4 hover:underline">Recordings and style</Link>
+              </p>
+            </Row>
+          ) : null}
         </article>
       </div>
     </div>
   );
 }
 
-function MissingMedia({ href, text }: { href: string; text: string }) {
+/** Missing media with where to add it: the media tab, or Twin's brain for the trainer's own persona. */
+function MissingMedia({ href, text }: { href: string | null; text: string }) {
   return (
     <p className="m-0 text-muted-foreground">
-      {text} · <Link href={`${href}?tab=media`} className="text-foreground underline-offset-4 hover:underline">Add</Link>
+      {text} · <Link href={href ? `${href}?tab=media` : "/twin/brain/voice"} className="text-foreground underline-offset-4 hover:underline">{href ? "Add" : "Set up on Twin’s brain"}</Link>
     </p>
   );
 }

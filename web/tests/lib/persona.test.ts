@@ -81,7 +81,7 @@ test("creating makes a role-play persona (isOwn false) with a unique slug", asyn
   expect((await savePersona("o1", { ...amira, name: "Olga" })).slug).toBe("olga-2");
 });
 
-test("updating is versioned and never touches someone's own persona", async () => {
+test("updating is versioned; the trainer's own persona keeps its recorded style", async () => {
   const { slug } = await savePersona("o1", amira);
   const updated = await savePersona("o1", { ...amira, formality: "formal", pace: "slow" }, slug);
   expect(updated.version).toBe(2);
@@ -89,7 +89,10 @@ test("updating is versioned and never touches someone's own persona", async () =
   const row = rows.find((r) => r.slug === slug)!;
   expect(row.settings).toEqual({ pace: "slow" });
   expect((row.data as { mannerisms: { formality: string } }).mannerisms.formality).toBe("formal");
-  await expect(savePersona("o1", amira, "olga")).rejects.toBeInstanceOf(PersonaError);
+  rows[0].data = { id: "olga", name: "Olga", style: { tone: "direct" }, decision_preferences: { pace: "fast" } };
+  await savePersona("o1", { ...amira, name: "Olga Sinenko", role: "Sales coach" }, "olga");
+  expect(rows[0]).toMatchObject({ isOwn: true, version: 2, data: { name: "Olga Sinenko", role: "Sales coach", style: { tone: "direct" }, decision_preferences: { pace: "fast" } } });
+  await expect(savePersona("o1", amira, "missing")).rejects.toBeInstanceOf(PersonaError);
   await expect(savePersona("o2", amira, slug)).rejects.toThrow(/not found/);
   await expect(savePersona("o1", { ...amira, behaviours: [] }, slug)).rejects.toThrow(/behaviour/);
 });
