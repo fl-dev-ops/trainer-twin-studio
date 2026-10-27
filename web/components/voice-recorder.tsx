@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { LiveWaveform } from "@/components/ui/live-waveform";
 import { MicIcon, type MicIconHandle } from "@/components/ui/mic";
-import { encodeWav } from "@/lib/wav";
+import { recordingToWav } from "@/lib/wav";
 
 const TARGET_SECONDS = 20;
 const MIN_SECONDS = 10;
@@ -93,28 +93,14 @@ export function VoiceRecorder({
     recorder.onstop = async () => {
       const webm = new Blob(chunksRef.current, { type: recorder.mimeType });
       stopEverything();
-      const context = new AudioContext();
       try {
-        const decoded = await context.decodeAudioData(await webm.arrayBuffer());
-        // mix down to mono 16-bit WAV — VoxCPM needs a decodable reference
-        const mono = new Float32Array(decoded.length);
-        for (let channel = 0; channel < decoded.numberOfChannels; channel++) {
-          const data = decoded.getChannelData(channel);
-          for (let i = 0; i < decoded.length; i++)
-            mono[i] += data[i] / decoded.numberOfChannels;
-        }
-        // 1s trailing silence — stops VoxCPM2 from leaking the reference tail
-        // into generated speech as a chirp (OpenBMB/VoxCPM#272)
-        const padded = new Float32Array(mono.length + decoded.sampleRate);
-        padded.set(mono);
-        onFinished(encodeWav(padded, decoded.sampleRate));
+        onFinished(await recordingToWav(webm));
       } catch {
         toast.error(
           "That recording could not be processed. Please record again.",
         );
       } finally {
         setPhase("idle");
-        void context.close();
       }
     };
     recorder.stop();

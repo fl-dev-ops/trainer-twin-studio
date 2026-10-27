@@ -92,6 +92,11 @@ export async function presignedGetUrl(key: string, expiresIn = 3600) {
   return getSignedUrl(client(), new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn });
 }
 
+/** Browser uploads straight to S3 (files too large to pass through the app); the bucket's CORS allows PUT. */
+export async function presignedPutUrl(key: string, contentType: string, expiresIn = 600) {
+  return getSignedUrl(client(), new PutObjectCommand({ Bucket: bucket, Key: key, ContentType: contentType }), { expiresIn });
+}
+
 /** Deletes every object under the given prefix with full pagination beyond 1,000 keys. */
 export async function deletePrefix(prefix: string) {
   const client_ = client();

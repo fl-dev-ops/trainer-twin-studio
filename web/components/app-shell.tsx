@@ -9,6 +9,8 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 const FULLSCREEN = [
   "/voice/cloning",
   "/dash/voice/cloning",
+  "/twin/brain/voice",
+  "/dash/twin/brain/voice",
   "/talk",
   "/dash/talk",
   "/calibration",

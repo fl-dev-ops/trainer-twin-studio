@@ -127,7 +127,7 @@ export function ShareTwinDialog({
                   id="share-link"
                   readOnly
                   value={url}
-                  placeholder="Preparing link\u2026"
+                  placeholder="Preparing link…"
                   onFocus={(event) => event.currentTarget.select()}
                   className="h-10 min-w-0 flex-1 rounded-[8px] border border-(--border) bg-card px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-(--brand) focus:ring-1 focus:ring-(--brand)"
                 />

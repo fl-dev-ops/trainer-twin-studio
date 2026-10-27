@@ -25,3 +25,24 @@ export function encodeWav(samples: Float32Array, sampleRate: number): Blob {
   }
   return new Blob([buffer], { type: "audio/wav" });
 }
+
+/**
+ * A browser recording (webm/mp4 audio) as a mono 16-bit WAV for voice cloning, with 1s of trailing silence
+ * (stops VoxCPM2 leaking the reference tail into generated speech as a chirp, OpenBMB/VoxCPM#272).
+ */
+export async function recordingToWav(recording: Blob): Promise<Blob> {
+  const context = new AudioContext();
+  try {
+    const decoded = await context.decodeAudioData(await recording.arrayBuffer());
+    const mono = new Float32Array(decoded.length);
+    for (let channel = 0; channel < decoded.numberOfChannels; channel++) {
+      const data = decoded.getChannelData(channel);
+      for (let i = 0; i < decoded.length; i++) mono[i] += data[i] / decoded.numberOfChannels;
+    }
+    const padded = new Float32Array(mono.length + decoded.sampleRate);
+    padded.set(mono);
+    return encodeWav(padded, decoded.sampleRate);
+  } finally {
+    void context.close();
+  }
+}

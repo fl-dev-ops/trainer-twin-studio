@@ -13,6 +13,9 @@ export type BrainKnowledge = {
   total: number;
 };
 
+/** Voice and avatar as set up on /twin/brain/voice (null: the org has no own persona yet). */
+export type BrainAvatar = { photoUrl: string | null; voiceName: string | null; updatedAt: string | null } | null;
+
 const CONNECTOR_ICONS = { drive: HardDrive, notion: BookOpen, youtube: Video };
 
 // shortcut: training style and voice are mock content (UI only); replace with twin data when that backend lands.
@@ -61,7 +64,7 @@ function Edge() {
 }
 
 /** Twin's brain: the twin as a graph of what it knows, how it trains and how it sounds. */
-export function TwinBrainPage({ knowledge }: { knowledge: BrainKnowledge }) {
+export function TwinBrainPage({ knowledge, avatar }: { knowledge: BrainKnowledge; avatar: BrainAvatar }) {
   const [zoom, setZoom] = useState(100);
   const [playing, setPlaying] = useState(false);
   const zoomBy = (delta: number) => setZoom((value) => Math.min(ZOOM.max, Math.max(ZOOM.min, value + delta)));
@@ -150,14 +153,22 @@ export function TwinBrainPage({ knowledge }: { knowledge: BrainKnowledge }) {
 
             <Node
               tag="Voice and avatar" tone="green" title="Voice and avatar"
+              footer={<EditLink href="/twin/brain/voice" />}
             >
               <div className="flex flex-col items-center gap-2 text-center">
-                <video
-                  src="/media/twin-listening.mp4" autoPlay muted loop playsInline preload="metadata" aria-hidden
-                  className="size-16 rounded-full bg-(--tone-control) object-cover object-[center_18%]"
-                />
-                <p className="m-0 text-base font-semibold">Walkthrough</p>
-                <p className="m-0 text-sm text-muted-foreground">Your voice · Cloned from your videos</p>
+                {avatar?.photoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- same-site route redirecting to a signed S3 URL
+                  <img src={avatar.photoUrl} alt="" className="size-16 rounded-full bg-(--tone-control) object-cover" />
+                ) : (
+                  <video
+                    src="/media/twin-listening.mp4" autoPlay muted loop playsInline preload="metadata" aria-hidden
+                    className="size-16 rounded-full bg-(--tone-control) object-cover object-[center_18%]"
+                  />
+                )}
+                <p className="m-0 text-base font-semibold">{avatar?.voiceName ?? "Not set up yet"}</p>
+                <p className="m-0 text-sm text-muted-foreground">
+                  {avatar?.voiceName ? "Your voice · Recorded on camera" : "Record a photo and your voice from Edit"}
+                </p>
                 <div className="mt-1 flex items-center gap-3">
                   <button
                     type="button"

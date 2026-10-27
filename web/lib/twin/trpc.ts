@@ -14,6 +14,7 @@ import {
   twinShareUrl,
 } from "@/lib/twin-access";
 import { TWIN_SOURCE } from "@/lib/twins";
+import { AVATAR_VIDEO_TYPES, AvatarError, avatarState, avatarVideoUpload, saveAvatar, type AvatarVideoType } from "@/lib/twin/avatar";
 import { getRun } from "workflow/api";
 import { isTwinReport, reportState } from "@/lib/twin/session-report";
 import { attachRatings, durationSeconds, firstExchange, lastSevenDays, likeRateByWeek, mostAsked, titleFrom, transcriptTurns } from "@/lib/twin/stats";
@@ -35,6 +36,7 @@ async function twinCall<T>(fn: () => Promise<T>): Promise<T> {
     if (error instanceof TwinAccessError) {
       throw new TRPCError({ code: error.status === 404 ? "NOT_FOUND" : error.status === 400 ? "BAD_REQUEST" : "FORBIDDEN", message: error.message });
     }
+    if (error instanceof AvatarError) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
     throw error;
   }
 }
@@ -490,6 +492,23 @@ const calibrationsRouter = t.router({
     }),
 });
 
+/** "Voice and avatar" on Twin's brain: photo (avatar), reference video, cloned voice. */
+const avatarRouter = t.router({
+  get: studioProcedure.query(({ ctx }) => avatarState(ctx.user.orgId)),
+  /** Signed S3 upload for the reference video (too large to pass through the app). */
+  videoUploadUrl: studioProcedure
+    .input(z.object({ contentType: z.enum(Object.keys(AVATAR_VIDEO_TYPES) as [AvatarVideoType, ...AvatarVideoType[]]) }))
+    .mutation(({ ctx, input }) => twinCall(() => avatarVideoUpload(ctx.user.orgId, input.contentType))),
+  save: studioProcedure
+    .input(z.object({
+      photo: z.string().min(1).max(3_000_000),
+      videoKey: z.string().min(1).max(500),
+      voiceId: z.string().min(1).max(100),
+      transcript: z.string().trim().max(2000),
+    }))
+    .mutation(({ ctx, input }) => twinCall(() => saveAvatar(ctx.user.orgId, input))),
+});
+
 export const twinRouter = t.router({
   /** Who is talking to us over /api/twin. */
   me: studioProcedure.query(({ ctx }) => ctx.user),
@@ -498,6 +517,7 @@ export const twinRouter = t.router({
   sessions: sessionsRouter,
   users: usersRouter,
   calibrations: calibrationsRouter,
+  avatar: avatarRouter,
 });
 
 export type TwinRouter = typeof twinRouter;
