@@ -60,7 +60,47 @@ export function TwinEditPage({
   const minutesValue = Number(minutes);
   const minutesValid = Number.isInteger(minutesValue) && minutesValue >= 1 && minutesValue <= 10_000;
 
-  const filtered = learners.filter(
+  // People typed in by email who are not in the list yet (not in the org): shown first, selected.
+  const [invite, setInvite] = useState("");
+  const [invited, setInvited] = useState<string[]>([]);
+  const [assigning, setAssigning] = useState(false);
+  const rows: LearnerAssign[] = [
+    ...invited.map((email) => ({ email, name: email, image: null, assigned: false, minutes: null, minutesUsed: 0 })),
+    ...learners,
+  ];
+  const inviteEmails = invite.split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter(Boolean);
+  const inviteValid = inviteEmails.length > 0 && inviteEmails.every((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+
+  /** Adds typed emails to the list (new people) and selects everyone not already assigned. */
+  function addInvites() {
+    if (!inviteValid) return;
+    const known = new Map(learners.map((l) => [l.email.toLowerCase(), l]));
+    setInvited((prev) => [...prev, ...inviteEmails.filter((e) => !known.has(e) && !prev.includes(e))]);
+    setSelectedIds((prev) => [...new Set([...prev, ...inviteEmails.filter((e) => !known.get(e)?.assigned)])]);
+    setInvite("");
+  }
+
+  /** Assigns the selected people now, with the minutes above (reference "Assign" button). */
+  async function assignNow() {
+    if (!selectedIds.length || !minutesValid) return;
+    setAssigning(true);
+    try {
+      // Already-active people are skipped server-side, so a retry sends no second invite.
+      const result = await twinClient.assignments.assign.mutate({ slug: id, emails: selectedIds, minutes: minutesValue });
+      toast.success(`${selectedIds.length} ${selectedIds.length === 1 ? "learner" : "learners"} assigned`);
+      if (result.blocked) toast.warning(`${result.blocked} learner(s) belong to another organization and were not assigned.`);
+      if (result.emailFailures) toast.warning(`${result.emailFailures} invite email(s) could not be sent.`);
+      setSelectedIds([]);
+      setInvited([]);
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not assign");
+    } finally {
+      setAssigning(false);
+    }
+  }
+
+  const filtered = rows.filter(
     (l) =>
       l.name.toLowerCase().includes(query.toLowerCase()) ||
       l.email.toLowerCase().includes(query.toLowerCase())
@@ -330,11 +370,41 @@ export function TwinEditPage({
               />
             </div>
 
+            {/* Someone not in the list yet: add them by email (they get an invite) */}
+            <div className="flex gap-2">
+              <label htmlFor="invite-email" className="sr-only">Invite by email</label>
+              <input
+                id="invite-email"
+                type="text"
+                inputMode="email"
+                autoComplete="off"
+                placeholder="Invite by email, e.g. name@company.com"
+                value={invite}
+                onChange={(e) => setInvite(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addInvites();
+                  }
+                }}
+                aria-invalid={invite.trim() !== "" && !inviteValid}
+                className="h-10 min-w-0 flex-1 rounded-full border border-(--border) bg-transparent px-4 text-sm text-(--foreground) outline-none focus:border-(--brand) focus:ring-1 focus:ring-(--brand) aria-invalid:border-destructive"
+              />
+              <button
+                type="button"
+                onClick={addInvites}
+                disabled={!inviteValid}
+                className="inline-flex h-10 shrink-0 items-center rounded-full border border-(--border) px-4 text-sm font-medium hover:bg-(--tone-control) disabled:opacity-50"
+              >
+                Add
+              </button>
+            </div>
+
             {/* Learner checklist */}
             <div className="flex flex-col overflow-hidden rounded-[12px] border border-(--border)">
               {filtered.length === 0 ? (
                 <p className="p-6 text-center text-sm text-muted-foreground">
-                  {learners.length ? "No one matches that search." : "No learners in your organization yet."}
+                  {rows.length ? "No one matches that search." : "No learners yet. Invite someone by email above."}
                 </p>
               ) : (
                 filtered.map((u, i) => {
@@ -389,6 +459,19 @@ export function TwinEditPage({
             </div>
           </div>
 
+          <div className="flex items-center justify-end gap-3 border-t border-(--border) pt-4">
+            <span className="text-xs text-muted-foreground">
+              {selectedIds.length ? `${selectedIds.length} selected · ${minutesValid ? minutesValue : "?"} min each` : "Select learners to assign"}
+            </span>
+            <button
+              type="button"
+              onClick={() => void assignNow()}
+              disabled={assigning || !selectedIds.length || !minutesValid}
+              className="inline-flex h-9 items-center gap-2 rounded-full bg-(--brand) px-5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+            >
+              {assigning ? "Assigning…" : selectedIds.length > 1 ? `Assign ${selectedIds.length}` : "Assign"}
+            </button>
+          </div>
         </article>
         </TabsContent>
         </Tabs>
