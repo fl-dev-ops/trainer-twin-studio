@@ -19,8 +19,8 @@ const text = (value: unknown) => (typeof value === "string" && value.trim() ? va
  * and its summary with feedback. Only people in this org with an active assignment can talk; they use their own
  * minutes. Studio members (admin, team) have no assignment and try twins in the studio instead.
  */
-export default async function TwinLinkPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ start?: string }> }) {
-  const [{ slug }, { start }] = await Promise.all([params, searchParams]);
+export default async function TwinLinkPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
   const host = (await headers()).get("host") ?? "";
   const { org, user } = await resolveSessionUser();
 
@@ -64,7 +64,9 @@ export default async function TwinLinkPage({ params, searchParams }: { params: P
       access = { ok: true, name: user.name || user.email, email: user.email, code: found.code, minutesLeft: Math.floor(found.secondsLeft / 60), minutesTotal: found.minutesLimit };
     } catch (error) {
       if (!(error instanceof TwinAccessError)) throw error;
-      access = { ok: false, name: user.name || user.email, email: user.email, reason: error.message };
+      // In the learner's words: why they can't talk (messages from usable() in lib/twin-access.ts).
+      const reason = /minutes/.test(error.message) ? "used" : /removed/.test(error.message) ? "ended" : "unassigned";
+      access = { ok: false, name: user.name || user.email, email: user.email, reason };
     }
   }
 
@@ -76,11 +78,14 @@ export default async function TwinLinkPage({ params, searchParams }: { params: P
   return (
     <TwinLearnerFlow
       path={`/t/${encodeURIComponent(slug)}`}
-      trainer={{ name: text(persona.name) ?? agent.persona.name, title: text(persona.role), photoUrl }}
+      trainer={{
+        name: text(persona.name) ?? agent.persona.name,
+        title: [text(persona.role), text(persona.based_in)].filter(Boolean).join(" · ") || null,
+        bio: text(persona.background),
+        photoUrl,
+      }}
       twin={{ slug: agent.slug, name: agent.name, description: text(data.objective) }}
       access={access}
-      // Back from Google sign-in (?start=1): straight to their access.
-      startAtAccess={start !== undefined && access !== null}
     />
   );
 }

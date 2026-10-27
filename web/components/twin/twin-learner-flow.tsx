@@ -2,28 +2,39 @@
 
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown, Flag, Star } from "lucide-react";
+import { Check, ChevronDown, Flag, Lock, LogIn, LogOut, Star } from "lucide-react";
 import { toast } from "sonner";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { CalibrationCall, type CallResult } from "@/components/calibration/calibration-call";
 import { CallEndedIcon, PhoneIcon } from "@/components/calibration/call-icons";
 import { Bubble, PILL, TwinPortrait } from "@/components/calibration/parts";
+import { BrandMark } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
+import { UserAvatar } from "@/components/user-avatar";
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
 /** The signed-in person's access to this twin (null: signed out). */
 export type LearnerAccess =
   | { ok: true; name: string; email: string; code: string; minutesLeft: number; minutesTotal: number }
-  | { ok: false; name: string; email: string; reason: string }
+  | { ok: false; name: string; email: string; reason: "unassigned" | "ended" | "used" }
   | null;
 
-type Trainer = { name: string; title: string | null; photoUrl: string | null };
+type Trainer = { name: string; title: string | null; bio: string | null; photoUrl: string | null };
 type Twin = { slug: string; name: string; description: string | null };
-type Step = "landing" | "signin" | "check" | "call" | "summary";
+type Step = "profile" | "call" | "summary";
 
 // The dash's own scale (twin overview cards): 16px cards with the soft shadow, 11px labels, 18px titles, 15px body.
 const CARD = "rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]";
@@ -35,40 +46,71 @@ const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2,
 const firstName = (name: string) => name.split(/[\s@]/)[0] || name;
 const ISSUES = ["Wrong or made-up answer", "Didn't understand me", "Audio or connection", "Too slow", "Something else"];
 
+/** Why someone can't talk, said plainly (title, what to do). */
+function noAccessCopy(reason: "unassigned" | "ended" | "used", trainer: string) {
+  if (reason === "used") return { title: "You've used all your minutes", body: `Ask ${trainer} for more time to keep practising.` };
+  if (reason === "ended") return { title: "Your access has ended", body: `Ask ${trainer} if you'd like to keep practising.` };
+  return { title: "You don't have access yet", body: `Ask ${trainer} to add you, or switch to the account ${trainer} invited.` };
+}
+
 /**
- * A learner's whole visit on a twin link, on one page (reference learner flow): what the twin is → sign in with Google
- * (back to this page) → their minutes → the call (the calibration screen, learner mode) → summary with a rating, a
- * problem report and the transcript. Never sends people to the auth pages.
+ * A learner's whole visit on a twin link, on one page, laid out like a profile (Delphi-style): the trainer, the twin
+ * you can talk to and your minutes, a call dock at the bottom; Google sign-in in a dialog (back to this page); the
+ * call (the calibration screen, learner mode); then a summary with a rating, a problem report and the transcript.
+ * Never sends people to the auth pages.
  */
-export function TwinLearnerFlow({ path, trainer, twin, access, startAtAccess = false }: { path: string; trainer: Trainer; twin: Twin; access: LearnerAccess; startAtAccess?: boolean }) {
+export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string; trainer: Trainer; twin: Twin; access: LearnerAccess }) {
   const router = useRouter();
-  const [step, setStep] = useState<Step>(startAtAccess ? "check" : "landing");
+  const [step, setStep] = useState<Step>("profile");
+  const [signingIn, setSigningIn] = useState(false);
   const [result, setResult] = useState<CallResult | null>(null);
   const [reportFor, setReportFor] = useState<{ sessionId: string | null } | null>(null);
   const minutesLeft = access?.ok ? access.minutesLeft : null;
+  const coach = firstName(trainer.name);
 
-  // Same row as a dash page header (min-h-10, 1024px column): the trainer on the left, minutes on the right.
-  const header = (
-    <header className="mx-auto flex min-h-10 w-full max-w-[560px] items-center justify-between gap-3 px-4 pt-5 md:px-0">
-      <span className="flex min-w-0 items-center gap-2.5">
-        <TwinPortrait name={trainer.name} photoUrl={trainer.photoUrl} className="size-8 shrink-0 rounded-full text-xs" />
-        <span className="flex min-w-0 flex-col">
-          <b className="truncate text-sm leading-5 font-semibold">{trainer.name}</b>
-          {trainer.title ? <small className="truncate text-xs leading-4 text-muted-foreground">{trainer.title}</small> : null}
-        </span>
-      </span>
-      {minutesLeft !== null && step !== "landing" && step !== "signin" ? (
-        <span className="shrink-0 rounded-full bg-(--tone-control) px-3 py-1 text-xs font-medium tabular-nums">{minutesLeft} min left</span>
-      ) : null}
-    </header>
-  );
-
-  function signOutAndRestart() {
+  function switchAccount() {
     void authClient.signOut().finally(() => {
-      setStep("signin");
       router.refresh();
+      setSigningIn(true);
     });
   }
+
+  // Top bar (Delphi-style): the brand on the left; sign in, or your account, on the right (minutes during a call).
+  const topBar = (
+    <header className="flex h-14 w-full shrink-0 items-center justify-between gap-3 px-5">
+      <span className="flex items-center gap-1.5">
+        <BrandMark className="size-5 text-primary" />
+        <span className="text-base leading-none font-semibold tracking-[-0.02em]">TrainerTwin</span>
+      </span>
+      {step !== "profile" && minutesLeft !== null ? (
+        <span className="rounded-full bg-(--tone-control) px-3 py-1 text-xs font-medium tabular-nums">{minutesLeft} min left</span>
+      ) : access ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<Button variant="ghost" className="h-9 gap-2 pr-3 pl-1.5" />}>
+            <UserAvatar user={{ name: access.name, email: access.email }} size="sm" />
+            <span className="max-w-[140px] truncate text-sm font-medium">{firstName(access.name)}</span>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" sideOffset={6} className="w-56">
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="truncate font-normal text-muted-foreground">{access.email}</DropdownMenuLabel>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem onClick={switchAccount}>
+                <LogOut />
+                Switch account
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : (
+        <Button variant="ghost" className="h-9 px-3" onClick={() => setSigningIn(true)}>
+          <LogIn data-icon="inline-start" />
+          Sign in
+        </Button>
+      )}
+    </header>
+  );
 
   const report = reportFor ? <ReportDialog twin={twin} sessionId={reportFor.sessionId} onClose={() => setReportFor(null)} /> : null;
 
@@ -84,7 +126,7 @@ export function TwinLearnerFlow({ path, trainer, twin, access, startAtAccess = f
           learner={{
             code: access.code,
             minutesLeft: access.minutesLeft,
-            header,
+            header: topBar,
             onReport: (sessionId) => setReportFor({ sessionId }),
             onEnded: (ended) => {
               setResult(ended);
@@ -98,97 +140,108 @@ export function TwinLearnerFlow({ path, trainer, twin, access, startAtAccess = f
     );
   }
 
+  const blocked = access && !access.ok ? noAccessCopy(access.reason, coach) : null;
   return (
     <div className="flex min-h-svh flex-col bg-background">
-      {header}
-      <main className="mx-auto flex w-full max-w-[560px] flex-1 flex-col gap-4 px-4 pt-10 pb-16 md:px-0">
-        {step === "landing" ? (
-          <article className={cn(CARD, "flex flex-col")}>
-            <TwinHeading trainer={trainer} twin={twin} />
-            {twin.description ? (
-              <div className="mt-6">
-                <p className={cn(LABEL, "text-muted-foreground")}>What it does</p>
-                <p className={cn(BODY, "mt-1 line-clamp-5")}>{twin.description}</p>
-              </div>
-            ) : null}
-            <Button className={cn(BRAND, "mt-6")} onClick={() => setStep(access ? "check" : "signin")}>
-              <PhoneIcon className="size-[18px]" />
-              Start conversation
-            </Button>
-            <p className="mt-3 text-center text-xs text-muted-foreground">
-              Conversations are recorded to help you and {firstName(trainer.name)}.
-            </p>
-          </article>
-        ) : step === "signin" ? (
-          <article className={cn(CARD, "flex flex-col")}>
-            <p className={cn(LABEL, "text-muted-foreground")}>Sign in</p>
-            <h1 className={cn(TITLE, "mt-1")}>Who&apos;s practising?</h1>
-            <p className={cn(BODY, "mt-1")}>Use the Google account {firstName(trainer.name)} invited, so your minutes and sessions are yours.</p>
-            <div className="mt-6">
-              <GoogleSignInButton callbackURL={`${typeof window === "undefined" ? "" : window.location.origin}${path}?start=1`} className="h-10 w-full text-sm" />
-            </div>
-            <Button variant="ghost" className="mt-2 h-9 self-center" onClick={() => setStep("landing")}>Back</Button>
-          </article>
-        ) : step === "check" && access ? (
-          <article className={cn(CARD, "flex flex-col")}>
-            <TwinHeading trainer={trainer} twin={twin} />
-            {access.ok ? (
-              <>
-                {/* The twin overview's Usage credit box, for this person. */}
-                <div className="mt-6 flex flex-col gap-2 rounded-[12px] bg-(--sidebar) p-5">
-                  <p className={cn(LABEL, "text-emerald-700 dark:text-emerald-400")}>You&apos;re in, {firstName(access.name)}</p>
-                  <p className="m-0 text-[20px] leading-6 font-semibold tabular-nums">
-                    {access.minutesLeft} <span className="text-sm font-normal text-muted-foreground">of {access.minutesTotal} min left</span>
-                  </p>
-                  <span className="mt-1 block h-1.5 w-full overflow-hidden rounded-full bg-card">
-                    <span className="block h-full rounded-full bg-(--foreground)" style={{ width: `${Math.min(100, Math.round((access.minutesLeft / Math.max(1, access.minutesTotal)) * 100))}%` }} />
-                  </span>
-                  <p className="m-0 text-xs text-muted-foreground">Minutes count for the whole conversation, from start to end.</p>
-                </div>
-                <Button className={cn(BRAND, "mt-6")} disabled={access.minutesLeft <= 0} onClick={() => setStep("call")}>
-                  <PhoneIcon className="size-[18px]" />
-                  Start voice call
-                </Button>
-                <p className="mt-3 text-center text-xs text-muted-foreground">We&apos;ll ask for your microphone.</p>
-              </>
-            ) : (
-              <div className="mt-6 flex flex-col gap-1.5 rounded-[12px] bg-amber-500/10 p-5 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
-                <p className={LABEL}>Not available</p>
-                <p className="m-0 text-[15px] leading-6 font-medium">{access.reason}.</p>
-                <p className="m-0 text-xs opacity-80">Signed in as {access.email}. Ask {firstName(trainer.name)} for access, or use the account they invited.</p>
-              </div>
-            )}
-            <Button variant="ghost" className="mt-2 h-9 self-center text-muted-foreground" onClick={signOutAndRestart}>Use a different account</Button>
-          </article>
-        ) : step === "summary" && result ? (
+      {topBar}
+      <main className="mx-auto flex w-full max-w-[640px] flex-1 flex-col gap-4 px-5 pt-8 pb-40">
+        {step === "summary" && result ? (
           <Summary
             twin={twin}
             trainer={trainer}
             result={result}
             minutesLeft={minutesLeft}
             onReport={() => setReportFor({ sessionId: result.sessionId })}
-            onAgain={() => setStep("check")}
+            onAgain={() => setStep("call")}
           />
         ) : (
-          <article className={CARD}>
-            <TwinHeading trainer={trainer} twin={twin} />
-          </article>
+          <>
+            {/* Profile hero: the trainer whose twin this is. */}
+            <section className="flex items-center gap-5">
+              <TwinPortrait name={trainer.name} photoUrl={trainer.photoUrl} className="size-24 shrink-0 rounded-[24px] text-4xl shadow-[0_2px_4px_rgb(30_28_25/0.06),0_8px_20px_rgb(30_28_25/0.1)] sm:size-28 sm:rounded-[28px]" />
+              <div className="flex min-w-0 flex-col gap-1">
+                <h1 className="m-0 text-[28px] leading-9 font-semibold tracking-[-0.02em]">{trainer.name}</h1>
+                {trainer.title ? <p className="m-0 text-[15px] text-(--text-secondary)">{trainer.title}</p> : null}
+              </div>
+            </section>
+            {trainer.bio ? <p className="m-0 line-clamp-3 text-[15px] leading-6 text-muted-foreground">{trainer.bio}</p> : null}
+
+            <h2 className="mt-6 mb-0 text-[18px] leading-6 font-semibold tracking-[-0.015em]">Talk to {coach}&apos;s twin</h2>
+            <article className={cn(CARD, "flex flex-col p-5")}>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex min-w-0 flex-col gap-1">
+                  <p className={cn(LABEL, "text-muted-foreground")}>Voice call</p>
+                  <h3 className={TITLE}>{twin.name}</h3>
+                </div>
+                <span className="grid size-10 shrink-0 place-items-center rounded-[12px] bg-(--brand)/10 text-(--brand)">
+                  <PhoneIcon className="size-5" />
+                </span>
+              </div>
+              {twin.description ? <p className={cn(BODY, "mt-2 line-clamp-4")}>{twin.description}</p> : null}
+              {access?.ok ? (
+                // Your minutes, as the twin overview's usage meter.
+                <div className="mt-5 flex flex-col gap-2 border-t border-(--card-border) pt-4">
+                  <p className="m-0 flex items-baseline justify-between gap-3 text-sm">
+                    <span className="font-medium">You&apos;re in, {firstName(access.name)}</span>
+                    <span className="text-muted-foreground tabular-nums">{access.minutesLeft} of {access.minutesTotal} min left</span>
+                  </p>
+                  <span className="block h-1.5 w-full overflow-hidden rounded-full bg-(--tone-control)">
+                    <span className="block h-full rounded-full bg-(--foreground)" style={{ width: `${Math.min(100, Math.round((access.minutesLeft / Math.max(1, access.minutesTotal)) * 100))}%` }} />
+                  </span>
+                </div>
+              ) : null}
+            </article>
+
+            {blocked && access ? (
+              <article className={cn(CARD, "flex items-start gap-4 p-5")}>
+                <span className="grid size-10 shrink-0 place-items-center rounded-full bg-(--tone-control) text-(--text-secondary)">
+                  <Lock className="size-[18px]" />
+                </span>
+                <div className="flex min-w-0 flex-col gap-1">
+                  <h3 className="m-0 text-[15px] leading-6 font-semibold">{blocked.title}</h3>
+                  <p className="m-0 text-sm text-muted-foreground">{blocked.body}</p>
+                  <p className="mt-2 mb-0 text-xs text-muted-foreground">
+                    Signed in as {access.email} ·{" "}
+                    <button type="button" className="font-medium text-foreground underline-offset-2 hover:underline" onClick={switchAccount}>
+                      Switch account
+                    </button>
+                  </p>
+                </div>
+              </article>
+            ) : null}
+          </>
         )}
       </main>
-      {report}
-    </div>
-  );
-}
 
-/** The twin's photo, kind and name, as at the top of each card. */
-function TwinHeading({ trainer, twin }: { trainer: Trainer; twin: Twin }) {
-  return (
-    <div className="flex items-center gap-4">
-      <TwinPortrait name={trainer.name} photoUrl={trainer.photoUrl} className="size-16 shrink-0 rounded-[16px] text-2xl" />
-      <div className="flex min-w-0 flex-col gap-0.5">
-        <p className={cn(LABEL, "text-(--brand)")}>Twin · voice call</p>
-        <h1 className={cn(TITLE, "line-clamp-2")} title={twin.name}>{twin.name}</h1>
-      </div>
+      {/* Call dock (Delphi's bottom bar): one clear action, minutes beside it. Hidden when there's nothing to start. */}
+      {step === "profile" && !blocked ? (
+        <div className="fixed inset-x-0 bottom-0 z-10 flex flex-col items-center gap-2 bg-linear-to-t from-background via-background/90 to-transparent px-5 pt-10 pb-5">
+          <div className="flex items-center gap-3 rounded-full border border-(--card-border) bg-card p-1.5 shadow-[0_2px_4px_rgb(30_28_25/0.06),0_8px_24px_rgb(30_28_25/0.12)]">
+            {access?.ok ? <span className="pl-3 text-sm text-muted-foreground tabular-nums">{access.minutesLeft} min left</span> : null}
+            <Button
+              className="h-11 bg-(--brand) px-6 text-[15px] font-semibold text-white hover:bg-[#e04d00]"
+              disabled={access?.ok === true && access.minutesLeft <= 0}
+              onClick={() => (access?.ok ? setStep("call") : setSigningIn(true))}
+            >
+              <PhoneIcon className="size-[18px]" />
+              {access?.ok ? "Start voice call" : "Start conversation"}
+            </Button>
+          </div>
+          <p className="m-0 text-xs text-muted-foreground">Conversations are recorded to help you and {coach}.</p>
+        </div>
+      ) : null}
+
+      <Dialog open={signingIn} onOpenChange={setSigningIn}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader className="items-center text-center">
+            <TwinPortrait name={trainer.name} photoUrl={trainer.photoUrl} className="mb-2 size-16 rounded-[18px] text-2xl" />
+            <DialogTitle>Sign in to talk to {coach}&apos;s twin</DialogTitle>
+            <DialogDescription>Use the Google account {coach} invited. Your minutes and sessions stay yours.</DialogDescription>
+          </DialogHeader>
+          <GoogleSignInButton callbackURL={`${typeof window === "undefined" ? "" : window.location.origin}${path}`} className="h-10 w-full text-sm" />
+        </DialogContent>
+      </Dialog>
+      {report}
     </div>
   );
 }

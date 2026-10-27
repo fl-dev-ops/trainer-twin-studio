@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { PersonaIcon, RoleplayIcon, SessionsIcon, SettingsIcon, SetupIcon, TwinIcon, UsersIcon } from "@/components/icons";
+import { BrandMark, PersonaIcon, RoleplayIcon, SessionsIcon, SettingsIcon, SetupIcon, TwinIcon, UsersIcon } from "@/components/icons";
 import { SidebarAccountMenu } from "@/components/sidebar-account-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
@@ -81,9 +81,7 @@ function Brand() {
         aria-expanded={!collapsed}
         className="flex h-8 items-center gap-1.5 rounded-md text-foreground transition-colors outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring hover:text-(--text-secondary) group-data-[collapsible=icon]:w-10 group-data-[collapsible=icon]:justify-center"
       >
-        <svg viewBox="0 0 441 441" width={20} height={20} fill="currentColor" aria-hidden className="shrink-0 text-primary">
-          <path d="M20 0L421 0A20 20 0 0 1 441 20L441 127A20 20 0 0 1 421 147L314 147A20 20 0 0 0 294 167L294 274A20 20 0 0 0 314 294L421 294A20 20 0 0 1 441 314L441 421A20 20 0 0 1 421 441L314 441A20 20 0 0 1 294 421L294 314A20 20 0 0 0 274 294L167 294A20 20 0 0 0 147 314L147 421A20 20 0 0 1 127 441L20 441A20 20 0 0 1 0 421L0 314A20 20 0 0 1 20 294L127 294A20 20 0 0 0 147 274L147 167A20 20 0 0 0 127 147L20 147A20 20 0 0 1 0 127L0 20A20 20 0 0 1 20 0Z" />
-        </svg>
+        <BrandMark className="size-5 shrink-0 text-primary" />
         <span className="text-base font-semibold leading-none tracking-[-0.02em] group-data-[collapsible=icon]:hidden">
           TrainerTwin
         </span>
