@@ -80,3 +80,25 @@ describe("scenario-ingest playbook sessions", () => {
     assert.ok(!prompt.includes("SCENARIO PLAYBOOK"));
   });
 });
+
+describe("persona brief", () => {
+  const brief = "- Who: Rohan Mehta, Prospect, 36.\n- Stay in character.";
+  const twin = { playbooks: [] };
+
+  test("web's brief replaces the recorded-style line in every prompt format", () => {
+    for (const specs of [
+      { ...base, personaBrief: brief }, // role play / interview spec
+      { ...base, personaBrief: brief, playbook: scenarioPlaybook("TWIN", ingestData) }, // skill playbook
+      { ...base, personaBrief: brief, twin }, // all-skills twin
+    ] as SessionSpecs[]) {
+      const prompt = formatSessionSpec(specs);
+      assert.ok(prompt.includes(brief), "brief missing");
+      assert.ok(!prompt.includes("Recorded style and decision preferences"));
+    }
+  });
+
+  test("without a brief (older web, legacy persona) the recorded-style line stays", () => {
+    const prompt = formatSessionSpec({ ...base, personaVoice: '{"style":"calm"}' });
+    assert.ok(prompt.includes('- Recorded style and decision preferences: {"style":"calm"}'));
+  });
+});

@@ -123,6 +123,8 @@ export type SessionSpecs = {
   personaSlug?: string;
   personaVersion?: number;
   personaVoice?: string;
+  /** The persona as prompt lines, rendered by web; replaces the recorded-style line when present. */
+  personaBrief?: string;
   documents: AttachedDocument[];
   expectedArtifact?: {
     label: string;
@@ -341,6 +343,8 @@ export async function loadSessionContext(
     } | null;
     knowledgeBases?: { slug: string; name: string }[];
     twinPlaybooks?: TwinPlaybook[];
+    /** web's rendered persona (lib/persona.ts personaBrief); absent from older web builds and legacy personas. */
+    personaBrief?: string | null;
   }>(orgId, {
     action: "getSessionContext",
     sessionId,
@@ -423,6 +427,7 @@ export async function loadSessionContext(
     personaSlug: result.persona?.slug ?? personaSlug,
     personaVersion: result.persona?.version,
     personaVoice: hasPersonaProfile ? JSON.stringify(personaProfile).slice(0, 4000) : undefined,
+    personaBrief: typeof result.personaBrief === "string" && result.personaBrief.trim() ? result.personaBrief.trim() : undefined,
     documents: result.documents ?? [],
     expectedArtifact: (() => {
       const rawCtx = (agentData.config as { context?: unknown } | null)?.context as {
@@ -566,7 +571,7 @@ PERSONA
 - Name: ${specs.personaName ?? specs.personaSlug ?? "Trainer"}
 - Slug: ${specs.personaSlug ?? "trainer"}
 - Version: ${specs.personaVersion ?? "not specified"}
-- Recorded style and decision preferences: ${specs.personaVoice ?? "none supplied"}
+${personaLines(specs)}
 
 DOMAIN
 - Name: ${specs.domainName ?? "not specified"}
@@ -635,7 +640,7 @@ ${blocks.learnerBlock}
 PERSONA
 - Name: ${specs.personaName ?? specs.personaSlug ?? "Trainer"}
 - Slug: ${specs.personaSlug ?? "trainer"}
-- Recorded style and decision preferences: ${specs.personaVoice ?? "none supplied"}
+${personaLines(specs)}
 
 ${blocks.uiStateBlock || "WORKSPACE STATE: not reported"}
 ${blocks.warmBlock}
@@ -645,6 +650,11 @@ ${blocks.docsBlock}
 OPERATING MODE: ${specs.mode === "voice" ? "voice" : "text chat"}
 CLIENT-EXECUTED TOOLS ADVERTISED FOR THIS SESSION
 ${(specs.clientTools ?? []).length > 0 ? (specs.clientTools ?? []).map((tool) => `- ${tool}`).join("\n") : "- None"}`;
+}
+
+/** The persona lines inside a PERSONA block: web's brief, else the older recorded-style line (legacy personas). */
+function personaLines(specs: Pick<SessionSpecs, "personaBrief" | "personaVoice">): string {
+  return specs.personaBrief ?? `- Recorded style and decision preferences: ${specs.personaVoice ?? "none supplied"}`;
 }
 
 /**
@@ -695,7 +705,7 @@ ${blocks.learnerBlock}
 PERSONA
 - Name: ${specs.personaName ?? specs.personaSlug ?? "Trainer"}
 - Slug: ${specs.personaSlug ?? "trainer"}
-- Recorded style and decision preferences: ${specs.personaVoice ?? "none supplied"}
+${personaLines(specs)}
 
 ${blocks.uiStateBlock || "WORKSPACE STATE: not reported"}
 ${blocks.warmBlock}
