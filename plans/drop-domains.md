@@ -13,7 +13,7 @@ Decision (user): v2 has no domains. Remove them everywhere, the public API inclu
 
 Twin and scenario-ingest domains are placeholders (`{ id, name, description }`), so nothing moves for them.
 
-## Phase 1: domains unused (additive)
+## Phase 1: domains unused (additive): done (`c6bff9b`, docs `6ffd0f7`)
 
 1. **Migration `drop_domains_1`** (backup first):
    - copy `principles`, `classifications` and `knowledge_bases` from each agent's domain into its `data` (only keys not already set);
@@ -44,7 +44,7 @@ Twin and scenario-ingest domains are placeholders (`{ id, name, description }`),
    - before/after snapshot of what every agent compiles to: same knowledge bases, same principles, same agent spec;
    - tests updated; SQL suites pass.
 
-## Phase 2: delete (separate commit, backup)
+## Phase 2: delete (separate commit, backup): done
 
 Migration `drop_domains_2`:
 - drop table `Domain`;
@@ -60,3 +60,11 @@ Also delete `data/domains/*.yaml` and update the SQL test fixtures.
 - Old `SpecVersion` agent rows keep their `domain` slug and have no rubric. Restoring a pre-migration version brings back an agent without principles.
 - Sessions started before the migration keep `domain` inside their frozen snapshot; readers ignore it.
 - Dev scripts outside the build (benchmarks, provisioning) that create or read domains are not updated. They fail if run.
+
+## Rehearsed on prod data
+
+Both migrations ran on `trainertwin_prod_rehearsal` (prod dump plus the v2 migrations):
+- 15/15 agents carry their principles;
+- 8/8 drafts too;
+- the Domain table, the domain columns and 39 domain versions are gone;
+- the 6 `tests/sql` suites pass.

@@ -5,12 +5,12 @@ INSERT INTO "organization" (id, name, slug, "createdAt") VALUES ('tc-org', 'TC',
 INSERT INTO "user" (id, name, email, "createdAt", "updatedAt") VALUES ('tc-admin', 'Admin', 'tc-admin@example.com', NOW(), NOW());
 INSERT INTO "member" (id, "organizationId", "userId", role, "createdAt") VALUES ('tc-m', 'tc-org', 'tc-admin', 'admin', NOW());
 INSERT INTO "Persona" (id, "orgId", slug, name, data, "isOwn", "updatedAt") VALUES ('tc-own', 'tc-org', 'tc-own', 'Own', '{}', true, NOW());
-INSERT INTO "Agent" (id, "orgId", slug, name, "domainSlug", "personaId", kind, data, "updatedAt") VALUES
-  ('tc-twin', 'tc-org', 'tc-twin', 'Twin', 'd', 'tc-own', 'TWIN', '{}', NOW()),
-  ('tc-rp', 'tc-org', 'tc-rp', 'Role play', 'd', 'tc-own', 'ROLEPLAY', '{}', NOW());
-INSERT INTO "InterviewSession" (id, "orgId", "userId", "agentId", "shareCode", "personaSlug", "personaVersion", "agentSlug", "agentVersion", "domainSlug", "domainVersion") VALUES
-  ('tc-s-twin', 'tc-org', 'tc-admin', 'tc-twin', 'tc-s1', 'p', 1, 'tc-twin', 1, 'd', 1),
-  ('tc-s-rp', 'tc-org', 'tc-admin', 'tc-rp', 'tc-s2', 'p', 1, 'tc-rp', 1, 'd', 1);
+INSERT INTO "Agent" (id, "orgId", slug, name, "personaId", kind, data, "updatedAt") VALUES
+  ('tc-twin', 'tc-org', 'tc-twin', 'Twin', 'tc-own', 'TWIN', '{}', NOW()),
+  ('tc-rp', 'tc-org', 'tc-rp', 'Role play', 'tc-own', 'ROLEPLAY', '{}', NOW());
+INSERT INTO "InterviewSession" (id, "orgId", "userId", "agentId", "shareCode", "personaSlug", "personaVersion", "agentSlug", "agentVersion") VALUES
+  ('tc-s-twin', 'tc-org', 'tc-admin', 'tc-twin', 'tc-s1', 'p', 1, 'tc-twin', 1),
+  ('tc-s-rp', 'tc-org', 'tc-admin', 'tc-rp', 'tc-s2', 'p', 1, 'tc-rp', 1);
 
 INSERT INTO "TwinCalibration" (id, "sessionId", "createdByUserId") VALUES ('tc-c', 'tc-s-twin', 'tc-admin');
 INSERT INTO "TwinCalibrationRating" (id, "calibrationId", "turnIndex", question, reply, rating, "updatedAt")

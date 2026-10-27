@@ -73,7 +73,8 @@ case "${1:-}" in
          CASE WHEN d.status = 'failed' THEN 'failed' ELSE 'uploaded' END, d.\"sourceId\", d.\"externalId\", d.\"externalUpdatedAt\", d.\"parentExternalId\", NULL $docs"
     ;;
   agents)
-    # One org's scenarios: its persona(s), domains, agents (role plays), the voices they use and their version history.
+    # One org's scenarios: its persona(s), agents (role plays), the voices they use and their version history.
+    # The source must have the v2 migrations applied (no domains: each agent carries its rubric).
     # Ids kept. S3 files they reference (voice audio/transcript, intro videos) are copied to the local org folder and every
     # <base>/kb/<prod org>/ key inside the JSON is rewritten. Agent slugs are unique across orgs: a slug another local org
     # (or a global agent) already uses gets the org slug as a prefix, history included. Deployments and learner
@@ -90,17 +91,15 @@ case "${1:-}" in
         SELECT DISTINCT k, $(rekey k) FROM (
           SELECT (regexp_matches(x, '([A-Za-z0-9_-]+/kb/$prod_org/[^\"]+)', 'g'))[1] k FROM (
             SELECT data::text x FROM \"Agent\" WHERE \"orgId\" = '$prod_org' UNION ALL SELECT data::text FROM \"Persona\" WHERE \"orgId\" = '$prod_org'
-            UNION ALL SELECT data::text FROM \"Domain\" WHERE \"orgId\" = '$prod_org' UNION ALL SELECT data::text FROM \"SpecVersion\" WHERE \"orgId\" = '$prod_org') t
+            UNION ALL SELECT data::text FROM \"SpecVersion\" WHERE \"orgId\" = '$prod_org') t
           UNION SELECT unnest(array[\"s3AudioKey\", \"s3TranscriptKey\"]) FROM \"Voice\" WHERE id IN ($voices)) keys
         WHERE k IS NOT NULL) TO STDOUT" | bun scripts/port-prod-s3.ts
     port Voice '"id", "name", "status", "s3AudioKey", "s3TranscriptKey", "createdAt", "updatedAt", "kind", "orgId"' \
       "SELECT id, name, status, $(rekey '"s3AudioKey"'), $(rekey '"s3TranscriptKey"'), \"createdAt\", \"updatedAt\", kind, '$local_id' FROM \"Voice\" WHERE id IN ($voices)"
     port Persona '"id", "slug", "name", "version", "data", "createdAt", "updatedAt", "orgId", "isOwn", "voiceId", "avatarId", "settings"' \
       "SELECT id, slug, name, version, $(rekey 'data::text')::jsonb, \"createdAt\", \"updatedAt\", '$local_id', \"isOwn\", \"voiceId\", \"avatarId\", settings FROM \"Persona\" WHERE \"orgId\" = '$prod_org'"
-    port Domain '"id", "slug", "name", "version", "data", "createdAt", "updatedAt", "orgId"' \
-      "SELECT id, slug, name, version, $(rekey 'data::text')::jsonb, \"createdAt\", \"updatedAt\", '$local_id' FROM \"Domain\" WHERE \"orgId\" = '$prod_org'"
-    port Agent '"id", "slug", "name", "version", "domainSlug", "data", "createdAt", "updatedAt", "orgId", "visibility", "order", "personaId", "kind"' \
-      "SELECT id, $(slug_for slug), name, version, \"domainSlug\", $(rekey 'data::text')::jsonb, \"createdAt\", \"updatedAt\", '$local_id', visibility, \"order\", \"personaId\", kind FROM \"Agent\" WHERE \"orgId\" = '$prod_org'"
+    port Agent '"id", "slug", "name", "version", "data", "createdAt", "updatedAt", "orgId", "visibility", "order", "personaId", "kind"' \
+      "SELECT id, $(slug_for slug), name, version, $(rekey 'data::text')::jsonb, \"createdAt\", \"updatedAt\", '$local_id', visibility, \"order\", \"personaId\", kind FROM \"Agent\" WHERE \"orgId\" = '$prod_org'"
     port SpecVersion '"id", "entityType", "entitySlug", "version", "data", "createdAt", "orgId"' \
       "SELECT id, \"entityType\", CASE WHEN \"entityType\" = 'agents' THEN $(slug_for '"entitySlug"') ELSE \"entitySlug\" END, version,
          $(rekey 'data::text')::jsonb, \"createdAt\", '$local_id' FROM \"SpecVersion\" WHERE \"orgId\" = '$prod_org'"

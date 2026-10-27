@@ -50,7 +50,7 @@ export DATABASE_URL='<direct, non-pooler URL>'   # never the -pooler host for mi
    ALTER TABLE "InterviewSession" ADD CONSTRAINT "InterviewSession_assignmentId_fkey"
      FOREIGN KEY ("assignmentId") REFERENCES "RolePlayAssignment"(id) ON UPDATE CASCADE ON DELETE SET NULL;
    ```
-3. `bunx prisma migrate deploy` (9 migrations).
+3. `bunx prisma migrate deploy`. At the dump that meant 9 migrations; with later work it is 12, including `avatar_original_image` and `drop_domains_1/2` (plans/drop-domains.md). All were rehearsed on the dump.
 4. Fix #3 (after the decision): `UPDATE member SET role = 'team' WHERE id = <diag-admin2's member id>;`
 5. Verify:
    - `migrate status` is clean;

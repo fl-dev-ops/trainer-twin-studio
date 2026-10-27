@@ -13,10 +13,10 @@ INSERT INTO "member" (id, "organizationId", "userId", role, "createdAt") VALUES
   ('ta-m2', 'ta-org', 'ta-team', 'team', NOW()),
   ('ta-m3', 'ta-org', 'ta-user', 'user', NOW());
 INSERT INTO "Persona" (id, "orgId", slug, name, data, "isOwn", "updatedAt") VALUES ('ta-own', 'ta-org', 'ta-own', 'Own', '{}', true, NOW());
-INSERT INTO "Agent" (id, "orgId", slug, name, "domainSlug", "personaId", kind, data, "updatedAt") VALUES
-  ('ta-twin', 'ta-org', 'ta-twin', 'Twin', 'd', 'ta-own', 'TWIN', '{}', NOW()),
-  ('ta-skill', 'ta-org', 'ta-skill', 'Skill', 'd', 'ta-own', 'TWIN', '{}', NOW()),
-  ('ta-rp', 'ta-org', 'ta-rp', 'Role play', 'd', 'ta-own', 'ROLEPLAY', '{}', NOW());
+INSERT INTO "Agent" (id, "orgId", slug, name, "personaId", kind, data, "updatedAt") VALUES
+  ('ta-twin', 'ta-org', 'ta-twin', 'Twin', 'ta-own', 'TWIN', '{}', NOW()),
+  ('ta-skill', 'ta-org', 'ta-skill', 'Skill', 'ta-own', 'TWIN', '{}', NOW()),
+  ('ta-rp', 'ta-org', 'ta-rp', 'Role play', 'ta-own', 'ROLEPLAY', '{}', NOW());
 INSERT INTO "Deployment" (id, "orgId", "agentId", "publicKey", "updatedAt") VALUES
   ('ta-dtwin', 'ta-org', 'ta-twin', 'ta-pk1', NOW()),
   ('ta-drp', 'ta-org', 'ta-rp', 'ta-pk2', NOW());
@@ -30,8 +30,8 @@ INSERT INTO "TwinAssignment" (id, "orgId", "agentId", "recipientEmail", "minutes
   VALUES ('ta-a2', 'ta-org', 'ta-skill', 'ta-learner@example.com', 10, 'ta-a2', NOW());
 
 CREATE FUNCTION pg_temp.sess(sid text, uid text, agent text, md text, twin text) RETURNS void LANGUAGE sql AS $$
-  INSERT INTO "InterviewSession" (id, "orgId", "userId", "agentId", "shareCode", "personaSlug", "personaVersion", "agentSlug", "agentVersion", "domainSlug", "domainVersion", mode, "twinAssignmentId", "startedAt", "endedAt")
-  VALUES (sid, 'ta-org', uid, agent, sid, 'p', 1, agent, 1, 'd', 1, md, twin, NOW() - INTERVAL '10 minutes', NOW() - INTERVAL '4 minutes') $$;
+  INSERT INTO "InterviewSession" (id, "orgId", "userId", "agentId", "shareCode", "personaSlug", "personaVersion", "agentSlug", "agentVersion", mode, "twinAssignmentId", "startedAt", "endedAt")
+  VALUES (sid, 'ta-org', uid, agent, sid, 'p', 1, agent, 1, md, twin, NOW() - INTERVAL '10 minutes', NOW() - INTERVAL '4 minutes') $$;
 
 -- allowed: admin and team without an assignment; a non-member learner with their own assignment
 SELECT pg_temp.sess('ta-s-admin', 'ta-admin', 'ta-twin', 'voice', NULL);
