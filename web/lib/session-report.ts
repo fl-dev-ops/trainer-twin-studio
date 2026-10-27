@@ -9,12 +9,32 @@ export type KeyMoment = {
   audioUrl?: string;
 };
 
+/** Points awarded for one rubric criterion of a role play. */
+export type RubricScore = {
+  criterion: string;
+  points: number;
+  maxPoints: number;
+  reason: string;
+};
+
+/** Whether the learner met one role-play learner goal. */
+export type GoalResult = {
+  goal: string;
+  status: "met" | "partly" | "not_met";
+  evidence: string;
+};
+
 export type SessionReport = {
   summary: string;
   summaryTags: string[];
   keyMoments: KeyMoment[];
   focusNextTime: string;
+  /** Role plays with a rubric: the rubric total as 0-100. */
   score?: number;
+  /** Role plays only: one row per rubric criterion, in the order configured. */
+  rubricScores?: RubricScore[];
+  /** Role plays only: one result per learner goal, in the order configured. */
+  goalResults?: GoalResult[];
   generatedAt: string;
 };
 
@@ -66,6 +86,63 @@ export const SESSION_REPORT_JSON_SCHEMA = {
     },
   },
 };
+
+const RUBRIC_SCORES_JSON_SCHEMA = {
+  type: "array",
+  description: "One entry per rubric criterion, in the order given, scoring only the learner.",
+  items: {
+    type: "object",
+    additionalProperties: false,
+    required: ["criterion", "points", "reason"],
+    properties: {
+      criterion: { type: "string", description: "The rubric criterion name, exactly as given." },
+      points: { type: "number", description: "Points awarded, from 0 up to the criterion's maximum." },
+      reason: { type: "string", description: "One sentence citing what the learner did or missed." },
+    },
+  },
+};
+
+const GOAL_RESULTS_JSON_SCHEMA = {
+  type: "array",
+  description: "One entry per learner goal, in the order given.",
+  items: {
+    type: "object",
+    additionalProperties: false,
+    required: ["goal", "status", "evidence"],
+    properties: {
+      goal: { type: "string", description: "The learner goal, exactly as given." },
+      status: { type: "string", enum: ["met", "partly", "not_met"], description: "met: clearly did it; partly: attempted but not fully; not_met: did not do it." },
+      evidence: { type: "string", description: "One sentence citing what the learner said or did." },
+    },
+  },
+};
+
+/** Report schema; role plays also return per-goal results and, with a rubric, per-criterion points. */
+export function sessionReportJsonSchema(options: { rubric: boolean; goals: boolean }) {
+  if (!options.rubric && !options.goals) return SESSION_REPORT_JSON_SCHEMA;
+  return {
+    ...SESSION_REPORT_JSON_SCHEMA,
+    required: [
+      ...SESSION_REPORT_JSON_SCHEMA.required,
+      // Goals first: the model writes fields in order, so rubric points follow the goal results.
+      ...(options.goals ? ["goalResults"] : []),
+      ...(options.rubric ? ["rubricScores"] : []),
+    ],
+    properties: {
+      ...SESSION_REPORT_JSON_SCHEMA.properties,
+      ...(options.goals ? { goalResults: GOAL_RESULTS_JSON_SCHEMA } : {}),
+      ...(options.rubric ? { rubricScores: RUBRIC_SCORES_JSON_SCHEMA } : {}),
+    },
+  };
+}
+
+/** Rubric points earned and available, e.g. 74 of 100. */
+export function rubricTotals(rows: RubricScore[]): { earned: number; max: number } {
+  return {
+    earned: rows.reduce((sum, row) => sum + row.points, 0),
+    max: rows.reduce((sum, row) => sum + row.maxPoints, 0),
+  };
+}
 
 export function isSessionReport(value: unknown): value is SessionReport {
   if (typeof value !== "object" || value === null) return false;

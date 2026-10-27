@@ -6,6 +6,7 @@ import { closeInterviewSession } from "@/lib/session-lifecycle";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { db } from "@/lib/db";
 import { processCompletedSession } from "@/lib/session-processing";
+import { usesAgentTranscript } from "@/lib/session-after";
 
 /** Only the LiveKit agent may call this: it holds the shared service secret. */
 function authorized(request: Request) {
@@ -60,13 +61,14 @@ export async function POST(req: Request) {
     where: {
       OR: [{ id: rawSessionId }, { shareCode: rawSessionId }],
     },
-    select: { id: true, agent: { select: { kind: true } } },
+    select: { id: true, agent: { select: { kind: true, data: true } } },
   });
 
   if (!session) {
     return NextResponse.json({ error: `Session not found: ${rawSessionId}` }, { status: 404 });
   }
-  const twin = session.agent.kind === "TWIN";
+  // Twins and new role plays: their report waits for this transcript (the whole conversation), which replaces the browser's.
+  const agentTranscript = usesAgentTranscript(session.agent.data, session.agent.kind);
 
   const requestedStatus: SessionEndStatus | undefined =
     body.status === "COMPLETED"
@@ -82,8 +84,7 @@ export async function POST(req: Request) {
     ...(body.audio_url ? { audioUrl: body.audio_url } : {}),
     ...(body.audio_s3_key ? { audioS3Key: body.audio_s3_key } : {}),
     ...(body.metrics ? { metrics: body.metrics } : {}),
-    // Twin reports wait for this: the agent's transcript is the whole conversation, the browser's may be partial.
-    ...(twin ? { transcriptFinal: true } : {}),
+    ...(agentTranscript ? { transcriptFinal: true } : {}),
   };
 
   const payload = {
@@ -92,7 +93,7 @@ export async function POST(req: Request) {
     s3AudioKey: body.audio_s3_key || body.audio_url
       ? String(body.audio_s3_key || body.audio_url)
       : undefined,
-    replaceTranscript: twin,
+    replaceTranscript: agentTranscript,
   };
   const finalized = requestedStatus
     ? await closeInterviewSession(session.id, requestedStatus, payload)

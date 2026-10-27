@@ -69,7 +69,7 @@ once into `web/data/roleplay/skills/<slug>/` (SKILL.md, scenario.json, items.jso
 
 1. ✅ **Before / after keys** — `data.before` (read `twinSettings` as fallback; writers write `before`) and `data.after`
    (`report: twin` for twins). No behaviour change; tests for both shapes.
-2. **After: one processing path** — `processCompletedSession` dispatches on `data.after.report`; the role-play report
+2. ✅ **After: one processing path** — `processCompletedSession` dispatches on `data.after.report`; the role-play report
    moves onto the same Workflow + `reportStatus` + quiet polling as twin; scorer = the branch's role-play prompt
    (goals → rubric consistency, pass, biggest opportunity), goals and rubric from `data.after`. Legacy interview
    reports keep `scheduleSessionReport`. Port the branch's report tests.

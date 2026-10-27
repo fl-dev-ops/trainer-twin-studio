@@ -35,7 +35,7 @@ mock.module("workflow/api", () => ({
 }));
 
 const { reportState } = await import("@/lib/twin/session-report");
-const { scheduleTwinReport } = await import("@/lib/twin/schedule-report");
+const { scheduleTwinReport } = await import("@/lib/schedule-report");
 const { generateTwinReport } = await import("@/workflows/twin-session-report-steps");
 const { FatalError, RetryableError } = await import("workflow");
 

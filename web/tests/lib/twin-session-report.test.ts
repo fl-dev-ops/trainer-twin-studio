@@ -45,7 +45,8 @@ test("after.report decides the processing; without it twins get the twin report,
   expect(reportKindOf({ after: { report: "nonsense" } }, "ROLEPLAY")).toBe("session");
   rows = { rp2: { agent: { kind: "ROLEPLAY", data: { after: { report: "roleplay" } } }, twinCalibration: null } };
   await processCompletedSession("rp2");
-  expect(roleplayScheduled).toEqual(["rp2"]); // role-play processing moves to its own path in the next step
+  expect(roleplayScheduled).toEqual([]); // not the older session report:
+  expect(claims).toEqual(["rp2"]); // claimed for the role-play report workflow
 });
 
 test("model reply becomes a twin report: trimmed, empties dropped, capped", () => {

@@ -1,23 +1,14 @@
 import { db } from "@/lib/db";
 import { scheduleSessionReport } from "@/lib/session-report-jobs";
-import { scheduleTwinReport } from "@/lib/twin/schedule-report";
+import { scheduleRoleplayReport, scheduleTwinReport } from "@/lib/schedule-report";
+import { reportKindOf } from "@/lib/session-after";
 
-/**
- * After the call: how a finished session is processed (Agent.data.after.report, plans/roleplay-skill.md).
- * Without an `after` block: twins get the twin report, everything else the existing session report.
- */
-export type ReportKind = "twin" | "roleplay" | "session";
-
-export function reportKindOf(data: unknown, kind: string | null | undefined): ReportKind {
-  const after = data && typeof data === "object" ? (data as { after?: { report?: unknown } }).after : undefined;
-  if (after?.report === "twin" || after?.report === "roleplay") return after.report;
-  return kind === "TWIN" ? "twin" : "session";
-}
+export { reportKindOf, type ReportKind } from "@/lib/session-after";
 
 /**
  * Runs once a session is completed: processes it the way its agent's `after` says.
  * Twin report → learner sessions only (a calibration's ratings are saved during the call, nothing to process);
- * role play → the session report for now (moves to its own processing next); session → the existing report.
+ * role play → the role-play report workflow (goals, rubric); session → the existing report.
  */
 export async function processCompletedSession(sessionId: string): Promise<boolean> {
   const session = await db.interviewSession.findUnique({
@@ -26,7 +17,8 @@ export async function processCompletedSession(sessionId: string): Promise<boolea
   });
   if (!session) return false;
   const report = reportKindOf(session.agent.data, session.agent.kind);
-  if (report !== "twin") return scheduleSessionReport(sessionId);
+  if (report === "roleplay") return scheduleRoleplayReport(sessionId);
+  if (report === "session") return scheduleSessionReport(sessionId);
   if (session.twinCalibration) return false;
   return scheduleTwinReport(sessionId);
 }
