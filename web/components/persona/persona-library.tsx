@@ -33,10 +33,6 @@ export function PersonaLibrary({ personas }: { personas: PersonaView[] }) {
           </Link>
         </header>
 
-        <p className="mt-6 max-w-[640px] text-sm leading-6 text-(--text-secondary)">
-          <b className="font-semibold text-foreground">These are the people your learners practise with.</b> The AI plays them in role plays. Pick one for a role play, or create your own.
-        </p>
-
         {own.length ? (
           <section aria-labelledby="persona-you" className="mt-8">
             <h2 id="persona-you" className="m-0 text-[18px] leading-6 font-semibold tracking-[-0.015em]">You</h2>
