@@ -134,7 +134,7 @@ function PersonaPicker({ personas, value, onChange }: { personas: Persona[]; val
     );
   }
   return (
-    <div role="radiogroup" aria-label="Client persona" className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5">
+    <div role="radiogroup" aria-label="Client persona" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
       {personas.map((persona) => {
         const on = persona.slug === value;
         return (
@@ -145,20 +145,23 @@ function PersonaPicker({ personas, value, onChange }: { personas: Persona[]; val
             aria-checked={on}
             onClick={() => onChange(persona.slug)}
             className={cn(
-              "flex flex-col items-center gap-1.5 rounded-[12px] border p-3 text-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",
-              on ? "border-(--brand) bg-(--brand)/5" : "border-(--border) hover:bg-(--sidebar)",
+              "flex items-center gap-3 rounded-[12px] border p-2.5 pr-3 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",
+              on ? "border-(--brand) bg-(--brand)/8 ring-1 ring-(--brand)" : "border-(--border) hover:bg-(--sidebar)",
             )}
           >
-            <span className="relative">
-              <UserAvatar user={{ name: persona.name, image: persona.photoUrl }} className="size-14 text-lg" />
+            {/* The tick sits on the photo's corner, so its box must wrap the photo exactly. */}
+            <span className="relative inline-flex shrink-0">
+              <UserAvatar user={{ name: persona.name, image: persona.photoUrl }} className="size-10 text-sm" />
               {on ? (
-                <span className="absolute -right-1 -bottom-1 grid size-5 place-items-center rounded-full bg-(--brand) text-white">
-                  <Check className="size-3" />
+                <span className="absolute -right-0.5 -bottom-0.5 grid size-4 place-items-center rounded-full bg-(--brand) text-white ring-2 ring-card">
+                  <Check className="size-2.5" strokeWidth={3} />
                 </span>
               ) : null}
             </span>
-            <span className="w-full truncate text-sm font-medium">{persona.name.split(" ")[0]}</span>
-            <span className="w-full truncate text-xs text-muted-foreground">{persona.isOwn ? "You" : persona.role}</span>
+            <span className="flex min-w-0 flex-col">
+              <span className="truncate text-sm font-medium">{persona.name}</span>
+              <span className="truncate text-xs text-muted-foreground">{persona.isOwn ? "You" : persona.role}</span>
+            </span>
           </button>
         );
       })}

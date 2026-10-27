@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Pencil } from "lucide-react";
 import { PersonaIcon } from "@/components/icons";
 import { CARD, ItemLabel, PersonaPhoto, RoleChip, Tags } from "@/components/persona/persona-parts";
 import { speakingTags } from "@/lib/persona";
@@ -69,25 +68,24 @@ export function PersonaLibrary({ personas }: { personas: PersonaView[] }) {
   );
 }
 
+/** A persona at a glance: name, background, behaviour and how they talk. The card opens the persona. */
 function PersonaCard({ item }: { item: PersonaView }) {
   const { persona } = item;
-  const place = [persona.age, persona.basedIn].filter(Boolean).join(" · ");
   return (
     <article className={cn(CARD, "relative flex flex-col gap-4 p-5 transition-shadow hover:shadow-[0_2px_4px_rgb(30_28_25/0.07),0_12px_28px_rgb(30_28_25/0.11)]")}>
-      {/* The whole card opens the persona; the edit button sits above this link. */}
       <Link
         href={`/personas/${encodeURIComponent(item.slug)}`}
         aria-label={`Open ${persona.name}`}
         className="absolute inset-0 rounded-[16px] outline-none focus-visible:ring-2 focus-visible:ring-(--brand)"
       />
-      <div className="flex items-start justify-between gap-3">
-        <PersonaPhoto name={persona.name} photoUrl={item.photoUrl} className="size-[72px] text-2xl" />
-        <RoleChip className={item.isOwn ? "bg-(--brand)/15 text-(--brand-strong) dark:text-(--brand)" : undefined}>{item.isOwn ? "Your persona" : persona.role}</RoleChip>
+      <div className="flex items-center gap-3">
+        <PersonaPhoto name={persona.name} photoUrl={item.photoUrl} className="size-12 text-lg" />
+        <div className="min-w-0 flex-1">
+          <h2 className="m-0 truncate text-[16px] leading-6 font-semibold tracking-[-0.01em]">{persona.name}</h2>
+          <RoleChip className={cn("mt-0.5 inline-block", item.isOwn && "bg-(--brand)/15 text-(--brand-strong) dark:text-(--brand)")}>{item.isOwn ? "Your persona" : persona.role}</RoleChip>
+        </div>
       </div>
-      <div>
-        <h2 className="m-0 text-[20px] leading-7 font-semibold tracking-[-0.01em]">{persona.name}</h2>
-        {place ? <p className="m-0 text-sm text-muted-foreground">{place}</p> : null}
-      </div>
+      {persona.background ? <p className="m-0 line-clamp-2 text-sm leading-[22px] text-(--text-secondary)">{persona.background}</p> : null}
       <div className="flex flex-col gap-1.5">
         <ItemLabel>Behaviour</ItemLabel>
         <Tags items={persona.behaviours.length ? persona.behaviours : ["Not set"]} />
@@ -95,23 +93,6 @@ function PersonaCard({ item }: { item: PersonaView }) {
       <div className="flex flex-col gap-1.5">
         <ItemLabel>How they talk</ItemLabel>
         <Tags items={speakingTags(persona)} />
-      </div>
-      {persona.background ? (
-        <div className="flex flex-col gap-1.5">
-          <ItemLabel>Background</ItemLabel>
-          <p className="m-0 line-clamp-3 text-sm leading-[22px] text-(--text-secondary)">{persona.background}</p>
-        </div>
-      ) : null}
-      <div className="mt-auto flex items-center justify-between gap-3 pt-1">
-        <span className="text-xs text-muted-foreground">{item.voice ? `Voice: ${item.voice.name}` : "No voice yet"}</span>
-        <Link
-          href={`/personas/${encodeURIComponent(item.slug)}/edit`}
-          aria-label={`Edit ${persona.name}`}
-          title="Edit persona"
-          className="relative z-10 grid size-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-(--tone-control) hover:text-foreground outline-none focus-visible:ring-2 focus-visible:ring-(--brand)"
-        >
-          <Pencil className="size-4" aria-hidden />
-        </Link>
       </div>
     </article>
   );

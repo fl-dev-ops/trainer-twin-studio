@@ -10,7 +10,9 @@ const AVATAR_TONES = [
   "bg-orange-500/15 text-orange-600 dark:text-orange-400",
 ];
 
-const columns = "grid grid-cols-[minmax(0,1.3fr)_minmax(0,1.6fr)_150px_110px] items-center gap-3";
+// Inline so the columns never depend on a freshly generated utility class.
+const columns = "grid items-center gap-3";
+const columnTemplate = { gridTemplateColumns: "minmax(0,1.3fr) minmax(0,1.6fr) 150px 110px" };
 
 /** Roleplay users (reference pageRoleUsers): everyone invited to or practising on the org's role plays. */
 export function RoleplayUsersPage({ users }: { users: RoleplayOutputs["users"]["list"] }) {
@@ -30,7 +32,7 @@ export function RoleplayUsersPage({ users }: { users: RoleplayOutputs["users"]["
           <p className="mt-1 text-sm text-muted-foreground">People practising on your roleplays</p>
         </div>
         <div className="mt-4 overflow-hidden rounded-[16px] border border-(--card-border) bg-card shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
-          <div className={cn(columns, "bg-(--sidebar) px-5 py-2.5 text-[12px] font-medium tracking-[0.04em] text-(--text-secondary) uppercase")}>
+          <div style={columnTemplate} className={cn(columns, "bg-(--sidebar) px-5 py-2.5 text-[12px] font-medium tracking-[0.04em] text-(--text-secondary) uppercase")}>
             <span>Name</span>
             <span>Email</span>
             <span>Roleplays assigned</span>
@@ -40,7 +42,7 @@ export function RoleplayUsersPage({ users }: { users: RoleplayOutputs["users"]["
             <p className="border-t border-(--border) px-5 py-6 text-center text-sm text-muted-foreground">Nobody yet. Assign a role play to invite people.</p>
           ) : null}
           {users.map((user, i) => (
-            <div key={user.email} className={cn(columns, "border-t border-(--border) px-5 py-3.5 text-sm")}>
+            <div key={user.email} style={columnTemplate} className={cn(columns, "border-t border-(--border) px-5 py-3.5 text-sm")}>
               <span className="flex min-w-0 items-center gap-3 font-medium">
                 <span className={cn("grid size-7 shrink-0 place-items-center rounded-full text-xs font-semibold", AVATAR_TONES[i % AVATAR_TONES.length])} aria-hidden>
                   {user.name.charAt(0).toUpperCase()}
