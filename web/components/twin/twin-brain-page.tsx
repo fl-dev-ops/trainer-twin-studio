@@ -6,12 +6,11 @@ import {
   ArrowLeft, BookOpen, Check, FileText, HardDrive, Minus, Pause, Pencil, Play, Plus, SlidersHorizontal, Sparkles, Video,
 } from "lucide-react";
 import { toast } from "sonner";
-import { SessionTime } from "@/components/sessions/session-time";
 import { cn } from "@/lib/utils";
 
 export type BrainKnowledge = {
   connectors: { id: string; kind: "drive" | "notion" | "youtube"; label: string; status: string }[];
-  recent: { id: string; title: string; ext: string; createdAt: string }[];
+  recent: { id: string; title: string }[];
   total: number;
 };
 
@@ -126,18 +125,12 @@ export function TwinBrainPage({ knowledge }: { knowledge: BrainKnowledge }) {
                       <li key={file.id} className="flex items-center gap-2.5">
                         <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                         <span className="min-w-0 flex-1 truncate" title={file.title}>{file.title}</span>
-                        <span className="shrink-0 text-xs text-muted-foreground"><SessionTime iso={file.createdAt} /></span>
                       </li>
                     ))}
                   </ul>
                 ) : (
                   <p className="m-0 text-sm text-muted-foreground">No files uploaded yet.</p>
                 )}
-                {knowledge.total > knowledge.recent.length ? (
-                  <Link href="/twin/knowledge" className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
-                    View all {knowledge.total} files
-                  </Link>
-                ) : null}
               </div>
             </Node>
 

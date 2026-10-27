@@ -16,7 +16,7 @@ export default async function TwinBrainRoute() {
     // Drive has no saved connection (one-hour import sessions), so show what was imported from it.
     db.knowledgeDocument.count({ where: { ...docs, externalId: { startsWith: "google-drive:" } } }),
     db.knowledgeDocument.count({ where: docs }),
-    db.knowledgeDocument.findMany({ where: docs, orderBy: { createdAt: "desc" }, take: 4, select: { id: true, title: true, slug: true, ext: true, createdAt: true } }),
+    db.knowledgeDocument.findMany({ where: docs, orderBy: { createdAt: "desc" }, take: 4, select: { id: true, title: true, slug: true } }),
   ]);
   const knowledge: BrainKnowledge = {
     connectors: [
@@ -24,7 +24,7 @@ export default async function TwinBrainRoute() {
       ...youtube.map((c) => ({ id: c.id, kind: "youtube" as const, label: c.channelTitle || "YouTube", status: "Connected" })),
       ...(driveFiles ? [{ id: "google-drive", kind: "drive" as const, label: "Google Drive", status: `${driveFiles} imported` }] : []),
     ],
-    recent: recent.map((d) => ({ id: d.id, title: d.title || d.slug, ext: d.ext, createdAt: d.createdAt.toISOString() })),
+    recent: recent.map((d) => ({ id: d.id, title: d.title || d.slug })),
     total,
   };
   return <TwinBrainPage knowledge={knowledge} />;
