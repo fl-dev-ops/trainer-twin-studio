@@ -14,7 +14,7 @@ import {
   twinShareUrl,
 } from "@/lib/twin-access";
 import { TWIN_SOURCE } from "@/lib/twins";
-import { AVATAR_VIDEO_TYPES, AvatarError, avatarState, avatarVideoUpload, saveAvatar, type AvatarVideoType } from "@/lib/twin/avatar";
+import { AVATAR_VIDEO_TYPES, AvatarError, avatarPhotoUrl, avatarState, avatarVideoUpload, saveAvatar, type AvatarVideoType } from "@/lib/twin/avatar";
 import { getRun } from "workflow/api";
 import { isTwinReport, reportState } from "@/lib/twin/session-report";
 import { attachRatings, durationSeconds, firstExchange, lastSevenDays, likeRateByWeek, mostAsked, titleFrom, transcriptTurns } from "@/lib/twin/stats";
@@ -131,11 +131,10 @@ async function orgAdmin(orgId: string) {
   return admin?.user ?? null;
 }
 
-/** The twin's AI avatar (image or video), set on its own persona as `data.avatarUrl`; https or same-site paths only. */
-function aiAvatarUrl(personaData: unknown): string | null {
-  const url = text(asRecord(personaData).avatarUrl);
-  return url && (url.startsWith("https://") || url.startsWith("/")) ? url : null;
-}
+/** The twin's face: its persona's avatar photo (Avatar row), served through the same-site avatar route. */
+const personaFace = { select: { slug: true, avatar: { select: { s3ImageKey: true, updatedAt: true } } } } as const;
+const aiAvatarUrl = (persona: { slug: string; avatar: { s3ImageKey: string | null; updatedAt: Date } | null }) =>
+  avatarPhotoUrl(persona.slug, persona.avatar);
 
 const agentsRouter = t.router({
   /** The library: all-skills twins and skill twins, with assigned learners and the latest learner question. */
@@ -145,7 +144,7 @@ const agentsRouter = t.router({
       db.agent.findMany({
         where: { orgId, kind: "TWIN" },
         orderBy: [{ order: "asc" }, { name: "asc" }],
-        select: { id: true, slug: true, name: true, data: true, updatedAt: true, persona: { select: { data: true } } },
+        select: { id: true, slug: true, name: true, data: true, updatedAt: true, persona: personaFace },
       }),
       db.twinAssignment.findMany({
         where: { orgId, status: "active" },
@@ -170,7 +169,7 @@ const agentsRouter = t.router({
         quote: questionOf.get(agent.id) ?? null,
         updatedAt: agent.updatedAt.toISOString(),
         allSkills: data.source === TWIN_SOURCE,
-        face: { person: admin, avatarUrl: aiAvatarUrl(agent.persona.data) },
+        face: { person: admin, avatarUrl: aiAvatarUrl(agent.persona) },
         learners: assignments
           .filter((row) => row.agentId === agent.id)
           .map((row) => ({ name: row.user?.name || row.recipientEmail, email: row.recipientEmail, image: row.user?.image ?? null })),
@@ -416,12 +415,12 @@ const calibrationsRouter = t.router({
     const found = await findTwinAgent(ctx.user.orgId, input.slug);
     const [rows, persona, admin] = await Promise.all([
       calibrationRows(ctx.user.orgId, found.id),
-      db.agent.findUniqueOrThrow({ where: { id: found.id }, select: { persona: { select: { data: true } } } }),
+      db.agent.findUniqueOrThrow({ where: { id: found.id }, select: { persona: personaFace } }),
       orgAdmin(ctx.user.orgId),
     ]);
     return {
       name: found.name,
-      face: { person: admin, avatarUrl: aiAvatarUrl(persona.persona.data) },
+      face: { person: admin, avatarUrl: aiAvatarUrl(persona.persona) },
       calibrations: rows.map((row) => omitRatings(row)),
     };
   })),
@@ -504,7 +503,6 @@ const avatarRouter = t.router({
       photo: z.string().min(1).max(3_000_000),
       videoKey: z.string().min(1).max(500),
       voiceId: z.string().min(1).max(100),
-      transcript: z.string().trim().max(2000),
     }))
     .mutation(({ ctx, input }) => twinCall(() => saveAvatar(ctx.user.orgId, input))),
 });

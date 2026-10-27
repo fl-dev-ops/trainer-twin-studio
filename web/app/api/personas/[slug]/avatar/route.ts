@@ -3,7 +3,7 @@ import { getSessionOrg } from "@/lib/org";
 import { presignedGetUrl } from "@/lib/s3";
 import { avatarImageKey } from "@/lib/twin/avatar";
 
-/** The persona's avatar photo (persona.data.avatarUrl points here): org members only, redirected to S3. */
+/** The persona's avatar photo (its Avatar row's image): org members only, redirected to S3. */
 export async function GET(_request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const org = await getSessionOrg();
   if (!org) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

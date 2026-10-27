@@ -34,7 +34,7 @@ export async function activateInterviewRuntime(input: {
       id: true,
       assignmentId: true,
       agentSlug: true,
-      agent: { select: { data: true } },
+      agent: { select: { data: true, persona: { select: { voiceId: true } } } },
       livekitRoom: true,
       livekitDispatchId: true,
       audioEgressId: true,
@@ -42,7 +42,8 @@ export async function activateInterviewRuntime(input: {
     },
   });
   const agentData = row.agent.data as { introVideo?: unknown; voiceId?: unknown } | null;
-  const configuredVoiceId = typeof agentData?.voiceId === "string" ? agentData.voiceId : "";
+  // The agent's own voice (an explicit override) wins; otherwise the voice its persona owns.
+  const configuredVoiceId = typeof agentData?.voiceId === "string" && agentData.voiceId ? agentData.voiceId : row.agent.persona.voiceId ?? "";
   const configuredVoice = configuredVoiceId
     ? await db.voice.findFirst({
         where: { id: configuredVoiceId, status: "ready", OR: [{ orgId: input.orgId }, { orgId: null }] },

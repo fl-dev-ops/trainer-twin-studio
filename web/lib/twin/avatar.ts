@@ -1,13 +1,15 @@
+import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
-import { personaSourcePrefix, presignedPutUrl, putObject } from "@/lib/s3";
+import { avatarPrefix, deleteObject, deletePrefix, presignedPutUrl, putObject, voicePrefix } from "@/lib/s3";
 import { TWIN_SOURCE } from "@/lib/twins";
 
 /**
- * The trainer's avatar setup ("Voice and avatar" on Twin's brain), stored on their own persona:
- * - `data.avatarUrl`: the photo (same-site route that redirects to S3), shown as the twin's face everywhere;
- * - `data.avatar`: { imageKey, videoKey, voiceId, transcript, updatedAt }. The video (reading the passage on camera)
- *   is kept as the AI avatar reference; its audio became the cloned voice, which every twin of the persona speaks with.
+ * The trainer's "Voice and avatar" setup on Twin's brain, stored the persona way (migration persona_media):
+ * - the persona's own Avatar row: `s3ImageKey` (the photo, the twin's face) and `s3VideoKey` (the take of them reading
+ *   the passage on camera, kept as the AI avatar reference);
+ * - `Persona.voiceId`: the voice cloned from that take's audio (reference audio + transcript live on the Voice).
+ * Twins speak with their persona's voice unless the agent sets its own `voiceId` (see session activation).
  */
 
 export const AVATAR_VIDEO_TYPES = { "video/webm": "webm", "video/mp4": "mp4" } as const;
@@ -16,9 +18,13 @@ const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
 
 export class AvatarError extends Error {}
 
-const personaSelect = { id: true, slug: true, name: true, version: true, data: true, isOwn: true } as const;
-const asRecord = (value: unknown) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
+const personaSelect = {
+  id: true, slug: true, name: true, isOwn: true, voiceId: true,
+  avatar: { select: { id: true, s3ImageKey: true, s3VideoKey: true, updatedAt: true } },
+  voice: { select: { name: true } },
+} as const;
 const json = (value: unknown) => value as Prisma.InputJsonValue;
+const asRecord = (value: unknown) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
 
 /** The persona behind the trainer's main twin (all skills), else their first own persona. */
 export async function ownTwinPersona(orgId: string) {
@@ -31,30 +37,43 @@ export async function ownTwinPersona(orgId: string) {
   return db.persona.findFirst({ where: { orgId, isOwn: true }, orderBy: { createdAt: "asc" }, select: personaSelect });
 }
 
-const avatarPrefix = (orgId: string, personaId: string) => personaSourcePrefix(orgId, personaId, "avatar");
+/** Same-site URL of a persona's photo; `v` changes with every save so browsers never show a stale one. */
+export const avatarPhotoUrl = (personaSlug: string, avatar: { s3ImageKey: string | null; updatedAt: Date } | null | undefined) =>
+  avatar?.s3ImageKey ? `/api/personas/${encodeURIComponent(personaSlug)}/avatar?v=${avatar.updatedAt.getTime()}` : null;
 
 /** What the Brain card and the capture page show. */
 export async function avatarState(orgId: string) {
   const persona = await ownTwinPersona(orgId);
   if (!persona) return null;
-  const data = asRecord(persona.data);
-  const avatar = asRecord(data.avatar);
-  const voiceId = typeof avatar.voiceId === "string" ? avatar.voiceId : null;
-  const voice = voiceId ? await db.voice.findFirst({ where: { id: voiceId, orgId }, select: { name: true } }) : null;
   return {
     personaName: persona.name,
-    photoUrl: typeof data.avatarUrl === "string" ? data.avatarUrl : null,
-    hasReference: typeof avatar.videoKey === "string",
-    voiceName: voice?.name ?? null,
-    updatedAt: typeof avatar.updatedAt === "string" ? avatar.updatedAt : null,
+    photoUrl: avatarPhotoUrl(persona.slug, persona.avatar),
+    hasReference: Boolean(persona.avatar?.s3VideoKey),
+    voiceName: persona.voice?.name ?? null,
+    updatedAt: persona.avatar?.updatedAt.toISOString() ?? null,
   };
 }
 
-/** Where the browser uploads the reference video (straight to S3). */
+/** The persona's Avatar, created and linked on first use (the persona owns it). */
+async function ensureAvatar(orgId: string, persona: NonNullable<Awaited<ReturnType<typeof ownTwinPersona>>>) {
+  if (persona.avatar) return persona.avatar;
+  const avatar = await db.avatar.create({ data: { orgId, name: `${persona.name} avatar` }, select: { id: true } });
+  const linked = await db.persona.updateMany({ where: { id: persona.id, avatarId: null }, data: { avatarId: avatar.id } });
+  if (linked.count === 1) return avatar;
+  // A parallel request linked its own avatar first: use that one.
+  await db.avatar.delete({ where: { id: avatar.id } }).catch(() => {});
+  const current = await db.persona.findUniqueOrThrow({ where: { id: persona.id }, select: { avatarId: true } });
+  return { id: current.avatarId! };
+}
+
+const videoFolder = (orgId: string, avatarId: string) => `${avatarPrefix(orgId, avatarId)}/video/`;
+
+/** Where the browser uploads the reference video (straight to S3), inside the persona's avatar folder. */
 export async function avatarVideoUpload(orgId: string, contentType: AvatarVideoType) {
   const persona = await ownTwinPersona(orgId);
   if (!persona) throw new AvatarError("Set up your twin first");
-  const key = `${avatarPrefix(orgId, persona.id)}/reference-${Date.now()}.${AVATAR_VIDEO_TYPES[contentType]}`;
+  const avatar = await ensureAvatar(orgId, persona);
+  const key = `${videoFolder(orgId, avatar.id)}${randomUUID()}.${AVATAR_VIDEO_TYPES[contentType]}`;
   return { key, url: await presignedPutUrl(key, contentType) };
 }
 
@@ -67,44 +86,69 @@ export function decodePhoto(photo: string) {
 }
 
 /**
- * Saves the photo, records the reference video and links the cloned voice: the persona's avatar fields, and the
- * voice on every twin of the persona. Versioned like other spec edits (SpecVersion keeps the previous data).
+ * Saves the photo and the reference video on the persona's avatar and makes the cloned voice the persona's own.
+ * Twins then speak with it: their old copied `voiceId` is cleared (versioned), so the persona's voice applies.
+ * A previous voice that nothing else uses is deleted with its files.
  */
-export async function saveAvatar(orgId: string, input: { photo: string; videoKey: string; voiceId: string; transcript: string }) {
+export async function saveAvatar(orgId: string, input: { photo: string; videoKey: string; voiceId: string }) {
   const persona = await ownTwinPersona(orgId);
   if (!persona) throw new AvatarError("Set up your twin first");
-  const prefix = `${avatarPrefix(orgId, persona.id)}/reference-`;
-  const videoOk = input.videoKey.startsWith(prefix) && /^\d+\.(webm|mp4)$/.test(input.videoKey.slice(prefix.length));
-  if (!videoOk) throw new AvatarError("Unknown video");
-  const voice = await db.voice.findFirst({ where: { id: input.voiceId, orgId, status: "ready" }, select: { id: true } });
+  const avatar = persona.avatar;
+  const folder = avatar ? videoFolder(orgId, avatar.id) : null;
+  const videoOk = folder && input.videoKey.startsWith(folder) && /^[0-9a-f-]{36}\.(webm|mp4)$/.test(input.videoKey.slice(folder.length));
+  if (!avatar || !videoOk) throw new AvatarError("Unknown video");
+  // The voice must be this org's, ready, and not owned by another persona.
+  const voice = await db.voice.findFirst({
+    where: { id: input.voiceId, orgId, status: "ready", OR: [{ persona: null }, { persona: { id: persona.id } }] },
+    select: { id: true },
+  });
   if (!voice) throw new AvatarError("Unknown voice");
   const photo = decodePhoto(input.photo);
 
-  const now = new Date();
-  const imageKey = `${avatarPrefix(orgId, persona.id)}/photo-${now.getTime()}.jpg`;
+  const imageKey = `${avatarPrefix(orgId, avatar.id)}/image/${randomUUID()}.jpg`;
   await putObject(imageKey, photo, "image/jpeg");
 
-  const avatarUrl = `/api/personas/${encodeURIComponent(persona.slug)}/avatar?v=${now.getTime()}`;
-  const personaData = {
-    ...asRecord(persona.data),
-    avatarUrl,
-    avatar: { imageKey, videoKey: input.videoKey, voiceId: voice.id, transcript: input.transcript, updatedAt: now.toISOString() },
-  };
-  const twins = await db.agent.findMany({ where: { orgId, kind: "TWIN", personaId: persona.id }, select: { id: true, slug: true, version: true, data: true } });
+  const previousVoiceId = persona.voiceId && persona.voiceId !== voice.id ? persona.voiceId : null;
+  const twins = await db.agent.findMany({
+    where: { orgId, kind: "TWIN", personaId: persona.id },
+    select: { id: true, slug: true, version: true, data: true },
+  });
+  // Twins that carry their own copy of a voice (written by the earlier setup) would override the persona's.
+  const copied = twins.filter((twin) => typeof asRecord(twin.data).voiceId === "string");
   await db.$transaction([
-    db.specVersion.create({ data: { entityType: "personas", entitySlug: persona.slug, version: persona.version, data: json(persona.data), orgId } }),
-    db.persona.update({ where: { id: persona.id }, data: { version: persona.version + 1, data: json(personaData) } }),
-    ...twins.flatMap((twin) => [
-      db.specVersion.create({ data: { entityType: "agents", entitySlug: twin.slug, version: twin.version, data: json(twin.data), orgId } }),
-      db.agent.update({ where: { id: twin.id }, data: { version: twin.version + 1, data: json({ ...asRecord(twin.data), voiceId: voice.id }) } }),
-    ]),
+    db.avatar.update({ where: { id: avatar.id }, data: { s3ImageKey: imageKey, s3VideoKey: input.videoKey } }),
+    db.persona.update({ where: { id: persona.id }, data: { voiceId: voice.id } }),
+    ...copied.flatMap((twin) => {
+      const { voiceId: _dropped, ...data } = asRecord(twin.data);
+      void _dropped;
+      return [
+        db.specVersion.create({ data: { entityType: "agents", entitySlug: twin.slug, version: twin.version, data: json(twin.data), orgId } }),
+        db.agent.update({ where: { id: twin.id }, data: { version: twin.version + 1, data: json(data) } }),
+      ];
+    }),
   ]);
-  return { avatarUrl, twins: twins.length };
+
+  // Replaced files and an unused previous voice: best effort, the DB already points at the new ones.
+  const replaced = [avatar.s3ImageKey, avatar.s3VideoKey !== input.videoKey ? avatar.s3VideoKey : null].filter((key): key is string => Boolean(key));
+  await Promise.all(replaced.map((key) => deleteObject(key).catch(() => {})));
+  if (previousVoiceId) await removeUnusedVoice(orgId, previousVoiceId);
+
+  return { avatarUrl: avatarPhotoUrl(persona.slug, { s3ImageKey: imageKey, updatedAt: new Date() }), twins: copied.length };
+}
+
+/** Deletes a voice no persona owns and no agent names (e.g. the one a re-recording replaced). */
+async function removeUnusedVoice(orgId: string, voiceId: string) {
+  const [owner, agents] = await Promise.all([
+    db.persona.findFirst({ where: { voiceId }, select: { id: true } }),
+    db.agent.count({ where: { orgId, data: { path: ["voiceId"], equals: voiceId } } }),
+  ]);
+  if (owner || agents) return;
+  await deletePrefix(`${voicePrefix(orgId, voiceId)}/`).catch(() => {});
+  await db.voice.deleteMany({ where: { id: voiceId, orgId } });
 }
 
 /** The S3 key of the persona's photo (for the same-site avatar route). */
 export async function avatarImageKey(orgId: string, personaSlug: string) {
-  const persona = await db.persona.findFirst({ where: { orgId, slug: personaSlug }, select: { data: true } });
-  const key = asRecord(asRecord(persona?.data).avatar).imageKey;
-  return typeof key === "string" ? key : null;
+  const persona = await db.persona.findFirst({ where: { orgId, slug: personaSlug }, select: { avatar: { select: { s3ImageKey: true } } } });
+  return persona?.avatar?.s3ImageKey ?? null;
 }

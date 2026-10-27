@@ -163,7 +163,7 @@ export function TwinAvatarCapture({ personaName }: { personaName: string | null 
       if (!cloned.ok || !body.voice?.id) throw new Error(body.error ?? "Your voice could not be saved.");
 
       setProgress("Saving\u2026");
-      await twinClient.avatar.save.mutate({ photo, videoKey: upload.key, voiceId: body.voice.id, transcript: passage });
+      await twinClient.avatar.save.mutate({ photo, videoKey: upload.key, voiceId: body.voice.id });
       toast.success("Your photo, voice and video are saved.");
       router.push("/twin/brain");
       router.refresh();
