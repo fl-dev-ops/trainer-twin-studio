@@ -99,6 +99,8 @@ type Props = {
   agentSpeakers?: Record<string, string>;
   /** Client-persona photo per scenario slug, shown on the call tile. */
   agentAvatars?: Record<string, string>;
+  /** Client-persona role and short description per scenario slug, for the sales start screen. */
+  agentProfiles?: Record<string, { role?: string; description?: string }>;
   agentContextRequired?: Record<string, boolean>;
   agentContextUploads?: Record<string, AgentContextUpload>;
   sessionCode?: string;
@@ -127,6 +129,7 @@ export function SessionView({
   agentPersonas = {},
   agentSpeakers = {},
   agentAvatars = {},
+  agentProfiles = {},
   agentContextRequired = {},
   agentContextUploads = {},
   sessionCode,
@@ -959,6 +962,63 @@ export function SessionView({
         <div className="flex items-center gap-3 text-sm text-white/75">
           <LoaderCircle className="size-5 animate-spin" /> Preparing your session…
         </div>
+      </div>
+    );
+  }
+
+  if (!launched && !screenShareRequired) {
+    // Sales orgs test one role play: show who the learner will speak with, then start.
+    const scenarioTitle = scenarioName ?? agentNames[agent] ?? agent.replaceAll("-", " ");
+    const speakerName = speaker.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+    const avatar = agentAvatars[agent];
+    const profile = agentProfiles[agent] ?? {};
+    return (
+      <div className="flex h-dvh w-dvw flex-col overflow-hidden bg-white text-neutral-900">
+        <header className="flex h-16 shrink-0 items-center px-4 sm:px-6">
+          <Link href="/" className="flex items-center gap-2.5">
+            <Image src="/trainertwin-mark.svg" alt="" width={22} height={17} priority />
+            <span className="font-bold text-lg tracking-tight text-neutral-900">TrainerTwin</span>
+          </Link>
+        </header>
+
+        <main className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto p-4 sm:p-6">
+          <div className="flex w-full max-w-xl flex-col gap-6">
+            <h1 className="text-center text-2xl font-semibold tracking-tight">{scenarioTitle}</h1>
+
+            <section className="flex items-start gap-4 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm sm:gap-5">
+              {avatar ? (
+                <Image src={avatar} alt="" width={96} height={96} className="size-20 shrink-0 rounded-full object-cover sm:size-24" />
+              ) : (
+                <span className="grid size-20 shrink-0 place-items-center rounded-full bg-neutral-100 text-3xl font-medium sm:size-24">
+                  {speakerName.charAt(0)}
+                </span>
+              )}
+              <div className="flex min-w-0 flex-col gap-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-lg font-semibold">{speakerName}</h2>
+                  {profile.role && (
+                    <span className="rounded-full border border-neutral-200 px-2.5 py-0.5 text-xs text-neutral-600">{profile.role}</span>
+                  )}
+                </div>
+                {profile.description && <p className="text-sm leading-6 text-neutral-600">{profile.description}</p>}
+              </div>
+            </section>
+
+            {error && <p role="alert" className="text-center text-sm text-red-600">{error}</p>}
+
+            <Button
+              size="lg"
+              onClick={() => {
+                setLaunched(true);
+                void handleStartSession();
+              }}
+              disabled={!persona || !agent}
+              className="h-11 w-full rounded-full"
+            >
+              <Play data-icon="inline-start" /> Start session
+            </Button>
+          </div>
+        </main>
       </div>
     );
   }

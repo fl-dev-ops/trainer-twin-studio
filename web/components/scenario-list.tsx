@@ -211,7 +211,7 @@ function ScenarioMenu({ card }: { card: ScenarioCard }) {
           <Pencil /> Edit
         </DropdownMenuItem>
         {card.status === "published" && (
-          <DropdownMenuItem render={<Link href={`/agents/${encodeURIComponent(card.slug)}`} />}>
+          <DropdownMenuItem render={<Link href={card.kind === "roleplay" ? `/talk?agent=${encodeURIComponent(card.slug)}` : `/agents/${encodeURIComponent(card.slug)}`} />}>
             <Play /> {card.kind === "roleplay" ? "Try role play" : "Open"}
           </DropdownMenuItem>
         )}

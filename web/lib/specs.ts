@@ -168,6 +168,23 @@ export async function listAgentAvatars(orgId: string, slugs: string[]) {
   );
 }
 
+/** Client-persona role and background per scenario slug, for the sales start screen. */
+export async function listAgentPersonaProfiles(orgId: string, slugs: string[]) {
+  const agents = await db.agent.findMany({
+    where: { orgId, slug: { in: slugs } },
+    select: { slug: true, persona: { select: { data: true } } },
+  });
+  return Object.fromEntries(
+    agents.map((agent) => {
+      const data = (agent.persona.data ?? {}) as { role?: unknown; background?: unknown };
+      return [agent.slug, {
+        role: typeof data.role === "string" ? data.role : undefined,
+        description: typeof data.background === "string" ? data.background : undefined,
+      }];
+    }),
+  );
+}
+
 export async function listAgentNames(orgId: string, slugs: string[]) {
   const agents = await db.agent.findMany({
     where: { orgId, slug: { in: slugs } },
