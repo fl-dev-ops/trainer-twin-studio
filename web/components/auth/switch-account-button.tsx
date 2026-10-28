@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
 
-export function SwitchAccountButton({ returnTo }: { returnTo: string }) {
+export function SwitchAccountButton({ returnTo, label = "Switch account" }: { returnTo: string; label?: string }) {
   const [error, setError] = useState<string | null>(null);
 
   async function switchAccount() {
@@ -18,7 +18,7 @@ export function SwitchAccountButton({ returnTo }: { returnTo: string }) {
 
   return (
     <>
-      <Button type="button" variant="outline" onClick={switchAccount}>Switch account</Button>
+      <Button type="button" variant="outline" onClick={switchAccount}>{label}</Button>
       {error ? <p role="alert" className="text-destructive text-sm">{error}</p> : null}
     </>
   );
