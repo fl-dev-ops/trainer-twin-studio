@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowUp, Flag, LoaderCircle, Paperclip, Volume2 } from "lucide-react";
+import { ArrowUp, FileSearch, Flag, LoaderCircle, Paperclip, Volume2 } from "lucide-react";
 import { RoomAudioRenderer, RoomContext, useStartAudio, useVoiceAssistant } from "@livekit/components-react";
 import { Room, RoomEvent, type TranscriptionSegment } from "livekit-client";
 import {
@@ -17,6 +17,7 @@ import {
 } from "@/components/calibration/call-icons";
 import type { CalibrationTurn, Rating } from "@/components/calibration/mock";
 import { Bubble, CalibrationStats, PILL, RatingLabel, SOFT_SHADOW, TwinPortrait } from "@/components/calibration/parts";
+import { WhyPanel } from "@/components/calibration/why-panel";
 import { RoleplayIcon } from "@/components/icons";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { LiveKitWorkspaceProvider } from "@/lib/livekit-workspaces";
@@ -416,6 +417,8 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
     });
   }
 
+  /** The twin reply whose "Why this answer" is open (calibration only). */
+  const [whyFor, setWhyFor] = useState<{ id: string; text: string } | null>(null);
   const [attaching, setAttaching] = useState(false);
   const attachInput = useRef<HTMLInputElement>(null);
   /** Mid-call file, as in the learner's session: upload it, link it to this session, then tell the twin its ID (it reads by ID). */
@@ -559,7 +562,23 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                             {twinName} speaking
                           </p>
                         ) : null}
-                        <Bubble speaker="twin">{turn.text}</Bubble>
+                        {twin && !learner && !turn.streaming && connection?.sessionId ? (
+                          <div className="flex items-start gap-2">
+                            <Bubble speaker="twin">{turn.text}</Bubble>
+                            <button
+                              type="button"
+                              aria-label="Why did the twin say this?"
+                              title="Why this answer?"
+                              aria-pressed={whyFor?.id === turn.id}
+                              onClick={() => setWhyFor(whyFor?.id === turn.id ? null : { id: turn.id, text: turn.text })}
+                              className={cn("mt-1 grid size-8 shrink-0 place-items-center rounded-full ring-1 ring-border hover:bg-muted", whyFor?.id === turn.id && "bg-muted")}
+                            >
+                              <FileSearch className="size-4" aria-hidden />
+                            </button>
+                          </div>
+                        ) : (
+                          <Bubble speaker="twin">{turn.text}</Bubble>
+                        )}
                         {turn.streaming || learner ? null : turn.rating ? (
                           <RatingLabel rating={turn.rating} className="text-[13px]" />
                         ) : turn.id !== latestTwinId ? null : (
@@ -692,6 +711,10 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
               </button>
             </div>
             </div>
+
+            {whyFor && connection?.sessionId ? (
+              <WhyPanel key={whyFor.id} sessionId={connection.sessionId} reply={whyFor.text} onClose={() => setWhyFor(null)} />
+            ) : null}
 
             <AlertDialog open={confirmEnd} onOpenChange={(open) => !ending && setConfirmEnd(open)}>
               <AlertDialogContent className="flex max-w-[420px]! flex-col items-center gap-6 rounded-3xl px-6 pt-8 pb-6">

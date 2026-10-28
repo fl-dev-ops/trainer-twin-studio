@@ -12,7 +12,7 @@ INSERT INTO "Persona" (id, "orgId", slug, name, data, "isOwn", "updatedAt") VALU
 INSERT INTO "Agent" (id, "orgId", slug, name, "personaId", kind, data, "updatedAt") VALUES
   ('kind-twin', 'kind-org', 'kind-twin', 'Twin', 'kind-own', 'TWIN', '{}', NOW()),
   -- an org role play may use a global persona
-  ('kind-rp', 'kind-org', 'kind-rp', 'Role play', 'd', 'kind-global', 'ROLEPLAY', '{}', NOW());
+  ('kind-rp', 'kind-org', 'kind-rp', 'Role play', 'kind-global', 'ROLEPLAY', '{}', NOW());
 
 DO $$
 BEGIN

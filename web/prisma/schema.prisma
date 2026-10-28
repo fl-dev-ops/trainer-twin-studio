@@ -371,6 +371,7 @@ model InterviewSession {
   twinAssignmentId String?
   twinAssignment   TwinAssignment?     @relation(fields: [twinAssignmentId], references: [id], onDelete: SetNull)
   twinCalibration  TwinCalibration?
+  turnEvidence     TwinTurnEvidence[]
 
   @@index([orgId, userId])
   @@index([agentId])
@@ -913,6 +914,21 @@ model TwinAssignment {
   @@unique([agentId, recipientEmail])
   @@index([orgId, status])
   @@index([userId])
+}
+
+// ---- Twin turn evidence (migration twin_turn_evidence) ----
+// Why a twin said what it said, one row per brain turn of a twin session: what it heard, what it looked up and the
+// moments that came back (data: heard, reply, inputKind, calls). Posted by the chat runtime after each turn; shown as
+// "Why this answer" on the calibration call.
+model TwinTurnEvidence {
+  id        String   @id @default(cuid())
+  sessionId String
+  data      Json
+  createdAt DateTime @default(now())
+
+  session InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
 }
 
 // ---- Twin calibration (migration twin_calibration) ----

@@ -493,7 +493,7 @@ export class MainCollectionService {
     agentSlug: string | string[],
     query: string,
     options: { step?: string; role?: ScenarioItemRole; limit?: number; steps?: ScenarioStep[] } = {},
-  ): Promise<{ text: string; context: string; step?: string; move?: string; role: string; score: number; scenario: string }[]> {
+  ): Promise<{ text: string; context: string; step?: string; move?: string; role: string; score: number; scenario: string; source?: string }[]> {
     const slugs = Array.isArray(agentSlug) ? agentSlug : [agentSlug];
     if (slugs.length === 0) return [];
     const collection = await this.getCollection(orgId);
@@ -527,6 +527,8 @@ export class MainCollectionService {
           role: String(meta.role ?? ""),
           score: typeof distance === "number" ? 1 - distance : 0,
           scenario: String(meta.scenarioId ?? meta.agentSlug ?? ""),
+          // The knowledge document the line came from (twin-creator items), for "Why this answer".
+          ...(typeof meta.source === "string" && meta.source ? { source: meta.source } : {}),
         };
       });
     };

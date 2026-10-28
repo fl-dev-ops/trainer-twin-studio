@@ -10,6 +10,7 @@ import { redactLearnerNames } from "@/lib/persona-voice";
 import { enqueueWorkspaceCommand } from "@/lib/workspace-commands";
 import { buildSessionContext, getCachedSessionContext } from "@/lib/session-context";
 import { unusedResumeClaims } from "@/lib/resume-interview";
+import { recordTurnEvidence, turnEvidenceSchema } from "@/lib/twin/evidence";
 
 export const runtime = "nodejs";
 
@@ -93,6 +94,7 @@ const requestSchema = z.discriminatedUnion("action", [
     action: z.literal("finishSession"),
     sessionId: z.string().trim().min(1),
   }).strict(),
+  turnEvidenceSchema.extend({ action: z.literal("recordTurnEvidence") }).strict(),
   z.object({
     action: z.literal("isCalibrationSession"),
     sessionId: z.string().trim().min(1),
@@ -214,6 +216,10 @@ export async function POST(request: Request) {
       data: { result: { status: input.candidateLocated ? "located" : "claim_cancelled" } },
     });
     return Response.json({ status: input.candidateLocated ? "ready" : "claim_cancelled", question: input.candidateLocated ? question : null });
+  }
+
+  if (input.action === "recordTurnEvidence") {
+    return Response.json(await recordTurnEvidence(orgId, turnEvidenceSchema.parse(input)));
   }
 
   if (input.action === "isCalibrationSession") {

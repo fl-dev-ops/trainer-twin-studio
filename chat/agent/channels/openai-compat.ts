@@ -7,6 +7,9 @@ import { summarizeToolInput, summarizeToolOutput } from "../lib/tool-trace";
 import { thinkingBudgetSchema } from "../lib/thinking-budget";
 import { studioFetch } from "../lib/studio";
 
+/** Lookups shown in "Why this answer" (the web describes and resolves them; UI tools are left out). */
+const EVIDENCE_TOOLS = new Set(["scenario_examples", "search_knowledge", "search_style", "read_document", "eve__skill"]);
+
 /** Resume claims already highlighted per session, so the bridge never speaks a spent claim's question. */
 // ponytail: unbounded Map, one small Set per voice session; a process restart clears it.
 const usedClaimsBySession = new Map<string, Set<string>>();
@@ -183,7 +186,7 @@ export default defineChannel({
       }
       return Response.json({ ready: true, sessionId, existing: Boolean(await resolveSession(sessionId)) });
     }),
-    POST("/v1/chat/completions", async (request, { from, resolveSession }) => {
+    POST("/v1/chat/completions", async (request, { from, resolveSession, waitUntil }) => {
       const principal = studioPrincipal(request);
       const orgHeader = request.headers.get("x-trainertwin-org-id")?.trim();
       const bearer = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
@@ -397,6 +400,9 @@ export default defineChannel({
           output?: Record<string, unknown>;
         }[] = [];
         const retrievalTraces: { callId: string; input: unknown; output: unknown }[] = [];
+        // "Why this answer" (twin sessions): the reply and each lookup's input and output, posted after the turn.
+        let replyText = "";
+        const evidenceCalls: { tool: string; input: unknown; output: unknown }[] = [];
         const finishReason = () => "stop";
 
         try {
@@ -430,6 +436,7 @@ export default defineChannel({
                 textStarted = true;
               }
               markSpoken();
+              replyText += content;
               await writeText(content);
               continue;
             }
@@ -486,6 +493,9 @@ export default defineChannel({
                     input: summarizeToolInput(toolName, requested?.input),
                     output: summarizeToolOutput(toolName, result.output, result.isError),
                   });
+                }
+                if (result.toolName && EVIDENCE_TOOLS.has(result.toolName) && !result.isError && evidenceCalls.length < 12) {
+                  evidenceCalls.push({ tool: result.toolName, input: allToolsCalled.find((call) => call.callId === callId)?.input ?? {}, output: result.output });
                 }
                 if (result.toolName === "search_knowledge" && !result.isError) {
                   retrievalTraces.push({
@@ -570,6 +580,20 @@ export default defineChannel({
               };
 
               console.info("[brain-trace] " + JSON.stringify(brainTrace));
+
+              // After the reply: the web keeps it for twin sessions only. Never delays or fails the turn.
+              if (sessionIdHeader && (inputKind === "learner" || inputKind === "opening") && replyText.trim()) {
+                waitUntil(
+                  studioFetch(orgId, {
+                    action: "recordTurnEvidence",
+                    sessionId: sessionIdHeader,
+                    heard: inputKind === "opening" ? "" : message.slice(0, 4000),
+                    reply: replyText.trim().slice(0, 8000),
+                    inputKind,
+                    calls: evidenceCalls,
+                  }).catch((error) => console.error("[openai-compat] turn evidence failed", error)),
+                );
+              }
 
               console.info("[openai-compat] turn timing", {
                 sessionId,

@@ -20,6 +20,7 @@ import { AVATAR_VIDEO_TYPES, AvatarError, avatarPhotoUrl, avatarState, avatarVid
 import { getRun } from "workflow/api";
 import { isTwinReport, reportState } from "@/lib/twin/session-report";
 import { rawScore, scoreCalibration, type CalibrationScore } from "@/lib/twin/calibration-score";
+import { sessionEvidence } from "@/lib/twin/evidence";
 import { attachRatings, durationSeconds, firstExchange, lastSevenDays, likeRateByWeek, mostAsked, titleFrom, transcriptTurns } from "@/lib/twin/stats";
 
 /**
@@ -466,6 +467,11 @@ const calibrationsRouter = t.router({
       turns,
     };
   }),
+
+  /** "Why this answer" for a calibration call (or any of your twin calls): per twin reply, what it heard and looked up. */
+  evidence: studioProcedure
+    .input(z.object({ sessionId: z.string().min(1).max(100) }))
+    .query(({ ctx, input }) => sessionEvidence(ctx.user.orgId, input.sessionId)),
 
   /** Marks a just-started twin call as a calibration (idempotent). */
   start: studioProcedure
