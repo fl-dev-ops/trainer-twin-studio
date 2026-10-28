@@ -5,6 +5,9 @@
  *
  *   bun scripts/import-roleplay.ts --org latencytest           # dry run (default)
  *   bun scripts/import-roleplay.ts --org latencytest --apply   # write
+ *   bun scripts/import-roleplay.ts --org sales --file data/roleplay/olga-first-calls.yaml --apply
+ *
+ * A scenario may use a client persona that already exists in the org instead of one from the file.
  *
  * Scenario slugs are prefixed with the org slug because agent slugs are global.
  */
@@ -36,7 +39,8 @@ async function main() {
   if (!org) throw new Error(`Organization "${orgSlug}" not found`);
   console.log(`Organization: ${org.name} (${org.slug})  mode: ${apply ? "APPLY" : "dry run"}\n`);
 
-  const seed = yaml.load(await readFile(path.join(import.meta.dir, "../data/roleplay/seed.yaml"), "utf8")) as Seed;
+  const file = arg("--file") ?? "data/roleplay/seed.yaml";
+  const seed = yaml.load(await readFile(path.join(import.meta.dir, "..", file), "utf8")) as Seed;
 
   for (const { slug, ...persona } of seed.personas) {
     const existing = await db.persona.findUnique({ where: { orgId_slug: { orgId: org.id, slug } }, select: { version: true, data: true } });
@@ -56,7 +60,8 @@ async function main() {
   for (const { slug: baseSlug, ...raw } of seed.scenarios) {
     const slug = `${org.slug}-${baseSlug}`;
     const input = roleplayInputSchema.parse(raw);
-    const persona = seed.personas.find((p) => p.slug === input.persona);
+    const persona = seed.personas.find((p) => p.slug === input.persona)
+      ?? ((await db.persona.findUnique({ where: { orgId_slug: { orgId: org.id, slug: input.persona } }, select: { data: true } }))?.data as SeedPersona | undefined);
     if (!persona) throw new Error(`Scenario "${baseSlug}" uses unknown persona "${input.persona}"`);
     const existingAgent = await db.agent.findUnique({ where: { slug }, select: { orgId: true, version: true, domainSlug: true } });
     if (existingAgent && existingAgent.orgId !== org.id) throw new Error(`Scenario slug "${slug}" belongs to another organization`);
