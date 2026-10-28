@@ -53,6 +53,9 @@ async function withRetries<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
  * the same session API as /talk. With `twin`, the call is saved as a twin calibration and every rating is stored
  * (twin tRPC); without it (role plays) ratings live only in this page.
  */
+/** Seconds of "Get ready" before the twin speaks, as on /talk. */
+const GET_READY_SECONDS = 5;
+
 type CallProps = {
   slug: string;
   scenarioName: string;
@@ -105,6 +108,11 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
   const [composerOpen, setComposerOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [confirmEnd, setConfirmEnd] = useState(false);
+  /** The 5s "Get ready" before the twin speaks (null: over); the call connects meanwhile. */
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const countdownDoneRef = useRef(false);
+  const agentInRef = useRef(false);
+  const releasedRef = useRef(false);
   /** Ending: ratings flushing, transcript saving, leaving the room (the End dialog shows it). */
   const [ending, setEnding] = useState(false);
 
@@ -170,6 +178,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
       if (endingRef.current) return;
       endingRef.current = true;
       setEnding(true);
+      setCountdown(null);
       // Ratings first: the summary and the review must show every rating that was made.
       await Promise.allSettled([...pendingRatings.current]);
       const saved = await closeSession(status, unloading);
@@ -183,9 +192,28 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
     [room, closeSession],
   );
 
+  /**
+   * Opens the mic and lets the twin speak ("begin-opening"), once both the get-ready countdown is over and the agent
+   * is in the room, whichever comes last (as /talk). The session was started with holdOpening, so it waits.
+   */
+  const tryRelease = useCallback(async () => {
+    if (!countdownDoneRef.current || !agentInRef.current || releasedRef.current || endingRef.current) return;
+    releasedRef.current = true;
+    await room.localParticipant.setMicrophoneEnabled(true).catch((micError) => console.error("Microphone failed:", micError));
+    await room.localParticipant
+      .publishData(new TextEncoder().encode(JSON.stringify({ type: "begin-opening" })), { reliable: true })
+      .catch((dataError) => console.error("Could not release the opening:", dataError));
+    setPhase("live");
+  }, [room]);
+
   const start = useCallback(async () => {
     endingRef.current = false;
     joinedRef.current = false;
+    countdownDoneRef.current = false;
+    agentInRef.current = false;
+    releasedRef.current = false;
+    // "Get ready": the session, room and agent start during the countdown, in parallel (see tryRelease).
+    setCountdown(GET_READY_SECONDS);
     connectionRef.current = null;
     turnsRef.current = [];
     // A new call keeps nothing from the previous one.
@@ -206,7 +234,12 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // A learner starts with their assignment code: access and minutes are checked by the session start.
-        body: JSON.stringify(learner?.code ? { shareCode: learner.code, idempotencyKey: crypto.randomUUID() } : { agentSlug: slug, idempotencyKey: crypto.randomUUID() }),
+        body: JSON.stringify({
+          ...(learner?.code ? { shareCode: learner.code } : { agentSlug: slug }),
+          idempotencyKey: crypto.randomUUID(),
+          // The agent waits for "begin-opening" (sent after the countdown) before it speaks.
+          holdOpening: true,
+        }),
       });
       const launch = await response.json().catch(() => ({}));
       if (!response.ok || !launch.session?.id || !launch.participantToken) {
@@ -234,24 +267,34 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
       });
       joinedRef.current = true;
 
-      // Same hand-off as /talk: once the agent is in the room, open the mic and let it speak first.
-      const release = async () => {
-        await room.localParticipant.setMicrophoneEnabled(true).catch((micError) => console.error("Microphone failed:", micError));
-        await room.localParticipant
-          .publishData(new TextEncoder().encode(JSON.stringify({ type: "begin-opening" })), { reliable: true })
-          .catch((dataError) => console.error("Could not release the opening:", dataError));
-        setPhase("live");
+      // Same hand-off as /talk: once the agent is in the room (and the countdown is over), it speaks first.
+      const agentIn = () => {
+        agentInRef.current = true;
+        void tryRelease();
       };
-      if (room.remoteParticipants.size > 0) await release();
-      else room.once(RoomEvent.ParticipantConnected, () => void release());
+      if (room.remoteParticipants.size > 0) agentIn();
+      else room.once(RoomEvent.ParticipantConnected, agentIn);
     } catch (startError) {
       endingRef.current = true;
+      setCountdown(null);
       void closeSession("abandoned");
       await room.disconnect().catch(() => {});
       setError(startError instanceof Error ? startError.message : "Could not start the call.");
       setPhase("error");
     }
-  }, [room, slug, closeSession, twin, learner]);
+  }, [room, slug, closeSession, twin, learner, tryRelease]);
+
+  // The get-ready countdown ticks while the call connects; at zero the twin may start (tryRelease).
+  useEffect(() => {
+    if (countdown === null) return;
+    const id = setTimeout(() => {
+      if (countdown > 1) return setCountdown(countdown - 1);
+      setCountdown(null);
+      countdownDoneRef.current = true;
+      void tryRelease();
+    }, 1000);
+    return () => clearTimeout(id);
+  }, [countdown, tryRelease]);
 
   // Start once on open; the ref stops React's dev double-mount from starting a second session.
   useEffect(() => {
@@ -480,6 +523,20 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                     <button type="button" className={PILL} onClick={() => void start()}>
                       Try again
                     </button>
+                  </div>
+                ) : phase === "connecting" && countdown !== null ? (
+                  // Same "Get ready" as /talk, while the call connects underneath.
+                  <div role="status" className="flex flex-col items-center gap-4 text-center">
+                    <span className="relative grid size-20 place-items-center rounded-full bg-card shadow-[0_2px_4px_rgba(30,28,25,0.07),0_8px_20px_rgba(30,28,25,0.11)]">
+                      <span aria-hidden className="absolute inset-0 animate-spin rounded-full border-2 border-foreground/10 border-t-foreground/60 motion-reduce:animate-none" />
+                      <span className="text-3xl font-semibold tabular-nums">{countdown}</span>
+                    </span>
+                    <div className="flex max-w-sm flex-col gap-1">
+                      <h2 className="m-0 text-lg font-semibold tracking-[-0.015em]">Get ready</h2>
+                      <p className="m-0 text-sm text-muted-foreground">
+                        {twinName} will start the conversation in a moment. Find a quiet spot and check your mic.
+                      </p>
+                    </div>
                   </div>
                 ) : phase === "connecting" ? (
                   <p className="flex items-center justify-center gap-2 text-sm text-muted-foreground">

@@ -157,7 +157,7 @@ export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string;
             minutesLeft={minutesLeft}
             preview={preview}
             onReport={() => setReportFor({ sessionId: result.sessionId })}
-            onAgain={() => setStep("call")}
+            onAgain={() => setStep("profile")}
           />
         ) : (
           <>
