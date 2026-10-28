@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowUp, Flag, LoaderCircle, Volume2 } from "lucide-react";
+import { ArrowUp, Flag, LoaderCircle, Paperclip, Volume2 } from "lucide-react";
 import { RoomAudioRenderer, RoomContext, useStartAudio, useVoiceAssistant } from "@livekit/components-react";
 import { Room, RoomEvent, type TranscriptionSegment } from "livekit-client";
 import {
@@ -65,6 +65,8 @@ type CallProps = {
    * handed back when it ends (End completes the call, so its minutes and report count).
    */
   learner?: LearnerCall;
+  /** Set when the twin lets people attach files during the call (Configure: "Attach files during the call"). */
+  attach?: { accept: string };
 };
 
 export type CallResult = { sessionId: string | null; seconds: number; turns: CalibrationTurn[] };
@@ -91,7 +93,7 @@ export function CalibrationCall(props: CallProps) {
   );
 }
 
-function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = null, learner }: CallProps & { room: Room }) {
+function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = null, learner, attach }: CallProps & { room: Room }) {
   const [phase, setPhase] = useState<Phase>("connecting");
   const [error, setError] = useState("");
   const [connection, setConnection] = useState<Connection | null>(null);
@@ -371,6 +373,35 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
     });
   }
 
+  const [attaching, setAttaching] = useState(false);
+  const attachInput = useRef<HTMLInputElement>(null);
+  /** Mid-call file, as in the learner's session: upload it, link it to this session, then tell the twin its ID (it reads by ID). */
+  async function attachFile(file: File) {
+    const sessionId = connectionRef.current?.sessionId;
+    if (!sessionId || phase !== "live") return;
+    setAttaching(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const uploaded = await fetch("/api/upload", { method: "POST", body: form });
+      const doc = await uploaded.json().catch(() => null);
+      if (!uploaded.ok) throw new Error(doc?.error ?? "Upload failed");
+      const linked = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/documents`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documentId: doc.id }),
+      });
+      const result = await linked.json().catch(() => null);
+      if (!linked.ok) throw new Error(result?.error ?? "Could not attach the file");
+      await say(`I've attached a file: ${doc.name} (document ID ${doc.id}).`);
+      toast.success(`${doc.name} attached`);
+    } catch (attachError) {
+      toast.error(attachError instanceof Error ? attachError.message : "Could not attach the file");
+    } finally {
+      setAttaching(false);
+    }
+  }
+
   async function toggleMute() {
     const next = !muted;
     setMuted(next);
@@ -557,6 +588,31 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
               >
                 <ChatIcon />
               </button>
+              {attach ? (
+                <>
+                  <button
+                    type="button"
+                    aria-label="Attach a file"
+                    title="Attach a file"
+                    disabled={phase !== "live" || attaching}
+                    onClick={() => attachInput.current?.click()}
+                    className={cn(CONTROL, "border bg-muted hover:bg-border")}
+                  >
+                    {attaching ? <LoaderCircle className="size-5 animate-spin" aria-hidden /> : <Paperclip className="size-5" aria-hidden />}
+                  </button>
+                  <input
+                    ref={attachInput}
+                    type="file"
+                    hidden
+                    accept={attach.accept}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.currentTarget.value = "";
+                      if (file) void attachFile(file);
+                    }}
+                  />
+                </>
+              ) : null}
               {learner ? (
                 <button
                   type="button"
