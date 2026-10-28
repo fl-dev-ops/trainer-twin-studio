@@ -22,6 +22,22 @@ export function evidenceFor(turns: TurnEvidence[], bubble: string): TurnEvidence
   return null;
 }
 
+/** The 🔍 beside a twin reply that opens its "Why this answer". */
+export function WhyButton({ open, onClick }: { open: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label="Why did the twin say this?"
+      title="Why this answer?"
+      aria-pressed={open}
+      onClick={onClick}
+      className={cn("mt-1 grid size-8 shrink-0 place-items-center rounded-full ring-1 ring-border hover:bg-muted", open && "bg-muted")}
+    >
+      <FileSearch className="size-4" aria-hidden />
+    </button>
+  );
+}
+
 const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : null);
 
 /** "Why this answer" for one twin reply: what it heard, what it looked up, and the moments from the trainer's sessions. */

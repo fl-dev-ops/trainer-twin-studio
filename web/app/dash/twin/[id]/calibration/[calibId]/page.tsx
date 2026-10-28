@@ -17,6 +17,7 @@ export default async function TwinCalibrationReviewRoute({ params }: { params: P
       startedAt={calibration.startedAt}
       turns={calibration.turns}
       score={calibration.score}
+      sessionId={calibration.sessionId}
     />
   );
 }

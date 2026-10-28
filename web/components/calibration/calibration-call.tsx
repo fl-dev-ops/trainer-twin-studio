@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowUp, FileSearch, Flag, LoaderCircle, Paperclip, Volume2 } from "lucide-react";
+import { ArrowUp, Flag, LoaderCircle, Paperclip, Volume2 } from "lucide-react";
 import { RoomAudioRenderer, RoomContext, useStartAudio, useVoiceAssistant } from "@livekit/components-react";
 import { Room, RoomEvent, type TranscriptionSegment } from "livekit-client";
 import {
@@ -17,7 +17,7 @@ import {
 } from "@/components/calibration/call-icons";
 import type { CalibrationTurn, Rating } from "@/components/calibration/mock";
 import { Bubble, CalibrationStats, PILL, RatingLabel, SOFT_SHADOW, TwinPortrait } from "@/components/calibration/parts";
-import { WhyPanel } from "@/components/calibration/why-panel";
+import { WhyButton, WhyPanel } from "@/components/calibration/why-panel";
 import { RoleplayIcon } from "@/components/icons";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { LiveKitWorkspaceProvider } from "@/lib/livekit-workspaces";
@@ -565,16 +565,10 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                         {twin && !learner && !turn.streaming && connection?.sessionId ? (
                           <div className="flex items-start gap-2">
                             <Bubble speaker="twin">{turn.text}</Bubble>
-                            <button
-                              type="button"
-                              aria-label="Why did the twin say this?"
-                              title="Why this answer?"
-                              aria-pressed={whyFor?.id === turn.id}
+                            <WhyButton
+                              open={whyFor?.id === turn.id}
                               onClick={() => setWhyFor(whyFor?.id === turn.id ? null : { id: turn.id, text: turn.text })}
-                              className={cn("mt-1 grid size-8 shrink-0 place-items-center rounded-full ring-1 ring-border hover:bg-muted", whyFor?.id === turn.id && "bg-muted")}
-                            >
-                              <FileSearch className="size-4" aria-hidden />
-                            </button>
+                            />
                           </div>
                         ) : (
                           <Bubble speaker="twin">{turn.text}</Bubble>

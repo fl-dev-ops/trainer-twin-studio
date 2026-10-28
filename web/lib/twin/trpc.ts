@@ -450,6 +450,7 @@ const calibrationsRouter = t.router({
         createdAt: true,
         turns: true,
         offTurns: true,
+        sessionId: true,
         session: { select: { startedAt: true, transcript: true, agent: { select: { slug: true, name: true, persona: personaFace } } } },
         ratings: { orderBy: { turnIndex: "asc" }, select: { turnIndex: true, question: true, reply: true, rating: true } },
       },
@@ -464,6 +465,7 @@ const calibrationsRouter = t.router({
       twinName: row.session.agent.name,
       photoUrl: aiAvatarUrl(row.session.agent.persona),
       startedAt: (row.session.startedAt ?? row.createdAt).toISOString(),
+      sessionId: row.sessionId,
       turns,
     };
   }),

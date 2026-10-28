@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import type { CalibrationTurn } from "@/components/calibration/mock";
-import { Bubble, CalibrationStats, RatingLabel, TwinPortrait } from "@/components/calibration/parts";
+import { CalibrationStats, TwinPortrait } from "@/components/calibration/parts";
+import { ReviewConversation } from "@/components/calibration/review-conversation";
 import { SessionTime } from "@/components/sessions/session-time";
 import type { CalibrationScore } from "@/lib/twin/stats";
 
@@ -13,6 +14,7 @@ export function CalibrationReview({
   startedAt,
   turns,
   score,
+  sessionId,
 }: {
   backHref: string;
   twinName: string;
@@ -22,6 +24,8 @@ export function CalibrationReview({
   turns: CalibrationTurn[];
   /** Jev's turns / meant Feels off (raw counts until scored). */
   score: CalibrationScore;
+  /** The call's session, for each reply's "Why this answer" (none on the demo calibration). */
+  sessionId?: string;
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-6">
@@ -41,16 +45,7 @@ export function CalibrationReview({
         <p className="mt-10 text-[13px] text-foreground/75">
           <SessionTime iso={startedAt} />
         </p>
-        <ol className="mt-4 flex w-full flex-col gap-4">
-          {turns.map((turn) => (
-            <li key={turn.id} className="flex flex-col gap-3">
-              <Bubble speaker={turn.speaker} className="max-w-[85%]">
-                {turn.text}
-              </Bubble>
-              {turn.rating ? <RatingLabel rating={turn.rating} /> : null}
-            </li>
-          ))}
-        </ol>
+        <ReviewConversation turns={turns} sessionId={sessionId} />
       </div>
     </div>
   );
