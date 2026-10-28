@@ -46,8 +46,8 @@ export function SessionControlBar({
   onChatToggle: () => void;
   screenSharing: boolean;
   screenSharePending: boolean;
-  /** Starts the whole-screen share; stopping is not offered because the session requires it. */
-  onScreenShare: () => void;
+  /** Starts the whole-screen share; stopping is not offered because the session requires it. Omit to hide the button. */
+  onScreenShare?: () => void;
 }) {
   const { buttonProps: cameraProps, enabled: cameraOn, pending: cameraPending } = useTrackToggle({
     room,
@@ -96,7 +96,7 @@ export function SessionControlBar({
         {micPending ? <LoaderCircle className="size-5 animate-spin" /> : micOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}
       </button>
 
-      <button
+      {onScreenShare && <button
         type="button"
         onClick={screenSharing ? undefined : onScreenShare}
         disabled={screenSharePending}
@@ -105,7 +105,7 @@ export function SessionControlBar({
         className={cn(controlClass, idleClass, screenSharing && "bg-neutral-200 text-emerald-600")}
       >
         {screenSharePending ? <LoaderCircle className="size-5 animate-spin" /> : <ScreenShare className="size-5" />}
-      </button>
+      </button>}
 
       <button
         type="button"

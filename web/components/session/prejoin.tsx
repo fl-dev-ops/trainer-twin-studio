@@ -25,6 +25,7 @@ import {
   Volume2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useOrgType } from "@/components/org-type-provider";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "../ui/button";
 import { FileThumbnail } from "@/components/extend/file-thumbnail";
@@ -79,6 +80,8 @@ export function PreJoin({
   sessionCode: string;
   onJoin: (settings: PreJoinMediaSettings, contextId?: string) => void;
 }) {
+  // Only technical interviews review the learner's screen; sales role plays never ask for it.
+  const screenShareRequired = useOrgType() !== "SALES";
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const previewRequestRef = useRef(0);
@@ -298,7 +301,7 @@ export function PreJoin({
       {
         microphoneEnabled,
         cameraEnabled,
-        screenShareEnabled: true,
+        screenShareEnabled: screenShareRequired,
         microphoneDeviceId: microphoneDeviceId || undefined,
         cameraDeviceId: cameraDeviceId || undefined,
         speakerDeviceId: speakerDeviceId || undefined,
@@ -379,12 +382,12 @@ export function PreJoin({
             className="col-span-3 relative flex min-h-85 items-center justify-center overflow-hidden rounded-2xl bg-[#202124] shadow-[0_12px_32px_rgba(32,33,36,0.12)]"
           >
             {/* Screen share enabled pill */}
-            <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 rounded-full bg-black/70 backdrop-blur-xs px-3 py-1 text-xs text-white border border-white/10">
+            {screenShareRequired && <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 rounded-full bg-black/70 backdrop-blur-xs px-3 py-1 text-xs text-white border border-white/10">
               <span className="size-2 rounded-full bg-amber-400" />
               <span className="font-medium text-[11px]">
                 Entire Screen Required
               </span>
-            </div>
+            </div>}
 
             <video
               ref={videoRef}

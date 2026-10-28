@@ -6,7 +6,7 @@ import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { toast } from "sonner";
 import { Check, LoaderCircle, Play, ScreenShare, Upload as UploadIcon, Volume2 } from "lucide-react";
-import { useOrgCopy } from "@/components/org-type-provider";
+import { useOrgCopy, useOrgType } from "@/components/org-type-provider";
 import { type AgentContextUpload } from "@/lib/context-upload";
 import "@livekit/components-styles";
 import {
@@ -152,6 +152,8 @@ export function SessionView({
   );
 
   const copy = useOrgCopy();
+  // Only technical interviews review the learner's screen; sales role plays never ask for it.
+  const screenShareRequired = useOrgType() !== "SALES";
   const [agent, setAgent] = useState(initialAgent ?? agents[0] ?? "");
   const persona = agentPersonas[agent] ?? personas[0] ?? "";
   const speaker = agentSpeakers[agent] ?? persona;
@@ -390,7 +392,7 @@ export function SessionView({
 
   // Prompt for screen share immediately as soon as the room connects on entry
   useEffect(() => {
-    if (!connected || screenShareAutoPromptedRef.current || ended) return;
+    if (!screenShareRequired || !connected || screenShareAutoPromptedRef.current || ended) return;
     screenShareAutoPromptedRef.current = true;
     screenShareValidationPendingRef.current = true;
     setIsScreenSharePending(true);
@@ -406,7 +408,7 @@ export function SessionView({
         setScreenShareAttempted(true);
       }
     })();
-  }, [connected, room, ended]);
+  }, [screenShareRequired, connected, room, ended]);
 
   useEffect(() => {
     if (!connected) return;
@@ -1142,7 +1144,7 @@ export function SessionView({
           {/* Main Body: Stage (Left) & Chat Sidebar (Right) — EQUAL HEIGHT */}
           <main className="relative flex min-h-0 flex-1 gap-4 px-4 sm:px-6">
             {/* Blocking overlay when screen sharing is stopped */}
-            {connected && !isScreenSharing && screenShareAttempted && !isScreenSharePending && (
+            {screenShareRequired && connected && !isScreenSharing && screenShareAttempted && !isScreenSharePending && (
               <div className="dark absolute inset-0 z-50 flex items-center justify-center bg-black/85 p-6 backdrop-blur-md">
                 <div className="max-w-md w-full rounded-2xl border border-brand/40 bg-[#191b22] p-7 text-center shadow-2xl flex flex-col items-center animate-in fade-in zoom-in-95 duration-200">
                   <div className="size-16 rounded-2xl bg-brand/15 border border-brand/30 text-brand flex items-center justify-center mb-4">
@@ -1333,7 +1335,7 @@ export function SessionView({
               onChatToggle={() => setSidebarOpen((v) => !v)}
               screenSharing={isScreenSharing}
               screenSharePending={isScreenSharePending}
-              onScreenShare={() => void handleEnableScreenShare()}
+              onScreenShare={screenShareRequired ? () => void handleEnableScreenShare() : undefined}
             />
             <div className="flex justify-end">
               {connected && <EndSessionButton onEnd={() => void handleDisconnect("manual")} />}
