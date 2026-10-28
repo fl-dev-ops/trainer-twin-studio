@@ -19,16 +19,12 @@ export type BrainKnowledge = {
 };
 
 /** Voice and avatar as set up on /twin/brain/voice and /twin/brain/avatar (null: the org has no own persona yet). */
-export type BrainAvatar = { photoUrl: string | null; voiceId: string | null; voiceName: string | null; updatedAt: string | null } | null;
+export type BrainAvatar = { personaName: string; photoUrl: string | null; voiceId: string | null; voiceName: string | null; updatedAt: string | null } | null;
+/** The twin's skills (skill twins), newest first: what Training style shows. */
+export type BrainSkill = { slug: string; name: string };
 
 const CONNECTOR_ICONS = { drive: HardDrive, notion: BookOpen, youtube: Video };
 
-// shortcut: training style and voice are mock content (UI only); replace with twin data when that backend lands.
-const TRAITS = [
-  "Frames selling as a process, not motivation",
-  "Plays the difficult buyer herself before teaching the fix",
-  "Gives word-for-word lines agents can use on the call",
-];
 
 const ZOOM = { min: 50, max: 150, step: 10 };
 
@@ -69,7 +65,7 @@ function Edge() {
 }
 
 /** Twin's brain: the twin as a graph of what it knows, how it trains and how it sounds. */
-export function TwinBrainPage({ knowledge, avatar }: { knowledge: BrainKnowledge; avatar: BrainAvatar }) {
+export function TwinBrainPage({ knowledge, avatar, skills }: { knowledge: BrainKnowledge; avatar: BrainAvatar; skills: BrainSkill[] }) {
   const [zoom, setZoom] = useState(100);
   const [playing, setPlaying] = useState(false);
   const [loadingVoice, setLoadingVoice] = useState(false);
@@ -165,14 +161,23 @@ export function TwinBrainPage({ knowledge, avatar }: { knowledge: BrainKnowledge
             <Node
               tag="Training style" tone="amber" title="Training style"
             >
-              <ul className="m-0 flex list-none flex-col gap-3 p-0 text-sm leading-5">
-                {TRAITS.map((trait) => (
-                  <li key={trait} className="flex gap-2">
-                    <Sparkles className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
-                    {trait}
-                  </li>
-                ))}
-              </ul>
+              {skills.length ? (
+                <ul className="m-0 flex list-none flex-col gap-3 p-0 text-sm leading-5">
+                  {skills.map((skill) => (
+                    <li key={skill.slug}>
+                      <Link href={`/twin/${skill.slug}`} className="flex gap-2 hover:underline">
+                        <Sparkles className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+                        {skill.name}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="m-0 text-sm text-muted-foreground">
+                  No twin skills yet.{" "}
+                  <Link href="/twin" className="font-medium text-foreground hover:underline">Create one</Link> from your knowledge.
+                </p>
+              )}
             </Node>
 
             <Edge />
@@ -191,10 +196,10 @@ export function TwinBrainPage({ knowledge, avatar }: { knowledge: BrainKnowledge
                   // eslint-disable-next-line @next/next/no-img-element -- same-site route redirecting to a signed S3 URL
                   <img src={avatar.photoUrl} alt="" className="size-16 rounded-full bg-(--tone-control) object-cover" />
                 ) : (
-                  <video
-                    src="/media/twin-listening.mp4" autoPlay muted loop playsInline preload="metadata" aria-hidden
-                    className="size-16 rounded-full bg-(--tone-control) object-cover object-[center_18%]"
-                  />
+                  // Not set up: the trainer's initial (the listening clip was one specific trainer).
+                  <span aria-hidden className="grid size-16 place-items-center rounded-full bg-(--tone-control) text-2xl font-semibold text-muted-foreground">
+                    {(avatar?.personaName ?? "?").charAt(0).toUpperCase()}
+                  </span>
                 )}
                 <p className="m-0 text-base font-semibold">{avatar?.voiceName ?? "Not set up yet"}</p>
                 <p className="m-0 text-sm text-muted-foreground">
