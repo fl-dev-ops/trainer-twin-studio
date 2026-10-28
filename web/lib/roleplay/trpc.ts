@@ -3,7 +3,7 @@ import { z } from "zod";
 import { beforeSettings } from "@/lib/context-upload";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
-import { LEARNER_ROLE } from "@/lib/org";
+import { assignablePeople } from "@/lib/learners";
 import { listPersonas } from "@/lib/personas";
 import { isSessionReport } from "@/lib/session-report";
 import { roleplayBuilderFrom, roleplayBuilderSchema } from "@/lib/roleplay/skill";
@@ -277,14 +277,7 @@ const sessionsRouter = t.router({
 
 const usersRouter = t.router({
   /** The org's learners (role user), for the assign dialog. */
-  orgLearners: studioProcedure.query(async ({ ctx }) => {
-    const members = await db.member.findMany({
-      where: { organizationId: ctx.user.orgId, role: LEARNER_ROLE },
-      orderBy: { createdAt: "asc" },
-      select: { user: { select: { name: true, email: true, image: true } } },
-    });
-    return members.map(({ user }) => ({ email: user.email.toLowerCase(), name: user.name || user.email, image: user.image }));
-  }),
+  orgLearners: studioProcedure.query(({ ctx }) => assignablePeople(ctx.user.orgId)),
 
   /** Everyone practising on the org's role plays: invited or with sessions, how many role plays, how many sessions. */
   list: studioProcedure.query(async ({ ctx }) => {

@@ -101,3 +101,29 @@ export async function listLearners(orgId: string, kind: AgentKind): Promise<Lear
     users,
   });
 }
+
+/**
+ * Who an assign dialog can pick: the org's learners, plus people invited as users (Settings > Users) who haven't
+ * accepted yet, so they can be given a twin or role play right away. Emails lowercased, members first.
+ */
+export async function assignablePeople(orgId: string): Promise<{ email: string; name: string; image: string | null }[]> {
+  const [members, invitations] = await Promise.all([
+    db.member.findMany({
+      where: { organizationId: orgId, role: LEARNER_ROLE },
+      orderBy: { createdAt: "asc" },
+      select: { user: { select: { name: true, email: true, image: true } } },
+    }),
+    db.invitation.findMany({
+      where: { organizationId: orgId, role: LEARNER_ROLE, status: "pending", expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: "desc" },
+      select: { email: true },
+    }),
+  ]);
+  const people = new Map<string, { email: string; name: string; image: string | null }>();
+  for (const { user } of members) people.set(user.email.toLowerCase(), { email: user.email.toLowerCase(), name: user.name || user.email, image: user.image });
+  for (const { email } of invitations) {
+    const key = email.toLowerCase();
+    if (!people.has(key)) people.set(key, { email: key, name: key, image: null });
+  }
+  return [...people.values()];
+}

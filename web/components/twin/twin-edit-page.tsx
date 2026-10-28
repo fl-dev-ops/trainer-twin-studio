@@ -94,8 +94,12 @@ export function TwinEditPage({
   async function assignLearners(emails: string[], minutes: number | null) {
     try {
       const result = await twinClient.assignments.assign.mutate({ slug: id, emails, minutes: minutes ?? defaultMinutes });
-      toast.success(`${emails.length} ${emails.length === 1 ? "learner" : "learners"} assigned`);
-      if (result.blocked) toast.warning(`${result.blocked} learner(s) belong to another organization and were not assigned.`);
+      // Say what actually happened: assigned (and emailed), already had access, or blocked by another org.
+      const done = result.added + result.reactivated;
+      const people = (n: number) => `${n} ${n === 1 ? "learner" : "learners"}`;
+      if (done) toast.success(`${people(done)} assigned and sent their link`);
+      if (result.skipped) toast.info(`${people(result.skipped)} already had this twin`);
+      if (result.blocked) toast.warning(`${people(result.blocked)} belong to another organization and were not assigned`);
       if (result.emailFailures) toast.warning(`${result.emailFailures} invite email(s) could not be sent.`);
       router.refresh();
       return true;

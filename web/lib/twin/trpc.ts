@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { beforeSettings } from "@/lib/context-upload";
+import { assignablePeople } from "@/lib/learners";
 import { LEARNER_ROLE } from "@/lib/org";
 import { studioProcedure, t } from "@/lib/trpc";
 import {
@@ -298,16 +299,10 @@ const assignmentsRouter = t.router({
   /** Who has the twin, and the org's learners who could get it. */
   list: studioProcedure.input(slugInput).query(({ ctx, input }) => twinCall(async () => {
     const found = await findTwinAgent(ctx.user.orgId, input.slug);
-    const [assigned, members] = await Promise.all([
-      listTwinAssignments(ctx.user.orgId, found.id),
-      db.member.findMany({
-        where: { organizationId: ctx.user.orgId, role: LEARNER_ROLE },
-        select: { user: { select: { name: true, email: true, image: true } } },
-      }),
-    ]);
+    const [assigned, assignable] = await Promise.all([listTwinAssignments(ctx.user.orgId, found.id), assignablePeople(ctx.user.orgId)]);
     const byEmail = new Map(assigned.map((row) => [row.recipientEmail, row]));
-    const people = new Map<string, { email: string; name: string; image: string | null }>();
-    for (const { user } of members) people.set(user.email.toLowerCase(), { email: user.email.toLowerCase(), name: user.name || user.email, image: user.image });
+    // The org's learners and people invited as users who haven't joined yet, plus everyone assigned by email.
+    const people = new Map(assignable.map((person) => [person.email, person]));
     for (const row of assigned) {
       if (!people.has(row.recipientEmail)) people.set(row.recipientEmail, { email: row.recipientEmail, name: row.user?.name || row.recipientEmail, image: row.user?.image ?? null });
     }
