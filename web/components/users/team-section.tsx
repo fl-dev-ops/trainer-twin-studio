@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from "@/components/ui/item";
 import { CopyButton } from "@/components/users/copy-button";
 import { InviteUser } from "@/components/users/invite-user";
+import type { AwaitingUser } from "@/lib/awaiting-users";
 import { authClient } from "@/lib/auth-client";
 import { BASE_DOMAIN } from "@/lib/base-domain";
 
@@ -47,7 +48,8 @@ function Initial({ text }: { text: string }) {
 }
 
 /**
- * Org members and pending invites, split into the studio team (admin, team) and users (learners).
+ * Org members and pending invites, split into the studio team (admin, team) and users (learners). Users also lists
+ * people given a twin or role play by email who haven't opened their link yet (`awaiting`).
  * One admin per org (fixed); members are disabled, never removed. Roles are shown, not edited here.
  */
 export function TeamSection(props: {
@@ -55,6 +57,7 @@ export function TeamSection(props: {
   currentUserId: string;
   members: TeamMember[];
   invitations: TeamInvitation[];
+  awaiting: AwaitingUser[];
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
@@ -121,6 +124,25 @@ export function TeamSection(props: {
     });
   }
 
+  /** Assigned by email from a twin or role play; they join when they open their personal link and sign in. */
+  function awaitingItems(people: AwaitingUser[]) {
+    return people.map((person) => (
+      <Item key={person.email} role="listitem" size="sm" className={ROW}>
+        <Initial text={person.email} />
+        <ItemContent>
+          <ItemTitle className="text-[15px]">{person.email.split("@")[0]}</ItemTitle>
+          <ItemDescription className="line-clamp-none flex flex-wrap items-center gap-1.5">
+            <span>{person.email}</span>· <Badge className={AMBER}>Invite sent</Badge>
+            <span className="text-xs">Assigned: {person.assigned.join(", ")}</span>
+          </ItemDescription>
+        </ItemContent>
+        <ItemActions>
+          <Badge className={ROLE}>{ROLE_LABEL.user}</Badge>
+        </ItemActions>
+      </Item>
+    ));
+  }
+
   function invitationItems(invitations: TeamInvitation[]) {
     return invitations.map((invitation) => (
       <Item key={invitation.id} role="listitem" size="sm" className={ROW}>
@@ -153,9 +175,11 @@ export function TeamSection(props: {
       {groups.map((group) => {
         const all = props.members.filter((member) => (member.role !== "user") === group.studio);
         const pending = props.invitations.filter((invitation) => (invitation.role !== "user") === group.studio);
+        const assigned = group.studio ? [] : props.awaiting;
         const needle = (query[group.role] ?? "").trim().toLowerCase();
         const members = all.filter((member) => matches(needle, member.name, member.email));
         const invitations = pending.filter((invitation) => matches(needle, invitation.email));
+        const waiting = assigned.filter((person) => matches(needle, person.email));
         return (
           <Card key={group.title}>
             <CardHeader>
@@ -179,7 +203,7 @@ export function TeamSection(props: {
               </CardAction>
             </CardHeader>
             <CardContent className="grid gap-3">
-              {all.length || pending.length ? (
+              {all.length || pending.length || assigned.length ? (
                 <div className="relative">
                   <Search aria-hidden className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
@@ -192,10 +216,11 @@ export function TeamSection(props: {
                   />
                 </div>
               ) : null}
-              {members.length || invitations.length ? (
+              {members.length || invitations.length || waiting.length ? (
                 <ItemGroup className="gap-0 divide-y divide-(--border)">
                   {memberItems(members)}
                   {invitationItems(invitations)}
+                  {awaitingItems(waiting)}
                 </ItemGroup>
               ) : (
                 <p className="text-sm text-muted-foreground">{needle ? "No one matches that search." : "No one yet."}</p>

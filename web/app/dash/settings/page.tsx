@@ -8,6 +8,7 @@ import { TeamSection } from "@/components/users/team-section";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { awaitingUsers } from "@/lib/awaiting-users";
 import { isStudioRole } from "@/lib/org";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +32,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   // Learners have no Team tab, so ?tab=team falls back to Account for them.
   const tab = TABS.find((name) => name === requested && (name !== "team" || isStudioRole(membership.role))) ?? "account";
 
-  // Team: studio only (admin, team). Everyone in the org plus pending invites; disabled members stay listed.
+  // Team: studio only (admin, team). Everyone in the org plus pending invites; disabled members stay listed. Users
+  // also lists people assigned a twin or role play by email who haven't joined yet (they join by opening their link).
   const team = isStudioRole(membership.role)
     ? await Promise.all([
         db.member.findMany({
@@ -44,8 +46,28 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           orderBy: { createdAt: "desc" },
           select: { id: true, email: true, role: true, expiresAt: true },
         }),
+        db.twinAssignment.findMany({
+          where: { orgId, status: "active", userId: null },
+          orderBy: { createdAt: "desc" },
+          select: { recipientEmail: true, agent: { select: { name: true } } },
+        }),
+        db.rolePlayAssignment.findMany({
+          where: { orgId, status: "pending", memberId: null },
+          orderBy: { assignedAt: "desc" },
+          select: { recipientEmail: true, deployment: { select: { agent: { select: { name: true } } } } },
+        }),
       ])
     : null;
+  const awaiting = team
+    ? awaitingUsers({
+        memberEmails: team[0].map((member) => member.user.email),
+        invitedEmails: team[1].map((invitation) => invitation.email),
+        assignments: [
+          ...team[2].map((row) => ({ email: row.recipientEmail, title: row.agent.name })),
+          ...team[3].map((row) => ({ email: row.recipientEmail, title: row.deployment.agent.name })),
+        ],
+      })
+    : [];
 
   // ponytail PT-1: parsing accentColor from the metadata blob.
   const accentColor = (() => {
@@ -91,6 +113,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   disabledAt: disabledAt?.toISOString() ?? null,
                 }))}
                 invitations={team[1].map((invitation) => ({ ...invitation, expiresAt: invitation.expiresAt.toISOString() }))}
+                awaiting={awaiting}
               />
             </TabsContent>
           ) : null}
