@@ -20,8 +20,15 @@ export type BrainKnowledge = {
 
 /** Voice and avatar as set up on /twin/brain/voice and /twin/brain/avatar (null: the org has no own persona yet). */
 export type BrainAvatar = { personaName: string; photoUrl: string | null; voiceId: string | null; voiceName: string | null; updatedAt: string | null } | null;
-/** The twin's skills (skill twins), newest first: what Coaching style shows. */
-export type BrainSkill = { slug: string; name: string };
+// shortcut: fixed coaching principles (Olga's); derive them from the trainer's recordings when that pipeline lands.
+const COACHING_STYLE = [
+  "Ask before answering",
+  "Diagnose before presenting",
+  "Help clients examine beliefs",
+  "Lower resistance first",
+  "Earn the next step",
+  "Use evidence, not promises",
+];
 
 const CONNECTOR_ICONS = { drive: HardDrive, notion: BookOpen, youtube: Video };
 
@@ -65,7 +72,7 @@ function Edge() {
 }
 
 /** Twin's brain: the twin as a graph of what it knows, how it trains and how it sounds. */
-export function TwinBrainPage({ knowledge, avatar, skills }: { knowledge: BrainKnowledge; avatar: BrainAvatar; skills: BrainSkill[] }) {
+export function TwinBrainPage({ knowledge, avatar }: { knowledge: BrainKnowledge; avatar: BrainAvatar }) {
   const [zoom, setZoom] = useState(100);
   const [playing, setPlaying] = useState(false);
   const [loadingVoice, setLoadingVoice] = useState(false);
@@ -161,23 +168,14 @@ export function TwinBrainPage({ knowledge, avatar, skills }: { knowledge: BrainK
             <Node
               tag="Coaching style" tone="amber" title="Coaching style"
             >
-              {skills.length ? (
-                <ul className="m-0 flex list-none flex-col gap-3 p-0 text-sm leading-5">
-                  {skills.map((skill) => (
-                    <li key={skill.slug}>
-                      <Link href={`/twin/${skill.slug}`} className="flex gap-2 hover:underline">
-                        <Sparkles className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
-                        {skill.name}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="m-0 text-sm text-muted-foreground">
-                  No twin skills yet.{" "}
-                  <Link href="/twin" className="font-medium text-foreground hover:underline">Create one</Link> from your knowledge.
-                </p>
-              )}
+              <ul className="m-0 flex list-none flex-col gap-3 p-0 text-sm leading-5">
+                {COACHING_STYLE.map((principle) => (
+                  <li key={principle} className="flex gap-2">
+                    <Sparkles className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+                    {principle}
+                  </li>
+                ))}
+              </ul>
             </Node>
 
             <Edge />
