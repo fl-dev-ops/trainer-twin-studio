@@ -1,0 +1,53 @@
+{
+  "slug": "karim-first-conversation",
+  "builder": {
+    "name": "Karim: first conversation (lead from YouTube video on Dubai investment)",
+    "persona": "karim-entrepreneur",
+    "situation": {
+      "scenario": "The learner speaks with Karim, who came in as a lead from: YouTube video on Dubai investment. Based in Hamburg. Owns one commercial unit and one apartment, both long-term rented. Runs a delivery business. Wife, two kids; parents in Lebanon. Concerned about regional stability; considering property vs. growing the business. Parents may influence decision. Budget 1.8–2.5M AED; timeline 6–9 months.",
+      "hiddenTruth": "Held back until the learner earns it:\n• Motivation: medium\n• What matters most: Market conditions 40%; Best price 30%; Time constraints 30%\n• Constraints: risk management; possible golden visa angle for parents\n• Areas: Dubai Hills / Creek Harbour (if probed)",
+      "learnerRole": "Dubai real estate agent",
+      "agreesWhen": "The learner offers: questions about risk tolerance and exit plans; acknowledging family priorities.",
+      "declinesWhen": "The learner uses: overpromising; ignoring risk."
+    },
+    "difficulty": "medium",
+    "guardedIf": [
+      "overpromising",
+      "ignoring risk",
+      "generic pitches",
+      "vague ROI talk"
+    ],
+    "opensUpIf": [
+      "questions about risk tolerance and exit plans",
+      "acknowledging family priorities"
+    ],
+    "whatToExpect": "A first call with Karim (German/Syrian entrepreneur), who came in from: YouTube video on Dubai investment. Earn the details before you pitch. Goal: agree to a structured comparison call.",
+    "opening": "Hallo, yes, Karim speaking. I watched a video about Dubai investment, but honestly I'm not sure property is the right move for me now.",
+    "exampleLines": [
+      "Maybe I should just put the money into my business.",
+      "What is the exit if I need the money back in three years?",
+      "My parents are in Lebanon, so stability matters to us."
+    ],
+    "learnerGoals": [
+      "Agree to a structured comparison call"
+    ],
+    "rubric": [
+      {
+        "name": "Opened the client up: used the openness triggers",
+        "points": 30
+      },
+      {
+        "name": "Avoided shutdown triggers and pet peeves",
+        "points": 25
+      },
+      {
+        "name": "Covered what matters most, in proportion: Market conditions 40%, Best price 30%, Time constraints 30%",
+        "points": 25
+      },
+      {
+        "name": "Secured the goal's next step with a date",
+        "points": 20
+      }
+    ]
+  }
+}

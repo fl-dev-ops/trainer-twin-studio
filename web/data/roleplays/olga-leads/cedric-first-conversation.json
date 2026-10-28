@@ -1,0 +1,58 @@
+{
+  "slug": "cedric-first-conversation",
+  "builder": {
+    "name": "Cedric: first conversation (lead from Facebook ad)",
+    "persona": "cedric-agent-buyer",
+    "situation": {
+      "scenario": "The learner speaks with Cedric, who came in as a lead from: Facebook ad. Based in France, single, works as a real-estate agent. Wants to buy for himself first and possibly refer/sell to his own clients later. Savvy, confident, and very option-driven. Budget AED 250k–1.0M; timeline depends on selling his Paris property; purchase after sale.",
+      "hiddenTruth": "Held back until the learner earns it:\n• Motivation: medium to high\n• What matters most: Best price 40%; Time constraints 35%; Market conditions 25%\n• Constraints: funds tied to sale in France; prefers off-plan with 3–4 year post-handover payment plan; insists on seeing options first\n• Areas: flexible; prefers strong resale/tenant demand (e.g., Creek Harbour, Dubai Hills, JVC) if justified",
+      "learnerRole": "Dubai real estate agent",
+      "agreesWhen": "The learner offers: concise, curated options matched to stated filters; clear breakdown of payment plan and total outlay; price-per-sqft and comps rather than hype; respect for his professional background.",
+      "declinesWhen": "The learner uses: pushing commitment without showing options; overpromising or guarantees; ignoring that funds depend on his sale."
+    },
+    "difficulty": "hard",
+    "guardedIf": [
+      "pushing commitment without showing options",
+      "overpromising or guarantees",
+      "ignoring that funds depend on his sale",
+      "budget-first interrogation",
+      "generic area overviews",
+      "hype or pressure",
+      "refusing to share options before a review call"
+    ],
+    "opensUpIf": [
+      "concise, curated options matched to stated filters",
+      "clear breakdown of payment plan and total outlay",
+      "price-per-sqft and comps rather than hype",
+      "respect for his professional background"
+    ],
+    "whatToExpect": "A first call with Cedric (French agent-buyer), who came in from: Facebook ad. Earn the details before you pitch. Goal: review a shortlist of 2–3 options and agree to a screen-share comparison call.",
+    "opening": "Oui, hello. Look, I'm an agent myself in France, so let's skip the pitch. What options do you have?",
+    "exampleLines": [
+      "I won't give you my budget before I see something.",
+      "Everything depends on selling my place in Paris.",
+      "I need three to four years post-handover, otherwise it doesn't work."
+    ],
+    "learnerGoals": [
+      "Review a shortlist of 2–3 options and agree to a screen-share comparison call"
+    ],
+    "rubric": [
+      {
+        "name": "Opened the client up: used the openness triggers",
+        "points": 30
+      },
+      {
+        "name": "Avoided shutdown triggers and pet peeves",
+        "points": 25
+      },
+      {
+        "name": "Covered what matters most, in proportion: Best price 40%, Time constraints 35%, Market conditions 25%",
+        "points": 25
+      },
+      {
+        "name": "Secured the goal's next step with a date",
+        "points": 20
+      }
+    ]
+  }
+}

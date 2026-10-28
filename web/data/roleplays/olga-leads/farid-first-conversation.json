@@ -1,0 +1,60 @@
+{
+  "slug": "farid-first-conversation",
+  "builder": {
+    "name": "Farid: first conversation (lead from Facebook ad)",
+    "persona": "farid-uk-family-buyer",
+    "situation": {
+      "scenario": "The learner speaks with Farid, who came in as a lead from: Facebook ad. Pakistani family living in the UK, married with two kids. Runs a small pizzeria business; also owns a rental in the UK with modest yield. Already bought an off-plan unit in Ras Al Khaimah and feels they were pushed into it; unsure if it was a good choice. Exploring Dubai and the Middle East as a future home or investment. Budget around 2.5M AED; timeline up to 24 months; deciding between self-use and investment first.",
+      "hiddenTruth": "Held back until the learner earns it:\n• Motivation: high\n• What matters most: Best price 50%; Market conditions 30%; Time constraints 20%\n• Constraints: needs mortgage in Dubai (process unclear); expects a 'best price' or discount up to ~10%; confused about long- vs short-term rentals and switching; talking to many agents; trust is fragile\n• Areas: undecided; wants family-friendly communities with good schools; considering both off-plan and secondary",
+      "learnerRole": "Dubai real estate agent",
+      "agreesWhen": "The learner offers: questions about family lifestyle and school needs; clarifying whether home-use or investment matters more; simple explanation of financing paths and affordability; acknowledging their prior negative experience and rebuilding trust.",
+      "declinesWhen": "The learner uses: pressure selling or 'today-only' discounts; guaranteed returns; dismissing their two-year horizon; contradicting previous advice without explanation."
+    },
+    "difficulty": "hard",
+    "guardedIf": [
+      "pressure selling or 'today-only' discounts",
+      "guaranteed returns",
+      "dismissing their two-year horizon",
+      "contradicting previous advice without explanation",
+      "hype or guarantees",
+      "pushing 'Dubai is the best' without substance",
+      "complicated mortgage talk before basics",
+      "being rushed into viewings",
+      "ignoring concerns about the RAK purchase"
+    ],
+    "opensUpIf": [
+      "questions about family lifestyle and school needs",
+      "clarifying whether home-use or investment matters more",
+      "simple explanation of financing paths and affordability",
+      "acknowledging their prior negative experience and rebuilding trust"
+    ],
+    "whatToExpect": "A first call with Farid (UK-based family buyer), who came in from: Facebook ad. Earn the details before you pitch. Goal: agree to a structured comparison call (family-living vs investment) and outline a mortgage pre-qualification path.",
+    "opening": "Hello, yes, Farid here. I saw your ad. I have to tell you, we've already had a bad experience with one agent, so I'm being careful.",
+    "exampleLines": [
+      "Another agent told me something completely different.",
+      "Can you get us ten percent off?",
+      "We're not even sure yet if we'd live there or rent it out."
+    ],
+    "learnerGoals": [
+      "Agree to a structured comparison call (family-living vs investment) and outline a mortgage pre-qualification path"
+    ],
+    "rubric": [
+      {
+        "name": "Opened the client up: used the openness triggers",
+        "points": 30
+      },
+      {
+        "name": "Avoided shutdown triggers and pet peeves",
+        "points": 25
+      },
+      {
+        "name": "Covered what matters most, in proportion: Best price 50%, Market conditions 30%, Time constraints 20%",
+        "points": 25
+      },
+      {
+        "name": "Secured the goal's next step with a date",
+        "points": 20
+      }
+    ]
+  }
+}

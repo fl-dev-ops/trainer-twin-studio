@@ -1,0 +1,53 @@
+{
+  "slug": "faisal-first-conversation",
+  "builder": {
+    "name": "Faisal: first conversation (lead from Google ad 'Dubai Airbnb investment')",
+    "persona": "faisal-experienced-investor",
+    "situation": {
+      "scenario": "The learner speaks with Faisal, who came in as a lead from: Google ad 'Dubai Airbnb investment'. Based in Riyadh. Owns two Saudi rentals (Airbnb). Sold a 2BR in Dubai recently; visits often. Married, four kids. Works in a government institution. Decision involves his brother in Dubai. Budget 2.0–3.0M AED; timeline 2–4 months.",
+      "hiddenTruth": "Held back until the learner earns it:\n• Motivation: medium\n• What matters most: Best price 40%; Market conditions 30%; Time constraints 30%\n• Constraints: reduce work stress; prefers manageable operations\n• Areas: Business Bay / JLT / Marina (if justified)",
+      "learnerRole": "Dubai real estate agent",
+      "agreesWhen": "The learner offers: questions on hold period and yield risk; calm, numbers-led tone.",
+      "declinesWhen": "The learner uses: celebrity developer pitch; pressure close."
+    },
+    "difficulty": "hard",
+    "guardedIf": [
+      "celebrity developer pitch",
+      "pressure close",
+      "hypey pitches",
+      "guarantees"
+    ],
+    "opensUpIf": [
+      "questions on hold period and yield risk",
+      "calm, numbers-led tone"
+    ],
+    "whatToExpect": "A first call with Faisal (Experienced investor), who came in from: Google ad 'Dubai Airbnb investment'. Earn the details before you pitch. Goal: share target yield and shortlist 2 projects for comparison.",
+    "opening": "Yes, hello. I saw your ad about Airbnb in Dubai. I have about five minutes, go ahead.",
+    "exampleLines": [
+      "Don't tell me about the developer, tell me the net yield.",
+      "I already run two Airbnbs in Riyadh. I don't need more headaches.",
+      "My brother is in Dubai, he will check whatever you send."
+    ],
+    "learnerGoals": [
+      "Share target yield and shortlist 2 projects for comparison"
+    ],
+    "rubric": [
+      {
+        "name": "Opened the client up: used the openness triggers",
+        "points": 30
+      },
+      {
+        "name": "Avoided shutdown triggers and pet peeves",
+        "points": 25
+      },
+      {
+        "name": "Covered what matters most, in proportion: Best price 40%, Market conditions 30%, Time constraints 30%",
+        "points": 25
+      },
+      {
+        "name": "Secured the goal's next step with a date",
+        "points": 20
+      }
+    ]
+  }
+}

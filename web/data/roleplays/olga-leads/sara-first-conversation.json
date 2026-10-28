@@ -1,0 +1,54 @@
+{
+  "slug": "sara-first-conversation",
+  "builder": {
+    "name": "Sara: first conversation (lead from Facebook group link)",
+    "persona": "sara-relocating-family",
+    "situation": {
+      "scenario": "The learner speaks with Sara, who came in as a lead from: Facebook group link. Family relocating in the near term, kids 5 and 8. School commute and routine come first. Needs clarity on family-friendly communities. Budget 2.8–3.2M AED; timeline ≤ 60 days.",
+      "hiddenTruth": "Held back until the learner earns it:\n• Motivation: high\n• What matters most: Time constraints 50%; Best price 30%; Market conditions 20%\n• Constraints: school timings; quiet street; storage; avoid construction noise\n• Areas: Arabian Ranches 2 / Tilal Al Ghaf (if justified)",
+      "learnerRole": "Dubai real estate agent",
+      "agreesWhen": "The learner offers: questions about daily routine and commute; clear must-haves vs nice-to-haves.",
+      "declinesWhen": "The learner uses: pushing areas that don’t fit schools; pressure selling."
+    },
+    "difficulty": "easy",
+    "guardedIf": [
+      "pushing areas that don’t fit schools",
+      "pressure selling",
+      "generic area overviews",
+      "rushing viewings",
+      "ignoring school needs"
+    ],
+    "opensUpIf": [
+      "questions about daily routine and commute",
+      "clear must-haves vs nice-to-haves"
+    ],
+    "whatToExpect": "A first call with Sara (Relocating with kids), who came in from: Facebook group link. Earn the details before you pitch. Goal: book two viewings around school timings.",
+    "opening": "Hi, it's Sara, I found you through the Facebook group. We're moving in about two months and schools come first, so where would you even start?",
+    "exampleLines": [
+      "Is there construction going on nearby?",
+      "We need proper storage, the kids have so much stuff.",
+      "I can only do viewings while the kids are at school."
+    ],
+    "learnerGoals": [
+      "Book two viewings around school timings"
+    ],
+    "rubric": [
+      {
+        "name": "Opened the client up: used the openness triggers",
+        "points": 30
+      },
+      {
+        "name": "Avoided shutdown triggers and pet peeves",
+        "points": 25
+      },
+      {
+        "name": "Covered what matters most, in proportion: Time constraints 50%, Best price 30%, Market conditions 20%",
+        "points": 25
+      },
+      {
+        "name": "Secured the goal's next step with a date",
+        "points": 20
+      }
+    ]
+  }
+}

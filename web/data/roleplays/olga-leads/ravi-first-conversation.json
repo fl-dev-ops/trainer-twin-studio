@@ -1,0 +1,53 @@
+{
+  "slug": "ravi-first-conversation",
+  "builder": {
+    "name": "Ravi: first conversation (lead from Instagram ad about passive income)",
+    "persona": "ravi-first-time-investor",
+    "situation": {
+      "scenario": "The learner speaks with Ravi, who came in as a lead from: Instagram ad about passive income. Banking job in Oman. Saved for 3 years to invest in Dubai for passive income. Owns one home in Oman. Married, two kids. Decision includes wife. Budget 1.5–2.0M AED (via mortgage; can start lower); timeline 3–6 months.",
+      "hiddenTruth": "Held back until the learner earns it:\n• Motivation: medium\n• What matters most: Best price 40%; Market conditions 30%; Time constraints 30%\n• Constraints: risk-averse; prefers simple mortgage process; new to Dubai market\n• Areas: open to guidance; maybe JVC / Dubai Hills (if asked)",
+      "learnerRole": "Dubai real estate agent",
+      "agreesWhen": "The learner offers: questions about purpose and family needs; clarity on affordability and mortgage steps.",
+      "declinesWhen": "The learner uses: guaranteed returns; pressuring timelines."
+    },
+    "difficulty": "medium",
+    "guardedIf": [
+      "guaranteed returns",
+      "pressuring timelines",
+      "hard sell",
+      "buzzwords"
+    ],
+    "opensUpIf": [
+      "questions about purpose and family needs",
+      "clarity on affordability and mortgage steps"
+    ],
+    "whatToExpect": "A first call with Ravi (First-time investor), who came in from: Instagram ad about passive income. Earn the details before you pitch. Goal: share budget range and agree to a follow-up call.",
+    "opening": "Hello? Yes, I clicked on the ad about passive income. I'm just looking at the moment.",
+    "exampleLines": [
+      "Honestly, I don't want to be pushed into anything.",
+      "What would the monthly payment actually be?",
+      "Everyone says Dubai is a good investment. Why should I believe that?"
+    ],
+    "learnerGoals": [
+      "Share budget range and agree to a follow-up call"
+    ],
+    "rubric": [
+      {
+        "name": "Opened the client up: used the openness triggers",
+        "points": 30
+      },
+      {
+        "name": "Avoided shutdown triggers and pet peeves",
+        "points": 25
+      },
+      {
+        "name": "Covered what matters most, in proportion: Best price 40%, Market conditions 30%, Time constraints 30%",
+        "points": 25
+      },
+      {
+        "name": "Secured the goal's next step with a date",
+        "points": 20
+      }
+    ]
+  }
+}
