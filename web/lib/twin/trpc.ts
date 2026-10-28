@@ -193,7 +193,7 @@ const agentsRouter = t.router({
   get: studioProcedure.input(slugInput).query(({ ctx, input }) => twinCall(async () => {
     const orgId = ctx.user.orgId;
     const found = await findTwinAgent(orgId, input.slug);
-    const [agent, assignments, sessions, calibrations] = await Promise.all([
+    const [agent, assignments, sessions, calibrations, skillAgents] = await Promise.all([
       db.agent.findUniqueOrThrow({ where: { id: found.id }, select: { data: true } }),
       listTwinAssignments(orgId, found.id),
       db.interviewSession.findMany({
@@ -203,6 +203,12 @@ const agentsRouter = t.router({
         select: { ...sessionRowSelect, report: true },
       }),
       calibrationRows(orgId, found.id),
+      // The org's skill twins: what the main (all-skills) twin's page lists in place of its description.
+      db.agent.findMany({
+        where: { orgId, kind: "TWIN", NOT: { data: { path: ["source"], equals: TWIN_SOURCE } } },
+        orderBy: { updatedAt: "desc" },
+        select: { slug: true, name: true },
+      }),
     ]);
     const data = asRecord(agent.data);
     const active = assignments.filter((row) => row.status === "active");
@@ -214,6 +220,8 @@ const agentsRouter = t.router({
       description: text(data.objective),
       whoAsks: whoAsks(data),
       allSkills: data.source === TWIN_SOURCE,
+      /** The twin agents the main twin covers (empty for a skill twin). */
+      skills: data.source === TWIN_SOURCE ? skillAgents : [],
       settings: beforeSettings(data),
       credit: {
         minutes: active.reduce((sum, row) => sum + row.minutesLimit, 0),

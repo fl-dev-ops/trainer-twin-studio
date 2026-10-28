@@ -11,6 +11,7 @@ import {
   Settings2,
   Share2,
   Sliders,
+  Sparkles,
   Trash2,
   UserPlus,
 } from "lucide-react";
@@ -32,6 +33,8 @@ import { cn } from "@/lib/utils";
 type TwinDetail = TwinOutputs["agents"]["get"];
 
 const DAY = 86_400_000;
+/** Twin agents listed on the main twin's card before "+N more". */
+const SKILLS_SHOWN = 5;
 /** Whether an ISO time falls in the picked range ("30", "7", "today" or "all"). */
 function inRange(iso: string, range: string, now = Date.now()) {
   if (range === "all") return true;
@@ -285,15 +288,43 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
               </p>
             </div>
 
-            <div className="mt-6">
-              <p className="text-[11px] font-medium tracking-[0.08em] uppercase text-muted-foreground">What it does</p>
-              <p
-                className="mt-1 line-clamp-4 text-[15px] leading-6 text-(--text-secondary)"
-                title={twin.description ?? undefined}
-              >
-                {twin.description ?? "No description yet."}
-              </p>
-            </div>
+            {twin.allSkills ? (
+              // The main twin covers every skill twin: list them instead of a description.
+              <div className="mt-6">
+                <p className="text-[11px] font-medium tracking-[0.08em] uppercase text-muted-foreground">Twin agents</p>
+                {twin.skills.length ? (
+                  <ul className="m-0 mt-2 flex list-none flex-col gap-2 p-0">
+                    {twin.skills.slice(0, SKILLS_SHOWN).map((skill) => (
+                      <li key={skill.slug}>
+                        <Link href={`/twin/${encodeURIComponent(skill.slug)}`} className="flex items-center gap-2 text-[15px] leading-6 text-(--text-secondary) hover:text-foreground">
+                          <Sparkles className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                          <span className="truncate">{skill.name}</span>
+                        </Link>
+                      </li>
+                    ))}
+                    {twin.skills.length > SKILLS_SHOWN ? (
+                      <li>
+                        <Link href="/twin" className="text-sm font-medium text-muted-foreground hover:text-foreground">
+                          +{twin.skills.length - SKILLS_SHOWN} more
+                        </Link>
+                      </li>
+                    ) : null}
+                  </ul>
+                ) : (
+                  <p className="mt-1 text-[15px] leading-6 text-(--text-secondary)">No twin agents yet.</p>
+                )}
+              </div>
+            ) : (
+              <div className="mt-6">
+                <p className="text-[11px] font-medium tracking-[0.08em] uppercase text-muted-foreground">What it does</p>
+                <p
+                  className="mt-1 line-clamp-4 text-[15px] leading-6 text-(--text-secondary)"
+                  title={twin.description ?? undefined}
+                >
+                  {twin.description ?? "No description yet."}
+                </p>
+              </div>
+            )}
 
             {/* Usage Credit Box pinned to bottom */}
             <div className="mt-auto pt-6">
