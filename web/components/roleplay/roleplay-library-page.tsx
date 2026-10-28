@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { BarChart3, Pencil, Play, Search, UserPlus } from "lucide-react";
+import { BarChart3, ExternalLink, Pencil, Play, Search, UserPlus } from "lucide-react";
 import { RoleplayIcon } from "@/components/icons";
 import { DotsIcon, GRADIENTS, LearnerAvatars } from "@/components/library-card-parts";
 import {
@@ -18,8 +18,12 @@ import { cn } from "@/lib/utils";
 
 type Scenario = RoleplayOutputs["scenarios"]["list"][number];
 
-/** Actions of one role play (card menu and detail header share them). */
-export function RoleplayMenu({ slug, name, trigger }: { slug: string; name: string; trigger?: "card" | "header" }) {
+/**
+ * Actions of one role play (card menu and detail header share them). A v1 interview scenario (`interview`) is
+ * configured, assigned and reviewed on its v1 pages, so its menu opens those.
+ */
+export function RoleplayMenu({ slug, name, trigger, interview = false }: { slug: string; name: string; trigger?: "card" | "header"; interview?: boolean }) {
+  const v1 = `/agents/${encodeURIComponent(slug)}`;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -37,24 +41,41 @@ export function RoleplayMenu({ slug, name, trigger }: { slug: string; name: stri
         }
       />
       <DropdownMenuContent side="bottom" align="end" className="w-44">
-        <DropdownMenuGroup>
-          <DropdownMenuItem render={<Link href={`/roleplay/${slug}/edit`} />}>
-            <Pencil className="size-4" />
-            <span>Edit</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem render={<Link href={`/talk?agent=${encodeURIComponent(slug)}`} />}>
-            <Play className="size-4" />
-            <span>Try as learner</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem render={<Link href={`/roleplay/${slug}/assign`} />}>
-            <UserPlus className="size-4" />
-            <span>Assign</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem render={<Link href={`/roleplay/${slug}`} />}>
-            <BarChart3 className="size-4" />
-            <span>Sessions</span>
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
+        {interview ? (
+          <DropdownMenuGroup>
+            <DropdownMenuItem render={<Link href={v1} />}>
+              <ExternalLink className="size-4" />
+              <span>Open</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem render={<Link href={`${v1}/edit`} />}>
+              <Pencil className="size-4" />
+              <span>Edit</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem render={<Link href={`/talk?agent=${encodeURIComponent(slug)}`} />}>
+              <Play className="size-4" />
+              <span>Try as learner</span>
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+        ) : (
+          <DropdownMenuGroup>
+            <DropdownMenuItem render={<Link href={`/roleplay/${slug}/edit`} />}>
+              <Pencil className="size-4" />
+              <span>Edit</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem render={<Link href={`/talk?agent=${encodeURIComponent(slug)}`} />}>
+              <Play className="size-4" />
+              <span>Try as learner</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem render={<Link href={`/roleplay/${slug}/assign`} />}>
+              <UserPlus className="size-4" />
+              <span>Assign</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem render={<Link href={`/roleplay/${slug}`} />}>
+              <BarChart3 className="size-4" />
+              <span>Sessions</span>
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -64,7 +85,7 @@ export function RoleplayMenu({ slug, name, trigger }: { slug: string; name: stri
 function ScenarioCard({ scenario, index }: { scenario: Scenario; index: number }) {
   return (
     <article className="flex flex-col overflow-visible rounded-[12px] border border-(--card-border) bg-card text-left shadow-[0_1px_2px_rgb(30_28_25/0.04)] transition-shadow hover:shadow-[0_2px_4px_rgb(30_28_25/0.07),0_8px_20px_rgb(30_28_25/0.11)]">
-      <Link href={`/roleplay/${scenario.slug}`} className="block outline-none">
+      <Link href={scenario.href} className="block outline-none">
         <div className={cn("relative flex min-h-[176px] items-center justify-center rounded-t-[12px] p-4", GRADIENTS[index % GRADIENTS.length])}>
           <div className="relative w-full rounded-[12px] bg-card p-3.5 shadow-[0_2px_8px_rgb(0_0_0/0.08)]">
             <span className="absolute top-full right-3 left-3 -z-10 -mt-2 h-4 rounded-b-[12px] bg-[rgb(255_255_255/0.28)] dark:bg-[rgb(0_0_0/0.25)]" />
@@ -92,7 +113,7 @@ function ScenarioCard({ scenario, index }: { scenario: Scenario; index: number }
       </Link>
       <div className="mt-auto flex items-center justify-between gap-2 px-4 pt-4 pb-4">
         <LearnerAvatars learners={scenario.learners} label="Learners assigned to this role play" />
-        <RoleplayMenu slug={scenario.slug} name={scenario.name} />
+        <RoleplayMenu slug={scenario.slug} name={scenario.name} interview={scenario.interview} />
       </div>
     </article>
   );
@@ -105,6 +126,8 @@ export function RoleplayLibraryPage({ scenarios }: { scenarios: Scenario[] }) {
   const shown = q
     ? scenarios.filter((s) => `${s.name} ${s.description ?? ""} ${s.client.name}`.toLowerCase().includes(q))
     : scenarios;
+  const created = shown.filter((s) => !s.interview);
+  const interviews = shown.filter((s) => s.interview);
   return (
     <div className="h-full w-full overflow-y-auto">
       <div className="mx-auto w-full max-w-[1024px] px-4 pt-5 pb-16 md:px-0">
@@ -141,9 +164,9 @@ export function RoleplayLibraryPage({ scenarios }: { scenarios: Scenario[] }) {
         </header>
 
         <h2 className="mt-10 text-[18px] leading-6 font-semibold tracking-[-0.015em]">Created role plays</h2>
-        {shown.length ? (
+        {created.length ? (
           <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {shown.map((scenario, i) => (
+            {created.map((scenario, i) => (
               <ScenarioCard key={scenario.slug} scenario={scenario} index={i} />
             ))}
           </div>
@@ -152,6 +175,18 @@ export function RoleplayLibraryPage({ scenarios }: { scenarios: Scenario[] }) {
             {q ? "No role plays match that search." : "No role plays yet. Create one with New."}
           </p>
         )}
+
+        {interviews.length ? (
+          <>
+            {/* v1 interview scenarios, as they were: they open (and are edited on) their v1 pages. */}
+            <h2 className="mt-12 text-[18px] leading-6 font-semibold tracking-[-0.015em]">Interview scenarios</h2>
+            <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {interviews.map((scenario, i) => (
+                <ScenarioCard key={scenario.slug} scenario={scenario} index={i} />
+              ))}
+            </div>
+          </>
+        ) : null}
       </div>
     </div>
   );

@@ -9,6 +9,7 @@ import { isSessionReport } from "@/lib/session-report";
 import { roleplayBuilderFrom, roleplayBuilderSchema } from "@/lib/roleplay/skill";
 import { type RoleplayReport } from "@/lib/roleplay/session-report";
 import { ROLEPLAY_SOURCE, saveRoleplay, ScenarioIngestError } from "@/lib/scenario-ingest";
+import { agentDisplayName } from "@/lib/specs";
 import { studioProcedure, t } from "@/lib/trpc";
 import { avatarPhotoUrl } from "@/lib/twin/avatar";
 import { durationSeconds, transcriptTurns } from "@/lib/twin/stats";
@@ -23,8 +24,13 @@ const slugInput = z.object({ slug: z.string().min(1).max(200) });
 const asRecord = (value: unknown) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
 const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : null);
 
-/** Builder role plays of the org. */
+/** Builder role plays of the org (detail, builder, assign and their session reports). */
 const roleplaysOf = (orgId: string): Prisma.AgentWhereInput => ({ orgId, kind: "ROLEPLAY", data: { path: ["source"], equals: ROLEPLAY_SOURCE } });
+/**
+ * Every role play of the org, for the library, sessions and users lists: builder role plays plus the v1 interview
+ * scenarios (no builder source), which keep opening their v1 pages (/agents/<slug>, /sessions/<id>).
+ */
+const anyRoleplayOf = (orgId: string): Prisma.AgentWhereInput => ({ orgId, kind: "ROLEPLAY" });
 
 const personaSelect = { slug: true, name: true, data: true, avatar: { select: { s3ImageKey: true, updatedAt: true } } } as const;
 type PersonaRow = Prisma.PersonaGetPayload<{ select: typeof personaSelect }>;
@@ -66,7 +72,7 @@ function reportState(row: { status: string; reportStatus: string | null; report:
 }
 
 const sessionSelect = {
-  id: true, status: true, reportStatus: true, report: true, startedAt: true, endedAt: true, createdAt: true,
+  id: true, agentId: true, status: true, reportStatus: true, report: true, startedAt: true, endedAt: true, createdAt: true,
   user: { select: { name: true, email: true, image: true } },
   agent: { select: { slug: true, name: true } },
 } as const;
@@ -84,12 +90,17 @@ function sessionItem(row: SessionRow) {
     score: typeof report?.score === "number" ? report.score : null,
     summary: report?.summary ?? null,
     reportState: reportState(row),
+    href: `/roleplay/sessions/${row.id}`,
   };
 }
 
 /** Sessions on builder role plays, newest first (calibration-free: role plays have none). */
 const roleplaySessions = (orgId: string, extra: Prisma.InterviewSessionWhereInput = {}): Prisma.InterviewSessionWhereInput => ({
   orgId, deletedAt: null, startedAt: { not: null }, agent: roleplaysOf(orgId), ...extra,
+});
+/** Sessions on any role play, v1 interview scenarios included. */
+const anyRoleplaySessions = (orgId: string): Prisma.InterviewSessionWhereInput => ({
+  orgId, deletedAt: null, startedAt: { not: null }, agent: anyRoleplayOf(orgId),
 });
 
 /** People invited to a role play (RolePlayAssignment) and their status. */
@@ -110,7 +121,7 @@ const scenariosRouter = t.router({
   list: studioProcedure.query(async ({ ctx }) => {
     const orgId = ctx.user.orgId;
     const agents = await db.agent.findMany({
-      where: roleplaysOf(orgId),
+      where: anyRoleplayOf(orgId),
       orderBy: [{ order: "asc" }, { updatedAt: "desc" }],
       select: { id: true, slug: true, name: true, data: true, updatedAt: true, persona: { select: personaSelect } },
     });
@@ -121,12 +132,17 @@ const scenariosRouter = t.router({
     ]);
     const sessionsOf = new Map(sessions.map((row) => [row.agentId, row._count]));
     return agents.map((agent) => {
-      const scenario = asRecord(asRecord(agent.data).scenario);
+      const data = asRecord(agent.data);
+      const scenario = asRecord(data.scenario);
+      // v1 interview scenarios: as in v1 (objective, opening, display name); they open their v1 page.
+      const interview = data.source !== ROLEPLAY_SOURCE;
       return {
         slug: agent.slug,
-        name: agent.name,
-        description: text(scenario.description),
-        opening: text(asRecord(scenario.roleplay).opening),
+        name: interview ? agentDisplayName(agent.slug, agent.name) : agent.name,
+        interview,
+        href: interview ? `/agents/${encodeURIComponent(agent.slug)}` : `/roleplay/${agent.slug}`,
+        description: text(scenario.description) ?? (interview ? text(data.objective) : null),
+        opening: text(asRecord(scenario.roleplay).opening) ?? (interview ? text(data.opening) : null),
         client: clientOf(agent.persona, agent.data),
         sessions: sessionsOf.get(agent.id) ?? 0,
         updatedAt: agent.updatedAt.toISOString(),
@@ -224,8 +240,14 @@ const builderRouter = t.router({
 const sessionsRouter = t.router({
   /** Practice sessions on the org's role plays, newest first. */
   list: studioProcedure.query(async ({ ctx }) => {
-    const rows = await db.interviewSession.findMany({ where: roleplaySessions(ctx.user.orgId), orderBy: { startedAt: "desc" }, take: 200, select: sessionSelect });
-    return rows.map(sessionItem);
+    const orgId = ctx.user.orgId;
+    const [rows, builder] = await Promise.all([
+      db.interviewSession.findMany({ where: anyRoleplaySessions(orgId), orderBy: { startedAt: "desc" }, take: 200, select: sessionSelect }),
+      db.agent.findMany({ where: roleplaysOf(orgId), select: { id: true } }),
+    ]);
+    const builderIds = new Set(builder.map((agent) => agent.id));
+    // A v1 interview session opens its v1 page, where its interview report shows.
+    return rows.map((row) => ({ ...sessionItem(row), ...(builderIds.has(row.agentId) ? {} : { href: `/sessions/${row.id}` }) }));
   }),
 
   /** One session: learner, client, report (goals, rubric, notes) and transcript. */
@@ -267,10 +289,10 @@ const usersRouter = t.router({
   /** Everyone practising on the org's role plays: invited or with sessions, how many role plays, how many sessions. */
   list: studioProcedure.query(async ({ ctx }) => {
     const orgId = ctx.user.orgId;
-    const agents = await db.agent.findMany({ where: roleplaysOf(orgId), select: { id: true } });
+    const agents = await db.agent.findMany({ where: anyRoleplayOf(orgId), select: { id: true } });
     const [invites, sessions] = await Promise.all([
       invitesFor(orgId, agents.map((agent) => agent.id)),
-      db.interviewSession.findMany({ where: roleplaySessions(orgId), select: { agentId: true, user: { select: { name: true, email: true, image: true } } } }),
+      db.interviewSession.findMany({ where: anyRoleplaySessions(orgId), select: { agentId: true, user: { select: { name: true, email: true, image: true } } } }),
     ]);
     const people = new Map<string, { name: string; email: string; image: string | null; roleplays: Set<string>; sessions: number }>();
     const person = (email: string, name: string, image: string | null) => {

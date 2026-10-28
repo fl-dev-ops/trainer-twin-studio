@@ -26,7 +26,7 @@ export function RoleplaySessionItem({ session, index = 0, divider = false }: { s
   return (
     <li className={cn(divider && "border-t border-(--border)")}>
       <Link
-        href={`/roleplay/sessions/${session.id}`}
+        href={session.href}
         className="grid w-full grid-cols-[40px_minmax(0,1fr)_28px] items-start gap-3.5 p-4 px-5 text-left transition-colors outline-none hover:bg-(--sidebar) focus-visible:bg-(--sidebar)"
       >
         <span className={cn("grid size-10 shrink-0 place-items-center rounded-full text-sm font-semibold", AVATAR_TONES[index % AVATAR_TONES.length])} aria-hidden>
