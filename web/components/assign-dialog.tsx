@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 
-export type AssignPerson = { email: string; name: string; image: string | null };
+/** `pending`: invited, hasn't accepted yet (not a member of the org). */
+export type AssignPerson = { email: string; name: string; image: string | null; pending?: boolean };
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -113,7 +114,16 @@ export function AssignDialog({ variant, open, onOpenChange, title, assignedCount
                   <UserAvatar user={person} className="size-8 text-xs" />
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate text-sm font-medium">{person.name}</span>
-                    {person.name !== person.email ? <span className="truncate text-xs text-muted-foreground">{person.email}</span> : <span className="text-xs text-muted-foreground">New · gets an invite</span>}
+                    {person.pending ? (
+                      <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                        {person.name !== person.email ? <span className="truncate">{person.email}</span> : null}
+                        <PendingBadge />
+                      </span>
+                    ) : person.name !== person.email ? (
+                      <span className="truncate text-xs text-muted-foreground">{person.email}</span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">New · gets an invite</span>
+                    )}
                   </span>
                   {on ? <Check className="size-4 shrink-0 text-(--brand)" aria-hidden /> : null}
                 </label>
@@ -150,5 +160,14 @@ export function AssignDialog({ variant, open, onOpenChange, title, assignedCount
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Invited but not joined yet (hasn't accepted the invite / opened their link). */
+export function PendingBadge() {
+  return (
+    <span className="shrink-0 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+      Invite pending
+    </span>
   );
 }

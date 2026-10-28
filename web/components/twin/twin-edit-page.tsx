@@ -11,7 +11,7 @@ import type { TwinOutputs } from "@/lib/twin/trpc";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SwitchToggle } from "@/components/switch-toggle";
-import { AssignDialog } from "@/components/assign-dialog";
+import { AssignDialog, PendingBadge } from "@/components/assign-dialog";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
 
@@ -334,7 +334,10 @@ export function TwinEditPage({
                     <UserAvatar user={u} className="size-8 text-xs" />
                     <span className="flex min-w-0 flex-col">
                       <span className="truncate text-sm font-semibold">{u.name}</span>
-                      <span className="truncate text-xs text-muted-foreground">{u.email}</span>
+                      <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                        {u.name !== u.email ? <span className="truncate">{u.email}</span> : null}
+                        {u.pending ? <PendingBadge /> : null}
+                      </span>
                     </span>
                   </span>
                   <span className="shrink-0 text-xs text-muted-foreground tabular-nums">

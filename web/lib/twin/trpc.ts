@@ -304,7 +304,8 @@ const assignmentsRouter = t.router({
     // The org's learners and people invited as users who haven't joined yet, plus everyone assigned by email.
     const people = new Map(assignable.map((person) => [person.email, person]));
     for (const row of assigned) {
-      if (!people.has(row.recipientEmail)) people.set(row.recipientEmail, { email: row.recipientEmail, name: row.user?.name || row.recipientEmail, image: row.user?.image ?? null });
+      // Assigned by email but not a member yet: they haven't accepted (opened their link and signed in).
+      if (!people.has(row.recipientEmail)) people.set(row.recipientEmail, { email: row.recipientEmail, name: row.user?.name || row.recipientEmail, image: row.user?.image ?? null, pending: true });
     }
     return [...people.values()]
       .map((person) => {
