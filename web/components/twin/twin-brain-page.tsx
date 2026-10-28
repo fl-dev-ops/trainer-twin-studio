@@ -20,7 +20,7 @@ export type BrainKnowledge = {
 
 /** Voice and avatar as set up on /twin/brain/voice and /twin/brain/avatar (null: the org has no own persona yet). */
 export type BrainAvatar = { personaName: string; photoUrl: string | null; voiceId: string | null; voiceName: string | null; updatedAt: string | null } | null;
-/** The twin's skills (skill twins), newest first: what Training style shows. */
+/** The twin's skills (skill twins), newest first: what Coaching style shows. */
 export type BrainSkill = { slug: string; name: string };
 
 const CONNECTOR_ICONS = { drive: HardDrive, notion: BookOpen, youtube: Video };
@@ -159,7 +159,7 @@ export function TwinBrainPage({ knowledge, avatar, skills }: { knowledge: BrainK
             <Edge />
 
             <Node
-              tag="Training style" tone="amber" title="Training style"
+              tag="Coaching style" tone="amber" title="Coaching style"
             >
               {skills.length ? (
                 <ul className="m-0 flex list-none flex-col gap-3 p-0 text-sm leading-5">
