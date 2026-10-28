@@ -38,7 +38,8 @@ export async function getSessionOrg(): Promise<SessionOrg | null> {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return null;
   const member = await db.member.findFirst({
-    where: { userId: session.user.id },
+    // Disabled members are out at once, even while their cached session cookie (lib/auth.ts) is still valid.
+    where: { userId: session.user.id, disabledAt: null },
     select: { organization: { select: { id: true, slug: true, metadata: true } } },
   });
   if (!member) return null;
@@ -54,7 +55,8 @@ export async function getTrainerOrg(): Promise<TrainerOrg | null> {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return null;
   const member = await db.member.findFirst({
-    where: { userId: session.user.id },
+    // Disabled members are out at once, even while their cached session cookie (lib/auth.ts) is still valid.
+    where: { userId: session.user.id, disabledAt: null },
     select: {
       role: true,
       organization: { select: { id: true, slug: true, metadata: true } },

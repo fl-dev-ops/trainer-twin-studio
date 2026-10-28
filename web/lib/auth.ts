@@ -20,6 +20,9 @@ async function assertSingleOrg(email: string, organizationId: string) {
 export const auth = betterAuth({
   appName: "TrainerTwin",
   database: prismaAdapter(db, { provider: "postgresql" }),
+  // The session is kept in a signed cookie for 5 minutes, so most requests skip the session lookup (the DB is far
+  // from the functions). Studio access still re-checks the member (role, disabled) on every request (lib/org.ts).
+  session: { cookieCache: { enabled: true, maxAge: 5 * 60 } },
   emailAndPassword: {
     enabled: true,
     sendResetPassword: async (data) => {
