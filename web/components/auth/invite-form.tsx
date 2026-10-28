@@ -18,10 +18,12 @@ import { Separator } from "@/components/ui/separator";
 import { authClient } from "@/lib/auth-client";
 
 /** Learner sign-up via trainer invitation: Google or account details, then join the org. */
-export function InviteForm({ invitationId, email, signedInEmail, googleEnabled }: {
+export function InviteForm({ invitationId, email, signedInEmail, signInHref, googleEnabled }: {
   invitationId: string;
   email: string;
   signedInEmail?: string;
+  /** Set when the invited email already has an account: sign in (and come back here to accept) instead of signing up. */
+  signInHref?: string;
   googleEnabled: boolean;
 }) {
   const router = useRouter();
@@ -90,6 +92,15 @@ export function InviteForm({ invitationId, email, signedInEmail, googleEnabled }
               <SwitchAccountButton returnTo={`/invite?token=${encodeURIComponent(invitationId)}`} />
             </div>
           )
+        ) : signInHref ? (
+          <div className="grid gap-3">
+            <p className="text-muted-foreground text-sm">
+              You already have an account with {email}. Sign in to accept the invitation.
+            </p>
+            <Button render={<a href={signInHref} />} nativeButton={false} className="w-full">
+              Sign in
+            </Button>
+          </div>
         ) : (
           <>
             {googleEnabled ? <GoogleSignInButton /> : null}
