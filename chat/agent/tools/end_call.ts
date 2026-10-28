@@ -11,10 +11,13 @@ export default defineTool({
   description: `Client role-play only: hang up the call. Never use it in an interview.
 
 Call it in the SAME reply as your short goodbye, after the goodbye words, when the call has reached its end: you agreed to a next step, you declined, or your guard reached 5.
+Always pass that goodbye as \`goodbye\`: it is spoken for you if your reply had no words.
 Never call it while the conversation is still going, for a pause, or because the agent asked you to stay on.
 After it returns, say nothing more.`,
   inputSchema: z.object({
     outcome: z.enum(["agreed", "declined", "guard_ran_out"]).describe("How the call ended for you, the client."),
+    goodbye: z.string().trim().min(1).max(200)
+      .describe("Your short, natural goodbye in character, fitting how the call ended (e.g. \"Okay, fine then.\", \"Alright, talk then.\")."),
   }),
   async execute(input, ctx) {
     if (!(await isRoleplaySession(ctx))) {

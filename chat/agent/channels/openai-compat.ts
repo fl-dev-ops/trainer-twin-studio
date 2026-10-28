@@ -25,16 +25,6 @@ const PURE_SIDE_EFFECT_TOOLS = new Set([
   "highlight_canvas_element",
 ]);
 
-/**
- * Spoken when the role-play client hangs up (end_call) without saying anything
- * first, so the learner never hears the call cut off mid-conversation.
- */
-const END_CALL_FALLBACK_GOODBYE: Record<string, string> = {
-  agreed: "Okay, speak then. Bye for now.",
-  declined: "Sorry, I have to go. Bye.",
-  guard_ran_out: "Sorry, I have to go. Bye.",
-};
-
 type ChatMessage = {
   role: "system" | "developer" | "user" | "assistant" | "tool";
   content?: unknown;
@@ -330,9 +320,12 @@ export default defineChannel({
                   allToolsCalled.push({ name: action.toolName, callId: action.callId, input: action.input });
                 }
                 // The browser disconnects ~5s after end_call, so the goodbye must go out now.
-                if (action.kind === "tool-call" && action.toolName === "end_call" && !sawActivity) {
-                  const outcome = String((action.input as { outcome?: unknown } | null)?.outcome ?? "");
-                  console.warn("[openai-compat] end_call without goodbye; speaking fallback", { sessionId, mode, outcome });
+                // The client wrote its goodbye as an end_call argument; speak it if the reply had no words.
+                const goodbye = action.kind === "tool-call" && action.toolName === "end_call"
+                  ? String((action.input as { goodbye?: unknown } | null)?.goodbye ?? "").trim()
+                  : "";
+                if (goodbye && !sawActivity) {
+                  console.info("[openai-compat] end_call without spoken goodbye; speaking its goodbye argument", { sessionId, mode });
                   sawActivity = true;
                   await writeChunk({
                     id: completionId,
@@ -341,11 +334,25 @@ export default defineChannel({
                     model,
                     choices: [{
                       index: 0,
-                      delta: { content: END_CALL_FALLBACK_GOODBYE[outcome] ?? END_CALL_FALLBACK_GOODBYE.declined },
+                      delta: { content: goodbye },
                       finish_reason: null,
                     }],
                   });
                 }
+              }
+              // LiveKit speaks the last sentence only when the stream ends, and end_call itself
+              // returns only after the room is closed, so end the reply now; the tool keeps running.
+              if (ev.data.actions.some((action) => action.kind === "tool-call" && action.toolName === "end_call")) {
+                console.info("[openai-compat] end_call requested; closing reply so the goodbye is spoken", { sessionId, mode });
+                await writeChunk({
+                  id: completionId,
+                  object: "chat.completion.chunk",
+                  created,
+                  model,
+                  choices: [{ index: 0, delta: {}, finish_reason: finishReason() }],
+                  tools_called: allToolsCalled,
+                });
+                break;
               }
               continue;
             }
