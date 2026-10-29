@@ -165,6 +165,8 @@ type StreamEvent = {
       kind?: string;
       callId?: string;
       toolName?: string;
+      /** "eve__skill" loads: the loaded skill's name. */
+      name?: string;
       isError?: boolean;
       output?: unknown;
     };
@@ -511,6 +513,10 @@ export default defineChannel({
                     output: result.output,
                   });
                 }
+              }
+              // A skill load reports load-skill-result, not tool-result; kept small (the skill body itself is not evidence).
+              if (result?.kind === "load-skill-result" && !result.isError && evidenceCalls.length < 12) {
+                evidenceCalls.push({ tool: "eve__skill", input: { name: result.name }, output: { loaded: true } });
               }
               continue;
             }

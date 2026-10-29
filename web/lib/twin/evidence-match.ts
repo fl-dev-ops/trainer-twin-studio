@@ -16,3 +16,9 @@ export function evidenceFor<T extends { reply: string }>(turns: T[], bubble: str
   }
   return null;
 }
+
+/** The reply's evidence only when the twin pulled some: the matched turn had at least one lookup. */
+export function lookupEvidence<T extends { reply: string; searches?: readonly unknown[] }>(turns: T[], bubble: string): T | null {
+  const found = evidenceFor(turns, bubble);
+  return found?.searches?.length ? found : null;
+}

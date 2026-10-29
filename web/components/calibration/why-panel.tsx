@@ -1,12 +1,36 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronDown, ExternalLink, FileSearch, FileText, LoaderCircle, Video, X } from "lucide-react";
+import { ChevronDown, ExternalLink, FileSearch, FileText, Video, X } from "lucide-react";
 import { SOFT_SHADOW } from "@/components/calibration/parts";
 import { twinClient } from "@/lib/twin/client";
 import type { TurnEvidence } from "@/lib/twin/evidence";
-import { evidenceFor } from "@/lib/twin/evidence-match";
 import { cn } from "@/lib/utils";
+
+/**
+ * All evidence turns of a session, fetched for the client. Icons and panels only render from this, so callers know
+ * whether a lookup pulled evidence before showing anything. While a live call streams replies, pass pollMs.
+ */
+export function useEvidenceTurns(sessionId: string | null | undefined, pollMs?: number) {
+  const [turns, setTurns] = useState<TurnEvidence[] | null>(null);
+  useEffect(() => {
+    if (!sessionId) return;
+    let live = true;
+    const load = () => void twinClient.calibrations.evidence.query({ sessionId }).then((t) => {
+      if (live) setTurns(t);
+    }).catch(() => {
+      if (live) setTurns([]);
+    });
+    load();
+    if (!pollMs) return () => { live = false; };
+    const timer = setInterval(load, pollMs);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [sessionId, pollMs]);
+  return turns;
+}
 
 const SHOWN = 5;
 /** The 🔍 beside a twin reply that opens its "Why this answer". */
@@ -28,26 +52,9 @@ export function WhyButton({ open, onClick }: { open: boolean; onClick: () => voi
 const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : null);
 
 /** "Why this answer" for one twin reply: what it heard, what it looked up, and the moments from the trainer's sessions. */
-export function WhyPanel({ sessionId, reply, onClose }: { sessionId: string; reply: string; onClose: () => void }) {
-  const [turn, setTurn] = useState<TurnEvidence | null | undefined>(undefined);
+export function WhyPanel({ turn, onClose }: { turn: TurnEvidence; onClose: () => void }) {
   const [open, setOpen] = useState<number | null>(0);
   const [shown, setShown] = useState(SHOWN);
-
-  useEffect(() => {
-    let live = true;
-    // Evidence is posted just after the reply, so ask again once if it isn't there yet.
-    const load = async (retry: boolean) => {
-      const turns = await twinClient.calibrations.evidence.query({ sessionId }).catch(() => []);
-      const found = evidenceFor(turns, reply);
-      if (!live) return;
-      if (found || !retry) setTurn(found);
-      else setTimeout(() => void load(false), 1500);
-    };
-    void load(true);
-    return () => {
-      live = false;
-    };
-  }, [sessionId, reply]);
 
   return (
     <div role="dialog" aria-label="Why this answer" className={cn("fixed right-6 bottom-28 z-30 flex max-h-[70dvh] w-[380px] max-w-[calc(100vw-3rem)] flex-col gap-4 overflow-y-auto rounded-3xl bg-card p-6", SOFT_SHADOW)}>
@@ -61,32 +68,24 @@ export function WhyPanel({ sessionId, reply, onClose }: { sessionId: string; rep
       </div>
       <h2 className="m-0 text-xl leading-7 font-semibold tracking-[-0.015em]">Why this answer</h2>
 
-      {turn === undefined ? (
-        <p className="m-0 flex items-center gap-2 text-sm text-muted-foreground">
-          <LoaderCircle className="size-4 animate-spin" aria-hidden /> Looking up this reply&hellip;
-        </p>
-      ) : turn === null ? (
-        <p className="m-0 text-sm text-muted-foreground">No evidence was recorded for this reply.</p>
-      ) : (
-        <>
-          <p className="m-0 text-sm leading-6">
-            <span className="font-medium">Heard: </span>
-            {turn.opening ? "The start of the call" : turn.heard || "\u2014"}
-          </p>
-          <p className="m-0 text-sm leading-6">
-            <span className="font-medium">Searched: </span>
-            {turn.searches.length
-              ? turn.searches.map((s) => `${s.label}${s.query ? ` for \u201c${s.query}\u201d` : ""}${s.label === "skill" ? "" : ` (${s.found} found)`}`).join(" \u00b7 ")
-              : "Nothing: this came from the twin\u2019s skills and persona."}
-          </p>
+      <p className="m-0 text-sm leading-6">
+        <span className="font-medium">Heard: </span>
+        {turn.opening ? "The start of the call" : turn.heard || "\u2014"}
+      </p>
+      <p className="m-0 text-sm leading-6">
+        <span className="font-medium">Searched: </span>
+        {(turn.searches ?? []).length
+          ? turn.searches.map((s) => `${s.label}${s.query ? ` for \u201c${s.query}\u201d` : ""}${s.label === "skill" ? "" : ` (${s.found} found)`}`).join(" \u00b7 ")
+          : "Nothing: this came from the twin\u2019s skills and persona."}
+      </p>
 
-          {turn.moments.length ? (
-            <>
-              <h3 className="m-0 flex items-center gap-2 text-sm font-medium">
-                Moments from your sessions
-                <span className="rounded-full bg-muted px-2 text-xs tabular-nums">{turn.moments.length}</span>
-              </h3>
-              <ul className="m-0 flex list-none flex-col gap-2 p-0">
+      {turn.moments.length ? (
+        <>
+          <h3 className="m-0 flex items-center gap-2 text-sm font-medium">
+            Moments from your sessions
+            <span className="rounded-full bg-muted px-2 text-xs tabular-nums">{turn.moments.length}</span>
+          </h3>
+          <ul className="m-0 flex list-none flex-col gap-2 p-0">
                 {turn.moments.slice(0, shown).map((moment, i) => {
                   const isOpen = open === i;
                   const Icon = moment.source?.kind === "document" ? FileText : Video;
@@ -117,15 +116,13 @@ export function WhyPanel({ sessionId, reply, onClose }: { sessionId: string; rep
                   );
                 })}
               </ul>
-              {turn.moments.length > shown ? (
-                <button type="button" onClick={() => setShown(turn.moments.length)} className="w-fit text-sm font-medium hover:underline">
-                  Show {turn.moments.length - shown} more
-                </button>
-              ) : null}
-            </>
+          {turn.moments.length > shown ? (
+            <button type="button" onClick={() => setShown(turn.moments.length)} className="w-fit text-sm font-medium hover:underline">
+              Show {turn.moments.length - shown} more
+            </button>
           ) : null}
         </>
-      )}
+      ) : null}
     </div>
   );
 }

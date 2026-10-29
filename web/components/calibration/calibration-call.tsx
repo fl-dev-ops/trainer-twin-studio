@@ -17,7 +17,9 @@ import {
 } from "@/components/calibration/call-icons";
 import type { CalibrationTurn, Rating } from "@/components/calibration/mock";
 import { Bubble, CalibrationStats, PILL, RatingLabel, SOFT_SHADOW, TwinPortrait } from "@/components/calibration/parts";
-import { WhyButton, WhyPanel } from "@/components/calibration/why-panel";
+import { WhyButton, WhyPanel, useEvidenceTurns } from "@/components/calibration/why-panel";
+import { lookupEvidence } from "@/lib/twin/evidence-match";
+import type { TurnEvidence } from "@/lib/twin/evidence";
 import { RoleplayIcon } from "@/components/icons";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { LiveKitWorkspaceProvider } from "@/lib/livekit-workspaces";
@@ -436,7 +438,9 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
   }
 
   /** The twin reply whose "Why this answer" is open (calibration only). */
-  const [whyFor, setWhyFor] = useState<{ id: string; text: string } | null>(null);
+  const [whyFor, setWhyFor] = useState<{ id: string; text: string; evidence: TurnEvidence } | null>(null);
+  // Evidence lands just after each reply; poll mildly so icons appear once a lookup actually pulled something.
+  const evidenceTurns = useEvidenceTurns(connection?.sessionId, 3000);
   const [attaching, setAttaching] = useState(false);
   const attachInput = useRef<HTMLInputElement>(null);
   /** Mid-call file, as in the learner's session: upload it, link it to this session, then tell the twin its ID (it reads by ID). */
@@ -600,8 +604,9 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                 ) : captions.length === 0 ? (
                   <p className="text-center text-sm text-muted-foreground">{twinName} will start in a moment.</p>
                 ) : (
-                  captions.map((turn, index, shown) =>
-                    turn.speaker === "you" ? (
+                  captions.map((turn, index, shown) => {
+                    const evidence = lookupEvidence(evidenceTurns ?? [], turn.text);
+                    return turn.speaker === "you" ? (
                       <Bubble key={turn.id} speaker="you" className="max-w-[440px]">
                         {turn.text}
                       </Bubble>
@@ -613,12 +618,12 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                             {twinName} speaking
                           </p>
                         ) : null}
-                        {twin && !learner && !turn.streaming && connection?.sessionId ? (
+                        {twin && !learner && !turn.streaming && evidence ? (
                           <div className="flex items-start gap-2">
                             <Bubble speaker="twin">{turn.text}</Bubble>
                             <WhyButton
                               open={whyFor?.id === turn.id}
-                              onClick={() => setWhyFor(whyFor?.id === turn.id ? null : { id: turn.id, text: turn.text })}
+                              onClick={() => setWhyFor(whyFor?.id === turn.id ? null : { id: turn.id, text: turn.text, evidence })}
                             />
                           </div>
                         ) : (
@@ -653,8 +658,8 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                           </div>
                         )}
                       </div>
-                    ),
-                  )
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -758,7 +763,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
             </div>
 
             {whyFor && connection?.sessionId ? (
-              <WhyPanel key={whyFor.id} sessionId={connection.sessionId} reply={whyFor.text} onClose={() => setWhyFor(null)} />
+              <WhyPanel key={whyFor.id} turn={whyFor.evidence} onClose={() => setWhyFor(null)} />
             ) : null}
 
             <AlertDialog open={confirmEnd} onOpenChange={(open) => !ending && setConfirmEnd(open)}>
