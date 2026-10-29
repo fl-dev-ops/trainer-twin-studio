@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ArrowUp, Flag, LoaderCircle, Paperclip, Volume2 } from "lucide-react";
-import { RoomAudioRenderer, RoomContext, useStartAudio, useVoiceAssistant } from "@livekit/components-react";
-import { type LocalAudioTrack, ParticipantEvent, Room, RoomEvent, Track, type TrackPublication, type TranscriptionSegment } from "livekit-client";
+import { RoomAudioRenderer, RoomContext, useStartAudio, useTrackToggle, useVoiceAssistant } from "@livekit/components-react";
+import { type LocalAudioTrack, ParticipantEvent, Room, RoomEvent, Track, type TranscriptionSegment } from "livekit-client";
 import {
   ArrowUpRightIcon,
   CallEndedIcon,
@@ -113,7 +113,13 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
   const [turns, setTurns] = useState<CalibrationTurn[]>([]);
   const [liveText, setLiveText] = useState("");
   const [seconds, setSeconds] = useState(0);
-  const [muted, setMuted] = useState(false);
+  // The mic button is LiveKit's (as the learner session's): it reads the real track, so it can't drift from it.
+  const { toggle: toggleMic, enabled: micOn, pending: micPending } = useTrackToggle({
+    room,
+    source: Track.Source.Microphone,
+    onDeviceError: (micError) => toast.error(micProblem(micError)),
+  });
+  const muted = !micOn;
   /** Typing instead of speaking: the message box above the call controls. */
   const [composerOpen, setComposerOpen] = useState(false);
   const [draft, setDraft] = useState("");
@@ -210,9 +216,8 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
     if (!countdownDoneRef.current || !agentInRef.current || releasedRef.current || endingRef.current) return;
     releasedRef.current = true;
     await room.localParticipant.setMicrophoneEnabled(true).catch((micError) => {
-      // Safari may refuse a mic that wasn't started from a click: show it muted and say why (clicking the mic retries).
+      // Safari may refuse a mic that wasn't started from a click: say why (the button shows it off; a click retries).
       console.error("Microphone failed:", micError);
-      setMuted(true);
       toast.error(micProblem(micError));
     });
     await room.localParticipant
@@ -241,7 +246,6 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
     setTurns([]);
     setLiveText("");
     setSeconds(0);
-    setMuted(false);
     setError("");
     setPhase("connecting");
     try {
@@ -462,48 +466,41 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
     }
   }
 
-  async function toggleMute() {
-    const next = !muted;
+  /** The browser's mic track, if it was stopped or paused by the browser itself (Safari does) rather than muted by you. */
+  const pausedMic = () => {
+    const track = room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track as LocalAudioTrack | undefined;
+    const raw = track?.mediaStreamTrack;
+    return track && raw && (raw.readyState === "ended" || raw.muted) ? track : null;
+  };
+
+  async function onMicClick() {
+    const paused = pausedMic();
+    if (!paused) return void (await toggleMic());
+    // Safari stopped or paused the capture: take a fresh one from this click and keep the mic on.
     try {
-      if (!next) {
-        // Safari can stop or pause the capture by itself: take a fresh one from this click before turning it back on.
-        const track = room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track as LocalAudioTrack | undefined;
-        const raw = track?.mediaStreamTrack;
-        if (track && raw && (raw.readyState === "ended" || raw.muted)) await track.restartTrack();
-      }
-      await room.localParticipant.setMicrophoneEnabled(!next);
-      setMuted(next);
+      await paused.restartTrack();
+      await toggleMic(true);
     } catch (micError) {
-      console.error("Microphone toggle failed:", micError);
-      setMuted(true);
+      console.error("Microphone restart failed:", micError);
       toast.error(micProblem(micError));
     }
   }
 
-  // The mic button follows the real mic: LiveKit's mute events, and the browser itself pausing capture (Safari does).
+  // Tell the trainer when the browser itself pauses the mic mid-call (Safari does); a click on the mic brings it back.
   useEffect(() => {
     const local = room.localParticipant;
-    const isMic = (publication: TrackPublication) => publication.source === Track.Source.Microphone;
     let raw: MediaStreamTrack | undefined;
-    const onBrowserPause = () => {
-      setMuted(true);
-      toast.warning("Your browser paused the microphone. Click the mic to turn it back on.");
-    };
+    const onBrowserPause = () => toast.warning("Your browser paused the microphone. Click the mic to turn it back on.");
     const watch = () => {
       raw?.removeEventListener("mute", onBrowserPause);
       raw = local.getTrackPublication(Track.Source.Microphone)?.track?.mediaStreamTrack;
       raw?.addEventListener("mute", onBrowserPause);
     };
-    const onMuted = (publication: TrackPublication) => isMic(publication) && setMuted(true);
-    const onUnmuted = (publication: TrackPublication) => {
-      if (!isMic(publication)) return;
-      setMuted(false);
-      watch(); // a restarted mic is a new browser track
-    };
-    local.on(ParticipantEvent.TrackMuted, onMuted).on(ParticipantEvent.TrackUnmuted, onUnmuted).on(ParticipantEvent.LocalTrackPublished, watch);
+    // A restarted mic is a new browser track, so watch again whenever the mic is (re)published or unmuted.
+    local.on(ParticipantEvent.LocalTrackPublished, watch).on(ParticipantEvent.TrackUnmuted, watch);
     watch();
     return () => {
-      local.off(ParticipantEvent.TrackMuted, onMuted).off(ParticipantEvent.TrackUnmuted, onUnmuted).off(ParticipantEvent.LocalTrackPublished, watch);
+      local.off(ParticipantEvent.LocalTrackPublished, watch).off(ParticipantEvent.TrackUnmuted, watch);
       raw?.removeEventListener("mute", onBrowserPause);
     };
   }, [room]);
@@ -696,8 +693,8 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                 type="button"
                 aria-label={muted ? "Unmute" : "Mute"}
                 aria-pressed={muted}
-                disabled={phase !== "live"}
-                onClick={() => void toggleMute()}
+                disabled={phase !== "live" || micPending}
+                onClick={() => void onMicClick()}
                 className={cn(CONTROL, muted ? "bg-foreground text-background" : "border bg-muted hover:bg-border")}
               >
                 <MicIcon off={muted} />
