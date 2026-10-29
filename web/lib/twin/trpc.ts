@@ -404,9 +404,9 @@ const usersRouter = t.router({
       select: { id: true, recipientEmail: true, minutesLimit: true, user: { select: { name: true, image: true } } },
     });
     const used = await db.$queryRaw<{ id: string; seconds: number }[]>`
-      SELECT "twinAssignmentId" AS id, coalesce(sum(extract(epoch FROM (
+      SELECT "twinAssignmentId" AS id, coalesce(sum(least(10800, extract(epoch FROM (
         coalesce("endedAt", CASE WHEN status IN ('activating', 'active') THEN now() AT TIME ZONE 'UTC' ELSE "startedAt" END)
-        - "startedAt"))), 0)::float8 AS seconds
+        - "startedAt")))), 0)::float8 AS seconds
       FROM "InterviewSession"
       WHERE "orgId" = ${ctx.user.orgId} AND "twinAssignmentId" IS NOT NULL AND "startedAt" IS NOT NULL
       GROUP BY "twinAssignmentId"`;

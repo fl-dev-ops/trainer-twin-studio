@@ -76,13 +76,14 @@ export const DEFAULT_TWIN_MINUTES = 30;
 /**
  * Seconds already used on an assignment. A session still running counts up to now; one that ended
  * without endedAt (crashed, failed) counts as 0. Timestamps are naive UTC, so "now" is taken in UTC:
- * the database session time zone may be anything.
+ * the database session time zone may be anything. Each session counts at most 3 hours (as learners.ts), so a
+ * call that never ended (stuck "active") cannot keep using minutes forever.
  */
 export async function twinSecondsUsed(assignmentId: string): Promise<number> {
   const [row] = await db.$queryRaw<{ seconds: number }[]>`
-    SELECT coalesce(sum(extract(epoch FROM (
+    SELECT coalesce(sum(least(10800, extract(epoch FROM (
       coalesce("endedAt", CASE WHEN status IN ('activating', 'active') THEN now() AT TIME ZONE 'UTC' ELSE "startedAt" END)
-      - "startedAt"))), 0)::float8 AS seconds
+      - "startedAt")))), 0)::float8 AS seconds
     FROM "InterviewSession"
     WHERE "twinAssignmentId" = ${assignmentId} AND "startedAt" IS NOT NULL`;
   return Math.max(0, row?.seconds ?? 0);
