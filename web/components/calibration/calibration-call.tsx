@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ArrowUp, Flag, LoaderCircle, Paperclip, Volume2 } from "lucide-react";
 import { RoomAudioRenderer, RoomContext, useStartAudio, useVoiceAssistant } from "@livekit/components-react";
-import { Room, RoomEvent, type TranscriptionSegment } from "livekit-client";
+import { type LocalAudioTrack, ParticipantEvent, Room, RoomEvent, Track, type TrackPublication, type TranscriptionSegment } from "livekit-client";
 import {
   ArrowUpRightIcon,
   CallEndedIcon,
@@ -83,6 +83,15 @@ export type LearnerCall = {
   onReport: (sessionId: string | null) => void;
   onEnded: (result: CallResult) => void;
 };
+
+/** Why the mic couldn't start, in words the trainer can act on. */
+function micProblem(error: unknown) {
+  const name = error instanceof Error ? error.name : "";
+  if (name === "NotAllowedError") return "The browser blocked the microphone. Allow it for this site, then click the mic.";
+  if (name === "NotReadableError" || name === "AbortError") return "The microphone is busy (another app or tab may be using it). Close that, then click the mic.";
+  if (name === "NotFoundError") return "No microphone was found. Connect one, then click the mic.";
+  return `The microphone could not start${error instanceof Error && error.message ? `: ${error.message}` : ""}. Click the mic to try again.`;
+}
 
 export function CalibrationCall(props: CallProps) {
   const room = useMemo(
@@ -200,7 +209,12 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
   const tryRelease = useCallback(async () => {
     if (!countdownDoneRef.current || !agentInRef.current || releasedRef.current || endingRef.current) return;
     releasedRef.current = true;
-    await room.localParticipant.setMicrophoneEnabled(true).catch((micError) => console.error("Microphone failed:", micError));
+    await room.localParticipant.setMicrophoneEnabled(true).catch((micError) => {
+      // Safari may refuse a mic that wasn't started from a click: show it muted and say why (clicking the mic retries).
+      console.error("Microphone failed:", micError);
+      setMuted(true);
+      toast.error(micProblem(micError));
+    });
     await room.localParticipant
       .publishData(new TextEncoder().encode(JSON.stringify({ type: "begin-opening" })), { reliable: true })
       .catch((dataError) => console.error("Could not release the opening:", dataError));
@@ -450,9 +464,49 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
 
   async function toggleMute() {
     const next = !muted;
-    setMuted(next);
-    await room.localParticipant.setMicrophoneEnabled(!next).catch(() => setMuted(!next));
+    try {
+      if (!next) {
+        // Safari can stop or pause the capture by itself: take a fresh one from this click before turning it back on.
+        const track = room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track as LocalAudioTrack | undefined;
+        const raw = track?.mediaStreamTrack;
+        if (track && raw && (raw.readyState === "ended" || raw.muted)) await track.restartTrack();
+      }
+      await room.localParticipant.setMicrophoneEnabled(!next);
+      setMuted(next);
+    } catch (micError) {
+      console.error("Microphone toggle failed:", micError);
+      setMuted(true);
+      toast.error(micProblem(micError));
+    }
   }
+
+  // The mic button follows the real mic: LiveKit's mute events, and the browser itself pausing capture (Safari does).
+  useEffect(() => {
+    const local = room.localParticipant;
+    const isMic = (publication: TrackPublication) => publication.source === Track.Source.Microphone;
+    let raw: MediaStreamTrack | undefined;
+    const onBrowserPause = () => {
+      setMuted(true);
+      toast.warning("Your browser paused the microphone. Click the mic to turn it back on.");
+    };
+    const watch = () => {
+      raw?.removeEventListener("mute", onBrowserPause);
+      raw = local.getTrackPublication(Track.Source.Microphone)?.track?.mediaStreamTrack;
+      raw?.addEventListener("mute", onBrowserPause);
+    };
+    const onMuted = (publication: TrackPublication) => isMic(publication) && setMuted(true);
+    const onUnmuted = (publication: TrackPublication) => {
+      if (!isMic(publication)) return;
+      setMuted(false);
+      watch(); // a restarted mic is a new browser track
+    };
+    local.on(ParticipantEvent.TrackMuted, onMuted).on(ParticipantEvent.TrackUnmuted, onUnmuted).on(ParticipantEvent.LocalTrackPublished, watch);
+    watch();
+    return () => {
+      local.off(ParticipantEvent.TrackMuted, onMuted).off(ParticipantEvent.TrackUnmuted, onUnmuted).off(ParticipantEvent.LocalTrackPublished, watch);
+      raw?.removeEventListener("mute", onBrowserPause);
+    };
+  }, [room]);
 
   // Show the twin's words as they stream in, then the finished turn with its rating buttons.
   const captions: (CalibrationTurn & { streaming?: boolean })[] = liveText

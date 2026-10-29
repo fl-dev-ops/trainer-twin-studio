@@ -5,23 +5,10 @@ import { ChevronDown, ExternalLink, FileSearch, FileText, LoaderCircle, Video, X
 import { SOFT_SHADOW } from "@/components/calibration/parts";
 import { twinClient } from "@/lib/twin/client";
 import type { TurnEvidence } from "@/lib/twin/evidence";
+import { evidenceFor } from "@/lib/twin/evidence-match";
 import { cn } from "@/lib/utils";
 
 const SHOWN = 5;
-const norm = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-
-/** The turn whose reply this bubble shows (the bubble is the spoken transcript, so match on the start of the text). */
-export function evidenceFor(turns: TurnEvidence[], bubble: string): TurnEvidence | null {
-  const said = norm(bubble);
-  if (!said) return null;
-  const head = (text: string) => text.slice(0, 40);
-  for (let i = turns.length - 1; i >= 0; i--) {
-    const reply = norm(turns[i].reply);
-    if (reply && (reply.startsWith(head(said)) || said.startsWith(head(reply)))) return turns[i];
-  }
-  return null;
-}
-
 /** The 🔍 beside a twin reply that opens its "Why this answer". */
 export function WhyButton({ open, onClick }: { open: boolean; onClick: () => void }) {
   return (

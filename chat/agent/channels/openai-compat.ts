@@ -9,6 +9,13 @@ import { studioFetch } from "../lib/studio";
 
 /** Lookups shown in "Why this answer" (the web describes and resolves them; UI tools are left out). */
 const EVIDENCE_TOOLS = new Set(["scenario_examples", "search_knowledge", "search_style", "read_document", "eve__skill"]);
+/** What "Heard" says for replies that don't answer a learner's words (the rest show the words themselves). */
+const EVIDENCE_HEARD: Record<string, string> = {
+  opening: "",
+  calibration_feedback: "Feels off (you marked the last reply)",
+  inactivity_nudge: "Silence: the twin checked in",
+  tool_result: "A result from the call screen",
+};
 
 /** Resume claims already highlighted per session, so the bridge never speaks a spent claim's question. */
 // ponytail: unbounded Map, one small Set per voice session; a process restart clears it.
@@ -582,12 +589,12 @@ export default defineChannel({
               console.info("[brain-trace] " + JSON.stringify(brainTrace));
 
               // After the reply: the web keeps it for twin sessions only. Never delays or fails the turn.
-              if (sessionIdHeader && (inputKind === "learner" || inputKind === "opening") && replyText.trim()) {
+              if (sessionIdHeader && replyText.trim()) {
                 waitUntil(
                   studioFetch(orgId, {
                     action: "recordTurnEvidence",
                     sessionId: sessionIdHeader,
-                    heard: inputKind === "opening" ? "" : message.slice(0, 4000),
+                    heard: (EVIDENCE_HEARD[inputKind] ?? message).slice(0, 4000),
                     reply: replyText.trim().slice(0, 8000),
                     inputKind,
                     calls: evidenceCalls,
