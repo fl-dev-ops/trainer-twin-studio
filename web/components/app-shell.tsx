@@ -19,7 +19,7 @@ const FULLSCREEN = [
   "/dash/calibration",
 ];
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({ children, hideRoleplay = false }: { children: ReactNode; hideRoleplay?: boolean }) {
   const pathname = usePathname();
 
   if (
@@ -36,7 +36,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       // Reference rail: 248px expanded / 72px collapsed.
       style={{ "--sidebar-width-left": "15.5rem", "--sidebar-width-icon": "4.5rem" } as CSSProperties}
     >
-      <AppSidebar />
+      <AppSidebar hideRoleplay={hideRoleplay} />
       {/* Prototype: flat content panel, flush against the rail (reference .main). */}
       <SidebarInset className="min-h-0 overflow-hidden bg-panel">
         {/* Desktop collapses via the sidebar logo; on mobile the sidebar is a drawer and needs an opener. */}

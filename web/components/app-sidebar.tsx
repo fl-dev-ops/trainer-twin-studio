@@ -91,8 +91,10 @@ function Brand() {
   );
 }
 
-export function AppSidebar() {
+/** hideRoleplay: a twin-only org (org metadata flag) gets no Role play group. */
+export function AppSidebar({ hideRoleplay = false }: { hideRoleplay?: boolean }) {
   const pathname = usePathname();
+  const groups = hideRoleplay ? NAV_GROUPS.filter((group) => group.label !== "Role play") : NAV_GROUPS;
 
   return (
     <Sidebar variant="sidebar" collapsible="icon" className="border-r-0">
@@ -100,7 +102,7 @@ export function AppSidebar() {
       <div className="flex h-full min-h-0 flex-col gap-2 px-3 pt-4 pb-3 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-2">
         <Brand />
         <nav aria-label="Sections" className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
-          {NAV_GROUPS.map((group, index) => (
+          {groups.map((group, index) => (
             <div key={group.label} className={index === 0 ? "mt-1" : "mt-3"}>
               <p className="px-2 text-[11px] leading-4 font-medium tracking-[0.08em] uppercase text-muted-foreground group-data-[collapsible=icon]:hidden">
                 {group.label}

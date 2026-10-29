@@ -12,7 +12,8 @@ export const LEARNER_ROLE = "user";
 export type OrgRole = (typeof STUDIO_ROLES)[number] | typeof LEARNER_ROLE;
 export const isStudioRole = (role: string | null | undefined) => role === "admin" || role === "team";
 
-export type SessionOrg = { id: string; slug: string; accentColor: string | null };
+/** hideRoleplay: org metadata flag for twin-only orgs (no Role play menus or pages). */
+export type SessionOrg = { id: string; slug: string; accentColor: string | null; hideRoleplay?: boolean };
 export type TrainerOrg = SessionOrg & {
   role: string;
   user: { id: string; name: string; email: string };
@@ -27,6 +28,15 @@ export function parseAccentColor(metadata: string | null): string | null {
     return typeof m.accentColor === "string" ? m.accentColor : null;
   } catch {
     return null;
+  }
+}
+
+/** `{ "hideRoleplay": true }` in the org metadata: a twin-only org (set per org in the database). */
+export function parseHideRoleplay(metadata: string | null): boolean {
+  try {
+    return JSON.parse(metadata ?? "{}").hideRoleplay === true;
+  } catch {
+    return false;
   }
 }
 
@@ -47,6 +57,7 @@ export async function getSessionOrg(): Promise<SessionOrg | null> {
     id: member.organization.id,
     slug: member.organization.slug,
     accentColor: parseAccentColor(member.organization.metadata),
+    hideRoleplay: parseHideRoleplay(member.organization.metadata),
   };
 }
 
@@ -69,6 +80,7 @@ export async function getTrainerOrg(): Promise<TrainerOrg | null> {
     id: member.organization.id,
     slug: member.organization.slug,
     accentColor: parseAccentColor(member.organization.metadata),
+    hideRoleplay: parseHideRoleplay(member.organization.metadata),
     role: member.role,
     user: { id: session.user.id, name: session.user.name, email: session.user.email },
   };
@@ -81,6 +93,13 @@ export async function getTrainerOrg(): Promise<TrainerOrg | null> {
 export async function requireStudioMember(): Promise<TrainerOrg> {
   const org = await getTrainerOrg();
   if (!org) redirect("/auth/no-org");
+  return org;
+}
+
+/** Page guard for Role play pages (scenarios, personas): studio members of an org that has role play. */
+export async function requireRoleplayOrg(): Promise<TrainerOrg> {
+  const org = await requireStudioMember();
+  if (org.hideRoleplay) redirect("/twin");
   return org;
 }
 

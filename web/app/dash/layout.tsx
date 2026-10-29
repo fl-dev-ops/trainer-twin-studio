@@ -14,7 +14,7 @@ export default async function DashLayout({ children }: { children: ReactNode }) 
   return (
     <QueryProvider>
       <OrgAccentProvider accentColor={org?.accentColor ?? null}>
-        <AppShell>{children}</AppShell>
+        <AppShell hideRoleplay={org?.hideRoleplay ?? false}>{children}</AppShell>
       </OrgAccentProvider>
     </QueryProvider>
   );
