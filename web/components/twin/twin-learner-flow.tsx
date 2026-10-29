@@ -169,12 +169,12 @@ export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string;
                 {trainer.title ? <p className="m-0 text-[15px] text-(--text-secondary)">{trainer.title}</p> : null}
               </div>
             </section>
-            {trainer.bio ? <p className="m-0 line-clamp-3 text-[15px] leading-6 text-muted-foreground">{trainer.bio}</p> : null}
+            {trainer.bio ? <p className="m-0 text-[15px] leading-6 text-muted-foreground">{trainer.bio}</p> : null}
 
             <h2 className="mt-6 mb-0 text-[18px] leading-6 font-semibold tracking-[-0.015em]">Talk to {coach}&apos;s twin</h2>
             <article className={cn(CARD, "flex flex-col p-5")}>
               <h3 className={TITLE}>{twin.name}</h3>
-              {twin.description ? <p className={cn(BODY, "mt-2 line-clamp-4")}>{twin.description}</p> : null}
+              {twin.description ? <p className={cn(BODY, "mt-2")}>{twin.description}</p> : null}
               {preview ? (
                 <p className="mt-5 mb-0 border-t border-(--card-border) pt-4 text-sm text-muted-foreground">
                   You&apos;re previewing what learners see. Your calls here use no minutes and aren&apos;t counted as learner sessions.
