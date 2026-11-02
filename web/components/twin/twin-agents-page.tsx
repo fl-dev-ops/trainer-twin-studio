@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { TwinOutputs } from "@/lib/twin/trpc";
 import { cn } from "@/lib/utils";
+import { PageContainer } from "@/components/page-container";
 
 /**
  * Twin Agents library, ported from the reference prototype
@@ -257,36 +258,33 @@ function CreateSkillDialog({ personaSlug }: { personaSlug: string | null }) {
 /** Full Twin Agents library page (beta `page--twin-profile`). */
 export function TwinAgentsPage({ data, personaSlug = null }: { data: TwinOutputs["agents"]["list"]; personaSlug?: string | null }) {
   return (
-    <div className="h-full w-full overflow-y-auto">
-      {/* Reference .page.page--library: max-width 1024px centered, padding 20px top, 32px bottom. */}
-      <div className="mx-auto w-full max-w-[1024px] px-4 md:px-0 pt-5 pb-16">
-        <header className="flex min-h-10 items-center justify-between gap-4">
-          <h1 className="m-0 flex items-center gap-2 text-[16px] font-semibold leading-[22px] tracking-[-0.015em]">
-            <span className="grid size-7 place-items-center rounded-[8px] text-(--text-secondary)">
-              <SetupIcon className="size-[18px]" />
-            </span>
-            Twin Agents
-          </h1>
-          <CreateSkillDialog personaSlug={personaSlug} />
-        </header>
+    <PageContainer>
+      <header className="flex min-h-10 items-center justify-between gap-4">
+        <h1 className="m-0 flex items-center gap-2 text-[16px] font-semibold leading-[22px] tracking-[-0.015em]">
+          <span className="grid size-7 place-items-center rounded-[8px] text-(--text-secondary)">
+            <SetupIcon className="size-[18px]" />
+          </span>
+          Twin Agents
+        </h1>
+        <CreateSkillDialog personaSlug={personaSlug} />
+      </header>
 
-        {/* Only when there's a main twin; otherwise the page starts with the skill twins. */}
-        {data.twins.length ? (
-          <>
-            <h2 className="mt-10 max-w-none text-[18px] font-semibold leading-6 tracking-[-0.015em]">Twin for all use cases</h2>
-            {data.twins.map((twin) => <TwinAllCard key={twin.slug} twin={twin} />)}
-          </>
-        ) : null}
+      {/* Only when there's a main twin; otherwise the page starts with the skill twins. */}
+      {data.twins.length ? (
+        <>
+          <h2 className="mt-10 max-w-none text-[18px] font-semibold leading-6 tracking-[-0.015em]">Twin for all use cases</h2>
+          {data.twins.map((twin) => <TwinAllCard key={twin.slug} twin={twin} />)}
+        </>
+      ) : null}
 
-        <h2 className={cn(data.twins.length ? "mt-8" : "mt-10", "max-w-none text-[18px] font-semibold leading-6 tracking-[-0.015em]")}>
-          Twin agents for specific use cases
-        </h2>
-        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {data.skills.map((bot, i) => (
-            <TwinBotCard key={bot.slug} bot={bot} index={i} />
-          ))}
-        </div>
+      <h2 className={cn(data.twins.length ? "mt-8" : "mt-10", "max-w-none text-[18px] font-semibold leading-6 tracking-[-0.015em]")}>
+        Twin agents for specific use cases
+      </h2>
+      <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {data.skills.map((bot, i) => (
+          <TwinBotCard key={bot.slug} bot={bot} index={i} />
+        ))}
       </div>
-    </div>
+    </PageContainer>
   );
 }

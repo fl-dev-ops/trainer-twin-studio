@@ -355,215 +355,213 @@ export function RolePlayPreview({
   );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-5 sm:p-8">
-      <PageContainer size="wide">
-        <Link
-          href="/agents"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground hover:underline"
-        >
-          <ArrowLeft className="size-4" /> All scenarios
-        </Link>
+    <PageContainer>
+      <Link
+        href="/agents"
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground hover:underline"
+      >
+        <ArrowLeft className="size-4" /> All scenarios
+      </Link>
 
-        <PageHeader
-          className="mt-4 border-b pb-6"
-          title={
-            <span className="flex flex-wrap items-center gap-2.5 break-words">
-              {rolePlay.name}
-              {rolePlay.status === "draft" ? (
-                <Badge variant="outline">Draft</Badge>
-              ) : (
-                <Badge variant="success">Published</Badge>
-              )}
-            </span>
-          }
-          description={`${rolePlay.slug} · ${rolePlay.status === "draft" ? `draft revision ${rolePlay.version}` : `published version ${rolePlay.version}`}`}
-          actions={
-            <>
-              <Button variant="outline" nativeButton={false} render={<Link href={`/agents/${encodeURIComponent(rolePlay.slug)}/edit`} />}>
-                <Pencil data-icon="inline-start" /> Edit scenario
-              </Button>
-              {rolePlay.status === "published" ? (
-                <Button nativeButton={false} render={<Link href={`/talk?agent=${encodeURIComponent(rolePlay.slug)}`} />}>
-                  <Play data-icon="inline-start" /> Test scenario
-                </Button>
-              ) : (
-                <Button disabled>
-                  <Play data-icon="inline-start" /> Publish to test
-                </Button>
-              )}
-            </>
-          }
-        />
-
-        {rolePlay.draftRevision && (
-          <div className="mt-6 flex flex-col gap-3 rounded-xl border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-medium">Unpublished changes</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Draft revision {rolePlay.draftRevision} is newer than the published scenario shown here.
-              </p>
-            </div>
-            <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/agents/${encodeURIComponent(rolePlay.slug)}/edit`} />}>
-              Continue editing
+      <PageHeader
+        className="mt-4 border-b pb-6"
+        title={
+          <span className="flex flex-wrap items-center gap-2.5 break-words">
+            {rolePlay.name}
+            {rolePlay.status === "draft" ? (
+              <Badge variant="outline">Draft</Badge>
+            ) : (
+              <Badge variant="success">Published</Badge>
+            )}
+          </span>
+        }
+        description={`${rolePlay.slug} · ${rolePlay.status === "draft" ? `draft revision ${rolePlay.version}` : `published version ${rolePlay.version}`}`}
+        actions={
+          <>
+            <Button variant="outline" nativeButton={false} render={<Link href={`/agents/${encodeURIComponent(rolePlay.slug)}/edit`} />}>
+              <Pencil data-icon="inline-start" /> Edit scenario
             </Button>
+            {rolePlay.status === "published" ? (
+              <Button nativeButton={false} render={<Link href={`/talk?agent=${encodeURIComponent(rolePlay.slug)}`} />}>
+                <Play data-icon="inline-start" /> Test scenario
+              </Button>
+            ) : (
+              <Button disabled>
+                <Play data-icon="inline-start" /> Publish to test
+              </Button>
+            )}
+          </>
+        }
+      />
+
+      {rolePlay.draftRevision && (
+        <div className="mt-6 flex flex-col gap-3 rounded-xl border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium">Unpublished changes</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Draft revision {rolePlay.draftRevision} is newer than the published scenario shown here.
+            </p>
           </div>
-        )}
+          <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/agents/${encodeURIComponent(rolePlay.slug)}/edit`} />}>
+            Continue editing
+          </Button>
+        </div>
+      )}
 
-        <Tabs defaultValue="overview" className="mt-6">
-          <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="assign" disabled={!canAssign}>
-              Assign
-            </TabsTrigger>
-          </TabsList>
+      <Tabs defaultValue="overview" className="mt-6">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="assign" disabled={!canAssign}>
+            Assign
+          </TabsTrigger>
+        </TabsList>
 
-          <TabsContent value="overview" className="mt-6 space-y-8">
-            {overview}
-          </TabsContent>
+        <TabsContent value="overview" className="mt-6 space-y-8">
+          {overview}
+        </TabsContent>
 
-          <TabsContent value="assign" className="mt-6">
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
-              <div>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-lg font-semibold">Assignments</h2>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Everyone this scenario has been assigned to.
-                    </p>
-                  </div>
-                  <Badge variant="secondary" className="gap-1 text-[11px]">
-                    {visibleAssignments.length}
-                  </Badge>
+        <TabsContent value="assign" className="mt-6">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold">Assignments</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Everyone this scenario has been assigned to.
+                  </p>
                 </div>
-                <div className="mt-4 flex gap-2">
-                  <div className="relative flex-1">
-                    <Search className="text-muted-foreground absolute top-2.5 left-2.5 size-4" />
-                    <Input
-                      placeholder="Search by name or email..."
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      className="pl-8"
-                    />
-                  </div>
-                  <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value ?? "all")}>
-                    <SelectTrigger className="w-36">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {STATUS_FILTERS.map((filter) => (
-                        <SelectItem key={filter.value} value={filter.value}>
-                          {filter.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                  {assignments.length === 0 ? (
-                    <p className="py-8 text-center text-xs text-muted-foreground">
-                      No assignments yet. Add emails on the right to send practice links.
-                    </p>
-                  ) : visibleAssignments.length === 0 ? (
-                    <p className="py-8 text-center text-xs text-muted-foreground">
-                      No assignments match this search or filter.
-                    </p>
-                  ) : (
-                    <ItemGroup>
-                      {visibleAssignments.map((assignment) => {
-                        const meta = STATUS_META[assignment.status] ?? {
-                          label: assignment.status,
-                          badge: "outline" as const,
-                        };
-                        return (
-                          <Item key={assignment.id} variant="outline" size="sm">
-                            <ItemMedia>
-                              <AvatarInitial name={assignment.userName} />
-                            </ItemMedia>
-                            <ItemContent>
-                              <ItemTitle>{assignment.userName}</ItemTitle>
-                              <ItemDescription>{assignment.userEmail}</ItemDescription>
-                            </ItemContent>
-                            <ItemActions>
-                              <span className="text-[11px] text-muted-foreground">
-                                {formatDay(assignment.assignedAt)}
-                              </span>
-                              <Badge variant={meta.badge} size="sm">
-                                {meta.label}
-                              </Badge>
-                              {assignment.status === "pending" && (
-                                <button
-                                  type="button"
-                                  aria-label={`Remove assignment for ${assignment.userEmail}`}
-                                  title="Remove assignment"
-                                  disabled={removingId === assignment.id}
-                                  className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
-                                  onClick={() => removeAssignment(assignment.id)}
-                                >
-                                  <Trash2 className="size-3.5" />
-                                </button>
-                              )}
-                            </ItemActions>
-                          </Item>
-                        );
-                      })}
-                    </ItemGroup>
-                  )}
+                <Badge variant="secondary" className="gap-1 text-[11px]">
+                  {visibleAssignments.length}
+                </Badge>
               </div>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>New assignment</CardTitle>
-                  <CardDescription>
-                    Comma-separated emails. Each learner receives their practice link.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {badges.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {badges.map((email) => (
-                        <BadgeChip
-                          key={email}
-                          email={email}
-                          kind={emailKind(email)}
-                          onRemove={() =>
-                            setBadges((current) => current.filter((item) => item !== email))
-                          }
-                        />
-                      ))}
-                    </div>
-                  )}
-                  <Textarea
-                    placeholder="name@company.com, another@company.com"
-                    value={draft}
-                    disabled={saving || !canAssign}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value.endsWith(",")) commitDraft();
-                      else setDraft(value);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        commitDraft();
-                      }
-                    }}
-                    onBlur={commitDraft}
+              <div className="mt-4 flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="text-muted-foreground absolute top-2.5 left-2.5 size-4" />
+                  <Input
+                    placeholder="Search by name or email..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-8"
                   />
-                  <Button
-                    className="w-full"
-                    size="sm"
-                    disabled={submittedEmails.length === 0 || hasInvalid || saving || !canAssign}
-                    onClick={() =>
-                      pendingSelected.length > 0 ? setConfirmOpen(true) : submit()
-                    }
-                  >
-                    <Send data-icon="inline-start" /> {saving ? "Sending…" : "Send practice links"}
-                  </Button>
-                </CardContent>
-              </Card>
+                </div>
+                <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value ?? "all")}>
+                  <SelectTrigger className="w-36">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STATUS_FILTERS.map((filter) => (
+                      <SelectItem key={filter.value} value={filter.value}>
+                        {filter.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+                {assignments.length === 0 ? (
+                  <p className="py-8 text-center text-xs text-muted-foreground">
+                    No assignments yet. Add emails on the right to send practice links.
+                  </p>
+                ) : visibleAssignments.length === 0 ? (
+                  <p className="py-8 text-center text-xs text-muted-foreground">
+                    No assignments match this search or filter.
+                  </p>
+                ) : (
+                  <ItemGroup>
+                    {visibleAssignments.map((assignment) => {
+                      const meta = STATUS_META[assignment.status] ?? {
+                        label: assignment.status,
+                        badge: "outline" as const,
+                      };
+                      return (
+                        <Item key={assignment.id} variant="outline" size="sm">
+                          <ItemMedia>
+                            <AvatarInitial name={assignment.userName} />
+                          </ItemMedia>
+                          <ItemContent>
+                            <ItemTitle>{assignment.userName}</ItemTitle>
+                            <ItemDescription>{assignment.userEmail}</ItemDescription>
+                          </ItemContent>
+                          <ItemActions>
+                            <span className="text-[11px] text-muted-foreground">
+                              {formatDay(assignment.assignedAt)}
+                            </span>
+                            <Badge variant={meta.badge} size="sm">
+                              {meta.label}
+                            </Badge>
+                            {assignment.status === "pending" && (
+                              <button
+                                type="button"
+                                aria-label={`Remove assignment for ${assignment.userEmail}`}
+                                title="Remove assignment"
+                                disabled={removingId === assignment.id}
+                                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                                onClick={() => removeAssignment(assignment.id)}
+                              >
+                                <Trash2 className="size-3.5" />
+                              </button>
+                            )}
+                          </ItemActions>
+                        </Item>
+                      );
+                    })}
+                  </ItemGroup>
+                )}
             </div>
-          </TabsContent>
-        </Tabs>
-      </PageContainer>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>New assignment</CardTitle>
+                <CardDescription>
+                  Comma-separated emails. Each learner receives their practice link.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {badges.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {badges.map((email) => (
+                      <BadgeChip
+                        key={email}
+                        email={email}
+                        kind={emailKind(email)}
+                        onRemove={() =>
+                          setBadges((current) => current.filter((item) => item !== email))
+                        }
+                      />
+                    ))}
+                  </div>
+                )}
+                <Textarea
+                  placeholder="name@company.com, another@company.com"
+                  value={draft}
+                  disabled={saving || !canAssign}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value.endsWith(",")) commitDraft();
+                    else setDraft(value);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      commitDraft();
+                    }
+                  }}
+                  onBlur={commitDraft}
+                />
+                <Button
+                  className="w-full"
+                  size="sm"
+                  disabled={submittedEmails.length === 0 || hasInvalid || saving || !canAssign}
+                  onClick={() =>
+                    pendingSelected.length > 0 ? setConfirmOpen(true) : submit()
+                  }
+                >
+                  <Send data-icon="inline-start" /> {saving ? "Sending…" : "Send practice links"}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent className="sm:max-w-sm">
@@ -618,6 +616,6 @@ export function RolePlayPreview({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageContainer>
   );
 }

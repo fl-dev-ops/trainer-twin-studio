@@ -19,6 +19,7 @@ import {
 import { generateSpeech, playPcmStream, stopPlayback } from "@/lib/audio-playback";
 import { cn } from "@/lib/utils";
 import { useRefresh } from "@/lib/use-refresh";
+import { PageContainer } from "@/components/page-container";
 
 type Media = { photoUrl: string | null; hasVideo: boolean; voiceName: string | null };
 type LibraryVoice = { id: string; name: string; kind: string };
@@ -69,139 +70,137 @@ export function PersonaEditor({ slug, initial, media, voices = [], isOwn = false
   }
 
   return (
-    <div className="h-full w-full overflow-y-auto">
-      <div className="mx-auto w-full max-w-[760px] px-4 pt-5 pb-16 md:px-0">
-        <header className="flex min-h-10 items-center">
-          <Link href={back} className="inline-flex items-center gap-2 text-sm text-foreground transition-colors hover:text-muted-foreground">
-            <ArrowLeft className="size-4" aria-hidden />
-            Back
-          </Link>
-        </header>
-        <div className="mt-6">
-          <h1 className="m-0 text-[20px] leading-7 font-semibold tracking-[-0.015em]">{slug ? `Edit ${initial.name || "persona"}` : "Create persona"}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Who your learners talk to in a role play: who they are, how they talk, and how they sound and look.</p>
-        </div>
-
-        <Tabs defaultValue={defaultTab} className="mt-6 gap-4">
-          <TabsList>
-            <TabsTrigger value="look">Look</TabsTrigger>
-            <TabsTrigger value="talk">How they talk</TabsTrigger>
-            <TabsTrigger value="media">Voice and avatar</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="look">
-            <Section>
-              <Field label="Name" htmlFor="p-name">
-                <Input id="p-name" value={form.name} placeholder="Example: Amira Haddad" onChange={(e) => update({ name: e.target.value })} />
-              </Field>
-              <Field label="Role" htmlFor="p-role" help="Who they are on the call.">
-                <NativeSelect id="p-role" value={form.role} onChange={(e) => update({ role: e.target.value })} className="w-full">
-                  {roleOptions ? <NativeSelectOption value={roleOptions}>{roleOptions}</NativeSelectOption> : null}
-                  {Object.entries(PERSONA_ROLES).map(([group, roles]) => (
-                    <NativeSelectOptGroup key={group} label={group}>
-                      {roles.map((role) => <NativeSelectOption key={role} value={role}>{role}</NativeSelectOption>)}
-                    </NativeSelectOptGroup>
-                  ))}
-                </NativeSelect>
-              </Field>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Age" htmlFor="p-age">
-                  <Input id="p-age" inputMode="numeric" value={form.age ?? ""} placeholder="Example: 44"
-                    onChange={(e) => { const n = Number.parseInt(e.target.value, 10); update({ age: Number.isFinite(n) ? n : null }); }} />
-                </Field>
-                <Field label="Based in" htmlFor="p-based">
-                  <Input id="p-based" value={form.basedIn} placeholder="Example: Dubai Marina" onChange={(e) => update({ basedIn: e.target.value })} />
-                </Field>
-              </div>
-              <Field label="Background" htmlFor="p-background" help="Their situation, what they want and what worries them.">
-                <Textarea id="p-background" rows={4} value={form.background} onChange={(e) => update({ background: e.target.value })}
-                  placeholder="Example: Went quiet after a townhouse viewing. Worried about the down payment and fees." />
-              </Field>
-              <Field label="Behaviour" help={`Pick up to ${MAX_BEHAVIOURS}.`}>
-                <div className="flex flex-wrap gap-2" role="group" aria-label="Behaviour">
-                  {BEHAVIOURS.map((b) => {
-                    const on = form.behaviours.includes(b.value);
-                    return (
-                      <button key={b.value} type="button" aria-pressed={on} title={b.meaning} onClick={() => toggleBehaviour(b.value)}
-                        className={cn("inline-flex h-8 items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",
-                          on ? "border-transparent bg-foreground text-background" : "border-(--card-border) text-(--text-secondary) hover:bg-(--tone-control)")}>
-                        {on ? <Check className="size-3.5" aria-hidden /> : null}
-                        {b.value}
-                      </button>
-                    );
-                  })}
-                </div>
-                {form.behaviours.length ? (
-                  <ul className="m-0 mt-1 flex list-none flex-col gap-1 p-0 text-xs text-muted-foreground">
-                    {form.behaviours.map((b) => <li key={b}>{b}: {meaningOf(BEHAVIOURS.map((x) => ({ ...x })), b)}</li>)}
-                  </ul>
-                ) : null}
-              </Field>
-              <Choice label="Opening style" options={OPENING_STYLES} value={form.openingStyle} onChange={(openingStyle) => update({ openingStyle })} />
-            </Section>
-          </TabsContent>
-
-          <TabsContent value="talk">
-            <Section>
-              <Choice label="Formality" options={FORMALITY} value={form.formality} onChange={(formality) => update({ formality })} />
-              <Choice label="Answer length" options={ANSWER_LENGTH} value={form.answerLength} onChange={(answerLength) => update({ answerLength })} />
-              <Choice label="Interrupts" options={INTERRUPTS} value={form.interrupts} onChange={(interrupts) => update({ interrupts })} />
-              <div className="flex flex-col divide-y divide-(--border) rounded-[12px] border border-(--border) bg-(--sidebar) px-4">
-                <ToggleRow label="Pauses before answering" help="Takes a beat to think, like a real call." checked={form.pauses} onChange={(pauses) => update({ pauses })} />
-                <ToggleRow label="Uses fillers" help="Says “um”, “well” and “you know” now and then." checked={form.fillers} onChange={(fillers) => update({ fillers })} />
-              </div>
-              <Field label="Signature phrases" help={`Lines they come back to, in their own words. Up to ${MAX_PHRASES}.`}>
-                {form.phrases.length ? (
-                  <ul className="m-0 flex list-none flex-col divide-y divide-(--border) rounded-[12px] border border-(--border) p-0">
-                    {form.phrases.map((p) => (
-                      <li key={p} className="flex items-center justify-between gap-3 px-3.5 py-2 text-sm">
-                        <span>“{p}”</span>
-                        <Button variant="ghost" size="icon-sm" aria-label={`Remove “${p}”`} onClick={() => update({ phrases: form.phrases.filter((x) => x !== p) })}><X /></Button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-                <div className="flex gap-2">
-                  <Input aria-label="Signature phrase" value={phrase} placeholder="Example: I need to talk to my husband." disabled={form.phrases.length >= MAX_PHRASES}
-                    onChange={(e) => setPhrase(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addPhrase(); } }} />
-                  <Button variant="outline" onClick={addPhrase} disabled={!phrase.trim() || form.phrases.length >= MAX_PHRASES}><Plus /> Add</Button>
-                </div>
-              </Field>
-              <Field label="In their words" htmlFor="p-talk" help="One or two sentences on how they come across.">
-                <Textarea id="p-talk" rows={2} value={form.howTheyTalk} onChange={(e) => update({ howTheyTalk: e.target.value })}
-                  placeholder="Example: Polite and a little guarded. Short answers at first." />
-              </Field>
-              <Choice label="Speaking pace" options={PACE} value={form.pace} onChange={(pace) => update({ pace })} />
-            </Section>
-          </TabsContent>
-
-          <TabsContent value="media">
-            {isOwn ? (
-              <Section>
-                <p className="m-0 text-sm text-(--text-secondary)">
-                  This is your own persona: your photo, reference video and cloned voice are set up on{" "}
-                  <Link href="/twin/brain" className="font-medium text-foreground underline-offset-4 hover:underline">Twin’s brain</Link>.
-                  {media?.voiceName ? ` Current voice: ${media.voiceName}.` : ""}
-                </p>
-              </Section>
-            ) : slug && media ? <MediaSection slug={slug} name={form.name} media={media} voices={voices} /> : (
-              <Section>
-                <p className="m-0 text-sm text-muted-foreground">Save the persona first, then add its voice and avatar here.</p>
-              </Section>
-            )}
-          </TabsContent>
-        </Tabs>
-
-        <div className="mt-6 flex items-center justify-end gap-3">
-          <Link href={back} className="inline-flex h-9 items-center rounded-full px-4 text-sm font-medium text-muted-foreground hover:text-foreground">Cancel</Link>
-          <button type="button" onClick={() => void save()} disabled={saving || !form.name.trim()}
-            className="inline-flex h-9 items-center gap-2 rounded-full bg-(--brand) px-5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60">
-            <Check className="size-4" aria-hidden />
-            {saving ? "Saving…" : slug ? "Save changes" : "Create persona"}
-          </button>
-        </div>
+    <PageContainer>
+      <header className="flex min-h-10 items-center">
+        <Link href={back} className="inline-flex items-center gap-2 text-sm text-foreground transition-colors hover:text-muted-foreground">
+          <ArrowLeft className="size-4" aria-hidden />
+          Back
+        </Link>
+      </header>
+      <div className="mt-6">
+        <h1 className="m-0 text-[20px] leading-7 font-semibold tracking-[-0.015em]">{slug ? `Edit ${initial.name || "persona"}` : "Create persona"}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Who your learners talk to in a role play: who they are, how they talk, and how they sound and look.</p>
       </div>
-    </div>
+
+      <Tabs defaultValue={defaultTab} className="mt-6 gap-4">
+        <TabsList>
+          <TabsTrigger value="look">Look</TabsTrigger>
+          <TabsTrigger value="talk">How they talk</TabsTrigger>
+          <TabsTrigger value="media">Voice and avatar</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="look">
+          <Section>
+            <Field label="Name" htmlFor="p-name">
+              <Input id="p-name" value={form.name} placeholder="Example: Amira Haddad" onChange={(e) => update({ name: e.target.value })} />
+            </Field>
+            <Field label="Role" htmlFor="p-role" help="Who they are on the call.">
+              <NativeSelect id="p-role" value={form.role} onChange={(e) => update({ role: e.target.value })} className="w-full">
+                {roleOptions ? <NativeSelectOption value={roleOptions}>{roleOptions}</NativeSelectOption> : null}
+                {Object.entries(PERSONA_ROLES).map(([group, roles]) => (
+                  <NativeSelectOptGroup key={group} label={group}>
+                    {roles.map((role) => <NativeSelectOption key={role} value={role}>{role}</NativeSelectOption>)}
+                  </NativeSelectOptGroup>
+                ))}
+              </NativeSelect>
+            </Field>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Age" htmlFor="p-age">
+                <Input id="p-age" inputMode="numeric" value={form.age ?? ""} placeholder="Example: 44"
+                  onChange={(e) => { const n = Number.parseInt(e.target.value, 10); update({ age: Number.isFinite(n) ? n : null }); }} />
+              </Field>
+              <Field label="Based in" htmlFor="p-based">
+                <Input id="p-based" value={form.basedIn} placeholder="Example: Dubai Marina" onChange={(e) => update({ basedIn: e.target.value })} />
+              </Field>
+            </div>
+            <Field label="Background" htmlFor="p-background" help="Their situation, what they want and what worries them.">
+              <Textarea id="p-background" rows={4} value={form.background} onChange={(e) => update({ background: e.target.value })}
+                placeholder="Example: Went quiet after a townhouse viewing. Worried about the down payment and fees." />
+            </Field>
+            <Field label="Behaviour" help={`Pick up to ${MAX_BEHAVIOURS}.`}>
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Behaviour">
+                {BEHAVIOURS.map((b) => {
+                  const on = form.behaviours.includes(b.value);
+                  return (
+                    <button key={b.value} type="button" aria-pressed={on} title={b.meaning} onClick={() => toggleBehaviour(b.value)}
+                      className={cn("inline-flex h-8 items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",
+                        on ? "border-transparent bg-foreground text-background" : "border-(--card-border) text-(--text-secondary) hover:bg-(--tone-control)")}>
+                      {on ? <Check className="size-3.5" aria-hidden /> : null}
+                      {b.value}
+                    </button>
+                  );
+                })}
+              </div>
+              {form.behaviours.length ? (
+                <ul className="m-0 mt-1 flex list-none flex-col gap-1 p-0 text-xs text-muted-foreground">
+                  {form.behaviours.map((b) => <li key={b}>{b}: {meaningOf(BEHAVIOURS.map((x) => ({ ...x })), b)}</li>)}
+                </ul>
+              ) : null}
+            </Field>
+            <Choice label="Opening style" options={OPENING_STYLES} value={form.openingStyle} onChange={(openingStyle) => update({ openingStyle })} />
+          </Section>
+        </TabsContent>
+
+        <TabsContent value="talk">
+          <Section>
+            <Choice label="Formality" options={FORMALITY} value={form.formality} onChange={(formality) => update({ formality })} />
+            <Choice label="Answer length" options={ANSWER_LENGTH} value={form.answerLength} onChange={(answerLength) => update({ answerLength })} />
+            <Choice label="Interrupts" options={INTERRUPTS} value={form.interrupts} onChange={(interrupts) => update({ interrupts })} />
+            <div className="flex flex-col divide-y divide-(--border) rounded-[12px] border border-(--border) bg-(--sidebar) px-4">
+              <ToggleRow label="Pauses before answering" help="Takes a beat to think, like a real call." checked={form.pauses} onChange={(pauses) => update({ pauses })} />
+              <ToggleRow label="Uses fillers" help="Says “um”, “well” and “you know” now and then." checked={form.fillers} onChange={(fillers) => update({ fillers })} />
+            </div>
+            <Field label="Signature phrases" help={`Lines they come back to, in their own words. Up to ${MAX_PHRASES}.`}>
+              {form.phrases.length ? (
+                <ul className="m-0 flex list-none flex-col divide-y divide-(--border) rounded-[12px] border border-(--border) p-0">
+                  {form.phrases.map((p) => (
+                    <li key={p} className="flex items-center justify-between gap-3 px-3.5 py-2 text-sm">
+                      <span>“{p}”</span>
+                      <Button variant="ghost" size="icon-sm" aria-label={`Remove “${p}”`} onClick={() => update({ phrases: form.phrases.filter((x) => x !== p) })}><X /></Button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              <div className="flex gap-2">
+                <Input aria-label="Signature phrase" value={phrase} placeholder="Example: I need to talk to my husband." disabled={form.phrases.length >= MAX_PHRASES}
+                  onChange={(e) => setPhrase(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addPhrase(); } }} />
+                <Button variant="outline" onClick={addPhrase} disabled={!phrase.trim() || form.phrases.length >= MAX_PHRASES}><Plus /> Add</Button>
+              </div>
+            </Field>
+            <Field label="In their words" htmlFor="p-talk" help="One or two sentences on how they come across.">
+              <Textarea id="p-talk" rows={2} value={form.howTheyTalk} onChange={(e) => update({ howTheyTalk: e.target.value })}
+                placeholder="Example: Polite and a little guarded. Short answers at first." />
+            </Field>
+            <Choice label="Speaking pace" options={PACE} value={form.pace} onChange={(pace) => update({ pace })} />
+          </Section>
+        </TabsContent>
+
+        <TabsContent value="media">
+          {isOwn ? (
+            <Section>
+              <p className="m-0 text-sm text-(--text-secondary)">
+                This is your own persona: your photo, reference video and cloned voice are set up on{" "}
+                <Link href="/twin/brain" className="font-medium text-foreground underline-offset-4 hover:underline">Twin’s brain</Link>.
+                {media?.voiceName ? ` Current voice: ${media.voiceName}.` : ""}
+              </p>
+            </Section>
+          ) : slug && media ? <MediaSection slug={slug} name={form.name} media={media} voices={voices} /> : (
+            <Section>
+              <p className="m-0 text-sm text-muted-foreground">Save the persona first, then add its voice and avatar here.</p>
+            </Section>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      <div className="mt-6 flex items-center justify-end gap-3">
+        <Link href={back} className="inline-flex h-9 items-center rounded-full px-4 text-sm font-medium text-muted-foreground hover:text-foreground">Cancel</Link>
+        <button type="button" onClick={() => void save()} disabled={saving || !form.name.trim()}
+          className="inline-flex h-9 items-center gap-2 rounded-full bg-(--brand) px-5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60">
+          <Check className="size-4" aria-hidden />
+          {saving ? "Saving…" : slug ? "Save changes" : "Create persona"}
+        </button>
+      </div>
+    </PageContainer>
   );
 }
 

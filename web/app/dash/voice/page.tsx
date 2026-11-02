@@ -12,21 +12,19 @@ export default function VoiceLibraryPage() {
   const { mine, samples } = useApi(["page.voices"], () => api.page.voices.query());
 
   return (
-    <main className="min-h-0 flex-1 overflow-auto p-5 sm:p-8">
-      <PageContainer size="narrow">
-        <PageHeader
-          className="border-b pb-6"
-          title="Voices"
-          description="Use a built-in sample voice or clone your own for speech generation."
-          actions={
-            <Button render={<Link href="/voice/cloning" />} nativeButton={false}>
-              <Mic data-icon="inline-start" /> Clone voice
-            </Button>
-          }
-        />
+    <PageContainer>
+      <PageHeader
+        className="border-b pb-6"
+        title="Voices"
+        description="Use a built-in sample voice or clone your own for speech generation."
+        actions={
+          <Button render={<Link href="/voice/cloning" />} nativeButton={false}>
+            <Mic data-icon="inline-start" /> Clone voice
+          </Button>
+        }
+      />
 
-        <VoiceLibrary mine={mine} samples={samples} />
-      </PageContainer>
-    </main>
+      <VoiceLibrary mine={mine} samples={samples} />
+    </PageContainer>
   );
 }

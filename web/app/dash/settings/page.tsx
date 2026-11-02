@@ -16,45 +16,45 @@ export default function SettingsPage() {
   const { user, organization, team } = useApi(["page.settings"], () => api.page.settings.query());
   // Learners have no Team tab, so ?tab=team falls back to Account for them.
   const tab = TABS.find((name) => name === requested && (name !== "team" || team)) ?? "account";
+  // The URL holds the tab, so the sidebar's Settings link (no ?tab) is Account again. replaceState: no server request.
+  const selectTab = (value: unknown) => window.history.replaceState(null, "", value === "account" ? "/settings" : `/settings?tab=${value}`);
 
   return (
-    <main className="min-h-0 flex-1 overflow-auto p-5 sm:p-8">
-      <PageContainer size="narrow">
-        <PageHeader
-          className="border-b pb-6"
-          icon={SettingsIcon}
-          title="Settings"
-          description="Manage the details shown across your TrainerTwin workspace."
-        />
+    <PageContainer>
+      <PageHeader
+        className="border-b pb-6"
+        icon={SettingsIcon}
+        title="Settings"
+        description="Manage the details shown across your TrainerTwin workspace."
+      />
 
-        <Tabs defaultValue={tab} className="mt-6">
-          <TabsList>
-            <TabsTrigger value="account">Account</TabsTrigger>
-            {team ? <TabsTrigger value="team">Team</TabsTrigger> : null}
-            <TabsTrigger value="branding">Branding</TabsTrigger>
-          </TabsList>
+      <Tabs value={tab} onValueChange={selectTab} className="mt-6">
+        <TabsList>
+          <TabsTrigger value="account">Account</TabsTrigger>
+          {team ? <TabsTrigger value="team">Team</TabsTrigger> : null}
+          <TabsTrigger value="branding">Branding</TabsTrigger>
+        </TabsList>
 
-          <TabsContent value="account">
-            <ProfileForm user={user} />
+        <TabsContent value="account">
+          <ProfileForm user={user} />
+        </TabsContent>
+
+        {team ? (
+          <TabsContent value="team">
+            <TeamSection
+              organizationId={organization.id}
+              currentUserId={user.id}
+              members={team.members}
+              invitations={team.invitations}
+              awaiting={team.awaiting}
+            />
           </TabsContent>
+        ) : null}
 
-          {team ? (
-            <TabsContent value="team">
-              <TeamSection
-                organizationId={organization.id}
-                currentUserId={user.id}
-                members={team.members}
-                invitations={team.invitations}
-                awaiting={team.awaiting}
-              />
-            </TabsContent>
-          ) : null}
-
-          <TabsContent value="branding" className="pt-3">
-            <OrganizationForm organization={organization} />
-          </TabsContent>
-        </Tabs>
-      </PageContainer>
-    </main>
+        <TabsContent value="branding" className="pt-3">
+          <OrganizationForm organization={organization} />
+        </TabsContent>
+      </Tabs>
+    </PageContainer>
   );
 }

@@ -103,46 +103,44 @@ export function KnowledgeIndex({ bases }: { bases: Kb[] }) {
   }
 
   return (
-    <main className="min-h-0 flex-1 overflow-auto p-5 sm:p-8">
-      <PageContainer size="narrow">
-        <PageHeader
-          title="Knowledge"
-          description="Grounding documents stored in S3 and indexed into your organization's vector collection."
-          actions={
-            <Button onClick={handleCreate} disabled={creating}>
-              {creating ? <Spinner data-icon="inline-start" /> : <Plus data-icon="inline-start" />}
-              New knowledge base
-            </Button>
-          }
-        />
+    <PageContainer>
+      <PageHeader
+        title="Knowledge"
+        description="Grounding documents stored in S3 and indexed into your organization's vector collection."
+        actions={
+          <Button onClick={handleCreate} disabled={creating}>
+            {creating ? <Spinner data-icon="inline-start" /> : <Plus data-icon="inline-start" />}
+            New knowledge base
+          </Button>
+        }
+      />
 
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
-          {bases.map((kb) => (
-            <Link
-              key={kb.slug}
-              href={`/knowledge/${encodeURIComponent(kb.slug)}`}
-              className="group flex min-h-40 min-w-0 flex-col rounded-xl border bg-background p-5 transition-colors hover:border-foreground/20 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-            >
-              <span className="flex items-center gap-3">
-                <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted">
-                  <BookOpen className="size-4" aria-hidden="true" />
-                </span>
-                <ChevronRight className="ml-auto size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+      <div className="mt-6 grid gap-4 md:grid-cols-2">
+        {bases.map((kb) => (
+          <Link
+            key={kb.slug}
+            href={`/knowledge/${encodeURIComponent(kb.slug)}`}
+            className="group flex min-h-40 min-w-0 flex-col rounded-xl border bg-background p-5 transition-colors hover:border-foreground/20 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <span className="flex items-center gap-3">
+              <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted">
+                <BookOpen className="size-4" aria-hidden="true" />
               </span>
-              <span className="mt-5 block truncate text-base font-medium">{kb.name}</span>
-              <span className="mt-1 block truncate text-xs text-muted-foreground">{kb.slug}</span>
-              <span className="mt-auto block pt-4 text-xs text-muted-foreground">Knowledge base</span>
-            </Link>
-          ))}
-          {!bases.length && (
-            <div className="rounded-xl border px-5 py-16 text-center md:col-span-2">
-              <p className="text-sm font-medium">No knowledge bases yet</p>
-              <p className="mt-1 text-sm text-muted-foreground">Create the first base to start grounding your trainers.</p>
-            </div>
-          )}
-        </div>
-      </PageContainer>
-    </main>
+              <ChevronRight className="ml-auto size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+            </span>
+            <span className="mt-5 block truncate text-base font-medium">{kb.name}</span>
+            <span className="mt-1 block truncate text-xs text-muted-foreground">{kb.slug}</span>
+            <span className="mt-auto block pt-4 text-xs text-muted-foreground">Knowledge base</span>
+          </Link>
+        ))}
+        {!bases.length && (
+          <div className="rounded-xl border px-5 py-16 text-center md:col-span-2">
+            <p className="text-sm font-medium">No knowledge bases yet</p>
+            <p className="mt-1 text-sm text-muted-foreground">Create the first base to start grounding your trainers.</p>
+          </div>
+        )}
+      </div>
+    </PageContainer>
   );
 }
 

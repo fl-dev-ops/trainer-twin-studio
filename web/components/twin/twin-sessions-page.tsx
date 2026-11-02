@@ -11,6 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { PageContainer } from "@/components/page-container";
 
 const DATE_OPTIONS = [
   { value: "30", label: "Last 30 days" },
@@ -92,57 +93,55 @@ export function TwinSessionsPage({ sessions }: { sessions: TwinSessionItemData[]
   });
 
   return (
-    <div className="h-full w-full overflow-y-auto">
-      <div className="mx-auto w-full max-w-[1024px] px-4 md:px-0 pt-5 pb-16">
-        <header className="flex min-h-10 flex-wrap items-center justify-between gap-4">
-          <h1 className="m-0 flex items-center gap-2 text-[16px] font-semibold leading-[22px] tracking-[-0.015em]">
-            <span className="grid size-7 place-items-center rounded-[8px] text-(--text-secondary)">
-              <SessionsIcon className="size-[18px]" />
-            </span>
-            Twin sessions
-          </h1>
+    <PageContainer>
+      <header className="flex min-h-10 flex-wrap items-center justify-between gap-4">
+        <h1 className="m-0 flex items-center gap-2 text-[16px] font-semibold leading-[22px] tracking-[-0.015em]">
+          <span className="grid size-7 place-items-center rounded-[8px] text-(--text-secondary)">
+            <SessionsIcon className="size-[18px]" />
+          </span>
+          Twin sessions
+        </h1>
 
-          {/* Reference ts-filters: rounded-full pills opening shadcn DropdownMenu */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            <FilterDropdown
-              value={botFilter}
-              onChange={setBotFilter}
-              options={agentOptions}
-            />
-            <FilterDropdown
-              value={learnerFilter}
-              onChange={setLearnerFilter}
-              options={learnerOptions}
-            />
-            <FilterDropdown
-              value={dateFilter}
-              onChange={setDateFilter}
-              options={DATE_OPTIONS}
-            />
-          </div>
-        </header>
-
-        <div className="mt-10">
-          <h2 className="m-0 text-[18px] font-semibold leading-6 tracking-[-0.015em]">Sessions</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Questions your learners asked your twins</p>
+        {/* Reference ts-filters: rounded-full pills opening shadcn DropdownMenu */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          <FilterDropdown
+            value={botFilter}
+            onChange={setBotFilter}
+            options={agentOptions}
+          />
+          <FilterDropdown
+            value={learnerFilter}
+            onChange={setLearnerFilter}
+            options={learnerOptions}
+          />
+          <FilterDropdown
+            value={dateFilter}
+            onChange={setDateFilter}
+            options={DATE_OPTIONS}
+          />
         </div>
+      </header>
 
-        {/* Reference sess-list */}
-        <ul className="mt-4 flex flex-col overflow-hidden rounded-[16px] border border-(--card-border) bg-card p-0 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
-          {filteredSessions.length === 0 ? (
-            <li className="p-8 text-center text-sm text-muted-foreground">No sessions match these filters.</li>
-          ) : (
-            filteredSessions.map((c, idx) => (
-              <TwinSessionItem
-                key={c.id}
-                session={c}
-                index={idx}
-                divider={idx > 0}
-              />
-            ))
-          )}
-        </ul>
+      <div className="mt-10">
+        <h2 className="m-0 text-[18px] font-semibold leading-6 tracking-[-0.015em]">Sessions</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Questions your learners asked your twins</p>
       </div>
-    </div>
+
+      {/* Reference sess-list */}
+      <ul className="mt-4 flex flex-col overflow-hidden rounded-[16px] border border-(--card-border) bg-card p-0 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
+        {filteredSessions.length === 0 ? (
+          <li className="p-8 text-center text-sm text-muted-foreground">No sessions match these filters.</li>
+        ) : (
+          filteredSessions.map((c, idx) => (
+            <TwinSessionItem
+              key={c.id}
+              session={c}
+              index={idx}
+              divider={idx > 0}
+            />
+          ))
+        )}
+      </ul>
+    </PageContainer>
   );
 }

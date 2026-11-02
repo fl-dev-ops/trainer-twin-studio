@@ -336,107 +336,105 @@ export function SpecResourceIndex({ type, specs }: { type: ResourceType; specs: 
   }
 
   return (
-    <main className="min-h-0 flex-1 overflow-auto p-6">
-      <PageContainer size="narrow">
-        <PageHeader
-          className={type === "agents" ? undefined : "border-b pb-6"}
-          icon={type === "agents" ? RoleplayIcon : undefined}
-          title={type === "agents" ? "Roleplay" : copy.title}
-          description={type === "agents" ? undefined : copy.description}
-          actions={
-            <>
-              <Button
-                className={type === "agents" ? "rounded-full" : undefined}
-                onClick={() => type === "agents" ? setCreateOpen(true) : void createNew()}
-              >
-                <Plus data-icon="inline-start" /> {type === "agents" ? "Create new" : `New ${copy.single}`}
-              </Button>
-            </>
-          }
-        />
-
-        {type === "agents" ? (
+    <PageContainer>
+      <PageHeader
+        className={type === "agents" ? undefined : "border-b pb-6"}
+        icon={type === "agents" ? RoleplayIcon : undefined}
+        title={type === "agents" ? "Roleplay" : copy.title}
+        description={type === "agents" ? undefined : copy.description}
+        actions={
           <>
-            {specs.some((spec) => spec.twin) ? (
-              <section className="mt-6 flex flex-col gap-3">
-                <SectionHeader title="Twin for all use cases" note="Helps learners with real situations, the way you would" />
-                <div className="flex flex-col gap-4">
-                  {specs.filter((spec) => spec.twin).map((spec) => (
-                    <TwinCard key={spec.slug} twin={spec} />
-                  ))}
-                </div>
-              </section>
-            ) : null}
-            <section className="mt-6 flex flex-col gap-3">
-              <SectionHeader title="All scenarios" note="Role plays your learners practise, twin-based or not" />
-              {specs.some((spec) => !spec.twin) ? (
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                  {specs.filter((spec) => !spec.twin).map((spec) => (
-                    <ScenarioCard key={spec.slug} scenario={spec} />
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-2xl border bg-card px-5 py-16 text-center">
-                  <p className="text-sm font-medium">No scenarios yet</p>
-                  <p className="mt-1 text-sm text-muted-foreground">Create the first role play to get started.</p>
-                </div>
-              )}
-            </section>
+            <Button
+              className={type === "agents" ? "rounded-full" : undefined}
+              onClick={() => type === "agents" ? setCreateOpen(true) : void createNew()}
+            >
+              <Plus data-icon="inline-start" /> {type === "agents" ? "Create new" : `New ${copy.single}`}
+            </Button>
           </>
-        ) : (
-          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {specs.map((spec) => (
-              <SpecCard key={spec.slug} type={type} spec={spec} />
-            ))}
-            {!specs.length && (
-              <div className="rounded-xl border px-5 py-16 text-center md:col-span-2 xl:col-span-3">
-                <p className="text-sm font-medium">No {copy.title.toLowerCase()} yet</p>
-                <p className="mt-1 text-sm text-muted-foreground">Create the first {copy.single} to get started.</p>
+        }
+      />
+
+      {type === "agents" ? (
+        <>
+          {specs.some((spec) => spec.twin) ? (
+            <section className="mt-6 flex flex-col gap-3">
+              <SectionHeader title="Twin for all use cases" note="Helps learners with real situations, the way you would" />
+              <div className="flex flex-col gap-4">
+                {specs.filter((spec) => spec.twin).map((spec) => (
+                  <TwinCard key={spec.slug} twin={spec} />
+                ))}
+              </div>
+            </section>
+          ) : null}
+          <section className="mt-6 flex flex-col gap-3">
+            <SectionHeader title="All scenarios" note="Role plays your learners practise, twin-based or not" />
+            {specs.some((spec) => !spec.twin) ? (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {specs.filter((spec) => !spec.twin).map((spec) => (
+                  <ScenarioCard key={spec.slug} scenario={spec} />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border bg-card px-5 py-16 text-center">
+                <p className="text-sm font-medium">No scenarios yet</p>
+                <p className="mt-1 text-sm text-muted-foreground">Create the first role play to get started.</p>
               </div>
             )}
-          </div>
-        )}
+          </section>
+        </>
+      ) : (
+        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {specs.map((spec) => (
+            <SpecCard key={spec.slug} type={type} spec={spec} />
+          ))}
+          {!specs.length && (
+            <div className="rounded-xl border px-5 py-16 text-center md:col-span-2 xl:col-span-3">
+              <p className="text-sm font-medium">No {copy.title.toLowerCase()} yet</p>
+              <p className="mt-1 text-sm text-muted-foreground">Create the first {copy.single} to get started.</p>
+            </div>
+          )}
+        </div>
+      )}
 
-        {type === "agents" && (
-          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create scenario</DialogTitle>
-                <DialogDescription>
-                  Start with a name. You will describe the scenario on the next screen.
-                </DialogDescription>
-              </DialogHeader>
-              <form
-                className="space-y-5"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void submitNewScenario();
-                }}
-              >
-                <Field>
-                  <FieldLabel htmlFor="new-scenario-name">Name</FieldLabel>
-                  <Input
-                    id="new-scenario-name"
-                    value={newScenarioName}
-                    maxLength={120}
-                    autoFocus
-                    onChange={(event) => setNewScenarioName(event.target.value)}
-                    placeholder="React mock interview"
-                  />
-                </Field>
-                <DialogFooter>
-                  <DialogClose render={<Button variant="outline" disabled={creating} />}>Cancel</DialogClose>
-                  <Button type="submit" disabled={!newScenarioName.trim() || creating}>
-                    {creating ? <Spinner data-icon="inline-start" /> : <Plus data-icon="inline-start" />}
-                    Continue
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-        )}
-      </PageContainer>
-    </main>
+      {type === "agents" && (
+        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create scenario</DialogTitle>
+              <DialogDescription>
+                Start with a name. You will describe the scenario on the next screen.
+              </DialogDescription>
+            </DialogHeader>
+            <form
+              className="space-y-5"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void submitNewScenario();
+              }}
+            >
+              <Field>
+                <FieldLabel htmlFor="new-scenario-name">Name</FieldLabel>
+                <Input
+                  id="new-scenario-name"
+                  value={newScenarioName}
+                  maxLength={120}
+                  autoFocus
+                  onChange={(event) => setNewScenarioName(event.target.value)}
+                  placeholder="React mock interview"
+                />
+              </Field>
+              <DialogFooter>
+                <DialogClose render={<Button variant="outline" disabled={creating} />}>Cancel</DialogClose>
+                <Button type="submit" disabled={!newScenarioName.trim() || creating}>
+                  {creating ? <Spinner data-icon="inline-start" /> : <Plus data-icon="inline-start" />}
+                  Continue
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
+    </PageContainer>
   );
 }
 
@@ -464,6 +462,8 @@ export function SpecResourceEditor({
   const router = useRouter();
   const refresh = useRefresh();
   const [text, setText] = useState(initialText);
+  // Chosen once: a refetch that brings a baseline must not change an uncontrolled Tabs' default.
+  const [initialAsideTab] = useState(baseline ? "baseline" : "sources");
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const historical = shownVersion !== currentVersion;
@@ -635,7 +635,7 @@ export function SpecResourceEditor({
           />
         </div>
       ) : (
-        <Tabs defaultValue={baseline ? "baseline" : "sources"} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <Tabs defaultValue={initialAsideTab} className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="shrink-0 border-b px-4 py-2 sm:px-6">
             <TabsList>
               {baseline && <TabsTrigger value="baseline">Baseline</TabsTrigger>}

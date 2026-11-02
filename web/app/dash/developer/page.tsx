@@ -18,34 +18,32 @@ export default function DeveloperApiPage() {
   const { canManageApiKeys, apiKeys } = useApi(["page.developer"], () => api.page.developer.query());
 
   return (
-    <main className="min-h-0 flex-1 overflow-auto p-5 sm:p-8">
-      <PageContainer size="narrow">
-        <PageHeader
-          className="border-b pb-6"
-          title="Developer API"
-          description="Generate organization-scoped keys for server-to-server integrations."
-          actions={
-            <Button
-              variant="outline"
-              nativeButton={false}
-              render={<a href={`${DOCS_URL}/quickstart`} target="_blank" rel="noopener noreferrer" />}
-            >
-              <ExternalLink />
-              API docs
-            </Button>
-          }
-        />
+    <PageContainer>
+      <PageHeader
+        className="border-b pb-6"
+        title="Developer API"
+        description="Generate organization-scoped keys for server-to-server integrations."
+        actions={
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={<a href={`${DOCS_URL}/quickstart`} target="_blank" rel="noopener noreferrer" />}
+          >
+            <ExternalLink />
+            API docs
+          </Button>
+        }
+      />
 
-        {canManageApiKeys ? (
-          <div className="mt-8">
-            <ApiKeyManager initialKeys={apiKeys} />
-          </div>
-        ) : (
-          <p className="mt-8 text-sm text-muted-foreground">
-            Only organization owners and admins can manage API keys.
-          </p>
-        )}
-      </PageContainer>
-    </main>
+      {canManageApiKeys ? (
+        <div className="mt-8">
+          <ApiKeyManager initialKeys={apiKeys} />
+        </div>
+      ) : (
+        <p className="mt-8 text-sm text-muted-foreground">
+          Only organization owners and admins can manage API keys.
+        </p>
+      )}
+    </PageContainer>
   );
 }

@@ -48,8 +48,10 @@ export type VoiceRow = {
 const SAMPLE_SENTENCE = "Hi, this is a quick test of my voice. Let us begin today's session.";
 
 export function VoiceLibrary({ mine, samples }: { mine: VoiceRow[]; samples: VoiceRow[] }) {
+  // Chosen once: a refetch that adds or removes a voice must not change an uncontrolled Tabs' default.
+  const [initialTab] = useState(mine.length ? "my" : "explore");
   return (
-    <Tabs defaultValue={mine.length ? "my" : "explore"} className="mt-6" >
+    <Tabs defaultValue={initialTab} className="mt-6">
       <TabsList>
         <TabsTrigger className={"cursor-pointer"} value="explore">Explore voices</TabsTrigger>
         <TabsTrigger className={"cursor-pointer"} value="my">My voices</TabsTrigger>

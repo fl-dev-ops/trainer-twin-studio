@@ -1,3 +1,4 @@
+import { PageContainer } from "@/components/page-container";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
@@ -5,9 +6,7 @@ import { cn } from "@/lib/utils";
 
 export function LoadingPage({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <main className="min-h-0 flex-1 overflow-auto p-5 sm:p-8">
-      <div className={cn("mx-auto flex w-full max-w-4xl flex-col gap-6", className)}>{children}</div>
-    </main>
+    <PageContainer className={cn("flex flex-col gap-6", className)}>{children}</PageContainer>
   );
 }
 

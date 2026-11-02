@@ -1,30 +1,15 @@
 import type { ComponentProps } from "react";
-import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
-const pageContainerVariants = cva("mx-auto w-full", {
-  variants: {
-    size: {
-      narrow: "max-w-4xl",
-      wide: "max-w-none",
-    },
-  },
-  defaultVariants: {
-    size: "narrow",
-  },
-});
-
-export function PageContainer({
-  className,
-  size,
-  ...props
-}: ComponentProps<"div"> & VariantProps<typeof pageContainerVariants>) {
+/**
+ * Every dashboard page: one scroll area, one gutter and one content width (1024px), so pages never drift apart.
+ * `className` styles the content column (e.g. `flex flex-col gap-6`). Only immersive screens render without it:
+ * talk, calibration, capture flows, the copilot chat and the full-height editors.
+ */
+export function PageContainer({ className, ...props }: ComponentProps<"div">) {
   return (
-    <div
-      data-slot="page-container"
-      data-size={size ?? "narrow"}
-      className={cn(pageContainerVariants({ size }), className)}
-      {...props}
-    />
+    <div data-slot="page" className="min-h-0 w-full flex-1 overflow-y-auto px-4 md:px-8">
+      <div data-slot="page-container" className={cn("mx-auto w-full max-w-[1024px] pt-5 pb-16", className)} {...props} />
+    </div>
   );
 }

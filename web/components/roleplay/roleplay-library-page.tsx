@@ -15,6 +15,7 @@ import {
 import { UserAvatar } from "@/components/user-avatar";
 import type { RoleplayOutputs } from "@/lib/roleplay/trpc";
 import { cn } from "@/lib/utils";
+import { PageContainer } from "@/components/page-container";
 
 type Scenario = RoleplayOutputs["scenarios"]["list"][number];
 
@@ -129,65 +130,63 @@ export function RoleplayLibraryPage({ scenarios }: { scenarios: Scenario[] }) {
   const created = shown.filter((s) => !s.interview);
   const interviews = shown.filter((s) => s.interview);
   return (
-    <div className="h-full w-full overflow-y-auto">
-      <div className="mx-auto w-full max-w-[1024px] px-4 pt-5 pb-16 md:px-0">
-        <header className="flex min-h-10 items-center justify-between gap-4">
-          <h1 className="m-0 flex items-center gap-2 text-[16px] leading-[22px] font-semibold tracking-[-0.015em]">
-            <span className="grid size-7 place-items-center rounded-[8px] text-(--text-secondary)">
-              <RoleplayIcon className="size-[18px]" />
-            </span>
-            Scenarios
-          </h1>
-          <div className="flex items-center gap-2">
-            <label className="flex h-8 items-center gap-2 rounded-full border border-(--card-border) bg-card px-3 text-[13px] text-muted-foreground focus-within:border-(--brand)">
-              <Search className="size-4" aria-hidden />
-              <span className="sr-only">Search role plays</span>
-              <input
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search..."
-                autoComplete="off"
-                className="w-36 bg-transparent text-foreground outline-none placeholder:text-muted-foreground"
-              />
-            </label>
-            <Link
-              href="/roleplay/new"
-              className="inline-flex h-8 items-center gap-2 rounded-full bg-(--brand) px-3.5 text-[13px] leading-5 font-medium text-white transition-colors hover:bg-[#e04d00] dark:hover:bg-[#ff7e33]"
-            >
-              <svg viewBox="0 0 16 16" width={16} height={16} fill="none" aria-hidden>
-                <path d="M8 3.5v9M3.5 8h9" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" />
-              </svg>
-              New
-            </Link>
-          </div>
-        </header>
+    <PageContainer>
+      <header className="flex min-h-10 items-center justify-between gap-4">
+        <h1 className="m-0 flex items-center gap-2 text-[16px] leading-[22px] font-semibold tracking-[-0.015em]">
+          <span className="grid size-7 place-items-center rounded-[8px] text-(--text-secondary)">
+            <RoleplayIcon className="size-[18px]" />
+          </span>
+          Scenarios
+        </h1>
+        <div className="flex items-center gap-2">
+          <label className="flex h-8 items-center gap-2 rounded-full border border-(--card-border) bg-card px-3 text-[13px] text-muted-foreground focus-within:border-(--brand)">
+            <Search className="size-4" aria-hidden />
+            <span className="sr-only">Search role plays</span>
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search..."
+              autoComplete="off"
+              className="w-36 bg-transparent text-foreground outline-none placeholder:text-muted-foreground"
+            />
+          </label>
+          <Link
+            href="/roleplay/new"
+            className="inline-flex h-8 items-center gap-2 rounded-full bg-(--brand) px-3.5 text-[13px] leading-5 font-medium text-white transition-colors hover:bg-[#e04d00] dark:hover:bg-[#ff7e33]"
+          >
+            <svg viewBox="0 0 16 16" width={16} height={16} fill="none" aria-hidden>
+              <path d="M8 3.5v9M3.5 8h9" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" />
+            </svg>
+            New
+          </Link>
+        </div>
+      </header>
 
-        <h2 className="mt-10 text-[18px] leading-6 font-semibold tracking-[-0.015em]">Created role plays</h2>
-        {created.length ? (
+      <h2 className="mt-10 text-[18px] leading-6 font-semibold tracking-[-0.015em]">Created role plays</h2>
+      {created.length ? (
+        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {created.map((scenario, i) => (
+            <ScenarioCard key={scenario.slug} scenario={scenario} index={i} />
+          ))}
+        </div>
+      ) : (
+        <p className="mt-4 text-sm text-muted-foreground">
+          {q ? "No role plays match that search." : "No role plays yet. Create one with New."}
+        </p>
+      )}
+
+      {interviews.length ? (
+        <>
+          {/* v1 interview scenarios, as they were: they open (and are edited on) their v1 pages. */}
+          <h2 className="mt-12 text-[18px] leading-6 font-semibold tracking-[-0.015em]">Interview scenarios</h2>
           <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {created.map((scenario, i) => (
+            {interviews.map((scenario, i) => (
               <ScenarioCard key={scenario.slug} scenario={scenario} index={i} />
             ))}
           </div>
-        ) : (
-          <p className="mt-4 text-sm text-muted-foreground">
-            {q ? "No role plays match that search." : "No role plays yet. Create one with New."}
-          </p>
-        )}
-
-        {interviews.length ? (
-          <>
-            {/* v1 interview scenarios, as they were: they open (and are edited on) their v1 pages. */}
-            <h2 className="mt-12 text-[18px] leading-6 font-semibold tracking-[-0.015em]">Interview scenarios</h2>
-            <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {interviews.map((scenario, i) => (
-                <ScenarioCard key={scenario.slug} scenario={scenario} index={i} />
-              ))}
-            </div>
-          </>
-        ) : null}
-      </div>
-    </div>
+        </>
+      ) : null}
+    </PageContainer>
   );
 }

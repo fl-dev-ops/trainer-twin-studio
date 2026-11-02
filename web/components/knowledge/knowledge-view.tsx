@@ -240,56 +240,54 @@ export function KnowledgeView({
   }, [documents, searchHits, searchedQuery]);
 
   return (
-    <main className="min-h-0 flex-1 overflow-auto p-5 sm:p-8">
-      <PageContainer size="narrow" className="flex flex-col gap-6">
-        <KnowledgeHeader
-          stats={stats}
-          onOpenUpload={() => setAddSourceOpen(true)}
-        />
+    <PageContainer className="flex flex-col gap-6">
+      <KnowledgeHeader
+        stats={stats}
+        onOpenUpload={() => setAddSourceOpen(true)}
+      />
 
-        <KnowledgeActionBar
-          searchQuery={searchInput}
-          onSearchChange={handleSearchInputChange}
-          onSearch={handleSearch}
-          searching={searching}
-          onRefresh={refreshData}
-          refreshing={refreshing}
-        />
+      <KnowledgeActionBar
+        searchQuery={searchInput}
+        onSearchChange={handleSearchInputChange}
+        onSearch={handleSearch}
+        searching={searching}
+        onRefresh={refreshData}
+        refreshing={refreshing}
+      />
 
-        <DocumentList
-            documents={visibleDocuments}
-            onSelectDoc={handleSelectDoc}
-            onReindexDoc={handleReindex}
-            onRefreshSource={handleRefreshSource}
-            onDeleteDoc={handleDelete}
-            reindexingId={reindexingId}
-            refreshingSourceId={refreshingSourceId}
-            onOpenUpload={() => setAddSourceOpen(true)}
-            onClearSearch={clearSearch}
-            hasSearch={Boolean(searchedQuery)}
-          />
-
-        {/* Add Knowledge Source Dialog (Upload, Notion, YouTube, Connections) */}
-        <KnowledgeAddSourceDialog
-          open={addSourceOpen}
-          onOpenChange={setAddSourceOpen}
-          connectors={connectors}
-          initialDriveConnected={initialDriveConnected}
-          onSuccess={refreshData}
-        />
-
-        {/* Document Detail Drawer */}
-        <DocumentDetailDrawer
-          doc={selectedDoc ? documents.find((d) => d.id === selectedDoc.id) ?? selectedDoc : null}
-          open={drawerOpen}
-          onOpenChange={setDrawerOpen}
+      <DocumentList
+          documents={visibleDocuments}
+          onSelectDoc={handleSelectDoc}
           onReindexDoc={handleReindex}
           onRefreshSource={handleRefreshSource}
           onDeleteDoc={handleDelete}
-          reindexing={reindexingId === selectedDoc?.id}
-          refreshingSource={Boolean(selectedDoc?.sourceId && refreshingSourceId === selectedDoc.sourceId)}
+          reindexingId={reindexingId}
+          refreshingSourceId={refreshingSourceId}
+          onOpenUpload={() => setAddSourceOpen(true)}
+          onClearSearch={clearSearch}
+          hasSearch={Boolean(searchedQuery)}
         />
-      </PageContainer>
-    </main>
+
+      {/* Add Knowledge Source Dialog (Upload, Notion, YouTube, Connections) */}
+      <KnowledgeAddSourceDialog
+        open={addSourceOpen}
+        onOpenChange={setAddSourceOpen}
+        connectors={connectors}
+        initialDriveConnected={initialDriveConnected}
+        onSuccess={refreshData}
+      />
+
+      {/* Document Detail Drawer */}
+      <DocumentDetailDrawer
+        doc={selectedDoc ? documents.find((d) => d.id === selectedDoc.id) ?? selectedDoc : null}
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        onReindexDoc={handleReindex}
+        onRefreshSource={handleRefreshSource}
+        onDeleteDoc={handleDelete}
+        reindexing={reindexingId === selectedDoc?.id}
+        refreshingSource={Boolean(selectedDoc?.sourceId && refreshingSourceId === selectedDoc.sourceId)}
+      />
+    </PageContainer>
   );
 }
