@@ -15,8 +15,8 @@ export function AgentTile({ persona, photoUrl = null, compact = false }: { perso
   return (
     <div
       className={cn(
-        "relative size-full overflow-hidden rounded-2xl bg-[linear-gradient(135deg,#a8c6ec_0%,#d2c3e8_50%,#f1c6d7_100%)] shadow-[0_2px_4px_rgba(30,28,25,0.07),0_8px_20px_rgba(30,28,25,0.11)] transition-shadow duration-300",
-        isSpeaking && "ring-2 ring-emerald-500/70",
+        "relative size-full overflow-hidden rounded-2xl bg-art-pastel shadow-elevation-2 transition-shadow duration-300",
+        isSpeaking && "ring-2 ring-success-border",
       )}
     >
       {photoUrl ? (
@@ -28,7 +28,7 @@ export function AgentTile({ persona, photoUrl = null, compact = false }: { perso
         <div aria-hidden className="grid size-full place-items-center">
           <span
             className={cn(
-              "grid place-items-center rounded-full bg-white/70 font-semibold text-neutral-700",
+              "grid place-items-center rounded-full bg-white/70 font-semibold text-night/75",
               compact ? "size-14 text-2xl" : "size-24 text-4xl",
             )}
           >
@@ -41,13 +41,13 @@ export function AgentTile({ persona, photoUrl = null, compact = false }: { perso
         <span className="absolute top-3 left-3 flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
           <span
             aria-hidden
-            className={cn("size-1.5 rounded-full", isSpeaking ? "bg-[#e5484d]" : "animate-pulse bg-amber-400")}
+            className={cn("size-1.5 rounded-full", isSpeaking ? "bg-live" : "animate-pulse bg-caution")}
           />
           {isSpeaking ? "Speaking" : "Thinking"}
         </span>
       ) : null}
 
-      <span className="absolute bottom-3 left-3 max-w-[calc(100%-1.5rem)] truncate rounded-full bg-black/55 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
+      <span className="absolute bottom-3 left-3 max-w-[calc(100%-1.65rem)] truncate rounded-full bg-black/55 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
         {name}
       </span>
     </div>

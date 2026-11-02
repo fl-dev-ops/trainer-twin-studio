@@ -368,7 +368,7 @@ export function KnowledgeAddSourceDialog({
       <Dialog open={open} modal={!drivePickerOpen} onOpenChange={(next) => { if (!drivePickerOpen) onOpenChange(next); }}>
         <DialogContent
           showCloseButton={false}
-          className="sm:max-w-4xl md:max-w-5xl h-[620px] max-h-[90vh] p-0 gap-0 overflow-hidden rounded-2xl border border-border/80 shadow-2xl bg-background"
+          className="sm:max-w-4xl md:max-w-5xl h-[620px] max-h-[90vh] p-0 gap-0 overflow-hidden "
         >
           <div className="flex h-full w-full">
             <aside className="w-56 shrink-0 border-r border-border/60 bg-muted/20 flex flex-col p-4 select-none">
@@ -385,7 +385,7 @@ export function KnowledgeAddSourceDialog({
                       onClick={() => setActiveCategory(item.id)}
                       className={`w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg text-left transition-colors relative ${
                         isActive
-                          ? "text-foreground font-medium bg-accent/40 before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-1 before:rounded-full before:bg-orange-500"
+                          ? "text-foreground font-medium bg-accent/40 before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-1 before:rounded-full before:bg-brand"
                           : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
                       }`}
                     >
@@ -416,7 +416,7 @@ export function KnowledgeAddSourceDialog({
                       <button
                         type="button"
                         onClick={() => setActiveCategory("drive")}
-                        className="group flex items-center justify-between p-4 rounded-xl border border-border/70 bg-card hover:border-orange-500/50 hover:shadow-xs transition-all text-left col-span-2"
+                        className="group flex items-center justify-between p-4 rounded-xl border border-border/70 bg-card hover:border-brand/50 hover:shadow-xs transition-all text-left col-span-2"
                       >
                         <div className="flex items-center gap-3.5 min-w-0">
                           <CloudDownload className="size-5 shrink-0 text-muted-foreground" />
@@ -430,10 +430,10 @@ export function KnowledgeAddSourceDialog({
                       <button
                         type="button"
                         onClick={() => setActiveCategory("files")}
-                        className="group flex items-center justify-between p-4 rounded-xl border border-border/70 bg-card hover:border-orange-500/50 hover:shadow-xs transition-all text-left"
+                        className="group flex items-center justify-between p-4 rounded-xl border border-border/70 bg-card hover:border-brand/50 hover:shadow-xs transition-all text-left"
                       >
                         <div className="flex items-center gap-3.5 min-w-0">
-                          <div className="w-9 h-9 rounded-lg bg-orange-500/10 text-orange-600 flex items-center justify-center shrink-0">
+                          <div className="w-9 h-9 rounded-lg bg-brand/10 text-brand-strong flex items-center justify-center shrink-0">
                             <Upload className="w-5 h-5" />
                           </div>
                           <div className="min-w-0">
@@ -449,10 +449,10 @@ export function KnowledgeAddSourceDialog({
                       <button
                         type="button"
                         onClick={() => setActiveCategory("youtube")}
-                        className="group flex items-center justify-between p-4 rounded-xl border border-border/70 bg-card hover:border-orange-500/50 hover:shadow-xs transition-all text-left"
+                        className="group flex items-center justify-between p-4 rounded-xl border border-border/70 bg-card hover:border-brand/50 hover:shadow-xs transition-all text-left"
                       >
                         <div className="flex items-center gap-3.5 min-w-0">
-                          <div className="w-9 h-9 rounded-lg bg-red-500/10 text-red-600 flex items-center justify-center shrink-0">
+                          <div className="w-9 h-9 rounded-lg bg-danger-subtle text-danger flex items-center justify-center shrink-0">
                             <YouTubeIcon className="w-5 h-5" />
                           </div>
                           <div className="min-w-0">
@@ -468,7 +468,7 @@ export function KnowledgeAddSourceDialog({
                       <button
                         type="button"
                         onClick={() => setActiveCategory("notion")}
-                        className="group flex items-center justify-between p-4 rounded-xl border border-border/70 bg-card hover:border-orange-500/50 hover:shadow-xs transition-all text-left col-span-2"
+                        className="group flex items-center justify-between p-4 rounded-xl border border-border/70 bg-card hover:border-brand/50 hover:shadow-xs transition-all text-left col-span-2"
                       >
                         <div className="flex items-center gap-3.5 min-w-0">
                           <div className="w-9 h-9 rounded-lg bg-foreground/5 text-foreground flex items-center justify-center shrink-0">
@@ -519,32 +519,32 @@ export function KnowledgeAddSourceDialog({
                       onClick={() => fileInputRef.current?.click()}
                       className={`border border-dashed rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-all ${
                         dragOver
-                          ? "border-orange-500 bg-orange-500/5 shadow-inner"
-                          : "border-border/80 hover:border-orange-500/60 hover:bg-orange-500/[0.02]"
+                          ? "border-brand bg-brand/5 shadow-inner"
+                          : "border-border/80 hover:border-brand/60 hover:bg-brand/2"
                       }`}
                     >
                       <div className="flex items-center justify-center -space-x-3 mb-3">
                         <div className="w-12 h-14 rounded-lg bg-card border border-border shadow-xs -rotate-6 flex flex-col items-center justify-center p-1">
-                          <span className="text-[9px] font-bold text-muted-foreground/80 tracking-wider">MD</span>
+                          <span className="text-overline font-bold text-muted-foreground/80 tracking-wider">MD</span>
                           <div className="w-6 h-1 bg-muted rounded-full mt-1.5" />
                           <div className="w-4 h-1 bg-muted rounded-full mt-1" />
                         </div>
                         <div className="w-12 h-14 rounded-lg bg-card border border-border shadow-md z-10 flex flex-col items-center justify-center p-1">
-                          <span className="text-[9px] font-bold text-red-500 tracking-wider">PDF</span>
-                          <div className="w-6 h-1 bg-red-100 dark:bg-red-950/40 rounded-full mt-1.5" />
+                          <span className="text-overline font-bold text-danger tracking-wider">PDF</span>
+                          <div className="w-6 h-1 bg-danger-subtle rounded-full mt-1.5" />
                           <div className="w-4 h-1 bg-muted rounded-full mt-1" />
                         </div>
                         <div className="w-12 h-14 rounded-lg bg-card border border-border shadow-xs rotate-6 flex flex-col items-center justify-center p-1">
-                          <span className="text-[9px] font-bold text-blue-500 tracking-wider">DOC</span>
-                          <div className="w-6 h-1 bg-blue-100 dark:bg-blue-950/40 rounded-full mt-1.5" />
+                          <span className="text-overline font-bold text-info tracking-wider">DOC</span>
+                          <div className="w-6 h-1 bg-info-subtle rounded-full mt-1.5" />
                           <div className="w-4 h-1 bg-muted rounded-full mt-1" />
                         </div>
                       </div>
                       <div className="text-sm font-semibold text-foreground">Upload files</div>
                       <div className="text-xs text-muted-foreground mt-1">
-                        <span className="text-orange-500 font-medium">Click to browse</span> or drag and drop
+                        <span className="text-brand-strong font-medium">Click to browse</span> or drag and drop
                       </div>
-                      <div className="text-[11px] text-muted-foreground/70 mt-2">
+                      <div className="text-overline text-muted-foreground/70 mt-2">
                         PDF, Word (.docx), PowerPoint (.pptx), Markdown, CSV, TXT
                       </div>
                     </div>
@@ -557,9 +557,9 @@ export function KnowledgeAddSourceDialog({
                           </span>
                           <Button
                             type="button"
-                            variant="ghost"
+                            variant="subtle"
                             size="sm"
-                            className="h-6 text-xs text-muted-foreground hover:text-foreground"
+                            className="h-6"
                             onClick={() => setQueue([])}
                             disabled={isUploading}
                           >
@@ -581,10 +581,10 @@ export function KnowledgeAddSourceDialog({
                               </div>
                               <div className="flex items-center gap-2 shrink-0">
                                 {item.status === "uploading" && (
-                                  <Spinner className="w-3.5 h-3.5 text-orange-500" />
+                                  <Spinner className="w-3.5 h-3.5 text-brand-strong" />
                                 )}
                                 {item.status === "done" && (
-                                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                  <CheckCircle2 className="w-4 h-4 text-success" />
                                 )}
                                 {item.status === "error" && (
                                   <span className="text-destructive font-medium truncate max-w-[120px]">
@@ -605,11 +605,11 @@ export function KnowledgeAddSourceDialog({
                           ))}
                         </div>
                         <div className="pt-2 flex justify-end">
-                          <Button
+                          <Button variant="brand"
                             type="button"
                             onClick={startUpload}
                             disabled={isUploading || queue.every((i) => i.status === "done")}
-                            className="bg-orange-500 hover:bg-orange-600 text-white gap-2 text-xs"
+                            
                           >
                             {isUploading ? (
                               <>
@@ -635,7 +635,7 @@ export function KnowledgeAddSourceDialog({
                       <div className="flex items-center justify-between mb-3">
                         <div>
                           <div className="text-xs font-semibold text-foreground">YouTube Channels</div>
-                          <div className="text-[11px] text-muted-foreground">
+                          <div className="text-overline text-muted-foreground">
                             Connect your channel via Google OAuth to import videos and transcripts
                           </div>
                         </div>
@@ -645,9 +645,8 @@ export function KnowledgeAddSourceDialog({
                           size="sm"
                           onClick={startYouTubeOAuth}
                           disabled={!connectors?.youtube.configured}
-                          className="text-xs gap-1.5 border-border"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
+                          >
+                          <Plus data-icon="inline-start" className="size-3.5" />
                           Connect Channel
                         </Button>
                       </div>
@@ -656,7 +655,7 @@ export function KnowledgeAddSourceDialog({
                         <div className="p-4 rounded-xl border border-dashed border-border/80 bg-muted/10 text-center">
                           <YouTubeIcon className="w-7 h-7 text-muted-foreground/60 mx-auto mb-1.5" />
                           <div className="text-xs font-medium text-foreground">No YouTube Channel Connected</div>
-                          <div className="text-[11px] text-muted-foreground mt-0.5">
+                          <div className="text-overline text-muted-foreground mt-0.5">
                             Connect your owned channel to import videos, extract questions, and process transcripts.
                           </div>
                         </div>
@@ -667,7 +666,7 @@ export function KnowledgeAddSourceDialog({
                               key={c.id}
                               className={`flex items-center justify-between p-3 rounded-xl border transition-colors ${
                                 selectedYoutubeConnection?.id === c.id
-                                  ? "border-orange-500/70 bg-orange-500/[0.02]"
+                                  ? "border-brand/70 bg-brand/2"
                                   : "border-border/70 bg-card"
                               }`}
                             >
@@ -675,23 +674,23 @@ export function KnowledgeAddSourceDialog({
                                 className="flex items-center gap-2.5 cursor-pointer flex-1"
                                 onClick={() => setYoutubeConnectionId(c.id)}
                               >
-                                <div className="w-8 h-8 rounded-lg bg-red-500/10 text-red-600 flex items-center justify-center shrink-0">
+                                <div className="w-8 h-8 rounded-lg bg-danger-subtle text-danger flex items-center justify-center shrink-0">
                                   <YouTubeIcon className="w-4 h-4" />
                                 </div>
                                 <div>
                                   <div className="text-xs font-medium text-foreground">{c.channelTitle}</div>
-                                  <div className="text-[10px] text-muted-foreground">ID: {c.channelId}</div>
+                                  <div className="text-overline text-muted-foreground">ID: {c.channelId}</div>
                                 </div>
                               </div>
                               <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="text-[10px] text-emerald-600 border-emerald-500/30">
+                                <Badge variant="success" size="sm">
                                   Active
                                 </Badge>
                                 <Button
                                   type="button"
-                                  variant="ghost"
+                                  variant="ghost-destructive"
                                   size="icon-xs"
-                                  className="text-muted-foreground hover:text-destructive"
+                                  
                                   onClick={() =>
                                     setDisconnectItem({
                                       id: c.id,
@@ -722,14 +721,14 @@ export function KnowledgeAddSourceDialog({
                               setYoutubeUrl(e.target.value);
                               setYoutubePreview(null);
                             }}
-                            className="text-xs h-10 border-border/80"
+                            className="text-xs h-10"
                           />
                           <Button
                             type="button"
                             variant="outline"
                             onClick={handleYouTubePreview}
                             disabled={youtubePreviewing || !youtubeUrl.trim() || !selectedYoutubeConnection}
-                            className="text-xs px-4 border-border shrink-0"
+                            className="shrink-0"
                           >
                             {youtubePreviewing ? <Spinner className="w-3.5 h-3.5" /> : "Preview"}
                           </Button>
@@ -743,23 +742,23 @@ export function KnowledgeAddSourceDialog({
                                 <div className="text-xs font-semibold text-foreground line-clamp-2">
                                   {youtubePreview.title}
                                 </div>
-                                <div className="text-[11px] text-muted-foreground mt-0.5">
+                                <div className="text-overline text-muted-foreground mt-0.5">
                                   Channel: {youtubePreview.channelTitle} • Language:{" "}
                                   {youtubePreview.language.toUpperCase()}
                                 </div>
                               </div>
                               {youtubePreview.alreadyIndexed && (
-                                <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-500/40 shrink-0">
+                                <Badge variant="warning" size="sm" className="shrink-0">
                                   Already Indexed
                                 </Badge>
                               )}
                             </div>
                             <div className="flex justify-end pt-1">
-                              <Button
+                              <Button variant="brand"
                                 type="button"
                                 onClick={handleYouTubeImport}
                                 disabled={youtubeImporting}
-                                className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-4"
+                                
                               >
                                 {youtubeImporting ? (
                                   <>
@@ -815,7 +814,7 @@ export function KnowledgeAddSourceDialog({
                               <div className="text-xs font-semibold text-foreground">
                                 Workspaces ({notionConnections.length})
                               </div>
-                              <div className="text-[11px] text-muted-foreground">
+                              <div className="text-overline text-muted-foreground">
                                 Select an authorized Notion workspace
                               </div>
                             </div>
@@ -825,9 +824,8 @@ export function KnowledgeAddSourceDialog({
                               size="sm"
                               onClick={startNotionOAuth}
                               disabled={!connectors?.notion.configured}
-                              className="text-xs gap-1.5 border-border"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
+                              >
+                              <Plus data-icon="inline-start" className="size-3.5" />
                               Connect Notion
                             </Button>
                           </div>
@@ -836,7 +834,7 @@ export function KnowledgeAddSourceDialog({
                             <div className="p-4 rounded-xl border border-dashed border-border/80 bg-muted/10 text-center">
                               <BookOpen className="w-7 h-7 text-muted-foreground/60 mx-auto mb-1.5" />
                               <div className="text-xs font-medium text-foreground">No Workspace Connected</div>
-                              <div className="text-[11px] text-muted-foreground mt-0.5">
+                              <div className="text-overline text-muted-foreground mt-0.5">
                                 Connect your Notion workspace to import private databases and pages.
                               </div>
                             </div>
@@ -847,7 +845,7 @@ export function KnowledgeAddSourceDialog({
                                   key={c.id}
                                   className={`flex items-center justify-between p-3 rounded-xl border transition-colors ${
                                     selectedNotionConnection?.id === c.id
-                                      ? "border-orange-500/70 bg-orange-500/[0.02]"
+                                      ? "border-brand/70 bg-brand/2"
                                       : "border-border/70 bg-card"
                                   }`}
                                 >
@@ -862,14 +860,14 @@ export function KnowledgeAddSourceDialog({
                                       <div className="text-xs font-medium text-foreground">
                                         {c.workspaceName || "Notion Workspace"}
                                       </div>
-                                      <div className="text-[10px] text-muted-foreground">ID: {c.workspaceId}</div>
+                                      <div className="text-overline text-muted-foreground">ID: {c.workspaceId}</div>
                                     </div>
                                   </div>
                                   <Button
                                     type="button"
-                                    variant="ghost"
+                                    variant="ghost-destructive"
                                     size="icon-xs"
-                                    className="text-muted-foreground hover:text-destructive"
+                                    
                                     onClick={() =>
                                       setDisconnectItem({
                                         id: c.id,
@@ -896,19 +894,19 @@ export function KnowledgeAddSourceDialog({
                                 placeholder="https://notion.so/my-org/Page-Title-1234567890abcdef"
                                 value={notionUrl}
                                 onChange={(e) => setNotionUrl(e.target.value)}
-                                className="text-xs h-10 border-border/80"
+                                className="text-xs h-10"
                               />
-                              <p className="text-[11px] text-muted-foreground">
+                              <p className="text-overline text-muted-foreground">
                                 Subpages linked underneath this root will be recursively fanned out and indexed.
                               </p>
                             </div>
 
                             <div className="pt-2 flex justify-end">
-                              <Button
+                              <Button variant="brand"
                                 type="button"
                                 onClick={handleNotionImport}
                                 disabled={notionImporting || !notionUrl.trim()}
-                                className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-5"
+                                
                               >
                                 {notionImporting ? (
                                   <>
@@ -932,19 +930,19 @@ export function KnowledgeAddSourceDialog({
                             placeholder="https://myorg.notion.site/Public-Page-1234567890abcdef"
                             value={notionUrl}
                             onChange={(e) => setNotionUrl(e.target.value)}
-                            className="text-xs h-10 border-border/80"
+                            className="text-xs h-10"
                           />
-                          <p className="text-[11px] text-muted-foreground">
+                          <p className="text-overline text-muted-foreground">
                             Works on any page where &quot;Share to web&quot; is turned on. No OAuth connection required.
                           </p>
                         </div>
 
                         <div className="pt-2 flex justify-end">
-                          <Button
+                          <Button variant="brand"
                             type="button"
                             onClick={handleNotionImport}
                             disabled={notionImporting || !notionUrl.trim()}
-                            className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-5"
+                            
                           >
                             {notionImporting ? (
                               <>
@@ -970,8 +968,8 @@ export function KnowledgeAddSourceDialog({
         <Dialog open={Boolean(disconnectItem)} onOpenChange={(open) => !open && setDisconnectItem(null)}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-destructive">
-                <AlertCircle className="w-5 h-5" />
+              <DialogTitle className="flex items-center gap-2">
+                <AlertCircle className="size-5 text-destructive" aria-hidden />
                 Disconnect {disconnectItem.title}?
               </DialogTitle>
               <DialogDescription className="text-xs">
@@ -986,7 +984,7 @@ export function KnowledgeAddSourceDialog({
                 variant="outline"
                 onClick={() => setDisconnectItem(null)}
                 disabled={disconnecting}
-                className="text-xs"
+                
               >
                 Cancel
               </Button>
@@ -995,7 +993,7 @@ export function KnowledgeAddSourceDialog({
                 variant="destructive"
                 onClick={confirmDisconnect}
                 disabled={disconnecting}
-                className="text-xs"
+                
               >
                 {disconnecting ? (
                   <>

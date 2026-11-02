@@ -2,11 +2,9 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import type { CSSProperties } from "react";
 import {
-  ArrowLeft,
   ArrowUpRight,
-  Check,
-  ChevronDown,
   Play,
   Settings2,
   Share2,
@@ -23,34 +21,28 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { DATE_RANGES, FilterDropdown, inDateRange } from "@/components/filter-dropdown";
+import { PageHeader } from "@/components/page-header";
 import { SessionTime } from "@/components/sessions/session-time";
 import { ShareTwinDialog } from "@/components/twin/share-twin-dialog";
 import { TwinSessionItem } from "@/components/twin/twin-session-item";
+import { TwinLearnerActivity, type TwinLearner } from "@/components/twin/twin-learner-activity";
 import { usePendingReports } from "@/components/twin/use-report-polling";
 import type { TwinOutputs } from "@/lib/twin/trpc";
 import { cn } from "@/lib/utils";
 import { PageContainer } from "@/components/page-container";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type TwinDetail = TwinOutputs["agents"]["get"];
 
-const DAY = 86_400_000;
 /** Twin agents listed on the main twin's card before "+N more". */
 const SKILLS_SHOWN = 5;
-/** Whether an ISO time falls in the picked range ("30", "7", "today" or "all"). */
-function inRange(iso: string, range: string, now = Date.now()) {
-  if (range === "all") return true;
-  const at = new Date(iso).getTime();
-  if (range === "today") return new Date(at).toDateString() === new Date(now).toDateString();
-  return at >= now - Number(range) * DAY;
-}
 const minutesLabel = (seconds: number | null) => (seconds === null ? null : `${Math.max(1, Math.round(seconds / 60))} min`);
 
-const DATE_OPTIONS = [
-  { value: "30", label: "Last 30 days" },
-  { value: "7", label: "Last 7 days" },
-  { value: "today", label: "Today" },
-  { value: "all", label: "All time" },
-];
+/** The overline label (design-system type role): small caps over a value. */
+const OVERLINE = "text-overline font-medium tracking-overline uppercase";
 
 function MoreDotsIcon() {
   return (
@@ -70,7 +62,7 @@ function WeekBarsChart({ days }: { days: TwinDetail["report"]["week"] }) {
 
   return (
     <div className="w-full">
-      <p className="m-0 mb-3 text-[13px] font-medium text-muted-foreground">Conversations, last 7 days</p>
+      <p className="m-0 mb-3 text-body-s font-medium text-muted-foreground">Conversations, last 7 days</p>
       <svg viewBox="0 0 720 96" className="w-full h-auto max-h-[96px] overflow-visible" role="img" aria-label="Sessions this week">
         {bars.map((item, i) => {
           const width = 720;
@@ -88,13 +80,13 @@ function WeekBarsChart({ days }: { days: TwinDetail["report"]["week"] }) {
                 width={barW.toFixed(1)}
                 height={item.h}
                 rx="6"
-                className="fill-[#8fb6f5] dark:fill-[#8fb6f5]"
+                className="fill-info-border"
               />
               <text
                 x={(x + barW / 2).toFixed(1)}
                 y="86"
                 textAnchor="middle"
-                className="fill-muted-foreground text-[11px] font-medium"
+                className="fill-muted-foreground text-overline font-medium"
               >
                 {item.label}
               </text>
@@ -116,7 +108,7 @@ function FeelsLikeMeChart({ weeks }: { weeks: TwinDetail["report"]["feelsLikeMe"
   if (!points.length) {
     return (
       <div className="w-full mt-5">
-        <p className="m-0 mb-3 text-[13px] font-medium text-muted-foreground">Feels like me, by week</p>
+        <p className="m-0 mb-3 text-body-s font-medium text-muted-foreground">Feels like me, by week</p>
         <p className="m-0 text-sm text-muted-foreground">No calibration ratings in the last 6 weeks.</p>
       </div>
     );
@@ -124,12 +116,12 @@ function FeelsLikeMeChart({ weeks }: { weeks: TwinDetail["report"]["feelsLikeMe"
 
   return (
     <div className="w-full mt-5">
-      <p className="m-0 mb-3 text-[13px] font-medium text-muted-foreground">Feels like me, by week</p>
+      <p className="m-0 mb-3 text-body-s font-medium text-muted-foreground">Feels like me, by week</p>
       <svg viewBox="0 0 720 88" className="w-full h-auto max-h-[88px] overflow-visible" role="img" aria-label="Feels like me rate by week">
         <polyline
           points={polylinePoints}
           fill="none"
-          stroke="#34d399"
+          className="stroke-success-border"
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -137,12 +129,12 @@ function FeelsLikeMeChart({ weeks }: { weeks: TwinDetail["report"]["feelsLikeMe"
         {points.map((p) => (
           <g key={p.week}>
             <title>{`Week ${p.week}: ${p.pct}% feels like me`}</title>
-            <circle cx={p.x} cy={p.y} r="4" fill="#34d399" />
+            <circle cx={p.x} cy={p.y} r="4" className="fill-success-border" />
             <text
               x={p.x}
               y="78"
               textAnchor="middle"
-              className="fill-muted-foreground text-[11px] font-medium"
+              className="fill-muted-foreground text-overline font-medium"
             >
               {p.week}
             </text>
@@ -156,134 +148,82 @@ function FeelsLikeMeChart({ weeks }: { weeks: TwinDetail["report"]["feelsLikeMe"
 export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
   const id = twin.slug;
   const [dateFilter, setDateFilter] = useState("30");
-  const [tab, setTab] = useState<"calibration" | "sessions">("calibration");
   const [shareOpen, setShareOpen] = useState(false);
+  const [tab, setTab] = useState("sessions");
+  // A learner picked on the Learners tab: the Sessions tab then shows only theirs.
+  const [learner, setLearner] = useState<TwinLearner | null>(null);
 
-  const dateLabel = DATE_OPTIONS.find((o) => o.value === dateFilter)?.label || "Last 30 days";
-  const calibrations = twin.calibrations.filter((item) => inRange(item.at, dateFilter));
-  const sessions = twin.sessions.filter((item) => inRange(item.at, dateFilter));
+  const calibrations = twin.calibrations.filter((item) => inDateRange(item.at, dateFilter));
+  const sessions = twin.sessions.filter(
+    (item) => inDateRange(item.at, dateFilter) && (!learner || item.learnerEmail.toLowerCase() === learner.email),
+  );
   const { minutes, used } = twin.credit;
   const pendingReports = usePendingReports(id, twin.report.pendingReports);
 
   return (
     <PageContainer>
-      {/* Header Bar matching Reference 11.47.30 */}
-      <header className="flex min-h-10 items-center justify-between gap-4">
-        <Link
-          href="/twin"
-          className="inline-flex items-center gap-2 text-sm text-(--foreground) hover:text-muted-foreground transition-colors"
-        >
-          <ArrowLeft className="size-4" />
-          <span>Back</span>
-        </Link>
-
-        <div className="flex items-center gap-3">
-          {/* Date range dropdown pill */}
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <button
-                  type="button"
-                  className="inline-flex h-8 items-center justify-between gap-2.5 rounded-full border border-(--border) bg-transparent px-4 text-[13px] font-normal text-(--foreground) transition-colors hover:bg-(--tone-control) outline-none focus-visible:ring-2 focus-visible:ring-(--brand)"
-                >
-                  <span>{dateLabel}</span>
-                  <ChevronDown className="size-3.5 text-muted-foreground" />
-                </button>
-              }
-            />
-            <DropdownMenuContent align="end" className="min-w-44 rounded-[12px] p-1 bg-card border border-(--card-border) shadow-lg">
-              <DropdownMenuGroup>
-                {DATE_OPTIONS.map((opt) => {
-                  const isSelected = opt.value === dateFilter;
-                  return (
-                    <DropdownMenuItem
-                      key={opt.value}
-                      onClick={() => setDateFilter(opt.value)}
-                      className="flex items-center justify-between rounded-[8px] px-3 py-2 text-[13px] text-(--foreground) hover:bg-(--tone-control) cursor-pointer"
-                    >
-                      <span>{opt.label}</span>
-                      {isSelected && <Check className="size-3.5 text-(--brand)" />}
-                    </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Configure button: same shape as Calibrate, secondary colours */}
-          <Link
-            href={`/twin/${id}/edit`}
-            className="inline-flex h-8 items-center gap-2 rounded-full bg-secondary px-4 text-[13px] font-medium text-secondary-foreground shadow-none transition-opacity hover:opacity-90"
-          >
-            <Settings2 className="size-3.5" />
-            <span>Configure</span>
-          </Link>
-
-          {/* Calibrate button */}
-          <Link
-            href={`/twin/${id}/calibration`}
-            className="inline-flex h-8 items-center gap-2 rounded-full bg-(--brand) px-4 text-[13px] font-medium text-white shadow-none transition-colors hover:bg-[#e04d00] dark:hover:bg-[#ff7e33]"
-          >
-            <Sliders className="size-3.5" />
-            <span>Calibrate</span>
-          </Link>
-
-          {/* 3-dots actions menu */}
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <button
-                  type="button"
-                  aria-label="More actions"
-                  className="grid size-8 place-items-center rounded-full border border-(--border) bg-transparent text-muted-foreground hover:bg-(--tone-control) hover:text-(--foreground) transition-colors outline-none focus-visible:ring-2 focus-visible:ring-(--brand)"
-                >
-                  <MoreDotsIcon />
-                </button>
-              }
-            />
-            <DropdownMenuContent align="end" className="w-44 rounded-[12px] p-1 bg-card border border-(--card-border) shadow-lg">
-              <DropdownMenuGroup>
-                <DropdownMenuItem render={<Link href={`/twin/${id}/edit`} />}>
-                  <Settings2 className="size-4" />
-                  <span>Configure</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem render={<Link href={`/talk?agent=${encodeURIComponent(id)}`} />}>
-                  <Play className="size-4" />
-                  <span>Try as learner</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem render={<Link href={`/twin/${id}/assign`} />}>
-                  <UserPlus className="size-4" />
-                  <span>Assign</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setShareOpen(true)}>
-                  <Share2 className="size-4" />
-                  <span>Share</span>
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuGroup>
-                <DropdownMenuItem className="text-destructive focus:text-destructive">
-                  <Trash2 className="size-4" />
-                  <span>Remove</span>
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </header>
+      <PageHeader
+        back={{ href: "/twin" }}
+        actions={
+          <>
+            <FilterDropdown value={dateFilter} onChange={setDateFilter} options={DATE_RANGES} align="end" />
+            <Button variant="secondary" nativeButton={false} render={<Link href={`/twin/${id}/edit`} />}>
+              <Settings2 data-icon="inline-start" />
+              Configure
+            </Button>
+            <Button variant="brand" nativeButton={false} render={<Link href={`/twin/${id}/calibration`} />}>
+              <Sliders data-icon="inline-start" />
+              Calibrate
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<Button variant="outline" size="icon" aria-label="More actions" />}>
+                <MoreDotsIcon />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuGroup>
+                  <DropdownMenuItem render={<Link href={`/twin/${id}/edit`} />}>
+                    <Settings2 className="size-4" />
+                    <span>Configure</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem render={<Link href={`/talk?agent=${encodeURIComponent(id)}`} />}>
+                    <Play className="size-4" />
+                    <span>Try as learner</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem render={<Link href={`/twin/${id}/assign`} />}>
+                    <UserPlus className="size-4" />
+                    <span>Assign</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setShareOpen(true)}>
+                    <Share2 className="size-4" />
+                    <span>Share</span>
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuItem variant="destructive">
+                    <Trash2 className="size-4" />
+                    <span>Remove</span>
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        }
+      />
       <ShareTwinDialog open={shareOpen} onOpenChange={setShareOpen} slug={id} name={twin.name} allSkills={twin.allSkills} />
 
       {/* 2-Column Layout matching Reference Grid */}
       <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
         {/* Card 1: Left column - Agent Description & Credit */}
-        <article className="flex flex-col rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
-          <h1 className="m-0 line-clamp-2 text-[18px] font-semibold leading-7 tracking-[-0.015em]" title={twin.name}>
+        <Card size="lg">
+          <CardContent className="flex flex-1 flex-col">
+          <h1 className="m-0 line-clamp-2 text-section-title leading-7 font-semibold tracking-title" title={twin.name}>
             {twin.name}
           </h1>
 
           <div className="mt-6">
-            <p className="text-[11px] font-medium tracking-[0.08em] uppercase text-muted-foreground">Who asks</p>
-            <p className="mt-1 line-clamp-1 text-[20px] font-semibold leading-7" title={twin.whoAsks}>
+            <p className={cn(OVERLINE, "text-muted-foreground")}>Who asks</p>
+            <p className="mt-1 line-clamp-1 text-title-m leading-7 font-semibold" title={twin.whoAsks}>
               {twin.whoAsks}
             </p>
           </div>
@@ -291,12 +231,12 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
           {twin.allSkills ? (
             // The main twin covers every skill twin: list them instead of a description.
             <div className="mt-6">
-              <p className="text-[11px] font-medium tracking-[0.08em] uppercase text-muted-foreground">Twin agents</p>
+              <p className={cn(OVERLINE, "text-muted-foreground")}>Twin agents</p>
               {twin.skills.length ? (
                 <ul className="m-0 mt-2 flex list-none flex-col gap-2 p-0">
                   {twin.skills.slice(0, SKILLS_SHOWN).map((skill) => (
                     <li key={skill.slug}>
-                      <Link href={`/twin/${encodeURIComponent(skill.slug)}`} className="flex items-center gap-2 text-[15px] leading-6 text-(--text-secondary) hover:text-foreground">
+                      <Link href={`/twin/${encodeURIComponent(skill.slug)}`} className="flex items-center gap-2 text-body leading-6 text-(--text-secondary) hover:text-foreground">
                         <Sparkles className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                         <span className="truncate">{skill.name}</span>
                       </Link>
@@ -311,14 +251,14 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
                   ) : null}
                 </ul>
               ) : (
-                <p className="mt-1 text-[15px] leading-6 text-(--text-secondary)">No twin agents yet.</p>
+                <p className="mt-1 text-body leading-6 text-(--text-secondary)">No twin agents yet.</p>
               )}
             </div>
           ) : (
             <div className="mt-6">
-              <p className="text-[11px] font-medium tracking-[0.08em] uppercase text-muted-foreground">What it does</p>
+              <p className={cn(OVERLINE, "text-muted-foreground")}>What it does</p>
               <p
-                className="mt-1 line-clamp-4 text-[15px] leading-6 text-(--text-secondary)"
+                className="mt-1 line-clamp-4 text-body leading-6 text-(--text-secondary)"
                 title={twin.description ?? undefined}
               >
                 {twin.description ?? "No description yet."}
@@ -328,15 +268,18 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
 
           {/* Usage Credit Box pinned to bottom */}
           <div className="mt-auto pt-6">
-            <div className="rounded-[12px] bg-(--sidebar) p-5 flex flex-col gap-2">
-              <p className="text-[11px] font-medium tracking-[0.08em] uppercase text-muted-foreground">Usage credit</p>
+            <div className="flex flex-col gap-2 rounded-tt-md bg-sidebar p-5">
+              <p className={cn(OVERLINE, "text-muted-foreground")}>Usage credit</p>
               {minutes ? (
                 <>
-                  <p className="m-0 text-[20px] font-semibold leading-6 tabular-nums">
+                  <p className="m-0 text-title-m leading-6 font-semibold tabular-nums">
                     {used} <span className="text-sm font-normal text-muted-foreground">of {minutes} min used</span>
                   </p>
                   <span className="mt-1 block h-1.5 w-full overflow-hidden rounded-full bg-card">
-                    <span className="block h-full rounded-full bg-(--foreground)" style={{ width: `${Math.min(100, Math.round((used / minutes) * 100))}%` }} />
+                    <span
+                      className="block h-full w-(--used) rounded-full bg-foreground"
+                      style={{ "--used": `${Math.min(100, Math.round((used / minutes) * 100))}%` } as CSSProperties}
+                    />
                   </span>
                   <p className="m-0 text-xs text-muted-foreground tabular-nums">{Math.max(0, minutes - used)} minutes left</p>
                 </>
@@ -345,17 +288,19 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
               )}
             </div>
           </div>
-        </article>
+          </CardContent>
+        </Card>
 
         {/* Card 2: Right column - Report with 2x2 Stats & 2 Charts */}
-        <article className="flex flex-col rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
-          <h2 className="m-0 text-[17px] font-semibold tracking-[-0.015em]">Report</h2>
+        <Card size="lg">
+          <CardContent className="flex flex-col">
+          <h2 className="m-0 text-title-s font-semibold tracking-title">Report</h2>
 
           {/* 2x2 stats */}
           <div className="mt-4 grid grid-cols-2 gap-3">
-            <div className="rounded-[12px] bg-emerald-500/10 dark:bg-emerald-500/15 p-4 text-emerald-700 dark:text-emerald-400">
+            <div className="rounded-tt-md bg-success-subtle p-4 text-success">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-[11px] font-medium tracking-[0.08em] uppercase">Sessions</p>
+                <p className={OVERLINE}>Sessions</p>
                 <Link
                   href="/twin/sessions"
                   className="inline-flex items-center gap-1 text-xs font-semibold hover:underline"
@@ -366,21 +311,21 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
               <p className="mt-2 text-2xl font-semibold tabular-nums">{twin.report.sessions}</p>
             </div>
 
-            <div className="rounded-[12px] bg-amber-500/10 dark:bg-amber-500/15 p-4 text-amber-700 dark:text-amber-300">
-              <p className="text-[11px] font-medium tracking-[0.08em] uppercase">Help score</p>
+            <div className="rounded-tt-md bg-caution-subtle p-4 text-caution">
+              <p className={OVERLINE}>Help score</p>
               <p className="mt-2 text-2xl font-semibold tabular-nums">
                 {twin.report.helpScore ?? "—"} {twin.report.helpScore !== null ? <span className="text-sm font-normal opacity-70">/ 5</span> : null}
               </p>
             </div>
 
-            <div className="rounded-[12px] bg-sky-500/10 dark:bg-sky-500/15 p-4 text-sky-700 dark:text-sky-300">
-              <p className="text-[11px] font-medium tracking-[0.08em] uppercase">Avg response time</p>
+            <div className="rounded-tt-md bg-info-subtle p-4 text-info">
+              <p className={OVERLINE}>Avg response time</p>
               {/* Not tracked per twin yet. */}
               <p className="mt-2 text-2xl font-semibold tabular-nums">—</p>
             </div>
 
-            <div className="rounded-[12px] bg-(--sidebar) p-4 text-(--foreground)">
-              <p className="text-[11px] font-medium tracking-[0.08em] uppercase text-muted-foreground">
+            <div className="rounded-tt-md bg-sidebar p-4 text-foreground">
+              <p className={cn(OVERLINE, "text-muted-foreground")}>
                 Avg session length
               </p>
               <p className="mt-2 text-2xl font-semibold tabular-nums">
@@ -394,11 +339,13 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
             <WeekBarsChart days={twin.report.week} />
             <FeelsLikeMeChart weeks={twin.report.feelsLikeMe} />
           </div>
-        </article>
+          </CardContent>
+        </Card>
 
         {/* Card 3: Full width - Most asked */}
-        <article className="col-span-1 md:col-span-2 flex flex-col rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
-          <h2 className="m-0 text-[17px] font-semibold tracking-[-0.015em]">Most asked</h2>
+        <Card size="lg" className="md:col-span-2">
+          <CardContent>
+          <h2 className="m-0 text-title-s font-semibold tracking-title">Most asked</h2>
           {twin.report.mostAsked.length ? (
             <ul className="mt-4 flex flex-col gap-3 p-0 list-none">
               {twin.report.mostAsked.map((item) => (
@@ -415,47 +362,60 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
               {pendingReports > 0 ? "Preparing report…" : "No questions yet."}
             </p>
           )}
-        </article>
+          </CardContent>
+        </Card>
 
         {/* Card 4: Full width - Reports raised */}
-        <article className="col-span-1 md:col-span-2 flex flex-col rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
-          <h2 className="m-0 text-[17px] font-semibold tracking-[-0.015em]">Reports raised</h2>
-          <p className="mt-4 text-sm text-muted-foreground">Not tracked yet.</p>
-        </article>
+        <Card size="lg" className="md:col-span-2">
+          <CardContent>
+            <h2 className="m-0 text-title-s font-semibold tracking-title">Reports raised</h2>
+            <p className="mt-4 text-sm text-muted-foreground">Not tracked yet.</p>
+          </CardContent>
+        </Card>
 
-        {/* Card 5: Full width - Calibration & Sessions with Segmented Tabs */}
-        <article className="col-span-1 md:col-span-2 rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
-          {/* Segmented Control Header matching Reference 11.48.06 */}
-          <div className="inline-flex items-center p-1 rounded-full bg-(--sidebar) mb-4">
-            <button
-              type="button"
-              onClick={() => setTab("calibration")}
-              className={cn(
-                "rounded-full px-4 py-1.5 text-[14px] leading-5 font-medium transition-all outline-none",
-                tab === "calibration"
-                  ? "bg-card text-(--foreground) shadow-[0_1px_2px_rgb(30_28_25/0.06)]"
-                  : "text-muted-foreground hover:text-(--foreground)"
-              )}
-            >
-              Calibration
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab("sessions")}
-              className={cn(
-                "rounded-full px-4 py-1.5 text-[14px] leading-5 font-medium transition-all outline-none",
-                tab === "sessions"
-                  ? "bg-card text-(--foreground) shadow-[0_1px_2px_rgb(30_28_25/0.06)]"
-                  : "text-muted-foreground hover:text-(--foreground)"
-              )}
-            >
-              Sessions
-            </button>
-          </div>
-
-          {/* Content List */}
-          {tab === "calibration" ? (
-            <div className="flex flex-col">
+        {/* Card 5: Full width - this twin's sessions first (where insights will grow), then its calibrations */}
+        <Card size="lg" className="md:col-span-2">
+          <CardContent>
+          <Tabs value={tab} onValueChange={setTab}>
+            <TabsList className="mb-4">
+              <TabsTrigger value="sessions">Sessions</TabsTrigger>
+              <TabsTrigger value="learners">Learners</TabsTrigger>
+              <TabsTrigger value="calibration">Calibration</TabsTrigger>
+            </TabsList>
+            <TabsContent value="sessions">
+              {learner ? (
+                <p className="mb-2 flex items-center gap-2 text-body-s text-muted-foreground">
+                  Showing {learner.name}&apos;s sessions
+                  <Button variant="ghost" size="xs" onClick={() => setLearner(null)}>
+                    Show all
+                  </Button>
+                </p>
+              ) : null}
+              <ul className="m-0 flex list-none flex-col p-0">
+              {sessions.length === 0 ? (
+                <li className="py-3.5 text-sm text-muted-foreground">
+                  {learner ? `No sessions from ${learner.name} in this period.` : "No learner sessions in this period."}
+                </li>
+              ) : null}
+              {sessions.map((sess, idx) => (
+                <TwinSessionItem
+                  key={sess.id}
+                  session={sess}
+                  divider={idx > 0}
+                />
+              ))}
+              </ul>
+            </TabsContent>
+            <TabsContent value="learners">
+              <TwinLearnerActivity
+                learners={twin.learners}
+                onSelect={(picked) => {
+                  setLearner(picked);
+                  setTab("sessions");
+                }}
+              />
+            </TabsContent>
+            <TabsContent value="calibration" className="flex flex-col">
               {calibrations.length === 0 ? (
                 <p className="py-3.5 text-sm text-muted-foreground">No calibrations in this period.</p>
               ) : null}
@@ -464,13 +424,13 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
                   key={item.id}
                   href={`/twin/${id}/calibration/${item.id}`}
                   className={cn(
-                    "flex items-center justify-between py-3.5 transition-colors hover:text-(--brand)",
-                    idx > 0 && "border-t border-(--border)"
+                    "flex items-center justify-between py-3.5 transition-colors hover:text-brand",
+                    idx > 0 && "border-t border-border"
                   )}
                 >
                   <div className="flex flex-col gap-0.5 min-w-0">
-                    <span className="text-[14px] font-medium text-(--foreground)">{item.title}</span>
-                    <span className="text-[13px] text-muted-foreground">
+                    <span className="text-body font-medium text-foreground">{item.title}</span>
+                    <span className="text-body-s text-muted-foreground">
                       <SessionTime iso={item.at} />
                       {minutesLabel(item.seconds) ? ` · ${minutesLabel(item.seconds)}` : ""} · {item.turns} turns
                     </span>
@@ -478,23 +438,10 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
                   <ArrowUpRight className="size-4 shrink-0 text-muted-foreground" />
                 </Link>
               ))}
-            </div>
-          ) : (
-            <ul className="flex flex-col p-0 m-0 list-none">
-              {sessions.length === 0 ? (
-                <li className="py-3.5 text-sm text-muted-foreground">No learner sessions in this period.</li>
-              ) : null}
-              {sessions.map((sess, idx) => (
-                <TwinSessionItem
-                  key={sess.id}
-                  session={sess}
-                  index={idx}
-                  divider={idx > 0}
-                />
-              ))}
-            </ul>
-          )}
-        </article>
+            </TabsContent>
+          </Tabs>
+          </CardContent>
+        </Card>
       </div>
     </PageContainer>
   );

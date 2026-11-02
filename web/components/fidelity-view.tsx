@@ -52,8 +52,8 @@ function Comparison({ label, baseline, simulated, format }: {
     <div className="rounded-lg border bg-background p-3">
       <p className="text-xs text-muted-foreground">{label}</p>
       <div className="mt-2 flex items-end justify-between gap-4">
-        <div><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Baseline</p><p className="text-lg font-semibold tabular-nums">{format(baseline)}</p></div>
-        <div className="text-right"><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Simulation</p><p className="text-lg font-semibold tabular-nums">{format(simulated)}</p></div>
+        <div><p className="text-overline uppercase tracking-wide text-muted-foreground">Baseline</p><p className="text-lg font-semibold tabular-nums">{format(baseline)}</p></div>
+        <div className="text-right"><p className="text-overline uppercase tracking-wide text-muted-foreground">Simulation</p><p className="text-lg font-semibold tabular-nums">{format(simulated)}</p></div>
       </div>
     </div>
   );
@@ -230,7 +230,7 @@ export function FidelityView({
                     <p className="mt-3 text-xs text-muted-foreground">Preferred move</p>
                     <p className="mt-1 text-sm font-medium">{readableLabel(row.move)}</p>
                     {row.sample && <p className="mt-3 text-xs leading-5 text-muted-foreground">“{row.sample}”</p>}
-                    <p className="mt-2 text-[10px] text-muted-foreground">{row.exampleCount} source {row.exampleCount === 1 ? "example" : "examples"}</p>
+                    <p className="mt-2 text-overline text-muted-foreground">{row.exampleCount} source {row.exampleCount === 1 ? "example" : "examples"}</p>
                   </div>)}
                 </div> : <p className="text-sm text-muted-foreground">Decision policy data is not available for this persona.</p>}
                 {result.decisionCount ? (
@@ -280,7 +280,7 @@ export function FidelityView({
                     </div>
                     {chunk.query && <p className="mt-3 text-xs text-muted-foreground">Query: {chunk.query}</p>}
                     <p className="mt-2 line-clamp-4 text-sm leading-6">{chunk.text}</p>
-                    <p className="mt-2 font-mono text-[10px] text-muted-foreground">{chunk.chunkId}</p>
+                    <p className="mt-2 font-mono text-overline text-muted-foreground">{chunk.chunkId}</p>
                   </div>)}
                 </div>}
                 {!!retrievals.length && !retrievedChunks.length && <p className="text-sm text-muted-foreground">Searches completed without matching evidence.</p>}

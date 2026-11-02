@@ -139,7 +139,7 @@ export function PresentationViewer({
     <section
       ref={rootRef}
       aria-label="Presentation viewer"
-      className="session-surface session-tool-surface flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-card"
+      className=" flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-card"
     >
       <input
         ref={fileInputRef}
@@ -281,7 +281,7 @@ export function PresentationViewer({
         ) : null}
       </div>
 
-      <footer className={cn("hidden h-7 items-center justify-between border-t px-3 text-[11px] text-muted-foreground sm:flex", !source && "invisible")}>
+      <footer className={cn("hidden h-7 items-center justify-between border-t px-3 text-overline text-muted-foreground sm:flex", !source && "invisible")}>
         <span>Arrow keys to navigate · Home / End to jump</span>
         <span>{source ? `${slideIndex + 1} of ${slideCount}` : ""}</span>
       </footer>

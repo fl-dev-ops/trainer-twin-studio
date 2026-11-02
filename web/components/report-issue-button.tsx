@@ -20,7 +20,7 @@ export function ReportIssueButton() {
         variant="outline"
         size="sm"
         onClick={() => setOpen(true)}
-        className="h-9 rounded-full px-4 text-[13px] font-medium"
+        className="h-9"
       >
         <Flag data-icon="inline-start" />
         Report an issue

@@ -84,7 +84,7 @@ export function ShareTwinDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPortal>
-        <DialogOverlay className="bg-[rgb(11_10_9/0.55)] supports-backdrop-filter:backdrop-blur-none" />
+        <DialogOverlay />
         <DialogPrimitive.Popup
           className={cn(
             "fixed top-1/2 left-1/2 z-50 w-[min(520px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 outline-none",
@@ -92,10 +92,10 @@ export function ShareTwinDialog({
           )}
         >
           {/* Reference .confirm-card */}
-          <div className="relative flex w-full flex-col items-start gap-5 rounded-[24px] border-4 border-card bg-[linear-gradient(180deg,var(--sidebar)_0%,var(--card)_100%)] p-6 text-foreground shadow-[0_4px_8px_rgb(30_28_25/0.2)]">
+          <div className="relative flex w-full flex-col items-start gap-5 rounded-3xl border-4 border-card bg-fade-sidebar p-6 text-foreground shadow-elevation-2">
             {/* Reference .confirm-tile */}
-            <span aria-hidden className="flex rounded-[18px] bg-[linear-gradient(180deg,var(--border),var(--card))] p-[2px]">
-              <span className="flex rounded-[16px] border-4 border-card bg-[linear-gradient(180deg,var(--sidebar),var(--card))] p-3 text-foreground shadow-[0_4px_8px_rgb(30_28_25/0.2),inset_0_0_4px_rgb(30_28_25/0.05)]">
+            <span aria-hidden className="flex rounded-2xl bg-fade-border p-0.5">
+              <span className="flex rounded-tt-lg border-4 border-card bg-fade-sidebar p-3 text-foreground shadow-elevation-2">
                 <ShareGlyph />
               </span>
             </span>
@@ -110,7 +110,7 @@ export function ShareTwinDialog({
             </DialogPrimitive.Close>
 
             <div className="flex flex-col gap-2">
-              <DialogPrimitive.Title className="m-0 text-[20px] leading-7 font-semibold">Share {name}</DialogPrimitive.Title>
+              <DialogPrimitive.Title className="m-0 text-title-m leading-7 font-semibold">Share {name}</DialogPrimitive.Title>
               <DialogPrimitive.Description className="m-0 text-sm leading-5 text-(--text-secondary)">
                 {allSkills
                   ? "Send this link to your learners so they can talk to your twin."
@@ -129,7 +129,7 @@ export function ShareTwinDialog({
                   value={url}
                   placeholder="Preparing link…"
                   onFocus={(event) => event.currentTarget.select()}
-                  className="h-10 min-w-0 flex-1 rounded-[8px] border border-(--border) bg-card px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-(--brand) focus:ring-1 focus:ring-(--brand)"
+                  className="h-10 min-w-0 flex-1 rounded-tt-sm border border-(--border) bg-card px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-(--brand) focus:ring-1 focus:ring-(--brand)"
                 />
                 <button
                   type="button"
@@ -137,7 +137,7 @@ export function ShareTwinDialog({
                   disabled={!url}
                   className={cn(
                     "inline-flex h-10 min-w-32 shrink-0 items-center justify-center gap-2 rounded-full bg-card px-4 text-sm font-normal outline-none transition-colors disabled:opacity-60",
-                    "shadow-[0_0_1px_rgb(0_0_0/0.4),0_1px_1px_rgb(0_0_0/0.04),0_2px_4px_rgb(0_0_0/0.04)] hover:bg-(--sidebar) focus-visible:ring-2 focus-visible:ring-(--brand) dark:shadow-[0_0_0_1px_var(--border)]",
+                    "shadow-elevation-1 hover:bg-(--sidebar) focus-visible:ring-2 focus-visible:ring-(--brand) dark:ring-1 dark:ring-border",
                     copied ? "text-(--brand)" : "text-foreground",
                   )}
                 >

@@ -30,7 +30,7 @@ export function LearnersTable({ learners }: { learners: LearnerRow[] }) {
         <SectionHeader title="All learners" note="People practising your role plays and twin" />
 
         {learners.length === 0 ? (
-          <Empty className="rounded-2xl border bg-card">
+          <Empty>
             <EmptyHeader>
               <EmptyMedia variant="icon">
                 <UsersIcon />
@@ -42,9 +42,9 @@ export function LearnersTable({ learners }: { learners: LearnerRow[] }) {
             </EmptyHeader>
           </Empty>
         ) : (
-          <div className="overflow-x-auto rounded-2xl border bg-card shadow-[0_1px_2px_rgba(30,28,25,0.04)]">
-            <table className="w-full min-w-[720px] text-left text-[13px]">
-              <thead className="bg-muted/40 text-[11px] font-medium tracking-[0.06em] text-muted-foreground uppercase">
+          <div className="overflow-x-auto rounded-2xl border bg-card shadow-elevation-1">
+            <table className="w-full min-w-[720px] text-left text-body-s">
+              <thead className="bg-muted/40 text-overline font-medium tracking-overline text-muted-foreground uppercase">
                 <tr>
                   {COLUMNS.map((label) => (
                     <th key={label} scope="col" className="px-5 py-3 font-medium">

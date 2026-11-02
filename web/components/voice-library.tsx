@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { LoaderCircle, Mic, MoreHorizontal, Pencil, Play, Search, Sparkles, Square, Trash2 } from "lucide-react";
+import { LoaderCircle, Mic, MoreHorizontal, Pencil, Play, Sparkles, Square, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -36,6 +36,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { generateSpeech, playPcmStream, stopPlayback } from "@/lib/audio-playback";
 import { useRefresh } from "@/lib/use-refresh";
+import { SearchInput } from "@/components/search-input";
 
 export type VoiceRow = {
   id: string;
@@ -100,16 +101,13 @@ function VoiceTab({
   return (
     <div className="mt-4">
       <div className="flex items-center gap-2">
-        <div className="relative w-full max-w-xs">
-          <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.currentTarget.value)}
-            placeholder="Search"
-            className="pl-9"
-            aria-label="Search voices"
-          />
-        </div>
+        <SearchInput
+          className="w-full max-w-xs"
+          value={query}
+          onChange={(event) => setQuery(event.currentTarget.value)}
+          placeholder="Search"
+          aria-label="Search voices"
+        />
       </div>
 
       {filtered.length > 0 ? (

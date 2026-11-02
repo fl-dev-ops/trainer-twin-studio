@@ -5,6 +5,40 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* The studio's scale. The UI was designed at a 110% root font size; instead of scaling the root, Tailwind's rem
+   defaults are 1.1x here (16px root): spacing, type, containers, radii. Breakpoints are untouched (media queries
+   ignore the root font size). Hard-coded rem values in the app are written at this scale too. */
+@theme {
+  --spacing: 0.275rem;
+  --container-3xs: 17.6rem;
+  --container-2xs: 19.8rem;
+  --container-xs: 22rem;
+  --container-sm: 26.4rem;
+  --container-md: 30.8rem;
+  --container-lg: 35.2rem;
+  --container-xl: 39.6rem;
+  --container-2xl: 46.2rem;
+  --container-3xl: 52.8rem;
+  --container-4xl: 61.6rem;
+  --container-5xl: 70.4rem;
+  --container-6xl: 79.2rem;
+  --container-7xl: 88rem;
+  --text-xs: 0.825rem;
+  --text-sm: 0.9625rem;
+  --text-base: 1.1rem;
+  --text-lg: 1.2375rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.65rem;
+  --text-3xl: 2.0625rem;
+  --text-4xl: 2.475rem;
+  --text-5xl: 3.3rem;
+  --text-6xl: 4.125rem;
+  --text-7xl: 4.95rem;
+  --text-8xl: 6.6rem;
+  --text-9xl: 8.8rem;
+  --radius-xs: 0.1375rem;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -42,6 +76,7 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-card-border: var(--card-border);
   --color-panel: var(--panel);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -51,6 +86,73 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
   --color-highlight: var(--highlight);
+
+  /* Design system (plans/design-system-alignment.md): status, live, night and brand hover, from
+     trainertwin-website/src/styles/tokens.css. Switch with the theme through the :root / .dark values below. */
+  --color-brand-hover: var(--brand-hover);
+  --color-success: var(--success);
+  --color-success-subtle: var(--success-subtle);
+  --color-success-border: var(--success-border);
+  --color-success-badge-border: var(--success-badge-border);
+  --color-info: var(--info);
+  --color-info-subtle: var(--info-subtle);
+  --color-info-border: var(--info-border);
+  --color-info-badge-border: var(--info-badge-border);
+  --color-caution: var(--caution);
+  --color-caution-subtle: var(--caution-subtle);
+  --color-caution-border: var(--caution-border);
+  --color-caution-badge-border: var(--caution-badge-border);
+  --color-danger: var(--danger);
+  --color-danger-subtle: var(--danger-subtle);
+  --color-danger-border: var(--danger-border);
+  --color-danger-badge-border: var(--danger-badge-border);
+  --color-live: var(--live);
+  /* The live / stop-call button pressed: one step darker than live (the studio's value; the system has no hover). */
+  --color-live-hover: #b5262c;
+  --color-night: var(--night);
+  --color-night-deep: var(--night-deep);
+  --color-night-panel: var(--night-panel);
+  --color-on-night: var(--on-night);
+  --color-on-night-2: var(--on-night-2);
+  --color-on-night-3: var(--on-night-3);
+  --color-line-night: var(--line-night);
+  --shadow-elevation-1: var(--elevation-1);
+  --shadow-elevation-2: var(--elevation-2);
+  --shadow-elevation-3: var(--elevation-3);
+
+  /* Radius steps of the design system (8 controls / 12 panels / 16 large); shadcn's rounded-sm/md/lg derive from --radius. */
+  --radius-tt-sm: 8px;
+  --radius-tt-md: 12px;
+  --radius-tt-lg: 16px;
+
+  /* Type roles. The design system's product scale (title-m 20, title-s 17, body 15, body-s 13, overline 11) plus the
+     studio's own page title (16) and section title (18). px for the same reason as the radii. */
+  --text-title-m: 20px;
+  --text-title-s: 17px;
+  --text-body: 15px;
+  --text-body-s: 13px;
+  --text-overline: 11px;
+  --text-page-title: 16px;
+  --text-section-title: 18px;
+  --leading-page-title: 22px;
+  --leading-body: 23px;
+  --leading-body-s: 20px;
+  --tracking-title: -0.015em;
+  --tracking-overline: 0.09em;
+
+  /* The studio card (V2 pages): a softer resting shadow than elevation-1; it lifts to elevation-2 on hover. */
+  --shadow-card: 0 2px 4px rgb(30 28 25 / 0.035), 0 8px 20px rgb(30 28 25 / 0.055);
+
+  /* Large frames on the calibration call: the 320px video stage and the 240px portrait. */
+  --radius-stage: 32px;
+  --radius-portrait: 48px;
+  /* Text over video (captions, subtitles). */
+  --text-shadow-caption: 0 1px 2px rgb(0 0 0 / 0.5);
+  --text-shadow-subtitle: 0 1px 2px rgb(0 0 0 / 0.8);
+  /* The modal scrim of the design system. */
+  --color-scrim: rgb(11 10 9 / 0.55);
+  /* The session stage card: the sunken light tone in both themes, like the role-play cards (the light twin of night). */
+  --color-stage: #f7f7f7;
 }
 
 :root {
@@ -74,7 +176,7 @@
   --panel: #fefeff;
   --foreground: #1c1b1b;
   --card: var(--tone-surface);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: var(--foreground);
   --popover: var(--tone-surface);
   --popover-foreground: #1c1b1b;
   --primary: var(--brand-strong);
@@ -85,7 +187,8 @@
   --muted-foreground: #656565;
   --accent: var(--tone-control);
   --accent-foreground: #1c1b1b;
-  --destructive: oklch(0.577 0.245 27.325);
+  /* shadcn's destructive is the design system's danger (was Tailwind red-600, within a JND). */
+  --destructive: var(--danger);
   --border: #e9e9e9;
   --input: #e9e9e9;
   --ring: var(--brand);
@@ -94,7 +197,7 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
+  --radius: 0.6875rem;
   --sidebar: #f7f7f7;
   --sidebar-foreground: #1c1b1b;
   --sidebar-primary: var(--brand-strong);
@@ -104,6 +207,39 @@
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: var(--brand);
   --highlight: oklch(0.852 0.199 91.936);
+
+  /* Design system semantic tokens (light). Values from trainertwin-website/src/styles/tokens.css. */
+  --brand-hover: #e04d00;
+  --success: #1a6739;
+  --success-subtle: #edf9f1;
+  --success-border: #7fd1a0;
+  --success-badge-border: #bce7cd;
+  --info: #2a63c4;
+  --info-subtle: #eef4ff;
+  --info-border: #8fb6f5;
+  --info-badge-border: #c3d8fa;
+  /* Caution is gold, never amber: amber sits ~25deg from the brand and reads as a broken brand orange. */
+  --caution: #7f5f00;
+  --caution-subtle: #fdf6e3;
+  --caution-border: #e9c86a;
+  --caution-badge-border: #f4e1ad;
+  --danger: #ce2c33;
+  --danger-subtle: #fff1f1;
+  --danger-border: #f58f93;
+  --danger-badge-border: #fac5c7;
+  /* Recording / live session only, never the brand. */
+  --live: #ce2c33;
+  --elevation-1: 0 1px 2px rgb(30 28 25 / 0.06);
+  --elevation-2: 0 2px 4px rgb(30 28 25 / 0.07), 0 8px 20px rgb(30 28 25 / 0.11);
+  --elevation-3: 0 4px 8px rgb(30 28 25 / 0.09), 0 16px 40px rgb(30 28 25 / 0.16);
+  /* Night surfaces: a dark band that stays dark in both themes (call stage, code editor, whiteboard). */
+  --night: #111215;
+  --night-deep: #0f0f0f;
+  --night-panel: #241c1b;
+  --on-night: #ffffff;
+  --on-night-2: #b6b6b6;
+  --on-night-3: #828282;
+  --line-night: #373737;
 }
 
 .dark {
@@ -128,7 +264,7 @@
   --muted-foreground: #a3a3a3;
   --accent: var(--tone-control);
   --accent-foreground: #fefeff;
-  --destructive: oklch(0.704 0.191 22.216);
+  --destructive: var(--danger);
   --border: var(--tone-control);
   --input: var(--tone-control);
   --ring: var(--brand);
@@ -148,6 +284,29 @@
   --highlight: oklch(0.852 0.199 91.936);
   /* Dark mode keeps the reference brand (its tokens do not shift the logo in dark). */
   --brand: #ff5a00;
+
+  /* Design system semantic tokens (dark). Dark elevates with a hairline of light, not shadow. */
+  --brand-hover: #ff7e33;
+  --success: #7fd1a0;
+  --success-subtle: #0e3e22;
+  --success-border: #1a6739;
+  --success-badge-border: #13502c;
+  --info: #8fb6f5;
+  --info-subtle: #12305f;
+  --info-border: #1f4c9b;
+  --info-badge-border: #183d7a;
+  --caution: #e9c86a;
+  --caution-subtle: #3a2a00;
+  --caution-border: #7f5f00;
+  --caution-badge-border: #594200;
+  --danger: #f58f93;
+  --danger-subtle: #6b1216;
+  --danger-border: #a81f26;
+  --danger-badge-border: #86181d;
+  --live: #e5484d;
+  --elevation-1: 0 0 0 1px rgb(253 251 247 / 0.05);
+  --elevation-2: 0 0 0 1px rgb(253 251 247 / 0.07), 0 4px 16px rgb(0 0 0 / 0.5);
+  --elevation-3: 0 0 0 1px rgb(253 251 247 / 0.09), 0 12px 32px rgb(0 0 0 / 0.6);
 }
 
 @layer base {
@@ -156,12 +315,11 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Unstyled text: 17.6px, the studio's base (was inherited from a 110% root). */
+    font-size: var(--text-base);
   }
   html {
     @apply font-sans;
-    /* Global UI scale: rem-based sizes (all Tailwind text/spacing) resolve
-           against this. Bump to scale the whole UI; 110% ≈ Chrome zoom 110%. */
-    font-size: 110%;
   }
   svg {
     color: currentColor;
@@ -213,7 +371,7 @@
   }
 
   .session-tile {
-    border-radius: 1rem;
+    border-radius: 1.1rem;
     background: var(--card);
     box-shadow:
       0 0 0 1px var(--border),
@@ -228,7 +386,7 @@
   }
 
   .session-controls {
-    width: min(100%, 26rem);
+    width: min(100%, 28.6rem);
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 9999px;
@@ -236,7 +394,7 @@
   }
 
   .session-controls button {
-    min-height: 2.5rem;
+    min-height: 2.75rem;
   }
 
   .interview-stage {
@@ -258,7 +416,7 @@
   }
 
   .interview-stage[data-has-surface="true"] {
-    grid-template-rows: minmax(0, 1fr) 7rem;
+    grid-template-rows: minmax(0, 1fr) 7.7rem;
   }
 
   .interview-stage[data-has-surface="true"] .interview-surface {
@@ -280,7 +438,7 @@
 
   @media (min-width: 64rem) {
     .interview-stage[data-has-surface="true"] {
-      grid-template-columns: minmax(0, 1fr) 14rem;
+      grid-template-columns: minmax(0, 1fr) 15.4rem;
       grid-template-rows: minmax(0, 1fr);
     }
 
@@ -305,7 +463,7 @@
   .playground-rounded .lk-chat-entry,
   .playground-rounded .lk-message,
   .playground-rounded .lk-participant-tile {
-    border-radius: 1rem;
+    border-radius: 1.1rem;
   }
 
   .playground-rounded .lk-agent-control-bar button,
@@ -345,3 +503,36 @@
     border-bottom: 1px solid rgb(250 204 21 / 0.8) !important;
   }
 }
+
+/*
+ * Named decorations (plans/design-system-alignment.md), so pages don't hand-write gradients and masks.
+ */
+/* The pastel art placeholder behind a face that has no photo (scenario cards, agent tiles, calibration). Page-level
+   decoration, deliberately outside the token palette (design system decision D05). */
+@utility bg-art-pastel {
+  background-image: linear-gradient(135deg, #a8c6ec 0%, #d2c3e8 50%, #f1c6d7 100%);
+}
+/* The twin's brain canvas: a dot grid on the control tone. */
+@utility bg-dot-grid {
+  background-image: radial-gradient(circle, var(--tone-control) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+/* A panel that fades from the sunken tone (or a border line) into the card. */
+@utility bg-fade-sidebar {
+  background-image: linear-gradient(180deg, var(--sidebar), var(--card));
+}
+@utility bg-fade-border {
+  background-image: linear-gradient(180deg, var(--border), var(--card));
+}
+/* Scroll edges that fade out (top of a list fading in, bottom fading out). */
+@utility mask-fade-b {
+  mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
+}
+@utility mask-fade-t {
+  mask-image: linear-gradient(to bottom, transparent 0%, black 100%);
+}
+/* A scroll window whose content fades out under its top and bottom edges. */
+@utility mask-edge-y {
+  mask-image: linear-gradient(to bottom, transparent 0, black 24px, black calc(100% - 24px), transparent 100%);
+}
+

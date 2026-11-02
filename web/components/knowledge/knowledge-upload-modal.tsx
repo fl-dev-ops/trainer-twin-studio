@@ -230,7 +230,7 @@ export function KnowledgeUploadModal({
                     </span>
                   )}
                   {item.status === "done" && (
-                    <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                    <span className="flex items-center gap-1 text-success">
                       <CheckCircle2 className="size-3.5" />
                       <span>Done</span>
                     </span>

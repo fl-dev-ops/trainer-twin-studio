@@ -11,7 +11,7 @@ export function CandidateTile({ name, compact = false }: { name?: string; compac
   const initial = name?.trim().charAt(0).toUpperCase();
 
   return (
-    <div className="relative size-full overflow-hidden rounded-2xl bg-[#1c1b1b] text-white shadow-[0_2px_4px_rgba(30,28,25,0.07),0_8px_20px_rgba(30,28,25,0.11)]">
+    <div className="relative size-full overflow-hidden dark rounded-2xl bg-card text-white shadow-elevation-2">
       {cameraOn && cameraTrack ? (
         <VideoTrack
           trackRef={{ participant: localParticipant, publication: cameraTrack, source: Track.Source.Camera }}
@@ -30,9 +30,9 @@ export function CandidateTile({ name, compact = false }: { name?: string; compac
         </div>
       )}
 
-      <span className="absolute bottom-3 left-3 flex items-center gap-1.5 text-xs font-medium [text-shadow:0_1px_2px_rgba(0,0,0,0.5)]">
+      <span className="absolute bottom-3 left-3 flex items-center gap-1.5 text-xs font-medium text-shadow-caption">
         You
-        {micOn ? null : <MicOff className="size-3.5 text-[#ff6b6b]" aria-label="Microphone off" />}
+        {micOn ? null : <MicOff className="size-3.5 text-danger" aria-label="Microphone off" />}
       </span>
       {cameraOn ? null : <VideoOff className="absolute right-3 bottom-3 size-4 text-white/70" aria-label="Camera off" />}
     </div>

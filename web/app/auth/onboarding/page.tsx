@@ -88,7 +88,7 @@ export default async function OnboardingPage({
           />
         ) : (
           <div className="max-w-md mx-auto text-center py-16">
-            <div className="size-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-muted-foreground flex items-center justify-center mx-auto mb-4 text-xl">
+            <div className="size-12 rounded-2xl bg-muted border border-border text-muted-foreground flex items-center justify-center mx-auto mb-4 text-xl">
               ✉
             </div>
             <h1 className="text-xl font-semibold tracking-tight text-foreground">

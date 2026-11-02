@@ -1,22 +1,16 @@
+import type { CSSProperties } from "react";
 import { UsersIcon } from "@/components/icons";
 import type { TwinOutputs } from "@/lib/twin/trpc";
 import { cn } from "@/lib/utils";
 import { PageContainer } from "@/components/page-container";
-
-const AVATAR_TONES = [
-  "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-  "bg-sky-500/15 text-sky-600 dark:text-sky-400",
-  "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-  "bg-rose-500/15 text-rose-600 dark:text-rose-400",
-  "bg-orange-500/15 text-orange-600 dark:text-orange-400",
-];
+import { UserAvatar } from "@/components/user-avatar";
 
 export function TwinUsersPage({ learners }: { learners: TwinOutputs["users"]["list"] }) {
   return (
     <PageContainer>
       <header className="flex min-h-10 items-center justify-between gap-4">
-        <h1 className="m-0 flex items-center gap-2 text-[16px] font-semibold leading-[22px] tracking-[-0.015em]">
-          <span className="grid size-7 place-items-center rounded-[8px] text-(--text-secondary)">
+        <h1 className="m-0 flex items-center gap-2 text-page-title font-semibold leading-page-title tracking-title">
+          <span className="grid size-7 place-items-center rounded-tt-sm text-(--text-secondary)">
             <UsersIcon className="size-[18px]" />
           </span>
           Twin users
@@ -24,14 +18,14 @@ export function TwinUsersPage({ learners }: { learners: TwinOutputs["users"]["li
       </header>
 
       <div className="mt-10">
-        <h2 className="m-0 text-[18px] font-semibold leading-6 tracking-[-0.015em]">All learners</h2>
+        <h2 className="m-0 text-section-title font-semibold leading-6 tracking-title">All learners</h2>
         <p className="mt-1 text-sm text-muted-foreground">People who can learn from your twins</p>
       </div>
 
       {/* Reference lr-table */}
-      <div className="mt-4 overflow-hidden rounded-[16px] border border-(--card-border) bg-card shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
+      <div className="mt-4 overflow-hidden rounded-tt-lg border border-(--card-border) bg-card shadow-card">
         {/* Header row */}
-        <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1.5fr)_120px_130px_minmax(0,1.3fr)] items-center gap-3 bg-(--sidebar) px-5 py-2.5 text-[12px] font-medium tracking-[0.04em] uppercase text-(--text-secondary)">
+        <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1.5fr)_120px_130px_minmax(0,1.3fr)] items-center gap-3 bg-(--sidebar) px-5 py-2.5 text-overline font-medium tracking-overline uppercase text-(--text-secondary)">
           <span>Learner</span>
           <span>Email</span>
           <span>Assigned agents</span>
@@ -45,7 +39,7 @@ export function TwinUsersPage({ learners }: { learners: TwinOutputs["users"]["li
             Nobody has twin access yet. Assign a twin or share its link.
           </p>
         ) : null}
-        {learners.map((l, i) => {
+        {learners.map((l) => {
           const left = Math.max(0, l.minutes - l.used);
           const pct = Math.min(100, Math.round((l.used / l.minutes) * 100));
           const isHigh = pct >= 90;
@@ -55,15 +49,7 @@ export function TwinUsersPage({ learners }: { learners: TwinOutputs["users"]["li
               className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1.5fr)_120px_130px_minmax(0,1.3fr)] items-center gap-3 border-t border-(--border) px-5 py-3.5 text-sm"
             >
               <span className="flex items-center gap-3 min-w-0 font-medium">
-                <span
-                  className={cn(
-                    "grid size-7 shrink-0 place-items-center rounded-full text-xs font-semibold",
-                    AVATAR_TONES[i % AVATAR_TONES.length],
-                  )}
-                  aria-hidden
-                >
-                  {l.name.charAt(0).toUpperCase()}
-                </span>
+                <UserAvatar user={l} size="sm" />
                 <span className="truncate">{l.name}</span>
               </span>
 
@@ -81,13 +67,13 @@ export function TwinUsersPage({ learners }: { learners: TwinOutputs["users"]["li
                 <span className="block h-1.5 w-full overflow-hidden rounded-full bg-(--tone-control)">
                   <span
                     className={cn(
-                      "block h-full rounded-full transition-all",
-                      isHigh ? "bg-amber-600 dark:bg-amber-500" : "bg-(--foreground)",
+                      "block h-full w-(--w) rounded-full transition-all",
+                      isHigh ? "bg-caution" : "bg-foreground",
                     )}
-                    style={{ width: `${pct}%` }}
+                    style={{ "--w": `${pct}%` } as CSSProperties}
                   />
                 </span>
-                <span className="text-[13px] leading-[18px] text-muted-foreground tabular-nums">
+                <span className="text-body-s leading-body-s text-muted-foreground tabular-nums">
                   {l.used} used · {left} left
                 </span>
               </span>

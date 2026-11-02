@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, type ReactNode, type CSSProperties } from "react";
 import { Check, ChevronDown, Flag, Lock, LogIn, LogOut, Star } from "lucide-react";
 import { toast } from "sonner";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
@@ -39,11 +39,10 @@ type Twin = { slug: string; name: string; description: string | null };
 type Step = "profile" | "call" | "summary";
 
 // The dash's own scale (twin overview cards): 16px cards with the soft shadow, 11px labels, 18px titles, 15px body.
-const CARD = "rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]";
-const LABEL = "m-0 text-[11px] font-medium tracking-[0.08em] uppercase";
-const TITLE = "m-0 text-[18px] leading-7 font-semibold tracking-[-0.015em]";
-const BODY = "m-0 text-[15px] leading-6 text-(--text-secondary)";
-const BRAND = "h-10 w-full bg-(--brand) px-4 text-sm font-semibold text-white hover:bg-[#e04d00]";
+const CARD = "rounded-tt-lg border border-(--card-border) bg-card p-6 shadow-card";
+const LABEL = "m-0 text-overline font-medium tracking-overline uppercase";
+const TITLE = "m-0 text-section-title leading-7 font-semibold tracking-title";
+const BODY = "m-0 text-body leading-6 text-(--text-secondary)";
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 const firstName = (name: string) => name.split(/[\s@]/)[0] || name;
 const ISSUES = ["Wrong or made-up answer", "Didn't understand me", "Audio or connection", "Too slow", "Something else"];
@@ -83,20 +82,22 @@ export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string;
     <header className="flex h-14 w-full shrink-0 items-center justify-between gap-3 px-5">
       <span className="flex items-center gap-1.5">
         <BrandMark className="size-5 text-primary" />
-        <span className="text-base leading-none font-semibold tracking-[-0.02em]">TrainerTwin</span>
+        <span className="text-base leading-none font-semibold tracking-title">TrainerTwin</span>
         {preview ? <span className="ml-2 rounded-full bg-(--brand)/10 px-2.5 py-0.5 text-xs font-medium text-(--brand)">Preview</span> : null}
       </span>
       {step !== "profile" && minutesLeft !== null ? (
         <span className="rounded-full bg-(--tone-control) px-3 py-1 text-xs font-medium tabular-nums">{minutesLeft} min left</span>
       ) : access ? (
         <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="ghost" className="h-9 gap-2 pr-3 pl-1.5" />}>
-            <UserAvatar user={{ name: access.name, email: access.email }} size="sm" />
-            <span className="max-w-[140px] truncate text-sm font-medium">{firstName(access.name)}</span>
+          <DropdownMenuTrigger render={<Button variant="ghost" size="lg" />}>
+            <span data-icon="inline-start" className="-ml-2">
+              <UserAvatar user={{ name: access.name, email: access.email }} size="sm" />
+            </span>
+            <span className="max-w-[140px] truncate">{firstName(access.name)}</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" sideOffset={6} className="w-56">
             <DropdownMenuGroup>
-              <DropdownMenuLabel className="truncate font-normal text-muted-foreground">{access.email}</DropdownMenuLabel>
+              <DropdownMenuLabel className="truncate font-normal">{access.email}</DropdownMenuLabel>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
@@ -108,7 +109,7 @@ export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string;
           </DropdownMenuContent>
         </DropdownMenu>
       ) : (
-        <Button variant="ghost" className="h-9 px-3" onClick={() => setSigningIn(true)}>
+        <Button variant="ghost" className="h-9" onClick={() => setSigningIn(true)}>
           <LogIn data-icon="inline-start" />
           Sign in
         </Button>
@@ -163,15 +164,15 @@ export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string;
           <>
             {/* Profile hero: the trainer whose twin this is. */}
             <section className="flex items-center gap-5">
-              <TwinPortrait name={trainer.name} photoUrl={trainer.photoUrl} className="size-24 shrink-0 rounded-[24px] text-4xl shadow-[0_2px_4px_rgb(30_28_25/0.06),0_8px_20px_rgb(30_28_25/0.1)] sm:size-28 sm:rounded-[28px]" />
+              <TwinPortrait name={trainer.name} photoUrl={trainer.photoUrl} className="size-24 shrink-0 rounded-3xl text-4xl shadow-elevation-2 sm:size-28 sm:rounded-4xl" />
               <div className="flex min-w-0 flex-col gap-1">
-                <h1 className="m-0 text-[28px] leading-9 font-semibold tracking-[-0.02em]">{trainer.name}</h1>
-                {trainer.title ? <p className="m-0 text-[15px] text-(--text-secondary)">{trainer.title}</p> : null}
+                <h1 className="m-0 text-2xl leading-9 font-semibold tracking-title">{trainer.name}</h1>
+                {trainer.title ? <p className="m-0 text-body text-(--text-secondary)">{trainer.title}</p> : null}
               </div>
             </section>
-            {trainer.bio ? <p className="m-0 text-[15px] leading-6 text-muted-foreground">{trainer.bio}</p> : null}
+            {trainer.bio ? <p className="m-0 text-body leading-6 text-muted-foreground">{trainer.bio}</p> : null}
 
-            <h2 className="mt-6 mb-0 text-[18px] leading-6 font-semibold tracking-[-0.015em]">Talk to {coach}&apos;s twin</h2>
+            <h2 className="mt-6 mb-0 text-section-title leading-6 font-semibold tracking-title">Talk to {coach}&apos;s twin</h2>
             <article className={cn(CARD, "flex flex-col p-5")}>
               <h3 className={TITLE}>{twin.name}</h3>
               {twin.description ? <p className={cn(BODY, "mt-2")}>{twin.description}</p> : null}
@@ -187,7 +188,7 @@ export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string;
                     <span className="text-muted-foreground tabular-nums">{access.minutesLeft} of {access.minutesTotal} min left</span>
                   </p>
                   <span className="block h-1.5 w-full overflow-hidden rounded-full bg-(--tone-control)">
-                    <span className="block h-full rounded-full bg-(--foreground)" style={{ width: `${Math.min(100, Math.round((access.minutesLeft / Math.max(1, access.minutesTotal)) * 100))}%` }} />
+                    <span className="block h-full w-(--w) rounded-full bg-foreground" style={{ "--w": `${Math.min(100, Math.round((access.minutesLeft / Math.max(1, access.minutesTotal)) * 100))}%` } as CSSProperties} />
                   </span>
                 </div>
               ) : null}
@@ -199,7 +200,7 @@ export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string;
                   <Lock className="size-[18px]" />
                 </span>
                 <div className="flex min-w-0 flex-col gap-1">
-                  <h3 className="m-0 text-[15px] leading-6 font-semibold">{blocked.title}</h3>
+                  <h3 className="m-0 text-body leading-6 font-semibold">{blocked.title}</h3>
                   <p className="m-0 text-sm text-muted-foreground">{blocked.body}</p>
                   <p className="mt-2 mb-0 text-xs text-muted-foreground">
                     Signed in as {access.email} ·{" "}
@@ -217,13 +218,13 @@ export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string;
       {/* Call dock (Delphi's bottom bar): one clear action (minutes are on the card above). Hidden when there's nothing to start. */}
       {step === "profile" && !blocked ? (
         <div className="fixed inset-x-0 bottom-0 z-10 flex flex-col items-center gap-2 bg-linear-to-t from-background via-background/90 to-transparent px-5 pt-10 pb-5">
-          <div className="flex items-center gap-3 rounded-full border border-(--card-border) bg-card p-1.5 shadow-[0_2px_4px_rgb(30_28_25/0.06),0_8px_24px_rgb(30_28_25/0.12)]">
-            <Button
-              className="h-11 bg-(--brand) px-6 text-[15px] font-semibold text-white hover:bg-[#e04d00]"
+          <div className="flex items-center gap-3 rounded-full border border-(--card-border) bg-card p-1.5 shadow-elevation-2">
+            <Button size="xl" variant="brand"
+              
               disabled={minutesLeft !== null && minutesLeft <= 0}
               onClick={() => (access?.ok ? setStep("call") : setSigningIn(true))}
             >
-              <PhoneIcon className="size-[18px]" />
+              <PhoneIcon data-icon="inline-start" className="size-[18px]" />
               {access?.ok ? "Start voice call" : "Start conversation"}
             </Button>
           </div>
@@ -234,11 +235,11 @@ export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string;
       <Dialog open={signingIn} onOpenChange={setSigningIn}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader className="items-center text-center">
-            <TwinPortrait name={trainer.name} photoUrl={trainer.photoUrl} className="mb-2 size-16 rounded-[18px] text-2xl" />
+            <TwinPortrait name={trainer.name} photoUrl={trainer.photoUrl} className="mb-2 size-16 rounded-2xl text-2xl" />
             <DialogTitle>Sign in to talk to {coach}&apos;s twin</DialogTitle>
             <DialogDescription>Use the Google account {coach} invited. Your minutes and sessions stay yours.</DialogDescription>
           </DialogHeader>
-          <GoogleSignInButton callbackURL={`${typeof window === "undefined" ? "" : window.location.origin}${path}`} className="h-10 w-full text-sm" />
+          <GoogleSignInButton callbackURL={`${typeof window === "undefined" ? "" : window.location.origin}${path}`} className="h-10 w-full" />
         </DialogContent>
       </Dialog>
       {report}
@@ -292,25 +293,25 @@ function Summary({ twin, trainer, result, minutesLeft, preview, onReport, onAgai
         <p className="m-0 text-sm text-muted-foreground">{twin.name}</p>
         {/* The twin overview's stat tiles. */}
         <div className="mt-6 grid grid-cols-2 gap-3">
-          <div className="rounded-[12px] bg-emerald-500/10 p-4 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400">
+          <div className="rounded-tt-md bg-success-subtle p-4 text-success">
             <p className={LABEL}>This session</p>
             <p className="mt-2 mb-0 text-2xl font-semibold tabular-nums">{used} min</p>
             <p className="m-0 text-xs opacity-80 tabular-nums">{clock(result.seconds)} talked</p>
           </div>
-          <div className="rounded-[12px] bg-(--sidebar) p-4">
+          <div className="rounded-tt-md bg-(--sidebar) p-4">
             <p className={cn(LABEL, "text-muted-foreground")}>{preview ? "Preview" : "Minutes left"}</p>
             <p className="mt-2 mb-0 text-2xl font-semibold tabular-nums">{preview ? "0 min" : (minutesLeft ?? "—")}</p>
             <p className="m-0 text-xs text-muted-foreground">{preview ? "used: not counted" : "with this twin"}</p>
           </div>
         </div>
-        <Button className={cn(BRAND, "mt-6")} onClick={onAgain} disabled={minutesLeft !== null && minutesLeft <= 0}>
-          <PhoneIcon className="size-[18px]" />
+        <Button variant="brand" size="xl" className="mt-6 w-full" onClick={onAgain} disabled={minutesLeft !== null && minutesLeft <= 0}>
+          <PhoneIcon data-icon="inline-start" className="size-[18px]" />
           Start another
         </Button>
       </article>
 
       <section className={cn(CARD, "flex flex-col")}>
-        <h2 className="m-0 text-[17px] font-semibold tracking-[-0.015em]">How helpful was this?</h2>
+        <h2 className="m-0 text-title-s font-semibold tracking-title">How helpful was this?</h2>
         <p className="m-0 text-sm text-muted-foreground">Only {firstName(trainer.name)}&apos;s team sees your rating.</p>
         <div role="radiogroup" aria-label="Rating" className="mt-4 flex gap-2">
           {[1, 2, 3, 4, 5].map((n) => (
@@ -322,7 +323,7 @@ function Summary({ twin, trainer, result, minutesLeft, preview, onReport, onAgai
               aria-label={`${n} star${n === 1 ? "" : "s"}`}
               disabled={sent}
               onClick={() => setRating(n)}
-              className={cn(PILL, "size-10 justify-center px-0 disabled:opacity-60", n <= rating && "text-amber-500")}
+              className={cn(PILL, "size-10 justify-center px-0 disabled:opacity-60", n <= rating && "text-caution")}
             >
               <Star className={cn("size-[18px]", n <= rating && "fill-current")} />
             </button>
@@ -330,19 +331,20 @@ function Summary({ twin, trainer, result, minutesLeft, preview, onReport, onAgai
         </div>
         <Textarea className="mt-4" rows={2} maxLength={500} value={note} disabled={sent} onChange={(e) => setNote(e.target.value)} placeholder={`Anything to tell ${firstName(trainer.name)}? (optional)`} />
         <div className="mt-4 flex items-center justify-between gap-3">
-          <Button variant="ghost" className="h-9 text-muted-foreground" onClick={onReport}>
+          <Button variant="subtle" className="h-9" onClick={onReport}>
             <Flag data-icon="inline-start" />
             Report a problem
           </Button>
-          <Button variant="outline" className="h-9 px-4" disabled={!rating || sending || sent || !result.sessionId} onClick={() => void send()}>
+          <Button variant="outline" className="h-9" disabled={!rating || sending || sent || !result.sessionId} onClick={() => void send()}>
             {sent ? <><Check data-icon="inline-start" /> Sent</> : sending ? "Sending…" : "Send rating"}
           </Button>
         </div>
       </section>
 
-      <Collapsible className={cn(CARD, "flex flex-col")}>
-        <CollapsibleTrigger className="group flex items-center justify-between text-left text-[17px] font-semibold tracking-[-0.015em] outline-none">
-          Transcript
+      <section className={cn(CARD, "flex flex-col")}>
+      <Collapsible className="flex flex-col">
+        <CollapsibleTrigger className="group flex items-center justify-between text-left">
+          <span className="text-title-s font-semibold tracking-title">Transcript</span>
           <ChevronDown className="size-4 text-muted-foreground transition-transform group-data-panel-open:rotate-180" />
         </CollapsibleTrigger>
         <CollapsibleContent>
@@ -355,6 +357,7 @@ function Summary({ twin, trainer, result, minutesLeft, preview, onReport, onAgai
           </div>
         </CollapsibleContent>
       </Collapsible>
+      </section>
     </>
   );
 }
@@ -421,7 +424,7 @@ function ReportDialog({ twin, sessionId, onClose }: { twin: Twin; sessionId: str
             <Textarea rows={3} maxLength={2000} value={text} onChange={(e) => setText(e.target.value)} placeholder="Tell us more (optional)" />
             <DialogFooter>
               <Button variant="ghost" onClick={onClose}>Cancel</Button>
-              <Button className="bg-(--brand) text-white hover:bg-[#e04d00]" disabled={sending || (!reasons.length && text.trim().length < 5)} onClick={() => void send()}>
+              <Button variant="brand" disabled={sending || (!reasons.length && text.trim().length < 5)} onClick={() => void send()}>
                 {sending ? "Sending…" : "Send report"}
               </Button>
             </DialogFooter>

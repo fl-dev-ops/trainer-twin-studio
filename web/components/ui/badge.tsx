@@ -19,18 +19,23 @@ const badgeVariants = cva(
         ghost:
           "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
         link: "text-primary underline-offset-4 hover:underline",
+        // Status badges as the design system draws them: subtle fill, light badge border, status text. Caution is
+        // gold, never amber (plans/design-system-alignment.md D2).
         success:
-          "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 [a]:hover:bg-emerald-500/20",
+          "border-success-badge-border bg-success-subtle text-success [a]:hover:border-success-border",
         warning:
-          "bg-amber-500/10 text-amber-600 dark:text-amber-400 [a]:hover:bg-amber-500/20",
+          "border-caution-badge-border bg-caution-subtle text-caution [a]:hover:border-caution-border",
         error:
-          "bg-red-500/10 text-red-600 dark:text-red-400 [a]:hover:bg-red-500/20",
+          "border-danger-badge-border bg-danger-subtle text-danger [a]:hover:border-danger-border",
         info:
-          "bg-sky-500/10 text-sky-600 dark:text-sky-400 [a]:hover:bg-sky-500/20",
+          "border-info-badge-border bg-info-subtle text-info [a]:hover:border-info-border",
+        // A chip over artwork (always light): white glass with night ink in both themes.
+        glass: "bg-white/80 text-night",
       },
       size: {
         default: "",
-        sm: "h-4.5 px-1.5 text-[10px]",
+        // The design system's badge size (11px): counts, tags and overline-size labels.
+        sm: "h-4.5 px-1.5 text-overline",
       },
     },
     defaultVariants: {

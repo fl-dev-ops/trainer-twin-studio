@@ -6,13 +6,15 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 import { Separator } from "@/components/ui/separator"
 
-function ItemGroup({ className, ...props }: React.ComponentProps<"div">) {
+/** `divided`: rows separated by a rule instead of gaps (a list of people, sessions). */
+function ItemGroup({ className, divided = false, ...props }: React.ComponentProps<"div"> & { divided?: boolean }) {
   return (
     <div
       role="list"
       data-slot="item-group"
       className={cn(
         "group/item-group flex w-full flex-col gap-4 has-data-[size=sm]:gap-2.5 has-data-[size=xs]:gap-2",
+        divided && "gap-0! divide-y divide-border",
         className
       )}
       {...props}
@@ -47,6 +49,8 @@ const itemVariants = cva(
         default: "gap-2.5 px-3 py-2.5",
         sm: "gap-2.5 px-3 py-2.5",
         xs: "gap-2 px-2.5 py-2 in-data-[slot=dropdown-menu-content]:p-0",
+        // A row of a divided list (ItemGroup divided): no box, no side padding.
+        row: "gap-2.5 rounded-none px-0 py-3",
       },
     },
     defaultVariants: {
@@ -112,12 +116,13 @@ function ItemMedia({
   )
 }
 
+/** Content dims when its row is disabled (`data-disabled` on the Item). */
 function ItemContent({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="item-content"
       className={cn(
-        "flex flex-1 flex-col gap-1 group-data-[size=xs]/item:gap-0 [&+[data-slot=item-content]]:flex-none",
+        "group-data-[disabled=true]/item:opacity-60 flex flex-1 flex-col gap-1 group-data-[size=xs]/item:gap-0 [&+[data-slot=item-content]]:flex-none",
         className
       )}
       {...props}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -20,7 +20,7 @@ export function ImageViewerSurface({ sourceUrl, title }: { sourceUrl?: string; t
             onClick={() => setScale((s) => Math.max(0.25, s - 0.25))}
             aria-label="Zoom out"
           >
-            <ZoomOut className="size-4" />
+            <ZoomOut />
           </Button>
           <span className="min-w-10 text-center text-xs text-muted-foreground">{Math.round(scale * 100)}%</span>
           <Button
@@ -30,7 +30,7 @@ export function ImageViewerSurface({ sourceUrl, title }: { sourceUrl?: string; t
             onClick={() => setScale((s) => Math.min(3, s + 0.25))}
             aria-label="Zoom in"
           >
-            <ZoomIn className="size-4" />
+            <ZoomIn />
           </Button>
           <Button
             variant="ghost"
@@ -39,7 +39,7 @@ export function ImageViewerSurface({ sourceUrl, title }: { sourceUrl?: string; t
             onClick={() => setScale(1)}
             aria-label="Reset zoom"
           >
-            <RotateCcw className="size-4" />
+            <RotateCcw />
           </Button>
         </div>
       </header>
@@ -49,8 +49,8 @@ export function ImageViewerSurface({ sourceUrl, title }: { sourceUrl?: string; t
           <img
             src={sourceUrl}
             alt={fileName}
-            style={{ transform: `scale(${scale})`, transformOrigin: "center center", transition: "transform 0.15s ease-out" }}
-            className="max-h-full max-w-full rounded-lg object-contain shadow-sm"
+            style={{ "--zoom": scale } as CSSProperties}
+            className="max-h-full max-w-full origin-center scale-(--zoom) rounded-lg object-contain shadow-sm transition-transform duration-150 ease-out"
           />
         ) : (
           <div className="text-sm text-muted-foreground">No image available</div>

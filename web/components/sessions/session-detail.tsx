@@ -32,7 +32,7 @@ const minutesSeconds = (seconds: number) => `${Math.floor(seconds / 60)}:${Strin
 
 function Card({ title, aside, children, className }: { title?: string; aside?: React.ReactNode; children: React.ReactNode; className?: string }) {
   return (
-    <section className={cn("rounded-2xl border bg-card px-6 py-5 shadow-[0_1px_2px_rgba(30,28,25,0.04)]", className)}>
+    <section className={cn("rounded-2xl border bg-card px-6 py-5 shadow-elevation-1", className)}>
       {title ? (
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold">{title}</h2>
@@ -103,7 +103,7 @@ export function SessionDetail({ data: row }: { data: SessionDetailData }) {
               ) : null
             }
           >
-            <p className="text-[15px] leading-6">{report.summary}</p>
+            <p className="text-body leading-6">{report.summary}</p>
             {report.summaryTags.length ? (
               <div className="mt-4 flex flex-wrap gap-2">
                 {report.summaryTags.map((tag) => (
@@ -140,7 +140,7 @@ export function SessionDetail({ data: row }: { data: SessionDetailData }) {
                       {hasVideo && at !== null ? (
                         <SeekButton
                           seconds={at}
-                          className="-mx-2 flex w-[calc(100%+1rem)] flex-col gap-1.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted/50"
+                          className="-mx-2 flex w-[calc(100%+1.1rem)] flex-col gap-1.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted/50"
                         >
                           {body}
                         </SeekButton>
@@ -156,7 +156,7 @@ export function SessionDetail({ data: row }: { data: SessionDetailData }) {
 
           {report.focusNextTime ? (
             <Card title="Focus next time">
-              <p className="text-[15px] leading-6">{report.focusNextTime}</p>
+              <p className="text-body leading-6">{report.focusNextTime}</p>
             </Card>
           ) : null}
         </>
@@ -180,7 +180,7 @@ export function SessionDetail({ data: row }: { data: SessionDetailData }) {
         })()
       ) : null}
 
-      <section className="overflow-hidden rounded-2xl border bg-card shadow-[0_1px_2px_rgba(30,28,25,0.04)]">
+      <section className="overflow-hidden rounded-2xl border bg-card shadow-elevation-1">
         <h2 className="px-6 py-5 text-base font-semibold">Transcript</h2>
         <div className="flex flex-col gap-3 bg-muted/50 px-6 py-5">
           {transcript.length === 0 ? (
@@ -190,8 +190,8 @@ export function SessionDetail({ data: row }: { data: SessionDetailData }) {
               const isLearner = turn.role === "user";
               return (
                 <div key={index} className={cn("flex", isLearner ? "justify-end" : "justify-start")}>
-                  <div className="max-w-[78%] rounded-xl bg-card p-3 text-[15px] leading-[23px] shadow-[0_1px_2px_rgba(30,28,25,0.06)]">
-                    <p className="mb-0.5 text-[13px] leading-[18px] font-semibold">{isLearner ? learner : trainer}</p>
+                  <div className="max-w-[78%] rounded-xl bg-card p-3 text-body leading-body shadow-elevation-1">
+                    <p className="mb-0.5 text-body-s leading-body-s font-semibold">{isLearner ? learner : trainer}</p>
                     <p className="whitespace-pre-wrap">{turn.text}</p>
                   </div>
                 </div>

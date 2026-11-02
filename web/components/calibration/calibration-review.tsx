@@ -42,7 +42,7 @@ export function CalibrationReview({
           <CalibrationStats score={score} />
         </div>
 
-        <p className="mt-10 text-[13px] text-foreground/75">
+        <p className="mt-10 text-body-s text-foreground/75">
           <SessionTime iso={startedAt} />
         </p>
         <ReviewConversation turns={turns} sessionId={sessionId} />

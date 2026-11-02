@@ -966,7 +966,7 @@ export function SessionView({
       <div className="flex h-dvh w-dvw flex-col bg-panel text-foreground">
         <SessionHeader title={title} linkHome={!sessionCode} />
         <main className="grid min-h-0 flex-1 place-items-center overflow-y-auto p-6">
-        <Card className={cn("w-full max-w-md rounded-3xl text-center", RAISED)}>
+        <Card size="lg" raised className="w-full max-w-md text-center">
           {sessionCode && completedSessionId && endReason !== "disconnected" ? (
             <SessionFeedback scenarioName={scenarioName} sessionId={completedSessionId} />
           ) : (
@@ -985,11 +985,11 @@ export function SessionView({
               </CardHeader>
               {!sessionCode && (
                 <CardContent className="flex justify-center gap-2">
-                  <Button variant="outline" className="h-10 rounded-full px-4" nativeButton={false} render={<Link href="/sessions" />}>
+                  <Button variant="outline" className="h-10" nativeButton={false} render={<Link href="/sessions" />}>
                     View sessions
                   </Button>
                   <Button
-                    className="h-10 rounded-full px-4"
+                    className="h-10"
                     onClick={() => {
                       resetSessionState();
                       setEnded(false);
@@ -1013,14 +1013,14 @@ export function SessionView({
         <SessionHeader title={title} linkHome={!sessionCode} />
         <main className="flex min-h-0 flex-1 px-4 pb-20 sm:px-6">
           <Stage>
-            <div role="status" className="relative flex size-full flex-col items-center justify-center gap-5 p-6 text-center text-neutral-900">
-              <span className="relative grid size-24 place-items-center rounded-full bg-white/80 shadow-[0_2px_4px_rgba(30,28,25,0.07),0_8px_20px_rgba(30,28,25,0.11)]">
-                <span aria-hidden className="absolute inset-0 animate-spin rounded-full border-2 border-neutral-900/10 border-t-neutral-900/60 motion-reduce:animate-none" />
+            <div role="status" className="relative flex size-full flex-col items-center justify-center gap-5 p-6 text-center text-night">
+              <span className="relative grid size-24 place-items-center rounded-full bg-white/80 shadow-elevation-2">
+                <span aria-hidden className="absolute inset-0 animate-spin rounded-full border-2 border-night/10 border-t-night/60 motion-reduce:animate-none" />
                 <span className="text-4xl font-semibold tabular-nums">{countdown}</span>
               </span>
               <div className="flex max-w-sm flex-col gap-1.5">
-                <h2 className="text-xl font-semibold tracking-[-0.015em]">Get ready</h2>
-                <p className="text-sm text-neutral-600">
+                <h2 className="text-xl font-semibold tracking-title">Get ready</h2>
+                <p className="text-sm text-night/70">
                   {trainerName} will start the conversation in a moment. Find a quiet spot and check your mic.
                 </p>
               </div>
@@ -1048,9 +1048,9 @@ export function SessionView({
 
         <main className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto p-4 sm:p-6">
           <div className="w-full max-w-md">
-            <Card className={cn("w-full rounded-3xl", RAISED)}>
+            <Card size="lg" raised className="w-full">
               <CardHeader>
-                <CardTitle className="text-xl font-semibold tracking-[-0.015em]">Start a practice session</CardTitle>
+                <CardTitle className="text-xl font-semibold tracking-title">Start a practice session</CardTitle>
                 <CardDescription>
                   You’ll join as a learner. {trainerName} is already set up for this scenario.
                 </CardDescription>
@@ -1082,7 +1082,7 @@ export function SessionView({
                   <div className="flex items-center justify-between">
                     <span className="font-medium">{documentLabel}</span>
                     {isContextRequired && (
-                      <span className="text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                      <span className="text-overline font-medium text-caution">
                         Required
                       </span>
                     )}
@@ -1160,10 +1160,10 @@ export function SessionView({
                   <p role="alert" className="text-sm text-destructive">{error}</p>
                 )}
 
-                <Button
+                <Button size="xl"
                   onClick={() => setCountdown(GET_READY_SECONDS)}
                   disabled={!persona || !agent || (isContextRequired && contextIds.length === 0)}
-                  className="mt-2 h-11 w-full rounded-full text-[15px]"
+                  className="mt-2 w-full"
                 >
                   <Play data-icon="inline-start" /> Start session
                 </Button>
@@ -1189,8 +1189,8 @@ export function SessionView({
         >
           <SessionHeader title={title} linkHome={!sessionCode}>
             {isScreenSharing && (
-              <span className="hidden items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-700 sm:flex dark:text-emerald-400">
-                <span aria-hidden className="size-2 animate-pulse rounded-full bg-emerald-500" />
+              <span className="hidden items-center gap-1.5 rounded-full bg-success-subtle px-3 py-1 text-xs font-medium text-success sm:flex">
+                <span aria-hidden className="size-2 animate-pulse rounded-full bg-success" />
                 Sharing your screen
               </span>
             )}
@@ -1202,21 +1202,21 @@ export function SessionView({
             {/* Blocking overlay when screen sharing is stopped */}
             {screenShareRequired && connected && !isScreenSharing && screenShareAttempted && !isScreenSharePending && (
               <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/30 p-6 backdrop-blur-sm">
-                <div className={cn("flex w-full max-w-md flex-col items-center rounded-3xl bg-card p-7 text-center duration-200 animate-in fade-in zoom-in-95", RAISED)}>
+                <div className={cn("flex w-full max-w-md flex-col items-center rounded-tt-lg border border-card-border bg-card p-7 text-center shadow-elevation-2 duration-200 animate-in fade-in zoom-in-95")}>
                   <div className="mb-4 grid size-14 place-items-center rounded-2xl bg-primary/10 text-primary">
                     <ScreenShare className="size-7" />
                   </div>
-                  <h3 className="text-xl font-semibold tracking-[-0.015em]">Share your entire screen</h3>
+                  <h3 className="text-xl font-semibold tracking-title">Share your entire screen</h3>
                   <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                     {screenShareError || "Choose Entire Screen in the browser picker so your trainer can review your work throughout the session. Tabs and windows are not accepted."}
                   </p>
                   <div className="mt-6 w-full flex flex-col gap-2.5">
                     <Button
                       type="button"
-                      size="lg"
+                      size="xl"
                       disabled={isScreenSharePending}
                       onClick={() => void handleEnableScreenShare()}
-                      className="h-11 w-full rounded-full text-[15px]"
+                      className="w-full"
                     >
                       <ScreenShare data-icon="inline-start" />
                       {isScreenSharePending ? "Connecting screen share…" : "Share entire screen to continue"}
@@ -1244,7 +1244,7 @@ export function SessionView({
                     exit={reduceMotion ? undefined : { opacity: 0, scale: 0.98 }}
                     transition={reduceMotion ? { duration: 0 } : { duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
                     // Workspaces are dark-themed tools (code editor, whiteboard), so they keep a dark scope.
-                    className="dark flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl bg-[#15181f] text-foreground shadow-[0_8px_24px_rgba(30,28,25,0.18)]"
+                    className="dark flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl bg-night text-foreground shadow-elevation-3"
                   >
                     <div className="min-h-0 flex-1">
                       {surface.tool === "code" && (
@@ -1413,7 +1413,7 @@ export function SessionView({
 
           {error && (
             <div className="absolute inset-0 z-50 grid place-items-center bg-black/30 p-6 backdrop-blur-sm">
-              <Card className={cn("w-full max-w-md rounded-3xl text-center", RAISED)}>
+              <Card size="lg" raised className="w-full max-w-md text-center">
                 <CardHeader>
                   <CardTitle>{saveFailed ? "Could not save session" : "Session problem"}</CardTitle>
                   <CardDescription>{error}</CardDescription>
@@ -1422,7 +1422,7 @@ export function SessionView({
                   {!autoStart && (
                     <Button
                       variant="outline"
-                      className="h-10 rounded-full px-4"
+                      className="h-10"
                       onClick={() => {
                         resetSessionState();
                         setLaunched(false);
@@ -1431,7 +1431,7 @@ export function SessionView({
                       Back
                     </Button>
                   )}
-                  <Button className="h-10 rounded-full px-4" onClick={saveFailed ? () => void handleDisconnect(pendingEndReasonRef.current) : handleRetry}>Try again</Button>
+                  <Button className="h-10" onClick={saveFailed ? () => void handleDisconnect(pendingEndReasonRef.current) : handleRetry}>Try again</Button>
                 </CardContent>
               </Card>
             </div>
@@ -1443,13 +1443,11 @@ export function SessionView({
   );
 }
 
-const RAISED = "shadow-[0_0_0_1px_var(--border),0_4px_8px_rgba(30,28,25,0.05),0_16px_40px_rgba(30,28,25,0.1)] ring-0";
 const GET_READY_SECONDS = 5;
 /** The stage card: #f7f7f7 with the prototype's aurora, light in both themes like the role-play cards. */
 function Stage({ aurora = true, children }: { aurora?: boolean; children: React.ReactNode }) {
   return (
-    // Inline colour: it must not depend on a freshly generated utility class.
-    <div className="relative flex min-h-0 flex-1 overflow-hidden rounded-3xl" style={{ backgroundColor: "#f7f7f7" }}>
+    <div className="relative flex min-h-0 flex-1 overflow-hidden rounded-3xl bg-stage">
       {aurora ? <Aurora className="pointer-events-none absolute inset-0 size-full opacity-80" /> : null}
       {children}
     </div>
@@ -1461,7 +1459,7 @@ function SessionHeader({ title, linkHome, children }: { title: string; linkHome:
   const logo = (
     <>
       <Image src="/trainertwin-mark.svg" alt="" width={20} height={16} priority />
-      <span className="text-[15px] font-semibold tracking-tight">TrainerTwin</span>
+      <span className="text-body font-semibold tracking-tight">TrainerTwin</span>
     </>
   );
   return (
@@ -1471,7 +1469,7 @@ function SessionHeader({ title, linkHome, children }: { title: string; linkHome:
       ) : (
         <div className="flex items-center gap-2">{logo}</div>
       )}
-      <h1 className="max-w-[40vw] truncate text-center text-[15px] font-medium">{title}</h1>
+      <h1 className="max-w-[40vw] truncate text-center text-body font-medium">{title}</h1>
       <div className="flex items-center justify-end gap-3">{children}</div>
     </header>
   );
@@ -1632,7 +1630,7 @@ function ScenarioIntro({
   }
 
   return (
-    <div className={cn("relative overflow-hidden rounded-2xl bg-black shadow-[0_2px_4px_rgba(30,28,25,0.07),0_8px_20px_rgba(30,28,25,0.11)]", className)}>
+    <div className={cn("relative overflow-hidden rounded-2xl bg-black shadow-elevation-2", className)}>
       <video
         ref={video}
         src={latchedSrc}

@@ -57,7 +57,7 @@ export function WhyPanel({ turn, onClose }: { turn: TurnEvidence; onClose: () =>
   const [shown, setShown] = useState(SHOWN);
 
   return (
-    <div role="dialog" aria-label="Why this answer" className={cn("fixed right-6 bottom-28 z-30 flex max-h-[70dvh] w-[380px] max-w-[calc(100vw-3rem)] flex-col gap-4 overflow-y-auto rounded-3xl bg-card p-6", SOFT_SHADOW)}>
+    <div role="dialog" aria-label="Why this answer" className={cn("fixed right-6 bottom-28 z-30 flex max-h-[70dvh] w-[380px] max-w-[calc(100vw-3.3rem)] flex-col gap-4 overflow-y-auto rounded-3xl bg-card p-6", SOFT_SHADOW)}>
       <div className="flex items-start justify-between">
         <span className={cn("grid size-12 place-items-center rounded-2xl bg-card ring-1 ring-border", SOFT_SHADOW)}>
           <FileSearch className="size-5" aria-hidden />
@@ -66,7 +66,7 @@ export function WhyPanel({ turn, onClose }: { turn: TurnEvidence; onClose: () =>
           <X className="size-4" aria-hidden />
         </button>
       </div>
-      <h2 className="m-0 text-xl leading-7 font-semibold tracking-[-0.015em]">Why this answer</h2>
+      <h2 className="m-0 text-xl leading-7 font-semibold tracking-title">Why this answer</h2>
 
       <p className="m-0 text-sm leading-6">
         <span className="font-medium">Heard: </span>

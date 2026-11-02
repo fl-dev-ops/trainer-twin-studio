@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { ArrowRight } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -48,11 +49,11 @@ function Spectrum({
       >
         <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-muted" />
         <div
-          className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-background bg-primary shadow-sm ring-1 ring-primary/20"
-          style={{ left: `${position}%` }}
+          className="absolute top-1/2 left-(--x) size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-background bg-primary shadow-sm ring-1 ring-primary/20"
+          style={{ "--x": `${position}%` } as CSSProperties}
         />
       </div>
-      <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+      <div className="mt-1 flex justify-between text-overline text-muted-foreground">
         <span>{low}</span>
         <span>{high}</span>
       </div>
@@ -85,7 +86,7 @@ function SectionHeading({ title, tag }: { title: string; tag: "enforced" | "extr
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
       <h3 className="text-sm font-medium">{title}</h3>
-      <Badge variant={tag === "enforced" ? "secondary" : "outline"} className="text-[10px]">
+      <Badge variant={tag === "enforced" ? "secondary" : "outline"} size="sm">
         {tag === "enforced" ? "Measured at runtime" : "Extracted from sources"}
       </Badge>
     </div>
@@ -96,7 +97,7 @@ function SnapshotStat({ value, label }: { value: string | number; label: string 
   return (
     <div className="border-l pl-3 first:border-l-0 first:pl-0 sm:first:border-l sm:first:pl-3">
       <p className="text-xl font-semibold tracking-tight tabular-nums">{value}</p>
-      <p className="mt-0.5 text-[11px] text-muted-foreground">{label}</p>
+      <p className="mt-0.5 text-overline text-muted-foreground">{label}</p>
     </div>
   );
 }
@@ -112,7 +113,7 @@ export function PersonaBaselinePanel({ baseline }: { baseline: PersonaBaseline }
         <div className="border-b bg-muted/30 p-5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="max-w-xl">
-              <p className="text-[11px] font-semibold tracking-[0.18em] text-primary uppercase">
+              <p className="text-overline font-semibold tracking-overline text-primary uppercase">
                 Fidelity reference
               </p>
               <h2 className="mt-2 text-xl font-semibold tracking-tight sm:text-2xl">
@@ -125,8 +126,8 @@ export function PersonaBaselinePanel({ baseline }: { baseline: PersonaBaseline }
             <div className="flex flex-wrap items-center gap-2">
               <Badge>Version {baseline.version}</Badge>
               {provenance.confidence && (
-                <Badge variant="outline" className="capitalize">
-                  {provenance.confidence} confidence
+                <Badge variant="outline">
+                  <span className="capitalize">{provenance.confidence} confidence</span>
                 </Badge>
               )}
             </div>
@@ -216,13 +217,13 @@ export function PersonaBaselinePanel({ baseline }: { baseline: PersonaBaseline }
               <div className="grid gap-3 sm:grid-cols-2">
                 {language.sentenceLength && (
                   <div className="rounded-lg bg-muted/40 p-3">
-                    <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">Cadence</p>
+                    <p className="text-overline font-semibold tracking-wide text-muted-foreground uppercase">Cadence</p>
                     <p className="mt-1 text-xs leading-5">{language.sentenceLength}</p>
                   </div>
                 )}
                 {language.questionStyle && (
                   <div className="rounded-lg bg-muted/40 p-3">
-                    <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">Question style</p>
+                    <p className="text-overline font-semibold tracking-wide text-muted-foreground uppercase">Question style</p>
                     <p className="mt-1 text-xs leading-5">{language.questionStyle}</p>
                   </div>
                 )}
@@ -292,27 +293,25 @@ export function PersonaBaselinePanel({ baseline }: { baseline: PersonaBaseline }
                 {decisionPolicy.map((row) => (
                   <div
                     key={row.state}
-                    className="grid gap-3 border-t p-4 first:border-t-0 md:grid-cols-[minmax(8rem,0.7fr)_1rem_minmax(10rem,1fr)_minmax(14rem,1.5fr)] md:items-center"
+                    className="grid gap-3 border-t p-4 first:border-t-0 md:grid-cols-[minmax(8.8rem,0.7fr)_1.1rem_minmax(11rem,1fr)_minmax(15.4rem,1.5fr)] md:items-center"
                   >
                     <div>
-                      <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                      <p className="text-overline font-semibold tracking-wide text-muted-foreground uppercase">
                         Learner is
                       </p>
                       <p className="mt-1 text-sm font-medium capitalize">{prettyLabel(row.state)}</p>
                     </div>
                     <ArrowRight className="hidden size-4 text-muted-foreground md:block" aria-hidden="true" />
                     <div>
-                      <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                      <p className="text-overline font-semibold tracking-wide text-muted-foreground uppercase">
                         Twin should
                       </p>
                       <p className="mt-1 text-sm font-medium capitalize">{prettyLabel(row.move)}</p>
                     </div>
                     <div className="rounded-md bg-muted/40 p-3">
                       <div className="flex items-center justify-between gap-2">
-                        <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">Evidence</p>
-                        <Badge variant="outline" className="text-[10px] tabular-nums">
-                          {row.exampleCount} {row.exampleCount === 1 ? "example" : "examples"}
-                        </Badge>
+                        <p className="text-overline font-semibold tracking-wide text-muted-foreground uppercase">Evidence</p>
+                        <Badge variant="outline" size="sm"><span className="tabular-nums">{row.exampleCount} {row.exampleCount === 1 ? "example" : "examples"}</span></Badge>
                       </div>
                       <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-muted-foreground" title={row.sample ?? undefined}>
                         {row.sample ? `"${row.sample}"` : "No source example captured"}

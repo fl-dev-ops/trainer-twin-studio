@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 
 /** Gradient banner art behind the quote bubble (reference rp-art--N palette). */
 export const GRADIENTS = [
-  "bg-[linear-gradient(135deg,#a8c6ec_0%,#d2c3e8_50%,#f1c6d7_100%)]",
+  "bg-art-pastel",
   "bg-[linear-gradient(135deg,#a8e0c9_0%,#bfe0e8_50%,#c7cdf2_100%)]",
   "bg-[linear-gradient(135deg,#f3cfa0_0%,#f0bcc7_50%,#ddb8ea_100%)]",
   "bg-[linear-gradient(135deg,#cbe3a8_0%,#bfe6cf_50%,#a8e0e0_100%)]",

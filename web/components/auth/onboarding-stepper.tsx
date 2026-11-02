@@ -34,7 +34,7 @@ export function OnboardingProgress({
             aria-current={stepNumber === currentStep ? "step" : undefined}
             className={cn(
               "h-1 w-9 sm:w-11 rounded-full transition-all duration-300",
-              isActive ? "bg-primary" : "bg-zinc-200 dark:bg-zinc-800",
+              isActive ? "bg-primary" : "bg-muted",
               isCompleted && onStepClick
                 ? "cursor-pointer hover:opacity-80"
                 : "cursor-default",

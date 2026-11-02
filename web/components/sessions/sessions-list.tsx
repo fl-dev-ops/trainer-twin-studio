@@ -43,7 +43,7 @@ export function SessionsList({ data: { range, scenario, learner, scenarios, lear
         <SectionHeader title="All sessions" note="Role play and twin conversations your learners had" />
 
         {sessions.length === 0 ? (
-          <Empty className="rounded-2xl border bg-card">
+          <Empty>
             <EmptyHeader>
               <EmptyMedia variant="icon">
                 <SessionsIcon />
@@ -72,13 +72,13 @@ export function SessionsList({ data: { range, scenario, learner, scenarios, lear
                     <UserAvatar user={session.user} size="lg" />
                     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className="truncate text-sm font-medium">{name}</span>
-                      <span className="truncate text-[13px] text-muted-foreground">
+                      <span className="truncate text-body-s text-muted-foreground">
                         {session.agent.name || session.agentSlug} ·{" "}
                         <SessionTime iso={(session.startedAt ?? session.createdAt).toISOString()} />
                         {status ? ` · ${status}` : ""}
                       </span>
                       {snippet ? (
-                        <span className="truncate text-[13px] text-muted-foreground">{snippet}</span>
+                        <span className="truncate text-body-s text-muted-foreground">{snippet}</span>
                       ) : null}
                     </span>
                     <ArrowUpRight

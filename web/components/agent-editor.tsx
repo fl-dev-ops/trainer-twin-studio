@@ -289,7 +289,7 @@ export function AgentEditor(initial: AgentEditorProps) {
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[minmax(0,7fr)_minmax(18rem,3fr)] lg:overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[minmax(0,7fr)_minmax(19.8rem,3fr)] lg:overflow-hidden">
         <section className="flex min-h-128 min-w-0 flex-col gap-5 p-4 sm:p-6 lg:min-h-0 lg:overflow-y-auto">
           <Field data-invalid={dirty && !instruction.trim()}>
             <FieldLabel htmlFor="agent-instruction">Instructions</FieldLabel>
@@ -354,7 +354,7 @@ export function AgentEditor(initial: AgentEditorProps) {
                   setDirty(true);
                 }}
               />
-              <FieldDescription className="text-[11px]">
+              <FieldDescription className="text-overline">
                 Shown wherever this scenario is available.
               </FieldDescription>
               {!name.trim() ? (
@@ -383,7 +383,7 @@ export function AgentEditor(initial: AgentEditorProps) {
                   </SelectGroup>
                 </SelectContent>
               </Select>
-              <FieldDescription className="text-[11px]">
+              <FieldDescription className="text-overline">
                 Behavior and communication style the agent runs with.
               </FieldDescription>
               {!personaSlug ? <FieldError>Choose a persona.</FieldError> : null}
@@ -417,7 +417,7 @@ export function AgentEditor(initial: AgentEditorProps) {
                   </SelectGroup>
                 </SelectContent>
               </Select>
-              <FieldDescription className="text-[11px]">
+              <FieldDescription className="text-overline">
                 Only this collection is searched while the scenario runs.{" "}
                 <Link href="/knowledge">Manage knowledge</Link>.
               </FieldDescription>
@@ -629,7 +629,7 @@ export function AgentEditor(initial: AgentEditorProps) {
                   </SelectGroup>
                 </SelectContent>
               </Select>
-              <FieldDescription className="text-[11px]">
+              <FieldDescription className="text-overline">
                 Used whenever this scenario speaks.{" "}
                 <Link href="/voice">Manage voices</Link>.
               </FieldDescription>
@@ -667,12 +667,12 @@ function InstructionEditor({
         onMarkdownChange(markdown);
       }}
     >
-      <EditorContainer className="max-h-150 rounded-xl border bg-background">
+      <EditorContainer variant="field" className="max-h-150">
         <Editor
           id="agent-instruction"
           aria-label="Scenario instructions"
-          variant="none"
-          className="min-h-32 px-4 py-3 leading-relaxed"
+          variant="field"
+          className="min-h-32"
           placeholder="Describe what this scenario should do and how the agent should behave, operate and assess..."
         />
       </EditorContainer>

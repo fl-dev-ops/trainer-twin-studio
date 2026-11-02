@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useState, type ReactNode, type CSSProperties } from "react";
 import {
   ArrowLeft, BookOpen, Camera, Check, FileText, HardDrive, LoaderCircle, Mic, Minus, Pause, Pencil, Play, Plus, Sparkles, Video,
 } from "lucide-react";
@@ -38,11 +38,11 @@ const ZOOM = { min: 50, max: 150, step: 10 };
 /** Coloured tag that sits above each node, like the reference canvas. */
 function NodeTag({ tone, children }: { tone: "blue" | "amber" | "green"; children: ReactNode }) {
   const tones = {
-    blue: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
-    amber: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
-    green: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+    blue: "bg-info-subtle text-info",
+    amber: "bg-caution-subtle text-caution",
+    green: "bg-success-subtle text-success",
   };
-  return <span className={cn("inline-flex h-7 items-center self-start rounded-full px-3 text-[13px] font-medium", tones[tone])}>{children}</span>;
+  return <span className={cn("inline-flex h-7 items-center self-start rounded-full px-3 text-body-s font-medium", tones[tone])}>{children}</span>;
 }
 
 function Node({ tag, tone, title, children, footer, className }: {
@@ -51,8 +51,8 @@ function Node({ tag, tone, title, children, footer, className }: {
   return (
     <section aria-label={title} className={cn("flex w-[340px] shrink-0 flex-col gap-3", className)}>
       <NodeTag tone={tone}>{tag}</NodeTag>
-      <div className="flex flex-col gap-5 rounded-[16px] border border-(--card-border) bg-card p-5 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
-        <h2 className="m-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{title}</h2>
+      <div className="flex flex-col gap-5 rounded-tt-lg border border-(--card-border) bg-card p-5 shadow-card">
+        <h2 className="m-0 text-overline font-semibold uppercase tracking-overline text-muted-foreground">{title}</h2>
         {children}
         {footer ? <div className="flex flex-wrap gap-2 pt-1">{footer}</div> : null}
       </div>
@@ -99,7 +99,7 @@ export function TwinBrainPage({ knowledge, avatar }: { knowledge: BrainKnowledge
   const zoomBy = (delta: number) => setZoom((value) => Math.min(ZOOM.max, Math.max(ZOOM.min, value + delta)));
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-[radial-gradient(circle,var(--tone-control)_1px,transparent_1px)] bg-size-[20px_20px]">
+    <div className="relative h-full w-full overflow-hidden bg-dot-grid">
       <header className="relative z-10 flex h-16 items-center justify-between gap-4 px-5">
         <Link href="/twin" className="inline-flex items-center gap-2 text-sm text-foreground transition-colors hover:text-muted-foreground">
           <ArrowLeft className="size-4" aria-hidden />
@@ -110,7 +110,7 @@ export function TwinBrainPage({ knowledge, avatar }: { knowledge: BrainKnowledge
         </h1>
         <Link
           href="/twin"
-          className="inline-flex h-9 items-center rounded-full bg-(--brand) px-5 text-sm font-medium text-white transition-colors hover:bg-[#e04d00] dark:hover:bg-[#ff7e33]"
+          className="inline-flex h-9 items-center rounded-full bg-(--brand) px-5 text-sm font-medium text-white transition-colors hover:bg-brand-hover"
         >
           Done
         </Link>
@@ -119,8 +119,8 @@ export function TwinBrainPage({ knowledge, avatar }: { knowledge: BrainKnowledge
       <div className="absolute inset-0 top-16 overflow-auto">
         <div className="flex min-h-full min-w-max items-center justify-center p-12">
           <div
-            className="flex origin-center items-start transition-transform duration-200 ease-out motion-reduce:transition-none"
-            style={{ transform: `scale(${zoom / 100})` }}
+            className="flex origin-center scale-(--zoom) items-start transition-transform duration-200 ease-out motion-reduce:transition-none"
+            style={{ "--zoom": zoom / 100 } as CSSProperties}
           >
             <Node
               tag="Knowledge" tone="blue" title="Knowledge"
@@ -131,9 +131,9 @@ export function TwinBrainPage({ knowledge, avatar }: { knowledge: BrainKnowledge
                   {knowledge.connectors.map((connector) => {
                     const Icon = CONNECTOR_ICONS[connector.kind];
                     return (
-                      <li key={connector.id} className="flex items-center justify-between gap-3 rounded-[12px] bg-(--tone-control)/60 px-3 py-2.5 text-sm">
+                      <li key={connector.id} className="flex items-center justify-between gap-3 rounded-tt-md bg-(--tone-control)/60 px-3 py-2.5 text-sm">
                         <span className="flex min-w-0 items-center gap-2.5"><Icon className="size-4 shrink-0" aria-hidden /><span className="truncate">{connector.label}</span></span>
-                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-success-subtle px-2 py-0.5 text-xs font-medium text-success">
                           <Check className="size-3" aria-hidden /> {connector.status}
                         </span>
                       </li>
@@ -141,7 +141,7 @@ export function TwinBrainPage({ knowledge, avatar }: { knowledge: BrainKnowledge
                   })}
                 </ul>
               ) : (
-                <p className="m-0 rounded-[12px] bg-(--tone-control)/60 px-3 py-2.5 text-sm text-muted-foreground">No connectors yet. Connect Google Drive, Notion or YouTube from Edit.</p>
+                <p className="m-0 rounded-tt-md bg-(--tone-control)/60 px-3 py-2.5 text-sm text-muted-foreground">No connectors yet. Connect Google Drive, Notion or YouTube from Edit.</p>
               )}
               <div className="flex flex-col gap-2.5">
                 <p className="m-0 flex items-baseline justify-between gap-3 text-sm">
@@ -222,7 +222,7 @@ export function TwinBrainPage({ knowledge, avatar }: { knowledge: BrainKnowledge
         </div>
       </div>
 
-      <div className="absolute right-5 bottom-5 z-10 flex items-center gap-1 rounded-full border border-(--card-border) bg-card p-1 shadow-[0_2px_8px_rgb(30_28_25/0.08)]">
+      <div className="absolute right-5 bottom-5 z-10 flex items-center gap-1 rounded-full border border-(--card-border) bg-card p-1 shadow-elevation-2">
         <button type="button" onClick={() => zoomBy(-ZOOM.step)} disabled={zoom <= ZOOM.min} aria-label="Zoom out" className={zoomButton}>
           <Minus className="size-4" aria-hidden />
         </button>
@@ -249,12 +249,12 @@ function EditLink({ href }: { href: string }) {
 function Waveform({ playing }: { playing: boolean }) {
   const bars = [6, 14, 9, 18, 12, 20, 8, 15, 10];
   return (
-    <span aria-hidden className="flex h-6 items-center gap-[3px]">
+    <span aria-hidden className="flex h-6 items-center gap-0.75">
       {bars.map((height, index) => (
         <span
           key={index}
-          className={cn("w-[3px] rounded-full bg-foreground/70", playing && "animate-pulse motion-reduce:animate-none")}
-          style={{ height, animationDelay: `${index * 90}ms` }}
+          className={cn("h-(--h) w-[3px] rounded-full bg-foreground/70 [animation-delay:var(--delay)]", playing && "animate-pulse motion-reduce:animate-none")}
+          style={{ "--h": typeof height === "number" ? `${height}px` : height, "--delay": `${index * 90}ms` } as CSSProperties}
         />
       ))}
     </span>

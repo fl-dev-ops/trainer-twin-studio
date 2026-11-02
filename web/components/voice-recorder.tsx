@@ -152,25 +152,25 @@ export function VoiceRecorder({
                 <Button variant="ghost" size="sm" onClick={cancel}>
                   Re-record
                 </Button>
-                <Button
+                <Button variant="strong"
                   size="sm"
                   onClick={finish}
                   disabled={seconds < MIN_SECONDS}
-                  className="rounded-full bg-foreground px-5 text-background hover:bg-foreground/85"
+                  
                 >
-                  <Square /> Finish
+                  <Square data-icon="inline-start" /> Finish
                 </Button>
               </>
             ) : (
-              <Button
+              <Button variant="strong"
                 size="lg"
                 onClick={start}
                 onMouseEnter={() => micIconRef.current?.startAnimation()}
                 onMouseLeave={() => micIconRef.current?.stopAnimation()}
                 disabled={disabled}
-                className="rounded-full bg-foreground px-5 text-background hover:bg-foreground/85"
+                
               >
-                <MicIcon ref={micIconRef} size={16} /> Start recording
+                <MicIcon data-icon="inline-start" ref={micIconRef} size={16} /> Start recording
               </Button>
             )}
           </div>

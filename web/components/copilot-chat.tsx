@@ -260,7 +260,7 @@ export function CopilotChat({
           {!panel && (
             <div
               aria-hidden="true"
-              className="absolute inset-0 bg-linear-to-b from-background via-background/70 to-transparent backdrop-blur-md mask-[linear-gradient(to_bottom,black_0%,transparent_100%)]"
+              className="absolute inset-0 bg-linear-to-b from-background via-background/70 to-transparent backdrop-blur-md mask-fade-b"
             />
           )}
           <div
@@ -285,9 +285,10 @@ export function CopilotChat({
                   size="sm"
                   aria-label="Open workspace"
                   onClick={() => setBlueprintOpen(true)}
+                  // eslint-disable-next-line shadcn/no-restyle -- an icon on small screens, icon + label from sm: no Button size changes responsively.
                   className="size-8 px-0 sm:w-auto sm:px-3 xl:hidden"
                 >
-                  <Layers3 aria-hidden="true" />{" "}
+                  <Layers3 data-icon="inline-start" aria-hidden="true" />{" "}
                   <span className="hidden sm:inline">Workspace</span>
                 </Button>
               )}
@@ -307,9 +308,10 @@ export function CopilotChat({
                 aria-label="New conversation"
                 onClick={newConversation}
                 disabled={busy}
+                // eslint-disable-next-line shadcn/no-restyle -- an icon on small screens, icon + label from sm: no Button size changes responsively.
                 className="size-8 px-0 sm:w-auto sm:px-3"
               >
-                <Plus aria-hidden="true" />{" "}
+                <Plus data-icon="inline-start" aria-hidden="true" />{" "}
                 <span className="hidden sm:inline">New</span>
               </Button>
               {panel && (
@@ -386,7 +388,7 @@ export function CopilotChat({
           <div
             aria-hidden="true"
             className={cn(
-              "absolute inset-0 bg-linear-to-b from-transparent backdrop-blur-md mask-[linear-gradient(to_bottom,transparent_0%,black_100%)]",
+              "absolute inset-0 bg-linear-to-b from-transparent backdrop-blur-md mask-fade-t",
               panel ? "to-sidebar" : "to-background",
             )}
           />
@@ -454,7 +456,7 @@ export function CopilotChat({
           </aside>
 
           <Sheet open={blueprintOpen} onOpenChange={setBlueprintOpen}>
-            <SheetContent className="w-[min(92vw,22rem)] bg-background px-2 pb-2 pt-12 text-sidebar-foreground">
+            <SheetContent className="w-[min(92vw,24.2rem)] px-2 pb-2 pt-12">
               <SheetHeader className="sr-only">
                 <SheetTitle>Scenario workspace</SheetTitle>
                 <SheetDescription>
@@ -649,7 +651,7 @@ function ToolPartView({
 
   return (
     <div
-      className="not-prose flex min-h-7 items-center gap-2 py-1 text-sm"
+      className="flex min-h-7 items-center gap-2 py-1 text-sm"
       title={part.state === "output-error" ? part.errorText : undefined}
     >
       <ToolStateIcon state={part.state} />

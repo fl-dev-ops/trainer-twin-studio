@@ -98,7 +98,7 @@ export function GoogleDriveImport({ onSuccess, onPickerOpenChange }: { onSuccess
       <div className="flex flex-wrap items-center gap-2">
         {connection === "checking" ? <span className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Checking Google Drive…</span> : connection === "connected" ? (
           <>
-            <Button disabled={busy} onClick={choose}><CloudDownload /> Choose files</Button>
+            <Button disabled={busy} onClick={choose}><CloudDownload data-icon="inline-start" /> Choose files</Button>
             <Button variant="ghost" disabled={busy} onClick={forget}>Use another account</Button>
           </>
         ) : <Button disabled={busy || connection === "unconfigured"} onClick={connect}>{busy ? <Spinner /> : <CloudDownload />} Connect Google Drive</Button>}

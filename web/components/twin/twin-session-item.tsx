@@ -1,74 +1,53 @@
 import Link from "next/link";
 import { SessionTime } from "@/components/sessions/session-time";
+import { Badge } from "@/components/ui/badge";
+import { UserAvatar } from "@/components/user-avatar";
 import type { TwinOutputs } from "@/lib/twin/trpc";
 import { cn } from "@/lib/utils";
+
+/** Learner feedback is 1-5, read as three levels: green / neutral / red (only the poles carry hue). Means round first. */
+export function helpfulTone(score: number) {
+  const rounded = Math.round(score);
+  return rounded >= 5 ? "success" : rounded >= 4 ? "secondary" : "error";
+}
 
 /** One learner conversation with a twin (twin tRPC `sessions.list` row). */
 export type TwinSessionItemData = TwinOutputs["sessions"]["list"][number];
 
-const AVATAR_TONES = [
-  "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-  "bg-sky-500/15 text-sky-600 dark:text-sky-400",
-  "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-  "bg-rose-500/15 text-rose-600 dark:text-rose-400",
-  "bg-orange-500/15 text-orange-600 dark:text-orange-400",
-];
-
 export function TwinSessionItem({
   session,
-  index = 0,
   divider = false,
   className,
 }: {
   session: TwinSessionItemData;
-  index?: number;
   divider?: boolean;
   className?: string;
 }) {
-  // Learner feedback is 1-5.
   const score = session.rating;
-  const scoreTone =
-    score === null
-      ? ""
-      : score >= 5
-      ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-      : score >= 4
-        ? "bg-sky-500/15 text-sky-600 dark:text-sky-400"
-        : "bg-amber-500/15 text-amber-600 dark:text-amber-400";
+  const scoreTone = score === null ? "secondary" : helpfulTone(score);
 
   return (
-    <li className={cn(divider && "border-t border-(--border)", className)}>
+    <li className={cn(divider && "border-t border-border", className)}>
       <Link
         href={`/twin/sessions/${session.id}`}
         className="grid w-full grid-cols-[40px_minmax(0,1fr)_28px] items-start gap-3.5 p-4 px-5 text-left transition-colors hover:bg-(--sidebar) outline-none focus-visible:bg-(--sidebar)"
       >
-        {/* Initial avatar */}
-        <span
-          className={cn(
-            "grid size-10 shrink-0 place-items-center rounded-full text-sm font-semibold",
-            AVATAR_TONES[index % AVATAR_TONES.length],
-          )}
-          aria-hidden
-        >
-          {session.learner.charAt(0)}
-        </span>
+        <UserAvatar user={{ name: session.learner, email: session.learnerEmail }} size="xl" />
 
         {/* Middle text */}
         <span className="flex flex-col gap-0.5 min-w-0">
           <span className="text-sm font-semibold leading-5 text-(--foreground)">{session.learner}</span>
-          <span className="text-[13px] leading-[18px] text-muted-foreground">
+          <span className="text-body-s leading-body-s text-muted-foreground">
             {session.agentName} · <SessionTime iso={session.at} />
           </span>
           {session.question ? (
-            <span className="text-[13px] leading-[18px] text-muted-foreground truncate">
+            <span className="truncate text-body-s leading-body-s text-muted-foreground">
               “{session.question}”{session.answer ? ` · ${session.answer}` : ""}
             </span>
           ) : null}
           {score !== null ? (
             <span className="mt-1 flex flex-wrap items-center gap-2">
-              <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium", scoreTone)}>
-                Helpful {score}/5
-              </span>
+              <Badge variant={scoreTone}>Helpful {score}/5</Badge>
             </span>
           ) : null}
         </span>

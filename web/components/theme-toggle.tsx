@@ -17,12 +17,13 @@ export function ThemeToggle() {
   const label = dark ? "Switch to light" : "Switch to dark";
   return (
     <Button
-      variant="ghost"
+      variant="subtle"
+      size="icon"
       onClick={() => setTheme(dark ? "light" : "dark")}
       aria-label={label}
       aria-pressed={dark}
       title={label}
-      className="group/switch size-8 rounded-md p-0 text-(--text-secondary) shadow-none hover:bg-(--tone-control) hover:text-foreground dark:hover:bg-(--tone-control) dark:hover:text-foreground [&_svg]:size-4"
+      className="group/switch"
     >
       {dark ? <ThemeDarkIcon /> : <ThemeLightIcon />}
     </Button>

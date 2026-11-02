@@ -10,8 +10,8 @@ import { PageContainer } from "@/components/page-container";
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid grid-cols-1 gap-1.5 py-4 sm:grid-cols-[160px_minmax(0,1fr)] sm:gap-4">
-      <p className="m-0 text-sm leading-[22px] font-medium text-muted-foreground">{label}</p>
-      <div className="min-w-0 text-sm leading-[22px]">{children}</div>
+      <p className="m-0 text-sm leading-body font-medium text-muted-foreground">{label}</p>
+      <div className="min-w-0 text-sm leading-body">{children}</div>
     </div>
   );
 }
@@ -40,7 +40,7 @@ export function PersonaDetail({ item }: { item: PersonaView }) {
         </Link>
         <Link
           href={editHref}
-          className="inline-flex h-8 items-center gap-2 rounded-full border border-(--card-border) px-4 text-[13px] font-medium transition-colors hover:bg-(--tone-control)"
+          className="inline-flex h-8 items-center gap-2 rounded-full border border-(--card-border) px-4 text-body-s font-medium transition-colors hover:bg-(--tone-control)"
         >
           <Pencil className="size-3.5" aria-hidden />
           Edit
@@ -48,13 +48,13 @@ export function PersonaDetail({ item }: { item: PersonaView }) {
       </header>
 
       <article className={cn(CARD, "relative mt-6 flex flex-col items-start gap-3 p-6")}>
-        <PersonaPhoto name={persona.name} photoUrl={item.photoUrl} className="size-24 text-3xl" />
+        <PersonaPhoto name={persona.name} photoUrl={item.photoUrl} size="xl" />
         <div className="absolute top-4 right-4 flex gap-2">
           {item.isOwn ? <RoleChip className="bg-(--brand)/15 text-(--brand-strong) dark:text-(--brand)">Your persona</RoleChip> : null}
           <RoleChip>{persona.role}</RoleChip>
         </div>
         <div>
-          <h1 className="m-0 text-[28px] leading-9 font-semibold tracking-[-0.02em]">{persona.name}</h1>
+          <h1 className="m-0 text-2xl leading-9 font-semibold tracking-title">{persona.name}</h1>
           {place ? <p className="m-0 text-sm text-muted-foreground">{place}</p> : null}
         </div>
       </article>

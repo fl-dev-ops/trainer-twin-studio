@@ -54,7 +54,7 @@ export default function DashboardPage() {
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {stats.map((stat) => (
         <Link key={stat.label} href={stat.href}>
-          <Card className="transition-colors hover:bg-accent/60">
+          <Card interactive>
             <CardHeader className="pb-2">
               <CardDescription className="flex items-center gap-1.5">
                 <stat.icon className="size-3.5" /> {stat.label}

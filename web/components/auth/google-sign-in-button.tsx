@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { authClient } from "@/lib/auth-client";
 
+/* eslint-disable shadcn/no-raw-colors -- Google's own logo colours: a third-party mark, outside the palette by design. */
 function GoogleIcon(props: React.ComponentProps<"svg">) {
   return (
     <svg viewBox="0 0 24 24" {...props}>
@@ -27,6 +28,7 @@ function GoogleIcon(props: React.ComponentProps<"svg">) {
     </svg>
   );
 }
+/* eslint-enable shadcn/no-raw-colors */
 
 /** `callbackURL`: where Google returns to (default: this page as it is now). */
 export function GoogleSignInButton({ label = "Continue with Google", callbackURL, className }: { label?: string; callbackURL?: string; className?: string }) {

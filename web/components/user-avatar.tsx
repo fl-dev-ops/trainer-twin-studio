@@ -13,11 +13,27 @@ const SIZES = {
   md: "size-8 text-xs",
   lg: "size-9 text-sm",
   xl: "size-10 text-sm",
+  "2xl": "size-16 text-2xl",
+  "3xl": "size-[86px] text-3xl",
 } as const;
+
+/** A face is round, or a rounded square (the twin's own face on its library and calibration pages). */
+const SHAPES = {
+  circle: "",
+  rounded: "rounded-tt-lg after:rounded-tt-lg *:rounded-tt-lg",
+} as const;
+
+export type AvatarShape = keyof typeof SHAPES;
 
 export type UserAvatarSize = keyof typeof SIZES;
 
-// Opaque fills: avatars overlap in groups, so see-through tints would bleed into each other.
+/** The box (size and shape) an avatar takes, for media that stands in for one (a twin's video face). */
+export function avatarBox(size: UserAvatarSize, shape: AvatarShape = "circle") {
+  return cn(SIZES[size], shape === "circle" ? "rounded-full" : SHAPES.rounded);
+}
+
+// Opaque fills: avatars overlap in groups, so see-through tints would bleed into each other. These are identity
+// colours, deliberately outside the token palette (design system decision D05: category colours stay out of it).
 const TINTS = [
   "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200",
   "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200",
@@ -46,18 +62,20 @@ export function avatarInitial(user: AvatarUser): string {
 export function UserAvatar({
   user,
   size = "md",
+  shape = "circle",
   label = false,
   className,
 }: {
   user: AvatarUser;
   size?: UserAvatarSize;
+  shape?: AvatarShape;
   /** Announce the name to screen readers (off when the name is already visible next to it). */
   label?: boolean;
   className?: string;
 }) {
   return (
     <Avatar
-      className={cn(SIZES[size], className)}
+      className={cn(SIZES[size], SHAPES[shape], className)}
       title={avatarLabel(user)}
       aria-label={label ? avatarLabel(user) : undefined}
       aria-hidden={label ? undefined : true}

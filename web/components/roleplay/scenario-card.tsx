@@ -35,17 +35,17 @@ export function ScenarioCard({ scenario }: { scenario: ScenarioCardData }) {
   const badge = scenario.status === "draft" ? "Draft" : scenario.draftRevision ? "Unpublished changes" : null;
 
   return (
-    <article className="group relative flex flex-col rounded-2xl border bg-card shadow-[0_1px_2px_rgba(30,28,25,0.04)] transition-shadow focus-within:ring-3 focus-within:ring-ring/50 hover:shadow-md">
+    <article className="group relative flex flex-col rounded-2xl border bg-card shadow-elevation-1 transition-shadow focus-within:ring-3 focus-within:ring-ring/50 hover:shadow-md">
       {/* Prototype art: one light wash in both themes. */}
-      <div className="relative isolate flex h-[168px] items-center rounded-t-2xl bg-[linear-gradient(135deg,#a8c6ec_0%,#d2c3e8_50%,#f1c6d7_100%)] px-4">
+      <div className="relative isolate flex h-[168px] items-center rounded-t-2xl bg-art-pastel px-4">
         {badge ? (
-          <Badge variant="secondary" className="absolute top-3 right-3 bg-white/80 text-neutral-800">
+          <Badge variant="glass" className="absolute top-3 right-3">
             {badge}
           </Badge>
         ) : null}
         <div
           className={cn(
-            "relative flex w-full items-center gap-2 rounded-xl bg-card p-3 text-[13px] leading-[18px] text-muted-foreground shadow-[0_2px_8px_rgba(0,0,0,0.08)]",
+            "relative flex w-full items-center gap-2 rounded-xl bg-card p-3 text-body-s leading-body-s text-muted-foreground shadow-elevation-2",
             // The second card peeking out under the bubble.
             "before:absolute before:inset-x-2.5 before:-bottom-2.5 before:top-1/2 before:-z-10 before:rounded-b-xl before:bg-card/30",
           )}
@@ -58,13 +58,13 @@ export function ScenarioCard({ scenario }: { scenario: ScenarioCardData }) {
       </div>
 
       <div className="flex flex-col gap-2 px-4 pt-3.5">
-        <h3 className="text-[15px] leading-[22px] font-semibold">
+        <h3 className="text-body leading-body font-semibold">
           {/* Stretched link: the whole card opens the scenario; the menu sits above it. */}
           <Link href={href} className="outline-none after:absolute after:inset-0 after:rounded-2xl">
             {scenario.name}
           </Link>
         </h3>
-        <p className="line-clamp-3 text-[13px] leading-5 text-muted-foreground">
+        <p className="line-clamp-3 text-body-s leading-5 text-muted-foreground">
           {scenario.objective || "A guided conversational scenario."}
         </p>
       </div>
@@ -91,7 +91,7 @@ export function ScenarioMenu({ scenario }: { scenario: ScenarioCardData }) {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                className="relative z-10 size-8 rounded-full"
+                className="relative z-10 size-8"
                 aria-label={`Actions for ${scenario.name}`}
               />
             }

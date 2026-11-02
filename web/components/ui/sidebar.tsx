@@ -27,9 +27,9 @@ import { PanelLeftIcon, PanelRightIcon } from "lucide-react"
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
-const SIDEBAR_WIDTH = "16rem"
-const SIDEBAR_WIDTH_MOBILE = "18rem"
-const SIDEBAR_WIDTH_ICON = "3rem"
+const SIDEBAR_WIDTH = "17.6rem"
+const SIDEBAR_WIDTH_MOBILE = "19.8rem"
+const SIDEBAR_WIDTH_ICON = "3.3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 
 type SidebarSide = "left" | "right"
@@ -267,7 +267,7 @@ function Sidebar({
             // Adjust the padding for floating and inset variants.
             variant === "floating" || variant === "inset"
               ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
-              : "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l",
+              : "group-data-[collapsible=icon]:w-(--sidebar-width-icon)",
             className
           )}
           style={style}
@@ -520,6 +520,25 @@ const sidebarMenuButtonVariants = cva(
         default: "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
         outline:
           "bg-background shadow-[0_0_0_1px_var(--sidebar-border)] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-[0_0_0_1px_var(--sidebar-accent)]",
+        // The studio's primary navigation (design system §7): the active item is a white pill lifted with
+        // elevation-1, its icon in brand and its label in brand ink; collapsed, a 40px centered square.
+        nav: cn(
+          "min-h-8 px-2 text-sm font-normal text-(--text-secondary)",
+          "hover:bg-(--tone-control) hover:text-foreground",
+          "[&_svg]:size-5 [&_svg]:shrink-0 [&_svg]:text-(--text-secondary) [&_svg]:transition-colors",
+          "data-active:bg-card data-active:font-medium data-active:text-primary data-active:shadow-elevation-1 data-active:hover:bg-card",
+          "data-active:[&_svg]:text-(--brand)",
+          "dark:data-active:text-foreground dark:data-active:[&_svg]:text-foreground",
+          "group-data-[collapsible=icon]:size-10! group-data-[collapsible=icon]:min-h-0! group-data-[collapsible=icon]:p-0!",
+          "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:[&>span]:hidden",
+        ),
+        // The signed-in account at the foot of the rail: a 48px card (12px radius, card border, elevation-1, sunken
+        // on hover); collapsed, a bare 32px photo.
+        account: cn(
+          "h-12 gap-3 rounded-tt-md border border-card-border bg-card px-2 pr-3 text-sm shadow-elevation-1",
+          "hover:bg-(--sidebar) hover:text-foreground data-open:bg-card dark:data-open:bg-card",
+          "group-data-[collapsible=icon]:h-8! group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:p-0! group-data-[collapsible=icon]:shadow-none",
+        ),
       },
       size: {
         default: "h-8 text-sm",

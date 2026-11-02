@@ -78,7 +78,7 @@ export function PersonaEditor({ slug, initial, media, voices = [], isOwn = false
         </Link>
       </header>
       <div className="mt-6">
-        <h1 className="m-0 text-[20px] leading-7 font-semibold tracking-[-0.015em]">{slug ? `Edit ${initial.name || "persona"}` : "Create persona"}</h1>
+        <h1 className="m-0 text-title-m leading-7 font-semibold tracking-title">{slug ? `Edit ${initial.name || "persona"}` : "Create persona"}</h1>
         <p className="mt-1 text-sm text-muted-foreground">Who your learners talk to in a role play: who they are, how they talk, and how they sound and look.</p>
       </div>
 
@@ -123,7 +123,7 @@ export function PersonaEditor({ slug, initial, media, voices = [], isOwn = false
                   const on = form.behaviours.includes(b.value);
                   return (
                     <button key={b.value} type="button" aria-pressed={on} title={b.meaning} onClick={() => toggleBehaviour(b.value)}
-                      className={cn("inline-flex h-8 items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",
+                      className={cn("inline-flex h-8 items-center gap-1.5 rounded-full border px-3.5 text-body-s font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",
                         on ? "border-transparent bg-foreground text-background" : "border-(--card-border) text-(--text-secondary) hover:bg-(--tone-control)")}>
                       {on ? <Check className="size-3.5" aria-hidden /> : null}
                       {b.value}
@@ -146,13 +146,13 @@ export function PersonaEditor({ slug, initial, media, voices = [], isOwn = false
             <Choice label="Formality" options={FORMALITY} value={form.formality} onChange={(formality) => update({ formality })} />
             <Choice label="Answer length" options={ANSWER_LENGTH} value={form.answerLength} onChange={(answerLength) => update({ answerLength })} />
             <Choice label="Interrupts" options={INTERRUPTS} value={form.interrupts} onChange={(interrupts) => update({ interrupts })} />
-            <div className="flex flex-col divide-y divide-(--border) rounded-[12px] border border-(--border) bg-(--sidebar) px-4">
+            <div className="flex flex-col divide-y divide-(--border) rounded-tt-md border border-(--border) bg-(--sidebar) px-4">
               <ToggleRow label="Pauses before answering" help="Takes a beat to think, like a real call." checked={form.pauses} onChange={(pauses) => update({ pauses })} />
               <ToggleRow label="Uses fillers" help="Says “um”, “well” and “you know” now and then." checked={form.fillers} onChange={(fillers) => update({ fillers })} />
             </div>
             <Field label="Signature phrases" help={`Lines they come back to, in their own words. Up to ${MAX_PHRASES}.`}>
               {form.phrases.length ? (
-                <ul className="m-0 flex list-none flex-col divide-y divide-(--border) rounded-[12px] border border-(--border) p-0">
+                <ul className="m-0 flex list-none flex-col divide-y divide-(--border) rounded-tt-md border border-(--border) p-0">
                   {form.phrases.map((p) => (
                     <li key={p} className="flex items-center justify-between gap-3 px-3.5 py-2 text-sm">
                       <span>“{p}”</span>
@@ -164,7 +164,7 @@ export function PersonaEditor({ slug, initial, media, voices = [], isOwn = false
               <div className="flex gap-2">
                 <Input aria-label="Signature phrase" value={phrase} placeholder="Example: I need to talk to my husband." disabled={form.phrases.length >= MAX_PHRASES}
                   onChange={(e) => setPhrase(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addPhrase(); } }} />
-                <Button variant="outline" onClick={addPhrase} disabled={!phrase.trim() || form.phrases.length >= MAX_PHRASES}><Plus /> Add</Button>
+                <Button variant="outline" onClick={addPhrase} disabled={!phrase.trim() || form.phrases.length >= MAX_PHRASES}><Plus data-icon="inline-start" /> Add</Button>
               </div>
             </Field>
             <Field label="In their words" htmlFor="p-talk" help="One or two sentences on how they come across.">
@@ -193,12 +193,11 @@ export function PersonaEditor({ slug, initial, media, voices = [], isOwn = false
       </Tabs>
 
       <div className="mt-6 flex items-center justify-end gap-3">
-        <Link href={back} className="inline-flex h-9 items-center rounded-full px-4 text-sm font-medium text-muted-foreground hover:text-foreground">Cancel</Link>
-        <button type="button" onClick={() => void save()} disabled={saving || !form.name.trim()}
-          className="inline-flex h-9 items-center gap-2 rounded-full bg-(--brand) px-5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60">
-          <Check className="size-4" aria-hidden />
+        <Button variant="ghost" nativeButton={false} render={<Link href={back} />}>Cancel</Button>
+        <Button variant="brand" onClick={() => void save()} disabled={saving || !form.name.trim()}>
+          <Check data-icon="inline-start" aria-hidden />
           {saving ? "Saving…" : slug ? "Save changes" : "Create persona"}
-        </button>
+        </Button>
       </div>
     </PageContainer>
   );
@@ -226,8 +225,8 @@ function Choice<T extends string>({ label, options, value, onChange }: { label: 
       <div role="radiogroup" aria-label={label} className="inline-flex w-fit items-center rounded-full bg-(--sidebar) p-1">
         {options.map((option) => (
           <button key={option.value} type="button" role="radio" aria-checked={value === option.value} onClick={() => onChange(option.value)}
-            className={cn("rounded-full px-4 py-1.5 text-[14px] leading-5 font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",
-              value === option.value ? "bg-card text-foreground shadow-[0_1px_2px_rgb(30_28_25/0.06)]" : "text-muted-foreground hover:text-foreground")}>
+            className={cn("rounded-full px-4 py-1.5 text-sm leading-5 font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",
+              value === option.value ? "bg-card text-foreground shadow-elevation-1" : "text-muted-foreground hover:text-foreground")}>
             {option.label}
           </button>
         ))}
@@ -291,7 +290,7 @@ function MediaSection({ slug, name, media, voices }: { slug: string; name: strin
           <p className="mt-0.5 text-xs text-muted-foreground">A photo and a short video of this person. The AI avatar uses whichever it needs.</p>
         </div>
         <div className="flex items-center gap-4">
-          <PersonaPhoto name={name || "?"} photoUrl={media.photoUrl} className="size-16 text-xl" />
+          <PersonaPhoto name={name || "?"} photoUrl={media.photoUrl} size="lg" />
           <p className="m-0 text-sm text-muted-foreground">{[media.photoUrl ? "Photo added" : "No photo yet", media.hasVideo ? "video added" : "no video yet"].join(" · ")}</p>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -303,7 +302,7 @@ function MediaSection({ slug, name, media, voices }: { slug: string; name: strin
           </Field>
         </div>
         <Button className="w-fit" disabled={(!image && !video) || busy !== null} onClick={() => void upload("avatar", { image, video })}>
-          <Upload /> {busy === "avatar" ? "Uploading…" : "Save avatar"}
+          <Upload data-icon="inline-start" /> {busy === "avatar" ? "Uploading…" : "Save avatar"}
         </Button>
       </Section>
     </div>
@@ -342,7 +341,7 @@ function VoicePicker({ voices, current, busy, onPick }: { voices: LibraryVoice[]
     );
   }
   return (
-    <ul className="m-0 flex list-none flex-col divide-y divide-(--border) rounded-[12px] border border-(--border) p-0">
+    <ul className="m-0 flex list-none flex-col divide-y divide-(--border) rounded-tt-md border border-(--border) p-0">
       {voices.map((voice) => {
         const inUse = current === voice.name;
         return (
@@ -363,7 +362,7 @@ function VoicePicker({ voices, current, busy, onPick }: { voices: LibraryVoice[]
             {inUse ? (
               <span className="inline-flex items-center gap-1 text-xs font-medium text-(--brand)"><Check className="size-3.5" /> In use</span>
             ) : (
-              <Button size="sm" variant="outline" className="rounded-full" disabled={busy} onClick={() => onPick(voice.id)}>
+              <Button size="sm" variant="outline" disabled={busy} onClick={() => onPick(voice.id)}>
                 {busy ? "Saving…" : "Use"}
               </Button>
             )}

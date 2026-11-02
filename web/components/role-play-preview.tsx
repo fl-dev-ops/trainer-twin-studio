@@ -2,15 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import {
-  ArrowLeft,
-  Pencil,
-  Play,
-  Search,
-  Send,
-  Trash2,
-  X,
-} from "lucide-react";
+import { ArrowLeft, Pencil, Play, Send, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
@@ -32,7 +24,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -57,6 +48,7 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { useRefresh } from "@/lib/use-refresh";
+import { SearchInput } from "@/components/search-input";
 
 export type OrganizationUser = {
   id: string;
@@ -172,17 +164,17 @@ function BadgeChip({
 }) {
   const tone =
     kind === "invalid"
-      ? "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400"
+      ? "border-danger-border bg-danger-subtle text-danger"
       : kind === "pending"
-        ? "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400"
+        ? "border-danger-border bg-danger-subtle text-danger"
         : "border-border bg-muted/40 text-foreground";
   return (
     <span
       className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${tone}`}
     >
       <span className="truncate">{email}</span>
-      {kind === "invalid" && <span className="text-[10px] font-medium">invalid</span>}
-      {kind === "pending" && <span className="text-[10px] font-medium">pending</span>}
+      {kind === "invalid" && <span className="text-overline font-medium">invalid</span>}
+      {kind === "pending" && <span className="text-overline font-medium">pending</span>}
       <button
         type="button"
         aria-label={`Remove ${email}`}
@@ -331,7 +323,7 @@ export function RolePlayPreview({
     <>
       <section>
         <h2 className="text-lg font-semibold">Instructions</h2>
-        <MessageResponse className="mt-3 max-h-[35rem] overflow-y-auto rounded-xl border bg-muted/50 p-4 text-base leading-relaxed">
+        <MessageResponse className="mt-3 max-h-[38.5rem] overflow-y-auto rounded-xl border bg-muted/50 p-4 text-base leading-relaxed">
           {rolePlay.instruction || rolePlay.objective || "No instructions captured for this scenario yet."}
         </MessageResponse>
       </section>
@@ -421,7 +413,7 @@ export function RolePlayPreview({
         </TabsContent>
 
         <TabsContent value="assign" className="mt-6">
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24.2rem]">
             <div>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -430,20 +422,18 @@ export function RolePlayPreview({
                     Everyone this scenario has been assigned to.
                   </p>
                 </div>
-                <Badge variant="secondary" className="gap-1 text-[11px]">
+                <Badge variant="secondary" size="sm">
                   {visibleAssignments.length}
                 </Badge>
               </div>
               <div className="mt-4 flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="text-muted-foreground absolute top-2.5 left-2.5 size-4" />
-                  <Input
-                    placeholder="Search by name or email..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-8"
-                  />
-                </div>
+                <SearchInput
+                  className="flex-1"
+                  placeholder="Search by name or email..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  aria-label="Search assignments"
+                />
                 <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value ?? "all")}>
                   <SelectTrigger className="w-36">
                     <SelectValue />
@@ -482,7 +472,7 @@ export function RolePlayPreview({
                             <ItemDescription>{assignment.userEmail}</ItemDescription>
                           </ItemContent>
                           <ItemActions>
-                            <span className="text-[11px] text-muted-foreground">
+                            <span className="text-overline text-muted-foreground">
                               {formatDay(assignment.assignedAt)}
                             </span>
                             <Badge variant={meta.badge} size="sm">

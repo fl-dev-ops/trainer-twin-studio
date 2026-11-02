@@ -31,7 +31,7 @@ export function CodeViewer({ language, code }: { language: string; code: string 
   const normalizedLanguage = language.trim().toLowerCase();
 
   return (
-    <div className="overflow-hidden rounded-lg border border-white/10 bg-[#101216]">
+    <div className="overflow-hidden rounded-lg border border-white/10 bg-night">
       <div className="border-b border-white/10 px-3 py-2 text-xs font-medium text-muted-foreground">
         {LANGUAGE_LABELS[normalizedLanguage] ?? language}
       </div>

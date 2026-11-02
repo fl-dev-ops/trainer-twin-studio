@@ -15,7 +15,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenuButton } from "@/components/ui/sidebar";
-import { cn } from "@/lib/utils";
 import { authClient } from "@/lib/auth-client";
 import { BASE_DOMAIN } from "@/lib/base-domain";
 
@@ -51,14 +50,8 @@ export function SidebarAccountMenu() {
         render={
           <SidebarMenuButton
             size="lg"
+            variant="account"
             tooltip={user.name}
-            className={cn(
-              // Reference "rail-user" card: 48px tall, 1px card border, 12px radius,
-              // resting shadow, surface-sunken hover; collapses to a bare 32px photo.
-              "h-12 gap-3 rounded-[12px] bg-card px-2 pr-3 text-sm shadow-[0_1px_2px_rgb(30_28_25/0.04),0_2px_8px_rgb(30_28_25/0.05)]",
-              "border border-(--card-border) hover:bg-(--sidebar) hover:text-foreground data-open:bg-card dark:data-open:bg-card",
-              "group-data-[collapsible=icon]:h-8! group-data-[collapsible=icon]:p-0! group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:shadow-none",
-            )}
           />
         }
       >
@@ -67,7 +60,7 @@ export function SidebarAccountMenu() {
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-56">
         <DropdownMenuGroup>
-          <DropdownMenuLabel className="truncate font-normal text-muted-foreground">{user.email}</DropdownMenuLabel>
+          <DropdownMenuLabel className="truncate font-normal">{user.email}</DropdownMenuLabel>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>

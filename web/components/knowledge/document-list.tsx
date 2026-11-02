@@ -119,7 +119,7 @@ export function DocumentList({
   if (documents.length === 0) {
     if (hasSearch) {
       return (
-        <Empty className="rounded-xl border border-dashed py-16">
+        <Empty className="py-16">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <AlertCircle className="size-6 text-muted-foreground" />
@@ -135,7 +135,7 @@ export function DocumentList({
     }
 
     return (
-      <Empty className="rounded-xl border border-dashed py-16">
+      <Empty className="py-16">
         <EmptyHeader>
           <EmptyMedia variant="icon">
             <FileText className="size-6 text-muted-foreground" />
@@ -160,8 +160,8 @@ export function DocumentList({
     const statusClasses = isFailed
       ? "border-destructive/70 shadow-sm shadow-destructive/10 ring-1 ring-destructive/30"
       : isIndexing
-      ? "border-amber-500/70 shadow-sm shadow-amber-500/10 ring-1 ring-amber-500/30 animate-pulse"
-      : "border-border/70 hover:border-orange-500/50 hover:shadow-md";
+      ? "border-caution-border shadow-sm shadow-caution-border ring-1 ring-caution-border animate-pulse"
+      : "border-border/70 hover:border-brand/50 hover:shadow-md";
 
     const youtubeVideoId =
       doc.connector === "youtube"
@@ -182,7 +182,7 @@ export function DocumentList({
           <div className="flex items-center gap-2 min-w-0 flex-1">
             {getFileIcon(doc.ext, doc.connector)}
             <span
-              className="text-xs font-medium text-foreground truncate group-hover:text-orange-600 transition-colors"
+              className="text-xs font-medium text-foreground truncate group-hover:text-brand-strong transition-colors"
               title={doc.title || doc.slug}
             >
               {doc.title || doc.slug}
@@ -191,13 +191,13 @@ export function DocumentList({
 
           {/* Discreet status badge only when indexing or failed */}
           {isIndexing && (
-            <span className="flex items-center gap-1 text-[10px] font-medium text-amber-600 dark:text-amber-400 shrink-0">
+            <span className="flex items-center gap-1 text-overline font-medium text-caution shrink-0">
               <Spinner className="size-2.5" />
               <span className="capitalize">{doc.status}</span>
             </span>
           )}
           {isFailed && (
-            <span className="flex items-center gap-1 text-[10px] font-medium text-destructive shrink-0">
+            <span className="flex items-center gap-1 text-overline font-medium text-destructive shrink-0">
               <AlertCircle className="size-2.5" />
               <span>Failed</span>
             </span>
@@ -213,7 +213,7 @@ export function DocumentList({
               className="w-full h-full rounded-lg shadow-inner overflow-hidden border border-border/50"
               previewContent={
                 <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
-                  <div className="size-8 rounded-full bg-red-600 text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                  <div className="size-8 rounded-full bg-danger text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
                     <Video className="size-4 fill-white" />
                   </div>
                 </div>
@@ -226,7 +226,7 @@ export function DocumentList({
               previewContent={
                 <div className="p-3 flex flex-col gap-2 w-full h-full">
                   <div className="flex items-center gap-1.5">
-                    <BookOpen className="size-3.5 text-stone-600 dark:text-stone-300" />
+                    <BookOpen className="size-3.5 text-(--text-secondary)" />
                     <div className="h-2 w-16 bg-muted-foreground/30 rounded-full" />
                   </div>
                   <div className="h-1.5 w-full bg-muted rounded-full mt-1" />
@@ -288,7 +288,7 @@ export function DocumentList({
                     variant="outline"
                     size="sm"
                     onClick={() => showMore("uploaded")}
-                    className="text-xs h-8 px-4"
+                    className="h-8"
                   >
                     Show more
                   </Button>
@@ -328,7 +328,7 @@ export function DocumentList({
                     variant="outline"
                     size="sm"
                     onClick={() => showMore("youtube")}
-                    className="text-xs h-8 px-4"
+                    className="h-8"
                   >
                     Show more
                   </Button>
@@ -368,7 +368,7 @@ export function DocumentList({
                     variant="outline"
                     size="sm"
                     onClick={() => showMore("notion")}
-                    className="text-xs h-8 px-4"
+                    className="h-8"
                   >
                     Show more
                   </Button>

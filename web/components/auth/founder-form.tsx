@@ -57,6 +57,7 @@ function YouTubeLogo({ className = "size-4" }: { className?: string }) {
     <svg className={className} viewBox="0 0 24 24" fill="currentColor">
       <path
         d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"
+        // eslint-disable-next-line shadcn/no-arbitrary-values -- YouTube's own logo red: a third-party mark.
         className="fill-[#FF0000]"
       />
     </svg>
@@ -306,7 +307,7 @@ export function FounderForm({
       <div>
         {/* Step 1: Personal Info / Admin Account */}
         {step === 1 && (
-          <div className="space-y-6 animate-fade-in font-sans">
+          <div className="space-y-6 animate-in fade-in font-sans">
             <div>
               <h1 className="text-3xl font-semibold tracking-tight text-foreground">
                 Create your admin credentials
@@ -328,7 +329,7 @@ export function FounderForm({
                     onChange={(e) => setFirstName(e.target.value)}
                     placeholder="Sarah"
                     autoComplete="given-name"
-                    className="w-full h-10 px-3.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-sm text-foreground shadow-2xs focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground"
+                    className="w-full h-10 px-3.5 rounded-lg border border-border bg-card text-sm text-foreground shadow-2xs focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground"
                   />
                 </div>
                 <div>
@@ -341,7 +342,7 @@ export function FounderForm({
                     onChange={(e) => setLastName(e.target.value)}
                     placeholder="Connor"
                     autoComplete="family-name"
-                    className="w-full h-10 px-3.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-sm text-foreground shadow-2xs focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground"
+                    className="w-full h-10 px-3.5 rounded-lg border border-border bg-card text-sm text-foreground shadow-2xs focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground"
                   />
                 </div>
               </div>
@@ -355,9 +356,9 @@ export function FounderForm({
                     type="email"
                     value={email}
                     readOnly
-                    className="w-full h-10 pl-3.5 pr-28 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 text-sm text-muted-foreground shadow-2xs cursor-not-allowed focus:outline-none select-all"
+                    className="w-full h-10 pl-3.5 pr-28 rounded-lg border border-border bg-sidebar text-sm text-muted-foreground shadow-2xs cursor-not-allowed focus:outline-none select-all"
                   />
-                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-100 dark:border-emerald-800/40 select-none">
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 text-overline font-medium text-success bg-success-subtle px-2 py-0.5 rounded-md border border-success-border select-none">
                     <Check className="size-3" /> Verified invite
                   </span>
                 </div>
@@ -376,7 +377,7 @@ export function FounderForm({
                       minLength={8}
                       autoComplete="new-password"
                       placeholder="••••••••"
-                      className="w-full h-10 pl-3.5 pr-10 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-sm text-foreground shadow-2xs focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground"
+                      className="w-full h-10 pl-3.5 pr-10 rounded-lg border border-border bg-card text-sm text-foreground shadow-2xs focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground"
                     />
                     <button
                       type="button"
@@ -408,7 +409,7 @@ export function FounderForm({
                       minLength={8}
                       autoComplete="new-password"
                       placeholder="••••••••"
-                      className="w-full h-10 pl-3.5 pr-10 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-sm text-foreground shadow-2xs focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground"
+                      className="w-full h-10 pl-3.5 pr-10 rounded-lg border border-border bg-card text-sm text-foreground shadow-2xs focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground"
                     />
                     <button
                       type="button"
@@ -438,7 +439,7 @@ export function FounderForm({
             {error && (
               <p
                 role="alert"
-                className="text-xs font-medium text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border border-rose-100 dark:border-rose-900/50 rounded-lg p-3"
+                className="text-xs font-medium text-danger bg-danger-subtle border border-danger-border rounded-lg p-3"
               >
                 {error}
               </p>
@@ -459,7 +460,7 @@ export function FounderForm({
 
         {/* Step 2: Workspace Details */}
         {step === 2 && (
-          <div className="space-y-6 animate-fade-in font-sans">
+          <div className="space-y-6 animate-in fade-in font-sans">
             <div>
               <h1 className="text-3xl font-semibold tracking-tight text-foreground">
                 Set up your workspace
@@ -480,7 +481,7 @@ export function FounderForm({
                   disabled={isBusy}
                   onChange={(e) => handleOrgNameChange(e.target.value)}
                   placeholder="Acme Corp"
-                  className="w-full h-10 px-3.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-sm text-foreground shadow-2xs focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground disabled:opacity-60"
+                  className="w-full h-10 px-3.5 rounded-lg border border-border bg-card text-sm text-foreground shadow-2xs focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground disabled:opacity-60"
                 />
               </div>
 
@@ -497,7 +498,7 @@ export function FounderForm({
                   disabled={isBusy}
                   onChange={(e) => setWebsiteUrl(e.target.value)}
                   placeholder="https://example.com"
-                  className="w-full h-10 px-3.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-sm text-foreground shadow-2xs focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground disabled:opacity-60"
+                  className="w-full h-10 px-3.5 rounded-lg border border-border bg-card text-sm text-foreground shadow-2xs focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground disabled:opacity-60"
                 />
                 <p className="mt-1.5 text-xs text-muted-foreground">
                   Your workspace root redirects here. Leave blank to use www.trainertwin.com.
@@ -508,7 +509,7 @@ export function FounderForm({
                 <label htmlFor="trainertwin-subdomain" className="block text-sm font-medium text-foreground mb-1.5">
                   TrainerTwin subdomain
                 </label>
-                <div className="flex items-center rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 pr-3 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary shadow-2xs">
+                <div className="flex items-center rounded-lg border border-border bg-card pr-3 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary shadow-2xs">
                   <input
                     id="trainertwin-subdomain"
                     type="text"
@@ -543,7 +544,7 @@ export function FounderForm({
                         {BASE_DOMAIN} is available
                       </p>
                     ) : (
-                      <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">
+                      <p className="text-xs text-danger font-medium">
                         {slugState.reason ?? "That subdomain is taken"}
                       </p>
                     )
@@ -560,7 +561,7 @@ export function FounderForm({
             {error && (
               <p
                 role="alert"
-                className="text-xs font-medium text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border border-rose-100 dark:border-rose-900/50 rounded-lg p-3"
+                className="text-xs font-medium text-danger bg-danger-subtle border border-danger-border rounded-lg p-3"
               >
                 {error}
               </p>
@@ -574,7 +575,7 @@ export function FounderForm({
                   setError(null);
                   setStep(1);
                 }}
-                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
               >
                 <ArrowLeft className="size-4" /> Back
               </button>
@@ -606,7 +607,7 @@ export function FounderForm({
 
         {/* Step 3: Knowledge Base (Action Rows, No Radio Buttons) */}
         {step === 3 && (
-          <div className="space-y-6 animate-fade-in font-sans">
+          <div className="space-y-6 animate-in fade-in font-sans">
             <div>
               <h1 className="text-3xl font-semibold tracking-tight text-foreground">
                 Connect your knowledge base
@@ -619,8 +620,8 @@ export function FounderForm({
 
             {/* OAuth Status Notices */}
             {oauthNotice?.connected && (
-              <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 p-3.5 text-xs font-medium text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
-                <Check className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <div className="rounded-xl bg-success-subtle border border-success-border p-3.5 text-xs font-medium text-success flex items-center gap-2">
+                <Check className="size-4 text-success shrink-0" />
                 Successfully connected{" "}
                 {oauthNotice.connector === "notion" ? "Notion" : "YouTube"} to
                 your workspace!
@@ -628,7 +629,7 @@ export function FounderForm({
             )}
 
             {oauthNotice?.error && (
-              <div className="rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-3.5 text-xs font-medium text-amber-800 dark:text-amber-300">
+              <div className="rounded-xl bg-caution-subtle border border-caution-border p-3.5 text-xs font-medium text-caution">
                 Connection was cancelled or could not be completed (
                 {oauthNotice.error}). You can try again or proceed to the
                 dashboard.
@@ -637,9 +638,9 @@ export function FounderForm({
 
             <div className="space-y-3 pt-1">
               {/* Notion Connector Card */}
-              <div className="flex items-center justify-between gap-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 p-4.5 transition-all">
+              <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-card p-4.5 transition-all">
                 <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="size-9 rounded-lg border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/80 flex items-center justify-center shrink-0 text-foreground">
+                  <div className="size-9 rounded-lg border border-border bg-sidebar flex items-center justify-center shrink-0 text-foreground">
                     <NotionLogo className="size-4.5" />
                   </div>
                   <div className="min-w-0">
@@ -647,7 +648,7 @@ export function FounderForm({
                       <span className="text-sm font-semibold text-foreground">
                         Notion
                       </span>
-                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-muted-foreground border border-zinc-200/60 dark:border-zinc-700">
+                      <span className="text-overline font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/60">
                         Instant sync
                       </span>
                     </div>
@@ -660,15 +661,15 @@ export function FounderForm({
 
                 <div className="shrink-0">
                   {connections.notion ? (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-                      <Check className="size-3.5 stroke-[3]" /> Connected
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-success-subtle border border-success-border text-xs font-semibold text-success">
+                      <Check className="size-3.5 stroke-3" /> Connected
                     </span>
                   ) : (
                     <button
                       type="button"
                       onClick={() => handleConnect("notion")}
                       disabled={!connectors.notion || connecting === "notion"}
-                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 px-3.5 py-1.5 text-xs font-medium text-foreground transition-all shadow-2xs disabled:opacity-50"
+                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-card hover:bg-sidebar px-3.5 py-1.5 text-xs font-medium text-foreground transition-all shadow-2xs disabled:opacity-50"
                     >
                       {connecting === "notion" ? (
                         <Loader2 className="size-3.5 animate-spin text-primary" />
@@ -682,9 +683,9 @@ export function FounderForm({
               </div>
 
               {/* YouTube Connector Card */}
-              <div className="flex items-center justify-between gap-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 p-4.5 transition-all">
+              <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-card p-4.5 transition-all">
                 <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="size-9 rounded-lg border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/80 flex items-center justify-center shrink-0 text-foreground">
+                  <div className="size-9 rounded-lg border border-border bg-sidebar flex items-center justify-center shrink-0 text-foreground">
                     <YouTubeLogo className="size-4.5" />
                   </div>
                   <div className="min-w-0">
@@ -692,7 +693,7 @@ export function FounderForm({
                       <span className="text-sm font-semibold text-foreground">
                         YouTube
                       </span>
-                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-muted-foreground border border-zinc-200/60 dark:border-zinc-700">
+                      <span className="text-overline font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/60">
                         Captions
                       </span>
                     </div>
@@ -705,15 +706,15 @@ export function FounderForm({
 
                 <div className="shrink-0">
                   {connections.youtube ? (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-                      <Check className="size-3.5 stroke-[3]" /> Connected
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-success-subtle border border-success-border text-xs font-semibold text-success">
+                      <Check className="size-3.5 stroke-3" /> Connected
                     </span>
                   ) : (
                     <button
                       type="button"
                       onClick={() => handleConnect("youtube")}
                       disabled={!connectors.youtube || connecting === "youtube"}
-                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 px-3.5 py-1.5 text-xs font-medium text-foreground transition-all shadow-2xs disabled:opacity-50"
+                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-card hover:bg-sidebar px-3.5 py-1.5 text-xs font-medium text-foreground transition-all shadow-2xs disabled:opacity-50"
                     >
                       {connecting === "youtube" ? (
                         <Loader2 className="size-3.5 animate-spin text-primary" />
@@ -730,7 +731,7 @@ export function FounderForm({
             {error && (
               <p
                 role="alert"
-                className="text-xs font-medium text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border border-rose-100 dark:border-rose-900/50 rounded-lg p-3"
+                className="text-xs font-medium text-danger bg-danger-subtle border border-danger-border rounded-lg p-3"
               >
                 {error}
               </p>
@@ -751,7 +752,7 @@ export function FounderForm({
                 <button
                   type="button"
                   onClick={handleGoToDashboard}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 px-5 py-2.5 text-sm font-medium text-foreground transition-all"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-card hover:bg-sidebar px-5 py-2.5 text-sm font-medium text-foreground transition-all"
                 >
                   Skip for now <ArrowRight className="size-4" />
                 </button>

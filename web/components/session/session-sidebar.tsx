@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useVoiceAssistant } from "@livekit/components-react";
 import { ArrowUp, X } from "lucide-react";
 import type { Entry } from "@/lib/session-transcript";
@@ -49,7 +49,7 @@ export function SessionSidebar({
       )}
     >
       <header className="flex h-14 shrink-0 items-center justify-between border-b px-4">
-        <h2 className="text-base font-semibold tracking-[-0.015em]">Chat</h2>
+        <h2 className="text-base font-semibold tracking-title">Chat</h2>
         {onClose ? (
           <button
             type="button"
@@ -76,7 +76,7 @@ export function SessionSidebar({
                 <span className="text-xs text-foreground/70">{isUser ? "You" : trainerName}</span>
                 <p
                   className={cn(
-                    "max-w-[92%] rounded-[20px] px-3.5 py-2.5 text-[15px] leading-[22px] whitespace-pre-wrap",
+                    "max-w-[92%] rounded-2xl px-3.5 py-2.5 text-body leading-body whitespace-pre-wrap",
                     isUser ? "bg-card ring-1 ring-border ring-inset" : "bg-muted",
                   )}
                 >
@@ -93,8 +93,8 @@ export function SessionSidebar({
               {[0, 0.2, 0.4].map((delay) => (
                 <span
                   key={delay}
-                  style={{ animationDelay: `${delay}s` }}
-                  className={cn("size-1 animate-pulse rounded-full", isSpeaking ? "bg-emerald-500" : "bg-amber-500")}
+                  style={{ "--delay": `${delay}s` } as CSSProperties}
+                  className={cn("size-1 animate-pulse rounded-full [animation-delay:var(--delay)]", isSpeaking ? "bg-success" : "bg-caution")}
                 />
               ))}
             </span>

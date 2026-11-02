@@ -144,11 +144,11 @@ export function TwinAvatarCapture({ personaName }: { personaName: string | null 
 
   return (
     <main className="min-h-svh bg-muted p-2">
-      <div className="min-h-[calc(100svh-1rem)] rounded-2xl bg-background">
+      <div className="min-h-[calc(100svh-1.1rem)] rounded-2xl bg-background">
         <header className="flex items-center justify-between gap-4 px-5 py-5 sm:px-9 sm:py-7">
-          <Button variant="ghost" size="sm" className="-ml-2 text-base font-medium" render={<Link href="/twin/brain" />} nativeButton={false}>
+          <Link href="/twin/brain" className="-ml-2 inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-base font-medium transition-colors hover:bg-muted [&_svg]:size-4">
             <ArrowLeft data-icon="inline-start" /> Avatar
-          </Button>
+          </Link>
         </header>
 
         <section className="mx-auto flex w-full max-w-3xl flex-col items-center gap-8 px-5 pt-[4vh] pb-12 sm:px-8">
@@ -157,7 +157,7 @@ export function TwinAvatarCapture({ personaName }: { personaName: string | null 
           ) : (
             <>
               <div className="flex flex-col items-center gap-2 text-center">
-                <h1 className="text-2xl font-semibold tracking-[-0.015em]">{photo ? "Choose your twin's picture" : "Take or upload a photo"}</h1>
+                <h1 className="text-2xl font-semibold tracking-title">{photo ? "Choose your twin's picture" : "Take or upload a photo"}</h1>
                 <p className="text-sm text-muted-foreground">
                   {photo
                     ? "Your photo, or one of the AI versions made from it: same face, only clothes, light and background change."
@@ -193,7 +193,7 @@ export function TwinAvatarCapture({ personaName }: { personaName: string | null 
                       ) : version.state === "loading" ? (
                         <span className="grid size-full place-items-center bg-muted text-muted-foreground"><LoaderCircle className="size-5 animate-spin" /></span>
                       ) : (
-                        <span className="grid size-full place-items-center bg-muted px-2 text-center text-[11px] text-muted-foreground">Couldn&apos;t make this one</span>
+                        <span className="grid size-full place-items-center bg-muted px-2 text-center text-overline text-muted-foreground">Couldn&apos;t make this one</span>
                       )}
                     </PictureOption>
                   ))}
@@ -208,10 +208,10 @@ export function TwinAvatarCapture({ personaName }: { personaName: string | null 
               <div className="flex flex-wrap items-center justify-center gap-3">
                 {photo ? (
                   <>
-                    <Button variant="outline" className="rounded-full" disabled={saving} onClick={clearPhoto}>
+                    <Button variant="outline" disabled={saving} onClick={clearPhoto}>
                       <RotateCcw data-icon="inline-start" /> Retake
                     </Button>
-                    <Button className="rounded-full" disabled={saving} onClick={() => void save()}>
+                    <Button disabled={saving} onClick={() => void save()}>
                       {saving ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : null}
                       {saving ? "Saving\u2026" : "Save"}
                     </Button>
@@ -219,10 +219,10 @@ export function TwinAvatarCapture({ personaName }: { personaName: string | null 
                 ) : (
                   <>
                     <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(event) => { void uploadPhoto(event.target.files?.[0]); event.target.value = ""; }} />
-                    <Button variant="outline" className="rounded-full" onClick={() => fileRef.current?.click()}>
+                    <Button variant="outline" onClick={() => fileRef.current?.click()}>
                       <Upload data-icon="inline-start" /> Upload photo
                     </Button>
-                    <Button className="rounded-full" disabled={!cameraReady} onClick={takePhoto}>
+                    <Button disabled={!cameraReady} onClick={takePhoto}>
                       <Camera data-icon="inline-start" /> Take photo
                     </Button>
                   </>

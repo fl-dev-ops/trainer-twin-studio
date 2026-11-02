@@ -238,7 +238,7 @@ function SpecCard({
       onMouseEnter={() => iconRef.current?.startAnimation()}
       onMouseLeave={() => iconRef.current?.stopAnimation()}
     >
-      <Card className="flex h-full min-h-48 flex-col transition-colors group-hover:border-foreground/20 group-hover:bg-accent/40">
+      <Card className="flex h-full min-h-48 flex-col" interactive>
         <CardHeader>
           <div className="mb-3 flex items-center justify-between gap-3">
             <span className="grid size-10 place-items-center rounded-lg bg-muted text-muted-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary">
@@ -256,7 +256,7 @@ function SpecCard({
               <Badge variant="secondary">Published</Badge>
             ))}
           </div>
-          <CardTitle className="text-base font-semibold group-hover:text-primary transition-colors">
+          <CardTitle className="text-base font-semibold">
             {spec.name}
           </CardTitle>
           <CardDescription className="line-clamp-3 leading-5 text-xs sm:text-sm">
@@ -345,7 +345,6 @@ export function SpecResourceIndex({ type, specs }: { type: ResourceType; specs: 
         actions={
           <>
             <Button
-              className={type === "agents" ? "rounded-full" : undefined}
               onClick={() => type === "agents" ? setCreateOpen(true) : void createNew()}
             >
               <Plus data-icon="inline-start" /> {type === "agents" ? "Create new" : `New ${copy.single}`}
@@ -609,8 +608,8 @@ export function SpecResourceEditor({
       )}
 
       {type === "agents" ? (
-        <div className="min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[minmax(0,7fr)_minmax(18rem,3fr)] lg:overflow-hidden">
-          <section className="flex min-h-[32rem] min-w-0 flex-col p-4 sm:p-6 lg:min-h-0 lg:overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[minmax(0,7fr)_minmax(19.8rem,3fr)] lg:overflow-hidden">
+          <section className="flex min-h-[35.2rem] min-w-0 flex-col p-4 sm:p-6 lg:min-h-0 lg:overflow-hidden">
             <div className="mb-3 shrink-0">
               <h2 className="text-sm font-medium">Scenario definition</h2>
               <p className="mt-1 text-xs text-muted-foreground">Advanced behavior, stages, and progression policy.</p>
@@ -652,7 +651,7 @@ export function SpecResourceEditor({
           )}
 
           <TabsContent value="sources" className="mt-0 min-h-0 flex-1 overflow-hidden">
-            <div className="h-full overflow-y-auto lg:grid lg:grid-cols-[minmax(0,7fr)_minmax(18rem,3fr)] lg:overflow-hidden">
+            <div className="h-full overflow-y-auto lg:grid lg:grid-cols-[minmax(0,7fr)_minmax(19.8rem,3fr)] lg:overflow-hidden">
               <PersonaSourcePanel
                 personaSlug={slug}
                 initialSources={sources}
@@ -674,7 +673,7 @@ export function SpecResourceEditor({
                       onChange={(event) => { setText(event.target.value); setDirty(true); }}
                       spellCheck={false}
                       aria-label={`${name} YAML specification`}
-                      className="min-h-96 w-full resize-y rounded-lg border bg-background p-3 font-mono text-[11px] leading-relaxed outline-none focus-visible:ring-3 focus-visible:ring-ring/50 read-only:bg-muted"
+                      className="min-h-96 w-full resize-y rounded-lg border bg-background p-3 font-mono text-overline leading-relaxed outline-none focus-visible:ring-3 focus-visible:ring-ring/50 read-only:bg-muted"
                     />
                   </div>
                 </details>

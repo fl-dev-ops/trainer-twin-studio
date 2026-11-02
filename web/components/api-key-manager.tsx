@@ -99,13 +99,13 @@ export function ApiKeyManager({ initialKeys }: { initialKeys: ApiKeyRecord[] }) 
         {secret && (
           <div
             role="status"
-            className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"
+            className="rounded-lg border border-caution-border bg-caution-subtle p-4 text-caution"
           >
             <p className="text-sm font-semibold">Copy this key now. It will not be shown again.</p>
             <div className="mt-3 flex items-start gap-2">
               <code className="min-w-0 flex-1 break-all rounded bg-background/80 px-3 py-2 text-xs">{secret}</code>
               <Button type="button" size="icon" variant="outline" onClick={copySecret} aria-label="Copy API key">
-                {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+                {copied ? <Check /> : <Copy />}
               </Button>
             </div>
           </div>
@@ -130,13 +130,13 @@ export function ApiKeyManager({ initialKeys }: { initialKeys: ApiKeyRecord[] }) 
                   <Button
                     type="button"
                     size="icon"
-                    variant="ghost"
-                    className="shrink-0 text-muted-foreground hover:text-destructive"
+                    variant="ghost-destructive"
+                    className="shrink-0"
                     onClick={() => revokeKey(key.id)}
                     disabled={revoking === key.id}
                     aria-label={`Revoke ${key.name || "API key"}`}
                   >
-                    {revoking === key.id ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                    {revoking === key.id ? <Loader2 className="size-4 animate-spin" /> : <Trash2 />}
                   </Button>
                 </div>
               ))}

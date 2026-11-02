@@ -112,7 +112,7 @@ export function TtsPlayground({ voiceId }: { voiceId: string }) {
             <div className="flex items-center justify-between">
               <Label htmlFor="voice-picker">Voice</Label>
               <Button variant="ghost" size="xs" render={<Link href="/voice/cloning" />} nativeButton={false}>
-                <Mic /> Clone new
+                <Mic data-icon="inline-start" /> Clone new
               </Button>
             </div>
             <Select
@@ -128,7 +128,7 @@ export function TtsPlayground({ voiceId }: { voiceId: string }) {
                   <SelectGroup>
                     <SelectLabel>My voices</SelectLabel>
                     {myVoices.map((voice) => (
-                      <SelectItem key={voice.id} value={voice.id} className="capitalize">{voice.name}</SelectItem>
+                      <SelectItem key={voice.id} value={voice.id}><span className="capitalize">{voice.name}</span></SelectItem>
                     ))}
                   </SelectGroup>
                 )}
@@ -137,7 +137,7 @@ export function TtsPlayground({ voiceId }: { voiceId: string }) {
                   <SelectGroup>
                     <SelectLabel>Sample voices</SelectLabel>
                     {sampleVoices.map((voice) => (
-                      <SelectItem key={voice.id} value={voice.id} className="capitalize">{voice.name}</SelectItem>
+                      <SelectItem key={voice.id} value={voice.id}><span className="capitalize">{voice.name}</span></SelectItem>
                     ))}
                   </SelectGroup>
                 )}

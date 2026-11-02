@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, type HTMLAttributes } from "react"
+import { useEffect, useRef, type HTMLAttributes, type CSSProperties } from "react"
 
 import { cn } from "@/lib/utils"
 
@@ -534,9 +534,9 @@ export const LiveWaveform = ({
 
   return (
     <div
-      className={cn("relative h-full w-full", className)}
+      className={cn("relative h-full w-full h-(--h)", className)}
       ref={containerRef}
-      style={{ height: heightStyle }}
+      style={{ "--h": heightStyle } as CSSProperties}
       aria-label={
         active
           ? "Live audio waveform"

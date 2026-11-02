@@ -25,9 +25,9 @@ import {
   Volume2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "../ui/button";
 import { FileThumbnail } from "@/components/extend/file-thumbnail";
+import { UserAvatar } from "@/components/user-avatar";
 
 export type PreJoinMediaSettings = {
   microphoneEnabled: boolean;
@@ -315,17 +315,9 @@ export function PreJoin({
   }
 
   const permissionReady = permission === "ready";
-  const userInitials =
-    userName
-      .trim()
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((part) => part[0])
-      .join("")
-      .toUpperCase() || "U";
 
   return (
-    <main className="flex min-h-svh flex-col bg-[#fafafa] text-[#202124]">
+    <main className="flex min-h-svh flex-col bg-sidebar text-foreground">
       <header className="flex h-20 shrink-0 items-center justify-between px-5 sm:px-8 lg:px-10">
         <div className="flex min-w-0 items-center gap-3">
           {organizationLogo ? (
@@ -349,28 +341,24 @@ export function PreJoin({
               />
             </span>
           )}
-          <span className="truncate text-lg font-semibold tracking-[-0.02em] text-[#303134]">
+          <span className="truncate text-lg font-semibold tracking-title text-foreground">
             {organizationLogo ? organizationName : "TrainerTwin"}
           </span>
         </div>
         <div className="flex min-w-0 items-center gap-3">
           <div className="hidden min-w-0 text-right sm:block">
-            <p className="max-w-56 truncate text-sm font-medium text-[#303134]">
+            <p className="max-w-56 truncate text-sm font-medium text-foreground">
               {userName}
             </p>
-            <p className="text-xs text-[#5f6368]">Signed in</p>
+            <p className="text-xs text-muted-foreground">Signed in</p>
           </div>
-          <Avatar size="lg" className="after:border-brand/15">
-            <AvatarFallback className="bg-brand font-semibold text-white">
-              {userInitials}
-            </AvatarFallback>
-          </Avatar>
+          <UserAvatar user={{ name: userName }} size="xl" />
         </div>
       </header>
 
       <div className="flex flex-1 items-center justify-center px-5 py-6 sm:px-8">
         <div className="w-full max-w-5xl">
-          <h1 className="mb-8 text-center text-2xl font-bold tracking-tight text-[#202124] sm:text-3xl">
+          <h1 className="mb-8 text-center text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
             {scenarioName}
           </h1>
 
@@ -383,13 +371,13 @@ export function PreJoin({
           {/* Card 1: Camera and microphone preview */}
           <section
             aria-label="Camera and microphone preview"
-            className="col-span-3 relative flex min-h-85 items-center justify-center overflow-hidden rounded-2xl bg-[#202124] shadow-[0_12px_32px_rgba(32,33,36,0.12)]"
+            className="col-span-3 relative flex min-h-85 items-center justify-center overflow-hidden rounded-2xl bg-night shadow-elevation-3"
           >
             {/* Screen share enabled pill */}
             {screenShare ? (
               <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 rounded-full bg-black/70 backdrop-blur-xs px-3 py-1 text-xs text-white border border-white/10">
-                <span className="size-2 rounded-full bg-amber-400" />
-                <span className="font-medium text-[11px]">
+                <span className="size-2 rounded-full bg-caution" />
+                <span className="font-medium text-overline">
                   Entire Screen Required
                 </span>
               </div>
@@ -442,10 +430,10 @@ export function PreJoin({
                 }
                 aria-pressed={microphoneEnabled}
                 className={cn(
-                  "grid size-12 place-items-center rounded-full text-white shadow-[0_4px_12px_rgba(0,0,0,0.3)] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-45",
+                  "grid size-12 place-items-center rounded-full text-white shadow-elevation-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-45",
                   microphoneEnabled
-                    ? "bg-[#3c4043] hover:bg-[#4b4f52]"
-                    : "bg-[#d93025] hover:bg-[#c5221f]",
+                    ? "bg-on-night/15 hover:bg-on-night/25"
+                    : "bg-live hover:bg-live-hover",
                 )}
               >
                 {microphoneEnabled ? (
@@ -463,10 +451,10 @@ export function PreJoin({
                 }
                 aria-pressed={cameraEnabled}
                 className={cn(
-                  "grid size-12 place-items-center rounded-full text-white shadow-[0_4px_12px_rgba(0,0,0,0.3)] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-45",
+                  "grid size-12 place-items-center rounded-full text-white shadow-elevation-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-45",
                   cameraEnabled
-                    ? "bg-[#3c4043] hover:bg-[#4b4f52]"
-                    : "bg-[#d93025] hover:bg-[#c5221f]",
+                    ? "bg-on-night/15 hover:bg-on-night/25"
+                    : "bg-live hover:bg-live-hover",
                 )}
               >
                 {cameraEnabled ? (
@@ -482,30 +470,30 @@ export function PreJoin({
           {showDocumentCard && (
             <section
               aria-label={contextLabel || "Documents"}
-              className="flex min-h-85 flex-col justify-between rounded-2xl border border-[#e4e6e8] bg-white p-4 shadow-sm col-span-2 gap-3"
+              className="flex min-h-85 flex-col justify-between rounded-2xl border border-border bg-white p-4 shadow-sm col-span-2 gap-3"
             >
               <div>
                 <div className="flex items-center justify-between">
-                  <span className="text-base font-semibold text-[#202124]">
+                  <span className="text-base font-semibold text-foreground">
                     {contextLabel || "Documents"}
                   </span>
                   {contextRequired ? (
-                    <span className="text-xs font-semibold text-[#b45309]">
+                    <span className="text-xs font-semibold text-caution">
                       Required
                     </span>
                   ) : (
-                    <span className="text-xs text-[#5f6368]">Optional</span>
+                    <span className="text-xs text-muted-foreground">Optional</span>
                   )}
                 </div>
                 {contextPrompt ? (
-                  <p className="mt-1 text-sm text-[#5f6368]">
+                  <p className="mt-1 text-sm text-muted-foreground">
                     {contextPrompt}
                   </p>
                 ) : null}
               </div>
 
               {selectedDoc ? (
-                <div className="my-auto flex items-center justify-center rounded-xl border border-[#e4e6e8] bg-[#fafafa] p-4">
+                <div className="my-auto flex items-center justify-center rounded-xl border border-border bg-sidebar p-4">
                   <div className="flex w-full max-w-sm items-center gap-4">
                     <FileThumbnail
                       file={
@@ -518,11 +506,11 @@ export function PreJoin({
                       }
                       previewImageUrl={previewUrl}
                       previewAspectRatio={3 / 4}
-                      className="w-20 shrink-0 overflow-hidden rounded-lg border border-[#dadce0] bg-white shadow-xs"
+                      className="w-20 shrink-0 overflow-hidden rounded-lg border border-border bg-white shadow-xs"
                       previewContent={
                         !previewUrl ? (
                           <div className="flex size-full flex-col items-center justify-center bg-white p-2 text-center">
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-brand">
+                            <span className="text-overline font-bold uppercase tracking-wider text-brand">
                               {selectedDoc.name.split(".").pop() || "DOC"}
                             </span>
                             <div className="mt-1.5 w-full space-y-1">
@@ -535,16 +523,16 @@ export function PreJoin({
                       }
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-[#202124]">
+                      <p className="truncate text-sm font-semibold text-foreground">
                         {selectedDoc.name}
                       </p>
                       {typeof selectedDoc.size === "number" ? (
-                        <p className="mt-0.5 text-xs text-[#5f6368]">
+                        <p className="mt-0.5 text-xs text-muted-foreground">
                           {formatBytes(selectedDoc.size)}
                         </p>
                       ) : null}
                       <div className="mt-2.5 flex items-center gap-3">
-                        <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-600">
+                        <span className="inline-flex items-center gap-1 rounded-md bg-success-subtle px-2 py-0.5 text-overline font-medium text-success">
                           <Check className="size-3" /> Attached
                         </span>
                         <button
@@ -555,7 +543,7 @@ export function PreJoin({
                             setPreviewUrl(null);
                             setUploadedFile(null);
                           }}
-                          className="cursor-pointer text-xs font-medium text-red-600 hover:text-red-700 hover:underline"
+                          className="cursor-pointer text-xs font-medium text-danger hover:text-danger hover:underline"
                         >
                           Remove
                         </button>
@@ -597,7 +585,7 @@ export function PreJoin({
                     "my-auto flex flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed px-6 py-8 text-center transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand",
                     dragOver
                       ? "border-brand bg-brand/10"
-                      : "border-[#c7c9cc] bg-[#fafafa] hover:border-brand hover:bg-brand/5",
+                      : "border-input bg-sidebar hover:border-brand hover:bg-brand/5",
                   )}
                 >
                   {uploadingDoc ? (
@@ -606,7 +594,7 @@ export function PreJoin({
                         className="size-6 animate-spin text-brand"
                         aria-hidden="true"
                       />
-                      <p className="mt-2 text-sm font-medium text-[#202124]">
+                      <p className="mt-2 text-sm font-medium text-foreground">
                         Uploading…
                       </p>
                     </>
@@ -615,17 +603,17 @@ export function PreJoin({
                       <FileUp
                         className={cn(
                           "size-6",
-                          dragOver ? "text-brand" : "text-[#5f6368]",
+                          dragOver ? "text-brand" : "text-muted-foreground",
                         )}
                         aria-hidden="true"
                       />
-                      <p className="mt-2 text-sm text-[#202124]">
+                      <p className="mt-2 text-sm text-foreground">
                         <span className="font-semibold text-brand underline underline-offset-2">
                           Upload
                         </span>{" "}
                         or drag your {contextLabel ? contextLabel.toLowerCase() : "document"} here
                       </p>
-                      <p className="mt-1 text-xs text-[#5f6368]">
+                      <p className="mt-1 text-xs text-muted-foreground">
                         {contextAccept && contextAccept.includes(".pdf") && !contextAccept.includes(".png")
                           ? "PDF, Word, or text files (.pdf preferred)"
                           : "PDF, Word, slides, images, and text files"}
@@ -647,7 +635,7 @@ export function PreJoin({
               )}
 
               {docError ? (
-                <p role="alert" className="mt-2 text-xs text-[#b3261e]">
+                <p role="alert" className="mt-2 text-xs text-danger">
                   {docError}
                 </p>
               ) : null}
@@ -664,7 +652,7 @@ export function PreJoin({
             <button
               type="button"
               onClick={() => void startPreview()}
-              className="flex items-center gap-2 rounded-full border border-[#dadce0] bg-white px-4 py-2 text-sm font-medium text-[#3c4043] transition-colors hover:bg-[#f1f3f4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              className="flex items-center gap-2 rounded-full border border-border bg-white px-4 py-2 text-sm font-medium text-(--text-secondary) transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
             >
               <RotateCcw className="size-4" /> Try device check again
             </button>
@@ -672,7 +660,7 @@ export function PreJoin({
             <>
               <DeviceSelect
                 label="Microphone"
-                icon={<Mic className="size-4 text-[#5f6368]" />}
+                icon={<Mic className="size-4 text-muted-foreground" />}
                 value={microphoneDeviceId}
                 options={microphones}
                 fallback="Default microphone"
@@ -683,7 +671,7 @@ export function PreJoin({
               />
               <DeviceSelect
                 label="Speaker"
-                icon={<Volume2 className="size-4 text-[#5f6368]" />}
+                icon={<Volume2 className="size-4 text-muted-foreground" />}
                 value={speakerDeviceId}
                 options={speakers}
                 fallback="System default"
@@ -691,7 +679,7 @@ export function PreJoin({
               />
               <DeviceSelect
                 label="Camera"
-                icon={<Camera className="size-4 text-[#5f6368]" />}
+                icon={<Camera className="size-4 text-muted-foreground" />}
                 value={cameraDeviceId}
                 options={cameras}
                 fallback="Default camera"
@@ -706,27 +694,27 @@ export function PreJoin({
 
         {/* Join button centered below device selects */}
         <section className="mt-6 flex flex-col items-center justify-center">
-          <Button
+          <Button size="xl" variant="brand"
             type="button"
             onClick={join}
             disabled={
               permission === "requesting" || (contextRequired && !docAttached)
             }
-            className="h-12 min-w-44 cursor-pointer items-center justify-center rounded-full bg-brand px-8 text-sm font-semibold text-white shadow-[0_7px_20px_color-mix(in_srgb,var(--brand)_24%,transparent)] hover:bg-brand-strong disabled:opacity-45 disabled:cursor-not-allowed"
+            className="min-w-44"
           >
             {permission === "requesting" ? "Checking devices…" : "Join session"}
           </Button>
           {screenShare ? (
-            <p className="mt-2.5 text-center text-xs text-[#5f6368] max-w-md">
+            <p className="mt-2.5 text-center text-xs text-muted-foreground max-w-md">
               When prompted, choose Entire Screen. Sharing a tab or window will be rejected.
             </p>
           ) : null}
           {permission === "ready" && permissionError ? (
-            <p className="mt-3 max-w-sm text-center text-xs leading-5 text-amber-700">
+            <p className="mt-3 max-w-sm text-center text-xs leading-5 text-caution">
               {permissionError}
             </p>
           ) : permission === "denied" ? (
-            <p className="mt-3 max-w-sm text-center text-xs leading-5 text-[#b3261e]">
+            <p className="mt-3 max-w-sm text-center text-xs leading-5 text-danger">
               You can still join with devices off, or update browser permissions
               and retry.
             </p>
@@ -735,10 +723,10 @@ export function PreJoin({
         </div>
       </div>
 
-      <div className="fixed bottom-5 right-5 flex items-center gap-2 text-[11px] font-medium text-[#777b80] sm:bottom-7 sm:right-8">
+      <div className="fixed bottom-5 right-5 flex items-center gap-2 text-overline font-medium text-muted-foreground sm:bottom-7 sm:right-8">
         <span>Powered by</span>
         <Image src="/trainertwin-mark.svg" alt="" width={16} height={12} />
-        <span className="text-[#4b4f52]">TrainerTwin</span>
+        <span className="text-(--text-secondary)">TrainerTwin</span>
       </div>
     </main>
   );
@@ -760,8 +748,8 @@ function DeviceSelect({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="relative flex min-w-0 max-w-[260px] items-center gap-2 rounded-full border border-[#dadce0] bg-white px-3.5 text-[#3c4043] shadow-[0_1px_2px_rgba(60,64,67,0.06)] transition-colors focus-within:border-brand focus-within:ring-1 focus-within:ring-brand/30 hover:bg-[#f8f9fa]">
-      <span className="shrink-0 text-[#5f6368]" aria-hidden="true">
+    <label className="relative flex min-w-0 max-w-[260px] items-center gap-2 rounded-full border border-border bg-white px-3.5 text-(--text-secondary) shadow-elevation-1 transition-colors focus-within:border-brand focus-within:ring-1 focus-within:ring-brand/30 hover:bg-sidebar">
+      <span className="shrink-0 text-muted-foreground" aria-hidden="true">
         {icon}
       </span>
       <span className="sr-only">{label}</span>
@@ -778,7 +766,7 @@ function DeviceSelect({
         ))}
       </select>
       <ChevronDown
-        className="pointer-events-none absolute right-3 size-3.5 text-[#5f6368]"
+        className="pointer-events-none absolute right-3 size-3.5 text-muted-foreground"
         aria-hidden="true"
       />
     </label>

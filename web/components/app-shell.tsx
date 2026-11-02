@@ -42,11 +42,11 @@ export function AppShell({ children, hideRoleplay = false }: { children: ReactNo
     <SidebarProvider
       className="h-svh min-h-0 overflow-hidden"
       // Reference rail: 248px expanded / 72px collapsed.
-      style={{ "--sidebar-width-left": "15.5rem", "--sidebar-width-icon": "4.5rem" } as CSSProperties}
+      style={{ "--sidebar-width-left": "17.05rem", "--sidebar-width-icon": "4.95rem" } as CSSProperties}
     >
       <AppSidebar hideRoleplay={hideRoleplay} />
       {/* Prototype: flat content panel, flush against the rail (reference .main). */}
-      <SidebarInset className="min-h-0 overflow-hidden bg-panel">
+      <SidebarInset className="min-h-0 overflow-hidden">
         {/* Desktop collapses via the sidebar logo; on mobile the sidebar is a drawer and needs an opener. */}
         <div className="flex h-12 shrink-0 items-center px-3 md:hidden">
           <SidebarTrigger />

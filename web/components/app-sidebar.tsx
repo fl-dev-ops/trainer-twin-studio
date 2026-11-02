@@ -12,7 +12,6 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { cn } from "@/lib/utils";
 
 /**
  * Rail port of the reference sidebar (trainertwin-beta app.css `.rail`):
@@ -42,18 +41,6 @@ const NAV_GROUPS = [
 ];
 
 /** Reference nav-item metrics: 32px row, 8px radius, 14px/20px text, 20px icon. */
-const navButton = cn(
-  "min-h-8 px-2 text-sm font-normal text-(--text-secondary)",
-  "hover:bg-(--tone-control) hover:text-foreground",
-  "[&_svg]:size-5 [&_svg]:shrink-0 [&_svg]:text-(--text-secondary) [&_svg]:transition-colors",
-  "data-active:bg-card data-active:font-medium data-active:text-primary data-active:shadow-[0_1px_2px_rgb(30_28_25/0.06)] data-active:hover:bg-card",
-  "data-active:[&_svg]:text-(--brand)",
-  "dark:data-active:text-foreground dark:data-active:[&_svg]:text-foreground",
-  // Collapsed: 40px square row, centered (reference overrides the ui 32px collapse).
-  "group-data-[collapsible=icon]:size-10! group-data-[collapsible=icon]:min-h-0! group-data-[collapsible=icon]:p-0!",
-  "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:[&>span]:hidden",
-);
-
 type NavItem = { title: string; href: string; icon: typeof TwinIcon; also?: string[] };
 const NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((group) => group.items);
 const NAV_HREFS = [...NAV_ITEMS.flatMap((item) => [item.href, ...(item.also ?? [])]), "/settings"];
@@ -82,7 +69,7 @@ function Brand() {
         className="flex h-8 items-center gap-1.5 rounded-md text-foreground transition-colors outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring hover:text-(--text-secondary) group-data-[collapsible=icon]:w-10 group-data-[collapsible=icon]:justify-center"
       >
         <BrandMark className="size-5 shrink-0 text-primary" />
-        <span className="text-base font-semibold leading-none tracking-[-0.02em] group-data-[collapsible=icon]:hidden">
+        <span className="text-base font-semibold leading-none tracking-title group-data-[collapsible=icon]:hidden">
           TrainerTwin
         </span>
       </button>
@@ -97,14 +84,14 @@ export function AppSidebar({ hideRoleplay = false }: { hideRoleplay?: boolean })
   const groups = hideRoleplay ? NAV_GROUPS.filter((group) => group.label !== "Role play") : NAV_GROUPS;
 
   return (
-    <Sidebar variant="sidebar" collapsible="icon" className="border-r-0">
+    <Sidebar variant="sidebar" collapsible="icon">
       {/* Reference "rail-scroll": padded 16/12/12, children stacked with an 8px gap. */}
       <div className="flex h-full min-h-0 flex-col gap-2 px-3 pt-4 pb-3 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-2">
         <Brand />
         <nav aria-label="Sections" className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
           {groups.map((group, index) => (
             <div key={group.label} className={index === 0 ? "mt-1" : "mt-3"}>
-              <p className="px-2 text-[11px] leading-4 font-medium tracking-[0.08em] uppercase text-muted-foreground group-data-[collapsible=icon]:hidden">
+              <p className="px-2 text-overline leading-4 font-medium tracking-overline uppercase text-muted-foreground group-data-[collapsible=icon]:hidden">
                 {group.label}
               </p>
               <SidebarMenu className="mt-2 gap-2">
@@ -114,7 +101,7 @@ export function AppSidebar({ hideRoleplay = false }: { hideRoleplay?: boolean })
                       render={<Link href={item.href} />}
                       isActive={isActive(pathname, item.href)}
                       tooltip={item.title}
-                      className={navButton}
+                      variant="nav"
                     >
                       <item.icon />
                       <span>{item.title}</span>
@@ -133,7 +120,7 @@ export function AppSidebar({ hideRoleplay = false }: { hideRoleplay?: boolean })
                 render={<Link href="/settings" />}
                 isActive={isActive(pathname, "/settings")}
                 tooltip="Settings"
-                className={navButton}
+                variant="nav"
               >
                 <SettingsIcon />
                 <span>Settings</span>

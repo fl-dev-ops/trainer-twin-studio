@@ -68,12 +68,12 @@ function ExecutionConsole({
   return (
     <div className="space-y-3">
       {result.outcome === "timeout" ? (
-        <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-300">
+        <p className="rounded-lg border border-caution-border bg-caution-subtle p-3 text-sm text-caution">
           Execution timed out.
         </p>
       ) : null}
       {stdout.length || stderr.length ? (
-        <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-lg border bg-[#101216] p-3 text-xs leading-relaxed text-foreground/85">
+        <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-lg border bg-night p-3 text-xs leading-relaxed text-foreground/85">
           {stdout}
           {stderr ? (
             <span className="block whitespace-pre-wrap text-destructive">{stderr}</span>
@@ -81,7 +81,7 @@ function ExecutionConsole({
         </pre>
       ) : null}
       {browserEntries.length ? (
-        <div className="rounded-lg border bg-[#101216] p-3">
+        <div className="rounded-lg border bg-night p-3">
           <p className="mb-2 text-xs font-medium text-muted-foreground">Browser console</p>
           <div className="space-y-1 text-xs">
             {browserEntries.map((entry) => (
@@ -91,7 +91,7 @@ function ExecutionConsole({
                   entry.level === "error"
                     ? "text-destructive"
                     : entry.level === "warn"
-                      ? "text-amber-300"
+                      ? "text-caution"
                       : "text-foreground/85"
                 }
               >
@@ -443,7 +443,7 @@ export function CodeEditor({
                 setActiveTab("code");
                 onContentChange?.();
               }}
-              className="rounded-md border border-white/10 bg-[#1a1d23] px-2.5 py-1 text-xs text-foreground outline-none focus:ring-2 focus:ring-ring/15"
+              className="rounded-md border border-white/10 bg-on-night/5 px-2.5 py-1 text-xs text-foreground outline-none focus:ring-2 focus:ring-ring/15"
             >
               {(Object.keys(LANGUAGE_LABELS) as SupportedCodeExecutionLanguage[]).map((lang) => (
                 <option key={lang} value={lang}>
@@ -456,7 +456,7 @@ export function CodeEditor({
             type="button"
             onClick={handleRun}
             disabled={!code.trim() || isRunning || isSubmitting}
-            className="flex items-center gap-1.5 rounded-md border border-white/10 bg-[#1a1d23] px-3 py-1 text-xs font-medium text-foreground transition-[background-color,scale] hover:bg-[#232733] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-md border border-white/10 bg-on-night/5 px-3 py-1 text-xs font-medium text-foreground transition-[background-color,scale] hover:bg-on-night/10 active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isRunning ? (
               <LoaderCircle className="size-3.5 animate-spin" />

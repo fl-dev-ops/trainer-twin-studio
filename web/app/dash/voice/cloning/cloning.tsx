@@ -35,26 +35,20 @@ export default function VoiceCloningPage() {
 
   return (
     <main className="min-h-svh bg-muted p-2">
-      <div className="min-h-[calc(100svh-1rem)] rounded-2xl bg-background">
+      <div className="min-h-[calc(100svh-1.1rem)] rounded-2xl bg-background">
         <header className="px-5 py-5 sm:px-9 sm:py-7">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="-ml-2 text-base font-medium"
-            render={<Link href="/voice" />}
-            nativeButton={false}
-          >
+          <Link href="/voice" className="-ml-2 inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-base font-medium transition-colors hover:bg-muted [&_svg]:size-4">
             <ArrowLeft data-icon="inline-start" /> Voice cloning
-          </Button>
+          </Link>
         </header>
 
         <section className="mx-auto w-full max-w-3xl px-5 pt-[8vh] pb-12 sm:px-8">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">Read this out aloud</p>
             <Button
-              variant="ghost"
+              variant="subtle"
               size="icon-sm"
-              className="-mr-2 text-muted-foreground"
+              className="-mr-2"
               aria-label="Try another text"
               title="Try another text"
               onClick={() => setPassage(randomPassage(passage))}
@@ -62,7 +56,7 @@ export default function VoiceCloningPage() {
               <RefreshCw />
             </Button>
           </div>
-          <p className="mt-7 font-serif text-3xl leading-[1.16] tracking-tight sm:text-4xl">
+          <p className="mt-7 font-serif text-3xl leading-tight tracking-tight sm:text-4xl">
             {passage}
           </p>
 

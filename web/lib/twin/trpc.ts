@@ -92,6 +92,35 @@ function sessionItem(row: SessionRow) {
   };
 }
 
+/**
+ * Each active learner's use of one twin: minutes, sessions, last active and mean "Helpful" rating, most recently
+ * active first (never started last). shortcut: counts come from the page's latest 200 sessions; a learner with
+ * older sessions shows fewer, upgrade to a grouped query if twins get that busy.
+ */
+export function learnerActivity(
+  assignments: { recipientEmail: string; minutesLimit: number; minutesUsed: number; user: { name: string | null; image: string | null } | null }[],
+  sessions: SessionRow[],
+) {
+  return assignments
+    .map((row) => {
+      const mine = sessions.filter((session) => session.user.email.toLowerCase() === row.recipientEmail);
+      const rated = mine.map((session) => session.feedbackRating).filter((r): r is number => r !== null);
+      return {
+        email: row.recipientEmail,
+        name: row.user?.name || row.recipientEmail,
+        image: row.user?.image ?? null,
+        pending: !row.user,
+        minutes: row.minutesLimit,
+        used: row.minutesUsed,
+        sessions: mine.length,
+        // Sessions arrive newest first.
+        lastAt: mine[0] ? (mine[0].startedAt ?? mine[0].createdAt).toISOString() : null,
+        helpScore: rated.length ? Math.round((rated.reduce((a, b) => a + b, 0) / rated.length) * 10) / 10 : null,
+      };
+    })
+    .sort((a, b) => (b.lastAt ?? "").localeCompare(a.lastAt ?? ""));
+}
+
 /** Calibrations of one twin, newest first, with their rating counts. */
 async function calibrationRows(orgId: string, agentId: string) {
   const rows = await db.twinCalibration.findMany({
@@ -191,7 +220,7 @@ const agentsRouter = t.router({
     return { twins: cards.filter((card) => card.allSkills), skills: cards.filter((card) => !card.allSkills) };
   }),
 
-  /** One twin's page: description, minutes credit, report numbers, calibrations and learner sessions. */
+  /** One twin's page: description, minutes credit, report numbers, calibrations, learner sessions and learners. */
   get: studioProcedure.input(slugInput).query(({ ctx, input }) => twinCall(async () => {
     const orgId = ctx.user.orgId;
     const found = await findTwinAgent(orgId, input.slug);
@@ -240,6 +269,7 @@ const agentsRouter = t.router({
       },
       calibrations: calibrations.map((row) => omitRatings(row)),
       sessions: sessions.map(sessionItem),
+      learners: learnerActivity(active, sessions),
     };
   })),
 

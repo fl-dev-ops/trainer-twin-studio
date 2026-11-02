@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ArrowUp, Flag, LoaderCircle, Paperclip, Volume2 } from "lucide-react";
-import { RoomAudioRenderer, RoomContext, useStartAudio, useTrackToggle, useVoiceAssistant } from "@livekit/components-react";
-import { type LocalAudioTrack, ParticipantEvent, Room, RoomEvent, Track, type TranscriptionSegment } from "livekit-client";
+import { RoomAudioRenderer, RoomContext, useLocalParticipant, useStartAudio, useTrackToggle, useVoiceAssistant } from "@livekit/components-react";
+import { type LocalAudioTrack, ParticipantEvent, type RemoteAudioTrack, Room, RoomEvent, Track, type TranscriptionSegment } from "livekit-client";
 import {
   ArrowUpRightIcon,
   CallEndedIcon,
@@ -18,6 +18,7 @@ import {
 import type { CalibrationTurn, Rating } from "@/components/calibration/mock";
 import { Bubble, CalibrationStats, PILL, RatingLabel, SOFT_SHADOW, TwinPortrait } from "@/components/calibration/parts";
 import { WhyButton, WhyPanel, useEvidenceTurns } from "@/components/calibration/why-panel";
+import { CallWaves } from "@/components/calibration/call-waves";
 import { lookupEvidence } from "@/lib/twin/evidence-match";
 import type { TurnEvidence } from "@/lib/twin/evidence";
 import { RoleplayIcon } from "@/components/icons";
@@ -149,7 +150,8 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
   const nextId = useRef(0);
   /** Typed messages already shown; the agent echoes each back as your transcript once, which is skipped. */
   const typedEchoes = useRef<string[]>([]);
-  const { state: agentState } = useVoiceAssistant();
+  const { audioTrack: agentAudio } = useVoiceAssistant();
+  const { microphoneTrack } = useLocalParticipant({ room });
   const { mergedProps: audioProps, canPlayAudio } = useStartAudio({ room, props: {} });
 
   const updateTurns = useCallback((next: (turns: CalibrationTurn[]) => CalibrationTurn[]) => {
@@ -513,7 +515,6 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
   const captions: (CalibrationTurn & { streaming?: boolean })[] = liveText
     ? [...turns, { id: "streaming", speaker: "twin", text: liveText, streaming: true }]
     : turns;
-  const speaking = agentState === "speaking";
   /** Only the twin's latest finished answer can be rated; earlier ones keep their rating (or none). */
   const latestTwinId = turns.findLast((t) => t.speaker === "twin")?.id;
 
@@ -522,7 +523,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [turns.length, liveText]);
+  }, [turns, liveText]);
 
   return (
     <LiveKitWorkspaceProvider
@@ -557,10 +558,11 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
           />
         ) : (
           <>
-            <div ref={scrollRef} className={cn("flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-6 pt-8", composerOpen ? "pb-44" : "pb-28")}>
-              <div className={cn("relative size-[320px] shrink-0 overflow-hidden rounded-[32px] bg-muted", SOFT_SHADOW, speaking && "ring-2 ring-emerald-500/70")}>
+            <div className={cn("flex min-h-0 flex-1 flex-col items-center px-6 pt-8", composerOpen ? "pb-44" : "pb-28")}>
+              {/* The portrait stays put; only the transcript below it scrolls. Shrinks on short windows. */}
+              <div className={cn("relative size-[min(320px,34dvh)] shrink-0 overflow-hidden rounded-stage bg-muted", SOFT_SHADOW)}>
                 <TwinPortrait name={twinName} photoUrl={photoUrl} className="size-full text-8xl" />
-                <span className="absolute right-3 bottom-3 rounded-full bg-black/45 px-2.5 py-1 text-[13px] leading-[18px] font-medium text-white tabular-nums">
+                <span className="absolute right-3 bottom-3 rounded-full bg-black/45 px-2.5 py-1 text-body-s leading-body-s font-medium text-white tabular-nums">
                   <span className="sr-only">Call time </span>
                   {clock(seconds)}
                   {learner?.minutesLeft != null ? ` · ${Math.max(0, learner.minutesLeft - Math.ceil(seconds / 60))} min left` : ""}
@@ -574,7 +576,8 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                 </button>
               ) : null}
 
-              <div aria-live="polite" className="mt-8 flex w-full max-w-[440px] flex-col gap-4">
+              <div ref={scrollRef} className="mask-edge-y mt-4 flex min-h-0 w-full flex-1 justify-center overflow-y-auto">
+              <div aria-live="polite" className="flex h-fit w-full max-w-[440px] flex-col gap-4 py-7">
                 {phase === "error" ? (
                   <div role="alert" className="flex flex-col items-center gap-3 text-center">
                     <p className="text-sm text-muted-foreground">{error}</p>
@@ -585,26 +588,26 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                 ) : phase === "connecting" && countdown !== null ? (
                   // Same "Get ready" as /talk, while the call connects underneath.
                   <div role="status" className="flex flex-col items-center gap-4 text-center">
-                    <span className="relative grid size-20 place-items-center rounded-full bg-card shadow-[0_2px_4px_rgba(30,28,25,0.07),0_8px_20px_rgba(30,28,25,0.11)]">
+                    <span className="relative grid size-20 place-items-center rounded-full bg-card shadow-elevation-2">
                       <span aria-hidden className="absolute inset-0 animate-spin rounded-full border-2 border-foreground/10 border-t-foreground/60 motion-reduce:animate-none" />
                       <span className="text-3xl font-semibold tabular-nums">{countdown}</span>
                     </span>
                     <div className="flex max-w-sm flex-col gap-1">
-                      <h2 className="m-0 text-lg font-semibold tracking-[-0.015em]">Get ready</h2>
+                      <h2 className="m-0 text-lg font-semibold tracking-title">Get ready</h2>
                       <p className="m-0 text-sm text-muted-foreground">
-                        {twinName} will start the conversation in a moment. Find a quiet spot and check your mic.
+                        The conversation starts in a moment. Find a quiet spot and check your mic.
                       </p>
                     </div>
                   </div>
                 ) : phase === "connecting" ? (
                   <p className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
                     <LoaderCircle className="size-4 animate-spin" aria-hidden />
-                    Connecting to {twinName}…
+                    Connecting…
                   </p>
                 ) : captions.length === 0 ? (
-                  <p className="text-center text-sm text-muted-foreground">{twinName} will start in a moment.</p>
+                  <p className="text-center text-sm text-muted-foreground">Starting the conversation…</p>
                 ) : (
-                  captions.map((turn, index, shown) => {
+                  captions.map((turn) => {
                     const evidence = lookupEvidence(evidenceTurns ?? [], turn.text);
                     return turn.speaker === "you" ? (
                       <Bubble key={turn.id} speaker="you" className="max-w-[440px]">
@@ -612,12 +615,6 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                       </Bubble>
                     ) : (
                       <div key={turn.id} className="flex flex-col gap-2">
-                        {speaking && index === shown.length - 1 ? (
-                          <p className="flex items-center gap-2 text-[13px] leading-[18px] font-medium text-foreground/75">
-                            <span aria-hidden className="size-2 animate-pulse rounded-full bg-[#ce2c33] ring-3 ring-[#ce2c33]/20" />
-                            {twinName} speaking
-                          </p>
-                        ) : null}
                         {twin && !learner && !turn.streaming && evidence ? (
                           <div className="flex items-start gap-2">
                             <Bubble speaker="twin">{turn.text}</Bubble>
@@ -630,8 +627,8 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                           <Bubble speaker="twin">{turn.text}</Bubble>
                         )}
                         {turn.streaming || learner ? null : turn.rating ? (
-                          <RatingLabel rating={turn.rating} className="text-[13px]" />
-                        ) : turn.id !== latestTwinId ? null : (
+                          <RatingLabel rating={turn.rating} className="text-body-s" />
+                        ) : turn.id !== latestTwinId || liveText ? null : (
                           <div className="flex flex-wrap items-center gap-2">
                             <button type="button" className={cn(PILL, "disabled:opacity-50")} disabled={!canRate} onClick={() => rate(turn.id, "like")}>
                               <FeelsLikeMeIcon className="size-4" />
@@ -662,12 +659,19 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                   })
                 )}
               </div>
+              </div>
             </div>
 
-            {/* Pinned to the bottom of the window; the area above leaves room for it. */}
+            {/* Pinned to the bottom of the window; the area above leaves room for it. The voice waves run behind it. */}
             <div className="fixed inset-x-0 bottom-0 z-10 flex flex-col items-center gap-4 bg-background px-6 pt-3 pb-6">
+              {phase === "live" ? (
+                <CallWaves
+                  agentTrack={agentAudio?.publication.track as RemoteAudioTrack | undefined}
+                  micTrack={microphoneTrack?.track as LocalAudioTrack | undefined}
+                />
+              ) : null}
               {composerOpen ? (
-                <form onSubmit={(event) => void sendMessage(event)} className="flex w-full max-w-[440px] items-center gap-2 rounded-full border bg-card p-1.5 pl-4">
+                <form onSubmit={(event) => void sendMessage(event)} className="relative flex w-full max-w-[440px] items-center gap-2 rounded-full border bg-card p-1.5 pl-4">
                   <label htmlFor="calibration-message" className="sr-only">
                     Message {twinName}
                   </label>
@@ -693,7 +697,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                   </button>
                 </form>
               ) : null}
-            <div className="flex justify-center gap-4">
+            <div className="relative flex justify-center gap-4">
               <button
                 type="button"
                 aria-label={muted ? "Unmute" : "Mute"}
@@ -755,7 +759,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                 aria-label="End call"
                 disabled={phase === "error"}
                 onClick={() => (phase === "live" ? setConfirmEnd(true) : void end("abandoned"))}
-                className={cn(CONTROL, "bg-[#ce2c33] text-white hover:bg-[#b5262c]")}
+                className={cn(CONTROL, "bg-live text-white hover:bg-live-hover")}
               >
                 <HangUpIcon />
               </button>
@@ -767,8 +771,8 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
             ) : null}
 
             <AlertDialog open={confirmEnd} onOpenChange={(open) => !ending && setConfirmEnd(open)}>
-              <AlertDialogContent className="flex max-w-[420px]! flex-col items-center gap-6 rounded-3xl px-6 pt-8 pb-6">
-                <AlertDialogTitle className="max-w-[300px] text-center text-xl leading-7 font-semibold tracking-[-0.015em]">
+              <AlertDialogContent className="flex max-w-[420px]! flex-col items-center gap-6 px-6 pt-8 pb-6">
+                <AlertDialogTitle className="max-w-[300px] text-center text-xl leading-7 font-semibold tracking-title">
                   Do you want to end the conversation?
                 </AlertDialogTitle>
                 <div className="grid w-full grid-cols-2 gap-2">
@@ -776,7 +780,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                     {ending ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}
                     {ending ? "Ending the call\u2026" : "Yes, end the call"}
                   </button>
-                  <AlertDialogCancel variant="default" disabled={ending} className="h-10 rounded-full px-4 text-sm font-semibold">
+                  <AlertDialogCancel variant="default" disabled={ending} className="h-10">
                     No, I’ll continue
                   </AlertDialogCancel>
                 </div>
@@ -838,7 +842,7 @@ function CallSummary({
         <CallEndedIcon className="size-[18px]" />
         Call ended
       </p>
-      <TwinPortrait name={twinName} photoUrl={photoUrl} className={cn("mt-6 size-60 rounded-[48px] text-7xl", SOFT_SHADOW)} />
+      <TwinPortrait name={twinName} photoUrl={photoUrl} className={cn("mt-6 size-60 rounded-portrait text-7xl", SOFT_SHADOW)} />
       <h1 className="mt-6 text-lg font-semibold">{twinName}</h1>
       <p className="mt-0.5 text-sm text-foreground/75">Time spoke {clock(seconds)}</p>
       {transcriptHref ? (

@@ -6,10 +6,10 @@ import { accuracyOf, type CalibrationScore } from "@/lib/twin/stats";
 import { cn } from "@/lib/utils";
 
 /** Shared prototype shadows. */
-export const SOFT_SHADOW = "shadow-[0_2px_4px_rgba(30,28,25,0.07),0_8px_20px_rgba(30,28,25,0.11)]";
+export const SOFT_SHADOW = "shadow-elevation-2";
 /** The prototype's white pill button (Feels like me, Show more, secondary actions). */
 export const PILL =
-  "inline-flex h-8 items-center gap-2 rounded-full bg-card px-[18px] text-[13px] font-semibold shadow-[0_0_1px_rgba(0,0,0,0.4),0_1px_1px_rgba(0,0,0,0.04),0_2px_4px_rgba(0,0,0,0.04)] transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 outline-none dark:shadow-[0_0_0_1px_var(--border)]";
+  "inline-flex h-8 items-center gap-2 rounded-full bg-card px-[18px] text-body-s font-semibold shadow-elevation-1 transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 outline-none dark:ring-1 dark:ring-border";
 
 /** The twin's picture: its persona's photo, else the role-play card's light wash with an initial. */
 export function TwinPortrait({ name, photoUrl = null, className }: { name: string; photoUrl?: string | null; className?: string }) {
@@ -21,7 +21,7 @@ export function TwinPortrait({ name, photoUrl = null, className }: { name: strin
     <div
       aria-hidden
       className={cn(
-        "grid place-items-center bg-[linear-gradient(135deg,#a8c6ec_0%,#d2c3e8_50%,#f1c6d7_100%)] font-semibold text-neutral-800/80",
+        "grid place-items-center bg-art-pastel font-semibold text-night/80",
         className,
       )}
     >
@@ -35,7 +35,7 @@ export function Bubble({ speaker, children, className }: { speaker: CalibrationT
   return (
     <p
       className={cn(
-        "w-fit rounded-[20px] text-sm leading-5 whitespace-pre-wrap",
+        "w-fit rounded-2xl text-sm leading-5 whitespace-pre-wrap",
         speaker === "you" ? "self-end bg-card px-5 py-2.5 ring-1 ring-border ring-inset" : "bg-muted px-4 py-2.5",
         className,
       )}
@@ -75,12 +75,12 @@ export function CalibrationStats({ score }: { score: CalibrationScore | null }) 
       {stats.map((stat) => (
         <div
           key={stat.label}
-          className="flex flex-col gap-2 rounded-2xl border bg-card px-4 py-5 shadow-[0_2px_4px_rgba(30,28,25,0.035),0_8px_20px_rgba(30,28,25,0.055)]"
+          className="flex flex-col gap-2 rounded-2xl border bg-card px-4 py-5 shadow-card"
         >
-          <dt className="text-[11px] leading-3 font-medium tracking-[0.06em] text-muted-foreground uppercase">{stat.label}</dt>
+          <dt className="text-overline leading-3 font-medium tracking-overline text-muted-foreground uppercase">{stat.label}</dt>
           <dd className="flex flex-col gap-1">
-            <span className="flex h-[34px] items-center text-[28px] leading-[34px] font-semibold tracking-[-0.015em] tabular-nums">{stat.value}</span>
-            <span className="text-[13px] leading-[18px] text-muted-foreground">{stat.note}</span>
+            <span className="flex h-[34px] items-center text-2xl font-semibold tracking-title tabular-nums">{stat.value}</span>
+            <span className="text-body-s leading-body-s text-muted-foreground">{stat.note}</span>
           </dd>
         </div>
       ))}

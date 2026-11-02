@@ -14,7 +14,7 @@ export function OnboardingHeader() {
           height={22}
           priority
         />
-        <span className="font-semibold tracking-tight text-[15px] text-foreground">
+        <span className="font-semibold tracking-tight text-body text-foreground">
           TrainerTwin
         </span>
       </div>

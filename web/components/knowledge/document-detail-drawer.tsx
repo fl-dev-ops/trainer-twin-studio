@@ -159,7 +159,7 @@ export function DocumentDetailDrawer({
       <button
         type="button"
         onClick={() => setConfirmDeleteOpen(true)}
-        className="size-8 rounded-full flex items-center justify-center text-white/70 hover:text-red-400 hover:bg-red-500/20 transition-colors cursor-pointer"
+        className="size-8 rounded-full flex items-center justify-center text-white/70 hover:text-danger hover:bg-danger-subtle transition-colors cursor-pointer"
         aria-label="Delete document"
         title="Delete document"
       >

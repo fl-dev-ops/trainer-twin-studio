@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { cn } from "@/lib/utils";
 
 export type VisualizerState = "connecting" | "thinking" | "listening" | "speaking" | "muted";
@@ -65,9 +65,9 @@ export function VisualizerBar({
       {heights.map((height, index) => (
         <div
           key={index}
-          className="w-1 min-h-1 rounded-full bg-current/25 transition-[height,background-color] duration-150 ease-linear data-[highlighted=true]:bg-current"
+          className="h-(--h) min-h-1 w-1 rounded-full bg-current/25 transition-[height,background-color] duration-150 ease-linear data-[highlighted=true]:bg-current"
           data-highlighted={state !== "muted" && height > 0.4}
-          style={{ height: `${Math.round(height * 100)}%` }}
+          style={{ "--h": `${Math.round(height * 100)}%` } as CSSProperties}
         />
       ))}
     </div>

@@ -23,6 +23,7 @@ import type { RoleplayOutputs } from "@/lib/roleplay/trpc";
 import { cn } from "@/lib/utils";
 import { useRefresh } from "@/lib/use-refresh";
 import { PageContainer } from "@/components/page-container";
+import { Button } from "@/components/ui/button";
 
 type Persona = RoleplayOutputs["builder"]["personas"][number];
 type Phase = "before" | "during" | "after";
@@ -49,7 +50,7 @@ const emptyBuilder = (persona = ""): RoleplayBuilder => ({
 /** Which tab a field lives on, so a validation message opens the right one. */
 const PHASE_OF: Record<string, Phase> = { learnerGoals: "after", rubric: "after" };
 
-const card = "flex flex-col gap-6 rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]";
+const card = "flex flex-col gap-6 rounded-tt-lg border border-(--card-border) bg-card p-6 shadow-card";
 const input = "rounded-lg border border-(--border) bg-transparent px-3 text-sm text-(--foreground) outline-none focus:border-(--brand) focus:ring-1 focus:ring-(--brand)";
 
 function Field({ id, label, hint, children }: { id?: string; label: string; hint?: string; children: ReactNode }) {
@@ -118,9 +119,9 @@ function ListField({ id, items, onChange, max, placeholder, addLabel }: {
           }}
           className={cn(input, "h-9 min-w-0 flex-1 disabled:opacity-60")}
         />
-        <button type="button" onClick={add} disabled={full || !draft.trim()} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-(--border) px-3.5 text-sm hover:bg-(--tone-control) disabled:opacity-50">
-          <Plus className="size-4" /> {addLabel}
-        </button>
+        <Button variant="outline" onClick={add} disabled={full || !draft.trim()}>
+          <Plus data-icon="inline-start" /> {addLabel}
+        </Button>
       </div>
     </div>
   );
@@ -147,13 +148,13 @@ function PersonaPicker({ personas, value, onChange }: { personas: Persona[]; val
             aria-checked={on}
             onClick={() => onChange(persona.slug)}
             className={cn(
-              "flex items-center gap-3 rounded-[12px] border p-2.5 pr-3 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",
+              "flex items-center gap-3 rounded-tt-md border p-2.5 pr-3 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",
               on ? "border-(--brand) bg-(--brand)/8 ring-1 ring-(--brand)" : "border-(--border) hover:bg-(--sidebar)",
             )}
           >
             {/* The tick sits on the photo's corner, so its box must wrap the photo exactly. */}
             <span className="relative inline-flex shrink-0">
-              <UserAvatar user={{ name: persona.name, image: persona.photoUrl }} className="size-10 text-sm" />
+              <UserAvatar user={{ name: persona.name, image: persona.photoUrl }} size="xl" />
               {on ? (
                 <span className="absolute -right-0.5 -bottom-0.5 grid size-4 place-items-center rounded-full bg-(--brand) text-white ring-2 ring-card">
                   <Check className="size-2.5" strokeWidth={3} />
@@ -224,7 +225,7 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, pers
       </header>
 
       <div className="mt-6">
-        <h1 className="m-0 text-[20px] leading-7 font-semibold tracking-[-0.015em]">{slug ? "Edit role play" : "Build role play"}</h1>
+        <h1 className="m-0 text-title-m leading-7 font-semibold tracking-title">{slug ? "Edit role play" : "Build role play"}</h1>
         <p className="mt-1 text-sm text-muted-foreground">The call the learner practises, how they’re scored, and what they set up first.</p>
       </div>
 
@@ -239,7 +240,7 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, pers
         <TabsContent value="before">
           <article className={card}>
             <Section title="Before the call" sub="Optional: what the learner shares or uploads before the client picks up.">
-              <div className="flex flex-col divide-y divide-(--border) rounded-[12px] border border-(--border) bg-(--sidebar) px-4">
+              <div className="flex flex-col divide-y divide-(--border) rounded-tt-md border border-(--border) bg-(--sidebar) px-4">
                 <div className="flex items-center justify-between gap-4 py-3.5">
                   <div className="flex flex-col gap-0.5">
                     <span className="text-sm font-medium">Share screen</span>
@@ -315,7 +316,7 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, pers
                       role="radio"
                       aria-checked={b.difficulty === d.value}
                       onClick={() => set("difficulty", d.value)}
-                      className={cn("rounded-[10px] border p-2.5 text-left transition-colors", b.difficulty === d.value ? "border-(--brand) bg-(--brand)/5" : "border-(--border) hover:bg-(--sidebar)")}
+                      className={cn("rounded-lg border p-2.5 text-left transition-colors", b.difficulty === d.value ? "border-(--brand) bg-(--brand)/5" : "border-(--border) hover:bg-(--sidebar)")}
                     >
                       <span className="block text-sm font-medium">{d.label}</span>
                       <span className="mt-0.5 block text-xs leading-4 text-muted-foreground">{d.description}</span>
@@ -402,24 +403,19 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, pers
       </Tabs>
 
       <div className="mt-6 flex items-center justify-between gap-3">
-        <Link href={slug ? `/roleplay/${slug}` : "/roleplay"} className="inline-flex h-10 items-center rounded-full px-4 text-sm hover:bg-(--tone-control)">
+        <Button variant="ghost" nativeButton={false} render={<Link href={slug ? `/roleplay/${slug}` : "/roleplay"} />}>
           Cancel
-        </Link>
+        </Button>
         <div className="flex items-center gap-2">
           {slug ? (
-            <Link href={`/talk?agent=${encodeURIComponent(slug)}`} className="inline-flex h-10 items-center gap-2 rounded-full border border-(--border) px-4 text-sm hover:bg-(--tone-control)">
-              <Play className="size-4" /> Try role play
-            </Link>
+            <Button variant="outline" nativeButton={false} render={<Link href={`/talk?agent=${encodeURIComponent(slug)}`} />}>
+              <Play data-icon="inline-start" /> Try role play
+            </Button>
           ) : null}
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => void save()}
-            className="inline-flex h-10 items-center gap-2 rounded-full bg-(--brand) px-5 text-sm font-medium text-white transition-colors hover:bg-[#e04d00] disabled:opacity-60"
-          >
-            <Check className="size-4" />
+          <Button variant="brand" disabled={saving} onClick={() => void save()}>
+            <Check data-icon="inline-start" />
             {saving ? "Saving…" : slug ? "Save role play" : "Create role play"}
-          </button>
+          </Button>
         </div>
       </div>
     </PageContainer>

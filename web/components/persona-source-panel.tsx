@@ -184,7 +184,7 @@ export function PersonaSourcePanel({
   const coverage = voiceCoverage(sources);
 
   return (
-    <section className="order-1 flex min-h-[32rem] min-w-0 flex-col p-4 sm:p-6 lg:min-h-0 lg:overflow-hidden">
+    <section className="order-1 flex min-h-[35.2rem] min-w-0 flex-col p-4 sm:p-6 lg:min-h-0 lg:overflow-hidden">
       <div className="shrink-0">
         <h2 className="text-sm font-semibold">Source library</h2>
         <p className="mt-1 text-xs leading-5 text-muted-foreground">
@@ -253,7 +253,7 @@ export function PersonaSourcePanel({
                     {(s.status === "analyzing" || s.status === "compiling") && <Spinner className="size-3" />}
                     {status.label}
                   </Badge>
-                  {moments > 0 && <span className="text-[11px] text-muted-foreground">{moments} moments</span>}
+                  {moments > 0 && <span className="text-overline text-muted-foreground">{moments} moments</span>}
                 </div>
               </div>
               {!disabled && (
@@ -275,7 +275,7 @@ export function PersonaSourcePanel({
 
       <div className="mt-4 border-t pt-4">
         <div className="flex items-center gap-2 text-sm font-medium">
-          <span className={cn("size-2 rounded-full", ready ? "bg-emerald-500" : "bg-muted-foreground/30")} />
+          <span className={cn("size-2 rounded-full", ready ? "bg-success" : "bg-muted-foreground/30")} />
           {ready} source{ready === 1 ? "" : "s"} shaping this persona
           <Badge variant={coverage === "high" ? "success" : coverage === "medium" ? "warning" : "secondary"}>
             Voice coverage: {coverage}

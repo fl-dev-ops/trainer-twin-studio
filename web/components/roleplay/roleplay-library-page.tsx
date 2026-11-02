@@ -16,6 +16,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import type { RoleplayOutputs } from "@/lib/roleplay/trpc";
 import { cn } from "@/lib/utils";
 import { PageContainer } from "@/components/page-container";
+import { Button } from "@/components/ui/button";
 
 type Scenario = RoleplayOutputs["scenarios"]["list"][number];
 
@@ -29,18 +30,16 @@ export function RoleplayMenu({ slug, name, trigger, interview = false }: { slug:
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <button
-            type="button"
+          <Button
+            variant={trigger === "header" ? "secondary" : "ghost"}
+            size="icon"
+            className={trigger === "header" ? undefined : "ml-auto"}
             aria-label={`Actions for ${name}`}
-            className={cn(
-              "grid size-8 place-items-center rounded-full text-(--foreground) transition-colors outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",
-              trigger === "header" ? "bg-(--tone-control) hover:bg-(--border)" : "ml-auto hover:bg-(--tone-control)",
-            )}
-          >
-            <DotsIcon />
-          </button>
+          />
         }
-      />
+      >
+        <DotsIcon />
+      </DropdownMenuTrigger>
       <DropdownMenuContent side="bottom" align="end" className="w-44">
         {interview ? (
           <DropdownMenuGroup>
@@ -85,16 +84,16 @@ export function RoleplayMenu({ slug, name, trigger, interview = false }: { slug:
 /** One role play (reference rp-card): the client's opening line on the art, title, brief, learners, actions. */
 function ScenarioCard({ scenario, index }: { scenario: Scenario; index: number }) {
   return (
-    <article className="flex flex-col overflow-visible rounded-[12px] border border-(--card-border) bg-card text-left shadow-[0_1px_2px_rgb(30_28_25/0.04)] transition-shadow hover:shadow-[0_2px_4px_rgb(30_28_25/0.07),0_8px_20px_rgb(30_28_25/0.11)]">
+    <article className="flex flex-col overflow-visible rounded-tt-md border border-(--card-border) bg-card text-left shadow-elevation-1 transition-shadow hover:shadow-elevation-2">
       <Link href={scenario.href} className="block outline-none">
-        <div className={cn("relative flex min-h-[176px] items-center justify-center rounded-t-[12px] p-4", GRADIENTS[index % GRADIENTS.length])}>
-          <div className="relative w-full rounded-[12px] bg-card p-3.5 shadow-[0_2px_8px_rgb(0_0_0/0.08)]">
-            <span className="absolute top-full right-3 left-3 -z-10 -mt-2 h-4 rounded-b-[12px] bg-[rgb(255_255_255/0.28)] dark:bg-[rgb(0_0_0/0.25)]" />
+        <div className={cn("relative flex min-h-[176px] items-center justify-center rounded-t-tt-md p-4", GRADIENTS[index % GRADIENTS.length])}>
+          <div className="relative w-full rounded-tt-md bg-card p-3.5 shadow-elevation-2">
+            <span className="absolute top-full right-3 left-3 -z-10 -mt-2 h-4 rounded-b-tt-md bg-white/28 dark:bg-black/25" />
             <div className="flex items-center gap-3">
-              <UserAvatar user={{ name: scenario.client.name, image: scenario.client.photoUrl }} className="size-10 text-sm" />
+              <UserAvatar user={{ name: scenario.client.name, image: scenario.client.photoUrl }} size="xl" />
               <span className="flex min-w-0 flex-col">
-                <span className="truncate text-[13px] leading-[18px] font-semibold text-(--foreground)">{scenario.client.name}</span>
-                <span className="line-clamp-2 text-[13px] leading-[18px] text-(--text-secondary) dark:text-[#c4c4c4]" title={scenario.opening ?? undefined}>
+                <span className="truncate text-body-s leading-body-s font-semibold text-(--foreground)">{scenario.client.name}</span>
+                <span className="line-clamp-2 text-body-s leading-body-s text-(--text-secondary) " title={scenario.opening ?? undefined}>
                   {scenario.opening ? `“${scenario.opening}”` : scenario.client.role ?? "Client"}
                 </span>
               </span>
@@ -102,11 +101,11 @@ function ScenarioCard({ scenario, index }: { scenario: Scenario; index: number }
           </div>
         </div>
         <div className="flex flex-col gap-2 px-4 pt-3.5 pb-0">
-          <span className="line-clamp-1 text-[15px] leading-[22px] font-semibold tracking-[-0.015em] text-(--foreground)" title={scenario.name}>
+          <span className="line-clamp-1 text-body leading-body font-semibold tracking-title text-(--foreground)" title={scenario.name}>
             {scenario.name}
           </span>
           {scenario.description ? (
-            <span className="line-clamp-3 text-[13px] leading-5 text-(--text-secondary)" title={scenario.description}>
+            <span className="line-clamp-3 text-body-s leading-5 text-(--text-secondary)" title={scenario.description}>
               {scenario.description}
             </span>
           ) : null}
@@ -132,14 +131,14 @@ export function RoleplayLibraryPage({ scenarios }: { scenarios: Scenario[] }) {
   return (
     <PageContainer>
       <header className="flex min-h-10 items-center justify-between gap-4">
-        <h1 className="m-0 flex items-center gap-2 text-[16px] leading-[22px] font-semibold tracking-[-0.015em]">
-          <span className="grid size-7 place-items-center rounded-[8px] text-(--text-secondary)">
+        <h1 className="m-0 flex items-center gap-2 text-page-title leading-page-title font-semibold tracking-title">
+          <span className="grid size-7 place-items-center rounded-tt-sm text-(--text-secondary)">
             <RoleplayIcon className="size-[18px]" />
           </span>
           Scenarios
         </h1>
         <div className="flex items-center gap-2">
-          <label className="flex h-8 items-center gap-2 rounded-full border border-(--card-border) bg-card px-3 text-[13px] text-muted-foreground focus-within:border-(--brand)">
+          <label className="flex h-8 items-center gap-2 rounded-full border border-(--card-border) bg-card px-3 text-body-s text-muted-foreground focus-within:border-(--brand)">
             <Search className="size-4" aria-hidden />
             <span className="sr-only">Search role plays</span>
             <input
@@ -153,7 +152,7 @@ export function RoleplayLibraryPage({ scenarios }: { scenarios: Scenario[] }) {
           </label>
           <Link
             href="/roleplay/new"
-            className="inline-flex h-8 items-center gap-2 rounded-full bg-(--brand) px-3.5 text-[13px] leading-5 font-medium text-white transition-colors hover:bg-[#e04d00] dark:hover:bg-[#ff7e33]"
+            className="inline-flex h-8 items-center gap-2 rounded-full bg-(--brand) px-3.5 text-body-s leading-5 font-medium text-white transition-colors hover:bg-brand-hover"
           >
             <svg viewBox="0 0 16 16" width={16} height={16} fill="none" aria-hidden>
               <path d="M8 3.5v9M3.5 8h9" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" />
@@ -163,7 +162,7 @@ export function RoleplayLibraryPage({ scenarios }: { scenarios: Scenario[] }) {
         </div>
       </header>
 
-      <h2 className="mt-10 text-[18px] leading-6 font-semibold tracking-[-0.015em]">Created role plays</h2>
+      <h2 className="mt-10 text-section-title leading-6 font-semibold tracking-title">Created role plays</h2>
       {created.length ? (
         <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {created.map((scenario, i) => (
@@ -179,7 +178,7 @@ export function RoleplayLibraryPage({ scenarios }: { scenarios: Scenario[] }) {
       {interviews.length ? (
         <>
           {/* v1 interview scenarios, as they were: they open (and are edited on) their v1 pages. */}
-          <h2 className="mt-12 text-[18px] leading-6 font-semibold tracking-[-0.015em]">Interview scenarios</h2>
+          <h2 className="mt-12 text-section-title leading-6 font-semibold tracking-title">Interview scenarios</h2>
           <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {interviews.map((scenario, i) => (
               <ScenarioCard key={scenario.slug} scenario={scenario} index={i} />

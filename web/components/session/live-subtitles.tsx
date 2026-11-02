@@ -46,8 +46,8 @@ export function LiveSubtitles({
             className,
           )}
         >
-          <div className="inline-block rounded-md bg-black/85 px-3.5 py-1.5 shadow-[0_6px_24px_rgba(0,0,0,0.65)] backdrop-blur-md">
-            <p className="text-[14px] sm:text-[15px] font-medium leading-relaxed tracking-wide text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.8)]">
+          <div className="inline-block rounded-md bg-black/85 px-3.5 py-1.5 shadow-elevation-3 backdrop-blur-md">
+            <p className="text-body-s sm:text-body font-medium leading-relaxed tracking-wide text-white text-shadow-subtitle">
               {currentText}
             </p>
           </div>

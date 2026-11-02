@@ -9,6 +9,7 @@ import { SessionTime } from "@/components/sessions/session-time";
 import { ShareTwinDialog } from "@/components/twin/share-twin-dialog";
 import { TwinFace } from "@/components/twin/twin-face";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { seedCopilot } from "@/lib/copilot-handoff";
@@ -24,6 +25,7 @@ import {
 import type { TwinOutputs } from "@/lib/twin/trpc";
 import { cn } from "@/lib/utils";
 import { PageContainer } from "@/components/page-container";
+import { PageHeader, SectionHeader } from "@/components/page-header";
 
 /**
  * Twin Agents library, ported from the reference prototype
@@ -36,11 +38,11 @@ type TwinCard = TwinOutputs["agents"]["list"]["twins"][number];
 function TwinAllCard({ twin }: { twin: TwinCard }) {
   const [shareOpen, setShareOpen] = useState(false);
   return (
-    <article className="mt-4 flex items-center justify-between gap-4 rounded-[12px] border border-(--card-border) bg-card p-4 px-5 text-left shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)] transition-shadow hover:shadow-[0_2px_4px_rgb(30_28_25/0.07),0_8px_20px_rgb(30_28_25/0.11)]">
+    <Card interactive className="mt-4 flex-row items-center justify-between gap-4 px-5 py-4 text-left">
       <Link href={`/twin/${twin.slug}`} className="flex flex-1 items-center gap-4 min-w-0 outline-none">
-        <TwinFace face={twin.face} className="size-[86px] text-3xl rounded-[20px] after:rounded-[20px] *:rounded-[20px]" />
+        <TwinFace face={twin.face} size="3xl" shape="rounded" />
         <div className="min-w-0 flex-1">
-          <h3 className="m-0 text-[16px] font-semibold leading-6">{twin.name}</h3>
+          <h3 className="m-0 text-page-title leading-6 font-semibold">{twin.name}</h3>
           <p className="mt-0.5 flex items-center gap-1 text-sm leading-5 text-muted-foreground">
             Last updated <SessionTime iso={twin.updatedAt} />
             <span className="grid size-5 shrink-0 place-items-center text-muted-foreground">
@@ -53,33 +55,25 @@ function TwinAllCard({ twin }: { twin: TwinCard }) {
 
       <div className="shrink-0 ml-1">
         <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <button
-                type="button"
-                aria-label={`More actions for ${twin.name}`}
-                className="grid size-8 place-items-center rounded-full bg-(--tone-control) text-(--foreground) hover:bg-(--border) transition-colors outline-none focus-visible:ring-2 focus-visible:ring-(--brand)"
-              >
-                <DotsIcon />
-              </button>
-            }
-          />
+          <DropdownMenuTrigger render={<Button variant="secondary" size="icon" aria-label={`More actions for ${twin.name}`} />}>
+            <DotsIcon />
+          </DropdownMenuTrigger>
           <DropdownMenuContent side="bottom" align="end" className="w-44">
             <DropdownMenuGroup>
               <DropdownMenuItem render={<Link href={`/twin/${twin.slug}/edit`} />}>
-                <Settings2 className="size-4" />
+                <Settings2 />
                 <span>Configure</span>
               </DropdownMenuItem>
               <DropdownMenuItem render={<Link href={`/twin/${twin.slug}/calibration`} />}>
-                <Sliders className="size-4" />
+                <Sliders />
                 <span>Calibrate</span>
               </DropdownMenuItem>
               <DropdownMenuItem render={<Link href={`/twin/${twin.slug}/assign`} />}>
-                <UserPlus className="size-4" />
+                <UserPlus />
                 <span>Assign</span>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setShareOpen(true)}>
-                <Share2 className="size-4" />
+                <Share2 />
                 <span>Share</span>
               </DropdownMenuItem>
             </DropdownMenuGroup>
@@ -87,7 +81,7 @@ function TwinAllCard({ twin }: { twin: TwinCard }) {
         </DropdownMenu>
       </div>
       <ShareTwinDialog open={shareOpen} onOpenChange={setShareOpen} slug={twin.slug} name={twin.name} allSkills={twin.allSkills} />
-    </article>
+    </Card>
   );
 }
 
@@ -95,24 +89,24 @@ function TwinAllCard({ twin }: { twin: TwinCard }) {
 function TwinBotCard({ bot, index }: { bot: TwinCard; index: number }) {
   const [shareOpen, setShareOpen] = useState(false);
   return (
-    <article className="flex flex-col overflow-visible rounded-[12px] border border-(--card-border) bg-card text-left shadow-[0_1px_2px_rgb(30_28_25/0.04)] transition-shadow hover:shadow-[0_2px_4px_rgb(30_28_25/0.07),0_8px_20px_rgb(30_28_25/0.11)]">
+    <Card interactive className="gap-0 overflow-visible py-0 text-left">
       {/* Top gradient banner with centered quote bubble (reference rp-art--twin + rp-quote) */}
       <Link href={`/twin/${bot.slug}`} className="block outline-none">
         <div
           className={cn(
-            "relative flex min-h-[176px] items-center justify-center p-4 rounded-t-[12px]",
+            "relative flex min-h-[176px] items-center justify-center rounded-t-tt-md p-4",
             GRADIENTS[index % GRADIENTS.length],
           )}
         >
-          <div className="relative w-full rounded-[12px] bg-card p-3.5 shadow-[0_2px_8px_rgb(0_0_0/0.08)]">
+          <div className="relative w-full rounded-tt-md bg-card p-3.5 shadow-elevation-2">
             {/* Bottom shadow tab layer underneath bubble */}
-            <span className="absolute left-3 right-3 top-full -mt-2 h-4 rounded-b-[12px] bg-[rgb(255_255_255/0.28)] dark:bg-[rgb(0_0_0/0.25)] -z-10" />
+            <span className="absolute top-full right-3 left-3 -z-10 -mt-2 h-4 rounded-b-tt-md bg-white/28 dark:bg-black/25" />
             <div className="flex items-center gap-3">
-              <TwinFace face={bot.face} className="size-10 rounded-full text-sm" />
+              <TwinFace face={bot.face} size="xl" />
               <span className="flex min-w-0 flex-col">
                 <span
                   title={bot.quote ?? bot.description ?? bot.name}
-                  className="line-clamp-2 text-[13px] leading-[18px] text-(--text-secondary) dark:text-[#c4c4c4]"
+                  className="line-clamp-2 text-body-s leading-body-s text-(--text-secondary)"
                 >
                   {bot.quote ? `“${bot.quote}”` : bot.description ?? bot.name}
                 </span>
@@ -123,11 +117,11 @@ function TwinBotCard({ bot, index }: { bot: TwinCard; index: number }) {
 
         {/* Card Body */}
         <div className="flex flex-col gap-2 px-4 pt-3.5 pb-0">
-          <span className="line-clamp-1 text-[15px] font-semibold leading-[22px] tracking-[-0.015em] text-(--foreground)" title={bot.name}>
+          <span className="line-clamp-1 text-body leading-body font-semibold tracking-title text-foreground" title={bot.name}>
             {bot.name}
           </span>
           {bot.description ? (
-            <span className="line-clamp-3 text-[13px] leading-5 text-(--text-secondary)" title={bot.description}>
+            <span className="line-clamp-3 text-body-s leading-5 text-(--text-secondary)" title={bot.description}>
               {bot.description}
             </span>
           ) : null}
@@ -139,44 +133,36 @@ function TwinBotCard({ bot, index }: { bot: TwinCard; index: number }) {
         <LearnerAvatars learners={bot.learners} />
 
         <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <button
-                type="button"
-                aria-label={`Actions for ${bot.name}`}
-                className="ml-auto grid size-8 place-items-center rounded-full text-(--foreground) hover:bg-(--tone-control) transition-colors outline-none focus-visible:ring-2 focus-visible:ring-(--brand)"
-              >
-                <DotsIcon />
-              </button>
-            }
-          />
+          <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="ml-auto" aria-label={`Actions for ${bot.name}`} />}>
+            <DotsIcon />
+          </DropdownMenuTrigger>
           <DropdownMenuContent side="bottom" align="end" className="w-44">
             <DropdownMenuGroup>
               <DropdownMenuItem render={<Link href={`/twin/${bot.slug}/edit`} />}>
-                <Settings2 className="size-4" />
+                <Settings2 />
                 <span>Configure</span>
               </DropdownMenuItem>
               <DropdownMenuItem render={<Link href={`/twin/${bot.slug}/calibration`} />}>
-                <Sliders className="size-4" />
+                <Sliders />
                 <span>Calibrate</span>
               </DropdownMenuItem>
               <DropdownMenuItem render={<Link href={`/talk?agent=${encodeURIComponent(bot.slug)}`} />}>
-                <Play className="size-4" />
+                <Play />
                 <span>Try as learner</span>
               </DropdownMenuItem>
               <DropdownMenuItem render={<Link href={`/twin/${bot.slug}/assign`} />}>
-                <UserPlus className="size-4" />
+                <UserPlus />
                 <span>Assign</span>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setShareOpen(true)}>
-                <Share2 className="size-4" />
+                <Share2 />
                 <span>Share</span>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem className="text-destructive focus:text-destructive">
-                <Trash2 className="size-4" />
+              <DropdownMenuItem variant="destructive">
+                <Trash2 />
                 <span>Remove</span>
               </DropdownMenuItem>
             </DropdownMenuGroup>
@@ -184,7 +170,7 @@ function TwinBotCard({ bot, index }: { bot: TwinCard; index: number }) {
         </DropdownMenu>
       </div>
       <ShareTwinDialog open={shareOpen} onOpenChange={setShareOpen} slug={bot.slug} name={bot.name} allSkills={bot.allSkills} />
-    </article>
+    </Card>
   );
 }
 
@@ -210,14 +196,7 @@ function CreateSkillDialog({ personaSlug }: { personaSlug: string | null }) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          <button
-            type="button"
-            className="inline-flex h-8 items-center gap-2 rounded-full bg-(--brand) px-3.5 text-[13px] leading-5 font-medium text-white shadow-none transition-colors hover:bg-[#e04d00] dark:hover:bg-[#ff7e33]"
-          />
-        }
-      >
+      <DialogTrigger render={<Button variant="brand" />}>
         <svg viewBox="0 0 16 16" width={16} height={16} fill="none" aria-hidden>
           <path d="M8 3.5v9M3.5 8h9" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" />
         </svg>
@@ -259,27 +238,17 @@ function CreateSkillDialog({ personaSlug }: { personaSlug: string | null }) {
 export function TwinAgentsPage({ data, personaSlug = null }: { data: TwinOutputs["agents"]["list"]; personaSlug?: string | null }) {
   return (
     <PageContainer>
-      <header className="flex min-h-10 items-center justify-between gap-4">
-        <h1 className="m-0 flex items-center gap-2 text-[16px] font-semibold leading-[22px] tracking-[-0.015em]">
-          <span className="grid size-7 place-items-center rounded-[8px] text-(--text-secondary)">
-            <SetupIcon className="size-[18px]" />
-          </span>
-          Twin Agents
-        </h1>
-        <CreateSkillDialog personaSlug={personaSlug} />
-      </header>
+      <PageHeader icon={SetupIcon} title="Twin Agents" actions={<CreateSkillDialog personaSlug={personaSlug} />} />
 
       {/* Only when there's a main twin; otherwise the page starts with the skill twins. */}
       {data.twins.length ? (
         <>
-          <h2 className="mt-10 max-w-none text-[18px] font-semibold leading-6 tracking-[-0.015em]">Twin for all use cases</h2>
+          <SectionHeader title="Twin for all use cases" className="mt-10" />
           {data.twins.map((twin) => <TwinAllCard key={twin.slug} twin={twin} />)}
         </>
       ) : null}
 
-      <h2 className={cn(data.twins.length ? "mt-8" : "mt-10", "max-w-none text-[18px] font-semibold leading-6 tracking-[-0.015em]")}>
-        Twin agents for specific use cases
-      </h2>
+      <SectionHeader title="Twin agents for specific use cases" className={data.twins.length ? "mt-8" : "mt-10"} />
       <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {data.skills.map((bot, i) => (
           <TwinBotCard key={bot.slug} bot={bot} index={i} />

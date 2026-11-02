@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type HTMLAttributes,
+  type CSSProperties,
 } from "react"
 
 import { cn } from "@/lib/utils"
@@ -150,9 +151,9 @@ export const Waveform = ({
 
   return (
     <div
-      className={cn("relative", className)}
+      className={cn("relative h-(--h)", className)}
       ref={containerRef}
-      style={{ height: heightStyle }}
+      style={{ "--h": heightStyle } as CSSProperties}
       {...props}
     >
       <canvas
@@ -366,9 +367,9 @@ export const ScrollingWaveform = ({
 
   return (
     <div
-      className={cn("relative flex items-center", className)}
+      className={cn("relative flex items-center h-(--h)", className)}
       ref={containerRef}
-      style={{ height: heightStyle }}
+      style={{ "--h": heightStyle } as CSSProperties}
       {...props}
     >
       <canvas className="block h-full w-full" ref={canvasRef} />
@@ -463,11 +464,11 @@ export const AudioScrubber = ({
       aria-valuemax={duration}
       aria-valuemin={0}
       aria-valuenow={currentTime}
-      className={cn("relative cursor-pointer select-none", className)}
+      className={cn("relative cursor-pointer select-none h-(--h)", className)}
       onMouseDown={handleMouseDown}
       ref={containerRef}
       role="slider"
-      style={{ height: heightStyle }}
+      style={{ "--h": heightStyle } as CSSProperties}
       tabIndex={0}
       {...props}
     >
@@ -482,19 +483,19 @@ export const AudioScrubber = ({
       />
 
       <div
-        className="bg-primary/20 pointer-events-none absolute inset-y-0 left-0"
-        style={{ width: `${localProgress * 100}%` }}
+        className="bg-primary/20 pointer-events-none absolute inset-y-0 left-0 w-(--w)"
+        style={{ "--w": `${localProgress * 100}%` } as CSSProperties}
       />
 
       <div
-        className="bg-primary pointer-events-none absolute top-0 bottom-0 w-0.5"
-        style={{ left: `${localProgress * 100}%` }}
+        className="bg-primary pointer-events-none absolute top-0 bottom-0 w-0.5 left-(--x)"
+        style={{ "--x": `${localProgress * 100}%` } as CSSProperties}
       />
 
       {showHandle && (
         <div
-          className="border-background bg-primary pointer-events-none absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 shadow-lg transition-transform hover:scale-110"
-          style={{ left: `${localProgress * 100}%` }}
+          className="border-background bg-primary pointer-events-none absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 shadow-lg transition-transform hover:scale-110 left-(--x)"
+          style={{ "--x": `${localProgress * 100}%` } as CSSProperties}
         />
       )}
     </div>
@@ -1299,7 +1300,7 @@ export const LiveMicrophoneWaveform = ({
   return (
     <div
       className={cn(
-        "relative flex items-center",
+        "relative flex items-center h-(--h)",
         !active && historyRef.current.length > 0 && "cursor-pointer",
         className
       )}
@@ -1323,7 +1324,7 @@ export const LiveMicrophoneWaveform = ({
           : undefined
       }
       tabIndex={!active && historyRef.current.length > 0 ? 0 : undefined}
-      style={{ height: heightStyle }}
+      style={{ "--h": heightStyle } as CSSProperties}
       {...props}
     >
       <canvas className="block h-full w-full" ref={canvasRef} />
@@ -1641,14 +1642,14 @@ export const RecordingWaveform = ({
       aria-valuemin={isRecordingComplete && !recording ? 0 : undefined}
       aria-valuemax={isRecordingComplete && !recording ? 100 : undefined}
       className={cn(
-        "relative flex items-center",
+        "relative flex items-center h-(--h)",
         isRecordingComplete && !recording && "cursor-pointer",
         className
       )}
       onMouseDown={handleMouseDown}
       ref={containerRef}
       role={isRecordingComplete && !recording ? "slider" : undefined}
-      style={{ height: heightStyle }}
+      style={{ "--h": heightStyle } as CSSProperties}
       tabIndex={isRecordingComplete && !recording ? 0 : undefined}
       {...props}
     >

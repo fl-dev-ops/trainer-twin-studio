@@ -1,7 +1,7 @@
 "use client";
 
 import { Minus, Plus } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@/components/ui/input-group";
 import { cn } from "@/lib/utils";
 
 export const MIN_MINUTES = 1;
@@ -40,8 +40,8 @@ export function DurationInput({ id, value, onChange, step = 5, className, "aria-
       <button type="button" className={button} aria-label="Fewer minutes" disabled={current !== null && current <= MIN_MINUTES} onClick={() => nudge(-step)}>
         <Minus className="size-3.5" />
       </button>
-      <div className="relative">
-        <Input
+      <InputGroup className="w-24">
+        <InputGroupInput
           id={id}
           type="number"
           inputMode="numeric"
@@ -52,10 +52,12 @@ export function DurationInput({ id, value, onChange, step = 5, className, "aria-
           onChange={(event) => onChange(event.target.value)}
           aria-label={ariaLabel}
           aria-invalid={current === null}
-          className="w-24 pr-10 text-right tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          className="text-right tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
         />
-        <span className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-xs text-muted-foreground">min</span>
-      </div>
+        <InputGroupAddon align="inline-end">
+          <InputGroupText>min</InputGroupText>
+        </InputGroupAddon>
+      </InputGroup>
       <button type="button" className={button} aria-label="More minutes" disabled={current !== null && current >= MAX_MINUTES} onClick={() => nudge(step)}>
         <Plus className="size-3.5" />
       </button>

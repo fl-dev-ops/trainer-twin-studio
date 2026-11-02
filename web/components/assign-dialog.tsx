@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Search } from "lucide-react";
+import { Check } from "lucide-react";
 import { DurationInput, parseMinutes } from "@/components/duration-input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
+import { SearchInput } from "@/components/search-input";
 
 /** `pending`: invited, hasn't accepted yet (not a member of the org). */
 export type AssignPerson = { email: string; name: string; image: string | null; pending?: boolean };
@@ -76,7 +77,7 @@ export function AssignDialog({ variant, open, onOpenChange, title, assignedCount
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) reset(); onOpenChange(next); }}>
-      <DialogContent className="flex max-h-[min(640px,calc(100dvh-2rem))] flex-col gap-4 sm:max-w-[520px]">
+      <DialogContent className="flex max-h-[min(640px,calc(100dvh-2.2rem))] flex-col gap-4 sm:max-w-[520px]">
         <DialogHeader>
           <DialogTitle className="text-lg">{variant === "twin" ? "Assign twin agent" : "Assign roleplay"}</DialogTitle>
           <DialogDescription>
@@ -94,10 +95,7 @@ export function AssignDialog({ variant, open, onOpenChange, title, assignedCount
           <p className="m-0 text-xs text-muted-foreground">Each person gets an email with their own link: one attempt, valid for 30 days.</p>
         )}
 
-        <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input type="search" placeholder="Search by name or email" value={query} onChange={(e) => setQuery(e.target.value)} className="pl-8" aria-label="Search learners" />
-        </div>
+        <SearchInput placeholder="Search by name or email" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search learners" />
 
         <ul className="m-0 min-h-24 flex-1 list-none overflow-y-auto rounded-lg border border-input p-0">
           {shown.length === 0 ? (
@@ -111,7 +109,7 @@ export function AssignDialog({ variant, open, onOpenChange, title, assignedCount
               <li key={person.email} className={cn(i > 0 && "border-t border-input")}>
                 <label className="flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors hover:bg-muted/60">
                   <input type="checkbox" checked={on} onChange={() => toggle(person.email)} className="size-4 accent-(--brand)" aria-label={`Assign ${person.name}`} />
-                  <UserAvatar user={person} className="size-8 text-xs" />
+                  <UserAvatar user={person} size="md" />
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate text-sm font-medium">{person.name}</span>
                     {person.pending ? (
@@ -154,7 +152,7 @@ export function AssignDialog({ variant, open, onOpenChange, title, assignedCount
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button disabled={!canAssign} onClick={() => void assign()} className="bg-(--brand) text-white hover:bg-[#e04d00]">
+          <Button variant="brand" disabled={!canAssign} onClick={() => void assign()} >
             {busy ? "Assigning…" : picked.length > 1 ? `Assign ${picked.length}` : "Assign"}
           </Button>
         </DialogFooter>
@@ -166,7 +164,7 @@ export function AssignDialog({ variant, open, onOpenChange, title, assignedCount
 /** Invited but not joined yet (hasn't accepted the invite / opened their link). */
 export function PendingBadge() {
   return (
-    <span className="shrink-0 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+    <span className="shrink-0 rounded-full bg-caution-subtle px-2 py-0.5 text-overline font-medium text-caution">
       Invite pending
     </span>
   );

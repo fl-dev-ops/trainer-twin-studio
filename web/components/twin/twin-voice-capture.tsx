@@ -160,11 +160,11 @@ export function TwinVoiceCapture({ personaName }: { personaName: string | null }
 
   return (
     <main className="min-h-svh bg-muted p-2">
-      <div className="min-h-[calc(100svh-1rem)] rounded-2xl bg-background">
+      <div className="min-h-[calc(100svh-1.1rem)] rounded-2xl bg-background">
         <header className="flex items-center justify-between gap-4 px-5 py-5 sm:px-9 sm:py-7">
-          <Button variant="ghost" size="sm" className="-ml-2 text-base font-medium" render={<Link href="/twin/brain" />} nativeButton={false}>
+          <Link href="/twin/brain" className="-ml-2 inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-base font-medium transition-colors hover:bg-muted [&_svg]:size-4">
             <ArrowLeft data-icon="inline-start" /> Voice
-          </Button>
+          </Link>
         </header>
 
         <section className="mx-auto flex w-full max-w-3xl flex-col items-center gap-8 px-5 pt-[4vh] pb-12 sm:px-8">
@@ -173,12 +173,12 @@ export function TwinVoiceCapture({ personaName }: { personaName: string | null }
           ) : cameraError ? (
             <div role="alert" className="flex flex-col items-center gap-3 text-center">
               <p className="text-sm text-muted-foreground">{cameraError}</p>
-              <Button variant="outline" className="rounded-full" onClick={() => void openCamera()}>Try again</Button>
+              <Button variant="outline" onClick={() => void openCamera()}>Try again</Button>
             </div>
           ) : (
             <>
               <div className="flex flex-col items-center gap-2 text-center">
-                <h1 className="text-2xl font-semibold tracking-[-0.015em]">Read this out aloud</h1>
+                <h1 className="text-2xl font-semibold tracking-title">Read this out aloud</h1>
                 <p className="text-sm text-muted-foreground">
                   Look at the camera and read the passage. We clone your voice from it and keep the video for your AI avatar.
                 </p>
@@ -195,7 +195,7 @@ export function TwinVoiceCapture({ personaName }: { personaName: string | null }
                 ) : null}
                 {recording ? (
                   <span className="absolute top-3 left-3 flex items-center gap-2 rounded-full bg-black/55 px-3 py-1 text-sm font-medium text-white tabular-nums">
-                    <span aria-hidden className="size-2 animate-pulse rounded-full bg-red-500" />
+                    <span aria-hidden className="size-2 animate-pulse rounded-full bg-danger" />
                     {fmt(seconds)} <span className="text-white/70">/ {fmt(TARGET_SECONDS)}</span>
                   </span>
                 ) : null}
@@ -205,9 +205,9 @@ export function TwinVoiceCapture({ personaName }: { personaName: string | null }
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-muted-foreground">Read this out aloud</p>
                   <Button
-                    variant="ghost"
+                    variant="subtle"
                     size="icon-sm"
-                    className="-mr-2 text-muted-foreground"
+                    className="-mr-2"
                     aria-label="Try another text"
                     title="Try another text"
                     disabled={stage !== "record" || recording}
@@ -216,27 +216,27 @@ export function TwinVoiceCapture({ personaName }: { personaName: string | null }
                     <RefreshCw />
                   </Button>
                 </div>
-                <p className="mt-4 font-serif text-2xl leading-[1.2] tracking-tight sm:text-3xl">{passage}</p>
+                <p className="mt-4 font-serif text-2xl leading-tight tracking-tight sm:text-3xl">{passage}</p>
               </div>
 
               <div className="flex flex-wrap items-center justify-center gap-3">
                 {stage === "record" ? (
                   recording ? (
                     <>
-                      <Button variant="ghost" className="rounded-full" onClick={() => void stopRecorders(false)}>Re-record</Button>
-                      <Button className="rounded-full" disabled={seconds < MIN_SECONDS} onClick={() => void stopRecorders(true)}>
+                      <Button variant="ghost" onClick={() => void stopRecorders(false)}>Re-record</Button>
+                      <Button disabled={seconds < MIN_SECONDS} onClick={() => void stopRecorders(true)}>
                         <Square data-icon="inline-start" /> Finish
                       </Button>
                     </>
                   ) : (
-                    <Button className="rounded-full" disabled={!cameraReady} onClick={startRecording}>Start recording</Button>
+                    <Button disabled={!cameraReady} onClick={startRecording}>Start recording</Button>
                   )
                 ) : (
                   <>
-                    <Button variant="outline" className="rounded-full" disabled={stage === "saving"} onClick={() => { setTake(null); setStage("record"); }}>
+                    <Button variant="outline" disabled={stage === "saving"} onClick={() => { setTake(null); setStage("record"); }}>
                       <RotateCcw data-icon="inline-start" /> Record again
                     </Button>
-                    <Button className="rounded-full" disabled={stage === "saving"} onClick={() => void save()}>
+                    <Button disabled={stage === "saving"} onClick={() => void save()}>
                       {stage === "saving" ? progress : "Save"}
                     </Button>
                   </>

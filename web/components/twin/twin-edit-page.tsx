@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check, Copy, UserPlus } from "lucide-react";
 import { toast } from "sonner";
@@ -43,16 +43,10 @@ function CopyShareLinkButton({ slug }: { slug: string }) {
     }
   }
   return (
-    // Same shape as "Save changes" below; only the colours differ.
-    <button
-      type="button"
-      onClick={() => void copy()}
-      disabled={state === "busy"}
-      className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full bg-secondary px-5 text-sm font-medium text-secondary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
-    >
-      {state === "copied" ? <Check className="size-4" /> : <Copy className="size-4" />}
-      <span>{state === "copied" ? "Copied" : "Copy link"}</span>
-    </button>
+    <Button variant="secondary" onClick={() => void copy()} disabled={state === "busy"}>
+      {state === "copied" ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}
+      {state === "copied" ? "Copied" : "Copy link"}
+    </Button>
   );
 }
 
@@ -65,7 +59,7 @@ export function TwinEditPage({
   twin: Pick<TwinOutputs["agents"]["get"], "slug" | "name" | "description" | "settings">;
   learners: LearnerAssign[];
   defaultMinutes: number;
-  /** /edit opens on General, /assign on Learners. All tabs share one Save. */
+  /** /edit opens on General, /assign on Learners. General saves with its button; the other tabs save as you go. */
   defaultTab?: "general" | "conversation" | "learners";
 }) {
   const id = twin.slug;
@@ -75,14 +69,11 @@ export function TwinEditPage({
   const [name, setName] = useState(twin.name);
   const [description, setDescription] = useState(twin.description ?? "");
 
-  // Before conversation start
-  const [preScreenshare, setPreScreenshare] = useState(twin.settings.preScreenshare);
-  const [preUpload, setPreUpload] = useState(twin.settings.preUpload);
-  const [uploadTitle, setUploadTitle] = useState(twin.settings.uploadTitle);
-  const [uploadInstruction, setUploadInstruction] = useState(twin.settings.uploadInstruction);
-
-  // During conversation
-  const [duringUpload, setDuringUpload] = useState(twin.settings.duringUpload);
+  // Conversation settings: saved on change (toggles) or on blur (text), one request at a time so the last one wins.
+  const [settings, setSettings] = useState(twin.settings);
+  const savedSettings = useRef(twin.settings);
+  const settingsQueue = useRef(Promise.resolve());
+  const { preScreenshare, preUpload, uploadTitle, uploadInstruction, duringUpload } = settings;
 
   const [assignOpen, setAssignOpen] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -110,6 +101,21 @@ export function TwinEditPage({
     }
   }
 
+  /** Saves conversation settings with the twin's *saved* name and description, so General's unsaved edits stay unsaved. */
+  function saveSettings(next: typeof settings) {
+    setSettings(next);
+    settingsQueue.current = settingsQueue.current.then(async () => {
+      if (JSON.stringify(next) === JSON.stringify(savedSettings.current)) return;
+      try {
+        await twinClient.agents.update.mutate({ slug: id, name: twin.name, description: twin.description ?? "", settings: next });
+        savedSettings.current = next;
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not save");
+        setSettings(savedSettings.current);
+      }
+    });
+  }
+
   async function handleSave() {
     setSaving(true);
     let settingsSaved = false;
@@ -118,7 +124,7 @@ export function TwinEditPage({
         slug: id,
         name,
         description,
-        settings: { preScreenshare, preUpload, duringUpload, uploadTitle, uploadInstruction },
+        settings: savedSettings.current,
       });
       settingsSaved = true;
       setSaved(true);
@@ -146,7 +152,7 @@ export function TwinEditPage({
 
       <div className="mt-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="m-0 text-[20px] font-semibold leading-7 tracking-[-0.015em]">
+          <h1 className="m-0 text-title-m font-semibold leading-7 tracking-title">
             Configure twin agent
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -169,7 +175,7 @@ export function TwinEditPage({
 
       {/* Card 1: name and description */}
       <TabsContent value="general">
-      <article className="flex flex-col gap-6 rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
+      <article className="flex flex-col gap-6 rounded-tt-lg border border-(--card-border) bg-card p-6 shadow-card">
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <label htmlFor="bot-name" className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
@@ -199,11 +205,20 @@ export function TwinEditPage({
         </div>
 
       </article>
+        <div className="flex items-center justify-end gap-3 pt-4">
+          <Button variant="ghost" nativeButton={false} render={<Link href={`/twin/${id}`} />}>
+            Cancel
+          </Button>
+          <Button variant="brand" onClick={() => void handleSave()} disabled={saving || !name.trim()}>
+            {saved && <Check data-icon="inline-start" />}
+            {saved ? "Saved" : "Save changes"}
+          </Button>
+        </div>
       </TabsContent>
 
-      {/* Card 2: before and during conversation settings */}
+      {/* Card 2: before and during conversation settings, saved as they change */}
       <TabsContent value="conversation">
-      <article className="flex flex-col gap-6 rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
+      <article className="flex flex-col gap-6 rounded-tt-lg border border-(--card-border) bg-card p-6 shadow-card">
         {/* Section: Before conversation start */}
         <div className="flex flex-col gap-4">
           <div>
@@ -211,11 +226,11 @@ export function TwinEditPage({
               Before conversation start
             </h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Permissions and configuration presented to the learner before the call begins.
+              Permissions and configuration presented to the learner before the call begins. Changes save automatically.
             </p>
           </div>
 
-          <div className="flex flex-col divide-y divide-(--border) rounded-[12px] border border-(--border) bg-(--sidebar) px-4">
+          <div className="flex flex-col divide-y divide-(--border) rounded-tt-md border border-(--border) bg-(--sidebar) px-4">
             <div className="flex items-center justify-between gap-4 py-3.5">
               <div className="flex flex-col gap-0.5">
                 <span className="text-sm font-medium">Enable screenshare</span>
@@ -225,7 +240,7 @@ export function TwinEditPage({
               </div>
               <SwitchToggle
                 checked={preScreenshare}
-                onChange={setPreScreenshare}
+                onChange={(checked) => saveSettings({ ...settings, preScreenshare: checked })}
                 label="Enable screenshare before conversation start"
               />
             </div>
@@ -239,7 +254,7 @@ export function TwinEditPage({
               </div>
               <SwitchToggle
                 checked={preUpload}
-                onChange={setPreUpload}
+                onChange={(checked) => saveSettings({ ...settings, preUpload: checked })}
                 label="Enable upload before conversation start"
               />
             </div>
@@ -256,7 +271,8 @@ export function TwinEditPage({
                     maxLength={80}
                     value={uploadTitle}
                     placeholder="e.g. Listing brochure, Client brief"
-                    onChange={(e) => setUploadTitle(e.target.value)}
+                    onChange={(e) => setSettings({ ...settings, uploadTitle: e.target.value })}
+                    onBlur={() => saveSettings(settings)}
                     className="h-9 rounded-lg border border-(--border) bg-card px-3 text-sm text-(--foreground) outline-none focus:border-(--brand) focus:ring-1 focus:ring-(--brand)"
                   />
                   <span className="text-xs text-muted-foreground">Shown on the upload card before the conversation.</span>
@@ -271,7 +287,8 @@ export function TwinEditPage({
                     maxLength={300}
                     value={uploadInstruction}
                     placeholder="e.g. Upload the property brochure you want to discuss."
-                    onChange={(e) => setUploadInstruction(e.target.value)}
+                    onChange={(e) => setSettings({ ...settings, uploadInstruction: e.target.value })}
+                    onBlur={() => saveSettings(settings)}
                     className="h-9 rounded-lg border border-(--border) bg-card px-3 text-sm text-(--foreground) outline-none focus:border-(--brand) focus:ring-1 focus:ring-(--brand)"
                   />
                   <span className="text-xs text-muted-foreground">Tells the learner which file to add. Uploading stays optional.</span>
@@ -292,7 +309,7 @@ export function TwinEditPage({
             </p>
           </div>
 
-          <div className="flex flex-col divide-y divide-(--border) rounded-[12px] border border-(--border) bg-(--sidebar) px-4">
+          <div className="flex flex-col divide-y divide-(--border) rounded-tt-md border border-(--border) bg-(--sidebar) px-4">
             <div className="flex items-center justify-between gap-4 py-3.5">
               <div className="flex flex-col gap-0.5">
                 <span className="text-sm font-medium">Enable upload</span>
@@ -302,7 +319,7 @@ export function TwinEditPage({
               </div>
               <SwitchToggle
                 checked={duringUpload}
-                onChange={setDuringUpload}
+                onChange={(checked) => saveSettings({ ...settings, duringUpload: checked })}
                 label="Enable upload during conversation"
               />
             </div>
@@ -314,7 +331,7 @@ export function TwinEditPage({
 
       {/* Card 3: learners assigned to this twin; Assign opens the shared dialog */}
       <TabsContent value="learners">
-      <article id="assign" className="flex flex-col gap-4 rounded-[16px] border border-(--card-border) bg-card p-6 shadow-[0_2px_4px_rgb(30_28_25/0.035),0_8px_20px_rgb(30_28_25/0.055)]">
+      <article id="assign" className="flex flex-col gap-4 rounded-tt-lg border border-(--card-border) bg-card p-6 shadow-card">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="m-0 text-sm font-semibold uppercase tracking-wide text-(--foreground)">Learners</h2>
@@ -322,16 +339,16 @@ export function TwinEditPage({
               {assigned.length} assigned. Each gets their own minutes with this twin.
             </p>
           </div>
-          <Button onClick={() => setAssignOpen(true)} className="bg-(--brand) text-white hover:bg-[#e04d00]">
+          <Button variant="brand" onClick={() => setAssignOpen(true)} >
             <UserPlus data-icon="inline-start" /> Assign learners
           </Button>
         </div>
         {assigned.length ? (
-          <ul className="m-0 flex list-none flex-col overflow-hidden rounded-[12px] border border-(--border) p-0">
+          <ul className="m-0 flex list-none flex-col overflow-hidden rounded-tt-md border border-(--border) p-0">
             {assigned.map((u, i) => (
               <li key={u.email} className={cn("flex items-center justify-between gap-3 px-4 py-3", i > 0 && "border-t border-(--border)")}>
                 <span className="flex min-w-0 items-center gap-3">
-                  <UserAvatar user={u} className="size-8 text-xs" />
+                  <UserAvatar user={u} size="md" />
                   <span className="flex min-w-0 flex-col">
                     <span className="truncate text-sm font-semibold">{u.name}</span>
                     <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
@@ -347,7 +364,7 @@ export function TwinEditPage({
             ))}
           </ul>
         ) : (
-          <p className="m-0 rounded-[12px] border border-dashed border-(--border) p-6 text-center text-sm text-muted-foreground">Nobody is assigned yet.</p>
+          <p className="m-0 rounded-tt-md border border-dashed border-(--border) p-6 text-center text-sm text-muted-foreground">Nobody is assigned yet.</p>
         )}
         <AssignDialog
           variant="twin"
@@ -363,24 +380,6 @@ export function TwinEditPage({
       </TabsContent>
       </Tabs>
 
-        {/* Action buttons */}
-        <div className="flex items-center justify-end gap-3 pt-2">
-          <Link
-            href={`/twin/${id}`}
-            className="inline-flex h-9 items-center rounded-full px-4 text-sm font-medium text-muted-foreground hover:text-(--foreground)"
-          >
-            Cancel
-          </Link>
-          <button
-            type="button"
-            onClick={() => void handleSave()}
-            disabled={saving || !name.trim()}
-            className="inline-flex h-9 items-center gap-2 rounded-full bg-(--brand) px-5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-          >
-            {saved && <Check className="size-4" />}
-            <span>{saved ? "Saved" : "Save changes"}</span>
-          </button>
-        </div>
       </div>
     </PageContainer>
   );

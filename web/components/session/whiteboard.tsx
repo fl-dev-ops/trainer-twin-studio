@@ -173,7 +173,7 @@ export function Whiteboard({
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-[#121212]">
+    <div className="flex h-full flex-col overflow-hidden bg-night">
       <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-2.5">
         <p className="min-w-0 flex-1 truncate pr-3 text-sm text-foreground">{question}</p>
         <button

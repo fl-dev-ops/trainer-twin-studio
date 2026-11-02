@@ -297,7 +297,7 @@ export function KnowledgeDetail({ slug }: { slug: string }) {
             <Spinner className="size-6" />
           </div>
         ) : docs.length === 0 ? (
-          <Empty className="border">
+          <Empty>
             <EmptyHeader>
               <EmptyMedia variant="icon">
                 <FileText />
@@ -310,7 +310,7 @@ export function KnowledgeDetail({ slug }: { slug: string }) {
             </EmptyHeader>
           </Empty>
         ) : (
-          <ScrollArea className="h-full rounded-xl border">
+          <ScrollArea className="h-full">
             <Table>
               <TableHeader>
                 <TableRow>
