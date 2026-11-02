@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowUp, Flag, LoaderCircle, Paperclip, Volume2 } from "lucide-react";
+import { ArrowUp, Flag, LoaderCircle, Mic, Paperclip, Volume2 } from "lucide-react";
 import { RoomAudioRenderer, RoomContext, useLocalParticipant, useStartAudio, useTrackToggle, useVoiceAssistant } from "@livekit/components-react";
 import { type LocalAudioTrack, ParticipantEvent, type RemoteAudioTrack, Room, RoomEvent, Track, type TranscriptionSegment } from "livekit-client";
 import {
@@ -23,13 +25,15 @@ import { lookupEvidence } from "@/lib/twin/evidence-match";
 import type { TurnEvidence } from "@/lib/twin/evidence";
 import { RoleplayIcon } from "@/components/icons";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import { LiveKitWorkspaceProvider } from "@/lib/livekit-workspaces";
 import { twinClient } from "@/lib/twin/client";
 import { isFeelsOffMessage, joinsLearnerTurn, type CalibrationScore } from "@/lib/twin/stats";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-type Phase = "connecting" | "live" | "ended" | "error";
+/** ready: the pre-join (mic access, Start); leaving: a saved twin calibration on its way to its page. */
+type Phase = "ready" | "connecting" | "live" | "ended" | "leaving" | "error";
 type Connection = { sessionId: string; runtimeToken: string };
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -87,13 +91,13 @@ export type LearnerCall = {
   onEnded: (result: CallResult) => void;
 };
 
-/** Why the mic couldn't start, in words the trainer can act on. */
-function micProblem(error: unknown) {
+/** Why the mic couldn't start, in words the trainer can act on; `retry` is what to do next ("click the mic"). */
+function micProblem(error: unknown, retry = "click the mic") {
   const name = error instanceof Error ? error.name : "";
-  if (name === "NotAllowedError") return "The browser blocked the microphone. Allow it for this site, then click the mic.";
-  if (name === "NotReadableError" || name === "AbortError") return "The microphone is busy (another app or tab may be using it). Close that, then click the mic.";
-  if (name === "NotFoundError") return "No microphone was found. Connect one, then click the mic.";
-  return `The microphone could not start${error instanceof Error && error.message ? `: ${error.message}` : ""}. Click the mic to try again.`;
+  if (name === "NotAllowedError") return `The browser blocked the microphone. Allow it for this site, then ${retry}.`;
+  if (name === "NotReadableError" || name === "AbortError") return `The microphone is busy (another app or tab may be using it). Close that, then ${retry}.`;
+  if (name === "NotFoundError") return `No microphone was found. Connect one, then ${retry}.`;
+  return `The microphone could not start${error instanceof Error && error.message ? `: ${error.message}` : ""}. Then ${retry}.`;
 }
 
 export function CalibrationCall(props: CallProps) {
@@ -110,7 +114,10 @@ export function CalibrationCall(props: CallProps) {
 }
 
 function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = null, learner, attach }: CallProps & { room: Room }) {
-  const [phase, setPhase] = useState<Phase>("connecting");
+  // Studio calls open on the pre-join, so a refresh or Back never starts a call; a learner's started from a click already.
+  const [phase, setPhase] = useState<Phase>(learner ? "connecting" : "ready");
+  const router = useRouter();
+  const queryClient = useQueryClient();
   const [error, setError] = useState("");
   const [connection, setConnection] = useState<Connection | null>(null);
   const [turns, setTurns] = useState<CalibrationTurn[]>([]);
@@ -138,6 +145,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
   const turnsRef = useRef<CalibrationTurn[]>([]);
   /** Twin calls: the stored calibration this call's ratings go to. Rating waits until it exists. */
   const [calibrationId, setCalibrationId] = useState<string | null>(null);
+  const calibrationIdRef = useRef<string | null>(null);
   const [calibrationFailed, setCalibrationFailed] = useState(false);
   /** Rating saves still in flight; ending the call or leaving waits for them. */
   const pendingRatings = useRef(new Set<Promise<unknown>>());
@@ -207,9 +215,22 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
       setComposerOpen(false);
       setConfirmEnd(false);
       setEnding(false);
+      const savedId = calibrationIdRef.current;
+      if (twin && !learner && savedId && !unloading) {
+        // Off /calibrate (a refresh there starts over): the saved calibration's own page. Its score is counted on the
+        // way (that page shows the raw count meanwhile) and the page updates when it lands.
+        setPhase("leaving");
+        void twinClient.calibrations.score
+          .mutate({ calibrationId: savedId })
+          .catch((scoreError) => console.error("Could not score the calibration:", scoreError))
+          .finally(() => void queryClient.invalidateQueries());
+        void queryClient.invalidateQueries();
+        router.replace(`/twin/${encodeURIComponent(slug)}/calibration/${encodeURIComponent(savedId)}`);
+        return;
+      }
       setPhase("ended");
     },
-    [room, closeSession],
+    [room, closeSession, twin, learner, slug, router, queryClient],
   );
 
   /**
@@ -245,6 +266,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
     typedEchoes.current = [];
     pendingRatings.current.clear();
     setCalibrationId(null);
+    calibrationIdRef.current = null;
     setCalibrationFailed(false);
     setConnection(null);
     setTurns([]);
@@ -277,7 +299,10 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
         // Saved as a calibration before anything can be rated (rating stays off until then); a failure only
         // loses the ratings, not the call. Creating it is idempotent, so retrying is safe.
         void withRetries(() => twinClient.calibrations.start.mutate({ slug, sessionId: active.sessionId }))
-          .then(({ calibrationId: id }) => setCalibrationId(id))
+          .then(({ calibrationId: id }) => {
+            calibrationIdRef.current = id;
+            setCalibrationId(id);
+          })
           .catch((saveError) => {
             console.error("Could not save the calibration:", saveError);
             setCalibrationFailed(true);
@@ -319,12 +344,13 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
     return () => clearTimeout(id);
   }, [countdown, tryRelease]);
 
-  // Start once on open; the ref stops React's dev double-mount from starting a second session.
+  // A learner's call starts once on open (the ref stops React's dev double-mount from starting a second session);
+  // studio calls wait for Start on the pre-join.
   useEffect(() => {
-    if (startedRef.current) return;
+    if (startedRef.current || !learner) return;
     startedRef.current = true;
     void start();
-  }, [start]);
+  }, [start, learner]);
 
   // Leaving the page mid-call still closes the session (pending rating saves can't be awaited here; Back does).
   useEffect(
@@ -540,7 +566,14 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
           <h1 className="m-0 truncate px-8 pt-6 text-sm font-medium text-foreground/90">{scenarioName}</h1>
         )}
 
-        {phase === "ended" && learner ? null : phase === "ended" ? (
+        {phase === "ready" ? (
+          <ReadyToCall twinName={twinName} photoUrl={photoUrl} onStart={() => void start()} />
+        ) : phase === "leaving" ? (
+          <p role="status" className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
+            <LoaderCircle className="size-4 animate-spin" aria-hidden />
+            Opening the calibration…
+          </p>
+        ) : phase === "ended" && learner ? null : phase === "ended" ? (
           <CallSummary
             transcriptHref={
               twin
@@ -794,6 +827,66 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
 }
 
 /** After the call: how long it ran and how the answers were rated. */
+/**
+ * The pre-join: the twin's portrait and the microphone, nothing else. Start asks for the mic (so the browser's prompt
+ * comes from this click) and then starts the call; a blocked mic says how to fix it.
+ */
+function ReadyToCall({ twinName, photoUrl, onStart }: { twinName: string; photoUrl: string | null; onStart: () => void }) {
+  const [mic, setMic] = useState<PermissionState | null>(null);
+  const [problem, setProblem] = useState("");
+  const [asking, setAsking] = useState(false);
+  useEffect(() => {
+    let status: PermissionStatus | undefined;
+    const update = () => status && setMic(status.state);
+    // Not every browser can say (Firefox can't for the mic): then the line just says it will ask.
+    navigator.permissions
+      ?.query({ name: "microphone" as PermissionName })
+      .then((result) => {
+        status = result;
+        update();
+        result.addEventListener("change", update);
+      })
+      .catch(() => {});
+    return () => status?.removeEventListener("change", update);
+  }, []);
+
+  async function begin() {
+    setAsking(true);
+    setProblem("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      for (const track of stream.getTracks()) track.stop();
+      onStart();
+    } catch (micError) {
+      setProblem(micProblem(micError, "try again"));
+      setAsking(false);
+    }
+  }
+
+  const status = problem
+    ? problem
+    : mic === "granted"
+      ? "Microphone ready"
+      : mic === "denied"
+        ? "The microphone is blocked for this site. Allow it in the browser's site settings, then start."
+        : "Your browser will ask to use the microphone.";
+  return (
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6 px-6 pb-16">
+      <TwinPortrait name={twinName} photoUrl={photoUrl} className={cn("size-[min(320px,34dvh)] rounded-stage text-8xl", SOFT_SHADOW)} />
+      <div className="flex max-w-sm flex-col items-center gap-2 text-center">
+        <p className="m-0 text-sm text-muted-foreground">Talk to {twinName} like a learner would, and rate each answer.</p>
+        <p role="status" className={cn("m-0 flex items-center gap-1.5 text-body-s", problem || mic === "denied" ? "text-destructive" : "text-muted-foreground")}>
+          <Mic className="size-4 shrink-0" aria-hidden />
+          {status}
+        </p>
+      </div>
+      <Button variant="brand" size="lg" onClick={() => void begin()} disabled={asking}>
+        {asking ? "Starting…" : "Start calibration"}
+      </Button>
+    </div>
+  );
+}
+
 function CallSummary({
   transcriptHref,
   backHref,
