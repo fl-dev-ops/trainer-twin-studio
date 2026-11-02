@@ -2,7 +2,6 @@ export type AgentContextUpload = {
   required: boolean;
   prompt: string;
   label: string;
-  accept: string;
   maxFiles: number;
   /** Show the upload card before the session even when not required. */
   offered: boolean;
@@ -29,9 +28,36 @@ export type BeforeSettings = {
 
 export const TWIN_UPLOAD_TITLE_DEFAULT = "Documents";
 
-export const DEFAULT_CONTEXT_ACCEPT =
-  ".md,.txt,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.csv,.json,.png,.jpg,.jpeg,.webp";
-export const RESUME_CONTEXT_ACCEPT = ".pdf,.docx,.doc,.md,.txt";
+/**
+ * What a learner may upload, fixed for every agent (twins and role plays), with no per-agent setting. Before the call:
+ * a PDF or an image; during it: an image. Both up to 10 MB. Images are PNG, JPEG or WebP (what the upload verifies).
+ */
+export const UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
+export const BEFORE_UPLOAD_ACCEPT = ".pdf,.png,.jpg,.jpeg,.webp";
+export const BEFORE_UPLOAD_RULE = "A PDF or an image (PNG, JPEG or WebP), up to 10 MB.";
+/** The session start's refusal (the API returns it as a 400). */
+export const BEFORE_UPLOAD_REFUSED = `This file can't be used for the conversation. ${BEFORE_UPLOAD_RULE}`;
+export const DURING_UPLOAD_ACCEPT = ".png,.jpg,.jpeg,.webp";
+export const DURING_UPLOAD_RULE = "Images only (PNG, JPEG or WebP), up to 10 MB.";
+
+function uploadProblem(file: { name: string; size?: number | null }, accept: string, wrongType: string) {
+  const ext = `.${(file.name.split(".").pop() ?? "").toLowerCase()}`;
+  if (!accept.split(",").includes(ext)) return wrongType;
+  if ((file.size ?? 0) > UPLOAD_MAX_BYTES) return "That file is over 10 MB. Use a smaller one.";
+  return null;
+}
+
+/** Why this file can't be added before the conversation, or null if it can (checked before uploading). */
+export const beforeUploadProblem = (file: { name: string; size?: number | null }) =>
+  uploadProblem(file, BEFORE_UPLOAD_ACCEPT, "Only a PDF or an image (PNG, JPEG or WebP) can be added before the conversation.");
+
+/** Why this file can't be attached during the conversation, or null if it can (checked before uploading). */
+export const duringUploadProblem = (file: { name: string; size?: number | null }) =>
+  uploadProblem(file, DURING_UPLOAD_ACCEPT, "Only images can be attached during the conversation (PNG, JPEG or WebP).");
+
+/** The server's check on a stored upload (kind and type verified from its bytes at upload). */
+export const uploadAllowed = (doc: { kind: string; mimeType: string; size: number | null }, when: "before" | "during") =>
+  (doc.size ?? 0) <= UPLOAD_MAX_BYTES && (doc.kind === "image" || (when === "before" && doc.mimeType === "application/pdf"));
 
 const MODE_DEFAULTS: Record<string, { prompt: string; label: string }> = {
   resume_grounding: {
@@ -93,7 +119,6 @@ export function resolveContextUpload(context: unknown): AgentContextUpload {
   const mode = text(ctx?.mode) || "none";
   const required = Boolean(ctx?.required);
   const defaults = MODE_DEFAULTS[mode] ?? FALLBACK;
-  const resume = mode === "resume_grounding" || mode === "resume_topics_only";
   const maxFiles = typeof ctx?.max_files === "number" && Number.isInteger(ctx.max_files) && ctx.max_files >= 1
     ? Math.min(ctx.max_files, 5)
     : 1;
@@ -101,7 +126,6 @@ export function resolveContextUpload(context: unknown): AgentContextUpload {
     required,
     prompt: required ? text(ctx?.prompt) || defaults.prompt : text(ctx?.prompt),
     label: documentLabel(ctx?.label, defaults.label),
-    accept: resume ? RESUME_CONTEXT_ACCEPT : DEFAULT_CONTEXT_ACCEPT,
     maxFiles,
     // Role plays: the card shows only when required, any picked document is accepted, the whole screen is
     // always shared, and there is no attaching mid-call.
@@ -136,7 +160,6 @@ export function contextUploadFromAgentData(data: unknown, kind?: string | null):
     required: false,
     prompt: settings.uploadInstruction,
     label: settings.uploadTitle || TWIN_UPLOAD_TITLE_DEFAULT,
-    accept: DEFAULT_CONTEXT_ACCEPT,
     maxFiles: 1,
     offered: settings.preUpload,
     allowed: settings.preUpload,

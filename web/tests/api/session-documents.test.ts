@@ -35,7 +35,7 @@ beforeEach(() => {
     compiledSnapshot: { agent: { data: twinOn }, sessionDocumentIds: [], documentManifests: [] },
     agent: { kind: "TWIN", data: twinOn },
   };
-  doc = { id: "d1", name: "brochure.pdf", kind: "document", mimeType: "application/pdf", size: 10, manifest: null };
+  doc = { id: "d1", name: "screenshot.png", kind: "image", mimeType: "image/png", size: 10, manifest: null };
   linked = [];
   snapshots = [];
 });
@@ -71,4 +71,12 @@ test("attaching the same file twice lists it once", async () => {
   session!.compiledSnapshot = { agent: { data: twinOn }, sessionDocumentIds: ["d1"], documentManifests: [{ id: "d1" }] };
   expect((await attach()).status).toBe(200);
   expect(snapshots).toEqual([]);
+});
+
+test("during the call only images up to 10 MB: a PDF or an oversized image is refused", async () => {
+  doc = { id: "d1", name: "brochure.pdf", kind: "document", mimeType: "application/pdf", size: 10, manifest: null };
+  expect((await attach()).status).toBe(400);
+  doc = { id: "d1", name: "huge.png", kind: "image", mimeType: "image/png", size: 10 * 1024 * 1024 + 1, manifest: null };
+  expect((await attach()).status).toBe(400);
+  expect(linked).toEqual([]);
 });

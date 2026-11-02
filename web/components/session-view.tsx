@@ -6,7 +6,7 @@ import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { toast } from "sonner";
 import { Check, LoaderCircle, Play, ScreenShare, Upload as UploadIcon, Volume2 } from "lucide-react";
-import { type AgentContextUpload } from "@/lib/context-upload";
+import { type AgentContextUpload, BEFORE_UPLOAD_ACCEPT, beforeUploadProblem, DURING_UPLOAD_ACCEPT, duringUploadProblem } from "@/lib/context-upload";
 import "@livekit/components-styles";
 import {
   RoomAudioRenderer,
@@ -152,7 +152,8 @@ export function SessionView({
   const persona = agentPersonas[agent] ?? personas[0] ?? "";
   const [contextIds, setContextIds] = useState<string[]>([]);
   const contextId = contextIds[0] ?? "";
-  const [contextList, setContextList] = useState<{ id: string; name: string; size?: number }[]>(contexts);
+  // Earlier uploads that fit the before-the-call rule (a PDF or an image, up to 10 MB); the session start checks again.
+  const [contextList, setContextList] = useState<{ id: string; name: string; size?: number }[]>(() => contexts.filter((c) => !beforeUploadProblem(c)));
   const [uploadingContext, setUploadingContext] = useState(false);
   const contextInput = useRef<HTMLInputElement>(null);
 
@@ -267,7 +268,7 @@ export function SessionView({
 
   const contextUpload = agentContextUploads[agent] ?? (
     agentContextRequired[agent]
-      ? { required: true, prompt: "", label: "Documents", accept: "", offered: true }
+      ? { required: true, prompt: "", label: "Documents", offered: true }
       : null
   );
   const isContextRequired = Boolean(contextUpload?.required ?? agentContextRequired[agent]);
@@ -539,6 +540,8 @@ export function SessionView({
   const handleAttach = useCallback(
     async (file: File) => {
       if (!connection) return;
+      const problem = duringUploadProblem(file);
+      if (problem) return void toast.error(problem);
       setAttaching(true);
       try {
         const form = new FormData();
@@ -950,7 +953,6 @@ export function SessionView({
         screenShare={screenShareRequired}
         contextPrompt={contextUpload?.prompt}
         contextLabel={contextUpload?.label}
-        contextAccept={contextUpload?.accept}
         sessionCode={sessionCode}
         onJoin={(settings, contextId) => {
           setPrejoinMedia(settings);
@@ -1114,12 +1116,14 @@ export function SessionView({
                     <input
                       ref={contextInput}
                       type="file"
-                      accept={contextUpload?.accept || ".md,.txt,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.csv,.json,.png,.jpg,.jpeg,.webp"}
+                      accept={BEFORE_UPLOAD_ACCEPT}
                       hidden
                       onChange={async (e) => {
                         const file = e.target.files?.[0];
                         e.currentTarget.value = "";
                         if (!file) return;
+                        const problem = beforeUploadProblem(file);
+                        if (problem) return setError(problem);
                         setUploadingContext(true);
                         setError("");
                         try {
@@ -1401,7 +1405,7 @@ export function SessionView({
                 ref={attachInput}
                 type="file"
                 hidden
-                accept={contextUpload?.accept || ".md,.txt,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.csv,.json,.png,.jpg,.jpeg,.webp"}
+                accept={DURING_UPLOAD_ACCEPT}
                 onChange={(event) => {
                   const file = event.target.files?.[0];
                   event.currentTarget.value = "";

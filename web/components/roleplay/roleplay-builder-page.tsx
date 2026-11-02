@@ -251,7 +251,7 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, pers
                 <div className="flex items-center justify-between gap-4 py-3.5">
                   <div className="flex flex-col gap-0.5">
                     <span className="text-sm font-medium">Upload a file</span>
-                    <span className="text-xs text-muted-foreground">Learners may add a document before the call starts.</span>
+                    <span className="text-xs text-muted-foreground">Learners may add a file before the call starts. A PDF or an image (PNG, JPEG or WebP), up to 10 MB.</span>
                   </div>
                   <SwitchToggle checked={before.preUpload} onChange={(v) => setBeforeKey("preUpload", v)} label="Upload a file before the call" />
                 </div>
@@ -268,7 +268,7 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, pers
                 <div className="flex items-center justify-between gap-4 py-3.5">
                   <div className="flex flex-col gap-0.5">
                     <span className="text-sm font-medium">Attach during the call</span>
-                    <span className="text-xs text-muted-foreground">Learners can add a file while they talk to the client.</span>
+                    <span className="text-xs text-muted-foreground">Learners can share an image while they talk to the client. Images only (PNG, JPEG or WebP), up to 10 MB.</span>
                   </div>
                   <SwitchToggle checked={before.duringUpload} onChange={(v) => setBeforeKey("duringUpload", v)} label="Attach files during the call" />
                 </div>

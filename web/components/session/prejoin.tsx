@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "../ui/button";
 import { FileThumbnail } from "@/components/extend/file-thumbnail";
 import { UserAvatar } from "@/components/user-avatar";
+import { BEFORE_UPLOAD_ACCEPT, BEFORE_UPLOAD_RULE, beforeUploadProblem } from "@/lib/context-upload";
 
 export type PreJoinMediaSettings = {
   microphoneEnabled: boolean;
@@ -43,8 +44,6 @@ export type PreJoinDocument = { id: string; name: string; size?: number };
 type DeviceOption = { deviceId: string; label: string };
 type PermissionState = "requesting" | "ready" | "denied" | "unsupported";
 
-const CONTEXT_ACCEPT =
-  ".md,.txt,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.csv,.json,.png,.jpg,.jpeg,.webp";
 
 function formatBytes(n: number) {
   if (n < 1024) return `${n} B`;
@@ -63,7 +62,6 @@ export function PreJoin({
   screenShare = true,
   contextPrompt,
   contextLabel,
-  contextAccept,
   sessionCode,
   onJoin,
 }: {
@@ -81,7 +79,6 @@ export function PreJoin({
   screenShare?: boolean;
   contextPrompt?: string;
   contextLabel?: string;
-  contextAccept?: string;
   sessionCode: string;
   onJoin: (settings: PreJoinMediaSettings, contextId?: string) => void;
 }) {
@@ -271,6 +268,8 @@ export function PreJoin({
   }
 
   async function uploadFile(file: File) {
+    const problem = beforeUploadProblem(file);
+    if (problem) return setDocError(problem);
     setUploadingDoc(true);
     setDocError("");
     try {
@@ -614,16 +613,14 @@ export function PreJoin({
                         or drag your {contextLabel ? contextLabel.toLowerCase() : "document"} here
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {contextAccept && contextAccept.includes(".pdf") && !contextAccept.includes(".png")
-                          ? "PDF, Word, or text files (.pdf preferred)"
-                          : "PDF, Word, slides, images, and text files"}
+                        {BEFORE_UPLOAD_RULE}
                       </p>
                     </>
                   )}
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept={contextAccept || CONTEXT_ACCEPT}
+                    accept={BEFORE_UPLOAD_ACCEPT}
                     hidden
                     onChange={(event) => {
                       const file = event.target.files?.[0];

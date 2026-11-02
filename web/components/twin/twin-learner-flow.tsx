@@ -35,7 +35,7 @@ export type LearnerAccess =
   | null;
 
 type Trainer = { name: string; title: string | null; bio: string | null; photoUrl: string | null };
-type Twin = { slug: string; name: string; description: string | null };
+type Twin = { slug: string; name: string; description: string | null; attach?: boolean };
 type Step = "profile" | "call" | "summary";
 
 // The dash's own scale (twin overview cards): 16px cards with the soft shadow, 11px labels, 18px titles, 15px body.
@@ -128,6 +128,7 @@ export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string;
           twinName={twin.name}
           twin
           photoUrl={trainer.photoUrl}
+          attach={twin.attach}
           learner={{
             code: access.preview ? null : access.code,
             minutesLeft: access.preview ? null : access.minutesLeft,

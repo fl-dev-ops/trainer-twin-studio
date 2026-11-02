@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { beforeSettings, usesBeforeSettings } from "@/lib/context-upload";
+import { beforeSettings, DURING_UPLOAD_RULE, uploadAllowed, usesBeforeSettings } from "@/lib/context-upload";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { resolveSessionUser } from "@/lib/session-user";
@@ -38,6 +38,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     select: { id: true, name: true, kind: true, mimeType: true, size: true, manifest: true },
   });
   if (!doc) return Response.json({ error: "Document not found" }, { status: 404 });
+  // During a conversation only images (verified as such at upload) up to 10 MB: the same rule the pickers show.
+  if (!uploadAllowed(doc, "during")) {
+    return Response.json({ error: `This file can't be attached during the conversation. ${DURING_UPLOAD_RULE}` }, { status: 400 });
+  }
 
   const ids = Array.isArray(snapshot?.sessionDocumentIds) ? (snapshot.sessionDocumentIds as unknown[]).filter((v): v is string => typeof v === "string") : [];
   const manifests = Array.isArray(snapshot?.documentManifests) ? (snapshot.documentManifests as unknown[]) : [];

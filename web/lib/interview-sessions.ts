@@ -10,6 +10,7 @@ import { isStudioRole, LEARNER_ROLE } from "@/lib/org";
 import { TwinAccessError, twinAccessByAgent, twinAccessByCode } from "@/lib/twin-access";
 import { pinTwinSkills, TWIN_SOURCE } from "@/lib/twins";
 import { beforeSettings, usesBeforeSettings } from "@/lib/context-upload";
+import { BEFORE_UPLOAD_REFUSED, uploadAllowed } from "@/lib/context-upload";
 
 const shareCode = () => randomBytes(18).toString("base64url");
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
@@ -118,12 +119,14 @@ async function sessionSnapshot(orgId: string, agentId: string, contextId?: strin
     docIds.length
       ? db.contextDocument.findMany({
           where: { id: { in: docIds }, orgId },
-          select: { id: true, name: true, ownerUserId: true },
+          select: { id: true, name: true, ownerUserId: true, kind: true, mimeType: true, size: true },
         })
       : Promise.resolve([]),
   ]);
   if (!agent) throw new Error("Agent not found");
   if (documents.length !== docIds.length) throw new Error("Context not found");
+  // Before the call only a PDF or an image up to 10 MB, for every agent (the pickers say the same).
+  if (documents.some((doc) => !uploadAllowed(doc, "before"))) throw new Error(BEFORE_UPLOAD_REFUSED);
   return { agent, documents, docIds };
 }
 

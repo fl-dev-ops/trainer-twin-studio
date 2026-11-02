@@ -31,6 +31,7 @@ import { twinClient } from "@/lib/twin/client";
 import { isFeelsOffMessage, joinsLearnerTurn, type CalibrationScore } from "@/lib/twin/stats";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { DURING_UPLOAD_ACCEPT, DURING_UPLOAD_RULE, duringUploadProblem } from "@/lib/context-upload";
 
 /** ready: the pre-join (mic access, Start); leaving: a saved twin calibration on its way to its page. */
 type Phase = "ready" | "connecting" | "live" | "ended" | "leaving" | "error";
@@ -76,8 +77,8 @@ type CallProps = {
    * handed back when it ends (End completes the call, so its minutes and report count).
    */
   learner?: LearnerCall;
-  /** Set when the twin lets people attach files during the call (Configure: "Attach files during the call"). */
-  attach?: { accept: string };
+  /** The twin lets people attach an image during the call (Configure: "Enable upload"); images only, up to 10 MB. */
+  attach?: boolean;
 };
 
 export type CallResult = { sessionId: string | null; seconds: number; turns: CalibrationTurn[] };
@@ -475,6 +476,8 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
   async function attachFile(file: File) {
     const sessionId = connectionRef.current?.sessionId;
     if (!sessionId || phase !== "live") return;
+    const problem = duringUploadProblem(file);
+    if (problem) return void toast.error(problem);
     setAttaching(true);
     try {
       const form = new FormData();
@@ -755,8 +758,8 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                 <>
                   <button
                     type="button"
-                    aria-label="Attach a file"
-                    title="Attach a file"
+                    aria-label="Attach an image"
+                    title={`Attach an image. ${DURING_UPLOAD_RULE}`}
                     disabled={phase !== "live" || attaching}
                     onClick={() => attachInput.current?.click()}
                     className={cn(CONTROL, "border bg-muted hover:bg-border")}
@@ -767,7 +770,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                     ref={attachInput}
                     type="file"
                     hidden
-                    accept={attach.accept}
+                    accept={DURING_UPLOAD_ACCEPT}
                     onChange={(event) => {
                       const file = event.target.files?.[0];
                       event.currentTarget.value = "";

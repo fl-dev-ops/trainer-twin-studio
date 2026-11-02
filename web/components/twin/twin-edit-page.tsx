@@ -249,7 +249,7 @@ export function TwinEditPage({
               <div className="flex flex-col gap-0.5">
                 <span className="text-sm font-medium">Enable upload or Upload file configuration</span>
                 <span className="text-xs text-muted-foreground">
-                  Allow learners to upload documents or select files prior to the session.
+                  Allow learners to add a file before the session starts. A PDF or an image (PNG, JPEG or WebP), up to 10 MB.
                 </span>
               </div>
               <SwitchToggle
@@ -314,7 +314,8 @@ export function TwinEditPage({
               <div className="flex flex-col gap-0.5">
                 <span className="text-sm font-medium">Enable upload</span>
                 <span className="text-xs text-muted-foreground">
-                  Learners can upload an image or a document for clarification during conversation.
+                  Learners can share an image during the conversation, like a screenshot or a photo of a document.
+                  Images only (PNG, JPEG or WebP), up to 10 MB.
                 </span>
               </div>
               <SwitchToggle

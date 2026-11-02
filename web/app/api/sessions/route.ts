@@ -10,6 +10,7 @@ import { listSessions } from "@/lib/specs";
 import { processCompletedSession } from "@/lib/session-processing";
 import { OrgLockError } from "@/lib/org-lock";
 import { TwinAccessError } from "@/lib/twin-access";
+import { BEFORE_UPLOAD_REFUSED } from "@/lib/context-upload";
 
 export async function GET() {
   const trainer = await getTrainerOrg();
@@ -56,7 +57,7 @@ export async function POST(req: Request) {
     if (error instanceof TwinAccessError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error("Session activation failed", error);
     const message = error instanceof Error ? error.message : "";
-    if (message === "Context not found" || message.startsWith("Deployment does not allow ")) {
+    if (message === "Context not found" || message === BEFORE_UPLOAD_REFUSED || message.startsWith("Deployment does not allow ")) {
       return NextResponse.json({ error: message }, { status: 400 });
     }
     return NextResponse.json({ error: "Could not start the session. Please try again or contact support." }, { status: 500 });

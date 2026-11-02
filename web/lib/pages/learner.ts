@@ -11,6 +11,7 @@ import { presignedGetUrl } from "@/lib/s3";
 import { resolveSessionUser } from "@/lib/session-user";
 import { listAgentContextRequired, listAgentContextUploads, listScenarioIntroVideos } from "@/lib/specs";
 import { resolveTwinPath, TwinAccessError, twinAccessByCode, twinAssignmentCode } from "@/lib/twin-access";
+import { beforeSettings } from "@/lib/context-upload";
 
 /**
  * Learner-portal pages (<org>.<base>/t/<path>, /s/<code>). They run on the org's subdomain, so the org comes from the
@@ -186,7 +187,8 @@ export async function loadTwinLink(slug: string): Promise<TwinLinkView> {
         bio: text(persona.background),
         photoUrl,
       },
-      twin: { slug: agent.slug, name: agent.name, description: text(data.objective) },
+      // attach: the twin's "Enable upload" during the call (images only, up to 10 MB; enforced by the attach route).
+      twin: { slug: agent.slug, name: agent.name, description: text(data.objective), attach: beforeSettings(agent.data).duringUpload },
       access,
     },
   };

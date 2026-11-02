@@ -13,7 +13,6 @@ test("resume mode uses the default documents label", () => {
   assert.equal(upload.required, true);
   assert.equal(upload.label, "Documents");
   assert.match(upload.prompt, /résumé/i);
-  assert.match(upload.accept, /\.pdf/);
 });
 
 test("custom prompt wins", () => {
