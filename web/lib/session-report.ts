@@ -1,7 +1,10 @@
 export type KeyMoment = {
   id: string;
   number: string;
-  timestamp: string;
+  /** Seconds into the session recording where the quoted turn was spoken, from the transcript's own timing. */
+  at?: number;
+  /** "m:ss" and seconds of `at`. Reports made before `at` existed hold a model's guess here: don't show or seek those. */
+  timestamp?: string;
   seconds?: number;
   title: string;
   quote: string;
@@ -64,11 +67,10 @@ export const SESSION_REPORT_JSON_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["number", "timestamp", "seconds", "title", "quote", "description"],
+        required: ["number", "turn", "title", "quote", "description"],
         properties: {
           number: { type: "string", description: "Sequential moment number, e.g. '01', '02', '03'." },
-          timestamp: { type: "string", description: "Formatted timestamp in minutes and seconds, e.g. '2:18'." },
-          seconds: { type: "number", description: "Timestamp in seconds from session start." },
+          turn: { type: "integer", description: "The [number] of the transcript line the quote comes from." },
           title: { type: "string", description: "Short title of the moment, e.g. 'Claim and baseline'." },
           quote: { type: "string", description: "Verbatim or near-verbatim quote spoken by the learner." },
           description: { type: "string", description: "Why this moment was notable or what it demonstrated." },
@@ -142,6 +144,61 @@ export function rubricTotals(rows: RubricScore[]): { earned: number; max: number
     earned: rows.reduce((sum, row) => sum + row.points, 0),
     max: rows.reduce((sum, row) => sum + row.maxPoints, 0),
   };
+}
+
+/** When the session video starts (epoch ms): the recording's first frame (saved by the agent webhook), else the session start. */
+export function recordingStartOf(evidence: unknown, startedAt: Date | null | undefined): number | null {
+  const recorded = evidence && typeof evidence === "object" ? (evidence as Record<string, unknown>).recordingStartedAt : undefined;
+  return typeof recorded === "number" && Number.isFinite(recorded) ? recorded : startedAt?.getTime() ?? null;
+}
+
+/** A transcript line as the report model sees it, with when it was spoken (epoch ms) when the transcript has it. */
+export type ReportTurn = { speaker: string; learner: boolean; text: string; spokenAt?: number };
+
+/** The transcript for the report model, one numbered line per turn ("[3] Learner: ..."), so a key moment can cite its turn. */
+export function numberedTranscript(turns: ReportTurn[]) {
+  return turns.map((turn, index) => `[${index + 1}] ${turn.speaker}: ${turn.text}`).join("\n\n");
+}
+
+const words = (text: string) => new Set(text.toLowerCase().match(/[\p{L}\p{N}']+/gu) ?? []);
+
+/** Share of the quote's words found in the turn: the quote is "verbatim or near-verbatim". */
+function overlap(quote: string, turn: string) {
+  const wanted = words(quote);
+  if (!wanted.size) return 0;
+  const have = words(turn);
+  let found = 0;
+  for (const word of wanted) if (have.has(word)) found++;
+  return found / wanted.size;
+}
+
+const minutesSeconds = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+
+/**
+ * The model's key moments with their real place in the recording. The model only says which numbered turn it quotes;
+ * the time is that turn's `spokenAt` minus when the recording started. A cited turn that doesn't hold the quote falls
+ * back to the learner turn that does; with no matching turn or no timing, the moment has no time rather than a guess.
+ */
+export function placeKeyMoments(sessionId: string, raw: unknown, turns: ReportTurn[], recordingStart: number | null): KeyMoment[] {
+  const moments = Array.isArray(raw) ? (raw as Array<Partial<KeyMoment> & { turn?: unknown }>) : [];
+  return moments.slice(0, 3).map((moment, index) => {
+    const quote = typeof moment.quote === "string" ? moment.quote : "";
+    const cited = Number.isInteger(moment.turn) ? turns[(moment.turn as number) - 1] : undefined;
+    const best = turns
+      .filter((turn) => turn.learner)
+      .map((turn) => ({ turn, score: overlap(quote, turn.text) }))
+      .sort((a, b) => b.score - a.score)[0];
+    const turn = cited && overlap(quote, cited.text) >= 0.6 ? cited : best && best.score >= 0.6 ? best.turn : undefined;
+    const at = turn?.spokenAt !== undefined && recordingStart !== null ? Math.max(0, Math.round((turn.spokenAt - recordingStart) / 1000)) : undefined;
+    return {
+      id: `${sessionId}-m${index + 1}`,
+      number: typeof moment.number === "string" ? moment.number : String(index + 1).padStart(2, "0"),
+      title: typeof moment.title === "string" ? moment.title : "",
+      quote,
+      description: typeof moment.description === "string" ? moment.description : "",
+      ...(at !== undefined ? { at, seconds: at, timestamp: minutesSeconds(at) } : {}),
+    };
+  });
 }
 
 export function isSessionReport(value: unknown): value is SessionReport {

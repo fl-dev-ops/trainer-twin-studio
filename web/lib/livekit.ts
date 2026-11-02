@@ -150,3 +150,13 @@ export async function closeLiveKitSession(input: {
   if (input.dispatchId) await dispatches.deleteDispatch(input.dispatchId, input.room).catch(() => {});
   await rooms.deleteRoom(input.room).catch(() => {});
 }
+
+/**
+ * When the session recording's first frame was written (epoch ms): 0:00 of the session video. The file's own start
+ * once LiveKit reports it, else when the egress went active. Null when LiveKit has no record of it.
+ */
+export async function recordingStartedAt(egressId: string): Promise<number | null> {
+  const [info] = await clients().egress.listEgress({ egressId });
+  const nanos = info?.fileResults?.[0]?.startedAt || info?.startedAt;
+  return nanos ? Number(nanos / BigInt(1_000_000)) : null;
+}

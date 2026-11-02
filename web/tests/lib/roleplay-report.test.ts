@@ -27,12 +27,18 @@ test("model reply is aligned to the configuration: goal order, clamped points, s
   const report = toRoleplayReport("s1", JSON.stringify({
     summary: "Stayed calm, no date.",
     summaryTags: ["Waiting"],
-    keyMoments: [{ number: "01", timestamp: "1:00", seconds: 60, title: "Calm", quote: "I hear you", description: "Good" }],
+    keyMoments: [{ number: "01", turn: 2, title: "Calm", quote: "I hear you", description: "Good" }],
     focusNextTime: "Ask for a date.",
     score: 99,
     goalResults: [{ goal: "book a follow-up", status: "met", evidence: "Booked Tuesday" }, { goal: "x", status: "bogus", evidence: 1 }],
     rubricScores: [{ criterion: "Dated follow-up", points: 75, reason: "Clamped" }, { criterion: "Calm tone", points: 30, reason: "Fine" }],
-  }), after, new Date("2026-10-27T00:00:00Z"));
+  }), after, new Date("2026-10-27T00:00:00Z"), {
+    turns: [
+      { speaker: "Client", learner: false, text: "I'm worried.", spokenAt: 1_000 },
+      { speaker: "Learner", learner: true, text: "I hear you.", spokenAt: 62_000 },
+    ],
+    recordingStart: 0,
+  });
   expect(report.kind).toBe("roleplay");
   expect(report.goalResults).toEqual([
     { goal: "Acknowledge the concern", status: "not_met", evidence: "" },
@@ -41,6 +47,8 @@ test("model reply is aligned to the configuration: goal order, clamped points, s
   expect(report.rubricScores?.map((r) => [r.criterion, r.points, r.maxPoints])).toEqual([["Calm tone", 30, 40], ["Dated follow-up", 60, 60]]);
   expect(report.score).toBe(90); // (30 + 60) / 100, not the model's 99
   expect(report.keyMoments[0].id).toBe("s1-m1");
+  // The time is the quoted turn's, from the recording start; the model gives no time.
+  expect(report.keyMoments[0]).toMatchObject({ at: 62, timestamp: "1:02" });
   expect(() => toRoleplayReport("s1", "{}", after)).toThrow();
   // Rows without usable names fall back to their position.
   const unnamed = toRoleplayReport("s1", { summary: "", summaryTags: [], keyMoments: [], focusNextTime: "", rubricScores: [{ points: 10 }, { points: 20 }] }, after);
@@ -74,7 +82,7 @@ test("input: only completed role plays with after.report = roleplay; the pinned 
 });
 
 test("no transcript is fatal; a silent learner gets an empty, all-missed report without a model call", async () => {
-  const base = { agentName: "x", brief: "", ...after };
+  const base = { agentName: "x", brief: "", recordingStart: null, ...after };
   await expect(buildRoleplayReport("s1", { ...base, turns: [] })).rejects.toBeInstanceOf(ReportError);
   const silent = await buildRoleplayReport("s1", { ...base, turns: [{ who: "twin", text: "Hello?" }] });
   expect(silent.score).toBe(0);

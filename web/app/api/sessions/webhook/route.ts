@@ -5,6 +5,7 @@ import { finalizeInterviewSession, type SessionEndStatus } from "@/lib/interview
 import { closeInterviewSession } from "@/lib/session-lifecycle";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { db } from "@/lib/db";
+import { recordingStartedAt } from "@/lib/livekit";
 import { processCompletedSession } from "@/lib/session-processing";
 import { usesAgentTranscript } from "@/lib/session-after";
 
@@ -24,7 +25,8 @@ const payloadSchema = z.object({
   sessionId: z.string().max(200).nullish(),
   room_name: z.string().max(200).nullish(),
   status: z.string().max(40).nullish(),
-  transcript: z.array(z.object({ role: z.string().max(40), text: z.string().max(50_000) }).passthrough()).max(10_000).nullish(),
+  // spokenAt: when the line was spoken (epoch ms); key moments are placed in the recording with it.
+  transcript: z.array(z.object({ role: z.string().max(40), text: z.string().max(50_000), spokenAt: z.number().nonnegative().nullish() }).passthrough()).max(10_000).nullish(),
   report: z.record(z.string(), z.unknown()).nullish(),
   metrics: z.unknown().optional(),
   video_url: text,
@@ -61,7 +63,7 @@ export async function POST(req: Request) {
     where: {
       OR: [{ id: rawSessionId }, { shareCode: rawSessionId }],
     },
-    select: { id: true, agent: { select: { kind: true, data: true } } },
+    select: { id: true, videoEgressId: true, agent: { select: { kind: true, data: true } } },
   });
 
   if (!session) {
@@ -77,6 +79,9 @@ export async function POST(req: Request) {
         ? "abandoned"
         : undefined;
 
+  // 0:00 of the session video, so key moments can be measured from it (lib/session-report.ts recordingStartOf).
+  const recordingStart = session.videoEgressId ? await recordingStartedAt(session.videoEgressId).catch(() => null) : null;
+
   const updatedEvidence = {
     ...(body.report ?? {}),
     ...(body.video_url ? { videoUrl: body.video_url } : {}),
@@ -84,6 +89,7 @@ export async function POST(req: Request) {
     ...(body.audio_url ? { audioUrl: body.audio_url } : {}),
     ...(body.audio_s3_key ? { audioS3Key: body.audio_s3_key } : {}),
     ...(body.metrics ? { metrics: body.metrics } : {}),
+    ...(recordingStart ? { recordingStartedAt: recordingStart } : {}),
     ...(agentTranscript ? { transcriptFinal: true } : {}),
   };
 

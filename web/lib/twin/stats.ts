@@ -1,6 +1,7 @@
 /** Pure helpers behind the twin pages: transcripts, first exchange, weekly counts, calibration rates. */
 
-export type Turn = { who: "learner" | "twin"; text: string };
+/** `spokenAt`: when the turn started (epoch ms), in transcripts the voice agent saved with timing. */
+export type Turn = { who: "learner" | "twin"; text: string; spokenAt?: number };
 
 /**
  * A saved transcript as turns. Learner lines are `role: "user"`; everything else is the twin speaking. Consecutive
@@ -10,13 +11,14 @@ export function transcriptTurns(transcript: unknown): Turn[] {
   if (!Array.isArray(transcript)) return [];
   const turns: Turn[] = [];
   for (const item of transcript) {
-    const turn = item as { role?: unknown; speaker?: unknown; text?: unknown };
+    const turn = item as { role?: unknown; speaker?: unknown; text?: unknown; spokenAt?: unknown };
     const text = typeof turn.text === "string" ? turn.text.trim() : "";
     if (!text) continue;
     const who = turn.role === "user" || turn.speaker === "learner" ? "learner" as const : "twin" as const;
     const last = turns[turns.length - 1];
+    // A joined learner turn keeps the time its first line was spoken.
     if (who === "learner" && joinsLearnerTurn(last, text)) last.text = `${last.text} ${text}`;
-    else turns.push({ who, text });
+    else turns.push({ who, text, ...(typeof turn.spokenAt === "number" && Number.isFinite(turn.spokenAt) ? { spokenAt: turn.spokenAt } : {}) });
   }
   return turns;
 }

@@ -604,7 +604,12 @@ async def on_session_end(ctx: agents.JobContext) -> None:
             if item.type == "message" and item.role in ("user", "assistant"):
                 text = (item.text_content or "").strip()
                 if text:
-                    transcript.append({"role": "user" if item.role == "user" else "trainer", "text": text})
+                    line = {"role": "user" if item.role == "user" else "trainer", "text": text}
+                    # When the line was spoken (epoch ms): the web places report key moments in the recording with it.
+                    spoken = (item.metrics or {}).get("started_speaking_at") or item.created_at
+                    if spoken:
+                        line["spokenAt"] = round(spoken * 1000)
+                    transcript.append(line)
 
     webhook_url = state.get("webhook_url") or f"{WEB_URL}/api/sessions/webhook"
     payload = {

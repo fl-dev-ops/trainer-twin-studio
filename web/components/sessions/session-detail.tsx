@@ -25,12 +25,9 @@ const REPORT_STATUS = {
   none: { title: "No evaluation", body: "This session ended before an evaluation could start.", icon: AlertCircle },
 } as const;
 
-/** "2:18" → 138; prefers the model's explicit seconds when present. */
-function momentSeconds(moment: KeyMoment) {
-  if (typeof moment.seconds === "number" && Number.isFinite(moment.seconds)) return Math.max(0, moment.seconds);
-  const [m, s] = moment.timestamp.split(":").map(Number);
-  return Number.isFinite(m) && Number.isFinite(s) ? m * 60 + s : 0;
-}
+/** Where a moment sits in the recording (seconds): only times taken from the transcript, never an older report's guess. */
+const momentAt = (moment: KeyMoment) => (typeof moment.at === "number" && Number.isFinite(moment.at) ? moment.at : null);
+const minutesSeconds = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
 
 function Card({ title, aside, children, className }: { title?: string; aside?: React.ReactNode; children: React.ReactNode; className?: string }) {
   return (
@@ -122,13 +119,16 @@ export function SessionDetail({ data: row }: { data: SessionDetailData }) {
               <Card title="Key moments">
                 <ol className="flex flex-col divide-y">
                   {report.keyMoments.map((moment) => {
+                    const at = momentAt(moment);
                     const body = (
                       <>
                         <span className="flex items-center gap-2">
-                          <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-mono text-xs">
-                            {hasVideo ? <Play className="size-3" aria-hidden /> : null}
-                            {moment.timestamp}
-                          </span>
+                          {at !== null ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-mono text-xs">
+                              {hasVideo ? <Play className="size-3" aria-hidden /> : null}
+                              {minutesSeconds(at)}
+                            </span>
+                          ) : null}
                           <span className="text-sm font-semibold">{moment.title}</span>
                         </span>
                         <span className="text-sm text-muted-foreground italic">“{moment.quote}”</span>
@@ -137,9 +137,9 @@ export function SessionDetail({ data: row }: { data: SessionDetailData }) {
                     );
                     return (
                       <li key={moment.id ?? moment.number} className="py-3 first:pt-0 last:pb-0">
-                        {hasVideo ? (
+                        {hasVideo && at !== null ? (
                           <SeekButton
-                            seconds={momentSeconds(moment)}
+                            seconds={at}
                             className="-mx-2 flex w-[calc(100%+1rem)] flex-col gap-1.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted/50"
                           >
                             {body}

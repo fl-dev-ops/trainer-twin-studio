@@ -3,9 +3,13 @@ import type { Prisma } from "@/lib/generated/prisma/client";
 import { chatCompletionItems, gatewayProvider, geminiItems, meterUsage } from "@/lib/usage";
 import { db } from "@/lib/db";
 import {
+  type ReportTurn,
   type SessionReport,
   SESSION_REPORT_JSON_SCHEMA,
   isSessionReport,
+  numberedTranscript,
+  placeKeyMoments,
+  recordingStartOf,
 } from "@/lib/session-report";
 import { formatSessionReportGrounding } from "@/lib/session-report-grounding";
 
@@ -42,8 +46,7 @@ Generate a structured evaluation report matching the exact schema:
 2. summaryTags: 2 to 4 concise tags (e.g., "Baseline established", "Method explained", "Attribution unresolved", "Architecture diagrammed").
 3. keyMoments: Up to 3 substantive, high-impact learner moments from the body of the session. Return fewer than 3 if the transcript does not contain enough meaningful moments. Never select greetings, introductions, readiness or audio checks, consent/confirmation, agenda setup, kickoff prompts, transitions, or closing pleasantries unless the learner's response itself reveals meaningful role competency.
    - number: "01", "02", "03"
-   - timestamp: approximate "MM:SS" (estimate from dialogue progression, e.g. "2:18", "5:06", "8:41")
-   - seconds: integer seconds corresponding to timestamp
+   - turn: the [number] of the transcript line the quote comes from (the time is taken from that line)
    - title: short concept title (e.g., "Claim and baseline", "Measurement method", "Causal confidence")
    - quote: verbatim or near-verbatim quote spoken by the learner
    - description: 1 sentence explaining why this moment was notable or what it demonstrated
@@ -61,6 +64,7 @@ export async function generateSessionReport(
       agentSlug: true,
       personaSlug: true,
       contextName: true,
+      startedAt: true,
       transcript: true,
       evidence: true,
       compiledSnapshot: true,
@@ -86,15 +90,14 @@ export async function generateSessionReport(
     return null;
   }
 
-  const transcriptText = rawTranscript
-    .map((turn: unknown) => {
-      if (typeof turn !== "object" || turn === null) return "";
-      const t = turn as { role?: string; speaker?: string; text?: string };
-      const speaker = t.role === "user" || t.speaker === "learner" ? "Learner" : "Trainer";
-      return `${speaker}: ${t.text ?? ""}`;
-    })
-    .filter(Boolean)
-    .join("\n\n");
+  const turns: ReportTurn[] = rawTranscript.flatMap((turn: unknown) => {
+    if (typeof turn !== "object" || turn === null) return [];
+    const t = turn as { role?: string; speaker?: string; text?: string; spokenAt?: unknown };
+    const learner = t.role === "user" || t.speaker === "learner";
+    const spokenAt = typeof t.spokenAt === "number" && Number.isFinite(t.spokenAt) ? t.spokenAt : undefined;
+    return [{ speaker: learner ? "Learner" : "Trainer", learner, text: t.text ?? "", spokenAt }];
+  });
+  const transcriptText = numberedTranscript(turns);
 
   try {
     const learnerName = session.user?.name || "Learner";
@@ -214,12 +217,7 @@ ${transcriptText}`;
       throw new Error("LLM output did not match SessionReport schema");
     }
 
-    const keyMomentsWithIds = Array.isArray(parsed.keyMoments)
-      ? parsed.keyMoments.map((m, idx) => ({
-          ...m,
-          id: m.id || `${sessionId}-m${idx + 1}`,
-        }))
-      : [];
+    const keyMomentsWithIds = placeKeyMoments(sessionId, parsed.keyMoments, turns, recordingStartOf(session.evidence, session.startedAt));
 
     const finalReport: SessionReport = {
       ...parsed,

@@ -7,6 +7,10 @@ import { reportKindOf } from "@/lib/session-after";
 import {
   type GoalResult,
   isSessionReport,
+  numberedTranscript,
+  placeKeyMoments,
+  recordingStartOf,
+  type ReportTurn,
   type RubricScore,
   type SessionReport,
   sessionReportJsonSchema,
@@ -50,8 +54,7 @@ Generate a structured evaluation report matching the exact schema:
 2. summaryTags: 2 to 4 concise topics discussed on the call (e.g., "Waiting for the market", "Why they started looking", "Payment plan").
 3. keyMoments: Up to 3 substantive Learner moments from the body of the call. Return fewer if the transcript does not contain enough. Never select greetings or closing pleasantries.
    - number: "01", "02", "03"
-   - timestamp: approximate "MM:SS"
-   - seconds: integer seconds corresponding to timestamp
+   - turn: the [number] of the transcript line the quote comes from (the time is taken from that line)
    - title: short title (e.g., "Acknowledged the fear", "Pitched too early")
    - quote: verbatim or near-verbatim quote spoken by the Learner
    - description: 1 sentence on why this moment helped or hurt
@@ -64,15 +67,20 @@ export type RoleplayReportInput = RoleplayAfter & {
   eligible: boolean;
   transcriptFinal: boolean;
   turns: Turn[];
+  /** Epoch ms of the recording's 0:00 (else the session start): key-moment times are measured from it. */
+  recordingStart: number | null;
   agentName: string;
   brief: string;
 };
+
+const reportTurns = (turns: Turn[]): ReportTurn[] =>
+  turns.map((turn) => ({ speaker: turn.who === "learner" ? "Learner" : "Client", learner: turn.who === "learner", text: turn.text, spokenAt: turn.spokenAt }));
 
 /** The role play as the session ran it (pinned in its snapshot at start), else the agent as it is now. */
 export async function loadRoleplayReportInput(sessionId: string): Promise<RoleplayReportInput> {
   const session = await db.interviewSession.findUnique({
     where: { id: sessionId },
-    select: { status: true, transcript: true, evidence: true, compiledSnapshot: true, agent: { select: { kind: true, name: true, data: true } } },
+    select: { status: true, startedAt: true, transcript: true, evidence: true, compiledSnapshot: true, agent: { select: { kind: true, name: true, data: true } } },
   });
   const snapshot = asRecord(session?.compiledSnapshot);
   const agentData = asRecord(snapshot.agent).data ?? session?.agent.data;
@@ -91,6 +99,7 @@ export async function loadRoleplayReportInput(sessionId: string): Promise<Rolepl
     eligible: Boolean(session && session.status === "completed" && reportKindOf(agentData, session.agent.kind) === "roleplay"),
     transcriptFinal: asRecord(session?.evidence).transcriptFinal === true,
     turns: transcriptTurns(session?.transcript),
+    recordingStart: recordingStartOf(session?.evidence, session?.startedAt),
     agentName,
     brief,
     ...roleplayAfterOf(agentData),
@@ -142,7 +151,13 @@ const rubricPercent = (rows: RubricScore[]) => {
 };
 
 /** The model's JSON reply as a RoleplayReport: goals and rubric aligned to the configuration, score from the rubric. */
-export function toRoleplayReport(sessionId: string, content: unknown, after: RoleplayAfter, now = new Date()): RoleplayReport {
+export function toRoleplayReport(
+  sessionId: string,
+  content: unknown,
+  after: RoleplayAfter,
+  now = new Date(),
+  timeline: { turns: ReportTurn[]; recordingStart: number | null } = { turns: [], recordingStart: null },
+): RoleplayReport {
   const parsed: unknown = typeof content === "string" ? JSON.parse(content) : content;
   if (!isSessionReport(parsed)) throw new Error("not a session report");
   const raw = parsed as SessionReport & { rubricScores?: unknown; goalResults?: unknown };
@@ -153,7 +168,7 @@ export function toRoleplayReport(sessionId: string, content: unknown, after: Rol
     kind: "roleplay",
     summary: raw.summary,
     summaryTags: raw.summaryTags,
-    keyMoments: raw.keyMoments.slice(0, 3).map((moment, index) => ({ ...moment, id: moment.id || `${sessionId}-m${index + 1}` })),
+    keyMoments: placeKeyMoments(sessionId, raw.keyMoments, timeline.turns, timeline.recordingStart),
     focusNextTime: raw.focusNextTime,
     ...(score !== undefined ? { score } : {}),
     ...(rubricScores ? { rubricScores } : {}),
@@ -170,7 +185,8 @@ export async function buildRoleplayReport(sessionId: string, input: Omit<Rolepla
     // Nothing to judge: every goal missed, no points.
     return toRoleplayReport(sessionId, { summary: "The learner did not speak on this call.", summaryTags: [], keyMoments: [], focusNextTime: "", score: 0 }, after);
   }
-  const transcript = input.turns.map((turn) => `${turn.who === "learner" ? "Learner" : "Client"}: ${turn.text}`).join("\n\n");
+  const turns = reportTurns(input.turns);
+  const transcript = numberedTranscript(turns);
   const user = `--- ROLE-PLAY BRIEF ---
 ${input.brief}
 ${input.goals.length ? `
@@ -192,7 +208,7 @@ ${transcript}`;
     schema: sessionReportJsonSchema({ rubric: input.rubric.length > 0, goals: input.goals.length > 0 }),
   });
   try {
-    return toRoleplayReport(sessionId, content, after);
+    return toRoleplayReport(sessionId, content, after, new Date(), { turns, recordingStart: input.recordingStart ?? null });
   } catch {
     throw new ReportError("The model's reply did not match the role-play report shape", false);
   }
