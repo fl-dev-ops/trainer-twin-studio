@@ -12,7 +12,7 @@
     "migrate:persona-voice": "bun scripts/migrate-persona-voice.ts",
     "migrate:verify": "bun scripts/migrate-verify.ts",
     "migrate:cleanup": "bun scripts/migrate-cleanup.ts",
-    "build": "prisma generate && next build --webpack",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint"
   },
