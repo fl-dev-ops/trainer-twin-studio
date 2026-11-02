@@ -1,14 +1,13 @@
-import { notFound } from "next/navigation";
+"use client";
+
+import { useParams } from "next/navigation";
 import { CalibrationReview } from "@/components/calibration/calibration-review";
-import { orNotFound, twinServer } from "@/lib/twin/server";
+import { api, pageNotFound, useApi } from "@/lib/api";
 
-export const dynamic = "force-dynamic";
-
-export default async function TwinCalibrationReviewRoute({ params }: { params: Promise<{ id: string; calibId: string }> }) {
-  const { id, calibId } = await params;
-  const twin = await twinServer();
-  const calibration = await orNotFound(twin.calibrations.get({ id: calibId }));
-  if (calibration.slug !== id) notFound();
+export default function TwinCalibrationReviewRoute() {
+  const { id, calibId } = useParams<{ id: string; calibId: string }>();
+  const calibration = useApi(["twin.calibrations.get", calibId], () => api.twin.calibrations.get.query({ id: calibId }));
+  if (calibration.slug !== id) pageNotFound();
   return (
     <CalibrationReview
       backHref={`/twin/${id}/calibration`}

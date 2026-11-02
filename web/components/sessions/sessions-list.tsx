@@ -1,19 +1,15 @@
+"use client";
+
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { SessionsIcon } from "@/components/icons";
 import { PageHeader, SectionHeader } from "@/components/page-header";
 import { PageContainer } from "@/components/page-container";
 import { SessionFilters } from "@/components/sessions/session-filters";
-import { RANGE_OPTIONS } from "@/components/sessions/session-range";
 import { SessionTime } from "@/components/sessions/session-time";
 import { UserAvatar } from "@/components/user-avatar";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
-import { db } from "@/lib/db";
-import type { AgentKind } from "@/lib/generated/prisma/client";
-import { firstExchange } from "@/lib/session-snippet";
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-const PAGE_SIZE = 100;
+import type { SessionsListData } from "@/lib/pages/sessions";
 
 const STATUS_LABEL: Record<string, string> = {
   assigned: "Not started",
@@ -25,54 +21,8 @@ const STATUS_LABEL: Record<string, string> = {
   revoked: "Revoked",
 };
 
-
-/** Start of the date-range filter, `days` back from now. */
-const since = (days: number) => new Date(Date.now() - days * DAY_MS);
-
-const pick = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value) ?? "";
-
-export type SessionsSearchParams = Record<string, string | string[] | undefined>;
-
-/** Sessions list for one org and module (twin or role play): filters in the URL, newest first. */
-export async function SessionsList({ orgId, params, kind }: { orgId: string; params: SessionsSearchParams; kind: AgentKind }) {
-  const range = RANGE_OPTIONS.some((o) => o.value === pick(params.range)) ? pick(params.range) : "30";
-  const scenario = pick(params.scenario) || "all";
-  const learner = pick(params.learner) || "all";
-
-  const baseWhere = { orgId, deletedAt: null, agent: { kind } };
-  const [sessions, scenarios, learners] = await Promise.all([
-    db.interviewSession.findMany({
-      where: {
-        ...baseWhere,
-        ...(scenario !== "all" ? { agentId: scenario } : {}),
-        ...(learner !== "all" ? { userId: learner } : {}),
-        ...(range !== "all" ? { createdAt: { gte: since(Number(range)) } } : {}),
-      },
-      orderBy: { createdAt: "desc" },
-      take: PAGE_SIZE,
-      select: {
-        id: true,
-        status: true,
-        createdAt: true,
-        startedAt: true,
-        transcript: true,
-        agentSlug: true,
-        agent: { select: { name: true } },
-        user: { select: { id: true, name: true, email: true, image: true } },
-      },
-    }),
-    db.agent.findMany({ where: { orgId, kind }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    db.interviewSession.findMany({
-      where: baseWhere,
-      distinct: ["userId"],
-      select: { user: { select: { id: true, name: true, email: true } } },
-    }),
-  ]);
-
-  const learnerOptions = learners
-    .map(({ user }) => ({ value: user.id, label: user.name || user.email }))
-    .sort((a, b) => a.label.localeCompare(b.label));
-
+/** Sessions list for one org and module (twin or role play), loaded by lib/pages/sessions.ts: filters in the URL, newest first. */
+export function SessionsList({ data: { range, scenario, learner, scenarios, learners: learnerOptions, sessions, pageSize } }: { data: SessionsListData }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-6">
       <PageContainer className="flex flex-col gap-8">
@@ -81,7 +31,7 @@ export async function SessionsList({ orgId, params, kind }: { orgId: string; par
           title="Sessions"
           actions={
             <SessionFilters
-              scenarios={scenarios.map((a) => ({ value: a.id, label: a.name }))}
+              scenarios={scenarios}
               learners={learnerOptions}
               scenario={scenario}
               learner={learner}
@@ -111,7 +61,7 @@ export async function SessionsList({ orgId, params, kind }: { orgId: string; par
             <ul className="divide-y overflow-hidden rounded-2xl border bg-card shadow-xs">
               {sessions.map((session) => {
                 const name = session.user.name || session.user.email;
-                const { ask, reply } = firstExchange(session.transcript);
+                const { ask, reply } = session;
                 const status = STATUS_LABEL[session.status];
                 const snippet = ask ? `“${ask}”${reply ? ` · ${reply}` : ""}` : reply;
                 return (
@@ -142,8 +92,8 @@ export async function SessionsList({ orgId, params, kind }: { orgId: string; par
               })}
             </ul>
           )}
-          {sessions.length === PAGE_SIZE ? (
-            <p className="text-center text-xs text-muted-foreground">Showing the latest {PAGE_SIZE} sessions. Narrow the filters to see older ones.</p>
+          {sessions.length === pageSize ? (
+            <p className="text-center text-xs text-muted-foreground">Showing the latest {pageSize} sessions. Narrow the filters to see older ones.</p>
           ) : null}
         </section>
       </PageContainer>

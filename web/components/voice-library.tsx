@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { LoaderCircle, Mic, MoreHorizontal, Pencil, Play, Search, Sparkles, Square, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -36,6 +35,7 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { generateSpeech, playPcmStream, stopPlayback } from "@/lib/audio-playback";
+import { useRefresh } from "@/lib/use-refresh";
 
 export type VoiceRow = {
   id: string;
@@ -124,7 +124,7 @@ function VoiceTab({
 }
 
 function VoiceRowItem({ voice, sample }: { voice: VoiceRow; sample: boolean }) {
-  const router = useRouter();
+  const refresh = useRefresh();
   const [name, setName] = useState(voice.name);
   const [draft, setDraft] = useState(voice.name);
   const [renameOpen, setRenameOpen] = useState(false);
@@ -151,7 +151,7 @@ function VoiceRowItem({ voice, sample }: { voice: VoiceRow; sample: boolean }) {
       if (!response.ok) return toast.error((await response.json()).error ?? "Rename failed");
       setName(nextName);
       setRenameOpen(false);
-      router.refresh();
+      refresh();
       toast.success("Voice renamed");
     } catch {
       toast.error("Rename failed");
@@ -168,7 +168,7 @@ function VoiceRowItem({ voice, sample }: { voice: VoiceRow; sample: boolean }) {
       stopPlayback();
       setDeleteOpen(false);
       setDeleted(true);
-      router.refresh();
+      refresh();
       toast.success("Voice deleted");
     } catch {
       toast.error("Delete failed");

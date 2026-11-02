@@ -1,10 +1,10 @@
-import { RoleplayLibraryPage } from "@/components/roleplay/roleplay-library-page";
-import { roleplayServer } from "@/lib/roleplay/server";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { RoleplayLibraryPage } from "@/components/roleplay/roleplay-library-page";
+import { api, useApi } from "@/lib/api";
 
 /** Scenarios — the role-play library. */
-export default async function RoleplayPage() {
-  const roleplay = await roleplayServer();
-  return <RoleplayLibraryPage scenarios={await roleplay.scenarios.list()} />;
+export default function RoleplayPage() {
+  const scenarios = useApi(["roleplay.scenarios.list"], () => api.roleplay.scenarios.list.query());
+  return <RoleplayLibraryPage scenarios={scenarios} />;
 }

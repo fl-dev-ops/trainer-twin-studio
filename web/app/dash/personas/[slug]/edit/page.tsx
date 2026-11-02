@@ -1,26 +1,15 @@
-import { notFound } from "next/navigation";
-import { PersonaEditor, type PersonaTab } from "@/components/persona/persona-editor";
-import { requireStudioMember } from "@/lib/org";
-import { pickableVoices } from "@/lib/persona-media";
-import { getPersona } from "@/lib/personas";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { useParams, useSearchParams } from "next/navigation";
+import { PersonaEditor, type PersonaTab } from "@/components/persona/persona-editor";
+import { api, useApi } from "@/lib/api";
 
 const TABS: PersonaTab[] = ["look", "talk", "media"];
 
-export default async function EditPersonaPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ slug: string }>;
-  searchParams: Promise<{ tab?: string }>;
-}) {
-  const [{ slug }, { tab }] = await Promise.all([params, searchParams]);
-  const org = await requireStudioMember();
-  const item = await getPersona(org.id, slug);
-  if (!item) notFound();
-  // A role-play persona picks its voice from the voice library; the trainer's own uses their cloned voice.
-  const voices = item.isOwn ? [] : await pickableVoices(org.id);
+export default function EditPersonaPage() {
+  const { slug } = useParams<{ slug: string }>();
+  const tab = useSearchParams().get("tab");
+  const { item, voices } = useApi(["page.personaEdit", slug], () => api.page.personaEdit.query({ slug }));
   return (
     <PersonaEditor
       key={`${slug}-${item.version}`}

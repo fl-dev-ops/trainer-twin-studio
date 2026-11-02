@@ -1,6 +1,7 @@
+"use client";
+
 import Link from "next/link";
 import { ArrowUpRight, BookOpen, MessagesSquare, UserRound } from "lucide-react";
-import { redirect } from "next/navigation";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -20,10 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { db } from "@/lib/db";
-import { getSessionOrg } from "@/lib/org";
-
-export const dynamic = "force-dynamic";
+import { api, useApi } from "@/lib/api";
 
 const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
   active: "default",
@@ -31,15 +29,8 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
   abandoned: "outline",
 };
 
-export default async function DashboardPage() {
-  const org = await getSessionOrg();
-  if (!org) redirect("/auth/no-org");
-  const [personas, agents, kbs, sessions] = await Promise.all([
-    db.persona.count({ where: { orgId: org.id } }),
-    db.agent.count({ where: { orgId: org.id } }),
-    db.knowledgeBase.count({ where: { orgId: org.id } }),
-    db.interviewSession.findMany({ where: { orgId: org.id, deletedAt: null }, orderBy: { createdAt: "desc" }, take: 8 }),
-  ]);
+export default function DashboardPage() {
+  const { personas, agents, kbs, sessions } = useApi(["page.overview"], () => api.page.overview.query());
 
   const stats = [
     { label: "Personas", value: personas, href: "/personas", icon: UserRound },

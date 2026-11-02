@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   ArrowLeft,
@@ -57,6 +56,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import { useRefresh } from "@/lib/use-refresh";
 
 export type OrganizationUser = {
   id: string;
@@ -204,7 +204,7 @@ export function RolePlayPreview({
   availableUsers?: OrganizationUser[];
   assignments?: AssignmentSummary[];
 }) {
-  const router = useRouter();
+  const refresh = useRefresh();
   const canAssign = rolePlay.status === "published";
 
   // Assignments list state
@@ -295,7 +295,7 @@ export function RolePlayPreview({
       } else {
         toast.success(parts.join(" · "));
       }
-      router.refresh();
+      refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Practice links could not be sent");
     } finally {
@@ -319,7 +319,7 @@ export function RolePlayPreview({
         throw new Error(result?.error ?? "Assignment could not be removed");
       }
       toast.success("Assignment removed");
-      router.refresh();
+      refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Assignment could not be removed");
     } finally {

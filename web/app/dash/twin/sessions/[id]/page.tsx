@@ -1,10 +1,11 @@
+"use client";
+
+import { useParams } from "next/navigation";
 import { TwinSessionDetailPage } from "@/components/twin/twin-session-detail-page";
-import { orNotFound, twinServer } from "@/lib/twin/server";
+import { api, useApi } from "@/lib/api";
 
-export const dynamic = "force-dynamic";
-
-export default async function TwinSessionDetailRoute({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const twin = await twinServer();
-  return <TwinSessionDetailPage session={await orNotFound(twin.sessions.get({ id }))} />;
+export default function TwinSessionDetailRoute() {
+  const { id } = useParams<{ id: string }>();
+  const session = useApi(["twin.sessions.get", id], () => api.twin.sessions.get.query({ id }));
+  return <TwinSessionDetailPage session={session} />;
 }

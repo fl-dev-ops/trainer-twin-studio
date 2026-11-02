@@ -48,6 +48,7 @@ import {
   interviewConfigSchema,
   type InterviewConfig,
 } from "@/lib/interview-config-schema";
+import { useRefresh } from "@/lib/use-refresh";
 
 const GENERIC_SAVE_ERROR =
   "Failed to save the change, try again in a few seconds";
@@ -80,6 +81,7 @@ export type AgentEditorProps = {
 
 export function AgentEditor(initial: AgentEditorProps) {
   const router = useRouter();
+  const refresh = useRefresh();
   const [instruction, setInstruction] = useState(initial.instruction);
   const [name, setName] = useState(initial.name);
   const [opening, setOpening] = useState(initial.opening);
@@ -184,7 +186,7 @@ export function AgentEditor(initial: AgentEditorProps) {
         setDirty(false);
         toast.success(`Saved as draft r${result.revision ?? ""}`.trim());
       }
-      router.refresh();
+      refresh();
       // Refresh the version list after regeneration.
       fetch(`/api/spec/agents/${encodeURIComponent(initial.slug)}`)
         .then((r) => (r.ok ? r.json() : null))

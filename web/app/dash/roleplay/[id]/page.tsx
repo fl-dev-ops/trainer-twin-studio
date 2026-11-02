@@ -1,11 +1,12 @@
-import { RoleplayDetailPage } from "@/components/roleplay/roleplay-detail-page";
-import { orNotFound, roleplayServer } from "@/lib/roleplay/server";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { useParams } from "next/navigation";
+import { RoleplayDetailPage } from "@/components/roleplay/roleplay-detail-page";
+import { api, useApi } from "@/lib/api";
 
 /** One role play: client, scenario, report, members, sessions. */
-export default async function RoleplayDetailRoute({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const roleplay = await roleplayServer();
-  return <RoleplayDetailPage roleplay={await orNotFound(roleplay.scenarios.get({ slug: id }))} />;
+export default function RoleplayDetailRoute() {
+  const { id } = useParams<{ id: string }>();
+  const roleplay = useApi(["roleplay.scenarios.get", id], () => api.roleplay.scenarios.get.query({ slug: id }));
+  return <RoleplayDetailPage roleplay={roleplay} />;
 }

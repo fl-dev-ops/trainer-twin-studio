@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { PostHogTracker } from "@/components/posthog/tracker";
 import { Suspense } from "react";
 import { Toaster } from "@/components/ui/sonner";
+import { QueryProvider } from "@/lib/query-client";
 import "./globals.css";
 
 // V2 prototype typeface.
@@ -28,7 +29,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
     <html lang="en" className={`${figtree.variable} ${geistMono.variable} h-full antialiased`} suppressHydrationWarning>
       <body className="min-h-full bg-background font-sans text-foreground">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          {children}
+          <QueryProvider>{children}</QueryProvider>
         </ThemeProvider>
         <Toaster />
         <Suspense>

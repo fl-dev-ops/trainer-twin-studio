@@ -1,14 +1,15 @@
-import { notFound } from "next/navigation";
-import { RoleplayBuilderPage } from "@/components/roleplay/roleplay-builder-page";
-import { orNotFound, roleplayServer } from "@/lib/roleplay/server";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { useParams } from "next/navigation";
+import { RoleplayBuilderPage } from "@/components/roleplay/roleplay-builder-page";
+import { api, pageNotFound, useApi } from "@/lib/api";
 
 /** Edit a role play in the builder (Before / During / After). */
-export default async function EditRoleplayRoute({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const roleplay = await roleplayServer();
-  const [saved, personas] = await Promise.all([orNotFound(roleplay.builder.get({ slug: id })), roleplay.builder.personas()]);
-  if (!saved.builder) notFound();
+export default function EditRoleplayRoute() {
+  const { id } = useParams<{ id: string }>();
+  const [saved, personas] = useApi(["roleplay.edit", id], () =>
+    Promise.all([api.roleplay.builder.get.query({ slug: id }), api.roleplay.builder.personas.query()]),
+  );
+  if (!saved.builder) pageNotFound();
   return <RoleplayBuilderPage slug={saved.slug} initial={saved.builder} before={saved.before} personas={personas} />;
 }

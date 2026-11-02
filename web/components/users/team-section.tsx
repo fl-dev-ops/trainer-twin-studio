@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { Plus, Search } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -15,6 +14,7 @@ import { InviteUser } from "@/components/users/invite-user";
 import type { AwaitingUser } from "@/lib/awaiting-users";
 import { authClient } from "@/lib/auth-client";
 import { BASE_DOMAIN } from "@/lib/base-domain";
+import { useRefresh } from "@/lib/use-refresh";
 
 export type TeamMember = {
   id: string;
@@ -59,7 +59,7 @@ export function TeamSection(props: {
   invitations: TeamInvitation[];
   awaiting: AwaitingUser[];
 }) {
-  const router = useRouter();
+  const refresh = useRefresh();
   const [busy, setBusy] = useState<string | null>(null);
   const [query, setQuery] = useState<Record<string, string>>({});
   const [inviting, setInviting] = useState<"team" | "user" | null>(null);
@@ -76,7 +76,7 @@ export function TeamSection(props: {
       return;
     }
     toast.success(done);
-    router.refresh();
+    refresh();
   }
 
   const setDisabled = (member: TeamMember, disabled: boolean) => {

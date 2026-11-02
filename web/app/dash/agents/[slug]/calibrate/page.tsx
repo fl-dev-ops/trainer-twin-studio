@@ -1,8 +1,11 @@
+"use client";
+
+import { useParams } from "next/navigation";
 import { CalibrationCall } from "@/components/calibration/calibration-call";
-import { calibrationAgent } from "../calibration-agent";
+import { api, useApi } from "@/lib/api";
 
-export const dynamic = "force-dynamic";
-
-export default async function CalibratePage({ params }: { params: Promise<{ slug: string }> }) {
-  return <CalibrationCall {...await calibrationAgent((await params).slug)} />;
+export default function CalibratePage() {
+  const { slug } = useParams<{ slug: string }>();
+  const agent = useApi(["page.calibrationAgent", slug], () => api.page.calibrationAgent.query({ slug }));
+  return <CalibrationCall {...agent} />;
 }

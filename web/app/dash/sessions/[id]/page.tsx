@@ -1,11 +1,11 @@
-import { redirect } from "next/navigation";
+"use client";
+
+import { useParams } from "next/navigation";
 import { SessionDetail } from "@/components/sessions/session-detail";
-import { getTrainerOrg } from "@/lib/org";
+import { api, useApi } from "@/lib/api";
 
-export const dynamic = "force-dynamic";
-
-export default async function SessionDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const trainer = await getTrainerOrg();
-  if (!trainer) redirect("/auth/no-org");
-  return <SessionDetail orgId={trainer.id} id={(await params).id} />;
+export default function SessionDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const data = useApi(["page.session", id], () => api.page.session.query({ id }));
+  return <SessionDetail data={data} />;
 }

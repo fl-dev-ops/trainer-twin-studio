@@ -1,12 +1,14 @@
-import { RoleplayAssignPage } from "@/components/roleplay/roleplay-assign-page";
-import { orNotFound, roleplayServer } from "@/lib/roleplay/server";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { useParams } from "next/navigation";
+import { RoleplayAssignPage } from "@/components/roleplay/roleplay-assign-page";
+import { api, useApi } from "@/lib/api";
 
 /** Assign a role play: members, and the assign dialog over the org's learners. */
-export default async function RoleplayAssignRoute({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const roleplay = await roleplayServer();
-  const [detail, learners] = await Promise.all([orNotFound(roleplay.scenarios.get({ slug: id })), roleplay.users.orgLearners()]);
+export default function RoleplayAssignRoute() {
+  const { id } = useParams<{ id: string }>();
+  const [detail, learners] = useApi(["roleplay.assign", id], () =>
+    Promise.all([api.roleplay.scenarios.get.query({ slug: id }), api.roleplay.users.orgLearners.query()]),
+  );
   return <RoleplayAssignPage roleplay={detail} learners={learners} />;
 }

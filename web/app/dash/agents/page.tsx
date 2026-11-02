@@ -1,12 +1,9 @@
-import { redirect } from "next/navigation";
+"use client";
+
 import { SpecResourceIndex } from "@/components/spec-resource";
-import { getTrainerOrg } from "@/lib/org";
-import { listSpecSummaries } from "@/lib/specs";
+import { api, useApi } from "@/lib/api";
 
-export const dynamic = "force-dynamic";
-
-export default async function AgentsPage() {
-  const org = await getTrainerOrg();
-  if (!org) redirect("/auth/no-org");
-  return <SpecResourceIndex type="agents" specs={await listSpecSummaries("agents", org.id, "ROLEPLAY")} />;
+export default function AgentsPage() {
+  const specs = useApi(["page.agents"], () => api.page.agents.query());
+  return <SpecResourceIndex type="agents" specs={specs} />;
 }

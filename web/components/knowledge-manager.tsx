@@ -47,6 +47,7 @@ import { PDFViewer } from "@/components/extend/pdf-viewer";
 import { DocxViewerPreview } from "@/components/extend/docx-viewer";
 import { PptxViewerPreview } from "@/components/extend/pptx-viewer";
 import { CsvViewer } from "@/components/extend/csv-viewer";
+import { useRefresh } from "@/lib/use-refresh";
 
 type Kb = { slug: string; name: string };
 type Doc = {
@@ -147,6 +148,7 @@ export function KnowledgeIndex({ bases }: { bases: Kb[] }) {
 
 export function KnowledgeDetail({ slug }: { slug: string }) {
   const router = useRouter();
+  const refresh = useRefresh();
   const [docs, setDocs] = useState<Doc[] | null>(null);
   const [uploading, setUploading] = useState(false);
   const [digestingAll, setDigestingAll] = useState(false);
@@ -236,7 +238,7 @@ export function KnowledgeDetail({ slug }: { slug: string }) {
     if (res.ok) {
       toast.success("Knowledge base deleted");
       router.push("/knowledge");
-      router.refresh();
+      refresh();
     } else {
       toast.error("Delete failed");
     }

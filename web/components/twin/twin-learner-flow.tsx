@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
 import { Check, ChevronDown, Flag, Lock, LogIn, LogOut, Star } from "lucide-react";
 import { toast } from "sonner";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
@@ -25,6 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { UserAvatar } from "@/components/user-avatar";
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
+import { useRefresh } from "@/lib/use-refresh";
 
 /** The signed-in person's access to this twin (null: signed out). */
 export type LearnerAccess =
@@ -62,7 +62,7 @@ function noAccessCopy(reason: "unassigned" | "ended" | "used", trainer: string) 
  * Never sends people to the auth pages.
  */
 export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string; trainer: Trainer; twin: Twin; access: LearnerAccess }) {
-  const router = useRouter();
+  const refresh = useRefresh();
   const [step, setStep] = useState<Step>("profile");
   const [signingIn, setSigningIn] = useState(false);
   const [result, setResult] = useState<CallResult | null>(null);
@@ -73,7 +73,7 @@ export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string;
 
   function switchAccount() {
     void authClient.signOut().finally(() => {
-      router.refresh();
+      refresh();
       setSigningIn(true);
     });
   }
@@ -135,7 +135,7 @@ export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string;
             onEnded: (ended) => {
               setResult(ended);
               setStep("summary");
-              router.refresh(); // minutes left from the server for the summary and the next call
+              refresh(); // minutes left from the server for the summary and the next call
             },
           }}
         />

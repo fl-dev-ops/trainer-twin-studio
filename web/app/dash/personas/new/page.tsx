@@ -1,10 +1,11 @@
+"use client";
+
+import { useState } from "react";
 import { PersonaEditor } from "@/components/persona/persona-editor";
 import { emptyPersona } from "@/lib/persona";
-import { requireStudioMember } from "@/lib/org";
 
-export const dynamic = "force-dynamic";
-
-export default async function NewPersonaPage() {
-  await requireStudioMember();
-  return <PersonaEditor initial={emptyPersona()} />;
+/** A new persona. Studio only (app/dash/personas/layout.tsx). */
+export default function NewPersonaPage() {
+  const [initial] = useState(emptyPersona);
+  return <PersonaEditor initial={initial} />;
 }

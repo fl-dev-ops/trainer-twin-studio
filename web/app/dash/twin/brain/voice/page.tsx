@@ -1,11 +1,10 @@
-import { TwinVoiceCapture } from "@/components/twin/twin-voice-capture";
-import { twinServer } from "@/lib/twin/server";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { TwinVoiceCapture } from "@/components/twin/twin-voice-capture";
+import { api, useApi } from "@/lib/api";
 
 /** The twin's voice, recorded on camera: the take's audio clones the voice, its video is the AI avatar reference. */
-export default async function TwinVoiceRoute() {
-  const twin = await twinServer();
-  const state = await twin.avatar.get();
+export default function TwinVoiceRoute() {
+  const state = useApi(["twin.avatar.get"], () => api.twin.avatar.get.query());
   return <TwinVoiceCapture personaName={state?.personaName ?? null} />;
 }

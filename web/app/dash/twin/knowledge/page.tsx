@@ -1,18 +1,11 @@
-import { redirect } from "next/navigation";
+"use client";
+
+import { useSearchParams } from "next/navigation";
 import { KnowledgeView } from "@/components/knowledge";
-import { getSessionOrg } from "@/lib/org";
-import { OrganizationKnowledgeService } from "@/lib/org-knowledge";
+import { api, useApi } from "@/lib/api";
 
-export const dynamic = "force-dynamic";
-
-export default async function KnowledgePage({ searchParams }: { searchParams: Promise<{ drive?: string }> }) {
-  const org = await getSessionOrg();
-  if (!org) redirect("/auth/no-org");
-
-  const [initialDocs, initialStats] = await Promise.all([
-    OrganizationKnowledgeService.getAllDocuments(org.id),
-    OrganizationKnowledgeService.getStats(org.id),
-  ]);
-
-  return <KnowledgeView initialDocs={initialDocs} initialStats={initialStats} initialDriveConnected={(await searchParams).drive === "connected"} />;
+export default function KnowledgePage() {
+  const drive = useSearchParams().get("drive");
+  const { initialDocs, initialStats } = useApi(["page.twinKnowledge"], () => api.page.twinKnowledge.query());
+  return <KnowledgeView initialDocs={initialDocs} initialStats={initialStats} initialDriveConnected={drive === "connected"} />;
 }

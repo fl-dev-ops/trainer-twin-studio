@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check, Copy, UserPlus } from "lucide-react";
@@ -14,6 +13,7 @@ import { SwitchToggle } from "@/components/switch-toggle";
 import { AssignDialog, PendingBadge } from "@/components/assign-dialog";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
+import { useRefresh } from "@/lib/use-refresh";
 
 type LearnerAssign = TwinOutputs["assignments"]["list"][number];
 
@@ -68,7 +68,7 @@ export function TwinEditPage({
   defaultTab?: "general" | "conversation" | "learners";
 }) {
   const id = twin.slug;
-  const router = useRouter();
+  const refresh = useRefresh();
 
   // General fields
   const [name, setName] = useState(twin.name);
@@ -101,7 +101,7 @@ export function TwinEditPage({
       if (result.skipped) toast.info(`${people(result.skipped)} already had this twin`);
       if (result.blocked) toast.warning(`${people(result.blocked)} belong to another organization and were not assigned`);
       if (result.emailFailures) toast.warning(`${result.emailFailures} invite email(s) could not be sent.`);
-      router.refresh();
+      refresh();
       return true;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not assign");
@@ -126,7 +126,7 @@ export function TwinEditPage({
       toast.error(error instanceof Error ? error.message : "Could not save");
     } finally {
       setSaving(false);
-      if (settingsSaved) router.refresh();
+      if (settingsSaved) refresh();
     }
   }
 

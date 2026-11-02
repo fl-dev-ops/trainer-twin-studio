@@ -2,11 +2,18 @@
 
 import posthog from "posthog-js";
 import { useEffect } from "react";
+import NotFound from "@/app/not-found";
+import { isNotFound } from "@/lib/api";
 
 export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  // Client pages report a missing record by throwing (lib/api.ts); it is the 404 page, not a crash.
+  const missing = isNotFound(error);
+
   useEffect(() => {
-    if (process.env.NEXT_PUBLIC_POSTHOG_KEY) posthog.captureException(error);
-  }, [error]);
+    if (!missing && process.env.NEXT_PUBLIC_POSTHOG_KEY) posthog.captureException(error);
+  }, [error, missing]);
+
+  if (missing) return <NotFound />;
 
   return (
     <div className="flex min-h-[50vh] items-center justify-center p-8 text-center">

@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { twinClient } from "@/lib/twin/client";
 import { cn } from "@/lib/utils";
+import { useRefresh } from "@/lib/use-refresh";
 
 const PHOTO_SIZE = 720;
 const VERSIONS = 4; // one per HEADSHOT_STYLES look
@@ -21,6 +22,7 @@ type Version = { state: "loading" } | { state: "ready"; key: string; url: string
  */
 export function TwinAvatarCapture({ personaName }: { personaName: string | null }) {
   const router = useRouter();
+  const refresh = useRefresh();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -129,7 +131,7 @@ export function TwinAvatarCapture({ personaName }: { personaName: string | null 
       await twinClient.avatar.save.mutate({ photo, headshotKey: picked?.state === "ready" ? picked.key : null });
       toast.success("Your avatar is saved.");
       router.push("/twin/brain");
-      router.refresh();
+      refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save. Please try again.");
       setSaving(false);

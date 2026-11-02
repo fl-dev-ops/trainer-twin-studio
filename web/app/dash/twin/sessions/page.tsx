@@ -1,9 +1,9 @@
+"use client";
+
 import { TwinSessionsPage } from "@/components/twin/twin-sessions-page";
-import { twinServer } from "@/lib/twin/server";
+import { api, useApi } from "@/lib/api";
 
-export const dynamic = "force-dynamic";
-
-export default async function TwinSessionsRoute() {
-  const twin = await twinServer();
-  return <TwinSessionsPage sessions={await twin.sessions.list()} />;
+export default function TwinSessionsRoute() {
+  const sessions = useApi(["twin.sessions.list"], () => api.twin.sessions.list.query());
+  return <TwinSessionsPage sessions={sessions} />;
 }

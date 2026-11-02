@@ -1,105 +1,29 @@
-import { headers } from "next/headers";
-import { redirect } from "next/navigation";
+"use client";
+
+import { useParams } from "next/navigation";
+import { useEffect } from "react";
 import { SwitchAccountButton } from "@/components/auth/switch-account-button";
+import { LoadingCenteredCard } from "@/components/page-skeletons";
 import { HomeRedirect } from "@/components/session/home-redirect";
 import { SessionView } from "@/components/session-view";
-import { TwinSession } from "@/components/session/twin-session";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { assignmentMatchesUser } from "@/lib/assignments";
-import { signInUrl } from "@/lib/base-domain";
-import { db } from "@/lib/db";
-import { agentPhotoUrls } from "@/lib/persona-media";
-import { resolveSessionUser } from "@/lib/session-user";
-import { listAgentContextRequired, listAgentContextUploads, listScenarioIntroVideos } from "@/lib/specs";
-import { TwinAccessError, twinAccessByCode } from "@/lib/twin-access";
+import { api, useApi } from "@/lib/api";
 
-export const dynamic = "force-dynamic";
+/** /s/<code>: a role-play invite, or a twin assignment / share link, for the signed-in learner (lib/pages/learner.ts). */
+export default function SharedSessionPage() {
+  const { code } = useParams<{ code: string }>();
+  const loaded = useApi(["page.sharedSession", code], () => api.page.sharedSession.query({ code }));
 
-export default async function SharedSessionPage({ params }: { params: Promise<{ code: string }> }) {
-  const { code } = await params;
-  const host = (await headers()).get("host") ?? "";
-  const { org, user } = await resolveSessionUser();
-  if (!user) redirect(signInUrl(host, `/s/${encodeURIComponent(code)}`));
-
-  const assignment = org ? await db.rolePlayAssignment.findUnique({
-    where: { shareCode: code },
-    select: {
-      id: true,
-      orgId: true,
-      status: true,
-      expiresAt: true,
-      recipientEmail: true,
-      member: { select: { userId: true } },
-      deployment: {
-        select: {
-          agent: { select: { slug: true, name: true, persona: { select: { slug: true } } } },
-        },
-      },
-      organization: { select: { name: true, logo: true } },
-    },
-  }) : null;
-  // Not a role-play invite: maybe a twin assignment or a twin share link. Checked here without creating
-  // anything; the user's assignment is created when the session starts (POST /api/sessions).
-  if (!assignment && org) {
-    const twin = await twinAccessByCode({ orgId: org.id, user, code, join: false }).catch((error: unknown) => {
-      if (error instanceof TwinAccessError) return error;
-      throw error;
-    });
-    if (twin instanceof TwinAccessError) {
-      return (
-        <main className="grid min-h-svh place-items-center p-4">
-          <Card className="w-full max-w-md text-center">
-            <CardHeader>
-              <CardTitle>Twin not available</CardTitle>
-              <CardDescription>
-                {twin.message}. You are signed in as {user.email}.
-                <HomeRedirect />
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </main>
-      );
-    }
-    if (twin) return <TwinSession orgId={org.id} agentId={twin.agentId} code={code} userName={user.name} />;
-  }
-  const spent = assignment
-    ? (await db.interviewSession.count({
-        where: { assignmentId: assignment.id, status: { in: ["completed", "abandoned"] } },
-      })) > 0
-    : false;
-  const usable = assignment
-    && assignment.orgId === org?.id
-    && assignmentMatchesUser(assignment, user)
-    && assignment.status === "pending"
-    && !spent
-    && assignment.expiresAt > new Date();
-  if (!usable && assignment && assignment.orgId === org?.id
-    && assignment.status === "pending" && !spent && assignment.expiresAt > new Date()
-    && !assignmentMatchesUser(assignment, user)) {
+  if (loaded.kind === "signIn") return <SignIn url={loaded.url} />;
+  if (loaded.kind === "session") return <SessionView {...loaded.props} />;
+  if (loaded.kind === "twinUnavailable") {
     return (
       <main className="grid min-h-svh place-items-center p-4">
         <Card className="w-full max-w-md text-center">
           <CardHeader>
-            <CardTitle>Use your invited account</CardTitle>
+            <CardTitle>Twin not available</CardTitle>
             <CardDescription>
-              You are signed in as {user.email}. Use the account your trainer assigned to open this practice link.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <SwitchAccountButton returnTo={signInUrl(host, `/s/${encodeURIComponent(code)}`)} />
-          </CardContent>
-        </Card>
-      </main>
-    );
-  }
-  if (!usable) {
-    return (
-      <main className="grid min-h-svh place-items-center p-4">
-        <Card className="w-full max-w-md text-center">
-          <CardHeader>
-            <CardTitle>Invalid session link</CardTitle>
-            <CardDescription>
-              This practice link is not assigned to your account, has expired, or has already been completed.
+              {loaded.message}. You are signed in as {loaded.email}.
               <HomeRedirect />
             </CardDescription>
           </CardHeader>
@@ -107,29 +31,40 @@ export default async function SharedSessionPage({ params }: { params: Promise<{ 
       </main>
     );
   }
-  const agent = assignment.deployment.agent;
-  const [introVideos, agentPhotos, agentContextRequired, agentContextUploads] = await Promise.all([
-    listScenarioIntroVideos(org.id, [agent.slug]),
-    agentPhotoUrls(org.id, [agent.slug]),
-    listAgentContextRequired(org.id, [agent.slug]),
-    listAgentContextUploads(org.id, [agent.slug]),
-  ]);
+  if (loaded.kind === "switchAccount") {
+    return (
+      <main className="grid min-h-svh place-items-center p-4">
+        <Card className="w-full max-w-md text-center">
+          <CardHeader>
+            <CardTitle>Use your invited account</CardTitle>
+            <CardDescription>
+              You are signed in as {loaded.email}. Use the account your trainer assigned to open this practice link.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <SwitchAccountButton returnTo={loaded.returnTo} />
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
   return (
-    <SessionView
-      personas={[agent.persona.slug]}
-      agents={[agent.slug]}
-      scenarioName={agent.name}
-      userName={user.name}
-      organizationName={assignment.organization.name}
-      organizationLogo={/^data:image\/(?:png|jpeg|webp);base64,/.test(assignment.organization.logo ?? "") ? assignment.organization.logo : null}
-      agentPersonas={{ [agent.slug]: agent.persona.slug }}
-      agentContextRequired={agentContextRequired}
-      agentContextUploads={agentContextUploads}
-      introVideos={introVideos}
-      agentPhotos={agentPhotos}
-      autoStart
-      contexts={[]}
-      sessionCode={code}
-    />
+    <main className="grid min-h-svh place-items-center p-4">
+      <Card className="w-full max-w-md text-center">
+        <CardHeader>
+          <CardTitle>Invalid session link</CardTitle>
+          <CardDescription>
+            This practice link is not assigned to your account, has expired, or has already been completed.
+            <HomeRedirect />
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    </main>
   );
+}
+
+/** Signed out: the auth host (another origin) signs them in and sends them back here. */
+function SignIn({ url }: { url: string }) {
+  useEffect(() => window.location.replace(url), [url]);
+  return <LoadingCenteredCard />;
 }

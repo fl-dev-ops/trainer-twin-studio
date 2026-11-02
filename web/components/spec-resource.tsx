@@ -71,6 +71,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { PersonaSourcePanel } from "@/components/persona-source-panel";
+import { useRefresh } from "@/lib/use-refresh";
 
 type ResourceType = "personas" | "agents";
 type Summary = ScenarioCardData & { version: number };
@@ -461,6 +462,7 @@ export function SpecResourceEditor({
   baseline?: PersonaBaseline | null;
 }) {
   const router = useRouter();
+  const refresh = useRefresh();
   const [text, setText] = useState(initialText);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -506,7 +508,7 @@ export function SpecResourceEditor({
     setDirty(false);
     toast.success(result.versionBumped ? `Saved as v${result.version}` : "No changes to save");
     router.replace(editPath);
-    router.refresh();
+    refresh();
   }
 
   async function remove() {
@@ -515,7 +517,7 @@ export function SpecResourceEditor({
     if (!response.ok) return toast.error(`Could not delete ${slug}`);
     toast.success(`Deleted ${slug}`);
     router.push(`/${type}`);
-    router.refresh();
+    refresh();
   }
 
   async function restore() {

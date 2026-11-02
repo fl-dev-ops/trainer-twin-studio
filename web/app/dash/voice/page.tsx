@@ -1,21 +1,15 @@
+"use client";
+
 import Link from "next/link";
 import { Mic } from "lucide-react";
-import { redirect } from "next/navigation";
-import { db } from "@/lib/db";
-import { getSessionOrg } from "@/lib/org";
+import { api, useApi } from "@/lib/api";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { VoiceLibrary } from "@/components/voice-library";
 
-export default async function VoiceLibraryPage() {
-  const org = await getSessionOrg();
-  if (!org) redirect("/auth/no-org");
-  const voices = await db.voice.findMany({
-    where: { OR: [{ orgId: org.id }, { orgId: null }] },
-    orderBy: { createdAt: "desc" },
-    select: { id: true, name: true, kind: true, status: true, createdAt: true },
-  });
+export default function VoiceLibraryPage() {
+  const { mine, samples } = useApi(["page.voices"], () => api.page.voices.query());
 
   return (
     <main className="min-h-0 flex-1 overflow-auto p-5 sm:p-8">
@@ -31,10 +25,7 @@ export default async function VoiceLibraryPage() {
           }
         />
 
-        <VoiceLibrary
-          mine={voices.filter((voice) => voice.kind === "cloned").map((voice) => ({ ...voice, createdAt: voice.createdAt.toISOString() }))}
-          samples={voices.filter((voice) => voice.kind === "sample").map((voice) => ({ ...voice, createdAt: voice.createdAt.toISOString() }))}
-        />
+        <VoiceLibrary mine={mine} samples={samples} />
       </PageContainer>
     </main>
   );

@@ -1,14 +1,12 @@
-import { headers } from "next/headers";
-import { redirect } from "next/navigation";
+"use client";
+
 import { ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ApiKeyManager } from "@/components/api-key-manager";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
-import { auth } from "@/lib/auth";
+import { api, useApi } from "@/lib/api";
 import { BASE_DOMAIN } from "@/lib/base-domain";
-import { db } from "@/lib/db";
-import { isStudioRole } from "@/lib/org";
 
 const DOCS_URL =
   process.env.NEXT_PUBLIC_DOCS_URL ??
@@ -16,34 +14,8 @@ const DOCS_URL =
     ? `https://docs.${BASE_DOMAIN}`
     : "https://docs.trainertwin.com");
 
-export const dynamic = "force-dynamic";
-
-export default async function DeveloperApiPage() {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) redirect("/auth/sign-in");
-
-  const membership = await db.member.findFirst({
-    where: { userId: session.user.id },
-    select: { role: true, organization: { select: { id: true } } },
-  });
-  if (!membership) redirect("/auth/no-org");
-
-  const canManageApiKeys = isStudioRole(membership.role);
-  const apiKeys = canManageApiKeys
-    ? await db.apikey.findMany({
-        where: { referenceId: membership.organization.id, configId: "default" },
-        orderBy: { createdAt: "desc" },
-        select: {
-          id: true,
-          name: true,
-          start: true,
-          enabled: true,
-          expiresAt: true,
-          lastRequest: true,
-          createdAt: true,
-        },
-      })
-    : [];
+export default function DeveloperApiPage() {
+  const { canManageApiKeys, apiKeys } = useApi(["page.developer"], () => api.page.developer.query());
 
   return (
     <main className="min-h-0 flex-1 overflow-auto p-5 sm:p-8">
@@ -66,14 +38,7 @@ export default async function DeveloperApiPage() {
 
         {canManageApiKeys ? (
           <div className="mt-8">
-            <ApiKeyManager
-              initialKeys={apiKeys.map((key) => ({
-                ...key,
-                expiresAt: key.expiresAt?.toISOString() ?? null,
-                lastRequest: key.lastRequest?.toISOString() ?? null,
-                createdAt: key.createdAt.toISOString(),
-              }))}
-            />
+            <ApiKeyManager initialKeys={apiKeys} />
           </div>
         ) : (
           <p className="mt-8 text-sm text-muted-foreground">

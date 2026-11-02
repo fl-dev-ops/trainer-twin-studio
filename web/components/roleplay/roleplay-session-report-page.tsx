@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { SessionTime } from "@/components/sessions/session-time";
 import { minutesLabel, scoreTone } from "@/components/roleplay/roleplay-session-item";
@@ -11,6 +10,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { roleplayClient } from "@/lib/roleplay/client";
 import type { RoleplayOutputs } from "@/lib/roleplay/trpc";
 import { cn } from "@/lib/utils";
+import { useRefresh } from "@/lib/use-refresh";
 
 type Session = RoleplayOutputs["sessions"]["get"];
 
@@ -23,7 +23,7 @@ const GOAL = {
 
 /** Quiet polling while the report is being made (as on twin sessions); the page refreshes when it lands. */
 function useReportState(id: string, initial: Session["reportState"]) {
-  const router = useRouter();
+  const refresh = useRefresh();
   const { data } = useQuery({
     queryKey: ["roleplay-report-state", id],
     queryFn: () => roleplayClient.sessions.reportState.query({ id }),
@@ -33,8 +33,8 @@ function useReportState(id: string, initial: Session["reportState"]) {
   });
   const state = initial === "pending" ? data?.state ?? "pending" : initial;
   useEffect(() => {
-    if (initial === "pending" && state === "ready") router.refresh();
-  }, [initial, state, router]);
+    if (initial === "pending" && state === "ready") refresh();
+  }, [initial, state, refresh]);
   return state;
 }
 

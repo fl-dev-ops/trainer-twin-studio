@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ArrowLeft, UserPlus } from "lucide-react";
 import { toast } from "sonner";
@@ -10,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
 import type { RoleplayOutputs } from "@/lib/roleplay/trpc";
 import { cn } from "@/lib/utils";
+import { useRefresh } from "@/lib/use-refresh";
 
 type Detail = RoleplayOutputs["scenarios"]["get"];
 
@@ -20,7 +20,7 @@ const STATUS: Record<string, string> = { pending: "Invited", used: "Practised", 
  * (role-play variant). Invites go through the existing role-play invite route (one attempt, 30 days, org lock).
  */
 export function RoleplayAssignPage({ roleplay, learners }: { roleplay: Detail; learners: AssignPerson[] }) {
-  const router = useRouter();
+  const refresh = useRefresh();
   const [open, setOpen] = useState(false);
   // Invited and not expired, or already practised: not offered again. Expired or cancelled invites can be re-sent.
   const active = new Set(roleplay.members.filter((m) => m.status === "pending" || m.status === "used").map((m) => m.email.toLowerCase()));
@@ -39,7 +39,7 @@ export function RoleplayAssignPage({ roleplay, learners }: { roleplay: Detail; l
       toast.success(parts.join(" · ") || "Done");
       if (body.blocked) toast.warning(`${body.blocked} learner(s) belong to another organization and were not invited.`);
       if (body.emailFailures) toast.warning(`${body.emailFailures} invite email(s) could not be sent.`);
-      router.refresh();
+      refresh();
       return true;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not assign");

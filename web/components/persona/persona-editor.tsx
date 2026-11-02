@@ -18,6 +18,7 @@ import {
 } from "@/lib/persona";
 import { generateSpeech, playPcmStream, stopPlayback } from "@/lib/audio-playback";
 import { cn } from "@/lib/utils";
+import { useRefresh } from "@/lib/use-refresh";
 
 type Media = { photoUrl: string | null; hasVideo: boolean; voiceName: string | null };
 type LibraryVoice = { id: string; name: string; kind: string };
@@ -26,6 +27,7 @@ export type PersonaTab = "look" | "talk" | "media";
 /** Create or edit a role-play persona: who they are, how they talk, and their voice and avatar. One Save for all tabs. */
 export function PersonaEditor({ slug, initial, media, voices = [], isOwn = false, defaultTab = "look" }: { slug?: string; initial: PersonaInput; media?: Media; voices?: LibraryVoice[]; isOwn?: boolean; defaultTab?: PersonaTab }) {
   const router = useRouter();
+  const refresh = useRefresh();
   const [form, setForm] = useState<PersonaInput>(initial);
   const [phrase, setPhrase] = useState("");
   const [saving, setSaving] = useState(false);
@@ -58,7 +60,7 @@ export function PersonaEditor({ slug, initial, media, voices = [], isOwn = false
       if (!response.ok) throw new Error(result?.error ?? "Could not save the persona");
       toast.success(slug ? "Persona saved" : "Persona created");
       router.push(slug ? `/personas/${encodeURIComponent(result.slug)}` : `/personas/${encodeURIComponent(result.slug)}/edit?tab=media`);
-      router.refresh();
+      refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save the persona");
     } finally {
@@ -250,7 +252,7 @@ function ToggleRow({ label, help, checked, onChange }: { label: string; help: st
 
 /** Voice (picked from the voice library) and avatar (photo + video uploads) for a saved role-play persona. */
 function MediaSection({ slug, name, media, voices }: { slug: string; name: string; media: Media; voices: LibraryVoice[] }) {
-  const router = useRouter();
+  const refresh = useRefresh();
   const [busy, setBusy] = useState<"voice" | "avatar" | null>(null);
   const [image, setImage] = useState<File | null>(null);
   const [video, setVideo] = useState<File | null>(null);
@@ -265,7 +267,7 @@ function MediaSection({ slug, name, media, voices }: { slug: string; name: strin
       if (!response.ok) throw new Error(result?.error ?? "Upload failed");
       toast.success(kind === "voice" ? "Voice saved" : "Avatar saved");
       if (kind === "avatar") { setImage(null); setVideo(null); }
-      router.refresh();
+      refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Upload failed");
     } finally {

@@ -1,15 +1,17 @@
+"use client";
+
+import { useParams } from "next/navigation";
 import { TwinEditPage } from "@/components/twin/twin-edit-page";
-import { DEFAULT_TWIN_MINUTES } from "@/lib/twin-access";
-import { orNotFound, twinServer } from "@/lib/twin/server";
+import { api, useApi } from "@/lib/api";
 
-export const dynamic = "force-dynamic";
-
-export default async function TwinConfigureRoute({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const twin = await twinServer();
-  const [agent, learners] = await Promise.all([
-    orNotFound(twin.agents.get({ slug: id })),
-    orNotFound(twin.assignments.list({ slug: id })),
-  ]);
-  return <TwinEditPage twin={agent} learners={learners} defaultMinutes={DEFAULT_TWIN_MINUTES} defaultTab="learners" />;
+export default function TwinConfigureRoute() {
+  const { id } = useParams<{ id: string }>();
+  const [agent, learners, defaultMinutes] = useApi(["twin.configure", id], () =>
+    Promise.all([
+      api.twin.agents.get.query({ slug: id }),
+      api.twin.assignments.list.query({ slug: id }),
+      api.page.twinDefaultMinutes.query(),
+    ]),
+  );
+  return <TwinEditPage twin={agent} learners={learners} defaultMinutes={defaultMinutes} defaultTab="learners" />;
 }

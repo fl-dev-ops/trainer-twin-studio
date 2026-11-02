@@ -1,5 +1,6 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import { headers } from "next/headers";
+import superjson from "superjson";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isStudioRole } from "@/lib/org";
@@ -15,39 +16,50 @@ export type TrpcUser = { id: string; name: string; email: string; orgId: string;
 export type TrpcContext = {
   requestId?: string;
   user: TrpcUser | null;
+  /** Signed in, even when `user` is null for want of an (enabled) membership. */
+  signedIn?: boolean;
 };
 
-async function userFrom(requestHeaders: Headers): Promise<TrpcUser | null> {
+async function userFrom(requestHeaders: Headers): Promise<Pick<TrpcContext, "user" | "signedIn">> {
   const session = await auth.api.getSession({ headers: requestHeaders });
-  if (!session) return null;
+  if (!session) return { user: null, signedIn: false };
   const member = await db.member.findFirst({
-    where: { userId: session.user.id },
+    // Disabled members are out at once, as in getSessionOrg / getTrainerOrg (lib/org.ts).
+    where: { userId: session.user.id, disabledAt: null },
     select: { role: true, organization: { select: { id: true, slug: true } } },
   });
-  if (!member) return null;
+  if (!member) return { user: null, signedIn: true };
   return {
-    id: session.user.id,
-    name: session.user.name,
-    email: session.user.email,
-    orgId: member.organization.id,
-    orgSlug: member.organization.slug,
-    role: member.role,
+    signedIn: true,
+    user: {
+      id: session.user.id,
+      name: session.user.name,
+      email: session.user.email,
+      orgId: member.organization.id,
+      orgSlug: member.organization.slug,
+      role: member.role,
+    },
   };
 }
 
 export async function createTrpcContext(opts: { req: Request; requestId?: string }): Promise<TrpcContext> {
-  return { requestId: opts.requestId, user: await userFrom(opts.req.headers) };
+  return { requestId: opts.requestId, ...(await userFrom(opts.req.headers)) };
 }
 
 /** The same context for server components (they call routers directly through `createCaller`). */
 export async function createServerTrpcContext(): Promise<TrpcContext> {
-  return { user: await userFrom(await headers()) };
+  return userFrom(await headers());
 }
 
-export const t = initTRPC.context<TrpcContext>().create();
+// superjson: Dates (and Map/Set) reach client pages as they did through server-component props.
+export const t = initTRPC.context<TrpcContext>().create({ transformer: superjson });
+
+/** Anyone, signed in or not: learner-portal pages resolve the org from the host themselves. */
+export const publicProcedure = t.procedure;
 
 export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
-  if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
+  // Signed in without an org is FORBIDDEN (pages send it to /auth/no-org); no session at all is UNAUTHORIZED (sign-in).
+  if (!ctx.user) throw new TRPCError({ code: ctx.signedIn ? "FORBIDDEN" : "UNAUTHORIZED" });
   return next({ ctx: { ...ctx, user: ctx.user } });
 });
 

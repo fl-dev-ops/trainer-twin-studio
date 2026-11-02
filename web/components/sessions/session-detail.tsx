@@ -1,14 +1,13 @@
+"use client";
+
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { AlertCircle, ArrowLeft, Loader2, Play } from "lucide-react";
 import { RECORDING_ID, SeekButton } from "@/components/sessions/seek-button";
 import { SessionTime } from "@/components/sessions/session-time";
 import { UserAvatar } from "@/components/user-avatar";
-import { db } from "@/lib/db";
-import { isSessionReport, normalizeSessionReportStatus, type KeyMoment } from "@/lib/session-report";
+import type { SessionDetailData } from "@/lib/pages/sessions";
+import type { KeyMoment } from "@/lib/session-report";
 import { cn } from "@/lib/utils";
-
-type Turn = { role?: string; text?: string };
 
 const STATUS_LABEL: Record<string, string> = {
   assigned: "Not started",
@@ -49,40 +48,10 @@ function Card({ title, aside, children, className }: { title?: string; aside?: R
 
 const chip = "rounded-full bg-muted px-3.5 py-1 text-sm font-medium text-muted-foreground";
 
-/** Session detail (V2 prototype): who/when + recording, the AI evaluation, then the transcript. */
-export async function SessionDetail({ orgId, id }: { orgId: string; id: string }) {
-  const row = await db.interviewSession.findFirst({
-    where: { id, orgId, deletedAt: null },
-    select: {
-      id: true,
-      status: true,
-      agentId: true,
-      agentSlug: true,
-      createdAt: true,
-      startedAt: true,
-      endedAt: true,
-      transcript: true,
-      evidence: true,
-      videoEgressId: true,
-      report: true,
-      reportStatus: true,
-      agent: { select: { name: true, persona: { select: { name: true } } } },
-      user: { select: { name: true, email: true, image: true } },
-    },
-  });
-  if (!row) notFound();
-
-  const learner = row.user.name || row.user.email;
-  const trainer = row.agent.persona.name || "Trainer";
-  const scenario = row.agent.name || row.agentSlug;
-  const evidence = (row.evidence ?? {}) as Record<string, unknown>;
-  const hasVideo = Boolean(row.videoEgressId || evidence.videoS3Key || evidence.videoUrl);
-  const minutes =
-    row.startedAt && row.endedAt ? Math.max(1, Math.round((row.endedAt.getTime() - row.startedAt.getTime()) / 60_000)) : null;
+/** Session detail (V2 prototype), loaded by lib/pages/sessions.ts: who/when + recording, the AI evaluation, then the transcript. */
+export function SessionDetail({ data: row }: { data: SessionDetailData }) {
+  const { learner, trainer, scenario, hasVideo, minutes, report, reportState, transcript } = row;
   const status = STATUS_LABEL[row.status];
-  const report = isSessionReport(row.report) ? row.report : null;
-  const reportState = normalizeSessionReportStatus(row.reportStatus, Boolean(report));
-  const transcript = ((Array.isArray(row.transcript) ? row.transcript : []) as Turn[]).filter((t) => t.text?.trim());
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-6">
@@ -104,7 +73,7 @@ export async function SessionDetail({ orgId, id }: { orgId: string; id: string }
             </div>
             <p className="text-sm text-muted-foreground">{scenario}</p>
             <p className="text-sm text-muted-foreground">
-              <SessionTime iso={(row.startedAt ?? row.createdAt).toISOString()} />
+              <SessionTime iso={row.at.toISOString()} />
               {minutes ? ` · ${minutes} min` : ""}
               {status ? ` · ${status}` : ""}
             </p>

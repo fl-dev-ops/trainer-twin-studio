@@ -1,10 +1,11 @@
+"use client";
+
+import { useParams } from "next/navigation";
 import { TwinAgentDetailPage } from "@/components/twin/twin-agent-detail-page";
-import { orNotFound, twinServer } from "@/lib/twin/server";
+import { api, useApi } from "@/lib/api";
 
-export const dynamic = "force-dynamic";
-
-export default async function TwinAgentDetailRoute({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const twin = await twinServer();
-  return <TwinAgentDetailPage twin={await orNotFound(twin.agents.get({ slug: id }))} />;
+export default function TwinAgentDetailRoute() {
+  const { id } = useParams<{ id: string }>();
+  const twin = useApi(["twin.agents.get", id], () => api.twin.agents.get.query({ slug: id }));
+  return <TwinAgentDetailPage twin={twin} />;
 }

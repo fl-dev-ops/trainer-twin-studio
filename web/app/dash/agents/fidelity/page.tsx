@@ -1,30 +1,16 @@
-import { redirect } from "next/navigation";
+"use client";
+
+import { useSearchParams } from "next/navigation";
 import { FidelityView } from "@/components/fidelity-view";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
 import { ScenarioSectionNav } from "@/components/scenario-section-nav";
-import { loadLatestFidelityReport } from "@/lib/fidelity-report.server";
-import { getTrainerOrg } from "@/lib/org";
-import { getPersonaBaseline } from "@/lib/persona-baseline";
-import { listSpecSummaries } from "@/lib/specs";
+import { api, useApi } from "@/lib/api";
 
-export const dynamic = "force-dynamic";
-
-export default async function FidelityPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ scenario?: string; section?: string }>;
-}) {
-  const org = await getTrainerOrg();
-  if (!org) redirect("/auth/no-org");
-  const [report, selection, scenarios] = await Promise.all([
-    loadLatestFidelityReport(org.id),
-    searchParams,
-    listSpecSummaries("agents", org.id),
-  ]);
-  const baseline = report?.scenarios[0]?.persona.slug
-    ? await getPersonaBaseline(org.id, report.scenarios[0].persona.slug)
-    : null;
+export default function FidelityPage() {
+  const query = useSearchParams();
+  const selection = { scenario: query.get("scenario") ?? undefined, section: query.get("section") ?? undefined };
+  const { report, scenarios, baseline } = useApi(["page.fidelity"], () => api.page.fidelity.query());
 
   return (
     <main className="min-h-0 flex-1 overflow-auto p-5 sm:p-8">
@@ -48,7 +34,7 @@ export default async function FidelityPage({
         {report ? (
           <FidelityView
             report={report}
-            scenarios={scenarios.map(({ slug, name, version }) => ({ slug, name, version }))}
+            scenarios={scenarios}
             baseline={baseline}
             selectedScenario={selection.scenario}
             selectedSection={selection.section}

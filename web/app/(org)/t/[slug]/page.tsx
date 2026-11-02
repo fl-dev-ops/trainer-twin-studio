@@ -1,14 +1,9 @@
-import { TwinLearnerFlow, type LearnerAccess } from "@/components/twin/twin-learner-flow";
+"use client";
+
+import { useParams } from "next/navigation";
+import { TwinLearnerFlow } from "@/components/twin/twin-learner-flow";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { db } from "@/lib/db";
-import { isStudioRole } from "@/lib/org";
-import { resolveSessionUser } from "@/lib/session-user";
-import { presignedGetUrl } from "@/lib/s3";
-import { resolveTwinPath, TwinAccessError, twinAssignmentCode } from "@/lib/twin-access";
-
-export const dynamic = "force-dynamic";
-
-const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : null);
+import { api, useApi } from "@/lib/api";
 
 /**
  * A twin's readable link: /t/<username> (the trainer's main twin) or /t/<slug> (a skill twin). Everything happens on
@@ -16,68 +11,18 @@ const text = (value: unknown) => (typeof value === "string" && value.trim() ? va
  * and its summary with feedback. Only people in this org with an active assignment can talk; they use their own
  * minutes. Studio members (admin, team) see a preview: the same page, calls that use no minutes and aren't counted.
  */
-export default async function TwinLinkPage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
-  const { org, user } = await resolveSessionUser();
-
-  const twin = org ? await resolveTwinPath(org.id, org.slug, slug) : null;
-  if (!org || !twin) {
-    return (
-      <main className="grid min-h-svh place-items-center p-4">
-        <Card className="w-full max-w-md text-center">
-          <CardHeader>
-            <CardTitle>Twin not found</CardTitle>
-            <CardDescription>This link doesn&apos;t open a twin. Ask your trainer for a new one.</CardDescription>
-          </CardHeader>
-        </Card>
-      </main>
-    );
-  }
-
-  const agent = await db.agent.findUniqueOrThrow({
-    where: { id: twin.agentId },
-    select: {
-      slug: true,
-      name: true,
-      data: true,
-      persona: { select: { name: true, data: true, avatar: { select: { s3ImageKey: true } } } },
-    },
-  });
-
-  // Signed in: their access to this twin (minutes left), or why they can't talk to it. Studio members (admin, team)
-  // get a preview: the learner page as learners see it, calls started like Try as learner (no minutes, not counted).
-  let access: LearnerAccess = null;
-  const membership = user ? await db.member.findFirst({ where: { organizationId: org.id, userId: user.id }, select: { role: true } }) : null;
-  if (user && isStudioRole(membership?.role)) {
-    access = { ok: true, preview: true, name: user.name || user.email, email: user.email };
-  } else if (user) {
-    try {
-      const found = await twinAssignmentCode({ orgId: org.id, user, agentId: twin.agentId });
-      access = { ok: true, preview: false, name: user.name || user.email, email: user.email, code: found.code, minutesLeft: Math.floor(found.secondsLeft / 60), minutesTotal: found.minutesLimit };
-    } catch (error) {
-      if (!(error instanceof TwinAccessError)) throw error;
-      // In the learner's words: why they can't talk (messages from usable() in lib/twin-access.ts).
-      const reason = /minutes/.test(error.message) ? "used" : /removed/.test(error.message) ? "ended" : "unassigned";
-      access = { ok: false, name: user.name || user.email, email: user.email, reason };
-    }
-  }
-
-  // Presigned here: the avatar route is for org members, and visitors on this page may not be signed in yet.
-  const photoKey = agent.persona.avatar?.s3ImageKey;
-  const photoUrl = photoKey ? await presignedGetUrl(photoKey, 3600).catch(() => null) : null;
-  const persona = agent.persona.data && typeof agent.persona.data === "object" ? (agent.persona.data as Record<string, unknown>) : {};
-  const data = agent.data && typeof agent.data === "object" ? (agent.data as Record<string, unknown>) : {};
+export default function TwinLinkPage() {
+  const { slug } = useParams<{ slug: string }>();
+  const loaded = useApi(["page.twinLink", slug], () => api.page.twinLink.query({ slug }));
+  if (loaded.kind === "flow") return <TwinLearnerFlow {...loaded.props} />;
   return (
-    <TwinLearnerFlow
-      path={`/t/${encodeURIComponent(slug)}`}
-      trainer={{
-        name: text(persona.name) ?? agent.persona.name,
-        title: [text(persona.role), text(persona.based_in)].filter(Boolean).join(" · ") || null,
-        bio: text(persona.background),
-        photoUrl,
-      }}
-      twin={{ slug: agent.slug, name: agent.name, description: text(data.objective) }}
-      access={access}
-    />
+    <main className="grid min-h-svh place-items-center p-4">
+      <Card className="w-full max-w-md text-center">
+        <CardHeader>
+          <CardTitle>Twin not found</CardTitle>
+          <CardDescription>This link doesn&apos;t open a twin. Ask your trainer for a new one.</CardDescription>
+        </CardHeader>
+      </Card>
+    </main>
   );
 }

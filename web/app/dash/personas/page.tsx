@@ -1,11 +1,10 @@
-import { PersonaLibrary } from "@/components/persona/persona-library";
-import { requireStudioMember } from "@/lib/org";
-import { listPersonas } from "@/lib/personas";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { PersonaLibrary } from "@/components/persona/persona-library";
+import { api, useApi } from "@/lib/api";
 
 /** Persona Library: the trainer's own persona and the role-play personas. Studio only. */
-export default async function PersonasPage() {
-  const org = await requireStudioMember();
-  return <PersonaLibrary personas={await listPersonas(org.id)} />;
+export default function PersonasPage() {
+  const personas = useApi(["page.personas"], () => api.page.personas.query());
+  return <PersonaLibrary personas={personas} />;
 }

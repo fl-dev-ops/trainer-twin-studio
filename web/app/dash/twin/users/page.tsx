@@ -1,9 +1,9 @@
+"use client";
+
 import { TwinUsersPage } from "@/components/twin/twin-users-page";
-import { twinServer } from "@/lib/twin/server";
+import { api, useApi } from "@/lib/api";
 
-export const dynamic = "force-dynamic";
-
-export default async function TwinUsersRoute() {
-  const twin = await twinServer();
-  return <TwinUsersPage learners={await twin.users.list()} />;
+export default function TwinUsersRoute() {
+  const learners = useApi(["twin.users.list"], () => api.twin.users.list.query());
+  return <TwinUsersPage learners={learners} />;
 }

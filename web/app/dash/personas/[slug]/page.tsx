@@ -1,21 +1,17 @@
+"use client";
+
+import { useParams, useSearchParams } from "next/navigation";
 import { PersonaDetail } from "@/components/persona/persona-detail";
 import { SpecResourcePage } from "@/components/spec-resource-page";
-import { requireStudioMember } from "@/lib/org";
-import { getPersona } from "@/lib/personas";
-
-export const dynamic = "force-dynamic";
+import { api, useApi } from "@/lib/api";
 
 /** A persona's page. `?view=spec` (and global personas) open the spec page with recordings and recorded style. */
-export default async function PersonaPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ slug: string }>;
-  searchParams: Promise<{ version?: string; view?: string }>;
-}) {
-  const [{ slug }, { version, view }] = await Promise.all([params, searchParams]);
-  const org = await requireStudioMember();
-  const persona = view === "spec" ? null : await getPersona(org.id, slug);
-  if (persona) return <PersonaDetail item={persona} />;
-  return <SpecResourcePage type="personas" slug={slug} requestedVersion={version} />;
+export default function PersonaPage() {
+  const { slug } = useParams<{ slug: string }>();
+  const query = useSearchParams();
+  const version = query.get("version") ?? undefined;
+  const spec = query.get("view") === "spec";
+  const loaded = useApi(["page.persona", slug, version, spec], () => api.page.persona.query({ slug, version, spec }));
+  if (loaded.view === "persona") return <PersonaDetail item={loaded.item} />;
+  return <SpecResourcePage loaded={loaded} />;
 }

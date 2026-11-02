@@ -1,11 +1,16 @@
-import { redirect } from "next/navigation";
-import { SessionsList, type SessionsSearchParams } from "@/components/sessions/sessions-list";
-import { getTrainerOrg } from "@/lib/org";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { useSearchParams } from "next/navigation";
+import { SessionsList } from "@/components/sessions/sessions-list";
+import { api, useApi } from "@/lib/api";
 
-export default async function SessionsPage({ searchParams }: { searchParams: Promise<SessionsSearchParams> }) {
-  const trainer = await getTrainerOrg();
-  if (!trainer) redirect("/auth/no-org");
-  return <SessionsList orgId={trainer.id} params={await searchParams} kind="ROLEPLAY" />;
+export default function SessionsPage() {
+  const query = useSearchParams();
+  const filters = {
+    range: query.get("range") ?? undefined,
+    scenario: query.get("scenario") ?? undefined,
+    learner: query.get("learner") ?? undefined,
+  };
+  const data = useApi(["page.sessions", filters], () => api.page.sessions.query(filters));
+  return <SessionsList data={data} />;
 }

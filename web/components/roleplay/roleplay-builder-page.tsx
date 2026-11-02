@@ -21,6 +21,7 @@ import {
 } from "@/lib/roleplay/skill";
 import type { RoleplayOutputs } from "@/lib/roleplay/trpc";
 import { cn } from "@/lib/utils";
+import { useRefresh } from "@/lib/use-refresh";
 
 type Persona = RoleplayOutputs["builder"]["personas"][number];
 type Phase = "before" | "during" | "after";
@@ -181,6 +182,7 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, pers
   personas: Persona[];
 }) {
   const router = useRouter();
+  const refresh = useRefresh();
   const [b, setB] = useState<RoleplayBuilder>(() => initial ?? emptyBuilder(personas.find((p) => !p.isOwn)?.slug ?? personas[0]?.slug ?? ""));
   const [before, setBefore] = useState<BeforeSettings>(initialBefore);
   const [tab, setTab] = useState<Phase>("during");
@@ -203,7 +205,7 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, pers
       const saved = await roleplayClient.builder.save.mutate({ slug, builder: parsed.data, before });
       toast.success(slug ? "Role play saved" : "Role play created");
       router.push(`/roleplay/${saved.slug}`);
-      router.refresh();
+      refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save the role play");
     } finally {

@@ -1,11 +1,10 @@
-import { TwinAvatarCapture } from "@/components/twin/twin-avatar-capture";
-import { twinServer } from "@/lib/twin/server";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { TwinAvatarCapture } from "@/components/twin/twin-avatar-capture";
+import { api, useApi } from "@/lib/api";
 
 /** The twin's avatar: a photo taken or uploaded, kept as is or as one of the AI versions made from it. */
-export default async function TwinAvatarRoute() {
-  const twin = await twinServer();
-  const state = await twin.avatar.get();
+export default function TwinAvatarRoute() {
+  const state = useApi(["twin.avatar.get"], () => api.twin.avatar.get.query());
   return <TwinAvatarCapture personaName={state?.personaName ?? null} />;
 }

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { twinClient } from "@/lib/twin/client";
 import { randomPassage, VOICE_PASSAGES } from "@/lib/voice-passage";
 import { recordingToWav } from "@/lib/wav";
+import { useRefresh } from "@/lib/use-refresh";
 
 const MIN_SECONDS = 10;
 const TARGET_SECONDS = 20;
@@ -27,6 +28,7 @@ const fmt = (value: number) => `0:${String(Math.min(59, Math.floor(value))).padS
  */
 export function TwinVoiceCapture({ personaName }: { personaName: string | null }) {
   const router = useRouter();
+  const refresh = useRefresh();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recordersRef = useRef<{ video: MediaRecorder; audio: MediaRecorder; chunks: { video: Blob[]; audio: Blob[] } } | null>(null);
@@ -149,7 +151,7 @@ export function TwinVoiceCapture({ personaName }: { personaName: string | null }
       await twinClient.avatar.saveVoice.mutate({ voiceId: body.voice.id, videoKey: upload.key });
       toast.success("Your voice is saved. Your twins speak with it now.");
       router.push("/twin/brain");
-      router.refresh();
+      refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save. Please try again.");
       setStage("review");

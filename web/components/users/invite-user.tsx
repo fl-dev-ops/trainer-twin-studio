@@ -1,19 +1,19 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { authClient } from "@/lib/auth-client";
 import { MAX_INVITES, parseInviteEmails } from "@/lib/invite-emails";
+import { useRefresh } from "@/lib/use-refresh";
 
 /**
  * Invites one or more people (comma-separated) with a fixed role: team (runs the studio) or user (practises).
  * Nothing is sent while an entry is invalid. Failed invites stay in the box with their reason; onDone runs when all succeed.
  */
 export function InviteUser({ organizationId, role, onDone }: { organizationId: string; role: "team" | "user"; onDone?: () => void }) {
-  const router = useRouter();
+  const refresh = useRefresh();
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
@@ -36,7 +36,7 @@ export function InviteUser({ organizationId, role, onDone }: { organizationId: s
     const sent = emails.length - failed.length;
     if (sent) {
       toast.success(sent === 1 ? "Invitation sent" : `${sent} invitations sent`);
-      router.refresh();
+      refresh();
     }
     setText(failed.map((item) => item.email).join(", "));
     setErrors(failed.map((item) => `${item.email}: ${item.message}`));

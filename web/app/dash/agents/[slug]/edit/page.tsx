@@ -1,12 +1,14 @@
-import { SpecResourcePage } from "@/components/spec-resource-page";
+"use client";
 
-export default async function AgentEditPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ slug: string }>;
-  searchParams: Promise<{ version?: string; new?: string }>;
-}) {
-  const [{ slug }, query] = await Promise.all([params, searchParams]);
-  return <SpecResourcePage type="agents" slug={slug} requestedVersion={query.version} isNew={query.new === "1"} />;
+import { useParams, useSearchParams } from "next/navigation";
+import { SpecResourcePage } from "@/components/spec-resource-page";
+import { api, useApi } from "@/lib/api";
+
+export default function AgentEditPage() {
+  const { slug } = useParams<{ slug: string }>();
+  const query = useSearchParams();
+  const version = query.get("version") ?? undefined;
+  const isNew = query.get("new") === "1";
+  const loaded = useApi(["page.agentSpec", slug, version, isNew], () => api.page.agentSpec.query({ slug, version, isNew }));
+  return <SpecResourcePage loaded={loaded} />;
 }

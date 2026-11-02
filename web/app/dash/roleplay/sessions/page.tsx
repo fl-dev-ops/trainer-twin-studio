@@ -1,10 +1,10 @@
-import { RoleplaySessionsPage } from "@/components/roleplay/roleplay-sessions-page";
-import { roleplayServer } from "@/lib/roleplay/server";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { RoleplaySessionsPage } from "@/components/roleplay/roleplay-sessions-page";
+import { api, useApi } from "@/lib/api";
 
 /** Role play sessions: practice sessions on the org's role plays. */
-export default async function RoleplaySessionsRoute() {
-  const roleplay = await roleplayServer();
-  return <RoleplaySessionsPage sessions={await roleplay.sessions.list()} />;
+export default function RoleplaySessionsRoute() {
+  const sessions = useApi(["roleplay.sessions.list"], () => api.roleplay.sessions.list.query());
+  return <RoleplaySessionsPage sessions={sessions} />;
 }

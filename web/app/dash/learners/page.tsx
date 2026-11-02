@@ -1,12 +1,9 @@
-import { redirect } from "next/navigation";
+"use client";
+
 import { LearnersTable } from "@/components/learners/learners-table";
-import { listLearners } from "@/lib/learners";
-import { getTrainerOrg } from "@/lib/org";
+import { api, useApi } from "@/lib/api";
 
-export const dynamic = "force-dynamic";
-
-export default async function UsersPage() {
-  const trainer = await getTrainerOrg();
-  if (!trainer) redirect("/auth/no-org");
-  return <LearnersTable learners={await listLearners(trainer.id, "ROLEPLAY")} />;
+export default function UsersPage() {
+  const learners = useApi(["page.learners"], () => api.page.learners.query());
+  return <LearnersTable learners={learners} />;
 }

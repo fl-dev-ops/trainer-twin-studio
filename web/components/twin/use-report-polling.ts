@@ -1,10 +1,10 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { twinClient } from "@/lib/twin/client";
 import type { ReportState } from "@/lib/twin/session-report";
+import { useRefresh } from "@/lib/use-refresh";
 
 /**
  * Quiet polling while a twin session's report is being made: every 3s, paused in background tabs
@@ -12,7 +12,7 @@ import type { ReportState } from "@/lib/twin/session-report";
  * the server data is refreshed so the page shows it.
  */
 export function useSessionReportState(id: string, initial: ReportState): ReportState {
-  const router = useRouter();
+  const refresh = useRefresh();
   const { data } = useQuery({
     queryKey: ["twin-report-state", id],
     queryFn: () => twinClient.sessions.reportState.query({ id }),
@@ -22,14 +22,14 @@ export function useSessionReportState(id: string, initial: ReportState): ReportS
   });
   const state = initial === "pending" ? data?.state ?? "pending" : initial;
   useEffect(() => {
-    if (initial === "pending" && state === "ready") router.refresh();
-  }, [initial, state, router]);
+    if (initial === "pending" && state === "ready") refresh();
+  }, [initial, state, refresh]);
   return state;
 }
 
 /** The twin page: poll while any learner session's report is pending; refresh as each one lands. */
 export function usePendingReports(slug: string, initialCount: number): number {
-  const router = useRouter();
+  const refresh = useRefresh();
   const { data } = useQuery({
     queryKey: ["twin-pending-reports", slug],
     queryFn: () => twinClient.agents.pendingReports.query({ slug }),
@@ -40,8 +40,8 @@ export function usePendingReports(slug: string, initialCount: number): number {
   const count = initialCount > 0 ? data?.count ?? initialCount : 0;
   const last = useRef(count);
   useEffect(() => {
-    if (count < last.current) router.refresh();
+    if (count < last.current) refresh();
     last.current = count;
-  }, [count, router]);
+  }, [count, refresh]);
   return count;
 }
