@@ -32,3 +32,6 @@ agent/.local/
 storybook/
 web/storybook/
 .storybook/
+
+# pm2 dev logs (ecosystem.config.cjs)
+/logs/
