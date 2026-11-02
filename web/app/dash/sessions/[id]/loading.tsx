@@ -1,19 +1,12 @@
-import { Skeleton } from "@/components/ui/skeleton";
-import { LoadingPage, LoadingRows } from "@/components/page-skeletons";
+import { LoadingCard, LoadingPage } from "@/components/page-skeletons";
 
-export default function SessionDetailLoading() {
+/** A session: who and when with the recording, the evaluation, the transcript. */
+export default function Loading() {
   return (
-    <LoadingPage>
-      <Skeleton className="h-4 w-24" />
-      <div className="flex items-start justify-between">
-        <div className="flex-1 space-y-2">
-          <Skeleton className="h-8 w-64" />
-          <Skeleton className="h-4 w-80 max-w-full" />
-        </div>
-        <Skeleton className="h-6 w-20 rounded-full" />
-      </div>
-      <LoadingRows rows={4} />
-      <LoadingRows rows={8} />
+    <LoadingPage className="flex flex-col gap-4">
+      <LoadingCard lines={2} className="mt-8" />
+      <LoadingCard lines={4} />
+      <LoadingCard lines={8} />
     </LoadingPage>
   );
 }

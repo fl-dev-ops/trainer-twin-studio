@@ -1,10 +1,6 @@
-import { LoadingHeader, LoadingPage, LoadingRows } from "@/components/page-skeletons";
+import { LoadingTable } from "@/components/page-skeletons";
 
-export default function TwinLoading() {
-  return (
-    <LoadingPage>
-      <LoadingHeader />
-      <LoadingRows rows={6} />
-    </LoadingPage>
-  );
+/** Twin sessions: three filter pills, then the session list. */
+export default function Loading() {
+  return <LoadingTable actions={3} />;
 }

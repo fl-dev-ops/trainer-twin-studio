@@ -1,11 +1,6 @@
-import { LoadingCards, LoadingHeader, LoadingPage, LoadingRows } from "@/components/page-skeletons";
+import { LoadingTable } from "@/components/page-skeletons";
 
-export default function DashLoading() {
-  return (
-    <LoadingPage>
-      <LoadingHeader action />
-      <LoadingCards count={3} />
-      <LoadingRows rows={5} />
-    </LoadingPage>
-  );
+/** Dash default: the title bar, a section and a list, the shape most pages share. */
+export default function Loading() {
+  return <LoadingTable />;
 }

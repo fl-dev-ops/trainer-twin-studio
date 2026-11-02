@@ -1,12 +1,11 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
-import { AppShell } from "@/components/app-shell";
+import { AppShell, ShellFallback } from "@/components/app-shell";
 import { ClientOnly } from "@/components/client-only";
 import { OrgAccentProvider } from "@/components/org-accent-provider";
 import { auth } from "@/lib/auth";
 import { getSessionOrg } from "@/lib/org";
-import DashLoading from "./loading";
 
 /**
  * The studio shell renders on the server (session gate, sidebar, accent); every page under it renders only in the
@@ -19,7 +18,7 @@ export default async function DashLayout({ children }: { children: ReactNode }) 
   return (
     <OrgAccentProvider accentColor={org?.accentColor ?? null}>
       <AppShell hideRoleplay={org?.hideRoleplay ?? false}>
-        <ClientOnly fallback={<DashLoading />}>{children}</ClientOnly>
+        <ClientOnly fallback={<ShellFallback />}>{children}</ClientOnly>
       </AppShell>
     </OrgAccentProvider>
   );

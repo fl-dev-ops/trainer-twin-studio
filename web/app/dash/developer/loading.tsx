@@ -1,12 +1,11 @@
-import { LoadingHeader, LoadingPage, LoadingRows } from "@/components/page-skeletons";
+import { LoadingList, LoadingPage, LoadingPageHeader } from "@/components/page-skeletons";
 
-export default function DeveloperLoading() {
+/** Developer API: header and the API keys table. */
+export default function Loading() {
   return (
     <LoadingPage>
-      <LoadingHeader />
-      <div className="mt-8">
-        <LoadingRows rows={4} />
-      </div>
+      <LoadingPageHeader description actions={1} className="border-b pb-6" />
+      <LoadingList rows={3} header className="mt-8" />
     </LoadingPage>
   );
 }

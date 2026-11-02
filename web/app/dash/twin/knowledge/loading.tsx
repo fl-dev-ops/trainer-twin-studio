@@ -1,16 +1,12 @@
-import { Skeleton } from "@/components/ui/skeleton";
-import { LoadingHeader, LoadingPage, LoadingRows } from "@/components/page-skeletons";
+import { LoadingList, LoadingPage, LoadingPageHeader } from "@/components/page-skeletons";
 
-export default function KnowledgeLoading() {
+/** Twin knowledge: header with Add source, the action bar, the document list. */
+export default function Loading() {
   return (
-    <LoadingPage>
-      <LoadingHeader action />
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Skeleton className="h-20 rounded-xl" />
-        <Skeleton className="h-20 rounded-xl" />
-        <Skeleton className="h-20 rounded-xl" />
-      </div>
-      <LoadingRows rows={6} />
+    <LoadingPage className="flex flex-col gap-6">
+      <LoadingPageHeader description actions={1} />
+      <LoadingPageHeader actions={2} />
+      <LoadingList rows={6} className="" />
     </LoadingPage>
   );
 }

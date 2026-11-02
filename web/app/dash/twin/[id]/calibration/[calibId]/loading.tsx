@@ -1,10 +1,6 @@
-import { LoadingHeader, LoadingPage, LoadingRows } from "@/components/page-skeletons";
+import { LoadingCalibrationReview } from "@/components/page-skeletons";
 
-export default function TwinLoading() {
-  return (
-    <LoadingPage>
-      <LoadingHeader />
-      <LoadingRows rows={6} />
-    </LoadingPage>
-  );
+/** One calibration's transcript. */
+export default function Loading() {
+  return <LoadingCalibrationReview />;
 }

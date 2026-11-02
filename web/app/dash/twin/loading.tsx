@@ -1,10 +1,6 @@
-import { LoadingHeader, LoadingPage, LoadingRows } from "@/components/page-skeletons";
+import { LoadingLibrary } from "@/components/page-skeletons";
 
-export default function TwinLoading() {
-  return (
-    <LoadingPage>
-      <LoadingHeader />
-      <LoadingRows rows={6} />
-    </LoadingPage>
-  );
+/** Twin agents library. */
+export default function Loading() {
+  return <LoadingLibrary />;
 }

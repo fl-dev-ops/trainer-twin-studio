@@ -1,14 +1,12 @@
-import { Skeleton } from "@/components/ui/skeleton";
-import { LoadingHeader, LoadingPage } from "@/components/page-skeletons";
+import { LoadingCard, LoadingPage, LoadingPageHeader, LoadingTabs } from "@/components/page-skeletons";
 
-export default function ProfileLoading() {
+/** Settings: header, Account / Team / Branding tabs, the form. */
+export default function Loading() {
   return (
     <LoadingPage>
-      <LoadingHeader />
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Skeleton className="h-64 rounded-xl" />
-        <Skeleton className="h-64 rounded-xl" />
-      </div>
+      <LoadingPageHeader description className="border-b pb-6" />
+      <LoadingTabs className="mt-6" />
+      <LoadingCard lines={4} className="mt-4" />
     </LoadingPage>
   );
 }

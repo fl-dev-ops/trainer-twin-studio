@@ -3,6 +3,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
+import { LoadingTable } from "@/components/page-skeletons";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 
 /** Dash pages that render without the studio chrome. */
@@ -19,16 +20,23 @@ const FULLSCREEN = [
   "/dash/calibration",
 ];
 
+const isFullscreen = (pathname: string) =>
+  FULLSCREEN.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ||
+  pathname.endsWith("/calibrate") ||
+  pathname.includes("/calibrate/");
+
+/**
+ * What the dash shows before the page hydrates (pages render only in the browser): the common page skeleton, or
+ * nothing on full-screen routes, whose own loading.tsx takes over a moment later.
+ */
+export function ShellFallback() {
+  return isFullscreen(usePathname()) ? null : <LoadingTable />;
+}
+
 export function AppShell({ children, hideRoleplay = false }: { children: ReactNode; hideRoleplay?: boolean }) {
   const pathname = usePathname();
 
-  if (
-    FULLSCREEN.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ||
-    pathname.endsWith("/calibrate") ||
-    pathname.includes("/calibrate/")
-  ) {
-    return children;
-  }
+  if (isFullscreen(pathname)) return children;
 
   return (
     <SidebarProvider

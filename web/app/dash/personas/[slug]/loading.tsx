@@ -1,11 +1,12 @@
-import { LoadingHeader, LoadingPage, LoadingRows } from "@/components/page-skeletons";
+import { LoadingCard, LoadingList, LoadingPage, LoadingTitleBar } from "@/components/page-skeletons";
 
-/** Persona detail / role-play preview: a page header and its sections. */
-export default function DetailLoading() {
+/** A persona: back + Edit, the persona card, its details. */
+export default function Loading() {
   return (
     <LoadingPage>
-      <LoadingHeader action />
-      <LoadingRows rows={6} />
+      <LoadingTitleBar back actions={1} />
+      <LoadingCard lines={3} className="mt-6 h-48" />
+      <LoadingList rows={4} />
     </LoadingPage>
   );
 }

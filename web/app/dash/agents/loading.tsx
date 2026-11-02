@@ -1,12 +1,11 @@
-import { LoadingCards, LoadingHeader, LoadingPage } from "@/components/page-skeletons";
+import { LoadingList, LoadingPage, LoadingPageHeader } from "@/components/page-skeletons";
 
-export default function AgentsLoading() {
+/** Scenarios index. */
+export default function Loading() {
   return (
     <LoadingPage>
-      <LoadingHeader action />
-      <div className="mt-6">
-        <LoadingCards count={6} />
-      </div>
+      <LoadingPageHeader description actions={1} />
+      <LoadingList rows={5} className="mt-6" />
     </LoadingPage>
   );
 }

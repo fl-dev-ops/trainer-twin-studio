@@ -1,11 +1,14 @@
-import { LoadingCards, LoadingHeader, LoadingPage, LoadingRows } from "@/components/page-skeletons";
+import { LoadingList, LoadingPage, LoadingPageHeader, LoadingSectionTitle } from "@/components/page-skeletons";
 
-export default function LearnersLoading() {
+/** Learners: header, then the learner list. */
+export default function Loading() {
   return (
-    <LoadingPage>
-      <LoadingHeader />
-      <LoadingCards count={3} cols="sm:grid-cols-3" />
-      <LoadingRows rows={6} />
+    <LoadingPage className="flex flex-col gap-8">
+      <LoadingPageHeader />
+      <section className="flex flex-col gap-3">
+        <LoadingSectionTitle className="" />
+        <LoadingList rows={6} className="" />
+      </section>
     </LoadingPage>
   );
 }

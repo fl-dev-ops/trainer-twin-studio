@@ -1,10 +1,6 @@
-import { LoadingHeader, LoadingPage, LoadingRows } from "@/components/page-skeletons";
+import { LoadingTable } from "@/components/page-skeletons";
 
-export default function TwinLoading() {
-  return (
-    <LoadingPage>
-      <LoadingHeader />
-      <LoadingRows rows={6} />
-    </LoadingPage>
-  );
+/** Twin users: a table with column labels. */
+export default function Loading() {
+  return <LoadingTable header />;
 }

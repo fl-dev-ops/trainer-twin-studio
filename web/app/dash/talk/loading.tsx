@@ -1,5 +1,6 @@
-import { LoadingStage } from "@/components/page-skeletons";
+import { LoadingSessionScreen } from "@/components/page-skeletons";
 
-export default function TalkLoading() {
-  return <LoadingStage />;
+/** Talk: the session screen before joining. */
+export default function Loading() {
+  return <LoadingSessionScreen />;
 }

@@ -1,12 +1,12 @@
-import { LoadingCards, LoadingHeader, LoadingPage } from "@/components/page-skeletons";
+import { LoadingCardGrid, LoadingPage, LoadingPageHeader, LoadingTabs } from "@/components/page-skeletons";
 
-export default function VoiceLoading() {
+/** Voices: header with Clone voice, Explore / My voices tabs, the voice cards. */
+export default function Loading() {
   return (
     <LoadingPage>
-      <LoadingHeader action />
-      <div className="mt-6">
-        <LoadingCards count={4} />
-      </div>
+      <LoadingPageHeader description actions={1} className="border-b pb-6" />
+      <LoadingTabs count={2} className="mt-6" />
+      <LoadingCardGrid count={6} className="mt-4" />
     </LoadingPage>
   );
 }

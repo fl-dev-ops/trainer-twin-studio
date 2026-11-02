@@ -1,5 +1,6 @@
-import { LoadingCenteredCard } from "@/components/page-skeletons";
+import { LoadingWorkspace } from "@/components/page-skeletons";
 
-export default function VoicePlaygroundLoading() {
-  return <LoadingCenteredCard wide />;
+/** TTS playground. */
+export default function Loading() {
+  return <LoadingWorkspace />;
 }

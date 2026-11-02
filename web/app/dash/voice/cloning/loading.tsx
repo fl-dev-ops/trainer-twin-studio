@@ -1,5 +1,6 @@
-import { LoadingCenteredCard } from "@/components/page-skeletons";
+import { LoadingCapture } from "@/components/page-skeletons";
 
-export default function VoiceCloningLoading() {
-  return <LoadingCenteredCard wide />;
+/** Voice cloning (full screen). */
+export default function Loading() {
+  return <LoadingCapture />;
 }

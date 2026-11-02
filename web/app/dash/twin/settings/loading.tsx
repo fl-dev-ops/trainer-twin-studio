@@ -1,10 +1,10 @@
-import { LoadingHeader, LoadingPage, LoadingRows } from "@/components/page-skeletons";
+import { LoadingPage, LoadingPageHeader } from "@/components/page-skeletons";
 
-export default function TwinLoading() {
+/** Twin settings: the header (the page has nothing else yet). */
+export default function Loading() {
   return (
     <LoadingPage>
-      <LoadingHeader />
-      <LoadingRows rows={6} />
+      <LoadingPageHeader description />
     </LoadingPage>
   );
 }
