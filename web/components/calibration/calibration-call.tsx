@@ -26,6 +26,7 @@ import type { TurnEvidence } from "@/lib/twin/evidence";
 import { RoleplayIcon } from "@/components/icons";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Marker, MarkerContent } from "@/components/ui/marker";
 import { LiveKitWorkspaceProvider } from "@/lib/livekit-workspaces";
 import { twinClient } from "@/lib/twin/client";
 import { isFeelsOffMessage, joinsLearnerTurn, type CalibrationScore } from "@/lib/twin/stats";
@@ -159,7 +160,9 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
   const nextId = useRef(0);
   /** Typed messages already shown; the agent echoes each back as your transcript once, which is skipped. */
   const typedEchoes = useRef<string[]>([]);
-  const { audioTrack: agentAudio } = useVoiceAssistant();
+  const { state: agentState, audioTrack: agentAudio } = useVoiceAssistant();
+  /** After you finish speaking, while the twin works out its answer (before its words start streaming). */
+  const thinking = phase === "live" && agentState === "thinking" && !liveText;
   const { microphoneTrack } = useLocalParticipant({ room });
   const { mergedProps: audioProps, canPlayAudio } = useStartAudio({ room, props: {} });
 
@@ -552,7 +555,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [turns, liveText]);
+  }, [turns, liveText, thinking]);
 
   return (
     <LiveKitWorkspaceProvider
@@ -694,6 +697,14 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                     );
                   })
                 )}
+                {thinking ? (
+                  <Marker role="status">
+                    <MarkerContent>
+                      {/* No name: here it's the agent's title, often a long scenario name. */}
+                      <span className="shimmer">Thinking…</span>
+                    </MarkerContent>
+                  </Marker>
+                ) : null}
               </div>
               </div>
             </div>
