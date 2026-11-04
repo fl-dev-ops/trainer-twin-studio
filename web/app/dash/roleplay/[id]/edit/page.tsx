@@ -11,5 +11,5 @@ export default function EditRoleplayRoute() {
     Promise.all([api.roleplay.builder.get.query({ slug: id }), api.roleplay.builder.personas.query()]),
   );
   if (!saved.builder) pageNotFound();
-  return <RoleplayBuilderPage slug={saved.slug} initial={saved.builder} before={saved.before} personas={personas} />;
+  return <RoleplayBuilderPage slug={saved.slug} initial={saved.builder} before={saved.before} tools={saved.tools} personas={personas} />;
 }

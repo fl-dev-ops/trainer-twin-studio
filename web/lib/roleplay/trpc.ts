@@ -13,6 +13,7 @@ import { agentDisplayName } from "@/lib/specs";
 import { studioProcedure, t } from "@/lib/trpc";
 import { avatarPhotoUrl } from "@/lib/twin/avatar";
 import { durationSeconds, transcriptTurns } from "@/lib/twin/stats";
+import { toolSettings, toolSettingsInput } from "@/lib/agent-tools";
 
 /**
  * Role-play tRPC surface, mounted at /api/roleplay (the twin module's twin, plans/roleplay-skill.md step 6).
@@ -196,7 +197,7 @@ const builderRouter = t.router({
   /** The builder's fields and Before settings of a role play, for editing. */
   get: studioProcedure.input(slugInput).query(async ({ ctx, input }) => {
     const agent = await findRoleplay(ctx.user.orgId, input.slug);
-    return { slug: agent.slug, builder: roleplayBuilderFrom(agent.data), before: beforeSettings(agent.data) };
+    return { slug: agent.slug, builder: roleplayBuilderFrom(agent.data), before: beforeSettings(agent.data), tools: toolSettings(agent.data) };
   }),
 
   /** The org's personas the client can be (Persona Library), with photo and role. */
@@ -222,11 +223,12 @@ const builderRouter = t.router({
         uploadTitle: z.string().trim().max(80),
         uploadInstruction: z.string().trim().max(300),
       }).strict(),
+      tools: toolSettingsInput,
     }))
     .mutation(async ({ ctx, input }) => {
       if (input.slug) await findRoleplay(ctx.user.orgId, input.slug);
       try {
-        const saved = await saveRoleplay(ctx.user.orgId, input.builder, input.slug, input.before);
+        const saved = await saveRoleplay(ctx.user.orgId, input.builder, input.slug, input.before, input.tools);
         return { slug: saved.slug, version: saved.version, created: saved.created };
       } catch (error) {
         if (error instanceof ScenarioIngestError) {

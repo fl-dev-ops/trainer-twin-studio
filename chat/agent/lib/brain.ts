@@ -1,4 +1,5 @@
 import { formatRoleplaySession, primeRoleplayCache, roleplaySkill, type RoleplaySkill } from "./roleplay";
+import { formatWorkspaceBlock, NO_TOOLS, toolSettings, type ToolSettings } from "./agent-tools";
 import { studioFetch } from "./studio";
 
 /**
@@ -140,6 +141,8 @@ export type SessionSpecs = {
   playbook?: ScenarioPlaybook;
   /** Set for client role plays (kind ROLEPLAY with a SKILL.md): the AI plays the client. */
   roleplay?: RoleplaySkill;
+  /** The workspace surfaces the agent's Tools settings switch on (all off unless saved). */
+  tools?: ToolSettings;
   agentName: string;
   agentSlug: string;
   agentVersion?: number;
@@ -439,6 +442,7 @@ export async function loadSessionContext(
     sessionId: result.sessionId ?? sessionId,
     playbook: scenarioPlaybook(result.agent?.kind, agentData as Record<string, unknown>),
     roleplay,
+    tools: toolSettings(result.agent?.data),
     twin: (() => {
       const playbooks = twinSessionPlaybooks(result.agent ? { ...result.agent, data: agentData as Record<string, unknown> } : null, result.twinPlaybooks);
       return playbooks ? { playbooks } : undefined;
@@ -573,7 +577,7 @@ ${claimList}\n`;
     ? (specs.knowledgeBases ?? []).map((kb) => `- "${kb.name}" (slug: "${kb.slug}")`).join("\n")
     : "- None";
 
-  if (specs.roleplay) return formatRoleplaySession(specs, specs.roleplay, { learnerBlock });
+  if (specs.roleplay) return formatRoleplaySession(specs, specs.roleplay, { learnerBlock }, specs.tools ?? NO_TOOLS);
   if (specs.twin) return formatTwinSession(specs, specs.twin.playbooks, { learnerBlock, uiStateBlock, warmBlock, docsBlock });
   if (specs.playbook) return formatPlaybookSession(specs, specs.playbook, { learnerBlock, uiStateBlock, warmBlock, docsBlock });
 
@@ -715,7 +719,7 @@ You are ${who}'s twin. The learner works in the field and comes to you with a re
 - There is no agenda, question quota or evidence grading. Do not call session_plan.
 - On the [OPENING] turn, greet the learner in one short line in your own voice and ask what is going on with their client right now, with no tool calls.
 - When the learner says they are done, close in one turn and ask them to confirm. On their next message, if they confirm, call finish_session with no speech.
-
+${specs.tools && formatWorkspaceBlock(specs.tools, { client: false }) ? `\n${formatWorkspaceBlock(specs.tools, { client: false })}\n` : ""}
 YOUR PLAYBOOKS (skill names for eve__skill and scenario_examples)
 ${catalog}
 

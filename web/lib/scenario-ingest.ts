@@ -7,6 +7,7 @@ import { putObject, s3Configured, scenarioArtifactsPrefix, scenarioRunPrefix } f
 import type { BeforeSettings } from "@/lib/context-upload";
 import { renderRoleplay, roleplayBuilderSchema, type RoleplayItem } from "@/lib/roleplay/skill";
 import { validSlug } from "@/lib/specs";
+import type { ToolSettings } from "@/lib/agent-tools";
 
 /** Agent.data.source of a role play built in the builder (twin skills: "scenario-ingest"). */
 export const ROLEPLAY_SOURCE = "roleplay-skill";
@@ -178,7 +179,7 @@ async function requireOrg(orgId: string) {
  * Data a During write carries over from the agent it replaces: Before and After belong to their own phases (configure
  * page, builder), and the intro video is provisioned separately. Without this a re-ingest dropped them.
  */
-const KEPT_ACROSS_DURING_WRITES = ["introVideo", "before", "twinSettings", "after"] as const;
+const KEPT_ACROSS_DURING_WRITES = ["introVideo", "before", "twinSettings", "after", "tools"] as const;
 
 /**
  * Writes a skill package as an Agent of `kind` (twin skill or role play): S3 files, then Chroma items, then the
@@ -336,7 +337,7 @@ export async function ingestTwinSkill(orgId: string, input: TwinSkillIngestInput
  * after (lib/roleplay/skill.ts), stored like a skill twin with kind ROLEPLAY. The client is any persona of the org.
  * Returns the agent's slug (org-prefixed, like skill twins).
  */
-export async function saveRoleplay(orgId: string, builder: unknown, slug?: string, before?: BeforeSettings) {
+export async function saveRoleplay(orgId: string, builder: unknown, slug?: string, before?: BeforeSettings, tools?: ToolSettings) {
   const parsed = roleplayBuilderSchema.safeParse(builder);
   if (!parsed.success) throw new ScenarioIngestError(parsed.error.issues[0]?.message ?? "Invalid role play", 400);
   const [org, persona] = await Promise.all([
@@ -354,8 +355,8 @@ export async function saveRoleplay(orgId: string, builder: unknown, slug?: strin
   return storeSkillAgent({
     org, kind: "ROLEPLAY", personaId: persona.id,
     manifest: scenarioManifestSchema.parse(rendered.scenario), skill: rendered.skill, items: rendered.items,
-    // Before is saved with the builder when given (the builder edits all three phases); otherwise the agent's is kept.
-    data: { source: ROLEPLAY_SOURCE, after: rendered.after, ...(before ? { before } : {}) },
+    // Before and Tools are saved with the builder when given (the builder edits every tab); otherwise the agent's are kept.
+    data: { source: ROLEPLAY_SOURCE, after: rendered.after, ...(before ? { before } : {}), ...(tools ? { tools } : {}) },
   });
 }
 

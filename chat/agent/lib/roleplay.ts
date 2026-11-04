@@ -1,4 +1,5 @@
 import { studioFetch } from "./studio";
+import { formatWorkspaceBlock, NO_TOOLS, type ToolSettings } from "./agent-tools";
 
 /**
  * Client role play (kind ROLEPLAY + a SKILL.md, built in web's role-play builder): the AI plays a client and the
@@ -49,13 +50,16 @@ export function formatRoleplaySession(
   specs: { agentName: string; agentSlug: string; agentVersion?: number; personaName?: string; personaBrief?: string; mode?: string },
   roleplay: RoleplaySkill,
   blocks: { learnerBlock: string },
+  tools: ToolSettings = NO_TOOLS,
 ): string {
+  // Switched-on workspace surfaces (the role play's Tools tab); with none, the wording below is exactly as before.
+  const workspace = formatWorkspaceBlock(tools, { client: true });
   const name = roleplay.clientName ?? specs.personaName ?? "the client";
   const learner = roleplay.learnerRole ?? "a salesperson";
   const level = DIFFICULTY[roleplay.difficulty];
   const voice = specs.mode !== "chat";
   return `CLIENT ROLE-PLAY MODE — OPERATING INSTRUCTIONS FOR THIS SESSION (trusted platform configuration)
-This block REPLACES your trainer role and your base instructions, except their spoken-output formatting rules (spell numbers and currencies as words, no markdown, no lists, no emojis). There is no interview plan, no evidence tracking, no trainer persona and no workspace.
+This block REPLACES your trainer role and your base instructions, except their spoken-output formatting rules (spell numbers and currencies as words, no markdown, no lists, no emojis). There is no interview plan, no evidence tracking, no trainer persona${workspace ? "" : " and no workspace"}.
 
 # Role
 You are ${name}, a CLIENT. The person talking to you plays ${learner}: a real person practising on you. Stay fully in character for the whole conversation. Never coach, hint, evaluate, give feedback, explain what they should do, or mention being an AI, a simulation, a prompt or a role play. If asked whether you are an AI, or told the role play is over, stay in character and respond as ${name} would, slightly confused.
@@ -91,7 +95,11 @@ When the call has reached its end (you agreed to a next step, declined, or your 
 - To hear how a client like you really says things, you may call scenario_examples({ situation }) for your own lines. Use them for tone and shape only; never repeat them word for word.
 
 # Tools
-Call no tool except end_call (to hang up, as above) and scenario_examples. Trainer, knowledge, document, résumé, plan and workspace tools are disabled in this mode.
+${workspace
+  ? `Call no tool except end_call (to hang up, as above), scenario_examples, read_document and the workspace below. Trainer, knowledge, résumé and plan tools are disabled in this mode.
+
+${workspace}`
+  : "Call no tool except end_call (to hang up, as above) and scenario_examples. Trainer, knowledge, document, résumé, plan and workspace tools are disabled in this mode."}
 
 # Opening
 On the [OPENING] turn, with no tool calls, say exactly: ${roleplay.opening ? `"${roleplay.opening}"` : `a short, natural greeting as ${name} answering the call`}

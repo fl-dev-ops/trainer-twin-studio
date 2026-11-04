@@ -24,9 +24,10 @@ import { cn } from "@/lib/utils";
 import { useRefresh } from "@/lib/use-refresh";
 import { PageContainer } from "@/components/page-container";
 import { Button } from "@/components/ui/button";
+import type { ToolSettings } from "@/lib/agent-tools";
 
 type Persona = RoleplayOutputs["builder"]["personas"][number];
-type Phase = "before" | "during" | "after";
+type Phase = "before" | "during" | "after" | "tools";
 
 /** A new role play's rubric: the "Sales call" preset (20 points each, 100 in total). */
 const SALES_RUBRIC = ["Rapport and tone", "Discovery questions", "Objection handling", "Value and data", "Next step booked"].map((name) => ({ name, points: 20 }));
@@ -172,21 +173,32 @@ function PersonaPicker({ personas, value, onChange }: { personas: Persona[]; val
   );
 }
 
+/** The Tools tab's switches (Agent.data.tools); the chat agent loads only what's on for a call. */
+const TOOL_ROWS: { key: keyof ToolSettings; label: string; description: string }[] = [
+  { key: "canvas", label: "Canvas", description: "A whiteboard the client can sketch on and read what the learner draws." },
+  { key: "codeEditor", label: "Code editor", description: "An editor the client can open with code, read and run." },
+  { key: "preview", label: "Preview", description: "Show and point at a PDF the learner attached." },
+  { key: "choice", label: "Multiple choice", description: "A short question with options, checked when the learner picks one." },
+];
+
 /**
  * Role-play builder (reference pageRoleCreate) in three phases: Before (what the learner brings), During (the client
  * and the call: rendered into SKILL.md + items.json) and After (goals and rubric for the report).
  */
-export function RoleplayBuilderPage({ slug, initial, before: initialBefore, personas }: {
+export function RoleplayBuilderPage({ slug, initial, before: initialBefore, tools: initialTools, personas }: {
   slug?: string;
   /** Absent for a new role play: an empty form on the first role-play persona. */
   initial?: RoleplayBuilder;
   before: BeforeSettings;
+  /** The workspace surfaces the client may use on the call (all off for a new role play). */
+  tools: ToolSettings;
   personas: Persona[];
 }) {
   const router = useRouter();
   const refresh = useRefresh();
   const [b, setB] = useState<RoleplayBuilder>(() => initial ?? emptyBuilder(personas.find((p) => !p.isOwn)?.slug ?? personas[0]?.slug ?? ""));
   const [before, setBefore] = useState<BeforeSettings>(initialBefore);
+  const [tools, setTools] = useState<ToolSettings>(initialTools);
   const [tab, setTab] = useState<Phase>("during");
   const [saving, setSaving] = useState(false);
   const set = <K extends keyof RoleplayBuilder>(key: K, value: RoleplayBuilder[K]) => setB((prev) => ({ ...prev, [key]: value }));
@@ -204,7 +216,7 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, pers
     }
     setSaving(true);
     try {
-      const saved = await roleplayClient.builder.save.mutate({ slug, builder: parsed.data, before });
+      const saved = await roleplayClient.builder.save.mutate({ slug, builder: parsed.data, before, tools });
       toast.success(slug ? "Role play saved" : "Role play created");
       router.push(`/roleplay/${saved.slug}`);
       refresh();
@@ -235,7 +247,26 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, pers
           <TabsTrigger value="during">Scenario</TabsTrigger>
           <TabsTrigger value="after">Scoring</TabsTrigger>
           <TabsTrigger value="before">Learner setup</TabsTrigger>
+          <TabsTrigger value="tools">Tools</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="tools">
+          <article className={card}>
+            <Section title="Workspace tools" sub="What the client can show on the learner's screen during the call. All off unless you switch them on.">
+              <div className="flex flex-col divide-y divide-(--border) rounded-tt-md border border-(--border) bg-(--sidebar) px-4">
+                {TOOL_ROWS.map((row) => (
+                  <div key={row.key} className="flex items-center justify-between gap-4 py-3.5">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-sm font-medium">{row.label}</span>
+                      <span className="text-xs text-muted-foreground">{row.description}</span>
+                    </div>
+                    <SwitchToggle checked={tools[row.key]} onChange={(v) => setTools((prev) => ({ ...prev, [row.key]: v }))} label={row.label} />
+                  </div>
+                ))}
+              </div>
+            </Section>
+          </article>
+        </TabsContent>
 
         <TabsContent value="before">
           <article className={card}>
