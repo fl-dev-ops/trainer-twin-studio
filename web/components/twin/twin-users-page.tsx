@@ -4,6 +4,7 @@ import type { TwinOutputs } from "@/lib/twin/trpc";
 import { cn } from "@/lib/utils";
 import { PageContainer } from "@/components/page-container";
 import { UserAvatar } from "@/components/user-avatar";
+import { AccessUntil } from "@/components/twin/access-until";
 
 export function TwinUsersPage({ learners }: { learners: TwinOutputs["users"]["list"] }) {
   return (
@@ -25,11 +26,12 @@ export function TwinUsersPage({ learners }: { learners: TwinOutputs["users"]["li
       {/* Reference lr-table */}
       <div className="mt-4 overflow-hidden rounded-tt-lg border border-(--card-border) bg-card shadow-card">
         {/* Header row */}
-        <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1.5fr)_120px_130px_minmax(0,1.3fr)] items-center gap-3 bg-(--sidebar) px-5 py-2.5 text-overline font-medium tracking-overline uppercase text-(--text-secondary)">
+        <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1.5fr)_110px_120px_130px_minmax(0,1.3fr)] items-center gap-3 bg-(--sidebar) px-5 py-2.5 text-overline font-medium tracking-overline uppercase text-(--text-secondary)">
           <span>Learner</span>
           <span>Email</span>
           <span>Assigned agents</span>
           <span>Assigned minutes</span>
+          <span>Until</span>
           <span>Usage (minutes)</span>
         </div>
 
@@ -46,7 +48,7 @@ export function TwinUsersPage({ learners }: { learners: TwinOutputs["users"]["li
           return (
             <div
               key={l.email}
-              className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1.5fr)_120px_130px_minmax(0,1.3fr)] items-center gap-3 border-t border-(--border) px-5 py-3.5 text-sm"
+              className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1.5fr)_110px_120px_130px_minmax(0,1.3fr)] items-center gap-3 border-t border-(--border) px-5 py-3.5 text-sm"
             >
               <span className="flex items-center gap-3 min-w-0 font-medium">
                 <UserAvatar user={l} size="sm" />
@@ -61,6 +63,10 @@ export function TwinUsersPage({ learners }: { learners: TwinOutputs["users"]["li
 
               <span className="tabular-nums">
                 {l.minutes} <span className="text-muted-foreground font-normal">min</span>
+              </span>
+
+              <span className="text-muted-foreground">
+                <AccessUntil until={l.until} none="No end date" />
               </span>
 
               <span className="flex flex-col gap-1.5 min-w-0">

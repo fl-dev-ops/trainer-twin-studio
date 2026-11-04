@@ -902,6 +902,8 @@ model TwinAssignment {
   shareLinkId      String?
   assignedByUserId String?
   status           String   @default("active") // active | revoked
+  // Last moment a call can start (end of the chosen day, in the assigner's time zone); null = no end date.
+  accessUntil      DateTime?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 

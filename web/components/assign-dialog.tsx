@@ -17,8 +17,12 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * Assign a twin or a role play (reference assign dialog): the org's learners who are not assigned yet, searchable,
- * plus anyone invited by email; twins also set minutes per person. `onAssign` does the work and closes on success.
+ * plus anyone invited by email; twins also set minutes per person and an optional end date. `onAssign` does the work
+ * and closes on success.
  */
+/** Today as "YYYY-MM-DD" in this browser's time zone (the date input's earliest day). */
+const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+
 export function AssignDialog({ variant, open, onOpenChange, title, assignedCount, people, defaultMinutes = 30, onAssign }: {
   variant: "twin" | "roleplay";
   open: boolean;
@@ -29,13 +33,16 @@ export function AssignDialog({ variant, open, onOpenChange, title, assignedCount
   /** Who can be picked: the org's learners minus the ones already assigned (the caller filters). */
   people: AssignPerson[];
   defaultMinutes?: number;
-  onAssign: (emails: string[], minutes: number | null) => Promise<boolean>;
+  /** accessUntil: the end of the chosen day in this browser's time zone (ISO), or null for no end date. */
+  onAssign: (emails: string[], minutes: number | null, accessUntil: string | null) => Promise<boolean>;
 }) {
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<string[]>([]);
   const [invited, setInvited] = useState<string[]>([]);
   const [invite, setInvite] = useState("");
   const [minutes, setMinutes] = useState(String(defaultMinutes));
+  /** "YYYY-MM-DD" from the date input; empty = no end date. */
+  const [until, setUntil] = useState("");
   const [busy, setBusy] = useState(false);
 
   const minutesValue = variant === "twin" ? parseMinutes(minutes) : null;
@@ -60,13 +67,16 @@ export function AssignDialog({ variant, open, onOpenChange, title, assignedCount
     setInvited([]);
     setInvite("");
     setMinutes(String(defaultMinutes));
+    setUntil("");
   }
 
   async function assign() {
     if (!canAssign) return;
     setBusy(true);
     try {
-      if (await onAssign(picked, minutesValue)) {
+      // The whole chosen day counts: access ends at its last moment, in the assigner's time zone.
+      const accessUntil = variant === "twin" && until ? new Date(`${until}T23:59:59.999`).toISOString() : null;
+      if (await onAssign(picked, minutesValue, accessUntil)) {
         reset();
         onOpenChange(false);
       }
@@ -87,9 +97,18 @@ export function AssignDialog({ variant, open, onOpenChange, title, assignedCount
         </DialogHeader>
 
         {variant === "twin" ? (
-          <div className="flex items-center justify-between gap-4">
-            <label htmlFor="assign-minutes" className="text-sm font-medium">Minutes per person</label>
-            <DurationInput id="assign-minutes" value={minutes} onChange={setMinutes} />
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-4">
+              <label htmlFor="assign-minutes" className="text-sm font-medium">Minutes per person</label>
+              <DurationInput id="assign-minutes" value={minutes} onChange={setMinutes} />
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <label htmlFor="assign-until" className="flex flex-col text-sm font-medium">
+                Access until
+                <span className="text-xs font-normal text-muted-foreground">Optional. No calls can start after this day.</span>
+              </label>
+              <Input id="assign-until" type="date" min={today()} value={until} onChange={(event) => setUntil(event.target.value)} className="w-40" />
+            </div>
           </div>
         ) : (
           <p className="m-0 text-xs text-muted-foreground">Each person gets an email with their own link: one attempt, valid for 30 days.</p>

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getTrainerOrg } from "@/lib/org";
-import { assignTwinAndInvite, findTwinAgent, listTwinAssignments, TwinAccessError, twinUrl, updateTwinAssignment } from "@/lib/twin-access";
+import { accessUntilSchema, assignTwinAndInvite, findTwinAgent, listTwinAssignments, TwinAccessError, twinUrl, updateTwinAssignment } from "@/lib/twin-access";
 
 export const runtime = "nodejs";
 
@@ -8,6 +8,8 @@ const minutes = z.number().int().min(1).max(10_000);
 const assignSchema = z.object({
   emails: z.array(z.string().trim().toLowerCase().email().max(320)).min(1).max(100),
   minutes,
+  /** Optional end date (ISO); calls can't start after it. */
+  accessUntil: accessUntilSchema,
 }).strict();
 const updateSchema = z.object({
   assignmentId: z.string().min(1),
@@ -38,7 +40,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ slug
   const trainer = await getTrainerOrg();
   if (!trainer) return Response.json({ error: "Forbidden" }, { status: 403 });
   const parsed = assignSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return Response.json({ error: "Give a list of emails and the minutes for each person" }, { status: 400 });
+  if (!parsed.success) return Response.json({ error: "Give a list of emails, the minutes for each person, and an optional future accessUntil" }, { status: 400 });
   try {
     const agent = await findTwinAgent(trainer.id, (await params).slug);
     return Response.json(await assignTwinAndInvite({
@@ -47,6 +49,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ slug
       agent,
       emails: parsed.data.emails,
       minutes: parsed.data.minutes,
+      accessUntil: parsed.data.accessUntil,
     }));
   } catch (error) {
     return failed(error);

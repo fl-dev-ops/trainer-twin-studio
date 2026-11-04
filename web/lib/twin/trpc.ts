@@ -7,6 +7,7 @@ import { assignablePeople } from "@/lib/learners";
 import { LEARNER_ROLE } from "@/lib/org";
 import { studioProcedure, t } from "@/lib/trpc";
 import {
+  accessUntilSchema,
   assignTwinAndInvite,
   findTwinAgent,
   listTwinAssignments,
@@ -98,7 +99,7 @@ function sessionItem(row: SessionRow) {
  * older sessions shows fewer, upgrade to a grouped query if twins get that busy.
  */
 export function learnerActivity(
-  assignments: { recipientEmail: string; minutesLimit: number; minutesUsed: number; user: { name: string | null; image: string | null } | null }[],
+  assignments: { recipientEmail: string; minutesLimit: number; minutesUsed: number; accessUntil: Date | null; user: { name: string | null; image: string | null } | null }[],
   sessions: SessionRow[],
 ) {
   return assignments
@@ -112,6 +113,7 @@ export function learnerActivity(
         pending: !row.user,
         minutes: row.minutesLimit,
         used: row.minutesUsed,
+        until: row.accessUntil?.toISOString() ?? null,
         sessions: mine.length,
         // Sessions arrive newest first.
         lastAt: mine[0] ? (mine[0].startedAt ?? mine[0].createdAt).toISOString() : null,
@@ -346,6 +348,7 @@ const assignmentsRouter = t.router({
           assigned: row?.status === "active",
           minutes: row?.minutesLimit ?? null,
           minutesUsed: row?.minutesUsed ?? 0,
+          until: row?.accessUntil?.toISOString() ?? null,
         };
       })
       .sort((a, b) => Number(b.assigned) - Number(a.assigned) || a.name.localeCompare(b.name));
@@ -356,6 +359,7 @@ const assignmentsRouter = t.router({
     .input(slugInput.extend({
       emails: z.array(z.string().trim().toLowerCase().email().max(320)).min(1).max(100),
       minutes: z.number().int().min(1).max(10_000),
+      accessUntil: accessUntilSchema,
     }))
     .mutation(({ ctx, input }) => twinCall(async () => {
       const agent = await findTwinAgent(ctx.user.orgId, input.slug);
@@ -365,6 +369,7 @@ const assignmentsRouter = t.router({
         agent,
         emails: input.emails,
         minutes: input.minutes,
+        accessUntil: input.accessUntil,
       });
     })),
 });
@@ -426,12 +431,15 @@ async function sessionReportState(orgId: string, id: string) {
 }
 
 
+/** Of two end dates, the later; no end date (null) wins, since that access never ends. */
+const laterEnd = (a: Date | null, b: Date | null) => (a && b ? (a > b ? a : b) : null);
+
 const usersRouter = t.router({
   /** Everyone with twin access: how many twins, minutes given and used (active assignments). */
   list: studioProcedure.query(async ({ ctx }) => {
     const rows = await db.twinAssignment.findMany({
       where: { orgId: ctx.user.orgId, status: "active" },
-      select: { id: true, recipientEmail: true, minutesLimit: true, user: { select: { name: true, image: true } } },
+      select: { id: true, recipientEmail: true, minutesLimit: true, accessUntil: true, user: { select: { name: true, image: true } } },
     });
     const used = await db.$queryRaw<{ id: string; seconds: number }[]>`
       SELECT "twinAssignmentId" AS id, coalesce(sum(least(10800, extract(epoch FROM (
@@ -441,17 +449,20 @@ const usersRouter = t.router({
       WHERE "orgId" = ${ctx.user.orgId} AND "twinAssignmentId" IS NOT NULL AND "startedAt" IS NOT NULL
       GROUP BY "twinAssignmentId"`;
     const secondsOf = new Map(used.map((row) => [row.id, row.seconds]));
-    const people = new Map<string, { email: string; name: string; image: string | null; agents: number; minutes: number; used: number }>();
+    // until: when this person's access ends; the latest of their twins, null when any twin has no end date.
+    const people = new Map<string, { email: string; name: string; image: string | null; agents: number; minutes: number; used: number; until: Date | null }>();
     for (const row of rows) {
-      const person = people.get(row.recipientEmail)
-        ?? { email: row.recipientEmail, name: row.user?.name || row.recipientEmail, image: row.user?.image ?? null, agents: 0, minutes: 0, used: 0 };
+      const known = people.get(row.recipientEmail);
+      const person = known
+        ?? { email: row.recipientEmail, name: row.user?.name || row.recipientEmail, image: row.user?.image ?? null, agents: 0, minutes: 0, used: 0, until: row.accessUntil };
+      if (known) person.until = laterEnd(person.until, row.accessUntil);
       person.agents += 1;
       person.minutes += row.minutesLimit;
       person.used += (secondsOf.get(row.id) ?? 0) / 60;
       people.set(row.recipientEmail, person);
     }
     return [...people.values()]
-      .map((person) => ({ ...person, used: Math.round(person.used) }))
+      .map((person) => ({ ...person, used: Math.round(person.used), until: person.until?.toISOString() ?? null }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }),
 });

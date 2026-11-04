@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { randomBytes } from "node:crypto";
 import { BASE_DOMAIN } from "@/lib/base-domain";
 import { db } from "@/lib/db";
@@ -90,16 +91,36 @@ export async function twinSecondsUsed(assignmentId: string): Promise<number> {
 }
 
 type Person = { id: string; email: string };
-type AssignmentRow = { id: string; agentId: string; minutesLimit: number; status: string; userId: string | null; recipientEmail: string };
+type AssignmentRow = {
+  id: string;
+  agentId: string;
+  minutesLimit: number;
+  status: string;
+  userId: string | null;
+  recipientEmail: string;
+  accessUntil: Date | null;
+};
 
-const assignmentSelect = { id: true, agentId: true, minutesLimit: true, status: true, userId: true, recipientEmail: true } as const;
+const assignmentSelect = { id: true, agentId: true, minutesLimit: true, status: true, userId: true, recipientEmail: true, accessUntil: true } as const;
+
+/** An assignment's end date (set when assigning): optional, and only a future date makes sense. */
+export const accessUntilSchema = z.coerce
+  .date()
+  .refine((date) => date.getTime() > Date.now(), "Pick an end date in the future")
+  .nullable()
+  .optional();
+
+/** Still within the end date (no end date: always). */
+export const withinAccess = (accessUntil: Date | null, now = new Date()) => !accessUntil || accessUntil.getTime() > now.getTime();
 const belongsTo = (assignment: AssignmentRow, user: Person) =>
   assignment.userId ? assignment.userId === user.id : assignment.recipientEmail === user.email.trim().toLowerCase();
 
-/** Active, owned by the user, minutes left; binds the user on first use. Throws TwinAccessError otherwise. */
+/** Active, owned by the user, within its end date, minutes left; binds the user on first use. Throws TwinAccessError otherwise. */
 async function usable(assignment: AssignmentRow | null, user: Person) {
   if (!assignment || !belongsTo(assignment, user)) throw new TwinAccessError("This twin is not assigned to your account", 403);
   if (assignment.status !== "active") throw new TwinAccessError("Your access to this twin was removed", 403);
+  // Checked when a call starts; a call already running finishes (its minutes still cap it).
+  if (!withinAccess(assignment.accessUntil)) throw new TwinAccessError("Your access to this twin has ended", 403);
   const secondsLeft = assignment.minutesLimit * 60 - (await twinSecondsUsed(assignment.id));
   if (secondsLeft <= 0) throw new TwinAccessError("You have used all your minutes with this twin", 403);
   if (!assignment.userId) await db.twinAssignment.update({ where: { id: assignment.id }, data: { userId: user.id } });
@@ -198,7 +219,7 @@ export async function listTwinAssignments(orgId: string, agentId: string) {
     where: { orgId, agentId },
     orderBy: { createdAt: "asc" },
     select: {
-      id: true, recipientEmail: true, minutesLimit: true, status: true, shareCode: true, shareLinkId: true, createdAt: true,
+      id: true, recipientEmail: true, minutesLimit: true, status: true, accessUntil: true, shareCode: true, shareLinkId: true, createdAt: true,
       user: { select: { id: true, name: true, image: true } },
     },
   });
@@ -206,8 +227,8 @@ export async function listTwinAssignments(orgId: string, agentId: string) {
 }
 
 /**
- * Assigns a twin to people by email with a minutes budget each. A revoked assignment is reactivated with the
- * new minutes; an active one is left alone (change minutes with updateTwinAssignment). People bound to another
+ * Assigns a twin to people by email with a minutes budget each and an optional end date. A revoked assignment is
+ * reactivated with the new minutes and date; an active one is left alone (change minutes with updateTwinAssignment). People bound to another
  * org are blocked (single-org lock). Returns who needs an invite email.
  */
 export async function assignTwin(input: {
@@ -215,9 +236,11 @@ export async function assignTwin(input: {
   agentId: string;
   emails: string[];
   minutes: number;
+  accessUntil?: Date | null;
   assignedByUserId: string;
   homeOrgs: Map<string, string>;
 }) {
+  const accessUntil = input.accessUntil ?? null;
   const emails = [...new Set(input.emails.map((email) => email.trim().toLowerCase()))];
   const existing = await db.twinAssignment.findMany({
     where: { agentId: input.agentId, recipientEmail: { in: emails } },
@@ -239,11 +262,11 @@ export async function assignTwin(input: {
     }
     const shareCode = newTwinShareCode();
     if (current) {
-      await db.twinAssignment.update({ where: { id: current.id }, data: { status: "active", minutesLimit: input.minutes, shareCode } });
+      await db.twinAssignment.update({ where: { id: current.id }, data: { status: "active", minutesLimit: input.minutes, accessUntil, shareCode } });
       stats.reactivated++;
     } else {
       await db.twinAssignment.create({
-        data: { orgId: input.orgId, agentId: input.agentId, recipientEmail: email, minutesLimit: input.minutes, shareCode, assignedByUserId: input.assignedByUserId },
+        data: { orgId: input.orgId, agentId: input.agentId, recipientEmail: email, minutesLimit: input.minutes, accessUntil, shareCode, assignedByUserId: input.assignedByUserId },
       });
       stats.added++;
     }
@@ -259,12 +282,14 @@ export async function assignTwinAndInvite(input: {
   agent: { id: string; name: string };
   emails: string[];
   minutes: number;
+  accessUntil?: Date | null;
 }) {
   const { stats, invites } = await assignTwin({
     orgId: input.org.id,
     agentId: input.agent.id,
     emails: input.emails,
     minutes: input.minutes,
+    accessUntil: input.accessUntil,
     assignedByUserId: input.by.id,
     homeOrgs: await homeOrgsByEmail(input.emails),
   });
@@ -326,6 +351,7 @@ export async function startableAgentSlugs(orgId: string, user: Person | null, sl
           status: "active",
           agentId: { in: twins.map((twin) => twin.id) },
           OR: [{ userId: user.id }, { userId: null, recipientEmail: user.email.trim().toLowerCase() }],
+          AND: [{ OR: [{ accessUntil: null }, { accessUntil: { gt: new Date() } }] }],
         },
         select: { agentId: true },
       })

@@ -167,7 +167,7 @@ export async function loadTwinLink(slug: string): Promise<TwinLinkView> {
     } catch (error) {
       if (!(error instanceof TwinAccessError)) throw error;
       // In the learner's words: why they can't talk (messages from usable() in lib/twin-access.ts).
-      const reason = /minutes/.test(error.message) ? "used" : /removed/.test(error.message) ? "ended" : "unassigned";
+      const reason = /minutes/.test(error.message) ? "used" : /removed|ended/.test(error.message) ? "ended" : "unassigned";
       access = { ok: false, name: user.name || user.email, email: user.email, reason };
     }
   }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check, Copy, UserPlus } from "lucide-react";
 import { toast } from "sonner";
@@ -15,6 +15,8 @@ import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
 import { useRefresh } from "@/lib/use-refresh";
 import { PageContainer } from "@/components/page-container";
+import { AccessUntil } from "@/components/twin/access-until";
+import { TWIN_UPLOAD_TITLE_DEFAULT } from "@/lib/context-upload";
 
 type LearnerAssign = TwinOutputs["assignments"]["list"][number];
 
@@ -71,9 +73,37 @@ export function TwinEditPage({
 
   // Conversation settings: saved on change (toggles) or on blur (text), one request at a time so the last one wins.
   const [settings, setSettings] = useState(twin.settings);
+  /** The upload card's text as typed; saved only with its Save button (switches save on their own). */
+  const [card, setCard] = useState({ uploadTitle: settings.uploadTitle, uploadInstruction: settings.uploadInstruction });
+  const cardDirty = card.uploadTitle !== settings.uploadTitle || card.uploadInstruction !== settings.uploadInstruction;
   const savedSettings = useRef(twin.settings);
   const settingsQueue = useRef(Promise.resolve());
-  const { preScreenshare, preUpload, uploadTitle, uploadInstruction, duringUpload } = settings;
+
+  // The page first renders from cached data, then the fresh copy arrives: take its values when they differ from what
+  // this page last received (otherwise coming back after a change shows the old values).
+  const [received, setReceived] = useState(twin);
+  if (received !== twin) {
+    setReceived(twin);
+    if (JSON.stringify(twin.settings) !== JSON.stringify(received.settings)) {
+      setSettings(twin.settings);
+      // Unsaved upload card text stays (a switch saved meanwhile); untouched text follows the saved values.
+      const untouched = card.uploadTitle === received.settings.uploadTitle && card.uploadInstruction === received.settings.uploadInstruction;
+      if (untouched) setCard({ uploadTitle: twin.settings.uploadTitle, uploadInstruction: twin.settings.uploadInstruction });
+    }
+    if (twin.name !== received.name) setName(twin.name);
+    if (twin.description !== received.description) setDescription(twin.description ?? "");
+  }
+  useEffect(() => {
+    savedSettings.current = twin.settings;
+  }, [twin.settings]);
+  // Leaving the page (closing, reloading) with unsaved upload card text asks first.
+  useEffect(() => {
+    if (!cardDirty) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [cardDirty]);
+  const { preScreenshare, preUpload, duringUpload } = settings;
 
   const [assignOpen, setAssignOpen] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -83,9 +113,9 @@ export function TwinEditPage({
   const assignable = learners.filter((l) => !l.assigned);
 
   /** The dialog's Assign: minutes per person; already-active people are skipped server-side. */
-  async function assignLearners(emails: string[], minutes: number | null) {
+  async function assignLearners(emails: string[], minutes: number | null, accessUntil: string | null) {
     try {
-      const result = await twinClient.assignments.assign.mutate({ slug: id, emails, minutes: minutes ?? defaultMinutes });
+      const result = await twinClient.assignments.assign.mutate({ slug: id, emails, minutes: minutes ?? defaultMinutes, accessUntil });
       // Say what actually happened: assigned (and emailed), already had access, or blocked by another org.
       const done = result.added + result.reactivated;
       const people = (n: number) => `${n} ${n === 1 ? "learner" : "learners"}`;
@@ -101,14 +131,19 @@ export function TwinEditPage({
     }
   }
 
-  /** Saves conversation settings with the twin's *saved* name and description, so General's unsaved edits stay unsaved. */
-  function saveSettings(next: typeof settings) {
+  /**
+   * Saves conversation settings with the twin's *saved* name and description, so General's unsaved edits stay unsaved.
+   * `done` is the toast once saved; the cached page data is refreshed so other pages (and coming back) show the change.
+   */
+  function saveSettings(next: typeof settings, done: string) {
     setSettings(next);
     settingsQueue.current = settingsQueue.current.then(async () => {
       if (JSON.stringify(next) === JSON.stringify(savedSettings.current)) return;
       try {
         await twinClient.agents.update.mutate({ slug: id, name: twin.name, description: twin.description ?? "", settings: next });
         savedSettings.current = next;
+        toast.success(done);
+        refresh();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not save");
         setSettings(savedSettings.current);
@@ -240,7 +275,7 @@ export function TwinEditPage({
               </div>
               <SwitchToggle
                 checked={preScreenshare}
-                onChange={(checked) => saveSettings({ ...settings, preScreenshare: checked })}
+                onChange={(checked) => saveSettings({ ...settings, preScreenshare: checked }, `Screen share before the call turned ${checked ? "on" : "off"}`)}
                 label="Enable screenshare before conversation start"
               />
             </div>
@@ -254,13 +289,20 @@ export function TwinEditPage({
               </div>
               <SwitchToggle
                 checked={preUpload}
-                onChange={(checked) => saveSettings({ ...settings, preUpload: checked })}
+                onChange={(checked) => saveSettings({ ...settings, preUpload: checked }, `File upload before the call turned ${checked ? "on" : "off"}`)}
                 label="Enable upload before conversation start"
               />
             </div>
 
             {preUpload ? (
-              <div className="flex flex-col gap-3 py-3.5">
+              // The upload card's text: typed freely, saved together with Save (or Enter), Cancel puts the saved text back.
+              <form
+                className="flex flex-col gap-3 py-3.5"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (cardDirty) saveSettings({ ...settings, ...card }, "Upload card updated");
+                }}
+              >
                 <div className="flex flex-col gap-1.5">
                   <label htmlFor="upload-title" className="text-xs font-medium text-muted-foreground">
                     Upload title
@@ -269,13 +311,12 @@ export function TwinEditPage({
                     id="upload-title"
                     type="text"
                     maxLength={80}
-                    value={uploadTitle}
-                    placeholder="e.g. Listing brochure, Client brief"
-                    onChange={(e) => setSettings({ ...settings, uploadTitle: e.target.value })}
-                    onBlur={() => saveSettings(settings)}
+                    value={card.uploadTitle}
+                    placeholder={TWIN_UPLOAD_TITLE_DEFAULT}
+                    onChange={(e) => setCard({ ...card, uploadTitle: e.target.value })}
                     className="h-9 rounded-lg border border-(--border) bg-card px-3 text-sm text-(--foreground) outline-none focus:border-(--brand) focus:ring-1 focus:ring-(--brand)"
                   />
-                  <span className="text-xs text-muted-foreground">Shown on the upload card before the conversation.</span>
+                  <span className="text-xs text-muted-foreground">The heading of the upload card before the conversation. Empty shows “{TWIN_UPLOAD_TITLE_DEFAULT}”.</span>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <label htmlFor="upload-instruction" className="text-xs font-medium text-muted-foreground">
@@ -285,15 +326,29 @@ export function TwinEditPage({
                     id="upload-instruction"
                     type="text"
                     maxLength={300}
-                    value={uploadInstruction}
+                    value={card.uploadInstruction}
                     placeholder="e.g. Upload the property brochure you want to discuss."
-                    onChange={(e) => setSettings({ ...settings, uploadInstruction: e.target.value })}
-                    onBlur={() => saveSettings(settings)}
+                    onChange={(e) => setCard({ ...card, uploadInstruction: e.target.value })}
                     className="h-9 rounded-lg border border-(--border) bg-card px-3 text-sm text-(--foreground) outline-none focus:border-(--brand) focus:ring-1 focus:ring-(--brand)"
                   />
-                  <span className="text-xs text-muted-foreground">Tells the learner which file to add. Uploading stays optional.</span>
+                  <span className="text-xs text-muted-foreground">Tells the learner which file to add. Leave empty to show no instruction. Uploading stays optional.</span>
                 </div>
-              </div>
+                <div className="flex items-center justify-end gap-2">
+                  {cardDirty ? <span className="mr-auto text-xs text-muted-foreground">Unsaved changes</span> : null}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={!cardDirty}
+                    onClick={() => setCard({ uploadTitle: settings.uploadTitle, uploadInstruction: settings.uploadInstruction })}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" size="sm" disabled={!cardDirty}>
+                    Save
+                  </Button>
+                </div>
+              </form>
             ) : null}
           </div>
         </div>
@@ -320,7 +375,7 @@ export function TwinEditPage({
               </div>
               <SwitchToggle
                 checked={duringUpload}
-                onChange={(checked) => saveSettings({ ...settings, duringUpload: checked })}
+                onChange={(checked) => saveSettings({ ...settings, duringUpload: checked }, `Image upload during the call turned ${checked ? "on" : "off"}`)}
                 label="Enable upload during conversation"
               />
             </div>
@@ -358,8 +413,9 @@ export function TwinEditPage({
                     </span>
                   </span>
                 </span>
-                <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                <span className="flex shrink-0 flex-col items-end gap-0.5 text-xs text-muted-foreground tabular-nums">
                   {u.minutesUsed} of {u.minutes} min used
+                  <AccessUntil until={u.until} />
                 </span>
               </li>
             ))}

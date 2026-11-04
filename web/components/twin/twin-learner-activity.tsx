@@ -2,6 +2,7 @@ import { PendingBadge } from "@/components/assign-dialog";
 import { SessionTime } from "@/components/sessions/session-time";
 import { helpfulTone } from "@/components/twin/twin-session-item";
 import { Badge } from "@/components/ui/badge";
+import { AccessUntil } from "@/components/twin/access-until";
 import { Progress } from "@/components/ui/progress";
 import { UserAvatar } from "@/components/user-avatar";
 import type { TwinOutputs } from "@/lib/twin/trpc";
@@ -38,6 +39,12 @@ export function TwinLearnerActivity({ learners, onSelect }: { learners: TwinLear
                   ) : (
                     "Not started yet"
                   )}
+                  {learner.until ? (
+                    <>
+                      {" · "}
+                      <AccessUntil until={learner.until} />
+                    </>
+                  ) : null}
                 </span>
               </span>
               <span className="flex items-center gap-4">
