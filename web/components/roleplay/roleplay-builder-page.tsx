@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowLeft, Check, Play, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { SwitchToggle } from "@/components/switch-toggle";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UserAvatar } from "@/components/user-avatar";
-import type { BeforeSettings } from "@/lib/context-upload";
+import { TWIN_UPLOAD_TITLE_DEFAULT, type BeforeSettings } from "@/lib/context-upload";
 import { roleplayClient } from "@/lib/roleplay/client";
 import {
   DIFFICULTIES,
@@ -25,6 +25,7 @@ import { useRefresh } from "@/lib/use-refresh";
 import { PageContainer } from "@/components/page-container";
 import { Button } from "@/components/ui/button";
 import type { ToolSettings } from "@/lib/agent-tools";
+import { FormCard, SettingCard, SettingsPanel, SettingsSection } from "@/components/settings-cards";
 
 type Persona = RoleplayOutputs["builder"]["personas"][number];
 type Phase = "before" | "during" | "after" | "tools";
@@ -51,7 +52,6 @@ const emptyBuilder = (persona = ""): RoleplayBuilder => ({
 /** Which tab a field lives on, so a validation message opens the right one. */
 const PHASE_OF: Record<string, Phase> = { learnerGoals: "after", rubric: "after" };
 
-const card = "flex flex-col gap-6 rounded-tt-lg border border-(--card-border) bg-card p-6 shadow-card";
 const input = "rounded-lg border border-(--border) bg-transparent px-3 text-sm text-(--foreground) outline-none focus:border-(--brand) focus:ring-1 focus:ring-(--brand)";
 
 function Field({ id, label, hint, children }: { id?: string; label: string; hint?: string; children: ReactNode }) {
@@ -62,18 +62,6 @@ function Field({ id, label, hint, children }: { id?: string; label: string; hint
       </label>
       {children}
       {hint ? <span className="text-xs text-muted-foreground">{hint}</span> : null}
-    </div>
-  );
-}
-
-function Section({ title, sub, children }: { title: string; sub: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-4 border-t border-(--border) pt-6 first:border-t-0 first:pt-0">
-      <div>
-        <h2 className="m-0 text-sm font-semibold tracking-wide text-(--foreground) uppercase">{title}</h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>
-      </div>
-      {children}
     </div>
   );
 }
@@ -182,8 +170,12 @@ const TOOL_ROWS: { key: keyof ToolSettings; label: string; description: string }
 ];
 
 /**
- * Role-play builder (reference pageRoleCreate) in three phases: Before (what the learner brings), During (the client
- * and the call: rendered into SKILL.md + items.json) and After (goals and rubric for the report).
+ * Role-play builder (reference pageRoleCreate): Scenario (the client and the call: rendered into SKILL.md + items),
+ * Scoring (goals and rubric for the report), Settings (Before: what the learner shares with the client) and Tools (what the client can show the learner).
+ *
+ * Editing: Scenario and Scoring save with "Save role play" (a new version of the script); Settings and Tools save
+ * as they change, like twin Configure (switches on flip, the upload card with its own Save). Creating: everything is
+ * kept in the form and saved by "Create role play", on every tab.
  */
 export function RoleplayBuilderPage({ slug, initial, before: initialBefore, tools: initialTools, personas }: {
   slug?: string;
@@ -196,15 +188,64 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, tool
 }) {
   const router = useRouter();
   const refresh = useRefresh();
+  const editing = Boolean(slug);
   const [b, setB] = useState<RoleplayBuilder>(() => initial ?? emptyBuilder(personas.find((p) => !p.isOwn)?.slug ?? personas[0]?.slug ?? ""));
   const [before, setBefore] = useState<BeforeSettings>(initialBefore);
   const [tools, setTools] = useState<ToolSettings>(initialTools);
+  /** The upload card's text as typed (editing: saved with its own Save). */
+  const [card, setCard] = useState({ uploadTitle: initialBefore.uploadTitle, uploadInstruction: initialBefore.uploadInstruction });
   const [tab, setTab] = useState<Phase>("during");
   const [saving, setSaving] = useState(false);
+  const saved = useRef({ before: initialBefore, tools: initialTools });
+  const settingsQueue = useRef(Promise.resolve());
+
+  // The page first renders from cached data, then the fresh copy arrives: take its values where nothing was edited
+  // (otherwise coming back after a change shows the old values).
+  const [received, setReceived] = useState({ initial, before: initialBefore, tools: initialTools });
+  if (received.initial !== initial || received.before !== initialBefore || received.tools !== initialTools) {
+    setReceived({ initial, before: initialBefore, tools: initialTools });
+    if (initial && JSON.stringify(b) === JSON.stringify(received.initial)) setB(initial);
+    if (JSON.stringify(before) === JSON.stringify(received.before)) setBefore(initialBefore);
+    if (JSON.stringify(tools) === JSON.stringify(received.tools)) setTools(initialTools);
+    if (card.uploadTitle === received.before.uploadTitle && card.uploadInstruction === received.before.uploadInstruction) {
+      setCard({ uploadTitle: initialBefore.uploadTitle, uploadInstruction: initialBefore.uploadInstruction });
+    }
+  }
+  useEffect(() => {
+    saved.current = { before: initialBefore, tools: initialTools };
+  }, [initialBefore, initialTools]);
+
   const set = <K extends keyof RoleplayBuilder>(key: K, value: RoleplayBuilder[K]) => setB((prev) => ({ ...prev, [key]: value }));
   const setSituation = (key: keyof RoleplayBuilder["situation"], value: string) => setB((prev) => ({ ...prev, situation: { ...prev.situation, [key]: value } }));
-  const setBeforeKey = <K extends keyof BeforeSettings>(key: K, value: BeforeSettings[K]) => setBefore((prev) => ({ ...prev, [key]: value }));
   const rubricTotal = b.rubric.reduce((sum, row) => sum + (Number(row.points) || 0), 0);
+  const cardDirty = card.uploadTitle !== before.uploadTitle || card.uploadInstruction !== before.uploadInstruction;
+
+  /** Settings / Tools: the form keeps them while creating; editing saves each change in order, toasting `done`. */
+  function saveSettings(patch: { before?: BeforeSettings; tools?: ToolSettings }, done: string) {
+    if (patch.before) setBefore(patch.before);
+    if (patch.tools) setTools(patch.tools);
+    if (!slug) return;
+    settingsQueue.current = settingsQueue.current.then(async () => {
+      try {
+        await roleplayClient.builder.saveSettings.mutate({ slug, ...patch });
+        saved.current = { ...saved.current, ...patch };
+        toast.success(done);
+        refresh();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not save");
+        setBefore(saved.current.before);
+        setTools(saved.current.tools);
+      }
+    });
+  }
+
+  // Leaving the page (closing, reloading) with unsaved upload card text asks first.
+  useEffect(() => {
+    if (!editing || !cardDirty) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [editing, cardDirty]);
 
   async function save() {
     const parsed = roleplayBuilderSchema.safeParse(b);
@@ -216,9 +257,11 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, tool
     }
     setSaving(true);
     try {
-      const saved = await roleplayClient.builder.save.mutate({ slug, builder: parsed.data, before, tools });
+      // Creating: the upload card's text is part of the form. Editing: Settings are already saved as it changed.
+      const settings = editing ? saved.current.before : { ...before, ...card };
+      const result = await roleplayClient.builder.save.mutate({ slug, builder: parsed.data, before: settings, tools: editing ? saved.current.tools : tools });
       toast.success(slug ? "Role play saved" : "Role play created");
-      router.push(`/roleplay/${saved.slug}`);
+      router.push(`/roleplay/${result.slug}`);
       refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save the role play");
@@ -226,6 +269,29 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, tool
       setSaving(false);
     }
   }
+
+  const uploadFields = (
+    <>
+      <Field id="upload-title" label="Upload title" hint={`The heading of the upload card. Empty shows “${TWIN_UPLOAD_TITLE_DEFAULT}”.`}>
+        <input id="upload-title" maxLength={80} value={card.uploadTitle} placeholder={TWIN_UPLOAD_TITLE_DEFAULT} onChange={(e) => setCard({ ...card, uploadTitle: e.target.value })} className={cn(input, "h-9 bg-card")} />
+      </Field>
+      <Field id="upload-instruction" label="What to upload" hint="Tells the learner which file to add. Leave empty to show no instruction.">
+        <input id="upload-instruction" maxLength={300} value={card.uploadInstruction} placeholder="e.g. Add the brochure you'll pitch." onChange={(e) => setCard({ ...card, uploadInstruction: e.target.value })} className={cn(input, "h-9 bg-card")} />
+      </Field>
+      {editing ? (
+        <div className="flex items-center justify-end gap-2">
+          {cardDirty ? <span className="mr-auto text-xs text-muted-foreground">Unsaved changes</span> : null}
+          <Button type="button" variant="ghost" size="sm" disabled={!cardDirty} onClick={() => setCard({ uploadTitle: before.uploadTitle, uploadInstruction: before.uploadInstruction })}>
+            Cancel
+          </Button>
+          <Button type="submit" size="sm" disabled={!cardDirty}>
+            Save
+          </Button>
+        </div>
+      ) : null}
+    </>
+  );
+  const createNote = editing ? null : <p className="m-0 text-xs text-muted-foreground">Saved when you create the role play.</p>;
 
   return (
     <PageContainer>
@@ -236,219 +302,223 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, tool
         </Link>
       </header>
 
-      <div className="mt-6">
-        <h1 className="m-0 text-title-m leading-7 font-semibold tracking-title">{slug ? "Edit role play" : "Build role play"}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">The call the learner practises, how they’re scored, and what they set up first.</p>
+      <div className="mt-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="m-0 text-title-m leading-7 font-semibold tracking-title">{slug ? "Edit role play" : "Build role play"}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">The call the learner practises, how they’re scored, and what they set up first.</p>
+        </div>
+        {slug ? (
+          <Button variant="brand" nativeButton={false} render={<Link href={`/talk?agent=${encodeURIComponent(slug)}`} />}>
+            <Play data-icon="inline-start" /> Try role play
+          </Button>
+        ) : null}
       </div>
 
       <Tabs value={tab} onValueChange={(value) => setTab(value as Phase)} className="mt-6 gap-4">
         <TabsList>
-          {/* Build order: the call first, then how it's scored, then optional learner setup. */}
+          {/* Build order: the call first, then how it's scored, then what the learner shares and the client's tools. */}
           <TabsTrigger value="during">Scenario</TabsTrigger>
           <TabsTrigger value="after">Scoring</TabsTrigger>
-          <TabsTrigger value="before">Learner setup</TabsTrigger>
+          <TabsTrigger value="before">Settings</TabsTrigger>
           <TabsTrigger value="tools">Tools</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="tools">
-          <article className={card}>
-            <Section title="Workspace tools" sub="What the client can show on the learner's screen during the call. All off unless you switch them on.">
-              <div className="flex flex-col divide-y divide-(--border) rounded-tt-md border border-(--border) bg-(--sidebar) px-4">
-                {TOOL_ROWS.map((row) => (
-                  <div key={row.key} className="flex items-center justify-between gap-4 py-3.5">
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-sm font-medium">{row.label}</span>
-                      <span className="text-xs text-muted-foreground">{row.description}</span>
-                    </div>
-                    <SwitchToggle checked={tools[row.key]} onChange={(v) => setTools((prev) => ({ ...prev, [row.key]: v }))} label={row.label} />
-                  </div>
+        <TabsContent value="during" className="flex flex-col gap-4">
+          <FormCard title="Basics" description="What the role play is called and how hard the client is.">
+            <Field id="rp-name" label="Role play name">
+              <input id="rp-name" maxLength={120} value={b.name} placeholder="Example: The wait-and-see investor" onChange={(e) => set("name", e.target.value)} className={cn(input, "h-10")} />
+            </Field>
+            <Field label="Difficulty">
+              <div role="radiogroup" aria-label="Difficulty" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {DIFFICULTIES.map((d) => (
+                  <button
+                    key={d.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={b.difficulty === d.value}
+                    onClick={() => set("difficulty", d.value)}
+                    className={cn("rounded-lg border p-2.5 text-left transition-colors", b.difficulty === d.value ? "border-(--brand) bg-(--brand)/5" : "border-(--border) hover:bg-(--sidebar)")}
+                  >
+                    <span className="block text-sm font-medium">{d.label}</span>
+                    <span className="mt-0.5 block text-xs leading-4 text-muted-foreground">{d.description}</span>
+                  </button>
                 ))}
               </div>
-            </Section>
-          </article>
-        </TabsContent>
+            </Field>
+          </FormCard>
 
-        <TabsContent value="before">
-          <article className={card}>
-            <Section title="Before the call" sub="Optional: what the learner shares or uploads before the client picks up.">
-              <div className="flex flex-col divide-y divide-(--border) rounded-tt-md border border-(--border) bg-(--sidebar) px-4">
-                <div className="flex items-center justify-between gap-4 py-3.5">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-sm font-medium">Share screen</span>
-                    <span className="text-xs text-muted-foreground">Learners share their entire screen for the whole call.</span>
-                  </div>
-                  <SwitchToggle checked={before.preScreenshare} onChange={(v) => setBeforeKey("preScreenshare", v)} label="Share screen" />
-                </div>
-                <div className="flex items-center justify-between gap-4 py-3.5">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-sm font-medium">Upload a file</span>
-                    <span className="text-xs text-muted-foreground">Learners may add a file before the call starts. A PDF or an image (PNG, JPEG or WebP), up to 10 MB.</span>
-                  </div>
-                  <SwitchToggle checked={before.preUpload} onChange={(v) => setBeforeKey("preUpload", v)} label="Upload a file before the call" />
-                </div>
-                {before.preUpload ? (
-                  <div className="flex flex-col gap-3 py-3.5">
-                    <Field id="upload-title" label="Upload title">
-                      <input id="upload-title" maxLength={80} value={before.uploadTitle} placeholder="e.g. Listing brochure" onChange={(e) => setBeforeKey("uploadTitle", e.target.value)} className={cn(input, "h-9 bg-card")} />
-                    </Field>
-                    <Field id="upload-instruction" label="What to upload">
-                      <input id="upload-instruction" maxLength={300} value={before.uploadInstruction} placeholder="e.g. Add the brochure you'll pitch." onChange={(e) => setBeforeKey("uploadInstruction", e.target.value)} className={cn(input, "h-9 bg-card")} />
-                    </Field>
-                  </div>
-                ) : null}
-                <div className="flex items-center justify-between gap-4 py-3.5">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-sm font-medium">Attach during the call</span>
-                    <span className="text-xs text-muted-foreground">Learners can share an image while they talk to the client. Images only (PNG, JPEG or WebP), up to 10 MB.</span>
-                  </div>
-                  <SwitchToggle checked={before.duringUpload} onChange={(v) => setBeforeKey("duringUpload", v)} label="Attach files during the call" />
-                </div>
-              </div>
-            </Section>
+          <FormCard title="The client" description="The persona sets the voice, photo, background and how they talk. The two optional fields change them for this role play only.">
+            <Field label="Persona">
+              <PersonaPicker personas={personas} value={b.persona} onChange={(slug) => set("persona", slug)} />
+            </Field>
+            <Field id="rp-client" label="Client name on this call" hint="Optional. Replaces the persona's name; describe who they are in the situation below.">
+              <input id="rp-client" maxLength={120} value={b.clientName ?? ""} onChange={(e) => set("clientName", e.target.value)} className={cn(input, "h-10")} />
+            </Field>
+            <Field id="rp-talk" label="How they talk on this call" hint="Optional. Replaces the persona's speaking style for this role play.">
+              <textarea id="rp-talk" rows={2} maxLength={2000} value={b.howTheyTalk ?? ""} onChange={(e) => set("howTheyTalk", e.target.value)} className={cn(input, "py-2")} />
+            </Field>
+          </FormCard>
+
+          <FormCard title="The learner" description="Who the learner plays, and what they read before the call.">
+            <Field id="rp-learner" label="Learner role">
+              <input id="rp-learner" maxLength={200} value={b.situation.learnerRole} placeholder="Example: Off-plan agent on a first call" onChange={(e) => setSituation("learnerRole", e.target.value)} className={cn(input, "h-10")} />
+            </Field>
             <Field id="rp-brief" label="Learner brief" hint="Shown to the learner before the call: what to expect and what to aim for.">
               <textarea id="rp-brief" rows={3} maxLength={1000} value={b.whatToExpect ?? ""} placeholder="Example: Listen first, then ask one question at a time." onChange={(e) => set("whatToExpect", e.target.value)} className={cn(input, "py-2")} />
             </Field>
-          </article>
-        </TabsContent>
+          </FormCard>
 
-        <TabsContent value="during">
-          <article className={card}>
-            <Section title="The client" sub="The persona sets the voice, photo, background and how they talk. The two optional fields below change them for this role play only.">
-              <Field id="rp-name" label="Role play name">
-                <input id="rp-name" maxLength={120} value={b.name} placeholder="Example: The wait-and-see investor" onChange={(e) => set("name", e.target.value)} className={cn(input, "h-10")} />
-              </Field>
-              <Field label="Persona">
-                <PersonaPicker personas={personas} value={b.persona} onChange={(slug) => set("persona", slug)} />
-              </Field>
-              <Field id="rp-client" label="Client name on this call" hint="Optional. Replaces the persona's name; describe who they are in the scenario below.">
-                <input id="rp-client" maxLength={120} value={b.clientName ?? ""} onChange={(e) => set("clientName", e.target.value)} className={cn(input, "h-10")} />
-              </Field>
-              <Field id="rp-talk" label="How they talk on this call" hint="Optional. Replaces the persona's speaking style for this role play.">
-                <textarea id="rp-talk" rows={2} maxLength={2000} value={b.howTheyTalk ?? ""} onChange={(e) => set("howTheyTalk", e.target.value)} className={cn(input, "py-2")} />
-              </Field>
-            </Section>
+          <FormCard title="The situation" description="What the client is dealing with, and what they keep to themselves.">
+            <Field id="rp-scenario" label="Scenario">
+              <textarea id="rp-scenario" rows={6} maxLength={4000} value={b.situation.scenario} placeholder="Example: You are an off-plan buyer who wants to wait for prices to drop." onChange={(e) => setSituation("scenario", e.target.value)} className={cn(input, "py-2")} />
+            </Field>
+            <Field id="rp-hidden" label="What's really going on" hint="Hidden from the learner. The client reveals it only if the learner earns it.">
+              <textarea id="rp-hidden" rows={4} maxLength={4000} value={b.situation.hiddenTruth ?? ""} placeholder="Example: You are scared of making a mistake with your family's savings." onChange={(e) => setSituation("hiddenTruth", e.target.value)} className={cn(input, "py-2")} />
+            </Field>
+          </FormCard>
 
-            <Section title="The call" sub="The situation the client is in, and what the learner plays.">
-              <Field id="rp-scenario" label="Scenario">
-                <textarea id="rp-scenario" rows={6} maxLength={4000} value={b.situation.scenario} placeholder="Example: You are an off-plan buyer who wants to wait for prices to drop." onChange={(e) => setSituation("scenario", e.target.value)} className={cn(input, "py-2")} />
-              </Field>
-              <Field id="rp-hidden" label="What's really going on" hint="Hidden from the learner. The client reveals it only if the learner earns it.">
-                <textarea id="rp-hidden" rows={4} maxLength={4000} value={b.situation.hiddenTruth ?? ""} placeholder="Example: You are scared of making a mistake with your family's savings." onChange={(e) => setSituation("hiddenTruth", e.target.value)} className={cn(input, "py-2")} />
-              </Field>
-              <Field id="rp-learner" label="Learner role">
-                <input id="rp-learner" maxLength={200} value={b.situation.learnerRole} placeholder="Example: Off-plan agent on a first call" onChange={(e) => setSituation("learnerRole", e.target.value)} className={cn(input, "h-10")} />
-              </Field>
-              <Field label="Difficulty">
-                <div role="radiogroup" aria-label="Difficulty" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {DIFFICULTIES.map((d) => (
-                    <button
-                      key={d.value}
-                      type="button"
-                      role="radio"
-                      aria-checked={b.difficulty === d.value}
-                      onClick={() => set("difficulty", d.value)}
-                      className={cn("rounded-lg border p-2.5 text-left transition-colors", b.difficulty === d.value ? "border-(--brand) bg-(--brand)/5" : "border-(--border) hover:bg-(--sidebar)")}
-                    >
-                      <span className="block text-sm font-medium">{d.label}</span>
-                      <span className="mt-0.5 block text-xs leading-4 text-muted-foreground">{d.description}</span>
-                    </button>
-                  ))}
-                </div>
-              </Field>
-              <Field id="rp-opening" label="Opening line" hint="The client's first words when they pick up.">
-                <input id="rp-opening" maxLength={1000} value={b.opening} placeholder="Example: The market has basically stopped. I'll wait for prices to hit the bottom." onChange={(e) => set("opening", e.target.value)} className={cn(input, "h-10")} />
-              </Field>
-            </Section>
-
-            <Section title="Reactions" sub="What makes the client close up or open up during the call.">
-              <Field id="rp-guarded" label="Gets more guarded when the learner">
-                <ListField id="rp-guarded" items={b.guardedIf} onChange={(v) => set("guardedIf", v)} max={MAX_REACTIONS} placeholder="Example: Uses fake urgency, like “last units”" addLabel="Add" />
-              </Field>
-              <Field id="rp-opens" label="Opens up when the learner">
-                <ListField id="rp-opens" items={b.opensUpIf} onChange={(v) => set("opensUpIf", v)} max={MAX_REACTIONS} placeholder="Example: Asks why they started looking" addLabel="Add" />
-              </Field>
-            </Section>
-
-            <Section title="How the call can end" sub="The best outcome is a booked meeting or a dated follow-up, never a purchase.">
-              <Field id="rp-agree" label="Agrees when">
-                <textarea id="rp-agree" rows={2} maxLength={2000} value={b.situation.agreesWhen ?? ""} onChange={(e) => setSituation("agreesWhen", e.target.value)} className={cn(input, "py-2")} />
-              </Field>
-              <Field id="rp-decline" label="Declines when">
-                <textarea id="rp-decline" rows={2} maxLength={2000} value={b.situation.declinesWhen ?? ""} onChange={(e) => setSituation("declinesWhen", e.target.value)} className={cn(input, "py-2")} />
-              </Field>
-            </Section>
-
-            <Section title="Example lines" sub="Things this client might say. The AI uses them for tone, never word for word. Optional.">
+          <FormCard title="The call" description="How the client opens, and lines that set their tone.">
+            <Field id="rp-opening" label="Opening line" hint="The client's first words when they pick up.">
+              <input id="rp-opening" maxLength={1000} value={b.opening} placeholder="Example: The market has basically stopped. I'll wait for prices to hit the bottom." onChange={(e) => set("opening", e.target.value)} className={cn(input, "h-10")} />
+            </Field>
+            <Field id="rp-lines" label="Example lines" hint="Things this client might say. The AI uses them for tone, never word for word. Optional.">
               <ListField id="rp-lines" items={b.exampleLines} onChange={(v) => set("exampleLines", v)} max={MAX_EXAMPLE_LINES} placeholder="Example: Honestly, I might just put it into gold." addLabel="Add line" />
-            </Section>
-          </article>
+            </Field>
+          </FormCard>
+
+          <FormCard title="Reactions" description="What makes the client close up or open up during the call.">
+            <Field id="rp-guarded" label="Gets more guarded when the learner">
+              <ListField id="rp-guarded" items={b.guardedIf} onChange={(v) => set("guardedIf", v)} max={MAX_REACTIONS} placeholder="Example: Uses fake urgency, like “last units”" addLabel="Add" />
+            </Field>
+            <Field id="rp-opens" label="Opens up when the learner">
+              <ListField id="rp-opens" items={b.opensUpIf} onChange={(v) => set("opensUpIf", v)} max={MAX_REACTIONS} placeholder="Example: Asks why they started looking" addLabel="Add" />
+            </Field>
+          </FormCard>
+
+          <FormCard title="How the call can end" description="The best outcome is a booked meeting or a dated follow-up, never a purchase.">
+            <Field id="rp-agree" label="Agrees when">
+              <textarea id="rp-agree" rows={2} maxLength={2000} value={b.situation.agreesWhen ?? ""} onChange={(e) => setSituation("agreesWhen", e.target.value)} className={cn(input, "py-2")} />
+            </Field>
+            <Field id="rp-decline" label="Declines when">
+              <textarea id="rp-decline" rows={2} maxLength={2000} value={b.situation.declinesWhen ?? ""} onChange={(e) => setSituation("declinesWhen", e.target.value)} className={cn(input, "py-2")} />
+            </Field>
+          </FormCard>
         </TabsContent>
 
-        <TabsContent value="after">
-          <article className={card}>
-            <Section title="Learner goals" sub={`What the learner is scored on after the call. ${MAX_GOALS} at most. The client never sees these.`}>
-              <ListField id="rp-goals" items={b.learnerGoals} onChange={(v) => set("learnerGoals", v)} max={MAX_GOALS} placeholder="Example: Hold the price objection without offering a discount" addLabel="Add goal" />
-            </Section>
-            <Section title="Scoring rubric" sub={`Points per skill, ${MAX_RUBRIC_CRITERIA} at most. The report scores the learner out of the total.`}>
-              <ol className="m-0 flex list-none flex-col gap-1.5 p-0">
-                {b.rubric.map((row, i) => (
-                  <li key={i} className="flex items-center gap-2 rounded-lg bg-(--sidebar) px-3 py-1.5 text-sm">
-                    <input
-                      aria-label="Score name"
-                      maxLength={120}
-                      value={row.name}
-                      onChange={(e) => set("rubric", b.rubric.map((r, k) => (k === i ? { ...r, name: e.target.value } : r)))}
-                      className="h-8 min-w-0 flex-1 bg-transparent outline-none"
-                    />
-                    <input
-                      aria-label={`Points for ${row.name}`}
-                      type="number"
-                      min={1}
-                      max={100}
-                      value={row.points}
-                      onChange={(e) => set("rubric", b.rubric.map((r, k) => (k === i ? { ...r, points: Math.round(Number(e.target.value)) || 0 } : r)))}
-                      className={cn(input, "h-8 w-20 bg-card text-right tabular-nums")}
-                    />
-                    <button type="button" onClick={() => set("rubric", b.rubric.filter((_, k) => k !== i))} className="shrink-0 rounded-full px-2 py-0.5 text-xs text-muted-foreground hover:bg-(--tone-control) hover:text-foreground">
-                      Remove
-                    </button>
-                  </li>
-                ))}
-              </ol>
-              <div className="flex items-center justify-between gap-3">
-                <button
-                  type="button"
-                  disabled={b.rubric.length >= MAX_RUBRIC_CRITERIA}
-                  onClick={() => set("rubric", [...b.rubric, { name: "New score", points: 10 }])}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-full border border-(--border) px-3.5 text-sm hover:bg-(--tone-control) disabled:opacity-50"
+        <TabsContent value="after" className="flex flex-col gap-4">
+          <FormCard title="Learner goals" description={`What the learner is scored on after the call. ${MAX_GOALS} at most. The client never sees these.`}>
+            <ListField id="rp-goals" items={b.learnerGoals} onChange={(v) => set("learnerGoals", v)} max={MAX_GOALS} placeholder="Example: Hold the price objection without offering a discount" addLabel="Add goal" />
+          </FormCard>
+          <FormCard title="Scoring rubric" description={`Points per skill, ${MAX_RUBRIC_CRITERIA} at most. The report scores the learner out of the total.`}>
+            <ol className="m-0 flex list-none flex-col gap-1.5 p-0">
+              {b.rubric.map((row, i) => (
+                <li key={i} className="flex items-center gap-2 rounded-lg bg-(--sidebar) px-3 py-1.5 text-sm">
+                  <input
+                    aria-label="Score name"
+                    maxLength={120}
+                    value={row.name}
+                    onChange={(e) => set("rubric", b.rubric.map((r, k) => (k === i ? { ...r, name: e.target.value } : r)))}
+                    className="h-8 min-w-0 flex-1 bg-transparent outline-none"
+                  />
+                  <input
+                    aria-label={`Points for ${row.name}`}
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={row.points}
+                    onChange={(e) => set("rubric", b.rubric.map((r, k) => (k === i ? { ...r, points: Math.round(Number(e.target.value)) || 0 } : r)))}
+                    className={cn(input, "h-8 w-20 bg-card text-right tabular-nums")}
+                  />
+                  <button type="button" onClick={() => set("rubric", b.rubric.filter((_, k) => k !== i))} className="shrink-0 rounded-full px-2 py-0.5 text-xs text-muted-foreground hover:bg-(--tone-control) hover:text-foreground">
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ol>
+            <div className="flex items-center justify-between gap-3">
+              <Button variant="outline" disabled={b.rubric.length >= MAX_RUBRIC_CRITERIA} onClick={() => set("rubric", [...b.rubric, { name: "New score", points: 10 }])}>
+                <Plus data-icon="inline-start" /> Add score
+              </Button>
+              <span className="text-sm text-muted-foreground tabular-nums">
+                Total <b className="text-foreground">{rubricTotal}</b> points
+              </span>
+            </div>
+          </FormCard>
+        </TabsContent>
+
+        <TabsContent value="before" className="flex flex-col gap-4">
+          {createNote}
+          <SettingsPanel>
+          <SettingsSection title="Before the call" description="Optional: what the learner shares or uploads before the client picks up.">
+            <SettingCard
+              title="Share screen"
+              description="Learners share their entire screen for the whole call."
+              control={<SwitchToggle checked={before.preScreenshare} onChange={(on) => saveSettings({ before: { ...before, preScreenshare: on } }, `Screen share turned ${on ? "on" : "off"}`)} label="Share screen" />}
+            />
+            <SettingCard
+              title="Upload a file"
+              description="Learners may add a file before the call starts. A PDF or an image (PNG, JPEG or WebP), up to 10 MB."
+              control={<SwitchToggle checked={before.preUpload} onChange={(on) => saveSettings({ before: { ...before, preUpload: on } }, `File upload before the call turned ${on ? "on" : "off"}`)} label="Upload a file before the call" />}
+            >
+              {before.preUpload ? (
+                // Editing: the card's text saves with its own Save (or Enter); creating: it's part of the form.
+                <form
+                  className="flex flex-col gap-3"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    if (editing && cardDirty) saveSettings({ before: { ...before, ...card } }, "Upload card updated");
+                  }}
                 >
-                  <Plus className="size-4" /> Add score
-                </button>
-                <span className="text-sm text-muted-foreground tabular-nums">
-                  Total <b className="text-foreground">{rubricTotal}</b> points
-                </span>
-              </div>
-            </Section>
-          </article>
+                  {uploadFields}
+                </form>
+              ) : null}
+            </SettingCard>
+          </SettingsSection>
+          <SettingsSection title="During the call">
+            <SettingCard
+              title="Attach during the call"
+              description="Learners can share an image while they talk to the client. Images only (PNG, JPEG or WebP), up to 10 MB."
+              control={<SwitchToggle checked={before.duringUpload} onChange={(on) => saveSettings({ before: { ...before, duringUpload: on } }, `Image upload during the call turned ${on ? "on" : "off"}`)} label="Attach files during the call" />}
+            />
+          </SettingsSection>
+          </SettingsPanel>
+        </TabsContent>
+
+        <TabsContent value="tools" className="flex flex-col gap-4">
+          {createNote}
+          <SettingsPanel>
+          <SettingsSection title="Workspace tools" description="What the client can show on the learner's screen during the call. All off unless you switch them on.">
+            {TOOL_ROWS.map((row) => (
+              <SettingCard
+                key={row.key}
+                title={row.label}
+                description={row.description}
+                control={
+                  <SwitchToggle
+                    checked={tools[row.key]}
+                    onChange={(on) => saveSettings({ tools: { ...tools, [row.key]: on } }, `${row.label} turned ${on ? "on" : "off"}`)}
+                    label={row.label}
+                  />
+                }
+              />
+            ))}
+          </SettingsSection>
+          </SettingsPanel>
         </TabsContent>
       </Tabs>
 
-      <div className="mt-6 flex items-center justify-between gap-3">
-        <Button variant="ghost" nativeButton={false} render={<Link href={slug ? `/roleplay/${slug}` : "/roleplay"} />}>
-          Cancel
-        </Button>
-        <div className="flex items-center gap-2">
-          {slug ? (
-            <Button variant="outline" nativeButton={false} render={<Link href={`/talk?agent=${encodeURIComponent(slug)}`} />}>
-              <Play data-icon="inline-start" /> Try role play
-            </Button>
-          ) : null}
+      {/* Editing: Scenario and Scoring save with the role play; Settings and Tools save as they change. */}
+      {!editing || tab === "during" || tab === "after" ? (
+        <div className="mt-6 flex items-center justify-between gap-3">
+          <Button variant="ghost" nativeButton={false} render={<Link href={slug ? `/roleplay/${slug}` : "/roleplay"} />}>
+            Cancel
+          </Button>
           <Button variant="brand" disabled={saving} onClick={() => void save()}>
             <Check data-icon="inline-start" />
             {saving ? "Saving…" : slug ? "Save role play" : "Create role play"}
           </Button>
         </div>
-      </div>
+      ) : null}
     </PageContainer>
   );
 }

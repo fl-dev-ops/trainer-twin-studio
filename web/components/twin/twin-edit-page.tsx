@@ -17,6 +17,7 @@ import { useRefresh } from "@/lib/use-refresh";
 import { PageContainer } from "@/components/page-container";
 import { AccessUntil } from "@/components/twin/access-until";
 import { TWIN_UPLOAD_TITLE_DEFAULT } from "@/lib/context-upload";
+import { SettingCard, SettingsPanel, SettingsSection } from "@/components/settings-cards";
 
 type LearnerAssign = TwinOutputs["assignments"]["list"][number];
 
@@ -253,51 +254,34 @@ export function TwinEditPage({
 
       {/* Card 2: before and during conversation settings, saved as they change */}
       <TabsContent value="conversation">
-      <article className="flex flex-col gap-6 rounded-tt-lg border border-(--card-border) bg-card p-6 shadow-card">
-        {/* Section: Before conversation start */}
-        <div className="flex flex-col gap-4">
-          <div>
-            <h2 className="m-0 text-sm font-semibold uppercase tracking-wide text-(--foreground)">
-              Before conversation start
-            </h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Permissions and configuration presented to the learner before the call begins. Changes save automatically.
-            </p>
-          </div>
-
-          <div className="flex flex-col divide-y divide-(--border) rounded-tt-md border border-(--border) bg-(--sidebar) px-4">
-            <div className="flex items-center justify-between gap-4 py-3.5">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-sm font-medium">Enable screenshare</span>
-                <span className="text-xs text-muted-foreground">
-                  Learners share their entire screen when the conversation starts, so the twin can follow along.
-                </span>
-              </div>
+      <SettingsPanel>
+        <SettingsSection title="Before the conversation" description="What the learner shares or uploads before the call begins. Changes save automatically.">
+          <SettingCard
+            title="Share screen"
+            description="Learners share their entire screen when the conversation starts, so the twin can follow along."
+            control={
               <SwitchToggle
                 checked={preScreenshare}
                 onChange={(checked) => saveSettings({ ...settings, preScreenshare: checked }, `Screen share before the call turned ${checked ? "on" : "off"}`)}
-                label="Enable screenshare before conversation start"
+                label="Share screen before the conversation"
               />
-            </div>
-
-            <div className="flex items-center justify-between gap-4 py-3.5">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-sm font-medium">Enable upload or Upload file configuration</span>
-                <span className="text-xs text-muted-foreground">
-                  Allow learners to add a file before the session starts. A PDF or an image (PNG, JPEG or WebP), up to 10 MB.
-                </span>
-              </div>
+            }
+          />
+          <SettingCard
+            title="Upload a file"
+            description="Learners may add a file before the session starts. A PDF or an image (PNG, JPEG or WebP), up to 10 MB."
+            control={
               <SwitchToggle
                 checked={preUpload}
                 onChange={(checked) => saveSettings({ ...settings, preUpload: checked }, `File upload before the call turned ${checked ? "on" : "off"}`)}
-                label="Enable upload before conversation start"
+                label="Upload a file before the conversation"
               />
-            </div>
-
+            }
+          >
             {preUpload ? (
               // The upload card's text: typed freely, saved together with Save (or Enter), Cancel puts the saved text back.
               <form
-                className="flex flex-col gap-3 py-3.5"
+                className="flex flex-col gap-3"
                 onSubmit={(event) => {
                   event.preventDefault();
                   if (cardDirty) saveSettings({ ...settings, ...card }, "Upload card updated");
@@ -350,39 +334,23 @@ export function TwinEditPage({
                 </div>
               </form>
             ) : null}
-          </div>
-        </div>
+          </SettingCard>
+        </SettingsSection>
 
-        {/* Section: During a conversation */}
-        <div className="flex flex-col gap-4 border-t border-(--border) pt-6">
-          <div>
-            <h2 className="m-0 text-sm font-semibold uppercase tracking-wide text-(--foreground)">
-              During a conversation
-            </h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              In-session controls available while the learner is speaking with the twin.
-            </p>
-          </div>
-
-          <div className="flex flex-col divide-y divide-(--border) rounded-tt-md border border-(--border) bg-(--sidebar) px-4">
-            <div className="flex items-center justify-between gap-4 py-3.5">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-sm font-medium">Enable upload</span>
-                <span className="text-xs text-muted-foreground">
-                  Learners can share an image during the conversation, like a screenshot or a photo of a document.
-                  Images only (PNG, JPEG or WebP), up to 10 MB.
-                </span>
-              </div>
+        <SettingsSection title="During the conversation" description="What the learner can do while they talk to the twin.">
+          <SettingCard
+            title="Attach during the call"
+            description="Learners can share an image during the conversation, like a screenshot or a photo of a document. Images only (PNG, JPEG or WebP), up to 10 MB."
+            control={
               <SwitchToggle
                 checked={duringUpload}
                 onChange={(checked) => saveSettings({ ...settings, duringUpload: checked }, `Image upload during the call turned ${checked ? "on" : "off"}`)}
-                label="Enable upload during conversation"
+                label="Attach an image during the conversation"
               />
-            </div>
-          </div>
-        </div>
-
-      </article>
+            }
+          />
+        </SettingsSection>
+      </SettingsPanel>
       </TabsContent>
 
       {/* Card 3: learners assigned to this twin; Assign opens the shared dialog */}

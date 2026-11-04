@@ -193,6 +193,15 @@ const scenariosRouter = t.router({
   }),
 });
 
+/** A role play's Before settings (Settings tab), as the builder saves them. */
+const beforeInput = z.object({
+  preScreenshare: z.boolean(),
+  preUpload: z.boolean(),
+  duringUpload: z.boolean(),
+  uploadTitle: z.string().trim().max(80),
+  uploadInstruction: z.string().trim().max(300),
+}).strict();
+
 const builderRouter = t.router({
   /** The builder's fields and Before settings of a role play, for editing. */
   get: studioProcedure.input(slugInput).query(async ({ ctx, input }) => {
@@ -216,13 +225,7 @@ const builderRouter = t.router({
     .input(z.object({
       slug: z.string().min(1).max(200).optional(),
       builder: roleplayBuilderSchema,
-      before: z.object({
-        preScreenshare: z.boolean(),
-        preUpload: z.boolean(),
-        duringUpload: z.boolean(),
-        uploadTitle: z.string().trim().max(80),
-        uploadInstruction: z.string().trim().max(300),
-      }).strict(),
+      before: beforeInput,
       tools: toolSettingsInput,
     }))
     .mutation(async ({ ctx, input }) => {
@@ -236,6 +239,23 @@ const builderRouter = t.router({
         }
         throw error;
       }
+    }),
+
+  /**
+   * Saves an existing role play's Settings and Tools tabs as they change (switches on flip, the upload card with its
+   * own Save). Only Agent.data.before / .tools: the script isn't re-rendered, so no new version. A running call keeps
+   * the settings it started with.
+   */
+  saveSettings: studioProcedure
+    .input(slugInput.extend({ before: beforeInput.optional(), tools: toolSettingsInput.optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const agent = await findRoleplay(ctx.user.orgId, input.slug);
+      const data = (agent.data && typeof agent.data === "object" ? agent.data : {}) as Record<string, unknown>;
+      await db.agent.update({
+        where: { id: agent.id },
+        data: { data: { ...data, ...(input.before ? { before: input.before } : {}), ...(input.tools ? { tools: input.tools } : {}) } as Prisma.InputJsonValue },
+      });
+      return { ok: true };
     }),
 });
 
