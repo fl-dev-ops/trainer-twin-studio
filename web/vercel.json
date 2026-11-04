@@ -1,4 +1,6 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "if [ \"$VERCEL_ENV\" = \"production\" ]; then DATABASE_URL=\"${DATABASE_URL_UNPOOLED:?DATABASE_URL_UNPOOLED is not set}\" bunx prisma migrate deploy; fi && bun run build",
   "fluid": true,
   "crons": [
     {
