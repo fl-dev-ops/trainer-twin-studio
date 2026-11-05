@@ -5,7 +5,7 @@ import { Prisma } from "@/lib/generated/prisma/client";
 import { ensureDeployment, type DeliveryMode } from "@/lib/deployments";
 import { initRuntimeState } from "@/lib/runtime/runtime";
 import { getAgentConfigForAgent } from "@/lib/specs";
-import { assertUserInOrg } from "@/lib/org-lock";
+import { assertNotDisabledIn } from "@/lib/members";
 import { isStudioRole, LEARNER_ROLE } from "@/lib/org";
 import { TwinAccessError, twinAccessByAgent, twinAccessByCode } from "@/lib/twin-access";
 import { pinTwinSkills, TWIN_SOURCE } from "@/lib/twins";
@@ -196,7 +196,7 @@ export async function activateSession(input: {
   mode?: DeliveryMode;
   idempotencyKey?: string;
 }) {
-  await assertUserInOrg(input.userId, input.orgId); // single-org lock: every session path goes through here
+  await assertNotDisabledIn(input.userId, input.orgId); // every session path goes through here
   const mode = input.mode ?? "voice";
   const requestedDocs = Array.from(new Set([...(input.contextIds ?? []), ...(input.contextId ? [input.contextId] : [])]));
   let assignmentId: string | null = null;
@@ -309,8 +309,8 @@ export async function activateSession(input: {
   if (snapshot.docIds.length && usesBeforeSettings(snapshot.agent.data, snapshot.agent.kind) && !beforeSettings(snapshot.agent.data).preUpload) {
     throw new TwinAccessError(snapshot.agent.kind === "TWIN" ? "This twin does not take documents" : "This role play does not take documents", 400);
   }
-  // An invited learner (role-play invite, twin assignment or twin link) joins the org as a `user` on first start.
-  // The single-org lock above already refused people bound to another org.
+  // An invited learner (role-play invite, twin assignment or twin link) joins the org as a `user` on first start
+  // (people may belong to several orgs).
   if (assignmentId || twin?.assignmentId) await ensureLearnerMember(input.orgId, input.userId);
   const primaryId = snapshot.docIds[0];
   const primary = snapshot.documents.find((document) => document.id === primaryId);

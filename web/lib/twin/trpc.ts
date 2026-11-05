@@ -73,6 +73,7 @@ const sessionRowSelect = {
   transcript: true,
   agent: { select: { slug: true, name: true } },
   user: { select: { id: true, name: true, email: true, image: true } },
+  report: true,
 } as const;
 
 type SessionRow = Prisma.InterviewSessionGetPayload<{ select: typeof sessionRowSelect }>;
@@ -88,6 +89,8 @@ function sessionItem(row: SessionRow) {
     agentName: row.agent.name,
     at: (row.startedAt ?? row.createdAt).toISOString(),
     seconds: durationSeconds(row.startedAt, row.endedAt),
+    /** Topics discussed, from the after-call report (empty until it's ready). */
+    topics: isTwinReport(row.report) ? row.report.topics : [],
     question,
     answer,
     rating: row.feedbackRating,

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { portalSlug } from "@/lib/base-domain";
 import { db } from "@/lib/db";
-import { getOrgBySlug } from "@/lib/org";
+import { getOrgBySlug, getSessionOrg } from "@/lib/org";
 
 const bodySchema = z
   .object({
@@ -34,12 +34,7 @@ export async function POST(request: Request) {
 // (mirrors resolveSessionUser in lib/session-user.ts).
 const host = requestHeaders.get("host") ?? "";
 const portalOrg = host ? await getOrgBySlug(portalSlug(host)) : null;
-const member = portalOrg
-  ? null
-  : await db.member.findFirst({
-      where: { userId: session.user.id },
-      select: { organizationId: true },
-    });
+const homeOrg = portalOrg ? null : await getSessionOrg();
 
 const report = await db.issueReport.create({
   data: {
@@ -48,7 +43,7 @@ const report = await db.issueReport.create({
     url: parsed.data.url ?? null,
     userAgent: requestHeaders.get("user-agent")?.slice(0, 500) ?? null,
     userId: session.user.id,
-    orgId: portalOrg?.id ?? member?.organizationId ?? null,
+    orgId: portalOrg?.id ?? homeOrg?.id ?? null,
   },
   select: { id: true },
 });

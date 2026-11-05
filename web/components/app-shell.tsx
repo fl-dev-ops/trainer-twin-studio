@@ -3,6 +3,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
+import type { SwitchableOrg } from "@/components/org-switcher";
 import { LoadingTable } from "@/components/page-skeletons";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 
@@ -33,7 +34,13 @@ export function ShellFallback() {
   return isFullscreen(usePathname()) ? null : <LoadingTable />;
 }
 
-export function AppShell({ children, hideRoleplay = false }: { children: ReactNode; hideRoleplay?: boolean }) {
+export function AppShell({ children, hideRoleplay = false, orgs = [], orgId = null }: {
+  children: ReactNode;
+  hideRoleplay?: boolean;
+  /** The studio orgs this person can switch between, and the one this page is in. */
+  orgs?: SwitchableOrg[];
+  orgId?: string | null;
+}) {
   const pathname = usePathname();
 
   if (isFullscreen(pathname)) return children;
@@ -44,7 +51,7 @@ export function AppShell({ children, hideRoleplay = false }: { children: ReactNo
       // Reference rail: 248px expanded / 72px collapsed.
       style={{ "--sidebar-width-left": "17.05rem", "--sidebar-width-icon": "4.95rem" } as CSSProperties}
     >
-      <AppSidebar hideRoleplay={hideRoleplay} />
+      <AppSidebar hideRoleplay={hideRoleplay} orgs={orgs} orgId={orgId} />
       {/* Prototype: flat content panel, flush against the rail (reference .main). */}
       <SidebarInset className="min-h-0 overflow-hidden">
         {/* Desktop collapses via the sidebar logo; on mobile the sidebar is a drawer and needs an opener. */}

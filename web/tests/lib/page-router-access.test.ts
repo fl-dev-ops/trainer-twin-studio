@@ -8,14 +8,14 @@ let memberWhere: unknown = null;
 mock.module("server-only", () => ({}));
 mock.module("next/headers", () => ({ headers: async () => new Headers() }));
 mock.module("@/lib/auth", () => ({
-  auth: { api: { getSession: async () => ({ user: { id: "u1", name: "U", email: "u@example.com" } }) } },
+  auth: { api: { getSession: async () => ({ user: { id: "u1", name: "U", email: "u@example.com" }, session: { activeOrganizationId: null } }) } },
 }));
 mock.module("@/lib/db", () => ({
   db: {
     member: {
-      findFirst: async ({ where }: { where: unknown }) => {
+      findMany: async ({ where }: { where: unknown }) => {
         memberWhere = where;
-        return null;
+        return [];
       },
     },
   },

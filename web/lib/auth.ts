@@ -8,13 +8,7 @@ import { nextCookies } from "better-auth/next-js";
 import { db } from "@/lib/db";
 import { BASE_DOMAIN, safeFamilyRedirect } from "@/lib/base-domain";
 import { sendInvitationEmail, sendPasswordResetEmail } from "@/lib/email";
-import { belongsToOtherOrg, ORG_LOCK_MESSAGE } from "@/lib/org-lock";
 import { ADMIN_ROLE, assertNoSecondAdmin, DISABLED_MESSAGE, isDisabledUser, NO_REMOVAL_MESSAGE, ONE_ADMIN_MESSAGE } from "@/lib/members";
-
-// Single-org lock: block invites/memberships for people already bound to another org.
-async function assertSingleOrg(email: string, organizationId: string) {
-  if (await belongsToOtherOrg(email, organizationId)) throw new APIError("FORBIDDEN", { message: ORG_LOCK_MESSAGE });
-}
 
 
 export const auth = betterAuth({
@@ -61,16 +55,12 @@ export const auth = betterAuth({
       allowUserToCreateOrganization: false,
       organizationLimit: 1,
       organizationHooks: {
+        // People may belong to several orgs (the studio works in one at a time: lib/org.ts).
         beforeCreateInvitation: async ({ invitation, organization }) => {
           await assertNoSecondAdmin(invitation.role, organization.id);
-          await assertSingleOrg(invitation.email, organization.id);
         },
-        beforeAcceptInvitation: async ({ user, organization }) => {
-          await assertSingleOrg(user.email, organization.id);
-        },
-        beforeAddMember: async ({ member, user, organization }) => {
+        beforeAddMember: async ({ member, organization }) => {
           await assertNoSecondAdmin(member.role, organization.id);
-          await assertSingleOrg(user.email, organization.id);
         },
         beforeUpdateMemberRole: async ({ member, newRole, organization }) => {
           if (member.role === ADMIN_ROLE) throw new APIError("FORBIDDEN", { message: ONE_ADMIN_MESSAGE });

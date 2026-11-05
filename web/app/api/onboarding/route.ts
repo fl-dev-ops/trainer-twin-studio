@@ -11,7 +11,6 @@ import {
   notionAuthorizationUrl,
 } from "@/lib/notion-oauth";
 import { getOrCreateOrgKnowledgeBase } from "@/lib/org-knowledge";
-import { homeOrgsByEmail, ORG_LOCK_MESSAGE } from "@/lib/org-lock";
 import { validateOrgSlug } from "@/lib/slugs";
 import { startYouTubeOAuth } from "@/lib/youtube-oauth";
 
@@ -86,11 +85,6 @@ export async function POST(request: Request) {
     );
   }
 
-  // Single-org lock: a person already bound to an org can't found a second one.
-  if ((await homeOrgsByEmail([session.user.email])).size > 0) {
-    return NextResponse.json({ error: ORG_LOCK_MESSAGE }, { status: 409 });
-  }
-
   const { orgName, slug } = parsed.data;
   const websiteUrl = parsed.data.websiteUrl
     ? new URL(parsed.data.websiteUrl).toString()
@@ -133,6 +127,8 @@ export async function POST(request: Request) {
     ]);
     createdOrgId = org.id;
     await ChromaTenantService.createOrgDatabase(org.id);
+    // A founder may already belong to other orgs: the studio opens in the new one (sets the session cookie).
+    await auth.api.setActiveOrganization({ headers: await headers(), body: { organizationId: org.id } });
     const dashboard = familyOrigin((await headers()).get("host"), "dash");
     let redirect = `${dashboard}/`;
 

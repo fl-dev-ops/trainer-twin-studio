@@ -21,7 +21,7 @@ mock.module("@/lib/session-lifecycle", () => ({
   },
 }));
 mock.module("@/lib/session-processing", () => ({
-  processCompletedSession: async (id: string) => { processed.push(id); return true; },
+  processEndedSession: async (id: string) => { processed.push(id); return true; },
 }));
 
 const { POST } = await import("@/app/api/sessions/webhook/route");

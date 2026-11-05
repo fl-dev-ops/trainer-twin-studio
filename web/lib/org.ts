@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { ORG_PIN_HEADER } from "@/lib/org-pin";
 
 /**
  * Org roles on `member.role` (one per member, CHECK member_role_check): admin and team run the studio
@@ -41,17 +42,55 @@ export function parseHideRoleplay(metadata: string | null): boolean {
 }
 
 /**
- * The signed-in trainer's organization (orgLimit is 1, so at most one).
+ * Which of a person's memberships they're working in (people may belong to several orgs). Studio memberships first:
+ * the org this tab is pinned to, else the session's active org (the org switcher), else the oldest. A person with no
+ * studio membership gets their active org, else their oldest. Learner pages don't use this; their org is the subdomain.
+ */
+export function pickMembership<M extends { role: string; organization: { id: string } }>(
+  memberships: M[],
+  activeOrgId?: string | null,
+  pinnedOrgId?: string | null,
+): M | null {
+  const studio = memberships.filter((member) => isStudioRole(member.role));
+  const find = (list: M[], orgId?: string | null) => (orgId ? list.find((member) => member.organization.id === orgId) : undefined);
+  return find(studio, pinnedOrgId) ?? find(studio, activeOrgId) ?? studio[0] ?? find(memberships, activeOrgId) ?? memberships[0] ?? null;
+}
+
+const membershipSelect = {
+  role: true,
+  organization: { select: { id: true, slug: true, name: true, metadata: true } },
+} as const;
+
+/** All enabled memberships, oldest first: disabled ones are out at once, even while the cached session cookie (lib/auth.ts) is still valid. */
+export const enabledMemberships = (userId: string) =>
+  db.member.findMany({ where: { userId, disabledAt: null }, orderBy: { createdAt: "asc" }, select: membershipSelect });
+
+/** The membership this request works in (pickMembership), from the request headers. */
+export async function currentMembership(requestHeaders: Headers) {
+  const session = await auth.api.getSession({ headers: requestHeaders });
+  if (!session) return null;
+  const member = pickMembership(
+    await enabledMemberships(session.user.id),
+    session.session.activeOrganizationId,
+    requestHeaders.get(ORG_PIN_HEADER),
+  );
+  return { session, member };
+}
+
+/** The studio orgs this person can switch between (the org switcher shows when there are two or more). */
+export async function studioOrgsOf(userId: string) {
+  const memberships = await enabledMemberships(userId);
+  return memberships
+    .filter((member) => isStudioRole(member.role))
+    .map(({ organization }) => ({ id: organization.id, name: organization.name, slug: organization.slug }));
+}
+
+/**
+ * The signed-in person's current organization (pickMembership), any role.
  * Null when unauthenticated or not yet part of an organization.
  */
 export async function getSessionOrg(): Promise<SessionOrg | null> {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) return null;
-  const member = await db.member.findFirst({
-    // Disabled members are out at once, even while their cached session cookie (lib/auth.ts) is still valid.
-    where: { userId: session.user.id, disabledAt: null },
-    select: { organization: { select: { id: true, slug: true, metadata: true } } },
-  });
+  const member = (await currentMembership(await headers()))?.member;
   if (!member) return null;
   return {
     id: member.organization.id,
@@ -61,18 +100,11 @@ export async function getSessionOrg(): Promise<SessionOrg | null> {
   };
 }
 
-/** The signed-in studio member (admin or team) and their organization. */
+/** The signed-in studio member (admin or team) and the organization they're working in. */
 export async function getTrainerOrg(): Promise<TrainerOrg | null> {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) return null;
-  const member = await db.member.findFirst({
-    // Disabled members are out at once, even while their cached session cookie (lib/auth.ts) is still valid.
-    where: { userId: session.user.id, disabledAt: null },
-    select: {
-      role: true,
-      organization: { select: { id: true, slug: true, metadata: true } },
-    },
-  });
+  const current = await currentMembership(await headers());
+  if (!current) return null;
+  const { session, member } = current;
   if (!member || !isStudioRole(member.role)) {
     return null;
   }

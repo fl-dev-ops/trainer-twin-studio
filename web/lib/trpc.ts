@@ -1,9 +1,7 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import { headers } from "next/headers";
 import superjson from "superjson";
-import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { isStudioRole } from "@/lib/org";
+import { currentMembership, isStudioRole } from "@/lib/org";
 
 /**
  * App-wide tRPC primitives: every feature can import `t`, `protectedProcedure`, `studioProcedure`
@@ -21,13 +19,10 @@ export type TrpcContext = {
 };
 
 async function userFrom(requestHeaders: Headers): Promise<Pick<TrpcContext, "user" | "signedIn">> {
-  const session = await auth.api.getSession({ headers: requestHeaders });
-  if (!session) return { user: null, signedIn: false };
-  const member = await db.member.findFirst({
-    // Disabled members are out at once, as in getSessionOrg / getTrainerOrg (lib/org.ts).
-    where: { userId: session.user.id, disabledAt: null },
-    select: { role: true, organization: { select: { id: true, slug: true } } },
-  });
+  // The org this request works in, as for getSessionOrg / getTrainerOrg (lib/org.ts): pinned tab, active org, oldest.
+  const current = await currentMembership(requestHeaders);
+  if (!current) return { user: null, signedIn: false };
+  const { session, member } = current;
   if (!member) return { user: null, signedIn: true };
   return {
     signedIn: true,

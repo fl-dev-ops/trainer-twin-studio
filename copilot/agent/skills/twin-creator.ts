@@ -50,7 +50,9 @@ scratch and never create a second skill on the same topic.
 3. **Build the update.** One \`build_twin_skill\` with the same \`skill\` (id, situations; add or rename a situation only
    when the new material needs it), only the **new** items, \`remove\` for loaded items that no longer hold (each with a
    reason: superseded, outdated, wrong situation), and the full revised \`body\` and \`patterns\`: keep what still holds,
-   add what the new material teaches, cite the new sources in patterns.md.
+   add what the new material teaches, cite the new sources in patterns.md. Prefer whole turns; use \`start\`/\`end\`
+   only to cut a long turn, copied from \`read\`. If an item is rejected again after one fix, drop it: the update
+   still saves with the rest. Builds are scarce (at most ${TWIN.maxBuilds}).
 4. **Show the changes.** Tell the trainer what changed: items added and removed per situation (with reasons), sections
    you revised, new sources. Then \`publish_twin_skill\`; the trainer approves it on the card. It becomes the next
    version; the previous version stays and can be loaded again (\`load_skill\` with \`version\`) to restore it.

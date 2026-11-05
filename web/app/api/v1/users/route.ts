@@ -4,7 +4,6 @@ import { BASE_DOMAIN } from "@/lib/base-domain";
 import { db } from "@/lib/db";
 import { sendInvitationEmail } from "@/lib/email";
 import { API_LEARNER_ROLE, isApiError, paginationFromUrl, requireExternalApi } from "@/lib/external-api";
-import { belongsToOtherOrg, ORG_LOCK_MESSAGE } from "@/lib/org-lock";
 import { LEARNER_ROLE, STUDIO_ROLES } from "@/lib/org";
 
 const createSchema = z.object({ email: z.string().trim().email().max(320) }).strict();
@@ -58,7 +57,6 @@ export async function POST(request: Request) {
     return Response.json({ error: "User was removed (disabled); re-enable them in Settings → Team and users" }, { status: 409 });
   }
   if (existingMember) return Response.json({ error: "User is already an organization member" }, { status: 409 });
-  if (await belongsToOtherOrg(email, api.org.id)) return Response.json({ error: ORG_LOCK_MESSAGE }, { status: 409 });
 
   const inviter = await db.member.findFirst({
     where: {

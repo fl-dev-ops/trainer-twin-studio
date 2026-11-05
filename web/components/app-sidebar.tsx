@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BrandMark, PersonaIcon, RoleplayIcon, SessionsIcon, SettingsIcon, SetupIcon, TwinIcon, UsersIcon } from "@/components/icons";
+import { OrgSwitcher, type SwitchableOrg } from "@/components/org-switcher";
 import { SidebarAccountMenu } from "@/components/sidebar-account-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
@@ -79,7 +80,11 @@ function Brand() {
 }
 
 /** hideRoleplay: a twin-only org (org metadata flag) gets no Role play group. */
-export function AppSidebar({ hideRoleplay = false }: { hideRoleplay?: boolean }) {
+export function AppSidebar({ hideRoleplay = false, orgs = [], orgId = null }: {
+  hideRoleplay?: boolean;
+  orgs?: SwitchableOrg[];
+  orgId?: string | null;
+}) {
   const pathname = usePathname();
   const groups = hideRoleplay ? NAV_GROUPS.filter((group) => group.label !== "Role play") : NAV_GROUPS;
 
@@ -126,6 +131,12 @@ export function AppSidebar({ hideRoleplay = false }: { hideRoleplay?: boolean })
                 <span>Settings</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
+            {/* Only for people in two or more studio orgs. */}
+            {orgs.length >= 2 ? (
+              <SidebarMenuItem>
+                <OrgSwitcher orgs={orgs} orgId={orgId} />
+              </SidebarMenuItem>
+            ) : null}
           </SidebarMenu>
           <SidebarAccountMenu />
         </div>

@@ -3,7 +3,6 @@ import { randomBytes } from "node:crypto";
 import { BASE_DOMAIN } from "@/lib/base-domain";
 import { db } from "@/lib/db";
 import { sendTwinAssignmentEmail } from "@/lib/email";
-import { homeOrgsByEmail } from "@/lib/org-lock";
 import { TWIN_SOURCE } from "@/lib/twins";
 
 /**
@@ -228,8 +227,8 @@ export async function listTwinAssignments(orgId: string, agentId: string) {
 
 /**
  * Assigns a twin to people by email with a minutes budget each and an optional end date. A revoked assignment is
- * reactivated with the new minutes and date; an active one is left alone (change minutes with updateTwinAssignment). People bound to another
- * org are blocked (single-org lock). Returns who needs an invite email.
+ * reactivated with the new minutes and date; an active one is left alone (change minutes with updateTwinAssignment). Returns who needs
+ * an invite email.
  */
 export async function assignTwin(input: {
   orgId: string;
@@ -238,7 +237,6 @@ export async function assignTwin(input: {
   minutes: number;
   accessUntil?: Date | null;
   assignedByUserId: string;
-  homeOrgs: Map<string, string>;
 }) {
   const accessUntil = input.accessUntil ?? null;
   const emails = [...new Set(input.emails.map((email) => email.trim().toLowerCase()))];
@@ -247,14 +245,9 @@ export async function assignTwin(input: {
     select: { id: true, recipientEmail: true, status: true },
   });
   const byEmail = new Map(existing.map((row) => [row.recipientEmail, row]));
-  const stats = { added: 0, reactivated: 0, skipped: 0, blocked: 0 };
+  const stats = { added: 0, reactivated: 0, skipped: 0 };
   const invites: { to: string; shareCode: string }[] = [];
   for (const email of emails) {
-    const home = input.homeOrgs.get(email);
-    if (home && home !== input.orgId) {
-      stats.blocked++;
-      continue;
-    }
     const current = byEmail.get(email);
     if (current?.status === "active") {
       stats.skipped++;
@@ -291,7 +284,6 @@ export async function assignTwinAndInvite(input: {
     minutes: input.minutes,
     accessUntil: input.accessUntil,
     assignedByUserId: input.by.id,
-    homeOrgs: await homeOrgsByEmail(input.emails),
   });
   const deliveries = await Promise.all(invites.map(({ to, shareCode }) => sendTwinAssignmentEmail({
     to,

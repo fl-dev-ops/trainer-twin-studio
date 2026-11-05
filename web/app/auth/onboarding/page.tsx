@@ -21,16 +21,27 @@ export default async function OnboardingPage({
   const params = await searchParams;
   const token = params.t;
 
-  // 1. Check if the user is already authenticated with an existing organization
   const session = await auth.api.getSession({ headers: await headers() });
+  // 1. A founder invite: an unused one starts a new organization, even for someone who already runs one.
+  const invite = token
+    ? await db.founderInvite.findUnique({
+        where: { token },
+        select: { acceptedAt: true, email: true },
+      })
+    : null;
+  const newOrg = Boolean(invite && !invite.acceptedAt);
+
+  // 2. Otherwise an admin continues setting up their organization (connectors): the one they're working in.
   let userOrg: { id: string; name: string; slug: string } | null = null;
   let initialConnections = { notion: false, youtube: false };
 
-  if (session?.user) {
-    const member = await db.member.findFirst({
-      where: { userId: session.user.id, role: "admin" },
+  if (session?.user && !newOrg) {
+    const admins = await db.member.findMany({
+      where: { userId: session.user.id, role: "admin", disabledAt: null },
+      orderBy: { createdAt: "asc" },
       include: { organization: true },
     });
+    const member = admins.find((m) => m.organizationId === session.session.activeOrganizationId) ?? admins[0];
     if (member) {
       userOrg = member.organization;
       const [notionConn, youtubeConn] = await Promise.all([
@@ -48,18 +59,7 @@ export default async function OnboardingPage({
     }
   }
 
-  // 2. Check founder invite if not already authenticated into an org
-  const invite =
-    !userOrg && token
-      ? await db.founderInvite.findUnique({
-          where: { token },
-          select: { acceptedAt: true, email: true },
-        })
-      : null;
-
-  const canOnboard = Boolean(
-    userOrg || (token && invite && !invite.acceptedAt),
-  );
+  const canOnboard = newOrg || Boolean(userOrg);
 
   return (
     <main className="min-h-svh w-full onboarding-canvas text-foreground flex flex-col antialiased">

@@ -1,8 +1,6 @@
 import { headers } from "next/headers";
 import { BASE_DOMAIN } from "@/lib/base-domain";
-import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { isStudioRole } from "@/lib/org";
+import { currentMembership, isStudioRole } from "@/lib/org";
 
 
 function familyOrigin(name: string) {
@@ -16,23 +14,14 @@ function familyOrigin(name: string) {
 
 /**
  * Where should this signed-in user land?
- * Trainers -> dash host, learners -> their org host, null -> not signed in.
- * Members with no organization -> "/auth/no-org".
+ * Trainers (a studio role in any org) -> dash host, learners -> their current org's host (pickMembership),
+ * null -> not signed in. No enabled membership -> "/auth/no-org".
  */
 export async function resolveHome(): Promise<string | null> {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) return null;
-
-  const memberships = await db.member.findMany({
-    where: { userId: session.user.id },
-    select: { role: true, organization: { select: { slug: true } } },
-  });
-
-  if (memberships.length === 0) return "/auth/no-org";
-
-  const isTrainer = memberships.some((m) =>
-    isStudioRole(m.role),
-  );
-  if (isTrainer) return `${await familyOrigin("dash")}/`;
-  return `${await familyOrigin(memberships[0].organization.slug)}/`;
+  const current = await currentMembership(await headers());
+  if (!current) return null;
+  if (!current.member) return "/auth/no-org";
+  // pickMembership prefers studio memberships, so a studio role anywhere lands on the dash.
+  if (isStudioRole(current.member.role)) return `${await familyOrigin("dash")}/`;
+  return `${await familyOrigin(current.member.organization.slug)}/`;
 }

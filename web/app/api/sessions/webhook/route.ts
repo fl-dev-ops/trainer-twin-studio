@@ -6,7 +6,7 @@ import { closeInterviewSession } from "@/lib/session-lifecycle";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { db } from "@/lib/db";
 import { recordingStartedAt } from "@/lib/livekit";
-import { processCompletedSession } from "@/lib/session-processing";
+import { processEndedSession } from "@/lib/session-processing";
 import { usesAgentTranscript } from "@/lib/session-after";
 
 /** Only the LiveKit agent may call this: it holds the shared service secret. */
@@ -105,8 +105,8 @@ export async function POST(req: Request) {
     ? await closeInterviewSession(session.id, requestedStatus, payload)
     : await finalizeInterviewSession({ sessionId: session.id, ...payload });
   if (!finalized) return NextResponse.json({ error: "Session not found" }, { status: 404 });
-  if (finalized.finalStatus === "completed") {
-    await processCompletedSession(finalized.id).catch((error) => {
+  if (finalized.finalStatus === "completed" || finalized.finalStatus === "abandoned") {
+    await processEndedSession(finalized.id, finalized.finalStatus).catch((error) => {
       console.warn("Could not initiate session report generation:", error);
     });
   }

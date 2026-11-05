@@ -21,14 +21,25 @@ export async function assertNoSecondAdmin(role: string, organizationId: string) 
   }
 }
 
-/** True when this user's membership is disabled (they may not sign in). */
+/**
+ * True when this user may not sign in: they belong to orgs and every one of their memberships is disabled. Disabled in
+ * one org, they keep signing in to their others (that org's access is refused per request: lib/org.ts, assertNotDisabledIn).
+ */
 export async function isDisabledUser(userId: string) {
-  return Boolean(await db.member.findFirst({ where: { userId, disabledAt: { not: null } }, select: { id: true } }));
+  const memberships = await db.member.findMany({ where: { userId }, select: { disabledAt: true } });
+  return memberships.length > 0 && memberships.every((member) => member.disabledAt !== null);
+}
+
+/** Refuses a session in an org where this person's membership is disabled. */
+export async function assertNotDisabledIn(userId: string, orgId: string) {
+  const member = await db.member.findFirst({ where: { userId, organizationId: orgId }, select: { disabledAt: true } });
+  if (member?.disabledAt) throw new MemberError(DISABLED_MESSAGE, 403);
 }
 
 /**
- * Disables or re-enables a member. Disabling signs them out, revokes their twin assignments and pending role-play
- * invites, and ends their open sessions; past sessions and reports stay. Re-enabling only lets them sign in again
+ * Disables or re-enables a member in one org. Disabling revokes their twin assignments and pending role-play invites
+ * there and ends their open sessions there; it signs them out when that was their last enabled membership. Past
+ * sessions and reports stay. Re-enabling only lets them sign in again
  * (revoked access is re-granted by assigning again). The admin and yourself cannot be disabled.
  */
 export async function setMemberDisabled(input: { orgId: string; memberId: string; actorUserId: string; disabled: boolean }) {
@@ -46,9 +57,10 @@ export async function setMemberDisabled(input: { orgId: string; memberId: string
   if (member.disabledAt) return;
 
   const email = member.user.email.toLowerCase();
+  const elsewhere = await db.member.count({ where: { userId: member.userId, disabledAt: null, id: { not: member.id } } });
   await db.$transaction([
     db.member.update({ where: { id: member.id }, data: { disabledAt: new Date() } }),
-    db.session.deleteMany({ where: { userId: member.userId } }),
+    ...(elsewhere ? [] : [db.session.deleteMany({ where: { userId: member.userId } })]),
     db.twinAssignment.updateMany({
       where: { orgId: input.orgId, status: "active", OR: [{ userId: member.userId }, { recipientEmail: email }] },
       data: { status: "revoked" },

@@ -1,9 +1,8 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { isStudioRole } from "@/lib/org";
+import { currentMembership, isStudioRole } from "@/lib/org";
 
 const bodySchema = z.object({
   accentColor: z.string().regex(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i),
@@ -18,13 +17,9 @@ const bodySchema = z.object({
 }).strict();
 
 export async function PATCH(request: Request) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const member = await db.member.findFirst({
-    where: { userId: session.user.id },
-    select: { organizationId: true, role: true, organization: { select: { metadata: true } } },
-  });
+  const current = await currentMembership(await headers());
+  if (!current) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { member } = current;
   if (!member) return NextResponse.json({ error: "No organization" }, { status: 403 });
   if (!isStudioRole(member.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -44,7 +39,7 @@ export async function PATCH(request: Request) {
     : null;
 
   await db.organization.update({
-    where: { id: member.organizationId },
+    where: { id: member.organization.id },
     data: {
       websiteUrl,
       metadata: JSON.stringify({ ...existing, accentColor: parsed.data.accentColor }),

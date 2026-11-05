@@ -7,8 +7,8 @@ import { resolveSessionUser } from "@/lib/session-user";
 import { db } from "@/lib/db";
 import { isStudioRole } from "@/lib/org";
 import { listSessions } from "@/lib/specs";
-import { processCompletedSession } from "@/lib/session-processing";
-import { OrgLockError } from "@/lib/org-lock";
+import { processEndedSession } from "@/lib/session-processing";
+import { MemberError } from "@/lib/members";
 import { TwinAccessError } from "@/lib/twin-access";
 import { BEFORE_UPLOAD_REFUSED } from "@/lib/context-upload";
 
@@ -53,7 +53,7 @@ export async function POST(req: Request) {
     if (!activation) return NextResponse.json({ error: "Invalid or already used session URL" }, { status: 403 });
     return NextResponse.json(activation);
   } catch (error) {
-    if (error instanceof OrgLockError) return NextResponse.json({ error: error.message }, { status: 403 });
+    if (error instanceof MemberError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof TwinAccessError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error("Session activation failed", error);
     const message = error instanceof Error ? error.message : "";
@@ -74,8 +74,8 @@ export async function PATCH(req: Request) {
   const session = await authorizeRuntimeSession(String(body.id), token);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const finalized = await closeInterviewSession(session.id, body.status as SessionEndStatus);
-  if (finalized?.finalStatus === "completed") {
-    await processCompletedSession(finalized.id).catch((error) => {
+  if (finalized?.finalStatus === "completed" || finalized?.finalStatus === "abandoned") {
+    await processEndedSession(finalized.id, finalized.finalStatus).catch((error) => {
       console.warn("Could not initiate session report generation:", error);
     });
   }

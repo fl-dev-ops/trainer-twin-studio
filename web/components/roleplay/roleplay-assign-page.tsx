@@ -38,7 +38,6 @@ export function RoleplayAssignPage({ roleplay, learners }: { roleplay: Detail; l
       if (!res.ok) throw new Error(body.error ?? "Could not assign");
       const parts = [body.added ? `${body.added} invited` : "", body.resent ? `${body.resent} re-sent` : "", body.skipped ? `${body.skipped} already invited` : ""].filter(Boolean);
       toast.success(parts.join(" · ") || "Done");
-      if (body.blocked) toast.warning(`${body.blocked} learner(s) belong to another organization and were not invited.`);
       if (body.emailFailures) toast.warning(`${body.emailFailures} invite email(s) could not be sent.`);
       refresh();
       return true;

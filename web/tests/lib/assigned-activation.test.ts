@@ -17,12 +17,12 @@ mock.module("@/lib/db", () => ({ db: {
   },
   interviewSession: {
     findUnique: async () => existing,
-    findMany: async () => [], // single-org lock lookup (no prior sessions)
+    findMany: async () => [],
     update: async () => ({}),
   },
-  twinAssignment: { findMany: async () => [] }, // single-org lock lookup (no twin access)
+  twinAssignment: { findMany: async () => [] },
   user: { findUnique: async () => ({ email: "learner@example.com" }) },
-  member: { findMany: async () => [] },
+  member: { findMany: async () => [], findFirst: async () => null }, // not disabled in the org
 } }));
 
 const { activateSession } = await import("../../lib/interview-sessions");

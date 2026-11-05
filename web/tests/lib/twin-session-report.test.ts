@@ -1,6 +1,6 @@
 import { beforeEach, expect, mock, test } from "bun:test";
 
-type Row = { agent: { kind: string; data?: unknown }; twinCalibration: { id: string } | null };
+type Row = { agent: { kind: string; data?: unknown; name?: string }; twinCalibration: { id: string } | null; transcript?: unknown; status?: string; evidence?: unknown };
 let rows: Record<string, Row> = {};
 let claims: string[] = [];
 let roleplayScheduled: string[] = [];
@@ -18,8 +18,8 @@ mock.module("@/lib/session-report-jobs", () => ({
   scheduleSessionReport: async (id: string) => { roleplayScheduled.push(id); return true; },
 }));
 
-const { processCompletedSession, reportKindOf } = await import("@/lib/session-processing");
-const { isTwinReport, toTwinReport } = await import("@/lib/twin/session-report");
+const { processCompletedSession, processEndedSession, reportKindOf } = await import("@/lib/session-processing");
+const { isTwinReport, loadTwinReportInput, toTwinReport } = await import("@/lib/twin/session-report");
 const { mostAsked } = await import("@/lib/twin/stats");
 
 beforeEach(() => { rows = {}; claims = []; roleplayScheduled = []; });
@@ -87,4 +87,44 @@ test("most asked counts each question once per session, case/space-insensitive, 
     { question: "What next?", count: 2 },
     { question: "Why?", count: 1 },
   ]);
+});
+
+test("an abandoned twin learner call gets its report when the learner spoke; nothing else that didn't complete does", async () => {
+  const talked = [{ role: "trainer", text: "Hi, what's going on with your client?" }, { role: "user", text: "He wants to wait for prices to drop." }];
+  rows = {
+    spoke: { agent: { kind: "TWIN" }, twinCalibration: null, transcript: talked },
+    silent: { agent: { kind: "TWIN" }, twinCalibration: null, transcript: [{ role: "trainer", text: "Hi?" }] },
+    cal: { agent: { kind: "TWIN" }, twinCalibration: { id: "c1" }, transcript: talked },
+    rp: { agent: { kind: "ROLEPLAY", data: { after: { report: "roleplay" } } }, twinCalibration: null, transcript: talked },
+  };
+  await processEndedSession("spoke", "abandoned");
+  expect(await processEndedSession("silent", "abandoned")).toBe(false);
+  expect(await processEndedSession("cal", "abandoned")).toBe(false);
+  expect(await processEndedSession("rp", "abandoned")).toBe(false);
+  expect(await processEndedSession("spoke", "failed")).toBe(false);
+  expect(claims).toEqual(["spoke"]);
+  expect(roleplayScheduled).toEqual([]);
+});
+
+test("a completed session still goes through the usual processing", async () => {
+  rows = { tw: { agent: { kind: "TWIN" }, twinCalibration: null } };
+  await processEndedSession("tw", "completed");
+  expect(claims).toEqual(["tw"]);
+});
+
+test("report eligibility: completed, or abandoned after the learner spoke; never a calibration", async () => {
+  const talked = [{ role: "trainer", text: "Hi" }, { role: "user", text: "My client went quiet." }];
+  rows = {
+    done: { status: "completed", agent: { kind: "TWIN" }, twinCalibration: null, transcript: [] },
+    dropped: { status: "abandoned", agent: { kind: "TWIN" }, twinCalibration: null, transcript: talked },
+    silent: { status: "abandoned", agent: { kind: "TWIN" }, twinCalibration: null, transcript: [{ role: "trainer", text: "Hi" }] },
+    failed: { status: "failed", agent: { kind: "TWIN" }, twinCalibration: null, transcript: talked },
+    cal: { status: "completed", agent: { kind: "TWIN" }, twinCalibration: { id: "c1" }, transcript: talked },
+  };
+  const eligible = async (id: string) => (await loadTwinReportInput(id)).eligible;
+  expect(await eligible("done")).toBe(true);
+  expect(await eligible("dropped")).toBe(true);
+  expect(await eligible("silent")).toBe(false);
+  expect(await eligible("failed")).toBe(false);
+  expect(await eligible("cal")).toBe(false);
 });

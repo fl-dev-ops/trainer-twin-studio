@@ -24,6 +24,8 @@ export function TwinSessionItem({
   className?: string;
 }) {
   const score = session.rating;
+  // Minutes on the call (at least 1 once it started), as on the session page.
+  const minutes = session.seconds === null ? null : `${Math.max(1, Math.round(session.seconds / 60))} min`;
   const scoreTone = score === null ? "secondary" : helpfulTone(score);
 
   return (
@@ -39,15 +41,21 @@ export function TwinSessionItem({
           <span className="text-sm font-semibold leading-5 text-(--foreground)">{session.learner}</span>
           <span className="text-body-s leading-body-s text-muted-foreground">
             {session.agentName} · <SessionTime iso={session.at} />
+            {minutes ? ` · ${minutes}` : ""}
           </span>
           {session.question ? (
             <span className="truncate text-body-s leading-body-s text-muted-foreground">
               “{session.question}”{session.answer ? ` · ${session.answer}` : ""}
             </span>
           ) : null}
-          {score !== null ? (
-            <span className="mt-1 flex flex-wrap items-center gap-2">
-              <Badge variant={scoreTone}>Helpful {score}/5</Badge>
+          {score !== null || session.topics.length ? (
+            <span className="mt-1 flex flex-wrap items-center gap-1.5">
+              {score !== null ? <Badge variant={scoreTone}>Helpful {score}/5</Badge> : null}
+              {session.topics.map((topic) => (
+                <Badge key={topic} variant="outline">
+                  {topic}
+                </Badge>
+              ))}
             </span>
           ) : null}
         </span>

@@ -72,7 +72,10 @@ export function reportState(
 
 export type TwinReportInput = { eligible: boolean; transcriptFinal: boolean; turns: Turn[]; agentName: string };
 
-/** The finished session as the report needs it. Not eligible: not a completed learner twin session. */
+/**
+ * The finished session as the report needs it. Eligible: a learner twin session (not a calibration) that completed,
+ * or that ended early (abandoned: tab closed, call dropped) after the learner actually spoke.
+ */
 export async function loadTwinReportInput(sessionId: string): Promise<TwinReportInput> {
   const session = await db.interviewSession.findUnique({
     where: { id: sessionId },
@@ -85,10 +88,12 @@ export async function loadTwinReportInput(sessionId: string): Promise<TwinReport
     },
   });
   const evidence = session?.evidence && typeof session.evidence === "object" ? (session.evidence as Record<string, unknown>) : {};
+  const turns = transcriptTurns(session?.transcript);
+  const ended = session?.status === "completed" || (session?.status === "abandoned" && turns.some((turn) => turn.who === "learner"));
   return {
-    eligible: Boolean(session && session.status === "completed" && session.agent.kind === "TWIN" && !session.twinCalibration),
+    eligible: Boolean(session && ended && session.agent.kind === "TWIN" && !session.twinCalibration),
     transcriptFinal: evidence.transcriptFinal === true,
-    turns: transcriptTurns(session?.transcript),
+    turns,
     agentName: session?.agent.name ?? "Twin",
   };
 }

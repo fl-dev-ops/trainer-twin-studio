@@ -95,6 +95,7 @@ const TOOL_TITLES: Record<string, string> = {
   check: "Check role play",
   publish: "Publish role play",
   load_skill: "Load published skill",
+  eve__skill: "Load skill",
   studio_list: "List twins and role plays",
   studio_get: "Read settings",
   update_twin: "Change twin",
@@ -173,7 +174,12 @@ export function CopilotChat({
       }
     },
   });
-  const busy = agent.status === "submitted" || agent.status === "streaming";
+  // While the copilot waits on an approval card the stream stays open; that wait is the trainer's turn, not "busy",
+  // or the card's own buttons (and the composer) would be disabled.
+  const awaitingApproval = agent.data.messages.some((message) =>
+    message.parts.some((part) => part.type === "dynamic-tool" && part.state === "approval-requested"),
+  );
+  const busy = (agent.status === "submitted" || agent.status === "streaming") && !awaitingApproval;
   const restoring =
     savedSession !== undefined && agent.events.length === 0 && busy;
   const todos = findTodos(agent.data.messages);
@@ -631,6 +637,12 @@ function ToolPartView({
 }) {
   const request = part.toolMetadata?.eve?.inputRequest;
   const [answer, setAnswer] = useState("");
+  // One answer per card: the buttons lock once clicked, until the copilot moves on.
+  const [answered, setAnswered] = useState(false);
+  const reply = (response: Parameters<Respond>[0]) => {
+    setAnswered(true);
+    void respond(response).catch(() => setAnswered(false));
+  };
   const title =
     TOOL_TITLES[part.toolName] ?? part.toolName.replaceAll("_", " ");
 
@@ -651,11 +663,9 @@ function ToolPartView({
                 <ConfirmationAction
                   key={option.id}
                   variant={option.style === "primary" ? "default" : "outline"}
-                  disabled={busy}
+                  disabled={busy || answered}
                   onClick={() =>
-                    void respond([
-                      { requestId: request.requestId, optionId: option.id },
-                    ])
+                    reply([{ requestId: request.requestId, optionId: option.id }])
                   }
                 >
                   {option.label}
@@ -669,9 +679,7 @@ function ToolPartView({
               onSubmit={(event) => {
                 event.preventDefault();
                 if (answer.trim())
-                  void respond([
-                    { requestId: request.requestId, text: answer.trim() },
-                  ]);
+                  reply([{ requestId: request.requestId, text: answer.trim() }]);
               }}
             >
               <input
@@ -680,7 +688,7 @@ function ToolPartView({
                 aria-label="Your answer"
                 className="h-8 min-w-0 flex-1 rounded-lg border bg-background px-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               />
-              <Button size="sm" type="submit" disabled={!answer.trim() || busy}>
+              <Button size="sm" type="submit" disabled={!answer.trim() || busy || answered}>
                 Answer
               </Button>
             </form>
