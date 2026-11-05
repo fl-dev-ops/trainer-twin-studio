@@ -113,7 +113,8 @@ async function sessionSnapshot(orgId: string, agentId: string, contextId?: strin
   const docIds = Array.from(new Set([...contextIds, ...(contextId ? [contextId] : [])]));
   const [agent, documents] = await Promise.all([
     db.agent.findFirst({
-      where: { id: agentId, orgId },
+      // Archived agents start no new sessions (their past sessions stay).
+      where: { id: agentId, orgId, archivedAt: null },
       include: { persona: { select: { slug: true, version: true } } },
     }),
     docIds.length

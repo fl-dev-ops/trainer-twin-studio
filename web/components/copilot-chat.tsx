@@ -69,23 +69,44 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import type { SpecDraftBundle } from "@/lib/spec-draft-schema";
+import { CopilotChips, KnowledgeFilePicker, SkillMenu } from "@/components/copilot-composer";
+import {
+  type CopilotSkillName,
+  decodeCopilotMessage,
+  encodeCopilotMessage,
+  matchingSkills,
+  type PickedFile,
+  slashQuery,
+} from "@/lib/copilot-message";
+import { COPILOT_SESSION_KEY, takeCopilotSeed } from "@/lib/copilot-handoff";
 import { cn } from "@/lib/utils";
-import { takeCopilotSeed } from "@/lib/copilot-handoff";
 
-const SESSION_KEY = "trainertwin:spec-copilot-session:v4";
+const SESSION_KEY = COPILOT_SESSION_KEY;
 const INPUT_KEY = "trainertwin:spec-copilot-input:v1";
 const TOOL_TITLES: Record<string, string> = {
-  publish_spec_draft: "Publish scenario",
-  read_spec: "Read specification",
-  read_spec_draft: "Read working draft",
-  save_spec_draft: "Save working draft",
-  search_knowledge: "Search knowledge",
-  studio_inventory: "Inspect workspace",
-};
-type DraftView = SpecDraftBundle & {
-  status: "draft" | "published";
-  revision: number;
+  files: "List knowledge files",
+  search: "Search knowledge",
+  read: "Read sources",
+  read_sessions: "Read sessions",
+  read_method: "Read method docs",
+  build_twin_skill: "Build twin skill",
+  publish_twin_skill: "Publish twin skill",
+  build_scenario: "Build role play",
+  check: "Check role play",
+  publish: "Publish role play",
+  load_skill: "Load published skill",
+  studio_list: "List twins and role plays",
+  studio_get: "Read settings",
+  update_twin: "Change twin",
+  update_roleplay: "Change role play",
+  invite_learners: "Invite learners",
+  archive_item: "Archive",
+  restore_item: "Restore",
+  read_file: "Read file",
+  grep: "Search files",
+  glob: "Find files",
+  bash: "Look at files",
+  write: "Write notes",
 };
 type Respond = ReturnType<typeof useEveAgent>["respond"];
 type TodoItem = {
@@ -127,7 +148,10 @@ export function CopilotChat({
   const [localError, setLocalError] = useState<string>();
   const mountedAt = useRef(Date.now());
   const [blueprintOpen, setBlueprintOpen] = useState(false);
-  const [draft, setDraft] = useState<DraftView>();
+  // Composer extras: the skill picked from "/", knowledge files picked from Files, the highlighted "/" entry.
+  const [skill, setSkill] = useState<CopilotSkillName>();
+  const [pickedFiles, setPickedFiles] = useState<PickedFile[]>([]);
+  const [slashActive, setSlashActive] = useState(0);
   const agent = useEveAgent({
     host: "/api",
     initialSession: savedSession,
@@ -152,13 +176,13 @@ export function CopilotChat({
   const busy = agent.status === "submitted" || agent.status === "streaming";
   const restoring =
     savedSession !== undefined && agent.events.length === 0 && busy;
-  const draftTarget = findDraftTarget(agent.data.messages);
   const todos = findTodos(agent.data.messages);
-  const scopedDraft = draft?.slug === draftTarget.slug ? draft : undefined;
-  const workspaceVisible = todos.length > 0 || scopedDraft !== undefined;
+  const workspaceVisible = todos.length > 0;
   const showWorkspace = !panel && workspaceVisible;
+  const slash = skill ? null : slashQuery(input);
+  const slashSkills = slash === null ? [] : matchingSkills(slash);
 
-  // Send a message queued by another page (e.g. "Design with Copilot" on /agents).
+  // Send a message queued by another page (e.g. "Create a twin skill" on the twin agents page).
   useEffect(() => {
     if (restoring || busy || agent.data.messages.length > 0) return;
     const seed = takeCopilotSeed();
@@ -166,38 +190,17 @@ export function CopilotChat({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    if (!draftTarget.slug) return;
-    const controller = new AbortController();
-    fetch(
-      `/api/spec-drafts/current?slug=${encodeURIComponent(draftTarget.slug)}`,
-      { cache: "no-store", signal: controller.signal },
-    )
-      .then((response) =>
-        response.status === 404
-          ? undefined
-          : response.ok
-            ? response.json()
-            : Promise.reject(
-                new Error("The scenario blueprint could not be loaded."),
-              ),
-      )
-      .then((value: DraftView | undefined) => setDraft(value))
-      .catch((cause: unknown) => {
-        if (!(cause instanceof DOMException && cause.name === "AbortError")) {
-          setLocalError(
-            cause instanceof Error
-              ? cause.message
-              : "The scenario blueprint could not be loaded.",
-          );
-        }
-      });
-    return () => controller.abort();
-  }, [draftTarget.signal, draftTarget.slug]);
+  function pickSkill(name: CopilotSkillName) {
+    setSkill(name);
+    setInput("");
+    sessionStorage.removeItem(INPUT_KEY);
+    setSlashActive(0);
+  }
 
   async function send(text: string, files: FileUIPart[] = []) {
-    const message = text.trim();
-    if ((!message && files.length === 0) || busy) return;
+    const typed = text.trim();
+    if ((!typed && files.length === 0 && pickedFiles.length === 0) || busy) return;
+    const message = encodeCopilotMessage({ skill, files: pickedFiles, text: typed });
     const content: UserContent = [];
     if (message) content.push({ type: "text", text: message });
     content.push(
@@ -211,11 +214,17 @@ export function CopilotChat({
     setLocalError(undefined);
     setInput("");
     sessionStorage.removeItem(INPUT_KEY);
+    const sentSkill = skill;
+    const sentFiles = pickedFiles;
+    setSkill(undefined);
+    setPickedFiles([]);
     try {
       await agent.send(content);
     } catch (cause) {
+      setSkill((current) => current ?? sentSkill);
+      setPickedFiles((current) => (current.length ? current : sentFiles));
       setInput((current) => {
-        const restored = current || message;
+        const restored = current || typed;
         if (restored) sessionStorage.setItem(INPUT_KEY, restored);
         return restored;
       });
@@ -231,7 +240,8 @@ export function CopilotChat({
     sessionStorage.removeItem(INPUT_KEY);
     setInput("");
     setLocalError(undefined);
-    setDraft(undefined);
+    setSkill(undefined);
+    setPickedFiles([]);
     setBlueprintOpen(false);
     agent.reset();
   }
@@ -271,12 +281,7 @@ export function CopilotChat({
           >
             {!panel && <SidebarTrigger />}
             <h1 className="min-w-0 flex-1 truncate text-sm font-medium">
-              {panel
-                ? "Copilot"
-                : (scopedDraft?.name ??
-                  (agent.data.messages.length > 0
-                    ? "Build a scenario"
-                    : "New scenario"))}
+              Copilot
             </h1>
             <div className="ml-auto flex shrink-0 items-center gap-1">
               {showWorkspace && (
@@ -331,7 +336,7 @@ export function CopilotChat({
             )}
           >
             {panel && workspaceVisible && (
-              <WorkspacePanel draft={scopedDraft} todos={todos} busy={busy} />
+              <WorkspacePanel todos={todos} busy={busy} />
             )}
             {agent.data.messages.length === 0 && !restoring ? (
               <ConversationEmptyState
@@ -353,11 +358,12 @@ export function CopilotChat({
                       panel ? "text-xl" : "text-2xl sm:text-3xl",
                     )}
                   >
-                    {panel ? "How can I help?" : "What should we build?"}
+                    {panel ? "How can I help?" : "What should we work on?"}
                   </h2>
                   <p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
-                    Describe the scenario and desired outcome. Copilot can use
-                    your personas, voices, and knowledge.
+                    Build or update a twin skill or role play from your
+                    knowledge, change their settings, or invite learners. Type
+                    / for skills, or pick Files to work from.
                   </p>
                 </div>
               </ConversationEmptyState>
@@ -393,6 +399,14 @@ export function CopilotChat({
             )}
           />
           <div className="relative mx-auto max-w-2xl">
+            {slash !== null && (
+              <SkillMenu
+                skills={slashSkills}
+                active={Math.min(slashActive, Math.max(0, slashSkills.length - 1))}
+                onPick={pickSkill}
+                onHover={setSlashActive}
+              />
+            )}
             <PromptInput
               className="pointer-events-auto **:data-[slot=input-group]:rounded-2xl **:data-[slot=input-group]:bg-background/95 "
               accept="image/*,application/pdf,text/plain,text/markdown,.md"
@@ -403,6 +417,16 @@ export function CopilotChat({
               onSubmit={async ({ text, files }) => send(text, files)}
             >
               <PromptAttachments />
+              {(skill || pickedFiles.length > 0) && (
+                <PromptInputHeader>
+                  <CopilotChips
+                    skill={skill}
+                    files={pickedFiles}
+                    onRemoveSkill={() => setSkill(undefined)}
+                    onRemoveFile={(id) => setPickedFiles((files) => files.filter((file) => file.id !== id))}
+                  />
+                </PromptInputHeader>
+              )}
               <PromptInputBody>
                 <PromptInputTextarea
                   name="message"
@@ -410,13 +434,31 @@ export function CopilotChat({
                   onChange={(event) => {
                     const value = event.currentTarget.value;
                     setInput(value);
+                    setSlashActive(0);
                     if (value) sessionStorage.setItem(INPUT_KEY, value);
                     else sessionStorage.removeItem(INPUT_KEY);
                   }}
+                  onKeyDown={(event) => {
+                    // The "/" menu owns the arrows, Enter/Tab and Escape while it is open.
+                    if (slash === null) return;
+                    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                      event.preventDefault();
+                      const step = event.key === "ArrowDown" ? 1 : -1;
+                      setSlashActive((index) => (slashSkills.length ? (index + step + slashSkills.length) % slashSkills.length : 0));
+                    } else if ((event.key === "Enter" || event.key === "Tab") && slashSkills.length) {
+                      event.preventDefault();
+                      pickSkill(slashSkills[Math.min(slashActive, slashSkills.length - 1)].name);
+                    } else if (event.key === "Escape") {
+                      event.preventDefault();
+                      setInput("");
+                    }
+                  }}
                   placeholder={
-                    panel
-                      ? "Ask Copilot…"
-                      : "Describe the scenario you want to build…"
+                    skill
+                      ? "What should it build or update?"
+                      : panel
+                        ? "Ask Copilot… (/ for skills)"
+                        : "What should we work on? Type / for skills"
                   }
                   suppressHydrationWarning
                 />
@@ -429,6 +471,7 @@ export function CopilotChat({
                       <PromptInputActionAddAttachments label="Add source or context" />
                     </PromptInputActionMenuContent>
                   </PromptInputActionMenu>
+                  <KnowledgeFilePicker selected={pickedFiles} onChange={setPickedFiles} disabled={busy} />
                 </PromptInputTools>
                 <PromptInputSubmit
                   status={agent.status === "resuming" ? "submitted" : agent.status}
@@ -452,7 +495,7 @@ export function CopilotChat({
       {showWorkspace && (
         <>
           <aside className="absolute inset-y-3 right-3 hidden w-80 overflow-y-auto text-sidebar-foreground xl:block">
-            <WorkspacePanel draft={scopedDraft} todos={todos} busy={busy} />
+            <WorkspacePanel todos={todos} busy={busy} />
           </aside>
 
           <Sheet open={blueprintOpen} onOpenChange={setBlueprintOpen}>
@@ -463,7 +506,7 @@ export function CopilotChat({
                   Current scenario tasks.
                 </SheetDescription>
               </SheetHeader>
-              <WorkspacePanel draft={scopedDraft} todos={todos} busy={busy} />
+              <WorkspacePanel todos={todos} busy={busy} />
             </SheetContent>
           </Sheet>
         </>
@@ -556,9 +599,7 @@ function ChatMessage({
                 {part.text}
               </MessageResponse>
             ) : (
-              <p key={index} className="whitespace-pre-wrap">
-                {part.text}
-              </p>
+              <UserText key={index} raw={part.text} />
             );
           }
           if (part.type === "dynamic-tool") {
@@ -599,7 +640,7 @@ function ToolPartView({
       <Confirmation approval={approval} state={part.state}>
         <ConfirmationTitle>
           {request.kind === "tool-approval"
-            ? "Review before publishing"
+            ? "Approve this change"
             : "One decision needed"}
         </ConfirmationTitle>
         <ConfirmationRequest>
@@ -684,29 +725,13 @@ function ToolStateIcon({ state }: { state: EveDynamicToolPart["state"] }) {
 }
 
 function WorkspacePanel({
-  draft,
   todos,
   busy,
 }: {
-  draft?: DraftView;
   todos: TodoItem[];
   busy: boolean;
 }) {
-  const items =
-    todos.length > 0
-      ? todos
-      : [
-          ...(draft?.gaps.map((content) => ({
-            content,
-            priority: "high" as const,
-            status: "pending" as const,
-          })) ?? []),
-          ...(draft?.assumptions.map((content) => ({
-            content: `Confirm: ${content}`,
-            priority: "low" as const,
-            status: "pending" as const,
-          })) ?? []),
-        ];
+  const items = todos;
 
   return (
     <div className="flex min-h-0 flex-col gap-3 p-1 sm:p-3">
@@ -840,32 +865,13 @@ function findTodos(messages: readonly EveMessage[]): TodoItem[] {
   return [];
 }
 
-function findDraftTarget(messages: readonly EveMessage[]) {
-  for (
-    let messageIndex = messages.length - 1;
-    messageIndex >= 0;
-    messageIndex--
-  ) {
-    const parts = messages[messageIndex].parts;
-    for (let partIndex = parts.length - 1; partIndex >= 0; partIndex--) {
-      const part = parts[partIndex];
-      if (part.type !== "dynamic-tool") continue;
-      if (
-        part.toolName !== "save_spec_draft" &&
-        part.toolName !== "read_spec_draft"
-      )
-        continue;
-      const output =
-        part.state === "output-available" ? part.output : undefined;
-      const slug =
-        output &&
-        typeof output === "object" &&
-        "slug" in output &&
-        typeof output.slug === "string"
-          ? output.slug
-          : undefined;
-      return { signal: `${part.toolCallId}:${part.state}`, slug };
-    }
-  }
-  return { signal: "initial", slug: undefined };
+/** A trainer's message: the skill and files they picked as chips, then what they typed. */
+function UserText({ raw }: { raw: string }) {
+  const { skill, files, text } = decodeCopilotMessage(raw);
+  return (
+    <div className="flex flex-col gap-2">
+      <CopilotChips skill={skill} files={files} />
+      {text && <p className="whitespace-pre-wrap">{text}</p>}
+    </div>
+  );
 }

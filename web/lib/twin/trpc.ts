@@ -22,6 +22,7 @@ import { getRun } from "workflow/api";
 import { isTwinReport, reportState } from "@/lib/twin/session-report";
 import { rawScore, scoreCalibration, type CalibrationScore } from "@/lib/twin/calibration-score";
 import { sessionEvidence } from "@/lib/twin/evidence";
+import { updateTwin } from "@/lib/twin/manage";
 import { attachRatings, durationSeconds, firstExchange, lastSevenDays, likeRateByWeek, mostAsked, titleFrom, transcriptTurns } from "@/lib/twin/stats";
 
 /**
@@ -186,7 +187,7 @@ const agentsRouter = t.router({
     const orgId = ctx.user.orgId;
     const [agents, assignments, latest, admin] = await Promise.all([
       db.agent.findMany({
-        where: { orgId, kind: "TWIN" },
+        where: { orgId, kind: "TWIN", archivedAt: null },
         orderBy: [{ order: "asc" }, { name: "asc" }],
         select: { id: true, slug: true, name: true, data: true, updatedAt: true, persona: personaFace },
       }),
@@ -238,7 +239,7 @@ const agentsRouter = t.router({
       calibrationRows(orgId, found.id),
       // The org's skill twins: what the main (all-skills) twin's page lists in place of its description.
       db.agent.findMany({
-        where: { orgId, kind: "TWIN", NOT: { data: { path: ["source"], equals: TWIN_SOURCE } } },
+        where: { orgId, kind: "TWIN", archivedAt: null, NOT: { data: { path: ["source"], equals: TWIN_SOURCE } } },
         orderBy: { updatedAt: "desc" },
         select: { slug: true, name: true },
       }),
@@ -303,18 +304,8 @@ const agentsRouter = t.router({
       }).strict(),
     }))
     .mutation(({ ctx, input }) => twinCall(async () => {
-      const found = await findTwinAgent(ctx.user.orgId, input.slug);
-      const current = await db.agent.findUniqueOrThrow({ where: { id: found.id }, select: { version: true, data: true } });
-      // Before settings: read by the session screen (lib/context-upload), enforced by session start and the attach
-      // route. An older `twinSettings` key is left as is; `before` wins.
-      const data = { ...asRecord(current.data), name: input.name, objective: input.description, before: input.settings };
-      if (JSON.stringify(data) === JSON.stringify(current.data) && input.name === found.name) return { version: current.version };
-      const json = (value: unknown) => value as Prisma.InputJsonValue;
-      await db.$transaction([
-        db.specVersion.create({ data: { entityType: "agents", entitySlug: found.slug, version: current.version, data: json(current.data), orgId: ctx.user.orgId } }),
-        db.agent.update({ where: { id: found.id }, data: { name: input.name, version: current.version + 1, data: json(data) } }),
-      ]);
-      return { version: current.version + 1 };
+      const { version } = await updateTwin(ctx.user.orgId, input.slug, { name: input.name, description: input.description, settings: input.settings });
+      return { version };
     })),
 
   /**

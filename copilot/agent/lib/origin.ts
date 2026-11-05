@@ -50,6 +50,16 @@ const safeTitle = (title: string) => title.replace(/[\\/\[\]\x00-\x1f]/g, " ").r
  * Every Markdown copy in the org's knowledge base (web /api/internal/knowledge-sources), as data/uploads/<title> [<docId>].md.
  * Throws on any failed download: a run must never work from a silently partial knowledge base.
  */
+/** The org knowledge base's fingerprint (web /api/internal/knowledge-sources?versionOnly=1): changes when a document does. */
+export async function knowledgeBaseVersion(kb: KnowledgeBaseSource, fetcher: Fetch = fetch): Promise<string> {
+  const response = await fetcher(new URL("/api/internal/knowledge-sources?versionOnly=1", kb.url).toString(), {
+    headers: { authorization: `Bearer ${kb.secret}`, "x-trainertwin-org-id": kb.orgId },
+  });
+  const body = (await response.json().catch(() => null)) as { version?: string; error?: string } | null;
+  if (!response.ok || typeof body?.version !== "string") throw new Error(`knowledge base unavailable: ${body?.error ?? `HTTP ${response.status}`}`);
+  return body.version;
+}
+
 export async function pullKnowledgeBase(kb: KnowledgeBaseSource, fetcher: Fetch = fetch): Promise<{ path: string; text: string }[]> {
   const response = await fetcher(new URL("/api/internal/knowledge-sources", kb.url).toString(), {
     headers: { authorization: `Bearer ${kb.secret}`, "x-trainertwin-org-id": kb.orgId },
@@ -63,11 +73,14 @@ export async function pullKnowledgeBase(kb: KnowledgeBaseSource, fetcher: Fetch 
   });
 }
 
-/** Copies one finished output file out of the sandbox. */
-export async function pushOutput(user: string, rel: string, content: string) {
+/**
+ * Copies one finished output file out of the sandbox. `scope` is the studio session's organization id: S3 outputs live
+ * under output/<org>/<user>/ so two orgs whose trainers share a username never write over each other.
+ */
+export async function pushOutput(user: string, rel: string, content: string, scope?: string) {
   const id = userId(user);
   if (BUCKET) {
-    const k = key("output", id, rel);
+    const k = key("output", ...(scope ? [userId(scope)] : []), id, rel);
     await s3().send(new PutObjectCommand({ Bucket: BUCKET, Key: k, Body: content, ContentType: rel.endsWith(".json") ? "application/json" : "text/markdown" }));
     return `s3://${BUCKET}/${k}`;
   }

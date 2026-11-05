@@ -11,6 +11,8 @@ export type Io = {
   grep(patterns: string[], dir: string): Promise<{ path: string; line: number; text: string }[]>;
   /** Where this session's sources come from (the org's knowledge base); unset: the user folder (pullSources). */
   sources?: () => Promise<{ path: string; text: string }[]>;
+  /** A fingerprint of those sources; when it changes the sandbox re-syncs (a document uploaded mid-chat shows up). */
+  sourcesVersion?: () => Promise<string>;
 };
 
 type Sandbox = {

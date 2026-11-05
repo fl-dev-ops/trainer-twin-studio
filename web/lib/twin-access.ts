@@ -60,12 +60,12 @@ export async function resolveTwinPath(orgId: string, orgSlug: string, path: stri
   if (!value || value.length > 200) return null;
   const persona = await db.persona.findFirst({ where: { orgId, isOwn: true, slug: { equals: value, mode: "insensitive" } }, select: { id: true } });
   if (persona) {
-    const twins = await db.agent.findMany({ where: { orgId, kind: "TWIN", personaId: persona.id }, select: { id: true, data: true } });
+    const twins = await db.agent.findMany({ where: { orgId, kind: "TWIN", personaId: persona.id, archivedAt: null }, select: { id: true, data: true } });
     const main = twins.find((twin) => isAllSkillsTwin(twin.data));
     if (main) return { agentId: main.id };
   }
   for (const slug of [`${orgSlug}-${value}`, value]) {
-    const agent = await db.agent.findFirst({ where: { orgId, kind: "TWIN", slug }, select: { id: true } });
+    const agent = await db.agent.findFirst({ where: { orgId, kind: "TWIN", slug, archivedAt: null }, select: { id: true } });
     if (agent) return { agentId: agent.id };
   }
   return null;
@@ -206,9 +206,9 @@ export async function twinAccessByAgent(input: { orgId: string; user: Person; ag
 
 // ---- Studio management (admin / team) ----
 
-/** The org's twin agent by slug; role plays and other orgs' agents are not twins here. */
+/** The org's twin agent by slug; role plays, other orgs' agents and archived twins are not found here. */
 export async function findTwinAgent(orgId: string, slug: string) {
-  const agent = await db.agent.findFirst({ where: { orgId, slug, kind: "TWIN" }, select: { id: true, slug: true, name: true } });
+  const agent = await db.agent.findFirst({ where: { orgId, slug, kind: "TWIN", archivedAt: null }, select: { id: true, slug: true, name: true } });
   if (!agent) throw new TwinAccessError(`Twin "${slug}" was not found`, 404);
   return agent;
 }

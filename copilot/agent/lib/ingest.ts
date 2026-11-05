@@ -56,13 +56,16 @@ export function buildInventory(files: { path: string; text: string }[]): Invento
 /** Copies the user's sources into the sandbox once per session and returns the inventory. Later calls are one read. */
 export async function ensureSynced(io: Io, user: string): Promise<InventoryFile[]> {
   const marker = srcPath(user, ".inventory.json");
+  const versionMarker = srcPath(user, ".inventory.version");
   const cached = await io.read(marker);
-  if (cached) return JSON.parse(cached);
+  const version = io.sourcesVersion ? await io.sourcesVersion() : null;
+  if (cached && (version == null || version === (await io.read(versionMarker)))) return JSON.parse(cached);
   const files = await (io.sources ? io.sources() : pullSources(user));
   if (!files.length) throw new Error(`no sources found for ${userId(user)}`);
   await pool(files, 16, (f) => io.write(srcPath(user, f.path), f.text));
   const inv = buildInventory(files);
   await io.write(marker, JSON.stringify(inv));
+  if (version != null) await io.write(versionMarker, version);
   return inv;
 }
 

@@ -1,12 +1,8 @@
 import { z } from "zod";
-import { BASE_DOMAIN } from "@/lib/base-domain";
-import { assignmentExpiresAt, MAX_ASSIGNMENT_RECIPIENTS, newAssignmentShareCode } from "@/lib/assignments";
+import { MAX_ASSIGNMENT_RECIPIENTS } from "@/lib/assignments";
 import { db } from "@/lib/db";
-import { ensureDeployment } from "@/lib/deployments";
-import { sendRolePlayAssignmentEmail } from "@/lib/email";
-import { contextUploadFromAgentData } from "@/lib/context-upload";
 import { getTrainerOrg } from "@/lib/org";
-import { homeOrgsByEmail } from "@/lib/org-lock";
+import { inviteToRoleplay } from "@/lib/roleplay/invites";
 
 const bodySchema = z.object({
   emails: z
@@ -59,94 +55,18 @@ export async function PUT(
   if (!parsed.success) return Response.json({ error: "Invalid email list" }, { status: 400 });
 
   const { slug } = await params;
-  const emails = [...new Set(parsed.data.emails)];
   const agent = await db.agent.findFirst({
     // Role-play invites are for role plays only; twins have their own assignments (/api/twins/[slug]/assignments).
-    where: { slug, orgId: trainer.id, kind: "ROLEPLAY" },
+    where: { slug, orgId: trainer.id, kind: "ROLEPLAY", archivedAt: null },
     select: { id: true, name: true, data: true },
   });
   if (!agent) return Response.json({ error: "Published role play not found" }, { status: 404 });
 
-  const deployment = await ensureDeployment(trainer.id, agent.id);
-  const assignments = await db.rolePlayAssignment.findMany({
-    where: { deploymentId: deployment.id, recipientEmail: { in: emails } },
-    select: { id: true, recipientEmail: true, status: true, shareCode: true },
-  });
-  const assignmentByEmail = new Map(assignments.map((assignment) => [assignment.recipientEmail, assignment]));
-  const homeOrgs = await homeOrgsByEmail(emails);
-  const stats = { added: 0, resent: 0, skipped: 0, blocked: 0 };
-  const assignmentEmails: Array<{ to: string; practiceUrl: string }> = [];
-
-  for (const email of emails) {
-    const home = homeOrgs.get(email);
-    if (home && home !== trainer.id) {
-      stats.blocked++; // single-org lock: learner already belongs to another organization
-      continue;
-    }
-    const existing = assignmentByEmail.get(email);
-    if (!existing || existing.status === "cancelled" || existing.status === "expired") {
-      const shareCode = newAssignmentShareCode();
-      if (existing) {
-        await db.rolePlayAssignment.update({
-          where: { id: existing.id },
-          data: {
-            memberId: null,
-            shareCode,
-            status: "pending",
-            assignedAt: new Date(),
-            expiresAt: assignmentExpiresAt(),
-            usedAt: null,
-          },
-        });
-      } else {
-        await db.rolePlayAssignment.create({
-          data: {
-            orgId: trainer.id,
-            deploymentId: deployment.id,
-            recipientEmail: email,
-            assignedByUserId: trainer.user.id,
-            shareCode,
-            expiresAt: assignmentExpiresAt(),
-          },
-        });
-      }
-      stats.added++;
-      assignmentEmails.push({
-        to: email,
-        practiceUrl: `https://${trainer.slug}.${BASE_DOMAIN}/s/${shareCode}`,
-      });
-    } else if (existing.status === "pending" && parsed.data.resendPending === "send") {
-      stats.resent++;
-      assignmentEmails.push({
-        to: email,
-        practiceUrl: `https://${trainer.slug}.${BASE_DOMAIN}/s/${existing.shareCode}`,
-      });
-    } else {
-      stats.skipped++;
-    }
-  }
-
-  const data = agent.data as { objective?: unknown } | null;
-  const objective = typeof data?.objective === "string" ? data.objective : undefined;
-  const upload = contextUploadFromAgentData(agent.data);
-  const requiredArtifact = upload.required && upload.prompt
-    ? { label: upload.label, prompt: upload.prompt }
-    : null;
-  const deliveries = await Promise.all(
-    assignmentEmails.map(({ to, practiceUrl }) =>
-      sendRolePlayAssignmentEmail({
-        to,
-        rolePlayName: agent.name,
-        rolePlayObjective: objective,
-        practiceUrl,
-        trainerName: trainer.user.name,
-        requiredArtifact,
-      }),
-    ),
-  );
-
-  return Response.json({
-    ...stats,
-    emailFailures: deliveries.filter(({ success }) => !success).length,
-  });
+  return Response.json(await inviteToRoleplay({
+    org: { id: trainer.id, slug: trainer.slug },
+    by: { id: trainer.user.id, name: trainer.user.name },
+    agent,
+    emails: parsed.data.emails,
+    resendPending: parsed.data.resendPending === "send",
+  }));
 }

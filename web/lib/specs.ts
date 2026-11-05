@@ -64,7 +64,7 @@ export async function listSpecSummaries(type: "personas" | "agents", orgId: stri
 
   const [agents, drafts, assignments] = await Promise.all([
     db.agent.findMany({
-      where: { orgId, ...(kind ? { kind } : {}) },
+      where: { orgId, archivedAt: null, ...(kind ? { kind } : {}) },
       orderBy: [{ order: "asc" }, { name: "asc" }],
       select: {
         id: true,
@@ -359,22 +359,23 @@ export async function deleteSpec(type: SpecType, slug: string, orgId: string) {
     ? await db.persona.findUnique({ where: { orgId_slug: { orgId, slug } } })
     : await modelFor(type).findUnique({ where: { slug } });
   if (!row || row.orgId !== orgId) throw new Error("Not found");
-  await db.specVersion.deleteMany({ where: { entityType: type, entitySlug: slug, orgId } });
-  if (type === "personas") {
-    const personaId = row.id;
-    if (!personaId) throw new Error("Persona identity missing");
-    const sources = await db.personaSource.findMany({
-      where: { personaId, orgId },
-      select: { id: true, s3Key: true },
-    });
-    await Promise.all([
-      ...sources.map((source) => deletePrefix(source.s3Key)),
-      MainCollectionService.removePersona(orgId, personaId),
-    ]);
-    await db.persona.delete({ where: { orgId_slug: { orgId, slug } } });
-  } else {
-    await modelFor(type).delete({ where: { slug } });
+  // Agents are archived, never deleted: versions, S3 artifacts and past sessions stay, and the copilot can restore it.
+  if (type !== "personas") {
+    await db.agent.update({ where: { slug }, data: { archivedAt: new Date() } });
+    return;
   }
+  await db.specVersion.deleteMany({ where: { entityType: type, entitySlug: slug, orgId } });
+  const personaId = row.id;
+  if (!personaId) throw new Error("Persona identity missing");
+  const sources = await db.personaSource.findMany({
+    where: { personaId, orgId },
+    select: { id: true, s3Key: true },
+  });
+  await Promise.all([
+    ...sources.map((source) => deletePrefix(source.s3Key)),
+    MainCollectionService.removePersona(orgId, personaId),
+  ]);
+  await db.persona.delete({ where: { orgId_slug: { orgId, slug } } });
 }
 
 export async function listVersions(type: SpecType, slug: string, orgId: string) {

@@ -1,8 +1,10 @@
 const SEED_KEY = "trainertwin:copilot-seed";
-const SESSION_KEY = "trainertwin:spec-copilot-session:v3";
+/** The copilot chat's saved conversation (CopilotChat): clearing it makes a seed start a new conversation. */
+export const COPILOT_SESSION_KEY = "trainertwin:spec-copilot-session:v4";
+const SESSION_KEY = COPILOT_SESSION_KEY;
 
 /**
- * Queue a first message for the spec copilot and reset its conversation,
+ * Queue a first message for the copilot and reset its conversation,
  * then navigate to "/" so CopilotChat picks the seed up on mount.
  */
 export function seedCopilot(text: string) {

@@ -12,7 +12,7 @@
     "dev": "eve dev --no-default-extensions",
     "eval": "eve eval",
     "start": "eve start",
-    "test": "node --test test/sandbox.node.mjs",
+    "test": "node --test test/sandbox.node.mjs && bun test test/",
     "typecheck": "tsc"
   },
   "dependencies": {

@@ -7,7 +7,7 @@ const agents: Row[] = [];
 const s3 = new Map<string, string>();
 let chroma: { agentSlug: string; count: number } | null = null;
 let knowledgeWhere: Row | null = null;
-const knowledgeDocs: { id: string; title: string; s3MarkdownKey: string }[] = [];
+const knowledgeDocs: { id: string; title: string; s3MarkdownKey: string; updatedAt: Date }[] = [];
 
 const fakeDb = {
   organization: { findUnique: async () => ({ id: "org1", slug: "acme" }) },
@@ -146,8 +146,8 @@ const session = (n: number) => Array.from({ length: n }, (_, i) => (i % 2 ? "spe
 test("the copilot pulls every Markdown copy in the org's knowledge base into its sandbox", async () => {
   process.env.SCENARIO_INGEST_SECRET = "s3cret";
   knowledgeDocs.splice(0, knowledgeDocs.length,
-    { id: "d1", title: "Lesson 2: role play", s3MarkdownKey: "p/org1/ingest/files/d1/content.md" },
-    { id: "d2", title: "Pricing [2026] / guide", s3MarkdownKey: "p/org1/ingest/files/d2/content.md" },
+    { id: "d1", title: "Lesson 2: role play", s3MarkdownKey: "p/org1/ingest/files/d1/content.md", updatedAt: new Date("2026-11-01") },
+    { id: "d2", title: "Pricing [2026] / guide", s3MarkdownKey: "p/org1/ingest/files/d2/content.md", updatedAt: new Date("2026-11-01") },
   );
   s3.set("p/org1/ingest/files/d1/content.md", session(24));
   s3.set("p/org1/ingest/files/d2/content.md", "# Pricing guide\n\nOff-plan payment plans explained.");
@@ -174,7 +174,7 @@ test("knowledge sources: secret and org required; a failed download fails the pu
   process.env.SCENARIO_INGEST_SECRET = "s3cret";
   expect((await knowledgeSources(new Request("https://dash.test/api/internal/knowledge-sources", { headers: { authorization: "Bearer wrong", "x-trainertwin-org-id": "org1" } }))).status).toBe(401);
   expect((await knowledgeSources(new Request("https://dash.test/api/internal/knowledge-sources", { headers: { authorization: `Bearer ${kb.secret}` } }))).status).toBe(400);
-  knowledgeDocs.splice(0, knowledgeDocs.length, { id: "d9", title: "Gone", s3MarkdownKey: "p/org1/ingest/files/d9/content.md" });
+  knowledgeDocs.splice(0, knowledgeDocs.length, { id: "d9", title: "Gone", s3MarkdownKey: "p/org1/ingest/files/d9/content.md", updatedAt: new Date("2026-11-01") });
   await expect(pullKnowledgeBase(kb, kbFetch)).rejects.toThrow('could not download "Gone"');
 });
 

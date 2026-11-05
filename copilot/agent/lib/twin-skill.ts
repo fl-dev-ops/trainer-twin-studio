@@ -68,6 +68,19 @@ export type TwinItem = {
 export const trainerLabels = z.record(z.string(), z.array(z.string()).min(1));
 
 const squash = (s: string) => s.replace(/\s+/g, " ").trim();
+const PLACEHOLDER = /\[(?:name|email|link|phone)\]/;
+/**
+ * Whether a stored item's text is part of the rebuilt turn. Stored text was redacted with the names known when it was
+ * built ("[name]"); a later session may know fewer names, so a placeholder matches any short run of text.
+ */
+export function holdsPart(whole: string, part: string) {
+  const w = squash(whole);
+  const p = squash(part);
+  if (w.includes(p)) return true;
+  if (!PLACEHOLDER.test(p)) return false;
+  const re = p.split(new RegExp(PLACEHOLDER.source, "g")).map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".{1,80}?");
+  return new RegExp(re, "s").test(w);
+}
 
 /**
  * Finds `needle` in `text` ignoring case, punctuation and spacing (transcripts have little punctuation and odd casing,
@@ -147,7 +160,7 @@ export async function makeTwinItems(io: Io, user: string, head: TwinSkillHead, t
     } else {
       // Docs and posts are the trainer's own writing.
       if (p.n != null) { bad("docs and posts use quote, not n"); continue; }
-      if (!p.quote || !(squash(raw).includes(squash(p.quote)) || squash(redact(raw)).includes(squash(p.quote)))) { bad("quote must be copied exactly from the file"); continue; }
+      if (!p.quote || !(holdsPart(raw, p.quote) || squash(redact(raw)).includes(squash(p.quote)))) { bad("quote must be copied exactly from the file"); continue; }
       text = redact(squash(p.quote));
     }
     const n = words(text);
@@ -230,7 +243,7 @@ export async function checkTwinSkill(io: Io, user: string, id: string) {
   // A part of a turn (id "…#n@offset") is checked against its whole turn: the stored text must be in it.
   for (const it of items!) {
     const whole = it.id.replace(/@\d+$/, "");
-    if (!rebuilt.items.some((r) => r.id === whole && squash(r.text).includes(squash(it.text)))) reasons.push(`${it.id}: does not rebuild from its source`);
+    if (!rebuilt.items.some((r) => r.id === whole && holdsPart(r.text, it.text))) reasons.push(`${it.id}: does not rebuild from its source`);
   }
   const seen = new Map<string, string>();
   for (const it of items!) { const key = squash(it.text).toLowerCase(); if (seen.has(key)) reasons.push(`${it.id} repeats ${seen.get(key)}`); else seen.set(key, it.id); }
@@ -259,15 +272,23 @@ export const twinBuildInput = z.object({
   skill: twinSkillHead,
   trainer: trainerLabels.default({}).describe("For each two-person recording you take items from: the speaker labels that are the trainer."),
   names: z.array(z.string()).default([]).describe("Names of people and companies you saw, to redact."),
-  items: z.array(twinItemInput).min(1),
+  items: z.array(twinItemInput).default([]).describe("New items. In update mode (after load_skill) only the ones to add; the loaded items are kept."),
+  remove: z.array(z.object({ id: z.string(), reason: z.string().min(3) })).default([])
+    .describe("Update mode only: loaded items to drop, each with why (outdated, wrong situation, superseded by a new source)."),
   patterns: z.string().min(1).describe("patterns.md: the evidence notes, with every section and [[file#turn]] / [[file]] refs."),
   body: z.string().min(1).describe("SKILL.md body (no front matter), first person, every section."),
 });
 
 /** Saves every file of one twin skill (replacing an earlier attempt), then runs the full check. Writes nothing if an item is rejected. */
 export async function saveTwinSkill(io: Io, user: string, input: z.infer<typeof twinBuildInput>) {
-  const { skill: head, trainer, names, items: picks, patterns, body } = input;
+  // Defaults also hold for callers that skip zod (tests, scripts).
+  const { skill: head, names = [], items: picks = [], remove = [], patterns, body } = input;
   const dir = twinDir(head.skill);
+  const base = await readJson<TwinBase | null>(io, user, `${dir}/base.json`, null);
+  if (!base && remove.length) return { saved: false, rejected: ["remove is only for updates: call load_skill first, or leave remove empty for a new skill"] };
+  if (!base && !picks.length) return { saved: false, rejected: ["a new skill needs items"] };
+  // Update mode keeps the trainer labels worked out from the loaded items (sources.json) and adds the new ones.
+  const trainer = base ? { ...(await readJson(io, user, `${dir}/sources.json`, { trainer: {} as Record<string, string[]> })).trainer, ...input.trainer } : (input.trainer ?? {});
   const builds = Number((await io.read(outPath(user, `${dir}/builds`))) ?? 0) + 1;
   if (builds > TWIN.maxBuilds) {
     return { saved: false, stop: true, rejected: [`This is build ${builds}; the limit is ${TWIN.maxBuilds}. Do not build again: write report.md with the open reasons and stop without publishing.`] };
@@ -275,15 +296,119 @@ export async function saveTwinSkill(io: Io, user: string, input: z.infer<typeof 
   await io.write(outPath(user, `${dir}/builds`), String(builds));
   if (body.trimStart().startsWith("---")) return { saved: false, rejected: ["Pass the SKILL.md body without front matter; code creates the header."] };
   if (names.length) await addNames(io, user, `twin:${head.skill}`, names);
-  const { items, errors } = await makeTwinItems(io, user, head, trainer, picks);
+  const { items: added, errors } = await makeTwinItems(io, user, head, trainer, picks);
   if (errors.length) return { saved: false, rejected: errors };
   const redact = redactor(await knownNames(io, user));
+  const fresh = added.map((x) => ({ ...x, text: redact(x.text), context: redact(x.context) }));
+  let items = fresh;
+  let changes: TwinChanges | null = null;
+  if (base) {
+    const merged = mergeWithBase(base, head.skill, fresh, remove);
+    if ("rejected" in merged) return { saved: false, rejected: merged.rejected };
+    items = merged.items;
+    changes = merged.changes;
+    await io.write(outPath(user, `${dir}/changes.json`), JSON.stringify(changes, null, 1) + "\n");
+  }
   await io.write(outPath(user, `${dir}/sources.json`), JSON.stringify({ trainer }, null, 1) + "\n");
   await io.write(outPath(user, `${dir}/skill.json`), JSON.stringify(head, null, 2) + "\n");
   await io.write(outPath(user, `${dir}/SKILL.md`), twinSkillHeader(head) + body.trim() + "\n");
   await io.write(outPath(user, `${dir}/patterns.md`), patterns.trim() + "\n");
-  await io.write(outPath(user, `${dir}/items.json`), JSON.stringify(items.map((x) => ({ ...x, text: redact(x.text), context: redact(x.context) })), null, 1) + "\n");
-  return { saved: true, check: await checkTwinSkill(io, user, head.skill) };
+  await io.write(outPath(user, `${dir}/items.json`), JSON.stringify(items, null, 1) + "\n");
+  return { saved: true, ...(changes ? { changes } : {}), check: await checkTwinSkill(io, user, head.skill) };
+}
+
+// ---- Update mode: a published skill loaded as the baseline (load_skill) ----
+
+/** The published version an update builds on (output/<user>/twin-skills/<id>/base.json). */
+export type TwinBase = { slug: string; version: number; skillId: string; name: string; items: TwinItem[] };
+export type TwinChanges = {
+  base: { slug: string; version: number };
+  kept: number;
+  added: { id: string; situation: string; kind: string }[];
+  removed: { id: string; reason: string }[];
+  skipped: { id: string; why: string }[];
+  newSources: string[];
+};
+
+/** Baseline items minus the removed ones plus the new ones (a new item already in the baseline is skipped, not doubled). */
+export function mergeWithBase(base: TwinBase, skillId: string, added: TwinItem[], remove: { id: string; reason: string }[]) {
+  if (skillId !== base.skillId) {
+    return { rejected: [`An update keeps the skill id "${base.skillId}" (loaded ${base.slug} v${base.version}); you passed "${skillId}". Use "${base.skillId}".`] };
+  }
+  const ids = new Set(base.items.map((x) => x.id));
+  const unknown = remove.filter((r) => !ids.has(r.id));
+  if (unknown.length) return { rejected: unknown.map((r) => `remove: "${r.id}" is not one of the loaded items`) };
+  const dropped = new Set(remove.map((r) => r.id));
+  const kept = base.items.filter((x) => !dropped.has(x.id));
+  const texts = new Set(kept.map((x) => squash(x.text).toLowerCase()));
+  const keptIds = new Set(kept.map((x) => x.id));
+  const skipped: TwinChanges["skipped"] = [];
+  const fresh = added.filter((x) => {
+    if (keptIds.has(x.id) || texts.has(squash(x.text).toLowerCase())) { skipped.push({ id: x.id, why: "already in the loaded skill" }); return false; }
+    return true;
+  });
+  const baseSources = new Set(base.items.map((x) => x.metadata.source));
+  return {
+    items: [...kept, ...fresh],
+    changes: {
+      base: { slug: base.slug, version: base.version },
+      kept: kept.length,
+      added: fresh.map((x) => ({ id: x.id, situation: x.metadata.step, kind: x.metadata.type })),
+      removed: remove,
+      skipped,
+      newSources: [...new Set(fresh.map((x) => x.metadata.source).filter((source) => !baseSources.has(source)))],
+    } satisfies TwinChanges,
+  };
+}
+
+/**
+ * Two-person recordings: the trainer's speaker labels, worked out from the loaded items (each cites a turn the trainer
+ * spoke). sources.json is not published, so an update recovers it this way.
+ */
+export async function trainerLabelsFromItems(io: Io, user: string, items: TwinItem[]) {
+  const inv = await ensureSynced(io, user);
+  const trainer: Record<string, string[]> = {};
+  const missing = new Set<string>();
+  for (const item of items) {
+    if (item.metadata.kind !== "session" || item.metadata.ref == null) continue;
+    const f = inv.find((x) => x.id === item.metadata.source);
+    if (!f) { missing.add(item.metadata.source); continue; }
+    if (Object.keys(f.speakers ?? {}).length <= 1) continue;
+    const turn = parseDoc((await readSourceText(io, user, inv, f.path)).text).turns[item.metadata.ref];
+    if (turn && !(trainer[f.id] ?? []).includes(turn.speaker)) (trainer[f.id] ??= []).push(turn.speaker);
+  }
+  return { trainer, missingSources: [...missing] };
+}
+
+/** Writes a published twin skill into the sandbox as the baseline of an update: its files, base.json and sources.json. */
+export async function loadTwinBase(io: Io, user: string, published: { slug: string; version: number; name: string; skill: string; manifest: unknown; items: TwinItem[]; patterns: string | null }) {
+  const head = twinSkillHead.safeParse(published.manifest);
+  if (!head.success) throw new Error(`${published.slug} v${published.version}: its skill.json is not a twin skill (${head.error.issues[0]?.message})`);
+  // The studio may have renamed it since: the update keeps the current name.
+  const manifest = { ...head.data, name: published.name };
+  const dir = twinDir(manifest.skill);
+  const { trainer, missingSources } = await trainerLabelsFromItems(io, user, published.items);
+  const base: TwinBase = { slug: published.slug, version: published.version, skillId: manifest.skill, name: published.name, items: published.items };
+  await io.write(outPath(user, `${dir}/base.json`), JSON.stringify(base, null, 1) + "\n");
+  await io.write(outPath(user, `${dir}/sources.json`), JSON.stringify({ trainer }, null, 1) + "\n");
+  await io.write(outPath(user, `${dir}/skill.json`), JSON.stringify(manifest, null, 2) + "\n");
+  await io.write(outPath(user, `${dir}/SKILL.md`), published.skill.endsWith("\n") ? published.skill : published.skill + "\n");
+  await io.write(outPath(user, `${dir}/patterns.md`), (published.patterns ?? "").trim() + "\n");
+  await io.write(outPath(user, `${dir}/items.json`), JSON.stringify(published.items, null, 1) + "\n");
+  // A loaded skill starts with a fresh build budget.
+  await io.write(outPath(user, `${dir}/builds`), "0");
+  const body = published.skill.replace(/^---[\s\S]*?---\n/, "");
+  return {
+    skill: manifest,
+    version: published.version,
+    folder: outPath(user, dir),
+    situations: manifest.situations.map((s) => ({ ...s, items: published.items.filter((x) => x.metadata.step === s.id).length })),
+    items: published.items.map((x) => ({ id: x.id, situation: x.metadata.step, kind: x.metadata.type, source: x.metadata.source, text: x.text.slice(0, 140) })),
+    sources: [...new Set(published.items.map((x) => x.metadata.source))],
+    missingSources,
+    body,
+    patterns: published.patterns ?? "",
+  };
 }
 
 /** The files to publish for one twin skill, checked against a frozen snapshot; nothing is sent when the check fails. */

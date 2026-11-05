@@ -2,8 +2,6 @@ import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { searchKnowledge } from "@/lib/knowledge";
-import { specDraftBundleSchema } from "@/lib/spec-draft-schema";
-import { publishSpecDraft, readSpecDraft, saveSpecDraft } from "@/lib/spec-drafts";
 import { MainCollectionService, type ScenarioStep } from "@/lib/main-collection";
 import { type PinnedTwinSkill, TWIN_SOURCE, twinPlaybooks } from "@/lib/twins";
 import { redactLearnerNames } from "@/lib/persona-voice";
@@ -16,11 +14,6 @@ export const runtime = "nodejs";
 
 const slug = z.string().regex(/^[a-z0-9][a-z0-9._-]*$/i);
 const requestSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("inventory") }).strict(),
-  z.object({ action: z.literal("readSpec"), type: z.enum(["persona", "agent"]), slug }).strict(),
-  z.object({ action: z.literal("readDraft"), slug }).strict(),
-  z.object({ action: z.literal("saveDraft"), bundle: specDraftBundleSchema }).strict(),
-  z.object({ action: z.literal("publishDraft"), slug }).strict(),
   z.object({
     action: z.literal("searchKnowledge"),
     knowledgeBase: slug,
@@ -330,55 +323,6 @@ export async function POST(request: Request) {
   }
 
   try {
-    if (input.action === "inventory") {
-      const [personas, agents, knowledgeBases, drafts] = await Promise.all([
-        db.persona.findMany({ where: { orgId }, orderBy: { slug: "asc" }, select: { slug: true, name: true, version: true } }),
-        db.agent.findMany({ where: { orgId }, orderBy: [{ order: "asc" }, { slug: "asc" }], select: { slug: true, name: true, version: true } }),
-        db.knowledgeBase.findMany({
-          where: { orgId },
-          orderBy: { slug: "asc" },
-          select: { slug: true, name: true, documents: { select: { title: true, status: true } } },
-        }),
-        db.specDraft.findMany({
-          where: { orgId },
-          orderBy: { updatedAt: "desc" },
-          select: { slug: true, name: true, status: true, revision: true, updatedAt: true },
-        }),
-      ]);
-      return Response.json({
-        personas,
-        agents,
-        knowledgeBases,
-        drafts: drafts.map((draft) => ({ ...draft, updatedAt: draft.updatedAt.toISOString() })),
-      });
-    }
-
-    if (input.action === "readSpec") {
-      const row = input.type === "persona"
-        ? await db.persona.findFirst({ where: { slug: input.slug, orgId }, select: { slug: true, version: true, data: true } })
-        : await db.agent.findFirst({ where: { slug: input.slug, orgId }, select: { slug: true, version: true, data: true } });
-      return Response.json(row ?? { error: `${input.type} "${input.slug}" was not found` });
-    }
-
-    if (input.action === "readDraft") {
-      return Response.json(await readSpecDraft(input.slug, orgId) ?? { error: `Draft "${input.slug}" was not found` });
-    }
-
-    if (input.action === "saveDraft") {
-      const saved = await saveSpecDraft(input.bundle, orgId);
-      return Response.json({
-        slug: saved.slug,
-        name: saved.name,
-        status: saved.status,
-        revision: saved.revision,
-        changed: saved.changed,
-      });
-    }
-
-    if (input.action === "publishDraft") {
-      return Response.json(await publishSpecDraft(input.slug, orgId));
-    }
-
     const knowledgeBase = await db.knowledgeBase.findFirst({
       where: { slug: input.knowledgeBase, orgId, documents: { some: { status: "indexed" } } },
       select: { id: true },

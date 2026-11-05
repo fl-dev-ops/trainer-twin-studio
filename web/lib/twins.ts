@@ -50,7 +50,7 @@ export type PinnedTwinSkill = { slug: string; version: number };
 
 const liveSkillTwins = (orgId: string, personaId: string) =>
   db.agent.findMany({
-    where: { orgId, personaId, kind: "TWIN" },
+    where: { orgId, personaId, kind: "TWIN", archivedAt: null },
     orderBy: [{ order: "asc" }, { name: "asc" }],
     select: { slug: true, name: true, version: true, data: true },
   });

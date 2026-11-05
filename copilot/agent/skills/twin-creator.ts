@@ -37,10 +37,27 @@ Do all the work yourself. Plan the whole run before reading anything.
 
 If fewer than 3 sources show the trainer's thinking on this topic, report that and stop. Never invent what the trainer
 knows, decides or says, and never expose personal details.
+
+# Update an existing twin skill
+
+When the skill already exists (check \`studio_list\`: a \`twin-skill\` with this topic), update it; never rebuild it from
+scratch and never create a second skill on the same topic.
+
+1. **Load it.** \`load_skill\` with its slug. You get its situations, every item (id, situation, kind, source, text),
+   its sources, body and patterns. build_twin_skill is now in update mode for that skill id.
+2. **Find what's new.** The files the trainer picked (\`<selected-files>\`) first; otherwise sources from \`files\`
+   that the loaded items don't use. Read only those, and the loaded items they change.
+3. **Build the update.** One \`build_twin_skill\` with the same \`skill\` (id, situations; add or rename a situation only
+   when the new material needs it), only the **new** items, \`remove\` for loaded items that no longer hold (each with a
+   reason: superseded, outdated, wrong situation), and the full revised \`body\` and \`patterns\`: keep what still holds,
+   add what the new material teaches, cite the new sources in patterns.md.
+4. **Show the changes.** Tell the trainer what changed: items added and removed per situation (with reasons), sections
+   you revised, new sources. Then \`publish_twin_skill\`; the trainer approves it on the card. It becomes the next
+   version; the previous version stays and can be loaded again (\`load_skill\` with \`version\`) to restore it.
 `;
 
 export default defineSkill({
   description:
-    "Build one twin skill: the trainer's knowledge, decisions, patterns and approach on one topic, which their twin uses to advise learners. Use for a twin, twin skill, 'my approach' or 'how I handle X' request. Never a role play.",
+    "Build or update one twin skill: the trainer's knowledge, decisions, patterns and approach on one topic, which their twin uses to advise learners. Use for a twin, twin skill, 'my approach' or 'how I handle X' request, and to add new material to an existing twin skill. Never a role play.",
   markdown: `${procedure}\n${twinRequirementsText()}`,
 });

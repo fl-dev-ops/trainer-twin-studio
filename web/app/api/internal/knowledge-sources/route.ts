@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { db } from "@/lib/db";
 import { presignedGetUrl } from "@/lib/s3";
 import { ingestAuthorized } from "@/lib/scenario-ingest";
@@ -18,10 +19,13 @@ export async function GET(request: Request) {
   const docs = await db.knowledgeDocument.findMany({
     where: { kb: { orgId }, s3MarkdownKey: { not: null }, status: { not: "failed" } },
     orderBy: { createdAt: "asc" },
-    select: { id: true, title: true, s3MarkdownKey: true },
+    select: { id: true, title: true, s3MarkdownKey: true, updatedAt: true },
   });
+  // Changes when a document is added, removed or updated: the copilot re-syncs its sandbox when it differs.
+  const version = createHash("sha256").update(docs.map((doc) => `${doc.id}:${doc.updatedAt.toISOString()}`).join("|")).digest("hex").slice(0, 16);
+  if (new URL(request.url).searchParams.get("versionOnly") === "1") return Response.json({ version, count: docs.length });
   const files = await Promise.all(
     docs.map(async (doc) => ({ docId: doc.id, title: doc.title, url: await presignedGetUrl(doc.s3MarkdownKey!, 900) })),
   );
-  return Response.json({ files });
+  return Response.json({ files, version });
 }

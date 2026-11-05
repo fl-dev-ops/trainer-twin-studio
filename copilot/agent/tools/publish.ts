@@ -1,8 +1,9 @@
 import { defineTool } from "eve/tools";
+import { always } from "eve/tools/approval";
 import { z } from "zod";
 import { pool, pushOutput, staleOutputs } from "../lib/origin";
 import { preparePublication } from "../lib/publication";
-import { sessionIo } from "../lib/session-io";
+import { outputScope, sessionIo } from "../lib/session-io";
 import { publishToStudio, runIdFor } from "../lib/studio-publish";
 
 export default defineTool({
@@ -11,9 +12,10 @@ export default defineTool({
     user: z.string(),
     persona: z.string().optional().describe("TrainerTwin persona the scenarios are played by. Defaults to user."),
   }),
+  approval: { request: always(), prompt: () => "Publish the role play to TrainerTwin? An existing one becomes its next version; the previous one is kept." },
   async execute({ user, persona }, ctx) {
     const { files, rejected } = await preparePublication(await sessionIo(ctx), user);
-    const published = await pool(files, 16, (f) => pushOutput(user, f.path, f.text));
+    const published = await pool(files, 16, (f) => pushOutput(user, f.path, f.text, outputScope(ctx)));
     return {
       published: published.length,
       where: published[0]?.replace(/\/[^/]*$/, "") ?? null,

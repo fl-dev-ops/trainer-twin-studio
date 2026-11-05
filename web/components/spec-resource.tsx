@@ -548,7 +548,7 @@ export function SpecResourceEditor({
               aria-label="Refine this scenario with Copilot"
               onClick={() => {
                 seedCopilot(
-                  `Please load my published scenario "${slug}" (its current version) with read_spec, then start a working draft so we can revise it together.`,
+                  `Help me revise "${slug}". Read it with studio_get first, and update it on top of its current version.`,
                 );
                 router.push("/");
               }}

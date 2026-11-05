@@ -57,6 +57,8 @@ model Agent {
   kind            AgentKind
   data            Json
   order           Int                @default(0)
+  /// Soft delete: hidden from lists, twin playbooks and new sessions; restore clears it. Versions and S3 artifacts stay.
+  archivedAt      DateTime?
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
   deployments     Deployment[]

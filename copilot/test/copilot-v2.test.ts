@@ -1,0 +1,84 @@
+// Copilot v2 (plans/copilot-v2.md): skill updates on top of the published version, the studio client's org scoping,
+// knowledge re-sync. Run: bun test test/copilot-v2.test.ts
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { holdsPart, mergeWithBase } from "../agent/lib/twin-skill.ts";
+import { studio } from "../agent/lib/studio.ts";
+import { ensureSynced } from "../agent/lib/ingest.ts";
+import { outputScope } from "../agent/lib/session-io.ts";
+
+const item = (id, step, text, source = "doc1") => ({
+  id, role: "trainer", context: "c", text,
+  metadata: { skill_id: "objection-handling", step, type: "decision", source, kind: "doc", ref: null, words: text.split(" ").length },
+});
+const base = {
+  slug: "olga-objection-handling", version: 1, skillId: "objection-handling", name: "Objection Handling",
+  items: [item("a", "too-expensive", "I never defend the price, I clarify what they mean"), item("b", "wait", "When they want to wait I build the cost chain")],
+};
+
+test("a redacted stored item still matches its source turn", () => {
+  assert.equal(holdsPart("Call Maria now and ask what she means", "Call Maria now"), true);
+  assert.equal(holdsPart("Call Maria now and ask what she means", "Call [name] now and ask"), true);
+  assert.equal(holdsPart("Call Maria now and ask what she means", "Call [name] later"), false);
+});
+
+test("an update keeps the loaded items, drops removed ones, adds new ones once", () => {
+  const added = [item("c", "too-expensive", "I ask what the money is really protecting", "doc2"), item("dup", "wait", "When they want to wait I build the cost chain")];
+  const merged = mergeWithBase(base, "objection-handling", added, [{ id: "b", reason: "superseded by the workbook" }]);
+  // "dup" repeats b's text, but b was removed, so it comes back as a new item.
+  assert.deepEqual(merged.items.map((x) => x.id), ["a", "c", "dup"]);
+  assert.equal(merged.changes.kept, 1);
+  assert.deepEqual(merged.changes.removed, [{ id: "b", reason: "superseded by the workbook" }]);
+  assert.deepEqual(merged.changes.added.map((x) => x.id), ["c", "dup"]);
+  assert.deepEqual(merged.changes.newSources, ["doc2"]);
+  assert.equal(merged.changes.skipped.length, 0);
+});
+
+test("a new item repeating a kept one is skipped, not doubled", () => {
+  const merged = mergeWithBase(base, "objection-handling", [item("x", "wait", "When they want to wait I build the cost chain")], []);
+  assert.deepEqual(merged.items.map((x) => x.id), ["a", "b"]);
+  assert.equal(merged.changes.skipped[0].id, "x");
+});
+
+test("an update can't change the skill id or remove an unknown item", () => {
+  assert.match(mergeWithBase(base, "objections-v2", [], []).rejected[0], /keeps the skill id "objection-handling"/);
+  assert.match(mergeWithBase(base, "objection-handling", [], [{ id: "zzz", reason: "gone" }]).rejected[0], /not one of the loaded items/);
+});
+
+test("studio calls carry the session's org and trainer, never the model's", async () => {
+  const calls = [];
+  const fetcher = async (url, init) => { calls.push({ url, init }); return new Response(JSON.stringify({ ok: true }), { status: 200 }); };
+  const ctx = { session: { auth: { current: { principalType: "organization", principalId: "org-olga", attributes: { userId: "u1" } } } } };
+  await studio(ctx, { action: "list", orgId: "someone-else" }, fetcher, { STUDIO_URL: "https://dash.example", SCENARIO_INGEST_SECRET: "s" });
+  assert.equal(calls[0].url, "https://dash.example/api/internal/copilot-studio");
+  assert.equal(calls[0].init.headers["x-trainertwin-org-id"], "org-olga");
+  assert.equal(calls[0].init.headers["x-trainertwin-user-id"], "u1");
+  await assert.rejects(studio({ session: { auth: { current: null } } }, { action: "list" }, fetcher, { STUDIO_URL: "x", SCENARIO_INGEST_SECRET: "s" }), /not attached/);
+  await assert.rejects(studio({ session: { auth: { current: { principalType: "organization", principalId: "o", attributes: {} } } } }, { action: "list" }, fetcher, { STUDIO_URL: "x", SCENARIO_INGEST_SECRET: "s" }), /signed-in trainer/);
+});
+
+test("outputs of a studio session are scoped to its org", () => {
+  assert.equal(outputScope({ session: { auth: { current: { principalType: "organization", principalId: "org-olga" } } } }), "org-olga");
+  assert.equal(outputScope({ session: { auth: { current: null } } }), undefined);
+});
+
+test("the sandbox re-syncs when the knowledge base changes mid-chat", async () => {
+  const files = new Map();
+  let version = "v1";
+  let docs = [{ path: "data/uploads/Workbook [doc1].md", text: "---\ntitle: Workbook\n---\nA method doc.\n" }];
+  let pulls = 0;
+  const io = {
+    read: async (p) => files.get(p) ?? null,
+    write: async (p, c) => void files.set(p, c),
+    list: async () => [], grep: async () => [],
+    sources: async () => { pulls++; return docs; },
+    sourcesVersion: async () => version,
+  };
+  assert.deepEqual((await ensureSynced(io, "olga")).map((f) => f.id), ["doc1"]);
+  await ensureSynced(io, "olga");
+  assert.equal(pulls, 1); // same version: cached
+  docs = [...docs, { path: "data/uploads/Session 2 [doc2].md", text: "---\ntitle: Session 2\n---\nNew.\n" }];
+  version = "v2";
+  assert.deepEqual((await ensureSynced(io, "olga")).map((f) => f.id).sort(), ["doc1", "doc2"]);
+  assert.equal(pulls, 2);
+});

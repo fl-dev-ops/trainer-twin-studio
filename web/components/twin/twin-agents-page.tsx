@@ -13,6 +13,7 @@ import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { seedCopilot } from "@/lib/copilot-handoff";
+import { encodeCopilotMessage } from "@/lib/copilot-message";
 import { DotsIcon, GRADIENTS, LearnerAvatars } from "@/components/library-card-parts";
 import {
   DropdownMenu,
@@ -189,7 +190,11 @@ function CreateSkillDialog({ personaSlug }: { personaSlug: string | null }) {
     event.preventDefault();
     if (!personaSlug || !what.trim()) return;
     seedCopilot(
-      `USER=${user}\nBuild a twin skill from my knowledge base: ${what.trim()}\nPublish it for persona ${personaSlug}.`,
+      encodeCopilotMessage({
+        skill: "twin-creator",
+        files: [],
+        text: `USER=${user}\nBuild a twin skill from my knowledge base: ${what.trim()}\nPublish it for persona ${personaSlug}.`,
+      }),
     );
     router.push("/");
   }

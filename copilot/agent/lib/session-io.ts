@@ -1,8 +1,8 @@
 // The sandbox Io for a tool call, with this session's sources attached.
-import { type KnowledgeBaseSource, pullKnowledgeBase } from "./origin";
+import { type KnowledgeBaseSource, knowledgeBaseVersion, pullKnowledgeBase } from "./origin";
 import { type Io, sandboxIo } from "./paths";
 
-type Principal = { principalId: string; principalType: string } | null;
+type Principal = { principalId: string; principalType: string; attributes?: Record<string, unknown> } | null;
 export type SessionCtx = {
   getSandbox(): Promise<Parameters<typeof sandboxIo>[0]>;
   session: { auth: { current: Principal } };
@@ -20,15 +20,38 @@ export function knowledgeBaseFor(principal: Principal, env = process.env): Knowl
   return url && secret ? { url, secret, orgId: principal.principalId } : "unconfigured";
 }
 
+// The knowledge fingerprint is checked at most this often per org (tools run many times per turn).
+const VERSION_TTL_MS = 20_000;
+const versions = new Map<string, { at: number; value: Promise<string> }>();
+
+function cachedVersion(kb: KnowledgeBaseSource) {
+  const hit = versions.get(kb.orgId);
+  if (hit && Date.now() - hit.at < VERSION_TTL_MS) return hit.value;
+  const value = knowledgeBaseVersion(kb).catch((error) => {
+    versions.delete(kb.orgId);
+    throw error;
+  });
+  versions.set(kb.orgId, { at: Date.now(), value });
+  return value;
+}
+
 export async function sessionIo(ctx: SessionCtx): Promise<Io> {
   const io = sandboxIo(await ctx.getSandbox());
   const kb = knowledgeBaseFor(ctx.session.auth.current);
   if (kb === null) return io;
+  const configured = () => {
+    if (kb === "unconfigured") throw new Error("STUDIO_URL or SCENARIO_INGEST_SECRET is not configured, so the organization's knowledge base cannot be read.");
+    return kb;
+  };
   return {
     ...io,
-    sources: () => {
-      if (kb === "unconfigured") throw new Error("STUDIO_URL or SCENARIO_INGEST_SECRET is not configured, so the organization's knowledge base cannot be read.");
-      return pullKnowledgeBase(kb);
-    },
+    sources: () => pullKnowledgeBase(configured()),
+    sourcesVersion: () => cachedVersion(configured()),
   };
+}
+
+/** Where a studio session's published outputs go: under its organization (see pushOutput). */
+export function outputScope(ctx: SessionCtx): string | undefined {
+  const principal = ctx.session.auth.current;
+  return principal?.principalType === "organization" ? principal.principalId : undefined;
 }

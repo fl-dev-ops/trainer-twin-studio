@@ -50,7 +50,7 @@ function clientOf(persona: PersonaRow, data: unknown) {
 
 async function findRoleplay(orgId: string, slug: string) {
   const agent = await db.agent.findFirst({
-    where: { ...roleplaysOf(orgId), slug },
+    where: { ...roleplaysOf(orgId), slug, archivedAt: null },
     select: { id: true, slug: true, name: true, data: true, updatedAt: true, persona: { select: personaSelect } },
   });
   if (!agent) throw new TRPCError({ code: "NOT_FOUND", message: "Role play not found" });
@@ -122,7 +122,7 @@ const scenariosRouter = t.router({
   list: studioProcedure.query(async ({ ctx }) => {
     const orgId = ctx.user.orgId;
     const agents = await db.agent.findMany({
-      where: anyRoleplayOf(orgId),
+      where: { ...anyRoleplayOf(orgId), archivedAt: null },
       orderBy: [{ order: "asc" }, { updatedAt: "desc" }],
       select: { id: true, slug: true, name: true, data: true, updatedAt: true, persona: { select: personaSelect } },
     });

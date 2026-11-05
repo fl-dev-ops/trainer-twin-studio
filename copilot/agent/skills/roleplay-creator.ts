@@ -24,10 +24,20 @@ Do all the work yourself. Plan the whole run before reading anything.
 If fewer than 3 sessions show the practice, report that and stop. Never invent lines or expose personal details.
 
 \`write\` can only create \`specs/<id>.md\` and \`report.md\`. Never use it for \`patterns.md\`, \`SKILL.md\`, \`scenario.json\` or \`items.json\`; \`build_scenario\` creates all of those.
+
+# Change an existing role play
+
+Check \`studio_list\` first; never create a second role play for the same practice.
+- **Builder role play** (\`roleplay-builder\`): change its fields, Settings or Tools with \`update_roleplay\` (the trainer
+  approves the card). Read it with \`studio_get\` first and change only what was asked.
+- **Role play built from recordings** (\`roleplay-recordings\`): \`load_skill\` writes the published version to
+  \`baseline/<slug>/\`. Rebuild with the same scenario id, starting from its plan, steps and items: keep what still holds,
+  add the new sessions or method docs, and tell the trainer what changed before \`publish\` (approved on a card). It
+  becomes the next version; the previous one is kept.
 `;
 
 export default defineSkill({
   description:
-    "Build one role play (a practice session the AI leads) from a trainer's recordings. Use only for a role-play, practice or rehearsal request, never for a twin skill.",
+    "Build or change one role play (a practice session the AI leads) from a trainer's recordings, or change an existing role play. Use only for a role-play, practice or rehearsal request, never for a twin skill.",
   markdown: `${procedure}\n${requirementsText()}`,
 });
