@@ -25,6 +25,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import { useRefresh } from "@/lib/use-refresh";
+import posthog from "posthog-js";
 
 /** The signed-in person's access to this twin (null: signed out). */
 export type LearnerAccess =
@@ -377,7 +378,8 @@ function ReportDialog({ twin, sessionId, onClose }: { twin: Twin; sessionId: str
       const res = await fetch("/api/issues", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "bug", message, url: window.location.href }),
+        // The replay and the call go with it, so the team can see what happened (lib/issue-alerts.ts).
+        body: JSON.stringify({ kind: "bug", message, url: window.location.href, replayUrl: posthog.get_session_replay_url({ withTimestamp: true }) || null, sessionId }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Could not send the report");
       setDone(true);

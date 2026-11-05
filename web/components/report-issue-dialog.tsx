@@ -22,6 +22,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import posthog from "posthog-js";
 
 const KINDS = [
   { value: "bug", label: "Bug report" },
@@ -54,7 +55,7 @@ export function ReportIssueDialog({
       const response = await fetch("/api/issues", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ kind, message: trimmed, url: window.location.href }),
+        body: JSON.stringify({ kind, message: trimmed, url: window.location.href, replayUrl: posthog.get_session_replay_url({ withTimestamp: true }) || null }),
       });
       const result = await response.json().catch(() => null);
       if (!response.ok) {

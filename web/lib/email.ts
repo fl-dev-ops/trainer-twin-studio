@@ -9,6 +9,7 @@ const DEFAULT_REPLY_TO = "support@trainertwin.com";
 
 export type SendEmailOptions = {
   to: string | string[];
+  cc?: string | string[];
   subject: string;
   html: string;
   text?: string;
@@ -20,6 +21,7 @@ export type SendEmailOptions = {
  */
 export async function sendEmail({
   to,
+  cc,
   subject,
   html,
   text,
@@ -36,6 +38,7 @@ export async function sendEmail({
     const result = await resend.emails.send({
       from,
       to,
+      ...(cc ? { cc } : {}),
       replyTo: DEFAULT_REPLY_TO,
       subject,
       html,
@@ -411,4 +414,51 @@ export async function sendTwinAssignmentEmail({
     html,
     text: `${trainerName} gave you ${minutes} minutes with ${twinName} on TrainerTwin. Start here: ${practiceUrl}`,
   });
+}
+
+/** A user's "Report an issue", for the team (lib/issue-alerts.ts): who, where, what they wrote, and where to look. */
+export async function sendIssueReportEmail(input: {
+  to: string;
+  cc: string[];
+  kind: string;
+  reporter: { name: string; email: string };
+  org: string | null;
+  message: string;
+  pageUrl: string | null;
+  sessionUrl: string | null;
+  posthogEventUrl: string | null;
+  replayUrl: string | null;
+}) {
+  const where = input.org ? ` · ${input.org}` : "";
+  const subject = `Issue reported (${input.kind})${where} · ${input.reporter.name || input.reporter.email}`;
+  const link = (label: string, url: string | null) =>
+    url ? `<li><strong>${label}:</strong> <a href="${escapeHtml(url)}" class="muted-link">${escapeHtml(url)}</a></li>` : "";
+  const html = renderEmailLayout({
+    title: escapeHtml(subject),
+    previewText: escapeHtml(input.message.slice(0, 120)),
+    contentHtml: `
+      <h1>Issue reported</h1>
+      <p>
+        <strong>${escapeHtml(input.reporter.name || input.reporter.email)}</strong> (${escapeHtml(input.reporter.email)})${input.org ? ` in <strong>${escapeHtml(input.org)}</strong>` : ""}
+        reported a <strong>${escapeHtml(input.kind)}</strong>.
+      </p>
+      <p style="white-space: pre-wrap; padding: 12px 16px; background: #f1f5f9; border-radius: 8px;">${escapeHtml(input.message)}</p>
+      <ul>
+        ${link("PostHog", input.posthogEventUrl)}
+        ${link("Session replay", input.replayUrl)}
+        ${link("Session", input.sessionUrl)}
+        ${link("Page", input.pageUrl)}
+      </ul>
+    `,
+  });
+  const text = [
+    `${input.reporter.name || input.reporter.email} (${input.reporter.email})${input.org ? ` in ${input.org}` : ""} reported a ${input.kind}.`,
+    "",
+    input.message,
+    "",
+    ...[["PostHog", input.posthogEventUrl], ["Session replay", input.replayUrl], ["Session", input.sessionUrl], ["Page", input.pageUrl]]
+      .filter(([, url]) => url)
+      .map(([label, url]) => `${label}: ${url}`),
+  ].join("\n");
+  return sendEmail({ to: input.to, cc: input.cc, subject, html, text });
 }
