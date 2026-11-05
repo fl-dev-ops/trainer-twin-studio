@@ -109,6 +109,20 @@ export function TwinSessionDetailPage({ session }: { session: SessionDetail }) {
           </article>
         ) : null}
 
+        {/* What the learner asked that the twin declined (outside its playbooks), from the session report */}
+        {report === "ready" && session.unanswered.length ? (
+          <article className="rounded-tt-lg border border-(--card-border) bg-card p-6 shadow-card">
+            <h2 className="m-0 text-sm font-semibold uppercase tracking-overline text-muted-foreground">
+              Couldn&apos;t answer
+            </h2>
+            <ul className="mt-3 mb-0 flex list-disc flex-col gap-1.5 pl-5 text-sm text-(--text-secondary)">
+              {session.unanswered.map((question) => (
+                <li key={question}>{question}</li>
+              ))}
+            </ul>
+          </article>
+        ) : null}
+
         {/* Transcript Card (rp-chat) */}
         <article className="rounded-tt-lg border border-(--card-border) bg-card p-6 shadow-card">
           <div className="flex items-center justify-between gap-4 border-b border-(--border) pb-4">

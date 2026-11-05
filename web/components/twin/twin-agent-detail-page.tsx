@@ -406,6 +406,29 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
           </CardContent>
         </Card>
 
+        {/* Full width: what learners asked that the twin declined (outside its playbooks), counted like Most asked */}
+        <Card size="lg" className="md:col-span-2">
+          <CardContent>
+            <h2 className="m-0 text-title-s font-semibold tracking-title">Couldn&apos;t answer</h2>
+            {twin.report.couldntAnswer.length ? (
+              <ul className="mt-4 flex flex-col gap-3 p-0 list-none">
+                {twin.report.couldntAnswer.map((item) => (
+                  <li key={item.question} className="flex items-baseline justify-between gap-4 text-sm">
+                    <span className="line-clamp-2 text-(--text-secondary)" title={item.question}>
+                      {item.question}
+                    </span>
+                    <span className="tabular-nums font-semibold text-(--foreground)">{item.count}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-4 text-sm text-muted-foreground" role="status">
+                {pendingReports > 0 ? "Preparing report…" : "Nothing yet."}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Card 4: Full width - Reports raised */}
         <Card size="lg" className="md:col-span-2">
           <CardContent>

@@ -63,6 +63,7 @@ test("model reply becomes a twin report: trimmed, empties dropped, capped", () =
     summary: "Asked about a quiet client.",
     topics: ["Follow-up timing", "a", "b", "c"],
     questions: ["How soon do I follow up?", "q2", "q3", "q4", "q5"],
+    unanswered: [], // left out by the model: an empty list, not a failed report
     generatedAt: "2026-10-27T00:00:00.000Z",
   });
   expect(isTwinReport(report)).toBe(true);
@@ -127,4 +128,13 @@ test("report eligibility: completed, or abandoned after the learner spoke; never
   expect(await eligible("silent")).toBe(false);
   expect(await eligible("failed")).toBe(false);
   expect(await eligible("cal")).toBe(false);
+});
+
+test("the questions the twin declined are kept (trimmed, capped); reports from before still count as twin reports", () => {
+  const report = toTwinReport(JSON.stringify({
+    summary: "s", topics: ["Cold calling"], questions: ["How do I open a cold call?"],
+    unanswered: [" How do I open a cold call? ", "", "u2", "u3", "u4", "u5", "u6"],
+  }));
+  expect(report.unanswered).toEqual(["How do I open a cold call?", "u2", "u3", "u4", "u5"]);
+  expect(isTwinReport({ kind: "twin", summary: "s", topics: [], questions: [], generatedAt: "2026-11-01T00:00:00.000Z" })).toBe(true);
 });

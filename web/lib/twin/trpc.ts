@@ -280,6 +280,8 @@ const agentsRouter = t.router({
         week: lastSevenDays(sessions.map((row) => row.startedAt ?? row.createdAt)),
         feelsLikeMe: likeRateByWeek(calibrations.flatMap((row) => row.ratings.map((rating) => ({ rating: rating.rating, at: rating.createdAt })))),
         mostAsked: mostAsked(sessions.map((row) => (isTwinReport(row.report) ? row.report.questions : []))),
+        /** What learners asked that the twin declined ("please ask the real …"), counted like mostAsked. */
+        couldntAnswer: mostAsked(sessions.map((row) => (isTwinReport(row.report) ? row.report.unanswered ?? [] : []))),
         pendingReports: sessions.filter((row) => reportState(row) === "pending").length,
       },
       calibrations: calibrations.map((row) => omitRatings(row)),
@@ -405,6 +407,8 @@ const sessionsRouter = t.router({
       ...sessionItem(row),
       feedbackNote: row.feedbackNote,
       topics: isTwinReport(row.report) ? row.report.topics : [],
+      /** The questions the twin declined in this session. */
+      unanswered: isTwinReport(row.report) ? row.report.unanswered ?? [] : [],
       reportState: reportState(row),
       hasVideo: typeof asRecord(row.evidence).videoS3Key === "string",
       turns: transcriptTurns(row.transcript),

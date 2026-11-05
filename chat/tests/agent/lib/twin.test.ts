@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, test } from "node:test";
 import { BASE_INSTRUCTIONS_HEADER, baseInstructions, coreInstructions, CORE_HEADINGS } from "../../../agent/lib/base-instructions";
-import { formatSessionSpec, isAllSkillsTwin, playbookSkillNames, type SessionSpecs, type TwinPlaybook } from "../../../agent/lib/brain";
+import { formatSessionSpec, isAllSkillsTwin, playbookSkillNames, twinDeclineLine, type SessionSpecs, type TwinPlaybook } from "../../../agent/lib/brain";
 
 const full = await readFile(new URL("../../../prompts/base-instructions.md", import.meta.url), "utf8");
 
@@ -97,5 +97,27 @@ describe("twin-creator skills", () => {
     assert.ok(prompt.startsWith("TWIN — OPERATING INSTRUCTIONS FOR THIS SESSION"));
     assert.ok(prompt.includes("This is not a lesson and not a role play."));
     assert.ok(prompt.includes("A playbook holds your knowledge, decisions, patterns and approach on one topic"));
+  });
+});
+
+describe("twin boundary", () => {
+  const specs = (playbooks: TwinPlaybook[]) => ({
+    agentName: "Olga's twin", agentSlug: "acme-olga-twin", objective: "x", personaName: "Olga Sinenko", personaSlug: "olga",
+    mode: "voice", documents: [], phases: [], twin: { playbooks },
+  }) as unknown as SessionSpecs;
+
+  test("outside its playbooks the twin says exactly one line, with the trainer's first name", () => {
+    assert.equal(twinDeclineLine("Olga Sinenko"), "I can't answer this question, please ask the real Olga.");
+    assert.equal(twinDeclineLine("Vasanth"), "I can't answer this question, please ask the real Vasanth.");
+    const prompt = formatSessionSpec(specs([playbook("objections", "Objections")]));
+    assert.ok(prompt.includes('Say exactly: "I can\'t answer this question, please ask the real Olga."'));
+    assert.ok(prompt.includes("do not advise from general knowledge"));
+    assert.ok(prompt.includes("name only your playbooks' topics"));
+    assert.ok(!prompt.includes("give only advice you are sure of"));
+  });
+
+  test("with no playbooks yet, every request for advice gets the line", () => {
+    const prompt = formatSessionSpec(specs([]));
+    assert.ok(prompt.includes('- None yet. To any request for advice, say exactly: "I can\'t answer this question, please ask the real Olga."'));
   });
 });

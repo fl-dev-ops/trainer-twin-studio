@@ -688,6 +688,15 @@ function personaLines(specs: Pick<SessionSpecs, "personaBrief" | "personaVoice">
 }
 
 /**
+ * What a twin says, word for word, when asked for advice none of its playbooks covers. Exact so the after-call twin
+ * report (web/lib/twin/session-report.ts) can list the questions it declined.
+ */
+export function twinDeclineLine(personaName: string) {
+  const first = personaName.trim().split(/\s+/)[0] || personaName;
+  return `I can't answer this question, please ask the real ${first}.`;
+}
+
+/**
  * System context for a twin ("Ask Olga"): an open conversation where the persona answers questions.
  * Only a catalog of playbooks is in the prompt; each SKILL.md is an eve skill the model loads on
  * demand (agent/skills/playbooks.ts). Like the playbook block, it sits outside SESSION DATA.
@@ -698,11 +707,13 @@ export function formatTwinSession(
   blocks: { learnerBlock: string; uiStateBlock: string; warmBlock: string; docsBlock: string },
 ): string {
   const who = specs.personaName ?? specs.personaSlug ?? "the trainer";
+  // The boundary line (exact, so the after-call report can find the questions the twin declined): the first name.
+  const decline = twinDeclineLine(who);
   // eve announces each playbook skill with its description; this list only ties names to titles.
   const names = playbookSkillNames(playbooks);
   const catalog = playbooks.length > 0
     ? playbooks.map((p, i) => `- \`${names[i]}\`: ${p.name}`).join("\n")
-    : "- None yet. Answer only what you are sure of, and say plainly that you have no playbook for it.";
+    : `- None yet. To any request for advice, say exactly: "${decline}"`;
 
   return `TWIN — OPERATING INSTRUCTIONS FOR THIS SESSION
 You are ${who}'s twin. The learner works in the field and comes to you with a real situation: a client, a deal, a conversation that is happening now. Help them decide what to do next, the way ${who} would if they called mid-deal. This is not a lesson and not a role play.
@@ -715,7 +726,9 @@ You are ${who}'s twin. The learner works in the field and comes to you with a re
 - Each playbook below is how ${who} handles one kind of situation, and is available as a skill. When their situation touches one, load it with eve__skill before you advise, without mentioning it. A loaded playbook stays available for later turns. A playbook holds your knowledge, decisions, patterns and approach on one topic; advise from it. Some older playbooks are written as coaching sessions; for those, turn what the coach would teach into what the learner should do with their client.
 - Pull evidence before you advise on a real situation: load the matching playbook with eve__skill, and when its phrasing matters call scenario_examples to hear how ${who} actually said that kind of thing. Decide, then answer. Only a small reply can skip this — an acknowledgement, a short follow-up question or comfort while they think. An answer to a real situation with no playbook loaded is a guess, so pull the evidence first.
 - To hear how ${who} actually phrased something, call scenario_examples({ playbook, situation }) with that playbook's name. Use the lines for tone, length and shape only: never repeat them word for word, and never reuse details about past learners.
-- Ground what you say only in your playbooks and their examples. Do not call search_knowledge. If no playbook covers the situation, say so plainly and give only advice you are sure of.
+- Ground what you say only in your playbooks and their examples. Do not call search_knowledge.
+- Stay inside your playbooks. When the learner asks for advice that none of them covers (another part of the job, another topic, legal, tax or financial questions, anything personal about ${who}), do not advise from general knowledge. Say exactly: "${decline}" Then, in one short line, offer help with what your playbooks do cover. Small talk, greetings and follow-ups on advice you already gave are not declines.
+- When asked what you can help with, name only your playbooks' topics; never claim more.
 - There is no agenda, question quota or evidence grading. Do not call session_plan.
 - On the [OPENING] turn, greet the learner in one short line in your own voice and ask what is going on with their client right now, with no tool calls.
 - When the learner says they are done, close in one turn and ask them to confirm. On their next message, if they confirm, call finish_session with no speech.
