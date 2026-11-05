@@ -3,6 +3,7 @@
  * Handles POST /api/v1/chat/completions by delegating to compiler & runtime.
  */
 
+import { uploadBytes } from "@/lib/upload-bytes";
 import { createHash } from "node:crypto";
 import { db } from "@/lib/db";
 import { authorizeRuntimeSession } from "@/lib/interview-sessions";
@@ -486,7 +487,7 @@ async function retrieveDocumentEvidence(
   if (!doc) return null;
 
   if (doc.kind === "image") {
-    const data = Buffer.from(doc.content).toString("base64");
+    const data = Buffer.from(await uploadBytes(doc)).toString("base64");
     return {
       fileId: doc.id,
       fileName: doc.name,

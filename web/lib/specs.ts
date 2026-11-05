@@ -13,8 +13,8 @@ import { personaCoverageLevel } from "@/lib/persona-voice";
 import { MainCollectionService } from "@/lib/main-collection";
 import { ChromaTenantService } from "@/lib/chroma-tenant";
 import { enqueueIngestionWork } from "@/lib/ingestion-queue";
-import { prepareContextDocument, type DocumentManifest } from "@/lib/context-document-service";
-import { scheduleResumeClaimExtraction } from "@/lib/resume-claims";
+import { type DocumentManifest } from "@/lib/context-document-service";
+import { saveUploadToS3 } from "@/lib/uploads";
 import { contextUploadFromAgentData, type AgentContextUpload } from "@/lib/context-upload";
 
 export type SpecType = "personas" | "agents";
@@ -587,6 +587,7 @@ export async function removeEmbeddings(orgId: string, kbSlug: string, docIds: st
 }
 // ---- Learner context documents ----
 
+/** A file uploaded in one request (the multipart route, the bench): stored in S3 like every upload (lib/uploads.ts). */
 export async function saveUpload(
   orgId: string,
   name: string,
@@ -595,35 +596,7 @@ export async function saveUpload(
   ownerUserId: string
 ) {
   if (!ownerUserId) throw new Error("ownerUserId is required for uploads");
-  const prepared = await prepareContextDocument(name, mimeType, new Uint8Array(content));
-  const id = randomUUID();
-  const manifest: DocumentManifest = { ...prepared.manifest, id };
-  const doc = await db.contextDocument.create({
-    data: {
-      id,
-      orgId,
-      ownerUserId,
-      name: prepared.name,
-      mimeType: prepared.mimeType,
-      kind: prepared.kind,
-      content: new Uint8Array(content),
-      size: prepared.size,
-      sha256: prepared.sha256,
-      extractedText: prepared.extractedText,
-      manifest: manifest as unknown as Prisma.InputJsonValue,
-      chunks: {
-        create: prepared.chunks.map((c) => ({
-          chunkIndex: c.chunkIndex,
-          heading: c.heading,
-          pageNumber: c.pageNumber,
-          text: c.text,
-        })),
-      },
-    },
-    select: { id: true, name: true, size: true, kind: true, manifest: true, createdAt: true },
-  });
-  scheduleResumeClaimExtraction(id, prepared.kind);
-  return { ...doc, manifest };
+  return saveUploadToS3({ orgId, userId: ownerUserId, name, mimeType, content: new Uint8Array(content) });
 }
 
 export async function listUploads(orgId: string, userId: string) {
@@ -631,14 +604,13 @@ export async function listUploads(orgId: string, userId: string) {
     where: {
       orgId,
       ownerUserId: userId,
+      // A person's own files to pick before a call: finished uploads, not copilot attachments.
+      status: "ready",
+      purpose: { not: "copilot" },
     },
     orderBy: { createdAt: "desc" },
     select: { id: true, name: true, size: true, kind: true, manifest: true, createdAt: true },
   });
-}
-
-export async function readUploadBytes(id: string, orgId: string) {
-  return db.contextDocument.findFirst({ where: { id, orgId } });
 }
 
 // ---- Compiled config for the voice agent ----

@@ -187,7 +187,7 @@ export async function loadTwinLink(slug: string): Promise<TwinLinkView> {
         bio: text(persona.background),
         photoUrl,
       },
-      // attach: the twin's "Enable upload" during the call (images only, up to 10 MB; enforced by the attach route).
+      // attach: the twin's "Enable upload" during the call (an image up to 5 MB or a PDF up to 10 MB; enforced by the attach route).
       twin: { slug: agent.slug, name: agent.name, description: text(data.objective), attach: beforeSettings(agent.data).duringUpload },
       access,
     },

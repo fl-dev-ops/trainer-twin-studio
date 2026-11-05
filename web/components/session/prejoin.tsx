@@ -29,6 +29,7 @@ import { Button } from "../ui/button";
 import { FileThumbnail } from "@/components/extend/file-thumbnail";
 import { UserAvatar } from "@/components/user-avatar";
 import { BEFORE_UPLOAD_ACCEPT, BEFORE_UPLOAD_RULE, beforeUploadProblem } from "@/lib/context-upload";
+import { uploadFile as uploadToStorage } from "@/lib/upload-client";
 
 export type PreJoinMediaSettings = {
   microphoneEnabled: boolean;
@@ -273,12 +274,7 @@ export function PreJoin({
     setUploadingDoc(true);
     setDocError("");
     try {
-      const form = new FormData();
-      form.append("file", file);
-      form.append("shareCode", sessionCode);
-      const res = await fetch("/api/upload", { method: "POST", body: form });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error ?? "Upload failed");
+      const data = await uploadToStorage(file, { purpose: "before", shareCode: sessionCode });
       const doc: PreJoinDocument = {
         id: data.id,
         name: data.name,

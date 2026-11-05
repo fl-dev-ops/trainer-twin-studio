@@ -48,7 +48,6 @@ import {
   PromptInput,
   PromptInputBody,
   PromptInputFooter,
-  PromptInputHeader,
   PromptInputSubmit,
   PromptInputTextarea,
   PromptInputTools,
@@ -63,7 +62,17 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { CopilotChips, KnowledgeFilePicker, SkillMenu } from "@/components/copilot-composer";
+import {
+  AttachFileButton,
+  ComposerHeader,
+  COPILOT_ATTACH_ACCEPT,
+  COPILOT_ATTACH_MAX_FILES,
+  CopilotChips,
+  KnowledgeFilePicker,
+  SkillMenu,
+} from "@/components/copilot-composer";
+import { duringUploadProblem, UPLOAD_MAX_BYTES } from "@/lib/context-upload";
+import { copilotUploadUrl, copilotUploadView, uploadFile } from "@/lib/upload-client";
 import {
   type CopilotSkillName,
   decodeCopilotMessage,
@@ -218,6 +227,7 @@ function CopilotConversation({
   // Composer extras: the skill picked from "/", knowledge files picked from Files, the highlighted "/" entry.
   const [skill, setSkill] = useState<CopilotSkillName>();
   const [pickedFiles, setPickedFiles] = useState<PickedFile[]>([]);
+  const [uploading, setUploading] = useState(false);
   const [slashActive, setSlashActive] = useState(0);
   const agent = useEveAgent({
     host: "/api",
@@ -271,19 +281,39 @@ function CopilotConversation({
 
   async function send(text: string, files: FileUIPart[] = []) {
     const typed = text.trim();
-    if ((!typed && files.length === 0 && pickedFiles.length === 0) || busy) return;
+    if ((!typed && files.length === 0 && pickedFiles.length === 0) || busy || uploading) return;
+    setLocalError(undefined);
+    // Attached files go to S3 first; the message carries pointers the copilot loads (copilot/agent/lib/uploads.ts).
+    let uploaded: { id: string; name: string; mediaType: string }[] = [];
+    if (files.length) {
+      setUploading(true);
+      try {
+        uploaded = await Promise.all(files.map(async ({ url, filename, mediaType }) => {
+          const blob = await (await fetch(url)).blob();
+          const file = new File([blob], filename || "file", { type: mediaType || blob.type });
+          const problem = duringUploadProblem(file);
+          if (problem) throw new Error(`${file.name}: ${problem}`);
+          const saved = await uploadFile(file, { purpose: "copilot" });
+          return { id: saved.id, name: saved.name, mediaType: file.type };
+        }));
+      } catch (cause) {
+        setLocalError(cause instanceof Error ? cause.message : "The file could not be uploaded.");
+        throw cause;
+      } finally {
+        setUploading(false);
+      }
+    }
     const message = encodeCopilotMessage({ skill, files: pickedFiles, text: typed });
     const content: UserContent = [];
     if (message) content.push({ type: "text", text: message });
     content.push(
-      ...files.map(({ mediaType, filename, url }) => ({
+      ...uploaded.map(({ id, name, mediaType }) => ({
         type: "file" as const,
-        data: url,
+        data: copilotUploadUrl(id),
         mediaType,
-        filename,
+        filename: name,
       })),
     );
-    setLocalError(undefined);
     setInput("");
     sessionStorage.removeItem(INPUT_KEY);
     const sentSkill = skill;
@@ -481,31 +511,33 @@ function CopilotConversation({
             )}
             <PromptInput
               className="pointer-events-auto **:data-[slot=input-group]:rounded-2xl **:data-[slot=input-group]:bg-background/95 "
-              // No attachments: the copilot works only from the knowledge base (the Files picker). A dropped or pasted
-              // file is refused with where to put it instead.
-              maxFiles={0}
+              // Images and PDFs for this conversation (kept 30 days); lasting material goes in the knowledge base.
+              accept={COPILOT_ATTACH_ACCEPT}
+              multiple
+              maxFiles={COPILOT_ATTACH_MAX_FILES}
+              maxFileSize={UPLOAD_MAX_BYTES}
               onError={({ code, message }) =>
                 // PromptInput reports this from inside its own state update: set ours after it.
                 queueMicrotask(() =>
                   setLocalError(
-                    code === "max_files"
-                      ? "To work from a file, add it to your knowledge base in Twin's brain, then pick it with Files."
-                      : message,
+                    code === "accept"
+                      ? "Attach an image (PNG, JPEG or WebP) or a PDF. For other files, add them to your knowledge base in Twin's brain, then pick them with Files."
+                      : code === "max_file_size"
+                        ? "That file is over 10 MB. Use a smaller one."
+                        : code === "max_files"
+                          ? `Up to ${COPILOT_ATTACH_MAX_FILES} files per message.`
+                          : message,
                   ),
                 )
               }
               onSubmit={async ({ text, files }) => send(text, files)}
             >
-              {(skill || pickedFiles.length > 0) && (
-                <PromptInputHeader>
-                  <CopilotChips
-                    skill={skill}
-                    files={pickedFiles}
-                    onRemoveSkill={() => setSkill(undefined)}
-                    onRemoveFile={(id) => setPickedFiles((files) => files.filter((file) => file.id !== id))}
-                  />
-                </PromptInputHeader>
-              )}
+              <ComposerHeader
+                skill={skill}
+                files={pickedFiles}
+                onRemoveSkill={() => setSkill(undefined)}
+                onRemoveFile={(id) => setPickedFiles((files) => files.filter((file) => file.id !== id))}
+              />
               <PromptInputBody>
                 <PromptInputTextarea
                   name="message"
@@ -544,10 +576,11 @@ function CopilotConversation({
               </PromptInputBody>
               <PromptInputFooter>
                 <PromptInputTools>
+                  <AttachFileButton disabled={busy || uploading} />
                   <KnowledgeFilePicker selected={pickedFiles} onChange={setPickedFiles} disabled={busy} />
                 </PromptInputTools>
                 <PromptInputSubmit
-                  status={agent.status === "resuming" ? "submitted" : agent.status}
+                  status={uploading || agent.status === "resuming" ? "submitted" : agent.status}
                   onStop={() => void agent.cancel()}
                   aria-label={busy ? "Stop response" : "Send message"}
                 />
@@ -619,7 +652,7 @@ function ChatMessage({
             type: "file" as const,
             mediaType: part.mediaType,
             filename: part.filename,
-            url: part.url ?? "",
+            url: copilotUploadView(part.url ?? ""),
           },
         ]
       : [],

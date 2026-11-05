@@ -339,12 +339,12 @@ export function TwinEditPage({
         <SettingsSection title="During the conversation" description="What the learner can do while they talk to the twin.">
           <SettingCard
             title="Attach during the call"
-            description="Learners can share an image during the conversation, like a screenshot or a photo of a document. Images only (PNG, JPEG or WebP), up to 10 MB."
+            description="Learners can share an image or a PDF during the conversation, like a screenshot or a brochure. An image (PNG, JPEG or WebP) up to 5 MB, or a PDF up to 10 MB."
             control={
               <SwitchToggle
                 checked={duringUpload}
                 onChange={(checked) => saveSettings({ ...settings, duringUpload: checked }, `Image upload during the call turned ${checked ? "on" : "off"}`)}
-                label="Attach an image during the conversation"
+                label="Attach a file during the conversation"
               />
             }
           />

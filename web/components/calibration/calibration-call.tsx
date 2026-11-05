@@ -32,6 +32,7 @@ import { twinClient } from "@/lib/twin/client";
 import { isFeelsOffMessage, joinsLearnerTurn, type CalibrationScore } from "@/lib/twin/stats";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { attachedMessage, uploadFile } from "@/lib/upload-client";
 import { DURING_UPLOAD_ACCEPT, DURING_UPLOAD_RULE, duringUploadProblem } from "@/lib/context-upload";
 
 /** ready: the pre-join (mic access, Start); leaving: a saved twin calibration on its way to its page. */
@@ -78,7 +79,7 @@ type CallProps = {
    * handed back when it ends (End completes the call, so its minutes and report count).
    */
   learner?: LearnerCall;
-  /** The twin lets people attach an image during the call (Configure: "Enable upload"); images only, up to 10 MB. */
+  /** The twin lets people attach a file during the call (Configure: "Enable upload"): an image up to 5 MB or a PDF up to 10 MB. */
   attach?: boolean;
 };
 
@@ -489,11 +490,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
     if (problem) return void toast.error(problem);
     setAttaching(true);
     try {
-      const form = new FormData();
-      form.append("file", file);
-      const uploaded = await fetch("/api/upload", { method: "POST", body: form });
-      const doc = await uploaded.json().catch(() => null);
-      if (!uploaded.ok) throw new Error(doc?.error ?? "Upload failed");
+      const doc = await uploadFile(file, { purpose: "during" });
       const linked = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/documents`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -501,7 +498,8 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
       });
       const result = await linked.json().catch(() => null);
       if (!linked.ok) throw new Error(result?.error ?? "Could not attach the file");
-      await say(`I've attached a file: ${doc.name} (document ID ${doc.id}).`);
+      // The bridge turns the marker into the file itself for the twin (chat/agent/channels/openai-compat.ts).
+      await say(attachedMessage(doc));
       toast.success(`${doc.name} attached`);
     } catch (attachError) {
       toast.error(attachError instanceof Error ? attachError.message : "Could not attach the file");
@@ -775,8 +773,8 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                 <>
                   <button
                     type="button"
-                    aria-label="Attach an image"
-                    title={`Attach an image. ${DURING_UPLOAD_RULE}`}
+                    aria-label="Attach a file"
+                    title={`Attach a file. ${DURING_UPLOAD_RULE}`}
                     disabled={phase !== "live" || attaching}
                     onClick={() => attachInput.current?.click()}
                     className={cn(CONTROL, "border bg-muted hover:bg-border")}

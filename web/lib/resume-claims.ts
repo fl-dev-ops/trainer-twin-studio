@@ -1,3 +1,4 @@
+import { uploadBytes } from "@/lib/upload-bytes";
 import { db } from "@/lib/db";
 import { after } from "next/server";
 import { callOpenRouter } from "@/lib/runtime/openai";
@@ -112,13 +113,12 @@ async function classifyLines(
  * anchors take over and an upload never fails because of the highlighter.
  */
 async function layerClaimAnchors(
-  doc: { name: string; mimeType: string; content: Uint8Array },
+  doc: { name: string; mimeType: string; content: Uint8Array | null; s3Key: string | null },
   texts: string[]
 ): Promise<Array<string | null>> {
   if (doc.mimeType !== "application/pdf" && !/\.pdf$/i.test(doc.name)) return [];
   try {
-    const bytes = new Uint8Array(doc.content.buffer, doc.content.byteOffset, doc.content.byteLength);
-    return await locateClaimAnchors(bytes, texts);
+    return await locateClaimAnchors(await uploadBytes(doc), texts);
   } catch (error) {
     console.warn("[resume-claims] PDF text layer unreadable, falling back to computed anchors:", error);
     return [];
@@ -136,6 +136,7 @@ export async function extractResumeClaims(documentId: string): Promise<number> {
       name: true,
       mimeType: true,
       content: true,
+      s3Key: true,
       extractedText: true,
       orgId: true,
       ownerUserId: true,
@@ -223,7 +224,7 @@ export async function extractResumeClaims(documentId: string): Promise<number> {
 export async function refreshResumeClaimAnchors(documentId: string): Promise<number> {
   const doc = await db.contextDocument.findUnique({
     where: { id: documentId },
-    select: { name: true, mimeType: true, content: true, extractedText: true },
+    select: { name: true, mimeType: true, content: true, s3Key: true, extractedText: true },
   });
   if (!doc) return 0;
   const claims = await db.resumeClaim.findMany({

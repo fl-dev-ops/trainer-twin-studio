@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, Brain, Check, FileText, FileVideo, Library, MessagesSquare, X } from "lucide-react";
+import { ArrowUpRight, Brain, Check, FileText, FileVideo, Library, MessagesSquare, Paperclip, X } from "lucide-react";
+import { Attachment, AttachmentPreview, AttachmentRemove, Attachments } from "@/components/ai-elements/attachments";
+import { PromptInputButton, PromptInputHeader, usePromptInputAttachments } from "@/components/ai-elements/prompt-input";
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -122,6 +124,54 @@ export function SkillMenu({ skills, active, onPick, onHover }: {
 }
 
 /** The picked skill and files above the textarea (removable), or under a sent message (read-only). */
+/** What a trainer may attach in a copilot chat (lib/context-upload.ts "during"): an image up to 5 MB, a PDF up to 10 MB. */
+export const COPILOT_ATTACH_ACCEPT = "image/png,image/jpeg,image/webp,application/pdf";
+export const COPILOT_ATTACH_MAX_FILES = 4;
+
+/** Paperclip: picks images or PDFs to attach to the next message (uploaded to S3 when it's sent). */
+export function AttachFileButton({ disabled }: { disabled?: boolean }) {
+  const attachments = usePromptInputAttachments();
+  return (
+    <PromptInputButton
+      title="Attach an image or PDF"
+      aria-label="Attach an image or PDF"
+      disabled={disabled || attachments.files.length >= COPILOT_ATTACH_MAX_FILES}
+      onClick={() => attachments.openFileDialog()}
+    >
+      <Paperclip className="size-4" aria-hidden="true" />
+    </PromptInputButton>
+  );
+}
+
+/** The composer's header: the skill and knowledge chips, and the files waiting to be sent. Nothing when empty. */
+export function ComposerHeader({ skill, files, onRemoveSkill, onRemoveFile }: {
+  skill?: CopilotSkillName;
+  files: PickedFile[];
+  onRemoveSkill: () => void;
+  onRemoveFile: (id: string) => void;
+}) {
+  const attachments = usePromptInputAttachments();
+  if (!skill && !files.length && !attachments.files.length) return null;
+  return (
+    <PromptInputHeader>
+    <div className="flex w-full flex-wrap items-center gap-1.5">
+      <CopilotChips skill={skill} files={files} onRemoveSkill={onRemoveSkill} onRemoveFile={onRemoveFile} />
+      {attachments.files.length > 0 && (
+        <Attachments variant="inline">
+          {attachments.files.map((file) => (
+            <Attachment key={file.id} data={file} onRemove={() => attachments.remove(file.id)}>
+              <AttachmentPreview />
+              <span className="max-w-40 truncate text-xs">{file.filename}</span>
+              <AttachmentRemove />
+            </Attachment>
+          ))}
+        </Attachments>
+      )}
+    </div>
+    </PromptInputHeader>
+  );
+}
+
 export function CopilotChips({ skill, files, onRemoveSkill, onRemoveFile, className }: {
   skill?: CopilotSkillName;
   files: PickedFile[];

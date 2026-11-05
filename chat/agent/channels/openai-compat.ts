@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { defineChannel, POST, type Session } from "eve/channels";
+import { fetchUpload, UPLOAD_POLICY, withAttachments } from "../lib/uploads";
 import { studioPrincipal } from "../lib/auth";
 import { createQuestionBridge } from "../lib/question-bridge";
 import { followUpGradesFor } from "../lib/turn-grades";
@@ -8,7 +9,7 @@ import { thinkingBudgetSchema } from "../lib/thinking-budget";
 import { studioFetch } from "../lib/studio";
 
 /** Lookups shown in "Why this answer" (the web describes and resolves them; UI tools are left out). */
-const EVIDENCE_TOOLS = new Set(["scenario_examples", "search_knowledge", "search_style", "read_document", "eve__skill"]);
+const EVIDENCE_TOOLS = new Set(["scenario_examples", "search_knowledge", "read_knowledge_document", "search_style", "read_document", "eve__skill"]);
 /** What "Heard" says for replies that don't answer a learner's words (the rest show the words themselves). */
 const EVIDENCE_HEARD: Record<string, string> = {
   opening: "",
@@ -184,6 +185,9 @@ function serviceAuthorized(request: Request) {
 }
 
 export default defineChannel({
+  // Files attached mid-call ([ATTACHED <id>] in the learner's message) reach the model as files (lib/uploads.ts).
+  fetchFile: fetchUpload,
+  uploadPolicy: UPLOAD_POLICY,
   routes: [
     POST("/internal/sessions", async (request, { resolveSession }) => {
       if (!serviceAuthorized(request)) return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -327,7 +331,7 @@ export default defineChannel({
       const t_tail = Date.now();
       let session: Session;
       try {
-        session = await source.send(message, { auth, turnPolicy: "steer" });
+        session = await source.send(inputKind === "learner" ? withAttachments(message) : message, { auth, turnPolicy: "steer" });
       } catch (sendErr) {
         console.error("[EVE SEND ERROR]", sendErr);
         return Response.json({ error: String(sendErr) }, { status: 400 });

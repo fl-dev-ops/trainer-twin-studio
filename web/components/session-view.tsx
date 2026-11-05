@@ -7,6 +7,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { toast } from "sonner";
 import { Check, LoaderCircle, Play, ScreenShare, Upload as UploadIcon, Volume2 } from "lucide-react";
 import { type AgentContextUpload, BEFORE_UPLOAD_ACCEPT, beforeUploadProblem, DURING_UPLOAD_ACCEPT, duringUploadProblem } from "@/lib/context-upload";
+import { attachedMessage, uploadFile } from "@/lib/upload-client";
 import "@livekit/components-styles";
 import {
   RoomAudioRenderer,
@@ -544,12 +545,7 @@ export function SessionView({
       if (problem) return void toast.error(problem);
       setAttaching(true);
       try {
-        const form = new FormData();
-        form.append("file", file);
-        if (sessionCode) form.append("shareCode", sessionCode);
-        const uploaded = await fetch("/api/upload", { method: "POST", body: form });
-        const doc = await uploaded.json().catch(() => null);
-        if (!uploaded.ok) throw new Error(doc?.error ?? "Upload failed");
+        const doc = await uploadFile(file, { purpose: "during", shareCode: sessionCode });
         const linked = await fetch(`/api/sessions/${encodeURIComponent(connection.sessionId)}/documents`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -557,7 +553,8 @@ export function SessionView({
         });
         const result = await linked.json().catch(() => null);
         if (!linked.ok) throw new Error(result?.error ?? "Could not attach the file");
-        await handleSendMessage(`I've attached a file: ${doc.name} (document ID ${doc.id}).`);
+        // The bridge turns the marker into the file itself for the agent (chat/agent/channels/openai-compat.ts).
+        await handleSendMessage(attachedMessage(doc));
         toast.success(`${doc.name} attached`);
       } catch (attachError) {
         toast.error(attachError instanceof Error ? attachError.message : "Could not attach the file");
@@ -1127,12 +1124,7 @@ export function SessionView({
                         setUploadingContext(true);
                         setError("");
                         try {
-                          const form = new FormData();
-                          form.append("file", file);
-                          if (sessionCode) form.append("shareCode", sessionCode);
-                          const res = await fetch("/api/upload", { method: "POST", body: form });
-                          const data = await res.json().catch(() => null);
-                          if (!res.ok) throw new Error(data?.error ?? "Upload failed");
+                          const data = await uploadFile(file, { purpose: "before", shareCode: sessionCode });
                           setContextList((prev) => [
                             ...prev,
                             { id: data.id, name: data.name, size: file.size },

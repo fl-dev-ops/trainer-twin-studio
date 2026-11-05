@@ -99,8 +99,12 @@ export async function presignedGetUrl(key: string, expiresIn = 3600) {
 }
 
 /** Browser uploads straight to S3 (files too large to pass through the app); the bucket's CORS allows PUT. */
-export async function presignedPutUrl(key: string, contentType: string, expiresIn = 600) {
-  return getSignedUrl(client(), new PutObjectCommand({ Bucket: bucket, Key: key, ContentType: contentType }), { expiresIn });
+export async function presignedPutUrl(key: string, contentType: string, expiresIn = 600, contentLength?: number) {
+  // A signed length makes S3 refuse a body of any other size (an upload can't exceed what was checked).
+  return getSignedUrl(client(), new PutObjectCommand({ Bucket: bucket, Key: key, ContentType: contentType, ContentLength: contentLength }), {
+    expiresIn,
+    ...(contentLength ? { signableHeaders: new Set(["content-type", "content-length"]) } : {}),
+  });
 }
 
 export async function deleteObject(key: string) {

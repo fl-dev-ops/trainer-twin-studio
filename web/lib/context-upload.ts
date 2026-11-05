@@ -29,35 +29,49 @@ export type BeforeSettings = {
 export const TWIN_UPLOAD_TITLE_DEFAULT = "Documents";
 
 /**
- * What a learner may upload, fixed for every agent (twins and role plays), with no per-agent setting. Before the call:
- * a PDF or an image; during it: an image. Both up to 10 MB. Images are PNG, JPEG or WebP (what the upload verifies).
+ * What may be uploaded, fixed for every agent (twins and role plays) and the copilot. Before a call: a PDF or an image,
+ * up to 10 MB. During a conversation (a call, a calibration, a copilot chat): an image up to 5 MB or a PDF up to 10 MB.
+ * Images are PNG, JPEG or WebP (what the upload verifies from the bytes).
  */
 export const UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
+export const DURING_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 export const BEFORE_UPLOAD_ACCEPT = ".pdf,.png,.jpg,.jpeg,.webp";
 export const BEFORE_UPLOAD_RULE = "A PDF or an image (PNG, JPEG or WebP), up to 10 MB.";
 /** The session start's refusal (the API returns it as a 400). */
 export const BEFORE_UPLOAD_REFUSED = `This file can't be used for the conversation. ${BEFORE_UPLOAD_RULE}`;
-export const DURING_UPLOAD_ACCEPT = ".png,.jpg,.jpeg,.webp";
-export const DURING_UPLOAD_RULE = "Images only (PNG, JPEG or WebP), up to 10 MB.";
+export const DURING_UPLOAD_ACCEPT = ".pdf,.png,.jpg,.jpeg,.webp";
+export const DURING_UPLOAD_RULE = "An image (PNG, JPEG or WebP) up to 5 MB, or a PDF up to 10 MB.";
 
-function uploadProblem(file: { name: string; size?: number | null }, accept: string, wrongType: string) {
-  const ext = `.${(file.name.split(".").pop() ?? "").toLowerCase()}`;
-  if (!accept.split(",").includes(ext)) return wrongType;
-  if ((file.size ?? 0) > UPLOAD_MAX_BYTES) return "That file is over 10 MB. Use a smaller one.";
+export type UploadWhen = "before" | "during";
+const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
+const extOf = (name: string) => `.${(name.split(".").pop() ?? "").toLowerCase()}`;
+
+/** Why this file can't be uploaded, or null if it can (checked by the browser before uploading, and by the server). */
+export function uploadProblem(file: { name: string; size?: number | null }, when: UploadWhen): string | null {
+  const ext = extOf(file.name);
+  const size = file.size ?? 0;
+  if (!(when === "before" ? BEFORE_UPLOAD_ACCEPT : DURING_UPLOAD_ACCEPT).split(",").includes(ext)) {
+    return when === "before"
+      ? "Only a PDF or an image (PNG, JPEG or WebP) can be added before the conversation."
+      : "Only an image (PNG, JPEG or WebP) or a PDF can be added here.";
+  }
+  if (when === "during" && IMAGE_EXTS.has(ext) && size > DURING_IMAGE_MAX_BYTES) return "That image is over 5 MB. Use a smaller one.";
+  if (size > UPLOAD_MAX_BYTES) return "That file is over 10 MB. Use a smaller one.";
   return null;
 }
 
 /** Why this file can't be added before the conversation, or null if it can (checked before uploading). */
-export const beforeUploadProblem = (file: { name: string; size?: number | null }) =>
-  uploadProblem(file, BEFORE_UPLOAD_ACCEPT, "Only a PDF or an image (PNG, JPEG or WebP) can be added before the conversation.");
+export const beforeUploadProblem = (file: { name: string; size?: number | null }) => uploadProblem(file, "before");
 
 /** Why this file can't be attached during the conversation, or null if it can (checked before uploading). */
-export const duringUploadProblem = (file: { name: string; size?: number | null }) =>
-  uploadProblem(file, DURING_UPLOAD_ACCEPT, "Only images can be attached during the conversation (PNG, JPEG or WebP).");
+export const duringUploadProblem = (file: { name: string; size?: number | null }) => uploadProblem(file, "during");
 
 /** The server's check on a stored upload (kind and type verified from its bytes at upload). */
-export const uploadAllowed = (doc: { kind: string; mimeType: string; size: number | null }, when: "before" | "during") =>
-  (doc.size ?? 0) <= UPLOAD_MAX_BYTES && (doc.kind === "image" || (when === "before" && doc.mimeType === "application/pdf"));
+export const uploadAllowed = (doc: { kind: string; mimeType: string; size: number | null }, when: UploadWhen) => {
+  const size = doc.size ?? 0;
+  if (doc.kind === "image") return size <= (when === "during" ? DURING_IMAGE_MAX_BYTES : UPLOAD_MAX_BYTES);
+  return doc.mimeType === "application/pdf" && size <= UPLOAD_MAX_BYTES;
+};
 
 const MODE_DEFAULTS: Record<string, { prompt: string; label: string }> = {
   resume_grounding: {
