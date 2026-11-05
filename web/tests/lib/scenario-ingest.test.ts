@@ -358,3 +358,24 @@ test("each published version records which knowledge base documents built it (it
   await ingestScenario("org1", input({ scenario: { ...scenario, name: "Depth drill" } })); // unchanged: no new rows
   expect(skillSources).toHaveLength(2);
 });
+
+test("an update's change record is stored with its new version (changes.json), never over an unchanged one", async () => {
+  const { ingestTwinSkill } = await import("@/lib/scenario-ingest");
+  const twin = (extra: Row = {}) => ({
+    personaSlug: "vasanth",
+    skill: "---\nname: objection-handling\ndescription: \"When clients push back\"\n---\n## Too expensive\nI clarify.\n",
+    manifest: { skill: "objection-handling", name: "Objection Handling", description: "When clients push back", situations: [{ id: "too-expensive", name: "Too expensive" }] },
+    items: [{ ...item("t#1"), metadata: { ...item("t#1").metadata, step: "too-expensive" } }],
+    ...extra,
+  }) as never;
+  await ingestTwinSkill("org1", twin());
+  const changes = { base: { slug: "acme-objection-handling", version: 1 }, edits: [{ file: "SKILL.md", find: "I clarify.", replace: "I clarify, then ask.", why: "new session" }] };
+  const v2 = await ingestTwinSkill("org1", twin({ skill: "---\nname: objection-handling\ndescription: \"When clients push back\"\n---\n## Too expensive\nI clarify, then ask.\n", changes }));
+  expect(v2.version).toBe(2);
+  expect(JSON.parse(s3.get(`${v2.artifacts}/changes.json`)!)).toEqual(changes);
+  expect(s3.has(`${(await ingestTwinSkill("org1", twin({ changes }))).artifacts}/changes.json`)).toBe(true); // v3 (content differs from v2)
+  const before = s3.size;
+  await ingestTwinSkill("org1", twin({ changes })); // unchanged since v3: nothing new written for it
+  expect([...s3.keys()].filter((key) => key.endsWith("changes.json"))).toHaveLength(2);
+  expect(s3.size).toBe(before);
+});

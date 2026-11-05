@@ -200,6 +200,8 @@ async function storeSkillAgent(input: {
   skill: string;
   items: (ScenarioItem | RoleplayItem)[];
   patterns?: string;
+  /** An update's change record, stored with a new version as changes.json (debugging only; not part of the version's content). */
+  changes?: Record<string, unknown>;
   /** Agent.data keys on top of the derived ones (role play: source, after). */
   data?: Record<string, unknown>;
   runId?: string | null;
@@ -238,6 +240,7 @@ async function storeSkillAgent(input: {
     putObject(`${artifacts}/${pkg.manifestFile}`, fileText.scenario(pkg.manifest), "application/json"),
     putObject(`${artifacts}/items.json`, fileText.items(input.items), "application/json"),
     ...(input.patterns !== undefined ? [putObject(`${artifacts}/patterns.md`, input.patterns, "text/markdown; charset=utf-8")] : []),
+    ...(input.changes && !unchanged ? [putObject(`${artifacts}/changes.json`, JSON.stringify(input.changes, null, 1) + "\n", "application/json")] : []),
   ]);
   // The new version's items go in next to the live ones; the Agent row then switches to them. A failure before the
   // switch leaves the live version untouched.
@@ -311,6 +314,8 @@ export const twinSkillIngestSchema = z.object({
   /** The trainer's own words only. */
   items: z.array(scenarioItemSchema.refine((item) => item.role === "trainer", "a twin skill holds only the trainer's words")).max(5000),
   patterns: z.string().max(1_000_000).optional(),
+  /** An update's change record from the copilot (items added / removed, text edits): stored as the version's changes.json, for debugging. */
+  changes: z.record(z.string(), z.unknown()).refine((value) => JSON.stringify(value).length <= 500_000, "changes is too large").optional(),
   runId: runId.optional(),
 });
 export type TwinSkillIngestInput = z.infer<typeof twinSkillIngestSchema>;
@@ -348,7 +353,7 @@ export async function ingestTwinSkill(orgId: string, input: TwinSkillIngestInput
   if (!persona) throw new ScenarioIngestError(`Persona "${input.personaSlug}" was not found in this organization`, 404);
   return storeSkillAgent({
     org, kind: "TWIN", personaId: persona.id, built: buildTwinSkill(org.slug, input.manifest, input.skill),
-    skill: input.skill, items: input.items, patterns: input.patterns, runId: input.runId,
+    skill: input.skill, items: input.items, patterns: input.patterns, changes: input.changes, runId: input.runId,
   });
 }
 

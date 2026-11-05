@@ -23,9 +23,10 @@ export default defineTool({
   async execute({ user, skill, persona }, ctx) {
     const { files, rejected } = await prepareTwinPublication(await sessionIo(ctx), user, skill);
     if (!files.length) return { published: 0, rejected };
-    const published = await pool(files, 8, (f) => pushOutput(user, f.path, f.text, outputScope(ctx)));
     const io = await sessionIo(ctx);
+    // Read before publishing: a successful publish clears it (rebaseAfterPublish).
     const changes = await readJson<TwinChanges | null>(io, user, `${twinDir(skill)}/changes.json`, null);
+    const published = await pool(files, 8, (f) => pushOutput(user, f.path, f.text, outputScope(ctx)));
     const principal = sessionPrincipal(ctx);
     const url = process.env.STUDIO_URL;
     const secret = process.env.SCENARIO_INGEST_SECRET;
@@ -33,7 +34,7 @@ export default defineTool({
       ? { skipped: "This session is not attached to a TrainerTwin organization." }
       : !url || !secret
         ? { skipped: "STUDIO_URL or SCENARIO_INGEST_SECRET is not configured." }
-        : await publishTwinSkillToStudio({ url, secret, orgId: principal.principalId, persona: persona ?? user, runId: runIdFor(ctx.session.id) }, skill, files, fetch, ctx.abortSignal);
+        : await publishTwinSkillToStudio({ url, secret, orgId: principal.principalId, persona: persona ?? user, runId: runIdFor(ctx.session.id) }, skill, files, fetch, ctx.abortSignal, changes ?? undefined);
     // The next build in this conversation builds on what is now live, not on what was loaded before.
     if ("ok" in studio && studio.ok && studio.slug && studio.version) await rebaseAfterPublish(io, user, skill, { slug: studio.slug, version: studio.version });
     return { published: published.length, where: published[0]?.replace(/\/[^/]*$/, "") ?? null, rejected, studio, ...(changes ? { changes } : {}) };

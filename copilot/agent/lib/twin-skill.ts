@@ -275,18 +275,63 @@ export const twinBuildInput = z.object({
   items: z.array(twinItemInput).default([]).describe("New items. In update mode (after load_skill) only the ones to add; the loaded items are kept."),
   remove: z.array(z.object({ id: z.string(), reason: z.string().min(3) })).default([])
     .describe("Update mode only: loaded items to drop, each with why (outdated, wrong situation, superseded by a new source)."),
-  patterns: z.string().min(1).describe("patterns.md: the evidence notes, with every section and [[file#turn]] / [[file]] refs."),
-  body: z.string().min(1).describe("SKILL.md body (no front matter), first person, every section."),
+  patterns: z.string().min(1).optional().describe("New skill only: patterns.md, the evidence notes, with every section and [[file#turn]] / [[file]] refs."),
+  body: z.string().min(1).optional().describe("New skill only: SKILL.md body (no front matter), first person, every section."),
+  edits: z.array(z.object({
+    file: z.enum(["SKILL.md", "patterns.md"]),
+    find: z.string().min(1).describe("Exact text of the loaded file, found exactly once."),
+    replace: z.string().describe("What it becomes (empty to delete it)."),
+    why: z.string().min(3).describe("Why this changes: the new source, what was outdated."),
+  })).default([]).describe(
+    "Update mode only (after load_skill): the changes to SKILL.md and patterns.md as find/replace on the LOADED (published) text, never the whole files. Send every edit of this update each time you build; they apply to the published text, not to an earlier attempt.",
+  ),
 });
+
+export type TwinEdit = { file: "SKILL.md" | "patterns.md"; find: string; replace: string; why: string };
+
+/**
+ * Applies an update's edits to the published text, in order. Each `find` must occur exactly once in the text as edited
+ * so far, so an edit can never land in the wrong place; otherwise nothing is applied and the reasons come back.
+ */
+export function applyEdits(text: string, edits: TwinEdit[]): { text: string } | { rejected: string[] } {
+  let out = text;
+  const rejected: string[] = [];
+  for (const [i, edit] of edits.entries()) {
+    const at = out.indexOf(edit.find);
+    if (at < 0) { rejected.push(`edit ${i + 1} (${edit.file}): "find" is not in the loaded text; copy it exactly`); continue; }
+    if (out.indexOf(edit.find, at + 1) >= 0) { rejected.push(`edit ${i + 1} (${edit.file}): "find" occurs more than once; include more surrounding text`); continue; }
+    out = out.slice(0, at) + edit.replace + out.slice(at + edit.find.length);
+  }
+  return rejected.length ? { rejected } : { text: out };
+}
 
 /** Saves every file of one twin skill (replacing an earlier attempt), then runs the full check. Writes nothing if an item is rejected. */
 export async function saveTwinSkill(io: Io, user: string, input: z.infer<typeof twinBuildInput>) {
   // Defaults also hold for callers that skip zod (tests, scripts).
-  const { skill: head, names = [], items: picks = [], remove = [], patterns, body } = input;
+  const { skill: head, names = [], items: picks = [], remove = [], edits = [] } = input;
   const dir = twinDir(head.skill);
   const base = await readJson<TwinBase | null>(io, user, `${dir}/base.json`, null);
   if (!base && remove.length) return { saved: false, rejected: ["remove is only for updates: call load_skill first, or leave remove empty for a new skill"] };
   if (!base && !picks.length) return { saved: false, rejected: ["a new skill needs items"] };
+  // A new skill sends its texts whole; an update changes the published texts with edits only, so every change is
+  // explicit and recorded (changes.json, published with the version for debugging).
+  let body = input.body;
+  let patterns = input.patterns;
+  if (base) {
+    if (body !== undefined || patterns !== undefined) {
+      return { saved: false, rejected: ["This is an update: change SKILL.md and patterns.md with `edits` (find/replace on the loaded text), not by sending them whole."] };
+    }
+    if (base.body === undefined || base.patterns === undefined) return { saved: false, rejected: ["The loaded skill has no texts to edit: call load_skill again."] };
+    const skillEdits = applyEdits(base.body, edits.filter((e) => e.file === "SKILL.md"));
+    const patternEdits = applyEdits(base.patterns, edits.filter((e) => e.file === "patterns.md"));
+    const editErrors = [...("rejected" in skillEdits ? skillEdits.rejected : []), ...("rejected" in patternEdits ? patternEdits.rejected : [])];
+    if (editErrors.length) return { saved: false, rejected: editErrors };
+    body = (skillEdits as { text: string }).text;
+    patterns = (patternEdits as { text: string }).text;
+  } else {
+    if (edits.length) return { saved: false, rejected: ["edits are for updates (after load_skill); a new skill sends body and patterns whole"] };
+    if (!body || !patterns) return { saved: false, rejected: ["a new skill needs body and patterns"] };
+  }
   // Update mode keeps the trainer labels worked out from the loaded items (sources.json) and adds the new ones.
   const trainer = base ? { ...(await readJson(io, user, `${dir}/sources.json`, { trainer: {} as Record<string, string[]> })).trainer, ...input.trainer } : (input.trainer ?? {});
   const builds = Number((await io.read(outPath(user, `${dir}/builds`))) ?? 0) + 1;
@@ -306,7 +351,7 @@ export async function saveTwinSkill(io: Io, user: string, input: z.infer<typeof 
     const merged = mergeWithBase(base, head.skill, fresh, remove);
     if ("rejected" in merged) return { saved: false, rejected: merged.rejected };
     items = merged.items;
-    changes = merged.changes;
+    changes = { ...merged.changes, edits };
     await io.write(outPath(user, `${dir}/changes.json`), JSON.stringify(changes, null, 1) + "\n");
   }
   await io.write(outPath(user, `${dir}/sources.json`), JSON.stringify({ trainer }, null, 1) + "\n");
@@ -319,8 +364,11 @@ export async function saveTwinSkill(io: Io, user: string, input: z.infer<typeof 
 
 // ---- Update mode: a published skill loaded as the baseline (load_skill) ----
 
-/** The published version an update builds on (output/<user>/twin-skills/<id>/base.json). */
-export type TwinBase = { slug: string; version: number; skillId: string; name: string; items: TwinItem[] };
+/**
+ * The published version an update builds on (output/<user>/twin-skills/<id>/base.json): its items, and its SKILL.md body
+ * and patterns.md, which an update's edits apply to (absent in base.json written before edits existed).
+ */
+export type TwinBase = { slug: string; version: number; skillId: string; name: string; items: TwinItem[]; body?: string; patterns?: string };
 export type TwinChanges = {
   base: { slug: string; version: number };
   kept: number;
@@ -328,6 +376,8 @@ export type TwinChanges = {
   removed: { id: string; reason: string }[];
   skipped: { id: string; why: string }[];
   newSources: string[];
+  /** The text edits of this update, exactly as applied to the published SKILL.md / patterns.md. */
+  edits?: TwinEdit[];
 };
 
 /** Baseline items minus the removed ones plus the new ones (a new item already in the baseline is skipped, not doubled). */
@@ -380,6 +430,9 @@ export async function trainerLabelsFromItems(io: Io, user: string, items: TwinIt
   return { trainer, missingSources: [...missing] };
 }
 
+/** SKILL.md without its front matter (the body an update's edits apply to), trimmed as saveTwinSkill writes it. */
+export const skillBodyOf = (skillMd: string) => skillMd.replace(/^---[\s\S]*?---\n/, "").trim();
+
 /**
  * After a successful publish, what was just published becomes the baseline (base.json) of the next build in this
  * conversation: a follow-up "also add X" then merges onto the new version. Without it, a follow-up merged onto the
@@ -390,7 +443,11 @@ export async function rebaseAfterPublish(io: Io, user: string, skillId: string, 
   const dir = twinDir(skillId);
   const items = await readJson<TwinItem[]>(io, user, `${dir}/items.json`, []);
   const head = await readJson<{ name?: string } | null>(io, user, `${dir}/skill.json`, null);
-  const base: TwinBase = { slug: published.slug, version: published.version, skillId, name: head?.name ?? skillId, items };
+  const skillMd = (await io.read(outPath(user, `${dir}/SKILL.md`))) ?? "";
+  const base: TwinBase = {
+    slug: published.slug, version: published.version, skillId, name: head?.name ?? skillId, items,
+    body: skillBodyOf(skillMd), patterns: (await io.read(outPath(user, `${dir}/patterns.md`))) ?? "",
+  };
   await io.write(outPath(user, `${dir}/base.json`), JSON.stringify(base, null, 1) + "\n");
   await io.write(outPath(user, `${dir}/changes.json`), "null\n");
   await io.write(outPath(user, `${dir}/builds`), "0");
@@ -405,7 +462,8 @@ export async function loadTwinBase(io: Io, user: string, published: { slug: stri
   const manifest = { ...head.data, name: published.name };
   const dir = twinDir(manifest.skill);
   const { trainer, missingSources } = await trainerLabelsFromItems(io, user, published.items);
-  const base: TwinBase = { slug: published.slug, version: published.version, skillId: manifest.skill, name: published.name, items: published.items };
+  const body = skillBodyOf(published.skill);
+  const base: TwinBase = { slug: published.slug, version: published.version, skillId: manifest.skill, name: published.name, items: published.items, body, patterns: (published.patterns ?? "").trim() + "\n" };
   await io.write(outPath(user, `${dir}/base.json`), JSON.stringify(base, null, 1) + "\n");
   await io.write(outPath(user, `${dir}/sources.json`), JSON.stringify({ trainer }, null, 1) + "\n");
   await io.write(outPath(user, `${dir}/skill.json`), JSON.stringify(manifest, null, 2) + "\n");
@@ -414,7 +472,6 @@ export async function loadTwinBase(io: Io, user: string, published: { slug: stri
   await io.write(outPath(user, `${dir}/items.json`), JSON.stringify(published.items, null, 1) + "\n");
   // A loaded skill starts with a fresh build budget.
   await io.write(outPath(user, `${dir}/builds`), "0");
-  const body = published.skill.replace(/^---[\s\S]*?---\n/, "");
   return {
     skill: manifest,
     version: published.version,

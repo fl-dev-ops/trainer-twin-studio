@@ -26,7 +26,7 @@ export default defineTool({
         const loaded = await loadTwinBase(io, user, { ...published, items: published.items as TwinItem[] });
         return {
           mode: "update",
-          next: "Read the new material, then call build_twin_skill with the same skill id, the new items, `remove` for loaded items that no longer hold, and the revised body and patterns. Show the changes to the trainer before publish_twin_skill.",
+          next: "Read the new material, then call build_twin_skill with the same skill id, the new items, `remove` for loaded items that no longer hold, and `edits` (find/replace on the loaded SKILL.md and patterns.md; never the whole texts). Show the changes to the trainer before publish_twin_skill.",
           currentVersion: published.currentVersion,
           ...loaded,
         };

@@ -95,7 +95,8 @@ export async function publishToStudio(target: StudioTarget, files: File[], fetch
  * A twin skill (twin-creator) into the TrainerTwin web app: /api/internal/twin-skills stores it as a skill of the
  * trainer's twin (kind TWIN). Never a role play.
  */
-export async function publishTwinSkillToStudio(target: StudioTarget, skill: string, files: File[], fetcher: Fetch = fetch, signal?: AbortSignal) {
+/** `changes`: an update's change record (items, text edits), stored with the version in S3 for debugging. */
+export async function publishTwinSkillToStudio(target: StudioTarget, skill: string, files: File[], fetcher: Fetch = fetch, signal?: AbortSignal, changes?: unknown) {
   const byName = new Map(files.map((f) => [f.path.split("/").pop()!, f.text]));
   const response = await fetcher(new URL("/api/internal/twin-skills", target.url).toString(), {
     method: "POST",
@@ -106,6 +107,7 @@ export async function publishTwinSkillToStudio(target: StudioTarget, skill: stri
       manifest: JSON.parse(byName.get("skill.json") ?? "null"),
       items: JSON.parse(byName.get("items.json") ?? "[]"),
       patterns: byName.get("patterns.md"),
+      ...(changes ? { changes } : {}),
       runId: target.runId,
     }),
     signal,

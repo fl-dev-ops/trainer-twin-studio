@@ -2,7 +2,7 @@
 // knowledge re-sync. Run: bun test test/copilot-v2.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { holdsPart, mergeWithBase, rebaseAfterPublish } from "../agent/lib/twin-skill.ts";
+import { applyEdits, holdsPart, mergeWithBase, rebaseAfterPublish, saveTwinSkill } from "../agent/lib/twin-skill.ts";
 import { outPath } from "../agent/lib/paths.ts";
 import { studio } from "../agent/lib/studio.ts";
 import { ensureSynced } from "../agent/lib/ingest.ts";
@@ -114,4 +114,34 @@ test("a second update in the same conversation builds on what was just published
   const second = mergeWithBase(rebased, "objection-handling", [item("d", "wait", "I let the silence work for me", "doc3")], []);
   assert.deepEqual(second.items.map((x) => x.id), ["a", "b", "c", "d"]);
   assert.deepEqual(second.changes.base, { slug: "olga-objection-handling", version: 2 });
+});
+
+test("an update's edits each match the published text exactly once, in order; otherwise nothing applies", () => {
+  const text = "## When they say it's too expensive\nI clarify what they mean.\n## When they want to wait\nI build the cost chain.\n";
+  const edit = (find, replace) => ({ file: "SKILL.md", find, replace, why: "new session with Osama" });
+  assert.deepEqual(applyEdits(text, [edit("I clarify what they mean.", "I clarify what they mean, then ask what the money protects.")]), {
+    text: "## When they say it's too expensive\nI clarify what they mean, then ask what the money protects.\n## When they want to wait\nI build the cost chain.\n",
+  });
+  assert.match(applyEdits(text, [edit("I never defend the price", "x")]).rejected[0], /not in the loaded text/);
+  assert.match(applyEdits(text, [edit("## When", "x")]).rejected[0], /more than once/);
+  // Later edits see earlier ones: a heading renamed, then text under the new name.
+  const two = applyEdits(text, [edit("## When they want to wait", "## When they want to wait for prices to drop"), edit("prices to drop\nI build", "prices to drop\nFirst I ask why, then I build")]);
+  assert.match(two.text, /First I ask why, then I build the cost chain/);
+});
+
+test("an update refuses whole texts; a new skill refuses edits; after a publish the base keeps the published texts", async () => {
+  const files = new Map();
+  const io = { read: async (p) => files.get(p) ?? null, write: async (p, c) => void files.set(p, c), list: async () => [], grep: async () => [] };
+  const head = { skill: "objection-handling", name: "Objection Handling", description: "When clients push back", situations: [] };
+  const fresh = await saveTwinSkill(io, "olga", { user: "olga", skill: head, items: [], edits: [{ file: "SKILL.md", find: "a", replace: "b", why: "because" }] });
+  assert.match(fresh.rejected[0], /a new skill needs items|edits are for updates/);
+  // Published: rebase records the published body and patterns.
+  files.set(outPath("olga", "twin-skills/objection-handling/SKILL.md"), "---\nname: objection-handling\n---\n## Too expensive\nI clarify.\n");
+  files.set(outPath("olga", "twin-skills/objection-handling/patterns.md"), "# Patterns\n");
+  files.set(outPath("olga", "twin-skills/objection-handling/items.json"), "[]");
+  const rebased = await rebaseAfterPublish(io, "olga", "objection-handling", { slug: "olga-objection-handling", version: 3 });
+  assert.equal(rebased.body, "## Too expensive\nI clarify.");
+  assert.equal(rebased.patterns, "# Patterns\n");
+  const whole = await saveTwinSkill(io, "olga", { user: "olga", skill: head, items: [], body: "## Rewritten", patterns: "# New" });
+  assert.match(whole.rejected[0], /This is an update: change SKILL.md and patterns.md with `edits`/);
 });
