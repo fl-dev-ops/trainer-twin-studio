@@ -357,11 +357,17 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
   }, [start, learner]);
 
   // Leaving the page mid-call still closes the session (pending rating saves can't be awaited here; Back does).
+  // Only on unmount: `end` changes whenever the parent re-renders (the learner prop is a new object each time), and a
+  // cleanup tied to it ended live calls on any re-render, e.g. opening Report.
+  const endRef = useRef(end);
+  useEffect(() => {
+    endRef.current = end;
+  }, [end]);
   useEffect(
     () => () => {
-      if (!endingRef.current && connectionRef.current) void end("abandoned", true);
+      if (!endingRef.current && connectionRef.current) void endRef.current("abandoned", true);
     },
-    [end],
+    [],
   );
 
   // A learner's call hands its result to the learner page (which shows the summary and feedback).
@@ -472,7 +478,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
   /** The twin reply whose "Why this answer" is open (calibration only). */
   const [whyFor, setWhyFor] = useState<{ id: string; text: string; evidence: TurnEvidence } | null>(null);
   // Evidence lands just after each reply; poll mildly so icons appear once a lookup actually pulled something.
-  const evidenceTurns = useEvidenceTurns(connection?.sessionId, 3000);
+  const evidenceTurns = useEvidenceTurns(twin && !learner ? connection?.sessionId : undefined, 3000);
   const [attaching, setAttaching] = useState(false);
   const attachInput = useRef<HTMLInputElement>(null);
   /** Mid-call file, as in the learner's session: upload it, link it to this session, then tell the twin its ID (it reads by ID). */
