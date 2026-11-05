@@ -16,11 +16,16 @@ const fakeDb = {
   },
   agent: {
     findUnique: async ({ where }: { where: { slug: string } }) => agents.find((a) => a.slug === where.slug) ?? null,
-    create: async ({ data }: { data: Row }) => void agents.push({ id: "a1", ...data }),
+    create: async ({ data }: { data: Row }) => {
+      const row = { id: "a1", ...data };
+      agents.push(row);
+      return row;
+    },
     update: async () => {},
   },
   domain: { findUnique: async () => null, create: async () => {} },
   specVersion: { create: async () => {} },
+  skillSource: { createMany: async () => ({ count: 0 }) },
   knowledgeDocument: {
     findMany: async (args: { where: Row }) => {
       knowledgeWhere = args.where;

@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   AlertCircle,
   BookOpen,
@@ -10,11 +12,20 @@ import {
   FileText,
   Layers,
   RefreshCw,
+  Sparkles,
   Trash2,
   Video,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
 import { PDFViewer } from "@/components/extend/pdf-viewer";
@@ -23,6 +34,8 @@ import { PptxViewerPreview } from "@/components/extend/pptx-viewer";
 import { CsvViewer } from "@/components/extend/csv-viewer";
 import { PreviewWrapper } from "./preview-wrapper";
 import type { KnowledgeDoc } from "./types";
+
+type UsedIn = { slug: string; name: string; kind: "twin" | "roleplay"; version: number; items: number };
 
 function getFileIcon(ext: string, connector?: string) {
   if (connector === "youtube") {
@@ -68,6 +81,15 @@ export function DocumentDetailDrawer({
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // The twin skills / role plays whose live version was built from this document (web/lib/skill-sources.ts).
+  const { data: usedIn = [] } = useQuery({
+    queryKey: ["knowledge-used-in", doc?.id],
+    enabled: Boolean(doc && open),
+    queryFn: async (): Promise<UsedIn[]> => {
+      const res = await fetch(`/api/knowledge/documents/${doc!.id}/used-in`);
+      return res.ok ? ((await res.json()) as { usedIn: UsedIn[] }).usedIn : [];
+    },
+  });
 
   useEffect(() => {
     if (!doc || !open) {
@@ -132,6 +154,27 @@ export function DocumentDetailDrawer({
 
   const actions = (
     <>
+      {usedIn.length ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<Button variant="secondary" size="sm" />}>
+            <Sparkles data-icon="inline-start" />
+            Used in {usedIn.length}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" sideOffset={8} className="min-w-64">
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Built from this document</DropdownMenuLabel>
+              {usedIn.map((use) => (
+                <DropdownMenuItem key={use.slug} render={<Link href={`/${use.kind === "twin" ? "twin" : "roleplay"}/${encodeURIComponent(use.slug)}`} />}>
+                  <span className="min-w-0 flex-1 truncate">{use.name}</span>
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    v{use.version} · {use.items} {use.items === 1 ? "item" : "items"}
+                  </span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : null}
       {doc.sourceUrl && (
         <a
           href={doc.sourceUrl}
@@ -246,6 +289,12 @@ export function DocumentDetailDrawer({
           <p className="text-xs text-muted-foreground mt-2">
             This will permanently remove the document from storage and delete all associated vector embeddings.
           </p>
+          {usedIn.length ? (
+            <p className="text-xs text-muted-foreground mt-2">
+              {usedIn.map((use) => use.name).join(", ")} {usedIn.length === 1 ? "was" : "were"} built from it. They keep
+              working as they are, but a later update can&apos;t use this document.
+            </p>
+          ) : null}
           <div className="flex justify-end gap-2 mt-4">
             <Button
               variant="outline"

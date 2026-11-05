@@ -5,7 +5,8 @@ import { KnowledgeView } from "@/components/knowledge";
 import { api, useApi } from "@/lib/api";
 
 export default function KnowledgePage() {
-  const drive = useSearchParams().get("drive");
+  const params = useSearchParams();
+  const drive = params.get("drive");
   const { initialDocs, initialStats } = useApi(["page.twinKnowledge"], () => api.page.twinKnowledge.query());
-  return <KnowledgeView initialDocs={initialDocs} initialStats={initialStats} initialDriveConnected={drive === "connected"} />;
+  return <KnowledgeView initialDocs={initialDocs} initialStats={initialStats} initialDriveConnected={drive === "connected"} initialDocId={params.get("doc")} />;
 }

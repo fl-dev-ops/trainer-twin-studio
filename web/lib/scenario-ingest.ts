@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { skillSourceRows } from "@/lib/skill-sources";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { MainCollectionService } from "@/lib/main-collection";
 import { putObject, s3Configured, scenarioArtifactsPrefix, scenarioRunPrefix } from "@/lib/s3";
@@ -244,9 +245,11 @@ async function storeSkillAgent(input: {
 
   await db.$transaction(async (tx) => {
     if (!currentAgent) {
-      await tx.agent.create({
+      const created = await tx.agent.create({
         data: { slug, name: agentData.name, version, personaId: input.personaId, kind, data: json(data), orgId: org.id },
       });
+      // Which knowledge base documents built this version (lib/skill-sources.ts), with the version itself.
+      await tx.skillSource.createMany({ data: await skillSourceRows(org.id, created.id, version, input.items, tx), skipDuplicates: true });
       return;
     }
     // Publishing onto an archived skill / role play brings it back (archive is a soft delete; the slug stays taken).
@@ -262,6 +265,7 @@ async function storeSkillAgent(input: {
       where: { id: currentAgent.id },
       data: { name: agentData.name, version, personaId: input.personaId, data: json(data), archivedAt: null },
     });
+    await tx.skillSource.createMany({ data: await skillSourceRows(org.id, currentAgent.id, version, input.items, tx), skipDuplicates: true });
   });
 
   // Now that the row points at the new version: keep its items and the previous version's (calls that started on it);

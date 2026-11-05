@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { builtFrom } from "@/lib/skill-sources";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { beforeSettings } from "@/lib/context-upload";
 import { assignablePeople } from "@/lib/learners";
@@ -231,7 +232,7 @@ const agentsRouter = t.router({
     const orgId = ctx.user.orgId;
     const found = await findTwinAgent(orgId, input.slug);
     const [agent, assignments, sessions, calibrations, skillAgents] = await Promise.all([
-      db.agent.findUniqueOrThrow({ where: { id: found.id }, select: { data: true } }),
+      db.agent.findUniqueOrThrow({ where: { id: found.id }, select: { data: true, version: true } }),
       listTwinAssignments(orgId, found.id),
       db.interviewSession.findMany({
         where: learnerSessions(orgId, found.id),
@@ -244,10 +245,11 @@ const agentsRouter = t.router({
       db.agent.findMany({
         where: { orgId, kind: "TWIN", archivedAt: null, NOT: { data: { path: ["source"], equals: TWIN_SOURCE } } },
         orderBy: { updatedAt: "desc" },
-        select: { slug: true, name: true },
+        select: { id: true, slug: true, name: true, version: true },
       }),
     ]);
     const data = asRecord(agent.data);
+    const allSkills = data.source === TWIN_SOURCE;
     const active = assignments.filter((row) => row.status === "active");
     const lengths = sessions.map((row) => durationSeconds(row.startedAt, row.endedAt)).filter((s): s is number => s !== null);
     const rated = sessions.map((row) => row.feedbackRating).filter((r): r is number => r !== null);
@@ -256,9 +258,16 @@ const agentsRouter = t.router({
       name: found.name,
       description: text(data.objective),
       whoAsks: whoAsks(data),
-      allSkills: data.source === TWIN_SOURCE,
+      allSkills,
       /** The twin agents the main twin covers (empty for a skill twin). */
-      skills: data.source === TWIN_SOURCE ? skillAgents : [],
+      skills: allSkills ? skillAgents.map(({ slug, name }) => ({ slug, name })) : [],
+      /**
+       * The knowledge base documents this skill's live version was built from (the main twin: all its live skills'),
+       * with items per document; null when not recorded (skills from before the knowledge base sync).
+       */
+      builtFrom: await builtFrom(orgId, allSkills
+        ? skillAgents.map((skill) => ({ agentId: skill.id, version: skill.version }))
+        : [{ agentId: found.id, version: agent.version }]),
       settings: beforeSettings(data),
       credit: {
         minutes: active.reduce((sum, row) => sum + row.minutesLimit, 0),

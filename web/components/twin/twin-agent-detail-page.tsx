@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { CSSProperties } from "react";
 import {
   ArrowUpRight,
+  FileText,
   Play,
   Settings2,
   Share2,
@@ -33,6 +34,7 @@ import { cn } from "@/lib/utils";
 import { PageContainer } from "@/components/page-container";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from "@/components/ui/item";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type TwinDetail = TwinOutputs["agents"]["get"];
@@ -339,6 +341,45 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
             <WeekBarsChart days={twin.report.week} />
             <FeelsLikeMeChart weeks={twin.report.feelsLikeMe} />
           </div>
+          </CardContent>
+        </Card>
+
+        {/* Full width: the knowledge base documents this twin's live version was built from (the main twin: its skills'). */}
+        <Card size="lg" className="md:col-span-2">
+          <CardContent>
+            <h2 className="m-0 text-title-s font-semibold tracking-title">Built from</h2>
+            {twin.builtFrom ? (
+              <ItemGroup divided className="mt-2">
+                {twin.builtFrom.map((doc) => (
+                  <Item key={doc.documentId} size="row">
+                    <ItemMedia variant="icon">
+                      <FileText className="text-muted-foreground" />
+                    </ItemMedia>
+                    <ItemContent>
+                      <ItemTitle>
+                        {doc.exists ? (
+                          <Link href={`/twin/knowledge?doc=${encodeURIComponent(doc.documentId)}`} className="hover:underline">
+                            {doc.title}
+                          </Link>
+                        ) : (
+                          doc.title
+                        )}
+                      </ItemTitle>
+                      {doc.exists ? null : <ItemDescription>No longer in the knowledge base</ItemDescription>}
+                    </ItemContent>
+                    <ItemActions>
+                      <span className="text-sm tabular-nums text-muted-foreground">
+                        {doc.items} {doc.items === 1 ? "item" : "items"}
+                      </span>
+                    </ItemActions>
+                  </Item>
+                ))}
+              </ItemGroup>
+            ) : (
+              <p className="mt-4 text-sm text-muted-foreground">
+                {twin.allSkills ? "Not recorded for its twin agents yet." : "Not recorded for this version."}
+              </p>
+            )}
           </CardContent>
         </Card>
 

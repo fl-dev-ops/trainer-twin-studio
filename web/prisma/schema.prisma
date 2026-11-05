@@ -62,6 +62,7 @@ model Agent {
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
   deployments     Deployment[]
+  skillSources    SkillSource[]
   sessions        InterviewSession[]
   twinAssignments TwinAssignment[]
   twinShareLinks  TwinShareLink[]
@@ -989,4 +990,23 @@ model CopilotSession {
 
   @@index([orgId, userId, createdAt])
   @@map("copilot_session")
+}
+
+/// Which knowledge base documents one version of a twin skill / role play was built from, and how many of its items
+/// each gave (counted from items.json at publish: each item's metadata.source is the KnowledgeDocument id). The title is
+/// kept as it was at publish, so a document deleted since still has a name. No FK to the document for the same reason.
+/// Written by storeSkillAgent (web/lib/scenario-ingest.ts); older versions by scripts/backfill-skill-sources.ts.
+model SkillSource {
+  agentId    String
+  version    Int
+  documentId String
+  orgId      String
+  title      String
+  items      Int
+  createdAt  DateTime @default(now())
+
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@id([agentId, version, documentId])
+  @@index([orgId, documentId])
 }

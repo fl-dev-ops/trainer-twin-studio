@@ -8,6 +8,7 @@ let specVersions: Row[] = [];
 let storedItems: { orgId: string; agentSlug: string; version: number; count: number } | null = null;
 let pruned: { agentSlug: string; keepFrom: number }[] = [];
 let failItems = false;
+let skillSources: Row[] = [];
 const s3 = new Map<string, string>();
 
 const fakeDb = {
@@ -26,7 +27,9 @@ const fakeDb = {
     findUnique: async ({ where }: { where: { slug: string } }) => agents.find((a) => a.slug === where.slug) ?? null,
     create: async ({ data }: { data: Row }) => {
       log.push("agent.create");
-      agents.push({ id: `a${agents.length + 1}`, ...data });
+      const row = { id: `a${agents.length + 1}`, ...data };
+      agents.push(row);
+      return row;
     },
     update: async ({ where, data }: { where: { id: string }; data: Row }) => {
       log.push("agent.update");
@@ -40,6 +43,12 @@ const fakeDb = {
     },
   },
   specVersion: { create: async ({ data }: { data: Row }) => void specVersions.push(data) },
+  // The org's knowledge base: "abc" (the test items' source) is a document of org1.
+  knowledgeDocument: {
+    findMany: async ({ where }: { where: { id: { in: string[] }; kb: { orgId: string } } }) =>
+      where.kb.orgId === "org1" ? [{ id: "abc", title: "Session 3 · Osama" }].filter((doc) => where.id.in.includes(doc.id)) : [],
+  },
+  skillSource: { createMany: async ({ data }: { data: Row[] }) => void skillSources.push(...data) },
   $transaction: async (fn: (tx: unknown) => unknown) => fn(fakeDb),
 };
 mock.module("@/lib/db", () => ({ db: fakeDb }));
@@ -126,6 +135,7 @@ beforeEach(() => {
   storedItems = null;
   pruned = [];
   failItems = false;
+  skillSources = [];
   s3.clear();
 });
 
@@ -337,4 +347,14 @@ test("changing only items.json (or patterns.md) makes a new version instead of o
   expect(JSON.parse(s3.get("p/org1/scenario-ingest/scenarios/acme-fundamental-depth/v2/items.json")!)).toEqual([item("x#2")]);
   const patterns = await ingestScenario("org1", input({ items: [item("x#2")], patterns: "# New evidence\n" }));
   expect(patterns).toMatchObject({ version: 3 });
+});
+
+test("each published version records which knowledge base documents built it (items per document)", async () => {
+  await ingestScenario("org1", input({ items: [item("x#1"), item("x#2"), { ...item("x#3"), metadata: { ...item("x#3").metadata, source: "not-in-the-kb" } }] }));
+  // Only the org's KB documents; the unknown source gets no row.
+  expect(skillSources).toEqual([{ agentId: "a1", version: 1, documentId: "abc", orgId: "org1", title: "Session 3 · Osama", items: 2 }]);
+  await ingestScenario("org1", input({ scenario: { ...scenario, name: "Depth drill" } }));
+  expect(skillSources.map((row) => row.version)).toEqual([1, 2]);
+  await ingestScenario("org1", input({ scenario: { ...scenario, name: "Depth drill" } })); // unchanged: no new rows
+  expect(skillSources).toHaveLength(2);
 });

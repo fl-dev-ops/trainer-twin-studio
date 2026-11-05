@@ -21,10 +21,13 @@ export function KnowledgeView({
   initialDocs = [],
   initialStats = null,
   initialDriveConnected = false,
+  initialDocId = null,
 }: {
   initialDocs?: KnowledgeDoc[];
   initialStats?: KnowledgeStats | null;
   initialDriveConnected?: boolean;
+  /** ?doc=<id>: opens that document (e.g. from a skill's "Built from"). */
+  initialDocId?: string | null;
 }) {
   const queryClient = useQueryClient();
 
@@ -109,8 +112,8 @@ export function KnowledgeView({
   const [searching, setSearching] = useState(false);
   // Modals & Drawers
   const [addSourceOpen, setAddSourceOpen] = useState(initialDriveConnected);
-  const [selectedDoc, setSelectedDoc] = useState<KnowledgeDoc | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [selectedDoc, setSelectedDoc] = useState<KnowledgeDoc | null>(() => initialDocs.find((doc) => doc.id === initialDocId) ?? null);
+  const [drawerOpen, setDrawerOpen] = useState(() => initialDocs.some((doc) => doc.id === initialDocId));
   const [reindexingId, setReindexingId] = useState<string | null>(null);
   const [refreshingSourceId, setRefreshingSourceId] = useState<string | null>(null);
 
