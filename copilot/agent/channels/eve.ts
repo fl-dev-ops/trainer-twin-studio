@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { eveChannel } from "eve/channels/eve";
 import { type AuthFn, localDev, vercelOidc } from "eve/channels/auth";
+import { fetchUpload, UPLOAD_POLICY } from "../lib/uploads";
 
 function studioOrganization(): AuthFn<Request> {
   return (request) => {
@@ -30,4 +31,7 @@ function studioOrganization(): AuthFn<Request> {
 export default eveChannel({
   // The web app (org-scoped sessions), the eve TUI against a deployment, and `eve dev` locally.
   auth: [studioOrganization(), vercelOidc(), localDev()],
+  // Files the trainer attaches arrive as trainertwin-upload://<id> pointers (uploaded to S3 by the browser first).
+  fetchFile: fetchUpload,
+  uploadPolicy: UPLOAD_POLICY,
 });

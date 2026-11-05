@@ -34,11 +34,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   const doc = await db.contextDocument.findFirst({
-    where: { id: parsed.data.documentId, orgId: org.id, ownerUserId: user.id },
+    where: { id: parsed.data.documentId, orgId: org.id, ownerUserId: user.id, status: "ready" },
     select: { id: true, name: true, kind: true, mimeType: true, size: true, manifest: true },
   });
   if (!doc) return Response.json({ error: "Document not found" }, { status: 404 });
-  // During a conversation only images (verified as such at upload) up to 10 MB: the same rule the pickers show.
+  // During a conversation an image up to 5 MB or a PDF up to 10 MB (verified at upload): the rule the pickers show.
   if (!uploadAllowed(doc, "during")) {
     return Response.json({ error: `This file can't be attached during the conversation. ${DURING_UPLOAD_RULE}` }, { status: 400 });
   }

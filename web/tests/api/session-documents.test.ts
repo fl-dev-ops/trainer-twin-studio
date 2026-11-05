@@ -73,10 +73,12 @@ test("attaching the same file twice lists it once", async () => {
   expect(snapshots).toEqual([]);
 });
 
-test("during the call only images up to 10 MB: a PDF or an oversized image is refused", async () => {
-  doc = { id: "d1", name: "brochure.pdf", kind: "document", mimeType: "application/pdf", size: 10, manifest: null };
+test("during the call an image up to 5 MB or a PDF up to 10 MB: anything else is refused", async () => {
+  doc = { id: "d1", name: "notes.txt", kind: "document", mimeType: "text/plain", size: 10, manifest: null };
   expect((await attach()).status).toBe(400);
-  doc = { id: "d1", name: "huge.png", kind: "image", mimeType: "image/png", size: 10 * 1024 * 1024 + 1, manifest: null };
+  doc = { id: "d1", name: "huge.png", kind: "image", mimeType: "image/png", size: 5 * 1024 * 1024 + 1, manifest: null };
+  expect((await attach()).status).toBe(400);
+  doc = { id: "d1", name: "big.pdf", kind: "document", mimeType: "application/pdf", size: 10 * 1024 * 1024 + 1, manifest: null };
   expect((await attach()).status).toBe(400);
   expect(linked).toEqual([]);
 });

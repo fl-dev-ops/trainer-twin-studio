@@ -1,3 +1,4 @@
+import { resolveUpload, UploadError } from "@/lib/uploads";
 import { z } from "zod";
 import { toolSettings } from "@/lib/agent-tools";
 import { beforeSettings } from "@/lib/context-upload";
@@ -33,6 +34,8 @@ export const copilotStudioInput = z.discriminatedUnion("action", [
   z.object({ action: z.literal("get"), slug, kind: z.enum(["twin", "roleplay"]).optional() }).strict(),
   z.object({ action: z.literal("getSkill"), slug, version: z.number().int().positive().optional() }).strict(),
   z.object({ action: z.literal("listKnowledge") }).strict(),
+  // The copilot channel's fetchFile (trainertwin-upload://<id>): a file this trainer attached in a copilot chat.
+  z.object({ action: z.literal("resolveUpload"), documentId: z.string().trim().min(1).max(120) }).strict(),
   z.object({
     action: z.literal("updateTwin"), slug,
     name: z.string().trim().min(1).max(120).optional(),
@@ -58,7 +61,7 @@ export type CopilotStudioInput = z.infer<typeof copilotStudioInput>;
 export type Actor = { org: { id: string; slug: string }; user: { id: string; name: string } };
 
 /** What runCopilotStudio talks to; tests pass fakes instead of stubbing modules. */
-const defaultDeps = { db, getObjectText, assignTwinAndInvite, listTwinAssignments, inviteToRoleplay, updateTwin, updateRoleplay };
+const defaultDeps = { db, getObjectText, assignTwinAndInvite, listTwinAssignments, inviteToRoleplay, updateTwin, updateRoleplay, resolveUpload };
 export type CopilotStudioDeps = typeof defaultDeps;
 
 const asRecord = (value: unknown) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
@@ -190,6 +193,16 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
         select: { id: true, title: true, ext: true, createdAt: true },
       });
       return { docs: docs.map((doc) => ({ id: doc.id, title: doc.title, ext: doc.ext, addedAt: doc.createdAt.toISOString() })) };
+    }
+
+    case "resolveUpload": {
+      try {
+        // The copilot's model reads images, not PDFs: a PDF comes as its text.
+        return await d.resolveUpload({ orgId, id: input.documentId, ownerUserId: actor.user.id, pdfAsText: true });
+      } catch (error) {
+        if (error instanceof UploadError) throw new ScenarioIngestError(error.message, error.status);
+        throw error;
+      }
     }
 
     case "updateTwin":

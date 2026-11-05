@@ -232,7 +232,16 @@ model ContextDocument {
   name             String
   mimeType         String
   kind             String                     @default("document") // "document" | "image"
-  content          Bytes
+  /// Legacy: bytes kept in Postgres. New uploads live in S3 (s3Key) and leave this null (lib/uploads.ts).
+  content          Bytes?
+  /// The file in S3: <orgPrefix>/uploads/<id>/<file>.
+  s3Key            String?
+  /// pending (browser uploading) | ready | failed | expired
+  status           String                     @default("ready")
+  /// before (picked before a call) | during (attached in a call or calibration) | copilot (attached in a copilot chat)
+  purpose          String                     @default("before")
+  /// Copilot uploads are deleted after 30 days (cron /api/internal/uploads/expire).
+  expiresAt        DateTime?
   size             Int
   sha256           String?
   extractedText    String?
@@ -246,6 +255,7 @@ model ContextDocument {
 
   @@index([orgId])
   @@index([orgId, ownerUserId])
+  @@index([status, expiresAt])
 }
 
 model ContextDocumentChunk {

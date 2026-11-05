@@ -6,6 +6,10 @@
     {
       "path": "/api/internal/ingestion/pump",
       "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/internal/uploads/expire",
+      "schedule": "30 3 * * *"
     }
   ]
 }

@@ -119,7 +119,7 @@ async function sessionSnapshot(orgId: string, agentId: string, contextId?: strin
     }),
     docIds.length
       ? db.contextDocument.findMany({
-          where: { id: { in: docIds }, orgId },
+          where: { id: { in: docIds }, orgId, status: "ready" },
           select: { id: true, name: true, ownerUserId: true, kind: true, mimeType: true, size: true },
         })
       : Promise.resolve([]),

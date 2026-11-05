@@ -10,6 +10,12 @@ import { buildSessionContext, getCachedSessionContext } from "@/lib/session-cont
 import { unusedResumeClaims } from "@/lib/resume-interview";
 import { recordTurnEvidence, turnEvidenceSchema } from "@/lib/twin/evidence";
 import { modelImage } from "@/lib/model-image";
+import { uploadBytes } from "@/lib/upload-bytes";
+import { resolveUpload, UploadError } from "@/lib/uploads";
+import { getObjectText } from "@/lib/s3";
+
+/** How much of a knowledge document one read_knowledge_document call returns (about 3k tokens). */
+const KNOWLEDGE_PAGE_CHARS = 12_000;
 
 export const runtime = "nodejs";
 
@@ -51,6 +57,18 @@ const requestSchema = z.discriminatedUnion("action", [
     documentId: z.string().trim().min(1).max(120),
     query: z.string().trim().min(1).max(500).optional(),
     section: z.string().trim().min(1).max(100).optional(),
+  }).strict(),
+  z.object({
+    // read_knowledge_document: a knowledge-base document's Markdown, paged (ids from search_knowledge's docId).
+    action: z.literal("readKnowledgeDocument"),
+    documentId: z.string().trim().min(1).max(120),
+    page: z.number().int().min(1).max(500).optional(),
+  }).strict(),
+  z.object({
+    // The chat channel's fetchFile (trainertwin-upload://<id>): a file attached to this session, as an S3 link.
+    action: z.literal("resolveUpload"),
+    documentId: z.string().trim().min(1).max(120),
+    sessionId: z.string().trim().min(1).max(100),
   }).strict(),
   z.object({
     action: z.literal("getSessionContext"),
@@ -114,7 +132,7 @@ export async function POST(request: Request) {
 
   if (input.action === "readDocument") {
     const doc = await db.contextDocument.findFirst({
-      where: { id: input.documentId, orgId },
+      where: { id: input.documentId, orgId, status: "ready" },
       include: {
         chunks: { orderBy: { chunkIndex: "asc" } },
       },
@@ -141,7 +159,7 @@ export async function POST(request: Request) {
       name: doc.name,
       kind: doc.kind,
       // An image has no text: the chat agent shows it to the model itself (chat/agent/tools/read_document.ts).
-      ...(doc.kind === "image" ? { image: await modelImage(doc.content, doc.mimeType) } : {}),
+      ...(doc.kind === "image" ? { image: await modelImage(await uploadBytes(doc), doc.mimeType) } : {}),
       chunks: chunks.map((c) => ({
         index: c.chunkIndex,
         heading: c.heading,
@@ -149,6 +167,33 @@ export async function POST(request: Request) {
         text: c.text,
       })),
     });
+  }
+
+  if (input.action === "readKnowledgeDocument") {
+    const doc = await db.knowledgeDocument.findFirst({
+      where: { id: input.documentId, kb: { orgId }, status: "indexed", s3MarkdownKey: { not: null } },
+      select: { id: true, title: true, s3MarkdownKey: true },
+    });
+    if (!doc?.s3MarkdownKey) return Response.json({ error: `Knowledge document "${input.documentId}" not found` }, { status: 404 });
+    const text = await getObjectText(doc.s3MarkdownKey);
+    const pages = Math.max(1, Math.ceil(text.length / KNOWLEDGE_PAGE_CHARS));
+    const page = Math.min(input.page ?? 1, pages);
+    return Response.json({
+      documentId: doc.id,
+      title: doc.title,
+      page,
+      pages,
+      text: text.slice((page - 1) * KNOWLEDGE_PAGE_CHARS, page * KNOWLEDGE_PAGE_CHARS),
+    });
+  }
+
+  if (input.action === "resolveUpload") {
+    try {
+      return Response.json(await resolveUpload({ orgId, id: input.documentId, sessionId: input.sessionId }));
+    } catch (error) {
+      if (error instanceof UploadError) return Response.json({ error: error.message }, { status: error.status });
+      throw error;
+    }
   }
 
   if (input.action === "getSessionContext") {

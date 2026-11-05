@@ -1,3 +1,4 @@
+import { uploadBytes } from "@/lib/upload-bytes";
 import { db } from "@/lib/db";
 import { resolveSessionUser } from "@/lib/session-user";
 
@@ -27,7 +28,7 @@ export async function GET(
     },
     include: {
       document: {
-        select: { name: true, mimeType: true, content: true },
+        select: { name: true, mimeType: true, content: true, s3Key: true },
       },
     },
   });
@@ -35,7 +36,7 @@ export async function GET(
   const doc = sessionDoc?.document;
   if (!doc) return new Response("Not found", { status: 404 });
 
-  return new Response(doc.content, {
+  return new Response(Buffer.from(await uploadBytes(doc)), {
     headers: {
       "Content-Type": doc.mimeType || "application/octet-stream",
       "Content-Disposition": `inline; filename="${encodeURIComponent(doc.name)}"`,

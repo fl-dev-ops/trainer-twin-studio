@@ -42,6 +42,7 @@ const text = (value: unknown) => (typeof value === "string" && value.trim() ? va
 const LOOKUPS: Record<string, { label: string; query: (input: Record<string, unknown>) => string | null }> = {
   scenario_examples: { label: "her sessions", query: (i) => text(i.situation) },
   search_knowledge: { label: "knowledge", query: (i) => text(i.query) },
+  read_knowledge_document: { label: "a knowledge document", query: (i) => text(i.documentId) },
   search_style: { label: "her phrasing", query: (i) => text(i.query) },
   read_document: { label: "a document", query: (i) => text(i.documentId) ?? text(i.name) },
   eve__skill: { label: "skill", query: (i) => text(i.name) ?? text(i.skill) },

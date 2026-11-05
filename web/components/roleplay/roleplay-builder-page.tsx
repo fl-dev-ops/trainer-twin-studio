@@ -477,7 +477,7 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, tool
           <SettingsSection title="During the call">
             <SettingCard
               title="Attach during the call"
-              description="Learners can share an image while they talk to the client. Images only (PNG, JPEG or WebP), up to 10 MB."
+              description="Learners can share an image or a PDF while they talk to the client. An image (PNG, JPEG or WebP) up to 5 MB, or a PDF up to 10 MB."
               control={<SwitchToggle checked={before.duringUpload} onChange={(on) => saveSettings({ before: { ...before, duringUpload: on } }, `Image upload during the call turned ${on ? "on" : "off"}`)} label="Attach files during the call" />}
             />
           </SettingsSection>
