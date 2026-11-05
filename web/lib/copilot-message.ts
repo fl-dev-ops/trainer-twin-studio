@@ -19,7 +19,7 @@ export function encodeCopilotMessage({ skill, files, text }: CopilotMessage): st
   const head = [
     ...(skill ? [`<use-skill name="${skill}" />`] : []),
     ...(files.length
-      ? ["<selected-files>", ...files.map((file) => `<file id="${attr(file.id)}" title="${attr(file.title)}" />`), "</selected-files>"]
+      ? ["<selected-files>", ...files.map((file) => `<file id="${attr(file.id)}" title="${attr(file.title)}"${file.ext ? ` ext="${attr(file.ext)}"` : ""} />`), "</selected-files>"]
       : []),
   ];
   return head.length ? `${head.join("\n")}\n\n${text}`.trimEnd() : text;
@@ -27,7 +27,7 @@ export function encodeCopilotMessage({ skill, files, text }: CopilotMessage): st
 
 const SKILL_TAG = /^<use-skill name="([a-z-]+)" \/>\n?/;
 const FILES_BLOCK = /^<selected-files>\n([\s\S]*?)\n?<\/selected-files>\n?/;
-const FILE_TAG = /<file id="([^"]*)" title="([^"]*)" \/>/g;
+const FILE_TAG = /<file id="([^"]*)" title="([^"]*)"(?: ext="([^"]*)")? \/>/g;
 
 /** The skill and files a sent message carries, and the text the trainer typed. */
 export function decodeCopilotMessage(raw: string): CopilotMessage {
@@ -41,7 +41,7 @@ export function decodeCopilotMessage(raw: string): CopilotMessage {
   }
   const filesMatch = rest.match(FILES_BLOCK);
   if (filesMatch) {
-    for (const m of filesMatch[1].matchAll(FILE_TAG)) files.push({ id: unattr(m[1]), title: unattr(m[2]) });
+    for (const m of filesMatch[1].matchAll(FILE_TAG)) files.push({ id: unattr(m[1]), title: unattr(m[2]), ...(m[3] ? { ext: unattr(m[3]) } : {}) });
     rest = rest.slice(filesMatch[0].length);
   }
   return { skill, files, text: rest.replace(/^\n+/, "") };

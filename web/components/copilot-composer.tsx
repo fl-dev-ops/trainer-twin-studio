@@ -156,14 +156,17 @@ export function ComposerHeader({ skill, files, onRemoveSkill, onRemoveFile }: {
   return (
     <PromptInputHeader>
       <div className="flex w-full flex-col gap-2">
-        {attachments.files.length > 0 && (
+        {(attachments.files.length > 0 || files.length > 0) && (
           <div className="flex flex-wrap gap-2">
             {attachments.files.map((file) => (
-              <PendingFileCard key={file.id} file={file} onRemove={() => attachments.remove(file.id)} />
+              <PendingUploadCard key={file.id} file={file} onRemove={() => attachments.remove(file.id)} />
+            ))}
+            {files.map((file) => (
+              <PendingFileCard key={file.id} name={file.title} mediaType={knowledgeMediaType(file.ext)} onRemove={() => onRemoveFile(file.id)} />
             ))}
           </div>
         )}
-        <CopilotChips skill={skill} files={files} onRemoveSkill={onRemoveSkill} onRemoveFile={onRemoveFile} />
+        {skill && <CopilotChips skill={skill} files={[]} onRemoveSkill={onRemoveSkill} />}
       </div>
     </PromptInputHeader>
   );
@@ -172,15 +175,31 @@ export function ComposerHeader({ skill, files, onRemoveSkill, onRemoveFile }: {
 const isPdf = (mediaType?: string) => mediaType === "application/pdf";
 
 /** "PDF", "PNG", …: a file's type in a word. */
-export const fileTypeLabel = (mediaType?: string, name?: string) =>
-  isPdf(mediaType) ? "PDF" : (mediaType?.split("/")[1] ?? name?.split(".").pop() ?? "File").toUpperCase();
+export function fileTypeLabel(mediaType?: string, name?: string) {
+  if (isPdf(mediaType)) return "PDF";
+  const subtype = mediaType?.split("/")[1];
+  if (subtype && subtype !== "octet-stream") return subtype.toUpperCase();
+  const ext = name?.includes(".") ? name.split(".").pop() : undefined;
+  return ext ? ext.toUpperCase() : "File";
+}
+
+/** A knowledge-base document's type, from its extension (for its icon). */
+export const knowledgeMediaType = (ext?: string) => {
+  const e = (ext ?? "").toLowerCase();
+  if (e === "pdf") return "application/pdf";
+  if (["png", "jpg", "jpeg", "webp", "gif"].includes(e)) return `image/${e}`;
+  if (VIDEO.has(e)) return `video/${e}`;
+  return `application/${e || "octet-stream"}`;
+};
+
+/** Where a knowledge-base document opens: Twin's brain, on that document. */
+export const knowledgeDocUrl = (id: string) => `/twin/knowledge?doc=${encodeURIComponent(id)}`;
 
 function FileTypeIcon({ mediaType, className }: { mediaType?: string; className?: string }) {
-  return isPdf(mediaType) ? (
-    <FileText className={cn("text-danger", className)} aria-hidden="true" />
-  ) : (
-    <ImageIcon className={cn("text-info", className)} aria-hidden="true" />
-  );
+  if (isPdf(mediaType)) return <FileText className={cn("text-danger", className)} aria-hidden="true" />;
+  if (mediaType?.startsWith("image/")) return <ImageIcon className={cn("text-info", className)} aria-hidden="true" />;
+  if (mediaType?.startsWith("video/")) return <FileVideo className={cn("text-muted-foreground", className)} aria-hidden="true" />;
+  return <FileText className={cn("text-muted-foreground", className)} aria-hidden="true" />;
 }
 
 /** A preview for a picked file: the image itself, or a PDF's first page (rendered in the browser). */
@@ -201,21 +220,31 @@ function usePreview(url: string, mediaType?: string) {
 }
 
 /** A file waiting to be sent: its preview, type and name, and a remove button. */
-function PendingFileCard({ file, onRemove }: { file: { url: string; mediaType?: string; filename?: string }; onRemove: () => void }) {
-  const { preview, loading } = usePreview(file.url, file.mediaType);
-  const name = file.filename || "file";
+function PendingFileCard({ name, mediaType, preview, loading, onRemove }: {
+  name: string;
+  mediaType?: string;
+  preview?: string | null;
+  loading?: boolean;
+  onRemove: () => void;
+}) {
   return (
     <div className="group/file relative w-40 overflow-hidden rounded-xl border bg-card">
       <FileThumbnail
-        file={{ name, type: file.mediaType ?? "" }}
+        file={{ name, type: mediaType ?? "" }}
         previewImageUrl={preview}
         isLoading={loading}
+        // No preview (a knowledge-base document): its type, large.
+        previewContent={preview === undefined ? (
+          <div className="flex size-full items-center justify-center bg-muted">
+            <FileTypeIcon mediaType={mediaType} className="size-8" />
+          </div>
+        ) : undefined}
         previewAspectRatio={16 / 10}
         className="rounded-none border-0"
-        previewClassName={isPdf(file.mediaType) ? "bg-white [&_img]:object-top" : undefined}
+        previewClassName={isPdf(mediaType) && preview ? "bg-white [&_img]:object-top" : undefined}
       />
       <div className="flex items-center gap-1.5 border-t px-2 py-1.5">
-        <FileTypeIcon mediaType={file.mediaType} className="size-3.5 shrink-0" />
+        <FileTypeIcon mediaType={mediaType} className="size-3.5 shrink-0" />
         <span className="min-w-0 truncate text-xs" title={name}>{name}</span>
       </div>
       <button
@@ -230,17 +259,18 @@ function PendingFileCard({ file, onRemove }: { file: { url: string; mediaType?: 
   );
 }
 
-/** A file in a sent message: its type (or a small image preview), name and type label; opens the file. */
-export function MessageFileCard({ name, mediaType, url }: { name: string; mediaType?: string; url: string }) {
-  return (
-    <a
-      href={url || undefined}
-      target="_blank"
-      rel="noreferrer"
-      className={cn("flex w-72 max-w-full items-center gap-3 rounded-xl border bg-card px-3 py-2.5 text-left", url && "hover:bg-accent/50")}
-    >
-      {mediaType?.startsWith("image/") && url ? (
-        <FileThumbnail file={{ name, type: mediaType }} previewImageUrl={url} className="size-10 shrink-0 rounded-md" />
+/** An attached (uploaded) file waiting to be sent, with its image or PDF first-page preview. */
+function PendingUploadCard({ file, onRemove }: { file: { url: string; mediaType?: string; filename?: string }; onRemove: () => void }) {
+  const { preview, loading } = usePreview(file.url, file.mediaType);
+  return <PendingFileCard name={file.filename || "file"} mediaType={file.mediaType} preview={preview} loading={loading} onRemove={onRemove} />;
+}
+
+/** A file in a sent message: a small preview (or its type), name and type label; opens the file when it can. */
+export function MessageFileCard({ name, mediaType, href, previewUrl }: { name: string; mediaType?: string; href?: string; previewUrl?: string }) {
+  const body = (
+    <>
+      {previewUrl ? (
+        <FileThumbnail file={{ name, type: mediaType ?? "" }} previewImageUrl={previewUrl} className="size-10 shrink-0 rounded-md" />
       ) : (
         <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted">
           <FileTypeIcon mediaType={mediaType} className="size-5" />
@@ -250,7 +280,13 @@ export function MessageFileCard({ name, mediaType, url }: { name: string; mediaT
         <span className="block truncate text-sm font-medium" title={name}>{name}</span>
         <span className="block text-xs text-muted-foreground">{fileTypeLabel(mediaType, name)}</span>
       </span>
-    </a>
+    </>
+  );
+  const className = "flex w-72 max-w-full items-center gap-3 rounded-xl border bg-card px-3 py-2.5 text-left";
+  return href ? (
+    <a href={href} target="_blank" rel="noreferrer" className={cn(className, "hover:bg-accent/50")}>{body}</a>
+  ) : (
+    <div className={className}>{body}</div>
   );
 }
 

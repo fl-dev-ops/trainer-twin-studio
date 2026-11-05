@@ -16,6 +16,12 @@ describe("copilot message tags", () => {
     });
   });
 
+  test("a file's extension round-trips; older tags without one still decode", () => {
+    const sent = encodeCopilotMessage({ files: [{ id: "d1", title: "Deck", ext: "pdf" }], text: "hi" });
+    expect(decodeCopilotMessage(sent).files).toEqual([{ id: "d1", title: "Deck", ext: "pdf" }]);
+    expect(decodeCopilotMessage('<selected-files>\n<file id="d2" title="Old" />\n</selected-files>\n\nhi').files).toEqual([{ id: "d2", title: "Old" }]);
+  });
+
   test("a plain message is unchanged both ways", () => {
     expect(encodeCopilotMessage({ files: [], text: "hello" })).toBe("hello");
     expect(decodeCopilotMessage("hello")).toEqual({ skill: undefined, files: [], text: "hello" });

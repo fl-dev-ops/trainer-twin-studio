@@ -63,6 +63,8 @@ import {
   COPILOT_ATTACH_MAX_FILES,
   CopilotChips,
   KnowledgeFilePicker,
+  knowledgeDocUrl,
+  knowledgeMediaType,
   MessageFileCard,
   SkillMenu,
 } from "@/components/copilot-composer";
@@ -505,7 +507,7 @@ function CopilotConversation({
               />
             )}
             <PromptInput
-              className="pointer-events-auto **:data-[slot=input-group]:rounded-2xl **:data-[slot=input-group]:bg-background/95 "
+              className="pointer-events-auto **:data-[slot=input-group]:rounded-2xl **:data-[slot=input-group]:bg-background! "
               // Images and PDFs for this conversation (kept 30 days); lasting material goes in the knowledge base.
               accept={COPILOT_ATTACH_ACCEPT}
               multiple
@@ -639,19 +641,33 @@ function ChatMessage({
   respond: Respond;
   busy: boolean;
 }) {
-  const files = message.parts.flatMap((part, index) =>
-    part.type === "file"
-      ? [{ id: `${message.id}-${index}`, mediaType: part.mediaType, ...copilotUploadOf(part.filename) }]
-      : [],
-  );
-  // Files sit above the bubble; a message of files only has no bubble.
-  const hasBody = message.parts.some((part) => part.type === "text" || part.type === "dynamic-tool");
+  // Files sit above the bubble: attached uploads, and the knowledge-base documents picked with Files.
+  const files = message.parts.flatMap((part, index) => {
+    if (part.type === "file") {
+      const { name, url } = copilotUploadOf(part.filename);
+      return [{ id: `${message.id}-${index}`, name, mediaType: part.mediaType, href: url, previewUrl: part.mediaType.startsWith("image/") && url ? url : undefined }];
+    }
+    if (part.type === "text" && message.role === "user") {
+      return decodeCopilotMessage(part.text).files.map((file) => ({
+        id: `${message.id}-kb-${file.id}`,
+        name: file.title,
+        mediaType: knowledgeMediaType(file.ext),
+        href: knowledgeDocUrl(file.id),
+        previewUrl: undefined,
+      }));
+    }
+    return [];
+  });
+  // A message of files only has no bubble.
+  const hasBody = message.parts.some((part) =>
+    part.type === "dynamic-tool" ||
+    (part.type === "text" && (message.role !== "user" || Boolean(decodeCopilotMessage(part.text).text || decodeCopilotMessage(part.text).skill))));
   return (
     <Message from={message.role}>
       {files.length > 0 && (
         <div className="flex flex-wrap justify-end gap-2 group-[.is-assistant]:justify-start">
           {files.map((file) => (
-            <MessageFileCard key={file.id} name={file.name} mediaType={file.mediaType} url={file.url} />
+            <MessageFileCard key={file.id} name={file.name} mediaType={file.mediaType} href={file.href} previewUrl={file.previewUrl} />
           ))}
         </div>
       )}
@@ -940,11 +956,12 @@ function findTodos(messages: readonly EveMessage[]): TodoItem[] {
 }
 
 /** A trainer's message: the skill and files they picked as chips, then what they typed. */
+/** A trainer's message: the skill chip and their words (picked knowledge files show as cards above the bubble). */
 function UserText({ raw }: { raw: string }) {
-  const { skill, files, text } = decodeCopilotMessage(raw);
+  const { skill, text } = decodeCopilotMessage(raw);
   return (
     <div className="flex flex-col gap-2">
-      <CopilotChips skill={skill} files={files} />
+      {skill && <CopilotChips skill={skill} files={[]} />}
       {text && <p className="whitespace-pre-wrap">{text}</p>}
     </div>
   );
