@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, Brain, Check, FileText, FileVideo, Library, MessagesSquare, Paperclip, X } from "lucide-react";
-import { Attachment, AttachmentPreview, AttachmentRemove, Attachments } from "@/components/ai-elements/attachments";
+import { ArrowUpRight, Brain, Check, FileText, FileVideo, ImageIcon, Library, MessagesSquare, Paperclip, X } from "lucide-react";
+import { FileThumbnail } from "@/components/extend/file-thumbnail";
 import { PromptInputButton, PromptInputHeader, usePromptInputAttachments } from "@/components/ai-elements/prompt-input";
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { COPILOT_SKILLS, type CopilotSkillName, type PickedFile } from "@/lib/copilot-message";
+import { renderPdfThumbnailUrl } from "@/lib/pdf-thumbnail-utils";
 import { cn } from "@/lib/utils";
 
 /** The copilot composer's extras (plans/copilot-v2.md): Files from the knowledge base, the "/" skill menu, chips. */
@@ -154,21 +155,102 @@ export function ComposerHeader({ skill, files, onRemoveSkill, onRemoveFile }: {
   if (!skill && !files.length && !attachments.files.length) return null;
   return (
     <PromptInputHeader>
-    <div className="flex w-full flex-wrap items-center gap-1.5">
-      <CopilotChips skill={skill} files={files} onRemoveSkill={onRemoveSkill} onRemoveFile={onRemoveFile} />
-      {attachments.files.length > 0 && (
-        <Attachments variant="inline">
-          {attachments.files.map((file) => (
-            <Attachment key={file.id} data={file} onRemove={() => attachments.remove(file.id)}>
-              <AttachmentPreview />
-              <span className="max-w-40 truncate text-xs">{file.filename}</span>
-              <AttachmentRemove />
-            </Attachment>
-          ))}
-        </Attachments>
-      )}
-    </div>
+      <div className="flex w-full flex-col gap-2">
+        {attachments.files.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {attachments.files.map((file) => (
+              <PendingFileCard key={file.id} file={file} onRemove={() => attachments.remove(file.id)} />
+            ))}
+          </div>
+        )}
+        <CopilotChips skill={skill} files={files} onRemoveSkill={onRemoveSkill} onRemoveFile={onRemoveFile} />
+      </div>
     </PromptInputHeader>
+  );
+}
+
+const isPdf = (mediaType?: string) => mediaType === "application/pdf";
+
+/** "PDF", "PNG", …: a file's type in a word. */
+export const fileTypeLabel = (mediaType?: string, name?: string) =>
+  isPdf(mediaType) ? "PDF" : (mediaType?.split("/")[1] ?? name?.split(".").pop() ?? "File").toUpperCase();
+
+function FileTypeIcon({ mediaType, className }: { mediaType?: string; className?: string }) {
+  return isPdf(mediaType) ? (
+    <FileText className={cn("text-danger", className)} aria-hidden="true" />
+  ) : (
+    <ImageIcon className={cn("text-info", className)} aria-hidden="true" />
+  );
+}
+
+/** A preview for a picked file: the image itself, or a PDF's first page (rendered in the browser). */
+function usePreview(url: string, mediaType?: string) {
+  const [pdfPreview, setPdfPreview] = useState<{ url: string; preview: string | null } | null>(null);
+  useEffect(() => {
+    if (!isPdf(mediaType) || !url) return;
+    let live = true;
+    renderPdfThumbnailUrl({ url, pageIndex: 0, width: 240 })
+      .catch(() => null)
+      .then((preview) => live && setPdfPreview({ url, preview }));
+    return () => {
+      live = false;
+    };
+  }, [url, mediaType]);
+  if (!isPdf(mediaType)) return { preview: url, loading: false };
+  return { preview: pdfPreview?.url === url ? pdfPreview.preview : null, loading: pdfPreview?.url !== url };
+}
+
+/** A file waiting to be sent: its preview, type and name, and a remove button. */
+function PendingFileCard({ file, onRemove }: { file: { url: string; mediaType?: string; filename?: string }; onRemove: () => void }) {
+  const { preview, loading } = usePreview(file.url, file.mediaType);
+  const name = file.filename || "file";
+  return (
+    <div className="group/file relative w-40 overflow-hidden rounded-xl border bg-card">
+      <FileThumbnail
+        file={{ name, type: file.mediaType ?? "" }}
+        previewImageUrl={preview}
+        isLoading={loading}
+        previewAspectRatio={16 / 10}
+        className="rounded-none border-0"
+        previewClassName={isPdf(file.mediaType) ? "bg-white [&_img]:object-top" : undefined}
+      />
+      <div className="flex items-center gap-1.5 border-t px-2 py-1.5">
+        <FileTypeIcon mediaType={file.mediaType} className="size-3.5 shrink-0" />
+        <span className="min-w-0 truncate text-xs" title={name}>{name}</span>
+      </div>
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={`Remove ${name}`}
+        className="absolute top-1.5 right-1.5 rounded-full bg-background/90 p-1 text-foreground shadow-sm hover:bg-background focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <X className="size-3" aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
+/** A file in a sent message: its type (or a small image preview), name and type label; opens the file. */
+export function MessageFileCard({ name, mediaType, url }: { name: string; mediaType?: string; url: string }) {
+  return (
+    <a
+      href={url || undefined}
+      target="_blank"
+      rel="noreferrer"
+      className={cn("flex w-72 max-w-full items-center gap-3 rounded-xl border bg-card px-3 py-2.5 text-left", url && "hover:bg-accent/50")}
+    >
+      {mediaType?.startsWith("image/") && url ? (
+        <FileThumbnail file={{ name, type: mediaType }} previewImageUrl={url} className="size-10 shrink-0 rounded-md" />
+      ) : (
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted">
+          <FileTypeIcon mediaType={mediaType} className="size-5" />
+        </span>
+      )}
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-medium" title={name}>{name}</span>
+        <span className="block text-xs text-muted-foreground">{fileTypeLabel(mediaType, name)}</span>
+      </span>
+    </a>
   );
 }
 

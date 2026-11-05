@@ -21,12 +21,6 @@ import {
   X,
 } from "lucide-react";
 import {
-  Attachment,
-  AttachmentInfo,
-  AttachmentPreview,
-  Attachments,
-} from "@/components/ai-elements/attachments";
-import {
   Confirmation,
   ConfirmationActions,
   ConfirmationAction,
@@ -69,10 +63,11 @@ import {
   COPILOT_ATTACH_MAX_FILES,
   CopilotChips,
   KnowledgeFilePicker,
+  MessageFileCard,
   SkillMenu,
 } from "@/components/copilot-composer";
 import { duringUploadProblem, UPLOAD_MAX_BYTES } from "@/lib/context-upload";
-import { copilotUploadUrl, copilotUploadView, uploadFile } from "@/lib/upload-client";
+import { copilotUploadFilename, copilotUploadOf, copilotUploadUrl, uploadFile } from "@/lib/upload-client";
 import {
   type CopilotSkillName,
   decodeCopilotMessage,
@@ -311,7 +306,7 @@ function CopilotConversation({
         type: "file" as const,
         data: copilotUploadUrl(id),
         mediaType,
-        filename: name,
+        filename: copilotUploadFilename(id, name),
       })),
     );
     setInput("");
@@ -646,30 +641,22 @@ function ChatMessage({
 }) {
   const files = message.parts.flatMap((part, index) =>
     part.type === "file"
-      ? [
-          {
-            id: `${message.id}-${index}`,
-            type: "file" as const,
-            mediaType: part.mediaType,
-            filename: part.filename,
-            url: copilotUploadView(part.url ?? ""),
-          },
-        ]
+      ? [{ id: `${message.id}-${index}`, mediaType: part.mediaType, ...copilotUploadOf(part.filename) }]
       : [],
   );
+  // Files sit above the bubble; a message of files only has no bubble.
+  const hasBody = message.parts.some((part) => part.type === "text" || part.type === "dynamic-tool");
   return (
     <Message from={message.role}>
+      {files.length > 0 && (
+        <div className="flex flex-wrap justify-end gap-2 group-[.is-assistant]:justify-start">
+          {files.map((file) => (
+            <MessageFileCard key={file.id} name={file.name} mediaType={file.mediaType} url={file.url} />
+          ))}
+        </div>
+      )}
+      {hasBody && (
       <MessageContent>
-        {files.length > 0 && (
-          <Attachments variant="inline">
-            {files.map((file) => (
-              <Attachment key={file.id} data={file}>
-                <AttachmentPreview />
-                <AttachmentInfo />
-              </Attachment>
-            ))}
-          </Attachments>
-        )}
         {message.parts.map((part, index) => {
           if (part.type === "text") {
             return message.role === "assistant" ? (
@@ -700,6 +687,7 @@ function ChatMessage({
           return null;
         })}
       </MessageContent>
+      )}
     </Message>
   );
 }

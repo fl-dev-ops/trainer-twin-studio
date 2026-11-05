@@ -35,8 +35,14 @@ export async function uploadFile(file: File, options: { purpose: UploadPurpose; 
 export const attachedMessage = (file: { id: string; name: string }) => `I've attached a file: ${file.name} [ATTACHED ${file.id}]`;
 
 /** A copilot message's file part points at the upload (copilot/agent/lib/uploads.ts resolves it for the model). */
-const UPLOAD_SCHEME = "trainertwin-upload://";
-export const copilotUploadUrl = (id: string) => `${UPLOAD_SCHEME}${id}`;
-/** Where the browser opens a file part: the upload's view route for a pointer, the URL itself otherwise. */
-export const copilotUploadView = (url: string) =>
-  url.startsWith(UPLOAD_SCHEME) ? `/api/uploads/${encodeURIComponent(url.slice(UPLOAD_SCHEME.length))}/view` : url;
+export const copilotUploadUrl = (id: string) => `trainertwin-upload://${id}`;
+/**
+ * eve's stream gives the browser a sent file's name and type but not its URL, so the part's filename carries the
+ * upload id ("<id>/<name>"). The model never sees it: the copilot's fetchFile names the staged file itself.
+ */
+export const copilotUploadFilename = (id: string, name: string) => `${id}/${name}`;
+/** A sent file part's name, and where to open it when its filename carries an upload id. */
+export function copilotUploadOf(filename: string | undefined) {
+  const match = filename?.match(/^([0-9a-f-]{36})\/(.+)$/);
+  return match ? { name: match[2], url: `/api/uploads/${match[1]}/view` } : { name: filename || "file", url: "" };
+}
