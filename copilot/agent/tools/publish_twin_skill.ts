@@ -3,6 +3,7 @@ import { always } from "eve/tools/approval";
 import { z } from "zod";
 import { pool, pushOutput } from "../lib/origin";
 import { outputScope, sessionIo } from "../lib/session-io";
+import { sessionPrincipal } from "../lib/tenant";
 import { publishTwinSkillToStudio, runIdFor } from "../lib/studio-publish";
 import { prepareTwinPublication, twinDir, type TwinChanges } from "../lib/twin-skill";
 import { readJson } from "../lib/paths";
@@ -25,7 +26,7 @@ export default defineTool({
     const published = await pool(files, 8, (f) => pushOutput(user, f.path, f.text, outputScope(ctx)));
     const io = await sessionIo(ctx);
     const changes = await readJson<TwinChanges | null>(io, user, `${twinDir(skill)}/changes.json`, null);
-    const principal = ctx.session.auth.current;
+    const principal = sessionPrincipal(ctx);
     const url = process.env.STUDIO_URL;
     const secret = process.env.SCENARIO_INGEST_SECRET;
     const studio = principal?.principalType !== "organization"

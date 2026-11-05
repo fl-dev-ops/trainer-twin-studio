@@ -4,6 +4,7 @@ import { z } from "zod";
 import { pool, pushOutput, staleOutputs } from "../lib/origin";
 import { preparePublication } from "../lib/publication";
 import { outputScope, sessionIo } from "../lib/session-io";
+import { sessionPrincipal, type TenantCtx } from "../lib/tenant";
 import { publishToStudio, runIdFor } from "../lib/studio-publish";
 
 export default defineTool({
@@ -31,9 +32,9 @@ async function toStudio(
   files: { path: string; text: string }[],
   user: string,
   persona: string | undefined,
-  ctx: { abortSignal?: AbortSignal; session: { id: string; auth: { current: { principalId: string; principalType: string } | null } } },
+  ctx: TenantCtx & { abortSignal?: AbortSignal; session: { id: string } },
 ) {
-  const principal = ctx.session.auth.current;
+  const principal = sessionPrincipal(ctx);
   const url = process.env.STUDIO_URL;
   const secret = process.env.SCENARIO_INGEST_SECRET;
   if (principal?.principalType !== "organization") return { skipped: "This session is not attached to a TrainerTwin organization." };

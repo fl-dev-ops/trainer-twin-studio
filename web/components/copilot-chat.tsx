@@ -78,11 +78,15 @@ import {
   type PickedFile,
   slashQuery,
 } from "@/lib/copilot-message";
-import { COPILOT_SESSION_KEY, takeCopilotSeed } from "@/lib/copilot-handoff";
+import {
+  copilotInputKey,
+  copilotSessionKey,
+  hasCopilotSeed,
+  LEGACY_COPILOT_KEYS,
+  takeCopilotSeed,
+} from "@/lib/copilot-handoff";
 import { cn } from "@/lib/utils";
 
-const SESSION_KEY = COPILOT_SESSION_KEY;
-const INPUT_KEY = "trainertwin:spec-copilot-input:v1";
 const TOOL_TITLES: Record<string, string> = {
   files: "List knowledge files",
   search: "Search knowledge",
@@ -123,26 +127,92 @@ const SAFE_MARKDOWN_COMPONENTS = {
   ),
 };
 
-export function CopilotChat({
+type SavedSession = { sessionId: string; streamIndex: number };
+type ChatScope = { sessionKey: string; inputKey: string; savedSession?: SavedSession };
+
+/** A saved conversation is resumable when its owner (this user, this org) can still open it: not gone, not another org's. */
+async function resumable(sessionId: string): Promise<boolean> {
+  const controller = new AbortController();
+  try {
+    const response = await fetch(
+      `/api/eve/v1/session/${encodeURIComponent(sessionId)}/stream?streamControlVersion=1&includeTailIndex=1`,
+      { cache: "no-store", signal: controller.signal },
+    );
+    if (response.status === 404 || response.status === 403) return false;
+    if (response.status === 409) {
+      // "stranded" (built by an older copilot deploy) can never continue; "not ready yet" can.
+      const body = (await response.json().catch(() => null)) as { code?: string } | null;
+      return body?.code !== "session_stranded";
+    }
+    return true;
+  } catch {
+    return true; // offline or aborted: let the chat retry as before
+  } finally {
+    controller.abort(); // only the status was needed, not the stream
+  }
+}
+
+/**
+ * The copilot chat for the signed-in trainer in this tab's org. Each user + org has its own saved conversation, so
+ * switching org never shows (or continues) the other org's chat; a saved conversation that is gone or isn't theirs
+ * starts a fresh one instead of retrying forever.
+ */
+export function CopilotChat(props: { variant?: "page" | "panel"; onExpand?: () => void }) {
+  const [scope, setScope] = useState<ChatScope | "error">();
+
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      for (const key of LEGACY_COPILOT_KEYS) {
+        localStorage.removeItem(key);
+        sessionStorage.removeItem(key);
+      }
+      const response = await fetch("/api/copilot/me", { cache: "no-store" });
+      if (!response.ok) throw new Error(String(response.status));
+      const me = (await response.json()) as { userId: string; orgId: string };
+      const sessionKey = copilotSessionKey(me.userId, me.orgId);
+      let savedSession: SavedSession | undefined;
+      try {
+        savedSession = JSON.parse(localStorage.getItem(sessionKey) ?? "null") ?? undefined;
+      } catch {
+        savedSession = undefined;
+      }
+      // A queued message from another page starts a new conversation.
+      if (savedSession && (hasCopilotSeed() || !(await resumable(savedSession.sessionId)))) {
+        localStorage.removeItem(sessionKey);
+        savedSession = undefined;
+      }
+      if (live) setScope({ sessionKey, inputKey: copilotInputKey(me.userId, me.orgId), savedSession });
+    })().catch(() => live && setScope("error"));
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  if (scope === "error") {
+    return (
+      <main className="flex min-h-0 flex-1 items-center justify-center bg-background p-6">
+        <p role="alert" className="text-sm text-muted-foreground">Copilot couldn&apos;t load. Refresh the page to try again.</p>
+      </main>
+    );
+  }
+  if (!scope) return <main className="min-h-0 flex-1 bg-background" aria-busy="true" />;
+  return <CopilotConversation key={scope.sessionKey} {...props} {...scope} />;
+}
+
+function CopilotConversation({
   variant = "page",
   onExpand,
+  sessionKey,
+  inputKey,
+  savedSession,
 }: {
   variant?: "page" | "panel";
   onExpand?: () => void;
-}) {
+} & ChatScope) {
   const panel = variant === "panel";
-  const [savedSession] = useState<
-    { sessionId: string; streamIndex: number } | undefined
-  >(() => {
-    try {
-      return (
-        JSON.parse(localStorage.getItem(SESSION_KEY) ?? "null") ?? undefined
-      );
-    } catch {
-      localStorage.removeItem(SESSION_KEY);
-      return undefined;
-    }
-  });
+  const SESSION_KEY = sessionKey;
+  const INPUT_KEY = inputKey;
   const [input, setInput] = useState(
     () => sessionStorage.getItem(INPUT_KEY) ?? "",
   );

@@ -2,14 +2,15 @@
 // role plays and knowledge; change settings; invite learners; archive / restore. Always for the organization this
 // session belongs to (set by the web proxy), never one the model names.
 
-type Principal = { principalId: string; principalType: string; attributes?: Record<string, unknown> } | null;
+import { sessionPrincipal, type TenantCtx } from "./tenant";
+
 type Fetch = (url: string, init: RequestInit) => Promise<Response>;
-export type StudioCtx = { abortSignal?: AbortSignal; session: { auth: { current: Principal } } };
+export type StudioCtx = TenantCtx & { abortSignal?: AbortSignal };
 
 export class StudioUnavailable extends Error {}
 
 export async function studio<T = Record<string, unknown>>(ctx: StudioCtx, body: Record<string, unknown>, fetcher: Fetch = fetch, env = process.env): Promise<T> {
-  const principal = ctx.session.auth.current;
+  const principal = sessionPrincipal(ctx);
   if (principal?.principalType !== "organization") throw new StudioUnavailable("This session is not attached to a TrainerTwin organization.");
   const userId = typeof principal.attributes?.userId === "string" ? principal.attributes.userId : "";
   if (!userId) throw new StudioUnavailable("This session has no signed-in trainer; open the copilot from the studio.");

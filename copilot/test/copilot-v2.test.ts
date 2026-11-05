@@ -6,6 +6,7 @@ import { holdsPart, mergeWithBase } from "../agent/lib/twin-skill.ts";
 import { studio } from "../agent/lib/studio.ts";
 import { ensureSynced } from "../agent/lib/ingest.ts";
 import { outputScope } from "../agent/lib/session-io.ts";
+import { sessionPrincipal } from "../agent/lib/tenant.ts";
 
 const item = (id, step, text, source = "doc1") => ({
   id, role: "trainer", context: "c", text,
@@ -81,4 +82,19 @@ test("the sandbox re-syncs when the knowledge base changes mid-chat", async () =
   version = "v2";
   assert.deepEqual((await ensureSynced(io, "olga")).map((f) => f.id).sort(), ["doc1", "doc2"]);
   assert.equal(pulls, 2);
+});
+
+test("a conversation stays with the org that started it", async () => {
+  const olga = { principalType: "organization", principalId: "org-olga", attributes: { userId: "u1" } };
+  const acme = { principalType: "organization", principalId: "org-acme", attributes: { userId: "u1" } };
+  // Same org: the starter's org, the current caller's attributes.
+  assert.deepEqual(sessionPrincipal({ session: { auth: { current: { ...olga, attributes: { userId: "u2" } }, initiator: olga } } }), { ...olga, attributes: { userId: "u2" } });
+  // Another org continuing it: refused everywhere the copilot touches the studio.
+  const crossed = { session: { auth: { current: acme, initiator: olga } } };
+  assert.throws(() => sessionPrincipal(crossed), /belongs to another organization/);
+  assert.throws(() => outputScope(crossed), /belongs to another organization/);
+  const fetcher = async () => { throw new Error("must not be called"); };
+  await assert.rejects(studio(crossed, { action: "list" }, fetcher, { STUDIO_URL: "x", SCENARIO_INGEST_SECRET: "s" }), /belongs to another organization/);
+  // Non-studio sessions (eve dev) pass through.
+  assert.equal(sessionPrincipal({ session: { auth: { current: null } } }), null);
 });

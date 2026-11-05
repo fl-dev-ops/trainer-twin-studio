@@ -1,16 +1,23 @@
 const SEED_KEY = "trainertwin:copilot-seed";
-/** The copilot chat's saved conversation (CopilotChat): clearing it makes a seed start a new conversation. */
-export const COPILOT_SESSION_KEY = "trainertwin:spec-copilot-session:v4";
-const SESSION_KEY = COPILOT_SESSION_KEY;
 
 /**
- * Queue a first message for the copilot and reset its conversation,
- * then navigate to "/" so CopilotChat picks the seed up on mount.
+ * The copilot chat's saved conversation, one per signed-in user and org (a person in two orgs has one in each).
+ * Older builds kept a single browser-wide key; it is dropped on load.
+ */
+export const copilotSessionKey = (userId: string, orgId: string) => `trainertwin:copilot-session:v5:${userId}:${orgId}`;
+export const copilotInputKey = (userId: string, orgId: string) => `trainertwin:copilot-input:v2:${userId}:${orgId}`;
+export const LEGACY_COPILOT_KEYS = ["trainertwin:spec-copilot-session:v3", "trainertwin:spec-copilot-session:v4", "trainertwin:spec-copilot-input:v1"];
+
+/**
+ * Queue a first message for the copilot, then navigate to "/": CopilotChat starts a new conversation with it
+ * instead of resuming the saved one.
  */
 export function seedCopilot(text: string) {
   sessionStorage.setItem(SEED_KEY, JSON.stringify({ text, queuedAt: Date.now() }));
-  localStorage.removeItem(SESSION_KEY);
 }
+
+/** Whether a seed is waiting (the chat then starts fresh instead of resuming). */
+export const hasCopilotSeed = () => sessionStorage.getItem(SEED_KEY) !== null;
 
 /** Consume the queued seed, if any. */
 export function takeCopilotSeed(): string | undefined {

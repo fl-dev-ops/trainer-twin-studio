@@ -402,6 +402,7 @@ model User {
   youtubeOAuthStates YouTubeOAuthState[]
   issueReports       IssueReport[]
   twinAssignments    TwinAssignment[]
+  copilotSessions    CopilotSession[]
 
   @@unique([email])
   @@map("user")
@@ -512,6 +513,7 @@ model Organization {
   youtubeOAuthStates YouTubeOAuthState[]
   issueReports       IssueReport[]
   avatars            Avatar[]
+  copilotSessions    CopilotSession[]
 
   @@unique([slug])
   @@map("organization")
@@ -970,4 +972,21 @@ model TwinCalibrationRating {
   calibration TwinCalibration @relation(fields: [calibrationId], references: [id], onDelete: Cascade)
 
   @@unique([calibrationId, turnIndex])
+}
+
+/// A copilot conversation (an eve session) and who it belongs to. eve has no per-session access control, so the web
+/// proxy (/api/eve/v1) records the owner when it creates a session and only lets that user, in that org, reach it.
+/// Table from migration 20260928103654_add_copilot_session_metadata.
+model CopilotSession {
+  sessionId String   @id
+  orgId     String
+  userId    String
+  title     String   @db.VarChar(120)
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, userId, createdAt])
+  @@map("copilot_session")
 }
