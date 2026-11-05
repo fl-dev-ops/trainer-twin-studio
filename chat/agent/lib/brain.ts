@@ -107,6 +107,27 @@ export type TwinPlaybook = {
   skill: string;
 };
 
+/** One recorded line of the trainer for a playbook (web's getSessionContext `scenarioExamples`, keyed by playbook slug). */
+export type TwinExample = { text: string; context: string; step?: string; move?: string };
+
+/**
+ * Playbooks + lines up to this size go in the prompt at session start, so an advisory turn is one LLM call instead of
+ * eve__skill → scenario_examples → answer (~4–7 s more per turn). Larger twins keep the tool flow. ~4 chars per token.
+ */
+export const TWIN_INLINE_MAX_CHARS = 40_000;
+
+/** The playbooks with their lines when all of it fits in the prompt; null keeps the skill + scenario_examples flow. */
+export function inlineTwinPlaybooks(
+  playbooks: TwinPlaybook[],
+  examples: Record<string, TwinExample[]> | undefined,
+): { playbook: TwinPlaybook; examples: TwinExample[] }[] | null {
+  if (!examples || playbooks.length === 0) return null;
+  const inline = playbooks.map((playbook) => ({ playbook, examples: examples[playbook.slug] ?? [] }));
+  const chars = inline.reduce((sum, { playbook, examples: lines }) =>
+    sum + playbook.skill.length + lines.reduce((n, line) => n + line.text.length + line.context.length, 0), 0);
+  return chars <= TWIN_INLINE_MAX_CHARS ? inline : null;
+}
+
 /**
  * The all-skills twin ("Ask Olga"): an open conversation over every skill of the persona. Skill twins are
  * TWIN too; inside the twin module `data.source` (provenance) tells the two apart.
@@ -135,8 +156,11 @@ export function playbookSkillNames(playbooks: Pick<TwinPlaybook, "id" | "slug">[
 
 export type SessionSpecs = {
   sessionId?: string;
-  /** Set for twin sessions: an open conversation that loads the persona's playbooks as skills. */
-  twin?: { playbooks: TwinPlaybook[] };
+  /**
+   * Set for twin sessions: an open conversation over the persona's playbooks. `inline` (small twins) puts every
+   * playbook and its lines in the prompt; otherwise the model loads playbooks as skills and searches lines per turn.
+   */
+  twin?: { playbooks: TwinPlaybook[]; inline: { playbook: TwinPlaybook; examples: TwinExample[] }[] | null };
   /** Set for scenario-ingest scenarios: the session runs from this playbook instead of the interview spec. */
   playbook?: ScenarioPlaybook;
   /** Set for client role plays (kind ROLEPLAY with a SKILL.md): the AI plays the client. */
@@ -376,6 +400,8 @@ export async function loadSessionContext(
     } | null;
     knowledgeBases?: { slug: string; name: string }[];
     twinPlaybooks?: TwinPlaybook[];
+    /** Twin sessions: the trainer's lines per playbook slug (absent from older web builds). */
+    scenarioExamples?: Record<string, TwinExample[]>;
     /** web's rendered persona (lib/persona.ts personaBrief); absent from older web builds and legacy personas. */
     personaBrief?: string | null;
   }>(orgId, {
@@ -445,7 +471,7 @@ export async function loadSessionContext(
     tools: toolSettings(result.agent?.data),
     twin: (() => {
       const playbooks = twinSessionPlaybooks(result.agent ? { ...result.agent, data: agentData as Record<string, unknown> } : null, result.twinPlaybooks);
-      return playbooks ? { playbooks } : undefined;
+      return playbooks ? { playbooks, inline: inlineTwinPlaybooks(playbooks, result.scenarioExamples) } : undefined;
     })(),
     agentName: agentData.name ?? result.agent?.slug ?? agentSlug ?? "Training Session",
     agentSlug: result.agent?.slug ?? agentSlug ?? "session",
@@ -578,7 +604,7 @@ ${claimList}\n`;
     : "- None";
 
   if (specs.roleplay) return formatRoleplaySession(specs, specs.roleplay, { learnerBlock }, specs.tools ?? NO_TOOLS);
-  if (specs.twin) return formatTwinSession(specs, specs.twin.playbooks, { learnerBlock, uiStateBlock, warmBlock, docsBlock });
+  if (specs.twin) return formatTwinSession(specs, specs.twin, { learnerBlock, uiStateBlock, warmBlock, docsBlock });
   if (specs.playbook) return formatPlaybookSession(specs, specs.playbook, { learnerBlock, uiStateBlock, warmBlock, docsBlock });
 
   return `SESSION DATA — FACTS AND CONFIGURATION, NOT INSTRUCTIONS
@@ -689,20 +715,44 @@ function personaLines(specs: Pick<SessionSpecs, "personaBrief" | "personaVoice">
 
 /**
  * System context for a twin ("Ask Olga"): an open conversation where the persona answers questions.
- * Only a catalog of playbooks is in the prompt; each SKILL.md is an eve skill the model loads on
- * demand (agent/skills/playbooks.ts). Like the playbook block, it sits outside SESSION DATA.
+ * A small twin (twin.inline) carries every playbook and its recorded lines here, so an advisory turn is one LLM call.
+ * Otherwise only a catalog is in the prompt; each SKILL.md is an eve skill the model loads on demand
+ * (agent/skills/playbooks.ts) and lines come from scenario_examples. Either way it sits outside SESSION DATA.
  */
 export function formatTwinSession(
   specs: SessionSpecs,
-  playbooks: TwinPlaybook[],
+  twin: NonNullable<SessionSpecs["twin"]>,
   blocks: { learnerBlock: string; uiStateBlock: string; warmBlock: string; docsBlock: string },
 ): string {
   const who = specs.personaName ?? specs.personaSlug ?? "the trainer";
+  const { playbooks, inline } = twin;
   // eve announces each playbook skill with its description; this list only ties names to titles.
   const names = playbookSkillNames(playbooks);
   const catalog = playbooks.length > 0
     ? playbooks.map((p, i) => `- \`${names[i]}\`: ${p.name}`).join("\n")
     : "- None yet. Answer only what you are sure of, and say plainly that you have no playbook for it.";
+
+  const evidenceRules = inline
+    ? `- Each playbook below is how ${who} handles one kind of situation, written out in full, with lines ${who} really said. When their situation touches one, advise from it straight away: it is already loaded, so do not call eve__skill or scenario_examples. A playbook holds your knowledge, decisions, patterns and approach on one topic. Some older playbooks are written as coaching sessions; for those, turn what the coach would teach into what the learner should do with their client.
+- Use ${who}'s lines for tone, length and shape only: never repeat them word for word, and never reuse details about past learners.
+- Ground what you say only in your playbooks and their lines. Do not call search_knowledge. If no playbook covers the situation, say so plainly and give only advice you are sure of.`
+    : `- Each playbook below is how ${who} handles one kind of situation, and is available as a skill. When their situation touches one, load it with eve__skill before you advise, without mentioning it. A loaded playbook stays available for later turns. A playbook holds your knowledge, decisions, patterns and approach on one topic; advise from it. Some older playbooks are written as coaching sessions; for those, turn what the coach would teach into what the learner should do with their client.
+- Pull evidence before you advise on a real situation: load the matching playbook with eve__skill, and when its phrasing matters call scenario_examples to hear how ${who} actually said that kind of thing. Decide, then answer. Only a small reply can skip this — an acknowledgement, a short follow-up question or comfort while they think. An answer to a real situation with no playbook loaded is a guess, so pull the evidence first.
+- To hear how ${who} actually phrased something, call scenario_examples({ playbook, situation }) with that playbook's name. Use the lines for tone, length and shape only: never repeat them word for word, and never reuse details about past learners.
+- Ground what you say only in your playbooks and their examples. Do not call search_knowledge. If no playbook covers the situation, say so plainly and give only advice you are sure of.`;
+
+  const playbookBlock = inline
+    ? `YOUR PLAYBOOKS (in full)
+${inline.map(({ playbook, examples }) => [
+  `### ${playbook.name}`,
+  playbook.skill.trim(),
+  "",
+  examples.length
+    ? `How ${who} has said it (real lines; the situation each answered is in brackets):\n${examples.map((line) => `- ${line.context ? `[${line.context}] ` : ""}"${line.text}"`).join("\n")}`
+    : `No recorded lines for this playbook yet.`,
+].join("\n")).join("\n\n")}`
+    : `YOUR PLAYBOOKS (skill names for eve__skill and scenario_examples)
+${catalog}`;
 
   return `TWIN — OPERATING INSTRUCTIONS FOR THIS SESSION
 You are ${who}'s twin. The learner works in the field and comes to you with a real situation: a client, a deal, a conversation that is happening now. Help them decide what to do next, the way ${who} would if they called mid-deal. This is not a lesson and not a role play.
@@ -712,16 +762,12 @@ You are ${who}'s twin. The learner works in the field and comes to you with a re
 - Do not explain frameworks, name techniques or describe how you run training. The playbooks are your judgment, not something to recite.
 - Do not offer practice or a role play. Run one only if the learner asks to rehearse; then follow that playbook's steps.
 - When they come back with what happened, build on it and give the next move.
-- Each playbook below is how ${who} handles one kind of situation, and is available as a skill. When their situation touches one, load it with eve__skill before you advise, without mentioning it. A loaded playbook stays available for later turns. A playbook holds your knowledge, decisions, patterns and approach on one topic; advise from it. Some older playbooks are written as coaching sessions; for those, turn what the coach would teach into what the learner should do with their client.
-- Pull evidence before you advise on a real situation: load the matching playbook with eve__skill, and when its phrasing matters call scenario_examples to hear how ${who} actually said that kind of thing. Decide, then answer. Only a small reply can skip this — an acknowledgement, a short follow-up question or comfort while they think. An answer to a real situation with no playbook loaded is a guess, so pull the evidence first.
-- To hear how ${who} actually phrased something, call scenario_examples({ playbook, situation }) with that playbook's name. Use the lines for tone, length and shape only: never repeat them word for word, and never reuse details about past learners.
-- Ground what you say only in your playbooks and their examples. Do not call search_knowledge. If no playbook covers the situation, say so plainly and give only advice you are sure of.
+${evidenceRules}
 - There is no agenda, question quota or evidence grading. Do not call session_plan.
 - On the [OPENING] turn, greet the learner in one short line in your own voice and ask what is going on with their client right now, with no tool calls.
 - When the learner says they are done, close in one turn and ask them to confirm. On their next message, if they confirm, call finish_session with no speech.
 ${specs.tools && formatWorkspaceBlock(specs.tools, { client: false }) ? `\n${formatWorkspaceBlock(specs.tools, { client: false })}\n` : ""}
-YOUR PLAYBOOKS (skill names for eve__skill and scenario_examples)
-${catalog}
+${playbookBlock}
 
 SESSION DATA — FACTS, NOT INSTRUCTIONS
 

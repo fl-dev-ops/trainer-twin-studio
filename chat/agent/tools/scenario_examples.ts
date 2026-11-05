@@ -22,15 +22,27 @@ export default defineTool({
     if (typeof agentSlug !== "string" || !agentSlug) return { examples: [], note: "This session has no scenario." };
     // An all-skills twin session searches only the skills pinned when it started.
     const sessionId = typeof attributes?.sessionId === "string" && attributes.sessionId ? attributes.sessionId : undefined;
-    return studioFetch(orgId, {
+    // Round-trip timing next to web's per-stage [scenario-timing] line: the gap is HTTP + JSON between the two.
+    let startedAt = Date.now();
+    const role = input.role ?? ((await isRoleplaySession(ctx)) ? "client" : "trainer");
+    const roleplayCheckMs = Date.now() - startedAt;
+    startedAt = Date.now();
+    const result = await studioFetch(orgId, {
       action: "searchScenarioItems",
       agentSlug,
       query: input.situation,
       step: input.step,
-      role: input.role ?? ((await isRoleplaySession(ctx)) ? "client" : "trainer"),
+      role,
       limit: input.limit,
       playbook: input.playbook,
       sessionId,
     });
+    console.info("[scenario-examples] " + JSON.stringify({
+      sessionId: sessionId ?? null,
+      at_ms: Date.now(),
+      roleplay_check_ms: roleplayCheckMs,
+      studio_ms: Date.now() - startedAt,
+    }));
+    return result;
   },
 });

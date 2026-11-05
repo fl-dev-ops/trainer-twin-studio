@@ -1,12 +1,13 @@
 import { defineDynamic, defineSkill } from "eve/skills";
-import { type AgentKind, type TwinPlaybook, playbookSkillNames, twinSessionPlaybooks } from "../lib/brain";
+import { type AgentKind, type TwinExample, type TwinPlaybook, inlineTwinPlaybooks, playbookSkillNames, twinSessionPlaybooks } from "../lib/brain";
 import { studioFetch } from "../lib/studio";
 
 /**
  * Twin sessions get one skill per playbook: every skill of the persona for "Ask Olga", the skill itself for a single
  * twin-creator skill. The skill is the ingested SKILL.md.
  * eve lists only each skill's description; the model loads a playbook with eve__skill when a
- * question needs it, so the prompt never carries every playbook. Other sessions get none.
+ * question needs it, so the prompt never carries every playbook. Other sessions get none, and neither do small twins,
+ * whose playbooks are all in the prompt (inlineTwinPlaybooks).
  */
 export default defineDynamic({
   events: {
@@ -16,7 +17,11 @@ export default defineDynamic({
       if (!orgId || (!attributes.sessionId && !attributes.agentSlug)) return null;
 
       // Same call as the session-spec instructions; web caches it per session.
-      const context = await studioFetch<{ agent: { slug?: string; kind?: AgentKind | null; data?: Record<string, unknown> } | null; twinPlaybooks?: TwinPlaybook[] }>(orgId, {
+      const context = await studioFetch<{
+        agent: { slug?: string; kind?: AgentKind | null; data?: Record<string, unknown> } | null;
+        twinPlaybooks?: TwinPlaybook[];
+        scenarioExamples?: Record<string, TwinExample[]>;
+      }>(orgId, {
         action: "getSessionContext",
         sessionId: attributes.sessionId,
         agentSlug: attributes.agentSlug,
@@ -24,6 +29,8 @@ export default defineDynamic({
       });
       const playbooks = twinSessionPlaybooks(context.agent, context.twinPlaybooks) ?? [];
       if (playbooks.length === 0) return null;
+      // A small twin has every playbook in its prompt already (formatTwinSession); skills would only invite a load call.
+      if (inlineTwinPlaybooks(playbooks, context.scenarioExamples)) return null;
 
       const names = playbookSkillNames(playbooks);
       return Object.fromEntries(

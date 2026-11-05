@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
+import { MainCollectionService } from "@/lib/main-collection";
+import { TWIN_SKILL_SOURCE } from "@/lib/scenario-ingest";
+import { getCachedSessionContext } from "@/lib/session-context";
 
 /**
  * "Why this answer": per brain turn of a twin session, what the twin heard, what it looked up and the moments that came
@@ -26,12 +29,34 @@ export async function recordTurnEvidence(orgId: string, input: TurnEvidenceInput
   });
   if (!session) return { stored: false };
   const { sessionId, ...data } = input;
+  // A small twin has all its lines in the prompt and no longer searches: match the closest ones to what the learner
+  // said, after the reply (this runs off the turn's critical path), so the panel still shows the moments behind it.
+  if (data.inputKind === "learner" && data.heard.trim() && !data.calls.some((call) => call.tool === "scenario_examples")) {
+    const matched = await matchAfterReply(orgId, sessionId, data.heard).catch((error) => {
+      console.error("[twin-evidence] match after reply failed", error);
+      return null;
+    });
+    if (matched) data.calls = [...data.calls, matched];
+  }
   // Tool outputs can be long: keep the row bounded (calls are dropped, heard/reply stay).
   const fits = JSON.stringify(data).length <= MAX_EVIDENCE_BYTES;
   await db.twinTurnEvidence.create({
     data: { sessionId, data: (fits ? data : { ...data, calls: [], truncated: true }) as Prisma.InputJsonValue },
   });
   return { stored: true };
+}
+
+/** The session's playbook lines closest to what the learner said, as a scenario_examples call the panel can render. */
+async function matchAfterReply(orgId: string, sessionId: string, heard: string) {
+  const context = await getCachedSessionContext(orgId, sessionId);
+  const agentSource = (context.agent?.data as Record<string, unknown> | undefined)?.source;
+  const slugs = context.twinPlaybooks
+    ? context.twinPlaybooks.map((playbook) => playbook.slug)
+    : agentSource === TWIN_SKILL_SOURCE && context.agent?.slug ? [context.agent.slug] : [];
+  if (slugs.length === 0) return null;
+  const situation = heard.trim().slice(0, 500);
+  const examples = await MainCollectionService.searchScenarioItems(orgId, slugs, situation, { role: "trainer", limit: 3 });
+  return { tool: "scenario_examples", input: { situation, matchedAfterReply: true }, output: { examples } };
 }
 
 const asRecord = (value: unknown): Record<string, unknown> =>

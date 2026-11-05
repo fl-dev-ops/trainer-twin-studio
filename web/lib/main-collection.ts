@@ -9,6 +9,9 @@ import type { ScenarioItem } from "@/lib/scenario-ingest";
 /** Item roles depend on the kind: twin skills trainer | learner, role plays client | learner. */
 export type ScenarioItemRole = "trainer" | "learner" | "client";
 
+/** Filled in by searchScenarioItems when passed: ms per stage, one chroma_ms/hits entry per query (two when the step fallback ran). */
+export type ScenarioSearchTimings = { collection_ms?: number; embed_ms?: number; chroma_ms: number[]; hits: number[] };
+
 export const aiGatewayEmbeddings: EmbeddingFunction = {
   generate: embedTexts,
   generateForQueries: embedTexts,
@@ -492,14 +495,29 @@ export class MainCollectionService {
     /** One scenario, or several (a twin searches all of its persona's playbooks). */
     agentSlug: string | string[],
     query: string,
-    options: { step?: string; role?: ScenarioItemRole; limit?: number; steps?: ScenarioStep[] } = {},
+    options: {
+      step?: string;
+      role?: ScenarioItemRole;
+      limit?: number;
+      steps?: ScenarioStep[];
+      timings?: ScenarioSearchTimings;
+      /** The query's embedding, when the caller started it early (in parallel with its own lookups). */
+      queryEmbedding?: Promise<number[]>;
+    } = {},
   ): Promise<{ text: string; context: string; step?: string; move?: string; role: string; score: number; scenario: string; source?: string }[]> {
     const slugs = Array.isArray(agentSlug) ? agentSlug : [agentSlug];
     if (slugs.length === 0) return [];
+    const timings = options.timings;
+    let startedAt = Date.now();
     const collection = await this.getCollection(orgId);
-    const [queryEmbedding] = await embedTexts([query]);
+    if (timings) timings.collection_ms = Date.now() - startedAt;
+    startedAt = Date.now();
+    const queryEmbedding = await (options.queryEmbedding ?? embedTexts([query]).then(([embedding]) => embedding));
+    // With an early embedding this is only the wait left after the caller's own lookups.
+    if (timings) timings.embed_ms = Date.now() - startedAt;
     const index = scenarioStepIndex(options.steps ?? []);
     const run = async (step?: string) => {
+      const queryStartedAt = Date.now();
       const conditions: Where[] = [{ type: "scenario_item" }, slugs.length === 1 ? { agentSlug: slugs[0] } : ({ agentSlug: { $in: slugs } } as Where)];
       if (step) {
         const moves = index.movesOf(step);
@@ -512,6 +530,8 @@ export class MainCollectionService {
         where: { $and: conditions } as Where,
         include: ["documents", "metadatas", "distances"],
       });
+      timings?.chroma_ms.push(Date.now() - queryStartedAt);
+      timings?.hits.push(res.ids?.[0]?.length ?? 0);
       const docs = res.documents?.[0] ?? [];
       const metas = (res.metadatas?.[0] ?? []) as Record<string, unknown>[];
       const distances = res.distances?.[0] ?? [];
@@ -534,6 +554,44 @@ export class MainCollectionService {
     };
     const hits = await run(options.step);
     return hits.length > 0 || !options.step ? hits : run();
+  }
+
+  /**
+   * Every line of the given scenarios for one side, in recorded order: a small twin gets all of them in its prompt
+   * at session start instead of a search per turn. Reads in pages of 300 (Chroma Cloud's Get limit).
+   */
+  static async listScenarioItems(
+    orgId: string,
+    agentSlugs: string[],
+    role: ScenarioItemRole,
+  ): Promise<Record<string, { text: string; context: string; step?: string; move?: string }[]>> {
+    if (agentSlugs.length === 0) return {};
+    const collection = await this.getCollection(orgId);
+    const where = {
+      $and: [{ type: "scenario_item" }, agentSlugs.length === 1 ? { agentSlug: agentSlugs[0] } : { agentSlug: { $in: agentSlugs } }, { role }],
+    } as Where;
+    const rows: { slug: string; index: number; text: string; context: string; step?: string; move?: string }[] = [];
+    for (let offset = 0; ; offset += 300) {
+      const page = await collection.get({ where, limit: 300, offset, include: ["documents", "metadatas"] });
+      page.ids.forEach((_, i) => {
+        const meta = (page.metadatas[i] ?? {}) as Record<string, unknown>;
+        const text = (page.documents[i] ?? "").trim();
+        if (!text) return;
+        rows.push({
+          slug: String(meta.agentSlug ?? ""),
+          index: typeof meta.itemIndex === "number" ? meta.itemIndex : rows.length,
+          text,
+          context: typeof meta.context === "string" ? meta.context : "",
+          step: typeof meta.step === "string" ? meta.step : undefined,
+          move: typeof meta.move === "string" ? meta.move : typeof meta.action === "string" ? meta.action : undefined,
+        });
+      });
+      if (page.ids.length < 300) break;
+    }
+    rows.sort((a, b) => a.index - b.index);
+    const bySlug: Record<string, { text: string; context: string; step?: string; move?: string }[]> = {};
+    for (const { slug, index: _index, ...line } of rows) (bySlug[slug] ??= []).push(line);
+    return bySlug;
   }
 
   /**
