@@ -5,7 +5,9 @@ const log: string[] = [];
 let agents: Row[] = [];
 let domains: Row[] = [];
 let specVersions: Row[] = [];
-let storedItems: { orgId: string; agentSlug: string; count: number } | null = null;
+let storedItems: { orgId: string; agentSlug: string; version: number; count: number } | null = null;
+let pruned: { agentSlug: string; keepFrom: number }[] = [];
+let failItems = false;
 const s3 = new Map<string, string>();
 
 const fakeDb = {
@@ -58,10 +60,15 @@ mock.module("@/lib/main-collection", () => ({
   invalidateCollectionCache: () => {},
   invalidatePersonaStyleCache: () => {},
   MainCollectionService: {
-    replaceScenarioItems: async (orgId: string, agentSlug: string, _scenarioId: string, items: unknown[]) => {
+    writeScenarioItems: async (orgId: string, agentSlug: string, _scenarioId: string, version: number, items: unknown[]) => {
+      if (failItems) throw new Error("embedding failed");
       log.push("chroma");
-      storedItems = { orgId, agentSlug, count: items.length };
+      storedItems = { orgId, agentSlug, version, count: items.length };
       return items.length;
+    },
+    pruneScenarioItems: async (_orgId: string, agentSlug: string, keepFrom: number) => {
+      log.push("prune");
+      pruned.push({ agentSlug, keepFrom });
     },
   },
 }));
@@ -117,6 +124,8 @@ beforeEach(() => {
   domains = [];
   specVersions = [];
   storedItems = null;
+  pruned = [];
+  failItems = false;
   s3.clear();
 });
 
@@ -167,7 +176,7 @@ test("first ingest creates the agent (no domain) after storing items (duplicate 
   expect(s3.get(`${prefix}/scenario.json`)).toBe(`${JSON.stringify(scenario, null, 2)}\n`);
   expect(JSON.parse(s3.get(`${prefix}/items.json`)!)).toEqual([item("x#1"), item("x#1")]);
   expect((agents[0].data as Row).artifacts).toBe(prefix);
-  expect(storedItems).toEqual({ orgId: "org1", agentSlug: "acme-fundamental-depth", count: 2 });
+  expect(storedItems).toEqual({ orgId: "org1", agentSlug: "acme-fundamental-depth", version: 1, count: 2 });
   expect(domains).toHaveLength(0);
   expect(agents[0]).toMatchObject({ personaId: "p1", orgId: "org1", kind: "TWIN" });
   expect("domainSlug" in agents[0]).toBe(false);
@@ -296,4 +305,36 @@ test("publishing onto an archived skill brings it back, whether or not its conte
   const changed = await ingestScenario("org1", input({ scenario: { ...scenario, name: "Depth drill" } }));
   expect(changed).toMatchObject({ version: 2 });
   expect(agents[0].archivedAt).toBeNull();
+});
+
+test("a new version's items go in before the row switches to it; versions before the previous one are pruned after", async () => {
+  await ingestScenario("org1", input());
+  expect(pruned).toEqual([]); // a first publish has nothing to prune
+  log.length = 0;
+  await ingestScenario("org1", input({ scenario: { ...scenario, name: "Depth drill" } }));
+  expect(storedItems).toMatchObject({ version: 2 });
+  expect(log).toEqual(["s3", "chroma", "agent.update", "prune"]);
+  expect(pruned).toEqual([{ agentSlug: "acme-fundamental-depth", keepFrom: 1 }]); // keeps v2 (live) and v1 (previous)
+  log.length = 0;
+  await ingestScenario("org1", input({ scenario: { ...scenario, name: "Depth drill" } })); // unchanged
+  expect(log).not.toContain("prune");
+});
+
+test("a failed item write leaves the live version untouched", async () => {
+  await ingestScenario("org1", input());
+  failItems = true;
+  await expect(ingestScenario("org1", input({ scenario: { ...scenario, name: "Depth drill" } }))).rejects.toThrow(/embedding failed/);
+  expect(agents[0]).toMatchObject({ version: 1, name: "Fundamental depth" });
+  expect(specVersions).toHaveLength(0);
+});
+
+test("changing only items.json (or patterns.md) makes a new version instead of overwriting this one's files", async () => {
+  await ingestScenario("org1", input());
+  const v1Items = s3.get("p/org1/scenario-ingest/scenarios/acme-fundamental-depth/v1/items.json");
+  const changed = await ingestScenario("org1", input({ items: [item("x#2")] }));
+  expect(changed).toMatchObject({ version: 2 });
+  expect(s3.get("p/org1/scenario-ingest/scenarios/acme-fundamental-depth/v1/items.json")).toBe(v1Items); // the backup stays
+  expect(JSON.parse(s3.get("p/org1/scenario-ingest/scenarios/acme-fundamental-depth/v2/items.json")!)).toEqual([item("x#2")]);
+  const patterns = await ingestScenario("org1", input({ items: [item("x#2")], patterns: "# New evidence\n" }));
+  expect(patterns).toMatchObject({ version: 3 });
 });

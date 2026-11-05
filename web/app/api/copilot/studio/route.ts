@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { searchKnowledge } from "@/lib/knowledge";
-import { MainCollectionService, type ScenarioStep } from "@/lib/main-collection";
+import { MainCollectionService, type ScenarioScope, type ScenarioStep } from "@/lib/main-collection";
 import { type PinnedTwinSkill, TWIN_SOURCE, twinPlaybooks } from "@/lib/twins";
 import { redactLearnerNames } from "@/lib/persona-voice";
 import { enqueueWorkspaceCommand } from "@/lib/workspace-commands";
@@ -249,9 +249,9 @@ export async function POST(request: Request) {
   // Real lines from a scenario-ingest scenario (items.json), for the chat tool scenario_examples.
   if (input.action === "searchScenarioItems") {
     // scenario.json's steps map the newer items' `action` to a step, and a step to its moves.
-    const agent = await db.agent.findFirst({ where: { slug: input.agentSlug, orgId }, select: { data: true, personaId: true, kind: true } });
+    const agent = await db.agent.findFirst({ where: { slug: input.agentSlug, orgId }, select: { data: true, personaId: true, kind: true, version: true } });
     const data = agent?.data as { source?: unknown; scenario?: { steps?: unknown; situations?: unknown } } | null;
-    let scope: { slugs: string[]; steps: ScenarioStep[] };
+    let scope: { skills: ScenarioScope[]; steps: ScenarioStep[] };
     if (agent?.kind === "TWIN" && data?.source === TWIN_SOURCE) {
       // The all-skills twin searches its persona's skill twins: all of them, or the one the model has loaded.
       const pinned = input.sessionId
@@ -262,13 +262,19 @@ export async function POST(request: Request) {
       const named = input.playbook ? all.filter((p) => p.id === input.playbook || p.slug === input.playbook) : [];
       // An unknown name (e.g. a sanitised skill name) widens to all playbooks rather than finding nothing.
       const chosen = named.length > 0 ? named : all;
-      scope = { slugs: chosen.map((p) => p.slug), steps: chosen.flatMap((p) => p.steps as ScenarioStep[]) };
+      // Each skill at the version the call pinned (or the live one).
+      scope = { skills: chosen.map((p) => ({ slug: p.slug, version: p.version })), steps: chosen.flatMap((p) => p.steps as ScenarioStep[]) };
     } else {
       // A twin-creator skill lists situations where a scenario lists steps.
       const steps = data?.scenario?.steps ?? data?.scenario?.situations;
-      scope = { slugs: [input.agentSlug], steps: Array.isArray(steps) ? (steps as ScenarioStep[]) : [] };
+      // A call reads the version it started on (a publish mid-call doesn't change its examples); no call: the live one.
+      const started = input.sessionId
+        ? (await db.interviewSession.findFirst({ where: { id: input.sessionId, orgId, agentSlug: input.agentSlug }, select: { agentVersion: true } }))?.agentVersion
+        : undefined;
+      const version = started ?? agent?.version;
+      scope = { skills: version ? [{ slug: input.agentSlug, version }] : [], steps: Array.isArray(steps) ? (steps as ScenarioStep[]) : [] };
     }
-    const examples = await MainCollectionService.searchScenarioItems(orgId, scope.slugs, input.query, {
+    const examples = await MainCollectionService.searchScenarioItems(orgId, scope.skills, input.query, {
       step: input.step,
       role: input.role,
       limit: input.limit,

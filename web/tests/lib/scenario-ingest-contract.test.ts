@@ -44,10 +44,11 @@ mock.module("@/lib/main-collection", () => ({
   invalidateCollectionCache: () => {},
   invalidatePersonaStyleCache: () => {},
   MainCollectionService: {
-    replaceScenarioItems: async (_org: string, agentSlug: string, _id: string, items: unknown[]) => {
+    writeScenarioItems: async (_org: string, agentSlug: string, _id: string, _version: number, items: unknown[]) => {
       chroma = { agentSlug, count: items.length };
       return items.length;
     },
+    pruneScenarioItems: async () => {},
   },
 }));
 

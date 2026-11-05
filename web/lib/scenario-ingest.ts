@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
@@ -221,7 +221,10 @@ async function storeSkillAgent(input: {
 
   const previous = (currentAgent?.data ?? {}) as Record<string, unknown>;
   const kept = Object.fromEntries(KEPT_ACROSS_DURING_WRITES.filter((key) => previous[key] !== undefined).map((key) => [key, previous[key]]));
-  const content = { ...agentData, ...kept, ...input.data };
+  // items.json and patterns.md are not in the Agent row; their hash is, so changing them makes a new version (a new S3
+  // folder and new vector items) instead of overwriting this version's files.
+  const filesHash = createHash("sha256").update(JSON.stringify(input.items)).update("\0").update(input.patterns ?? "").digest("hex").slice(0, 16);
+  const content = { ...agentData, ...kept, ...input.data, filesHash };
   // Decide the version first: the S3 folder and the Agent row must carry the same number.
   const previousContent = Object.fromEntries(Object.entries(previous).filter(([key]) => key !== "artifacts"));
   const unchanged = Boolean(currentAgent) && currentAgent!.personaId === input.personaId && stableJson(previousContent) === stableJson(content);
@@ -235,7 +238,9 @@ async function storeSkillAgent(input: {
     putObject(`${artifacts}/items.json`, fileText.items(input.items), "application/json"),
     ...(input.patterns !== undefined ? [putObject(`${artifacts}/patterns.md`, input.patterns, "text/markdown; charset=utf-8")] : []),
   ]);
-  const itemCount = await MainCollectionService.replaceScenarioItems(org.id, slug, pkg.scenarioId, input.items);
+  // The new version's items go in next to the live ones; the Agent row then switches to them. A failure before the
+  // switch leaves the live version untouched.
+  const itemCount = await MainCollectionService.writeScenarioItems(org.id, slug, pkg.scenarioId, version, input.items);
 
   await db.$transaction(async (tx) => {
     if (!currentAgent) {
@@ -258,6 +263,13 @@ async function storeSkillAgent(input: {
       data: { name: agentData.name, version, personaId: input.personaId, data: json(data), archivedAt: null },
     });
   });
+
+  // Now that the row points at the new version: keep its items and the previous version's (calls that started on it);
+  // older ones only stay in S3. Programmatic, never the copilot; a failure leaves extra items, which no search reads.
+  if (currentAgent && !unchanged) {
+    await MainCollectionService.pruneScenarioItems(org.id, slug, version - 1)
+      .catch((error: unknown) => console.warn(`[scenario-ingest] could not prune old items of ${slug}`, error));
+  }
 
   return { slug, name: agentData.name, version, created: !currentAgent, items: itemCount, artifacts, runId: input.runId ?? null };
 }

@@ -63,6 +63,8 @@ export type ScenarioItemMetadata = {
   type: "scenario_item";
   orgId: string;
   agentSlug: string;
+  /** The Agent version these items were published with: each version's items live side by side until pruned. */
+  agentVersion: number;
   scenarioId: string;
   itemId: string;
   itemIndex: number;
@@ -71,6 +73,23 @@ export type ScenarioItemMetadata = {
 } & Record<string, string | number | boolean>;
 
 export type MainCollectionMetadata = KnowledgeMetadata | PersonaVoiceMetadata | ScenarioItemMetadata;
+
+/** Which skill (agent) versions a search reads: the live version, or the ones a call pinned when it started. */
+export type ScenarioScope = { slug: string; version: number };
+
+export const scenarioItemId = (agentSlug: string, agentVersion: number, index: number) => `scenario_item_${agentSlug}@v${agentVersion}#${index}`;
+
+/** Chroma filter for exactly these (slug, version) pairs. */
+export function scenarioScopeWhere(scope: ScenarioScope[]): Where {
+  const pairs = scope.map(({ slug, version }) => ({ $and: [{ agentSlug: slug }, { agentVersion: version }] }) as Where);
+  return pairs.length === 1 ? pairs[0] : ({ $or: pairs } as Where);
+}
+
+/** Chroma filter for these slugs at any version (the fallback). */
+export function scenarioSlugsWhere(scope: ScenarioScope[]): Where {
+  const slugs = [...new Set(scope.map((entry) => entry.slug))];
+  return slugs.length === 1 ? { agentSlug: slugs[0] } : ({ agentSlug: { $in: slugs } } as Where);
+}
 
 /** One step of scenario.json: the moves it allows on each side. */
 export type ScenarioStep = { id: string; trainer_moves?: unknown; learner_moves?: unknown };
@@ -439,25 +458,20 @@ export class MainCollectionService {
   }
 
   /**
-   * Replaces every item of one scenario (agent) with `items`. Idempotent: re-sending the same
-   * items.json leaves the same records. Embeds the situation with the line, so retrieval can
-   * match "what just happened" to "what the trainer said next".
+   * Stores one version's items next to the other versions' (nothing is deleted here: pruneScenarioItems does that after
+   * the Agent row points at the new version). Idempotent: re-sending the same version writes the same records. Embeds
+   * the situation with the line, so retrieval can match "what just happened" to "what the trainer said next".
    */
-  static async replaceScenarioItems(orgId: string, agentSlug: string, scenarioId: string, items: (ScenarioItem | RoleplayItem)[]): Promise<number> {
-    const collection = await this.getCollection(orgId);
-    try {
-      await collection.delete({ where: { $and: [{ type: "scenario_item" }, { agentSlug }] } as Where });
-    } catch {
-      // Nothing stored yet
-    }
+  static async writeScenarioItems(orgId: string, agentSlug: string, scenarioId: string, agentVersion: number, items: (ScenarioItem | RoleplayItem)[]): Promise<number> {
     if (items.length === 0) return 0;
+    const collection = await this.getCollection(orgId);
 
     const embeddings = await embedTexts(items.map((item) => (item.context ? `${item.context}\n${item.text}` : item.text)));
     for (let i = 0; i < items.length; i += 5000) {
       const batch = items.slice(i, i + 5000);
       await collection.upsert({
-        // By position: items.json may repeat an id (one turn picked for two moves); the original id is in metadata.
-        ids: batch.map((_, j) => `scenario_item_${agentSlug}#${i + j}`),
+        // By version and position: items.json may repeat an id (one turn picked for two moves); the original id is in metadata.
+        ids: batch.map((_, j) => scenarioItemId(agentSlug, agentVersion, i + j)),
         embeddings: embeddings.slice(i, i + 5000),
         documents: batch.map((item) => item.text),
         metadatas: batch.map((item, j): ScenarioItemMetadata => ({
@@ -470,6 +484,7 @@ export class MainCollectionService {
           type: "scenario_item",
           orgId,
           agentSlug,
+          agentVersion,
           scenarioId,
           itemId: item.id,
           itemIndex: i + j,
@@ -482,6 +497,40 @@ export class MainCollectionService {
   }
 
   /**
+   * Drops an agent's items older than `keepFrom` (the studio keeps the live version and the one before it, for calls
+   * that started on it and a quick rollback; every version's items.json stays in S3). Programmatic, after a publish.
+   */
+  static async pruneScenarioItems(orgId: string, agentSlug: string, keepFrom: number): Promise<void> {
+    const collection = await this.getCollection(orgId);
+    await collection.delete({ where: { $and: [{ type: "scenario_item" }, { agentSlug }, { agentVersion: { $lt: keepFrom } }] } as Where });
+  }
+
+  /**
+   * One-time upgrade of items stored before versioning: tags each with its agent's current version (`versionOf`, by
+   * slug). Already tagged items and items of agents no longer in `versionOf` are left alone. Returns how many changed.
+   */
+  static async tagUnversionedScenarioItems(orgId: string, versionOf: Map<string, number>): Promise<number> {
+    const collection = await this.getCollection(orgId);
+    let tagged = 0;
+    // Chroma Cloud reads at most 300 records per call.
+    for (let offset = 0; ; offset += 300) {
+      const page = await collection.get({ where: { type: "scenario_item" } as Where, include: ["metadatas"], limit: 300, offset });
+      const ids: string[] = [];
+      const metadatas: Record<string, string | number | boolean>[] = [];
+      page.ids.forEach((id, i) => {
+        const meta = (page.metadatas[i] ?? {}) as Record<string, string | number | boolean>;
+        const version = versionOf.get(String(meta.agentSlug));
+        if (typeof meta.agentVersion === "number" || version === undefined) return;
+        ids.push(id);
+        metadatas.push({ ...meta, agentVersion: version });
+      });
+      if (ids.length) await collection.update({ ids, metadatas });
+      tagged += ids.length;
+      if (page.ids.length < 300) return tagged;
+    }
+  }
+
+  /**
    * Real lines from one scenario for a situation, optionally limited to a step and a side.
    * Reads both item formats scenario-ingest has produced: `step` + `move`, and `action` (+ `part`),
    * where the step comes from scenario.json (`steps`: the moves each step allows).
@@ -489,18 +538,17 @@ export class MainCollectionService {
    */
   static async searchScenarioItems(
     orgId: string,
-    /** One scenario, or several (a twin searches all of its persona's playbooks). */
-    agentSlug: string | string[],
+    /** One scenario and version, or several (a twin searches all of its persona's playbooks, at the versions its call pinned). */
+    scope: ScenarioScope[],
     query: string,
     options: { step?: string; role?: ScenarioItemRole; limit?: number; steps?: ScenarioStep[] } = {},
   ): Promise<{ text: string; context: string; step?: string; move?: string; role: string; score: number; scenario: string; source?: string }[]> {
-    const slugs = Array.isArray(agentSlug) ? agentSlug : [agentSlug];
-    if (slugs.length === 0) return [];
+    if (scope.length === 0) return [];
     const collection = await this.getCollection(orgId);
     const [queryEmbedding] = await embedTexts([query]);
     const index = scenarioStepIndex(options.steps ?? []);
-    const run = async (step?: string) => {
-      const conditions: Where[] = [{ type: "scenario_item" }, slugs.length === 1 ? { agentSlug: slugs[0] } : ({ agentSlug: { $in: slugs } } as Where)];
+    const run = async (step: string | undefined, versioned: boolean) => {
+      const conditions: Where[] = [{ type: "scenario_item" }, versioned ? scenarioScopeWhere(scope) : scenarioSlugsWhere(scope)];
       if (step) {
         const moves = index.movesOf(step);
         conditions.push(moves.length ? { $or: [{ step }, { move: { $in: moves } }, { action: { $in: moves } }] } as Where : { step });
@@ -532,8 +580,14 @@ export class MainCollectionService {
         };
       });
     };
-    const hits = await run(options.step);
-    return hits.length > 0 || !options.step ? hits : run();
+    const search = async (versioned: boolean) => {
+      const hits = await run(options.step, versioned);
+      return hits.length > 0 || !options.step ? hits : run(undefined, versioned);
+    };
+    const hits = await search(true);
+    // Nothing at the versions asked for (items from before versioning not tagged yet, or a pinned version pruned since):
+    // the skill's items of any version kept, rather than no examples at all.
+    return hits.length > 0 ? hits : search(false);
   }
 
   /**

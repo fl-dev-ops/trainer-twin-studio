@@ -14,6 +14,8 @@ export const TWIN_SOURCE = "twin";
 export type TwinPlaybook = {
   /** Agent slug of the scenario (what scenario items are stored under). */
   slug: string;
+  /** The version this playbook is (live, or pinned by the call): its scenario items are searched at this version. */
+  version: number;
   /** scenario.json `scenario` id, used as the skill name. */
   id: string;
   name: string;
@@ -28,12 +30,13 @@ export type TwinPlaybook = {
 const asRecord = (value: unknown) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null);
 
 /** A skill twin's spec as a playbook, or null when it carries no skill (the all-skills twin itself). */
-function toPlaybook(slug: string, name: string, agentData: unknown): TwinPlaybook | null {
+function toPlaybook(slug: string, name: string, agentData: unknown, version: number): TwinPlaybook | null {
   const data = asRecord(agentData);
   const manifest = asRecord(data?.scenario);
   if (typeof data?.skill !== "string" || !manifest) return null;
   return {
     slug,
+    version,
     // scenario.json names it `scenario`; a twin-creator skill.json names it `skill` and lists situations, not steps.
     id: typeof manifest.scenario === "string" ? manifest.scenario : typeof manifest.skill === "string" ? manifest.skill : slug,
     name: typeof manifest.name === "string" ? manifest.name : name,
@@ -58,7 +61,7 @@ const liveSkillTwins = (orgId: string, personaId: string) =>
 /** The persona's skill twins right now, to pin into a new session's snapshot. */
 export async function pinTwinSkills(orgId: string, personaId: string): Promise<PinnedTwinSkill[]> {
   const rows = await liveSkillTwins(orgId, personaId);
-  return rows.filter((row) => toPlaybook(row.slug, row.name, row.data)).map(({ slug, version }) => ({ slug, version }));
+  return rows.filter((row) => toPlaybook(row.slug, row.name, row.data, row.version)).map(({ slug, version }) => ({ slug, version }));
 }
 
 /**
@@ -68,7 +71,7 @@ export async function pinTwinSkills(orgId: string, personaId: string): Promise<P
  */
 export async function twinPlaybooks(orgId: string, personaId: string, pinned?: PinnedTwinSkill[]): Promise<TwinPlaybook[]> {
   const rows = await liveSkillTwins(orgId, personaId);
-  if (!pinned) return rows.flatMap((row) => toPlaybook(row.slug, row.name, row.data) ?? []);
+  if (!pinned) return rows.flatMap((row) => toPlaybook(row.slug, row.name, row.data, row.version) ?? []);
 
   const live = new Map(rows.map((row) => [row.slug, row]));
   const older = pinned.filter(({ slug, version }) => live.get(slug)?.version !== version);
@@ -82,7 +85,7 @@ export async function twinPlaybooks(orgId: string, personaId: string, pinned?: P
   return pinned.flatMap(({ slug, version }) => {
     const row = live.get(slug);
     const data = row?.version === version ? row.data : snapshotOf.get(`${slug}@${version}`);
-    return toPlaybook(slug, row?.name ?? slug, data) ?? [];
+    return toPlaybook(slug, row?.name ?? slug, data, version) ?? [];
   });
 }
 
