@@ -4,12 +4,11 @@ import { contextUploadFromAgentData } from "@/lib/context-upload";
 import { db } from "@/lib/db";
 import { ensureDeployment } from "@/lib/deployments";
 import { sendRolePlayAssignmentEmail } from "@/lib/email";
-import { homeOrgsByEmail } from "@/lib/org-lock";
 
 /**
  * Invites learners to a role play by email (the role play's Assign page and the copilot): a new or reopened
- * assignment gets a fresh personal link and an email; a pending one is re-sent only on request. People bound to
- * another org are blocked (single-org lock).
+ * assignment gets a fresh personal link and an email; a pending one is re-sent only on request. People may belong
+ * to several orgs.
  */
 export async function inviteToRoleplay(input: {
   org: { id: string; slug: string };
@@ -25,17 +24,11 @@ export async function inviteToRoleplay(input: {
     select: { id: true, recipientEmail: true, status: true, shareCode: true },
   });
   const assignmentByEmail = new Map(assignments.map((assignment) => [assignment.recipientEmail, assignment]));
-  const homeOrgs = await homeOrgsByEmail(emails);
-  const stats = { added: 0, resent: 0, skipped: 0, blocked: 0 };
+  const stats = { added: 0, resent: 0, skipped: 0 };
   const assignmentEmails: Array<{ to: string; practiceUrl: string }> = [];
   const practiceUrl = (shareCode: string) => `https://${input.org.slug}.${BASE_DOMAIN}/s/${shareCode}`;
 
   for (const email of emails) {
-    const home = homeOrgs.get(email);
-    if (home && home !== input.org.id) {
-      stats.blocked++; // single-org lock: learner already belongs to another organization
-      continue;
-    }
     const existing = assignmentByEmail.get(email);
     if (!existing || existing.status === "cancelled" || existing.status === "expired") {
       const shareCode = newAssignmentShareCode();
