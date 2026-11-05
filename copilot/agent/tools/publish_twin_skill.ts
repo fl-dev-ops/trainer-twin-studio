@@ -5,7 +5,7 @@ import { pool, pushOutput } from "../lib/origin";
 import { outputScope, sessionIo } from "../lib/session-io";
 import { sessionPrincipal } from "../lib/tenant";
 import { publishTwinSkillToStudio, runIdFor } from "../lib/studio-publish";
-import { prepareTwinPublication, twinDir, type TwinChanges } from "../lib/twin-skill";
+import { prepareTwinPublication, rebaseAfterPublish, twinDir, type TwinChanges } from "../lib/twin-skill";
 import { readJson } from "../lib/paths";
 
 export default defineTool({
@@ -34,6 +34,8 @@ export default defineTool({
       : !url || !secret
         ? { skipped: "STUDIO_URL or SCENARIO_INGEST_SECRET is not configured." }
         : await publishTwinSkillToStudio({ url, secret, orgId: principal.principalId, persona: persona ?? user, runId: runIdFor(ctx.session.id) }, skill, files, fetch, ctx.abortSignal);
+    // The next build in this conversation builds on what is now live, not on what was loaded before.
+    if ("ok" in studio && studio.ok && studio.slug && studio.version) await rebaseAfterPublish(io, user, skill, { slug: studio.slug, version: studio.version });
     return { published: published.length, where: published[0]?.replace(/\/[^/]*$/, "") ?? null, rejected, studio, ...(changes ? { changes } : {}) };
   },
 });

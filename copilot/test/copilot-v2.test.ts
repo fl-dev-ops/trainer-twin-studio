@@ -2,7 +2,8 @@
 // knowledge re-sync. Run: bun test test/copilot-v2.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { holdsPart, mergeWithBase } from "../agent/lib/twin-skill.ts";
+import { holdsPart, mergeWithBase, rebaseAfterPublish } from "../agent/lib/twin-skill.ts";
+import { outPath } from "../agent/lib/paths.ts";
 import { studio } from "../agent/lib/studio.ts";
 import { ensureSynced } from "../agent/lib/ingest.ts";
 import { outputScope } from "../agent/lib/session-io.ts";
@@ -97,4 +98,20 @@ test("a conversation stays with the org that started it", async () => {
   await assert.rejects(studio(crossed, { action: "list" }, fetcher, { STUDIO_URL: "x", SCENARIO_INGEST_SECRET: "s" }), /belongs to another organization/);
   // Non-studio sessions (eve dev) pass through.
   assert.equal(sessionPrincipal({ session: { auth: { current: null } } }), null);
+});
+
+test("a second update in the same conversation builds on what was just published, not on what was loaded", async () => {
+  const files = new Map();
+  const io = { read: async (p) => files.get(p) ?? null, write: async (p, c) => void files.set(p, c), list: async () => [], grep: async () => [] };
+  // Update 1: loaded v1 (a, b) + c, published as v2. The sandbox's items.json is what was published.
+  const first = mergeWithBase(base, "objection-handling", [item("c", "too-expensive", "I ask what the money is really protecting", "doc2")], []);
+  files.set(outPath("olga", "twin-skills/objection-handling/items.json"), JSON.stringify(first.items));
+  files.set(outPath("olga", "twin-skills/objection-handling/skill.json"), JSON.stringify({ name: "Objection Handling" }));
+  const rebased = await rebaseAfterPublish(io, "olga", "objection-handling", { slug: "olga-objection-handling", version: 2 });
+  assert.equal(rebased.version, 2);
+  assert.equal(files.get(outPath("olga", "twin-skills/objection-handling/changes.json")), "null\n");
+  // Update 2: "also add d" keeps c from update 1.
+  const second = mergeWithBase(rebased, "objection-handling", [item("d", "wait", "I let the silence work for me", "doc3")], []);
+  assert.deepEqual(second.items.map((x) => x.id), ["a", "b", "c", "d"]);
+  assert.deepEqual(second.changes.base, { slug: "olga-objection-handling", version: 2 });
 });

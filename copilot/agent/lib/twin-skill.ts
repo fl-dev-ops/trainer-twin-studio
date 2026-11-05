@@ -380,6 +380,23 @@ export async function trainerLabelsFromItems(io: Io, user: string, items: TwinIt
   return { trainer, missingSources: [...missing] };
 }
 
+/**
+ * After a successful publish, what was just published becomes the baseline (base.json) of the next build in this
+ * conversation: a follow-up "also add X" then merges onto the new version. Without it, a follow-up merged onto the
+ * version loaded earlier and dropped the first update's items, and one right after a new skill rebuilt it from X alone.
+ * The change record is cleared and the build budget starts again, as after load_skill.
+ */
+export async function rebaseAfterPublish(io: Io, user: string, skillId: string, published: { slug: string; version: number }) {
+  const dir = twinDir(skillId);
+  const items = await readJson<TwinItem[]>(io, user, `${dir}/items.json`, []);
+  const head = await readJson<{ name?: string } | null>(io, user, `${dir}/skill.json`, null);
+  const base: TwinBase = { slug: published.slug, version: published.version, skillId, name: head?.name ?? skillId, items };
+  await io.write(outPath(user, `${dir}/base.json`), JSON.stringify(base, null, 1) + "\n");
+  await io.write(outPath(user, `${dir}/changes.json`), "null\n");
+  await io.write(outPath(user, `${dir}/builds`), "0");
+  return base;
+}
+
 /** Writes a published twin skill into the sandbox as the baseline of an update: its files, base.json and sources.json. */
 export async function loadTwinBase(io: Io, user: string, published: { slug: string; version: number; name: string; skill: string; manifest: unknown; items: TwinItem[]; patterns: string | null }) {
   const head = twinSkillHead.safeParse(published.manifest);

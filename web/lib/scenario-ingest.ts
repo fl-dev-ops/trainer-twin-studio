@@ -244,14 +244,18 @@ async function storeSkillAgent(input: {
       });
       return;
     }
-    if (unchanged) return;
+    // Publishing onto an archived skill / role play brings it back (archive is a soft delete; the slug stays taken).
+    if (unchanged) {
+      if (currentAgent.archivedAt) await tx.agent.update({ where: { id: currentAgent.id }, data: { archivedAt: null } });
+      return;
+    }
     // Same versioning as a dashboard publish: snapshot the old spec, bump the version.
     await tx.specVersion.create({
       data: { entityType: "agents", entitySlug: slug, version: currentAgent.version, data: json(currentAgent.data), orgId: org.id },
     });
     await tx.agent.update({
       where: { id: currentAgent.id },
-      data: { name: agentData.name, version, personaId: input.personaId, data: json(data) },
+      data: { name: agentData.name, version, personaId: input.personaId, data: json(data), archivedAt: null },
     });
   });
 

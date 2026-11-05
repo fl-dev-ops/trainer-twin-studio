@@ -286,3 +286,14 @@ test("the copilot's roleplay-creator publishes a ROLEPLAY (same package, kind RO
   expect((agents[0].data as Row).source).toBe("scenario-ingest");
   expect(() => input({ kind: "DOMAIN" })).toThrow();
 });
+
+test("publishing onto an archived skill brings it back, whether or not its content changed", async () => {
+  await ingestScenario("org1", input());
+  agents[0].archivedAt = new Date(); // deleted in the studio (archive is a soft delete; the slug stays taken)
+  await ingestScenario("org1", input()); // same content
+  expect(agents[0].archivedAt).toBeNull();
+  agents[0].archivedAt = new Date();
+  const changed = await ingestScenario("org1", input({ scenario: { ...scenario, name: "Depth drill" } }));
+  expect(changed).toMatchObject({ version: 2 });
+  expect(agents[0].archivedAt).toBeNull();
+});
