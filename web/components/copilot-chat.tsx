@@ -24,7 +24,6 @@ import {
   Attachment,
   AttachmentInfo,
   AttachmentPreview,
-  AttachmentRemove,
   Attachments,
 } from "@/components/ai-elements/attachments";
 import {
@@ -47,17 +46,12 @@ import {
 } from "@/components/ai-elements/message";
 import {
   PromptInput,
-  PromptInputActionAddAttachments,
-  PromptInputActionMenu,
-  PromptInputActionMenuContent,
-  PromptInputActionMenuTrigger,
   PromptInputBody,
   PromptInputFooter,
   PromptInputHeader,
   PromptInputSubmit,
   PromptInputTextarea,
   PromptInputTools,
-  usePromptInputAttachments,
 } from "@/components/ai-elements/prompt-input";
 import { CircularLoader } from "@/components/prompt-kit/loader";
 import { Button } from "@/components/ui/button";
@@ -487,14 +481,21 @@ function CopilotConversation({
             )}
             <PromptInput
               className="pointer-events-auto **:data-[slot=input-group]:rounded-2xl **:data-[slot=input-group]:bg-background/95 "
-              accept="image/*,application/pdf,text/plain,text/markdown,.md"
-              maxFiles={5}
-              maxFileSize={2 * 1024 * 1024}
-              multiple
-              onError={({ message }) => setLocalError(message)}
+              // No attachments: the copilot works only from the knowledge base (the Files picker). A dropped or pasted
+              // file is refused with where to put it instead.
+              maxFiles={0}
+              onError={({ code, message }) =>
+                // PromptInput reports this from inside its own state update: set ours after it.
+                queueMicrotask(() =>
+                  setLocalError(
+                    code === "max_files"
+                      ? "To work from a file, add it to your knowledge base in Twin's brain, then pick it with Files."
+                      : message,
+                  ),
+                )
+              }
               onSubmit={async ({ text, files }) => send(text, files)}
             >
-              <PromptAttachments />
               {(skill || pickedFiles.length > 0) && (
                 <PromptInputHeader>
                   <CopilotChips
@@ -543,12 +544,6 @@ function CopilotConversation({
               </PromptInputBody>
               <PromptInputFooter>
                 <PromptInputTools>
-                  <PromptInputActionMenu>
-                    <PromptInputActionMenuTrigger />
-                    <PromptInputActionMenuContent>
-                      <PromptInputActionAddAttachments label="Add source or context" />
-                    </PromptInputActionMenuContent>
-                  </PromptInputActionMenu>
                   <KnowledgeFilePicker selected={pickedFiles} onChange={setPickedFiles} disabled={busy} />
                 </PromptInputTools>
                 <PromptInputSubmit
@@ -604,28 +599,6 @@ function CopilotConversation({
     >
       <div className="flex min-h-0 flex-1">{content}</div>
     </Sidebar>
-  );
-}
-
-function PromptAttachments() {
-  const attachments = usePromptInputAttachments();
-  if (!attachments.files.length) return null;
-  return (
-    <PromptInputHeader>
-      <Attachments variant="inline">
-        {attachments.files.map((file) => (
-          <Attachment
-            key={file.id}
-            data={file}
-            onRemove={() => attachments.remove(file.id)}
-          >
-            <AttachmentPreview />
-            <AttachmentInfo />
-            <AttachmentRemove />
-          </Attachment>
-        ))}
-      </Attachments>
-    </PromptInputHeader>
   );
 }
 
