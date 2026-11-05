@@ -3,7 +3,7 @@ import { defineChannel, POST, type Session } from "eve/channels";
 import { studioPrincipal } from "../lib/auth";
 import { createQuestionBridge } from "../lib/question-bridge";
 import { followUpGradesFor } from "../lib/turn-grades";
-import { summarizeToolInput, summarizeToolOutput } from "../lib/tool-trace";
+import { summarizeToolInput, summarizeToolOutput, withoutImageBytes } from "../lib/tool-trace";
 import { thinkingBudgetSchema } from "../lib/thinking-budget";
 import { studioFetch } from "../lib/studio";
 
@@ -504,7 +504,7 @@ export default defineChannel({
                   });
                 }
                 if (result.toolName && EVIDENCE_TOOLS.has(result.toolName) && !result.isError && evidenceCalls.length < 12) {
-                  evidenceCalls.push({ tool: result.toolName, input: allToolsCalled.find((call) => call.callId === callId)?.input ?? {}, output: result.output });
+                  evidenceCalls.push({ tool: result.toolName, input: allToolsCalled.find((call) => call.callId === callId)?.input ?? {}, output: withoutImageBytes(result.output) });
                 }
                 if (result.toolName === "search_knowledge" && !result.isError) {
                   retrievalTraces.push({

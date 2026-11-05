@@ -63,3 +63,11 @@ export function summarizeToolOutput(toolName: string, output: unknown, isError?:
   if ("error" in data) return { error: true };
   return {};
 }
+
+/** Evidence keeps what a tool returned, but not an image's bytes (read_document): a note in their place. */
+export function withoutImageBytes(output: unknown): unknown {
+  const data = object(output);
+  const image = object(data.image);
+  if (typeof image.data !== "string") return output;
+  return { ...data, image: { mediaType: image.mediaType, omitted: `${Math.round((image.data.length * 3) / 4 / 1024)} KB image, shown to the model` } };
+}

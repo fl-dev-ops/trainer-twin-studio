@@ -9,6 +9,7 @@ import { enqueueWorkspaceCommand } from "@/lib/workspace-commands";
 import { buildSessionContext, getCachedSessionContext } from "@/lib/session-context";
 import { unusedResumeClaims } from "@/lib/resume-interview";
 import { recordTurnEvidence, turnEvidenceSchema } from "@/lib/twin/evidence";
+import { modelImage } from "@/lib/model-image";
 
 export const runtime = "nodejs";
 
@@ -139,6 +140,8 @@ export async function POST(request: Request) {
       documentId: doc.id,
       name: doc.name,
       kind: doc.kind,
+      // An image has no text: the chat agent shows it to the model itself (chat/agent/tools/read_document.ts).
+      ...(doc.kind === "image" ? { image: await modelImage(doc.content, doc.mimeType) } : {}),
       chunks: chunks.map((c) => ({
         index: c.chunkIndex,
         heading: c.heading,
