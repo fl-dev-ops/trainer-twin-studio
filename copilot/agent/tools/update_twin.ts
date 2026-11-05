@@ -25,7 +25,7 @@ const describe = (input: z.infer<typeof inputSchema>) => [
 
 export default defineTool({
   description:
-    "Change a twin or twin skill: name, description and Before settings (only the fields you pass). Needs the trainer's approval; read it with studio_get first. A real change is a new version; the old one is kept.",
+    "Change a twin or twin skill: name, description and Before settings (only the fields you pass). Needs the trainer's approval; read it with get_twin first. A real change is a new version; the old one is kept.",
   inputSchema,
   approval: {
     request: always(),

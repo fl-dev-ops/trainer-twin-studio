@@ -104,3 +104,13 @@ test("getSkill reads the version's own S3 copy (current or older)", async () => 
   const older = await run({ action: "getSkill", slug: "olga-objection-handling", version: 1 }) as Row;
   expect(older).toMatchObject({ version: 1, skill: "# v1", items: [{ id: "old" }] });
 });
+
+test("each module reads only its own kind", async () => {
+  agents.push({ id: "a4", orgId: "org1", slug: "olga-sara", name: "Sara", kind: "ROLEPLAY", version: 1, data: { source: "roleplay-skill" }, archivedAt: null, updatedAt: new Date() });
+  const twins = await run({ action: "list", kind: "twin" }) as { items: { slug: string }[] };
+  const roleplays = await run({ action: "list", kind: "roleplay" }) as { items: { slug: string }[] };
+  expect(twins.items.map((i) => i.slug)).toEqual(["olga-olga-twin", "olga-objection-handling"]);
+  expect(roleplays.items.map((i) => i.slug)).toEqual(["olga-sara"]);
+  await expect(run({ action: "get", slug: "olga-sara", kind: "twin" })).rejects.toThrow(/is a role play, not a twin/);
+  await expect(run({ action: "get", slug: "olga-objection-handling", kind: "roleplay" })).rejects.toThrow(/is a twin, not a role play/);
+});

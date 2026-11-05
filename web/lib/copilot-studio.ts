@@ -28,8 +28,9 @@ const tools = z.object({ canvas: z.boolean(), codeEditor: z.boolean(), preview: 
 
 export const copilotStudioInput = z.discriminatedUnion("action", [
   z.object({ action: z.literal("context") }).strict(),
-  z.object({ action: z.literal("list"), includeArchived: z.boolean().optional() }).strict(),
-  z.object({ action: z.literal("get"), slug }).strict(),
+  // kind: the copilot's list_twins / list_roleplays and get_twin / get_roleplay read only their own module.
+  z.object({ action: z.literal("list"), kind: z.enum(["twin", "roleplay"]).optional(), includeArchived: z.boolean().optional() }).strict(),
+  z.object({ action: z.literal("get"), slug, kind: z.enum(["twin", "roleplay"]).optional() }).strict(),
   z.object({ action: z.literal("getSkill"), slug, version: z.number().int().positive().optional() }).strict(),
   z.object({ action: z.literal("listKnowledge") }).strict(),
   z.object({
@@ -99,7 +100,11 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
 
     case "list": {
       const agents = await d.db.agent.findMany({
-        where: { orgId, ...(input.includeArchived ? {} : { archivedAt: null }) },
+        where: {
+          orgId,
+          ...(input.kind ? { kind: input.kind === "twin" ? "TWIN" : "ROLEPLAY" } : {}),
+          ...(input.includeArchived ? {} : { archivedAt: null }),
+        },
         orderBy: [{ kind: "asc" }, { name: "asc" }],
         select: { slug: true, name: true, kind: true, version: true, data: true, archivedAt: true, updatedAt: true },
       });
@@ -120,6 +125,9 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
 
     case "get": {
       const agent = await findAgent(d, orgId, input.slug);
+      if (input.kind && (agent.kind === "TWIN") !== (input.kind === "twin")) {
+        throw new ScenarioIngestError(`"${input.slug}" is a ${agent.kind === "TWIN" ? "twin" : "role play"}, not a ${input.kind === "twin" ? "twin" : "role play"}`, 400);
+      }
       const kind = kindOf(agent);
       const base = {
         slug: agent.slug, name: agent.name, kind, version: agent.version, archived: agent.archivedAt !== null,

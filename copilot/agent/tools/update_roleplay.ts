@@ -6,7 +6,7 @@ import { studioResult } from "../lib/studio";
 const inputSchema = z.object({
   slug: z.string().min(1),
   builder: z.record(z.string(), z.unknown()).optional().describe(
-    "Builder role plays only: the fields to change, named as studio_get returns them (name, clientName, situation {scenario, hiddenTruth, learnerRole, agreesWhen, declinesWhen}, difficulty, howTheyTalk, guardedIf, opensUpIf, whatToExpect, opening, exampleLines, learnerGoals, rubric). Omitted fields keep their value.",
+    "Builder role plays only: the fields to change, named as get_roleplay returns them (name, clientName, situation {scenario, hiddenTruth, learnerRole, agreesWhen, declinesWhen}, difficulty, howTheyTalk, guardedIf, opensUpIf, whatToExpect, opening, exampleLines, learnerGoals, rubric). Omitted fields keep their value.",
   ),
   before: z.object({
     preScreenshare: z.boolean(), preUpload: z.boolean(), duringUpload: z.boolean(),
@@ -24,7 +24,7 @@ const describe = (input: z.infer<typeof inputSchema>) => [
 
 export default defineTool({
   description:
-    "Change a role play: builder fields (builder role plays only), Settings (before) and Tools. Only what you pass changes. Needs the trainer's approval; read it with studio_get first. A role play built from recordings changes its script through roleplay-creator, not here.",
+    "Change a role play: builder fields (builder role plays only), Settings (before) and Tools. Only what you pass changes. Needs the trainer's approval; read it with get_roleplay first. A role play built from recordings changes its script through roleplay-creator, not here.",
   inputSchema,
   approval: {
     request: always(),

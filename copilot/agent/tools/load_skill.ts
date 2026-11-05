@@ -15,7 +15,7 @@ export default defineTool({
     "Load a published twin skill or role play as the starting point of an update (never start an existing skill from scratch). Twin skill: writes its SKILL.md, skill.json, patterns.md and items into twin-skills/<id>/ and switches build_twin_skill to update mode: the loaded items are kept, you pass only new items and `remove` (each with a reason), and the skill id stays. Returns its situations, items (id, situation, kind, source, text), sources, body and patterns. Role play built from recordings: its files are written to baseline/<slug>/ for reference. version loads an older version (to restore it).",
   inputSchema: z.object({
     user: z.string().describe("The USER folder the skill builders use."),
-    slug: z.string().min(1).describe("The skill's slug from studio_list."),
+    slug: z.string().min(1).describe("The slug from list_twins or list_roleplays."),
     version: z.number().int().positive().optional(),
   }),
   async execute({ user, slug, version }, ctx) {

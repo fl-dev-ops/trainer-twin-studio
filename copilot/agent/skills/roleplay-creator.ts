@@ -27,9 +27,9 @@ If fewer than 3 sessions show the practice, report that and stop. Never invent l
 
 # Change an existing role play
 
-Check \`studio_list\` first; never create a second role play for the same practice.
+Check \`list_roleplays\` first; never create a second role play for the same practice.
 - **Builder role play** (\`roleplay-builder\`): change its fields, Settings or Tools with \`update_roleplay\` (the trainer
-  approves the card). Read it with \`studio_get\` first and change only what was asked.
+  approves the card). Read it with \`get_roleplay\` first and change only what was asked.
 - **Role play built from recordings** (\`roleplay-recordings\`): \`load_skill\` writes the published version to
   \`baseline/<slug>/\`. Rebuild with the same scenario id, starting from its plan, steps and items: keep what still holds,
   add the new sessions or method docs, and tell the trainer what changed before \`publish\` (approved on a card). It

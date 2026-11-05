@@ -40,7 +40,7 @@ knows, decides or says, and never expose personal details.
 
 # Update an existing twin skill
 
-When the skill already exists (check \`studio_list\`: a \`twin-skill\` with this topic), update it; never rebuild it from
+When the skill already exists (check \`list_twins\`: a \`twin-skill\` with this topic), update it; never rebuild it from
 scratch and never create a second skill on the same topic.
 
 1. **Load it.** \`load_skill\` with its slug. You get its situations, every item (id, situation, kind, source, text),
