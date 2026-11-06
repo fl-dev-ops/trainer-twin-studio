@@ -19,6 +19,7 @@ import {
 } from "@/components/calibration/call-icons";
 import type { CalibrationTurn, Rating } from "@/components/calibration/mock";
 import { Bubble, CalibrationStats, PILL, RatingLabel, SOFT_SHADOW, TwinPortrait } from "@/components/calibration/parts";
+import { MessageFileCard } from "@/components/copilot-composer";
 import { WhyButton, WhyPanel, useEvidenceTurns } from "@/components/calibration/why-panel";
 import { CallWaves } from "@/components/calibration/call-waves";
 import { lookupEvidence } from "@/lib/twin/evidence-match";
@@ -33,6 +34,7 @@ import { isFeelsOffMessage, joinsLearnerTurn, type CalibrationScore } from "@/li
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { attachedMessage, uploadFile } from "@/lib/upload-client";
+import { stripAttachments } from "@/lib/markers";
 import { DURING_UPLOAD_ACCEPT, DURING_UPLOAD_RULE, duringUploadProblem } from "@/lib/context-upload";
 
 /** ready: the pre-join (mic access, Start); leaving: a saved twin calibration on its way to its page. */
@@ -481,6 +483,8 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
   // Evidence lands just after each reply; poll mildly so icons appear once a lookup actually pulled something.
   const evidenceTurns = useEvidenceTurns(twin && !learner ? connection?.sessionId : undefined, 3000);
   const [attaching, setAttaching] = useState(false);
+  /** Files attached this call, by marker id: the transcript line is re-rendered as a card above the message. */
+  const [attachedFiles, setAttachedFiles] = useState<Map<string, { name: string; mediaType: string | null }>>(new Map());
   const attachInput = useRef<HTMLInputElement>(null);
   /** Mid-call file, as in the learner's session: upload it, link it to this session, then tell the twin its ID (it reads by ID). */
   async function attachFile(file: File) {
@@ -498,6 +502,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
       });
       const result = await linked.json().catch(() => null);
       if (!linked.ok) throw new Error(result?.error ?? "Could not attach the file");
+      setAttachedFiles((map) => new Map(map).set(doc.id, { name: doc.name, mediaType: file.type || null }));
       // The bridge turns the marker into the file itself for the twin (chat/agent/channels/openai-compat.ts).
       await say(attachedMessage(doc));
       toast.success(`${doc.name} attached`);
@@ -652,6 +657,24 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                 ) : (
                   captions.map((turn) => {
                     const evidence = lookupEvidence(evidenceTurns ?? [], turn.text);
+                    if (turn.speaker === "you" && turn.text.includes("[ATTACHED")) {
+                      const split = stripAttachments(turn.text);
+                      return (
+                        <div key={turn.id} className="flex flex-col items-end gap-2">
+                          <div className="flex flex-wrap justify-end gap-2">
+                            {split.files.map((file) => (
+                              <MessageFileCard
+                                key={file.id}
+                                name={attachedFiles.get(file.id)?.name ?? file.name}
+                                mediaType={attachedFiles.get(file.id)?.mediaType ?? undefined}
+                                previewUrl={attachedFiles.get(file.id)?.mediaType?.startsWith("image/") ? `/api/uploads/${file.id}/view` : undefined}
+                              />
+                            ))}
+                          </div>
+                          {split.text.trim() ? <Bubble speaker="you" className="max-w-[440px]">{split.text}</Bubble> : null}
+                        </div>
+                      );
+                    }
                     return turn.speaker === "you" ? (
                       <Bubble key={turn.id} speaker="you" className="max-w-[440px]">
                         {turn.text}

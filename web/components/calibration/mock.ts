@@ -1,7 +1,8 @@
 // shortcut: past calibrations aren't stored yet, so the review page shows this sample; replace once ratings are saved.
 
 export type Rating = "like" | "off";
-export type CalibrationTurn = { id: string; speaker: "you" | "twin"; text: string; rating?: Rating };
+export type CalibrationTurn = { id: string; speaker: "you" | "twin"; text: string; rating?: Rating; /** Mid-call attachments resolved from the transcripts' \"[ATTACHED <id>]\" markers. */
+  attached?: { id: string; name: string; mediaType: string | null; href: string }[]; };
 
 /** A finished calibration, as shown on its review page. */
 export const DEMO_CALIBRATION = {

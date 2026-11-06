@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { CalibrationTurn } from "@/components/calibration/mock";
+import { MessageFileCard } from "@/components/copilot-composer";
 import { Bubble, RatingLabel } from "@/components/calibration/parts";
 import { WhyButton, WhyPanel, useEvidenceTurns } from "@/components/calibration/why-panel";
 import { lookupEvidence } from "@/lib/twin/evidence-match";
@@ -19,16 +20,29 @@ export function ReviewConversation({ turns, sessionId }: { turns: CalibrationTur
           const evidence = sessionId && turn.speaker === "twin" ? lookupEvidence(evidenceTurns ?? [], turn.text) : null;
           return (
             <li key={turn.id} className="flex flex-col gap-3">
+              {/* Attached files sit above the message, as in copilot chat. */}
+              {turn.speaker === "you" && turn.attached?.length ? (
+                <div className="flex flex-wrap justify-end gap-2 self-end">
+                  {turn.attached.map((file) => (
+                    <MessageFileCard
+                      key={file.id}
+                      name={file.name}
+                      mediaType={file.mediaType ?? undefined}
+                      previewUrl={file.mediaType?.startsWith("image/") ? file.href : undefined}
+                    />
+                  ))}
+                </div>
+              ) : null}
               {turn.speaker === "twin" && evidence ? (
                 <div className="flex max-w-[85%] items-start gap-2">
                   <Bubble speaker="twin">{turn.text}</Bubble>
                   <WhyButton open={whyFor?.id === turn.id} onClick={() => setWhyFor(whyFor?.id === turn.id ? null : { id: turn.id, text: turn.text, evidence })} />
                 </div>
-              ) : (
+              ) : turn.text.trim() ? (
                 <Bubble speaker={turn.speaker} className="max-w-[85%]">
                   {turn.text}
                 </Bubble>
-              )}
+              ) : null}
               {turn.rating ? <RatingLabel rating={turn.rating} /> : null}
             </li>
           );

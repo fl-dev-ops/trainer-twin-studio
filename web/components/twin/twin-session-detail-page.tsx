@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { SessionTime } from "@/components/sessions/session-time";
+import { MessageFileCard } from "@/components/copilot-composer";
 import { useSessionReportState } from "@/components/twin/use-report-polling";
 import type { TwinOutputs } from "@/lib/twin/trpc";
 import { cn } from "@/lib/utils";
@@ -134,19 +135,33 @@ export function TwinSessionDetailPage({ session }: { session: SessionDetail }) {
             {session.turns.map((turn, i) => {
               const isTwin = turn.who === "twin";
               return (
-                <div
-                  key={i}
-                  className={cn(
-                    "flex flex-col gap-1 max-w-[85%] rounded-xl p-4 text-sm leading-6",
-                    isTwin
-                      ? "self-start bg-(--sidebar) text-(--foreground)"
-                      : "self-end bg-(--brand) text-white font-normal",
-                  )}
-                >
-                  <span className={cn("text-xs font-semibold", isTwin ? "text-muted-foreground" : "text-white/80")}>
-                    {isTwin ? session.agentName : session.learner}
-                  </span>
-                  <p className="m-0">{turn.text}</p>
+                <div key={i} className="flex flex-col gap-1 max-w-[85%]">
+                  {/* Files the learner attached sit above their message, as in copilot chat. */}
+                  {turn.attached?.length ? (
+                    <div className="flex flex-wrap justify-end gap-2">
+                      {turn.attached.map((file) => (
+                        <MessageFileCard
+                          key={file.id}
+                          name={file.name}
+                          mediaType={file.mediaType ?? undefined}
+                          previewUrl={file.mediaType?.startsWith("image/") ? file.href : undefined}
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                  {turn.text.trim() ? <div
+                    className={cn(
+                      "flex flex-col gap-1 rounded-xl p-4 text-sm leading-6",
+                      isTwin
+                        ? "self-start bg-(--sidebar) text-(--foreground)"
+                        : "self-end bg-(--brand) text-white font-normal",
+                    )}
+                  >
+                    <span className={cn("text-xs font-semibold", isTwin ? "text-muted-foreground" : "text-white/80")}>
+                      {isTwin ? session.agentName : session.learner}
+                    </span>
+                    <p className="m-0">{turn.text}</p>
+                  </div> : null}
                 </div>
               );
             })}

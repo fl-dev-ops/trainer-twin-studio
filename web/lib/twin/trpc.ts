@@ -21,6 +21,7 @@ import { HEADSHOT_STYLES } from "@/lib/headshot";
 import { AVATAR_VIDEO_TYPES, AvatarError, avatarPhotoUrl, avatarState, avatarVideoUpload, makeHeadshot, saveAvatar, savePersonaVoice, type AvatarVideoType } from "@/lib/twin/avatar";
 import { getRun } from "workflow/api";
 import { isTwinReport, reportState } from "@/lib/twin/session-report";
+import { stripAttachments } from "@/lib/markers";
 import { rawScore, scoreCalibration, type CalibrationScore } from "@/lib/twin/calibration-score";
 import { sessionEvidence } from "@/lib/twin/evidence";
 import { updateTwin } from "@/lib/twin/manage";
@@ -415,10 +416,33 @@ const sessionsRouter = t.router({
       unanswered: isTwinReport(row.report) ? row.report.unanswered ?? [] : [],
       reportState: reportState(row),
       hasVideo: typeof asRecord(row.evidence).videoS3Key === "string",
-      turns: transcriptTurns(row.transcript),
+      turns: await withTurnAttachments(ctx.user.orgId, transcriptTurns(row.transcript)),
     };
   }),
 });
+
+/** One attachment a mid-call "[ATTACHED <id>]" marker resolved to: what the transcript-attachment card needs to render. */
+export type TurnAttachment = { id: string; name: string; mediaType: string | null; href: string };
+
+/**
+ * Strips attachment markers out of transcript turns and resolves each referenced file in the org (one query for the
+ * whole transcript). Unresolvable ids still render; they just have no kind or link.
+ */
+async function withTurnAttachments<T extends { text: string }>(orgId: string, turns: T[]): Promise<(T & { attached?: TurnAttachment[] })[]> {
+  type Stripped = T & { strip: ReturnType<typeof stripAttachments> };
+  const parsed: (T | Stripped)[] = turns.map((turn) =>
+    turn.text.includes("[ATTACHED") ? { ...turn, strip: stripAttachments(turn.text) } : turn,
+  );
+  const ids = [...new Set(parsed.flatMap((turn) => ("strip" in turn ? turn.strip.files.map((file) => file.id) : [])))];
+  if (!ids.length) return turns;
+  const docs = await db.contextDocument.findMany({ where: { id: { in: ids }, orgId }, select: { id: true, mimeType: true } });
+  const types = new Map(docs.map((doc) => [doc.id, doc.mimeType]));
+  return parsed.map((turn) =>
+    "strip" in turn
+      ? { ...turn, text: turn.strip.text, attached: turn.strip.files.map((file) => ({ id: file.id, name: file.name, mediaType: types.get(file.id) ?? null, href: `/api/uploads/${file.id}/view` })) }
+      : turn,
+  );
+}
 
 /**
  * A twin session's report state, for polling. A run that ended without saving (failed, cancelled, gone) is
@@ -525,8 +549,11 @@ const calibrationsRouter = t.router({
     });
     if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Calibration not found" });
     // The saved transcript usually comes from the voice agent, so ratings are matched to it by the reply they rated.
-    const turns = attachRatings(transcriptTurns(row.session.transcript), row.ratings)
-      .map((turn, i) => ({ id: String(i), speaker: turn.who === "twin" ? "twin" as const : "you" as const, text: turn.text, rating: turn.rating }));
+    const turns = await withTurnAttachments(
+      ctx.user.orgId,
+      attachRatings(transcriptTurns(row.session.transcript), row.ratings)
+        .map((turn, i) => ({ id: String(i), speaker: turn.who === "twin" ? "twin" as const : "you" as const, text: turn.text, rating: turn.rating })),
+    );
     return {
       score: savedScore(row, transcriptTurns(row.session.transcript)),
       slug: row.session.agent.slug,
