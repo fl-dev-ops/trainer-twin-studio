@@ -6,5 +6,5 @@ import { redirect } from "next/navigation";
  */
 export default async function LearnerReviewPage({ searchParams }: { searchParams: Promise<{ learner?: string }> }) {
   const { learner } = await searchParams;
-  redirect(learner ? `/sessions?learner=${encodeURIComponent(learner)}&range=all` : "/learners");
+  redirect(learner ? `/sessions?learner=${encodeURIComponent(learner)}&range=all` : "/users");
 }

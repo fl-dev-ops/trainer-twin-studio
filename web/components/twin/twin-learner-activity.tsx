@@ -1,3 +1,4 @@
+import { useRouter } from "next/navigation";
 import { PendingBadge } from "@/components/assign-dialog";
 import { SessionTime } from "@/components/sessions/session-time";
 import { helpfulTone } from "@/components/twin/twin-session-item";
@@ -10,8 +11,9 @@ import { cn } from "@/lib/utils";
 
 export type TwinLearner = TwinOutputs["agents"]["get"]["learners"][number];
 
-/** Who uses one twin and how much (twin detail, Learners tab). A row with sessions opens them in the Sessions tab. */
-export function TwinLearnerActivity({ learners, onSelect }: { learners: TwinLearner[]; onSelect: (learner: TwinLearner) => void }) {
+/** Who uses one twin and how much (twin detail, Learners tab). A row with sessions opens the user's page. */
+export function TwinLearnerActivity({ learners }: { learners: TwinLearner[] }) {
+  const router = useRouter();
   if (!learners.length) return <p className="py-3.5 text-sm text-muted-foreground">Nobody is assigned to this twin yet.</p>;
   return (
     <ul className="m-0 flex list-none flex-col p-0">
@@ -22,7 +24,7 @@ export function TwinLearnerActivity({ learners, onSelect }: { learners: TwinLear
             <button
               type="button"
               disabled={!learner.sessions}
-              onClick={() => onSelect(learner)}
+              onClick={() => learner.userId && router.push(`/users/${learner.userId}`)}
               className="grid w-full grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-3.5 p-4 px-5 text-left transition-colors outline-none enabled:hover:bg-(--sidebar) focus-visible:bg-(--sidebar)"
             >
               <UserAvatar user={{ name: learner.name, email: learner.email, image: learner.image }} size="xl" />

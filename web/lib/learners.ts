@@ -74,6 +74,52 @@ export function summarizeLearners({ assignments, sessions, members, users }: Inp
     .sort((a, b) => (b.lastActiveAt ?? "").localeCompare(a.lastActiveAt ?? "") || a.name.localeCompare(b.name));
 }
 
+/** One Users-page row: a person with their per-module session counts and total practice time. */
+export type UsersRow = {
+  email: string;
+  name: string;
+  userId: string | null;
+  image: string | null;
+  twinSessions: number;
+  roleplaySessions: number;
+  practiceSeconds: number;
+  lastActiveAt: string | null;
+};
+
+/** Everyone in the org's learner pool, twin and role-play counts merged by email (the Users page). */
+export async function listUsers(orgId: string): Promise<UsersRow[]> {
+  const [twin, roleplay] = await Promise.all([listLearners(orgId, "TWIN"), listLearners(orgId, "ROLEPLAY")]);
+  const byEmail = new Map<string, UsersRow>();
+  for (const [rows, field] of [
+    [twin, "twinSessions"],
+    [roleplay, "roleplaySessions"],
+  ] as const) {
+    for (const row of rows) {
+      const key = row.email.toLowerCase();
+      const merged = byEmail.get(key) ?? {
+        email: key,
+        name: row.name,
+        userId: row.userId,
+        image: row.image,
+        twinSessions: 0,
+        roleplaySessions: 0,
+        practiceSeconds: 0,
+        lastActiveAt: row.lastActiveAt,
+      };
+      merged.name ||= row.name;
+      merged.userId ||= row.userId;
+      merged.image ||= row.image;
+      merged[field] = row.sessionCount;
+      merged.practiceSeconds += row.practiceSeconds;
+      if ((row.lastActiveAt ?? "") > (merged.lastActiveAt ?? "")) merged.lastActiveAt = row.lastActiveAt;
+      byEmail.set(key, merged);
+    }
+  }
+  return [...byEmail.values()].sort(
+    (a, b) => (b.lastActiveAt ?? "").localeCompare(a.lastActiveAt ?? "") || a.name.localeCompare(b.name),
+  );
+}
+
 /** Learners of one module: role-play invites or twin assignments, and that module's sessions. */
 export async function listLearners(orgId: string, kind: AgentKind): Promise<LearnerRow[]> {
   const person = { select: { id: true, name: true, email: true, image: true } } as const;
@@ -84,8 +130,9 @@ export async function listLearners(orgId: string, kind: AgentKind): Promise<Lear
           select: { recipientEmail: true, deployment: { select: { agentId: true } } },
         }).then((rows) => rows.map((a) => ({ recipientEmail: a.recipientEmail, agentId: a.deployment.agentId })))
       : db.twinAssignment.findMany({ where: { orgId, status: "active" }, select: { recipientEmail: true, agentId: true } }),
+    // Only learners' sessions: admins testing their twins ("Try as learner") don't create a Users row.
     db.interviewSession.findMany({
-      where: { orgId, deletedAt: null, agent: { kind } },
+      where: { orgId, deletedAt: null, agent: { kind }, user: { members: { some: { organizationId: orgId, role: LEARNER_ROLE } } } },
       select: { agentId: true, startedAt: true, endedAt: true, createdAt: true, user: person },
     }),
     db.member.findMany({ where: { organizationId: orgId, role: LEARNER_ROLE }, select: { user: person } }),

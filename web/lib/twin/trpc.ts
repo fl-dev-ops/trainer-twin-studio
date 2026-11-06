@@ -106,7 +106,7 @@ function sessionItem(row: SessionRow) {
  * older sessions shows fewer, upgrade to a grouped query if twins get that busy.
  */
 export function learnerActivity(
-  assignments: { recipientEmail: string; minutesLimit: number; minutesUsed: number; accessUntil: Date | null; user: { name: string | null; image: string | null } | null }[],
+  assignments: { recipientEmail: string; minutesLimit: number; minutesUsed: number; accessUntil: Date | null; user: { id: string; name: string | null; image: string | null } | null }[],
   sessions: SessionRow[],
 ) {
   return assignments
@@ -115,6 +115,8 @@ export function learnerActivity(
       const rated = mine.map((session) => session.feedbackRating).filter((r): r is number => r !== null);
       return {
         email: row.recipientEmail,
+        /** Only set for accepted invites; rows with sessions always have a user. */
+        userId: row.user?.id ?? null,
         name: row.user?.name || row.recipientEmail,
         image: row.user?.image ?? null,
         pending: !row.user,
@@ -473,6 +475,22 @@ const usersRouter = t.router({
     return [...people.values()]
       .map((person) => ({ ...person, used: Math.round(person.used), until: person.until?.toISOString() ?? null }))
       .sort((a, b) => a.name.localeCompare(b.name));
+  }),
+
+  /** One learner across all twins: who they are and their twin sessions, newest first (the /users/<id> page). */
+  get: studioProcedure.input(z.object({ id: z.string().min(1).max(100) })).query(async ({ ctx, input }) => {
+    const user = await db.user.findFirst({
+      where: { id: input.id, members: { some: { organizationId: ctx.user.orgId } } },
+      select: { id: true, name: true, email: true, image: true },
+    });
+    if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+    const rows = await db.interviewSession.findMany({
+      where: { ...learnerSessions(ctx.user.orgId), userId: user.id },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+      select: sessionRowSelect,
+    });
+    return { user, sessions: rows.map(sessionItem) };
   }),
 });
 

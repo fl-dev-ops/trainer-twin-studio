@@ -13,10 +13,9 @@ export function helpfulTone(score: number) {
 }
 
 /** Grid shared by the column header row (twin-sessions-page) and the item rows. */
-// sm+: avatar fixed, learner and twin share the flexible space (twin slightly wider, as on the prototype),
-// the numeric/helpfulness columns are fixed to their label widths.
+// sm+: avatar fixed, learner and topics take the flexible space, minutes/helpfulness columns fixed to their label widths.
 export const TWIN_SESSION_GRID =
-  "grid grid-cols-[40px_minmax(0,1fr)_28px] gap-x-3.5 sm:grid-cols-[40px_minmax(0,1fr)_minmax(0,0.9fr)_72px_96px_112px_28px]";
+  "grid grid-cols-[40px_minmax(0,1fr)_28px] gap-x-3.5 sm:grid-cols-[40px_minmax(0,1fr)_minmax(0,0.9fr)_72px_112px_28px]";
 
 // 5 green ("Very helpful"), 3-4 gold ("Helpful"), 1-2 red, as the prototype reads them.
 const STAR_TONE = { success: "fill-(--color-success) text-(--color-success)", secondary: "fill-(--color-caution) text-(--color-caution)", error: "fill-(--color-danger) text-(--color-danger)" } as const;
@@ -79,15 +78,6 @@ export function TwinSessionItem({
               “{session.question}”{session.answer ? ` · ${session.answer}` : ""}
             </span>
           ) : null}
-          {session.topics.length ? (
-            <span className="mt-1 flex flex-wrap items-center gap-1.5">
-              {session.topics.map((topic) => (
-                <Badge key={topic} variant="outline">
-                  {topic}
-                </Badge>
-              ))}
-            </span>
-          ) : null}
           {/* Small screens: the columns are hidden, so the score badge stays inline here. */}
           {score !== null && score > 0 ? (
             <span className="mt-1 sm:hidden">
@@ -96,14 +86,24 @@ export function TwinSessionItem({
           ) : null}
         </span>
 
-        {/* Twin */}
-        <span className="hidden truncate text-sm text-(--foreground) sm:block">{session.agentName}</span>
+        {/* Topics: first two as chips, then a +n badge for the rest */}
+        <span className="hidden flex-wrap items-center gap-1.5 overflow-hidden sm:flex">
+          {session.topics.length ? (
+            <>
+              {session.topics.slice(0, 2).map((topic) => (
+                <Badge key={topic} className="max-w-full truncate" variant="outline">
+                  {topic}
+                </Badge>
+              ))}
+              {session.topics.length > 2 ? <Badge className="shrink-0" variant="outline">+{session.topics.length - 2}</Badge> : null}
+            </>
+          ) : (
+            <span className="text-sm text-muted-foreground">–</span>
+          )}
+        </span>
 
-        {/* Minutes */}
+        {/* Duration */}
         <span className="hidden text-sm text-(--foreground) sm:block">{minutes ? `${minutes} min` : "–"}</span>
-
-        {/* Questions discussed */}
-        <span className="hidden text-sm text-(--foreground) sm:block">{session.questionsCount || "–"}</span>
 
         {/* Helpfulness */}
         <span className="hidden sm:block">

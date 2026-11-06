@@ -48,9 +48,8 @@ export function TwinSessionsPage({ sessions }: { sessions: TwinSessionItemData[]
       <div className={cn(TWIN_SESSION_GRID, "border-b px-5 py-2.5 text-body-s font-medium uppercase text-muted-foreground max-sm:hidden")}>
         <span /> {/* avatar */}
         <span>Learner</span>
-        <span>Twin</span>
-        <span>Minutes</span>
-        <span>Questions discussed</span>
+        <span>Topics</span>
+        <span>Duration</span>
         <span>Helpfulness</span>
         <span /> {/* arrow */}
       </div>

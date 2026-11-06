@@ -3,7 +3,7 @@ import { z } from "zod";
 import { awaitingUsers } from "@/lib/awaiting-users";
 import { db } from "@/lib/db";
 import { loadLatestFidelityReport } from "@/lib/fidelity-report.server";
-import { listLearners } from "@/lib/learners";
+import { listUsers } from "@/lib/learners";
 import { OrganizationKnowledgeService } from "@/lib/org-knowledge";
 import { isStudioRole, parseAccentColor } from "@/lib/org";
 import { getPersonaBaseline } from "@/lib/persona-baseline";
@@ -111,7 +111,7 @@ export const pageRouter = t.router({
     return { report, scenarios: scenarios.map(({ slug, name, version }) => ({ slug, name, version })), baseline };
   }),
 
-  learners: studioProcedure.query(({ ctx }) => listLearners(ctx.user.orgId, "ROLEPLAY")),
+  users: studioProcedure.query(({ ctx }) => listUsers(ctx.user.orgId)),
 
   // Personas.
   personas: studioProcedure.query(({ ctx }) => listPersonas(ctx.user.orgId)),

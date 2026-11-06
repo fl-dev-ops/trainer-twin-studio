@@ -27,7 +27,7 @@ import { PageHeader } from "@/components/page-header";
 import { SessionTime } from "@/components/sessions/session-time";
 import { ShareTwinDialog } from "@/components/twin/share-twin-dialog";
 import { TwinSessionItem } from "@/components/twin/twin-session-item";
-import { TwinLearnerActivity, type TwinLearner } from "@/components/twin/twin-learner-activity";
+import { TwinLearnerActivity } from "@/components/twin/twin-learner-activity";
 import { usePendingReports } from "@/components/twin/use-report-polling";
 import type { TwinOutputs } from "@/lib/twin/trpc";
 import { cn } from "@/lib/utils";
@@ -152,13 +152,9 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
   const [dateFilter, setDateFilter] = useState("30");
   const [shareOpen, setShareOpen] = useState(false);
   const [tab, setTab] = useState("sessions");
-  // A learner picked on the Learners tab: the Sessions tab then shows only theirs.
-  const [learner, setLearner] = useState<TwinLearner | null>(null);
 
   const calibrations = twin.calibrations.filter((item) => inDateRange(item.at, dateFilter));
-  const sessions = twin.sessions.filter(
-    (item) => inDateRange(item.at, dateFilter) && (!learner || item.learnerEmail.toLowerCase() === learner.email),
-  );
+  const sessions = twin.sessions.filter((item) => inDateRange(item.at, dateFilter));
   const { minutes, used } = twin.credit;
   const pendingReports = usePendingReports(id, twin.report.pendingReports);
 
@@ -447,19 +443,9 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
               <TabsTrigger value="calibration">Calibration</TabsTrigger>
             </TabsList>
             <TabsContent value="sessions">
-              {learner ? (
-                <p className="mb-2 flex items-center gap-2 text-body-s text-muted-foreground">
-                  Showing {learner.name}&apos;s sessions
-                  <Button variant="ghost" size="xs" onClick={() => setLearner(null)}>
-                    Show all
-                  </Button>
-                </p>
-              ) : null}
               <ul className="m-0 flex list-none flex-col p-0">
               {sessions.length === 0 ? (
-                <li className="py-3.5 text-sm text-muted-foreground">
-                  {learner ? `No sessions from ${learner.name} in this period.` : "No learner sessions in this period."}
-                </li>
+                <li className="py-3.5 text-sm text-muted-foreground">No learner sessions in this period.</li>
               ) : null}
               {sessions.map((sess, idx) => (
                 <TwinSessionItem
@@ -471,13 +457,7 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
               </ul>
             </TabsContent>
             <TabsContent value="learners">
-              <TwinLearnerActivity
-                learners={twin.learners}
-                onSelect={(picked) => {
-                  setLearner(picked);
-                  setTab("sessions");
-                }}
-              />
+              <TwinLearnerActivity learners={twin.learners} />
             </TabsContent>
             <TabsContent value="calibration" className="flex flex-col">
               {calibrations.length === 0 ? (
