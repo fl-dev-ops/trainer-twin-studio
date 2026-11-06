@@ -1,12 +1,12 @@
 import { defineDynamic, defineInstructions } from "eve/instructions";
-import BASE from "../../prompts/base-instructions.md?raw";
-import { baseInstructions } from "../lib/base-instructions";
-import { formatSessionSpec, loadSessionContext } from "../lib/brain";
+import { loadSessionContext } from "../lib/brain";
+import { composeInstructions, FALLBACK_INSTRUCTIONS } from "../lib/compose-instructions";
+import { sessionMode } from "../lib/session-mode";
+import { primeSessionMode } from "../lib/session-mode-lookup";
 
 /**
- * Base instructions plus per-session grounding: pulls scenario specs, persona traits, and attached
- * documents from the studio and injects them as system context for the session. Playbook and twin
- * sessions get only the core base instructions; everything else gets the whole file.
+ * The session's instructions (lib/compose-instructions.ts): the platform rules, the session mode's operating
+ * instructions and its grounding (scenario specs, persona traits, attached documents) from the studio.
  */
 export default defineDynamic({
   events: {
@@ -14,8 +14,8 @@ export default defineDynamic({
       const auth = ctx.session.auth.current;
       const attributes = (auth?.attributes ?? {}) as Record<string, string | undefined>;
       const orgId = attributes.orgId;
-      const full = defineInstructions({ content: baseInstructions(BASE, false) });
-      if (typeof orgId !== "string" || !orgId) return full;
+      const fallback = defineInstructions({ content: FALLBACK_INSTRUCTIONS });
+      if (typeof orgId !== "string" || !orgId) return fallback;
 
       const sessionId = typeof attributes.sessionId === "string" ? attributes.sessionId : undefined;
       const agentSlug = typeof attributes.agentSlug === "string" ? attributes.agentSlug : undefined;
@@ -25,11 +25,12 @@ export default defineDynamic({
 
       try {
         const specs = await loadSessionContext(orgId, sessionId, agentSlug, personaSlug, mode, clientTools);
-        const base = baseInstructions(BASE, Boolean(specs.twin || specs.playbook || specs.roleplay));
-        return defineInstructions({ content: `${base}\n\n${formatSessionSpec(specs)}` });
+        // The channel and tools ask for the mode later; answer from the context already loaded.
+        primeSessionMode(orgId, sessionId, agentSlug, sessionMode(specs));
+        return defineInstructions({ content: composeInstructions(specs) });
       } catch (err) {
         console.error("Failed to load session context for brain grounding:", err);
-        return full;
+        return fallback;
       }
     },
   },

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, test } from "node:test";
 import { formatSessionSpec, scenarioPlaybook, type SessionSpecs } from "../../../agent/lib/brain";
-import { clearRoleplayCache, isRoleplaySession, primeRoleplayCache, roleplayGuard, roleplaySkill } from "../../../agent/lib/roleplay";
+import { roleplaySkill } from "../../../agent/lib/roleplay";
+import { clearSessionModeCache, isRoleplaySession, primeSessionMode, roleplayGuard } from "../../../agent/lib/session-mode-lookup";
 
 // What web's role-play builder stores (lib/roleplay/skill.ts renderRoleplay), trimmed.
 const SKILL = `---
@@ -52,7 +53,7 @@ const base: SessionSpecs = {
 };
 
 describe("client role play (kind ROLEPLAY with a SKILL.md)", () => {
-  afterEach(() => clearRoleplayCache());
+  afterEach(() => clearSessionModeCache());
 
   test("only ROLEPLAY agents with a skill are role plays; difficulty, opening and client name come from scenario.json", () => {
     assert.equal(roleplaySkill("TWIN", roleplayData), undefined);
@@ -89,8 +90,8 @@ describe("client role play (kind ROLEPLAY with a SKILL.md)", () => {
 
   test("tool guard: trainer tools are disabled in role plays only (primed from the loaded context)", async () => {
     const ctx = (sessionId: string) => ({ session: { auth: { current: { principalId: "org1", attributes: { sessionId, agentSlug: "x" } } } } });
-    primeRoleplayCache("org1", "rp", "x", true);
-    primeRoleplayCache("org1", "tw", "x", false);
+    primeSessionMode("org1", "rp", "x", "roleplay-client");
+    primeSessionMode("org1", "tw", "x", "twin");
     assert.equal(await isRoleplaySession(ctx("rp")), true);
     assert.deepEqual(await roleplayGuard(ctx("rp")), { disabled: true, reason: "Not available in client role play. Stay in character and answer as the client." });
     assert.equal(await roleplayGuard(ctx("tw")), null);

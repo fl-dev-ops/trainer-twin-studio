@@ -1,7 +1,7 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { studioFetch } from "../lib/studio";
-import { roleplayGuard } from "../lib/roleplay";
+import { roleplayGuard } from "../lib/session-mode-lookup";
 
 export default defineTool({
   description: "Resolve a resume question only after the PDF viewer verified its claim anchor was not found. Pass candidateLocated=true after the learner says they found the claim; then speak the exact returned question. Pass false if they cannot find it, and select another claim.",

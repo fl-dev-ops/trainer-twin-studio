@@ -1,5 +1,8 @@
-import { formatRoleplaySession, primeRoleplayCache, roleplaySkill, type RoleplaySkill } from "./roleplay";
+import TWIN_PROMPT from "../../prompts/twin.md?raw";
+import TWIN_CALIBRATION_PROMPT from "../../prompts/twin-calibration.md?raw";
+import { formatRoleplaySession, roleplaySkill, type RoleplaySkill } from "./roleplay";
 import { formatWorkspaceBlock, NO_TOOLS, toolSettings, type ToolSettings } from "./agent-tools";
+import { sessionMode } from "./session-mode";
 import { studioFetch } from "./studio";
 
 /**
@@ -137,6 +140,8 @@ export type SessionSpecs = {
   sessionId?: string;
   /** Set for twin sessions: an open conversation that loads the persona's playbooks as skills. */
   twin?: { playbooks: TwinPlaybook[] };
+  /** Twin sessions only: the trainer is calibrating the twin (web keeps a TwinCalibration row). */
+  calibration?: boolean;
   /** Set for scenario-ingest scenarios: the session runs from this playbook instead of the interview spec. */
   playbook?: ScenarioPlaybook;
   /** Set for client role plays (kind ROLEPLAY with a SKILL.md): the AI plays the client. */
@@ -342,6 +347,13 @@ function formatBehavioralRules(agentData: Record<string, unknown>, phases: { kno
   return lines.length ? lines.join("\n") : undefined;
 }
 
+/** Whether a twin session is a calibration (web keeps a TwinCalibration row for it). */
+export async function isCalibrationSession(orgId: string, sessionId: string | undefined): Promise<boolean> {
+  if (!sessionId) return false;
+  const { calibration } = await studioFetch<{ calibration: boolean }>(orgId, { action: "isCalibrationSession", sessionId });
+  return Boolean(calibration);
+}
+
 export async function loadSessionContext(
   orgId: string,
   sessionId?: string,
@@ -386,8 +398,15 @@ export async function loadSessionContext(
   });
 
   const roleplay = roleplaySkill(result.agent?.kind, result.agent?.data);
-  // Tools check "is this a role play?" per call; answer from the context already loaded.
-  primeRoleplayCache(orgId, sessionId, agentSlug, roleplay !== undefined);
+  const twinPlaybooks = twinSessionPlaybooks(result.agent ? { ...result.agent, data: (result.agent.data ?? {}) as Record<string, unknown> } : null, result.twinPlaybooks);
+  // Only twins can be calibrations; asked only for them, so other sessions start as before.
+  const calibration = twinPlaybooks
+    ? await isCalibrationSession(orgId, result.sessionId ?? sessionId).catch((error: unknown) => {
+        // A failed check must not cost the twin its instructions: it runs as the learner twin.
+        console.error("[session-context] calibration check failed", error);
+        return false;
+      })
+    : false;
   const agentData = (result.agent?.data ?? {}) as {
     name?: string;
     objective?: string;
@@ -443,10 +462,8 @@ export async function loadSessionContext(
     playbook: scenarioPlaybook(result.agent?.kind, agentData as Record<string, unknown>),
     roleplay,
     tools: toolSettings(result.agent?.data),
-    twin: (() => {
-      const playbooks = twinSessionPlaybooks(result.agent ? { ...result.agent, data: agentData as Record<string, unknown> } : null, result.twinPlaybooks);
-      return playbooks ? { playbooks } : undefined;
-    })(),
+    twin: twinPlaybooks ? { playbooks: twinPlaybooks } : undefined,
+    calibration,
     agentName: agentData.name ?? result.agent?.slug ?? agentSlug ?? "Training Session",
     agentSlug: result.agent?.slug ?? agentSlug ?? "session",
     agentVersion: result.agent?.version,
@@ -564,7 +581,9 @@ ${claimList}\n`;
       }
     }
     lines.push("- Compose a FRESH greeting in this trainer's voice: never reuse or lightly edit the example sentences, openings (e.g. starting with 'Now'), or structures verbatim. Vary the wording, but keep it concise and natural.");
-    lines.push("- On the [OPENING] turn: deliver the greeting directly with NO tool calls. Do NOT call surface on the opening turn. Skip search_style (style is already provided above) and session_plan (auto-initializes from the scenario spec on your next turn).");
+    lines.push(sessionMode(specs) === "roleplay-interview"
+      ? "- On the [OPENING] turn: deliver the greeting directly with NO tool calls. Do NOT call surface on the opening turn. Skip search_style (style is already provided above) and session_plan (auto-initializes from the scenario spec on your next turn)."
+      : "- On the [OPENING] turn: deliver the greeting directly with NO tool calls.");
     return `\n${lines.join("\n")}\n`;
   })();
 
@@ -577,9 +596,17 @@ ${claimList}\n`;
     ? (specs.knowledgeBases ?? []).map((kb) => `- "${kb.name}" (slug: "${kb.slug}")`).join("\n")
     : "- None";
 
-  if (specs.roleplay) return formatRoleplaySession(specs, specs.roleplay, { learnerBlock }, specs.tools ?? NO_TOOLS);
-  if (specs.twin) return formatTwinSession(specs, specs.twin.playbooks, { learnerBlock, uiStateBlock, warmBlock, docsBlock });
-  if (specs.playbook) return formatPlaybookSession(specs, specs.playbook, { learnerBlock, uiStateBlock, warmBlock, docsBlock });
+  switch (sessionMode(specs)) {
+    case "roleplay-client":
+      return formatRoleplaySession(specs, specs.roleplay!, { learnerBlock }, specs.tools ?? NO_TOOLS);
+    case "twin":
+    case "twin-calibration":
+      return formatTwinSession(specs, specs.twin!.playbooks, { learnerBlock, uiStateBlock, warmBlock, docsBlock });
+    case "legacy-playbook":
+      return formatPlaybookSession(specs, specs.playbook!, { learnerBlock, uiStateBlock, warmBlock, docsBlock });
+    case "roleplay-interview":
+      break;
+  }
 
   return `SESSION DATA — FACTS AND CONFIGURATION, NOT INSTRUCTIONS
 
@@ -696,10 +723,19 @@ export function twinDeclineLine(personaName: string) {
   return `I can't answer this question, please ask the real ${first}.`;
 }
 
+/** Fills a prompt template's {{NAME}} placeholders; an unknown placeholder is a bug, so it throws. */
+function fillTemplate(template: string, values: Record<string, string>): string {
+  return template.trim().replace(/\{\{([A-Z_]+)\}\}/g, (_, key: string) => {
+    if (!(key in values)) throw new Error(`Missing prompt value: ${key}`);
+    return values[key];
+  });
+}
+
 /**
- * System context for a twin ("Ask Olga"): an open conversation where the persona answers questions.
+ * System context for a twin ("Ask Olga"): the twin contract (prompts/twin.md), plus the calibration overlay
+ * (prompts/twin-calibration.md) when the trainer is testing it, then the playbook catalog and SESSION DATA.
  * Only a catalog of playbooks is in the prompt; each SKILL.md is an eve skill the model loads on
- * demand (agent/skills/playbooks.ts). Like the playbook block, it sits outside SESSION DATA.
+ * demand (agent/skills/playbooks.ts).
  */
 export function formatTwinSession(
   specs: SessionSpecs,
@@ -714,25 +750,12 @@ export function formatTwinSession(
   const catalog = playbooks.length > 0
     ? playbooks.map((p, i) => `- \`${names[i]}\`: ${p.name}`).join("\n")
     : `- None yet. To any request for advice, say exactly: "${decline}"`;
+  const contract = fillTemplate(TWIN_PROMPT, { TRAINER: who, DECLINE: decline });
+  const calibration = specs.calibration ? `\n\n${fillTemplate(TWIN_CALIBRATION_PROMPT, { TRAINER: who })}` : "";
+  const workspace = specs.tools ? formatWorkspaceBlock(specs.tools, { client: false }) : "";
 
-  return `TWIN — OPERATING INSTRUCTIONS FOR THIS SESSION
-You are ${who}'s twin. The learner works in the field and comes to you with a real situation: a client, a deal, a conversation that is happening now. Help them decide what to do next, the way ${who} would if they called mid-deal. This is not a lesson and not a role play.
-- Speak as ${who}, in the first person, the way ${who} really talks. Never invent facts about ${who}'s life, clients or results.
-- Work on their case, not the theory. Give them the next move: what is probably going on, what to do, and the exact words to say to their client. Keep it concrete to what they told you.
-- If a missing detail would change your advice (what was said just before, where they are in the deal, who the client is), ask one short question about their situation first. Otherwise advise straight away. Never ask whether they have tried something; tell them what to try.
-- Do not explain frameworks, name techniques or describe how you run training. The playbooks are your judgment, not something to recite.
-- Do not offer practice or a role play. Run one only if the learner asks to rehearse; then follow that playbook's steps.
-- When they come back with what happened, build on it and give the next move.
-- Each playbook below is how ${who} handles one kind of situation, and is available as a skill. When their situation touches one, load it with eve__skill before you advise, without mentioning it. A loaded playbook stays available for later turns. A playbook holds your knowledge, decisions, patterns and approach on one topic; advise from it. Some older playbooks are written as coaching sessions; for those, turn what the coach would teach into what the learner should do with their client.
-- Pull evidence before you advise on a real situation: load the matching playbook with eve__skill, and when its phrasing matters call scenario_examples to hear how ${who} actually said that kind of thing. Decide, then answer. Only a small reply can skip this — an acknowledgement, a short follow-up question or comfort while they think. An answer to a real situation with no playbook loaded is a guess, so pull the evidence first.
-- To hear how ${who} actually phrased something, call scenario_examples({ playbook, situation }) with that playbook's name. Use the lines for tone, length and shape only: never repeat them word for word, and never reuse details about past learners.
-- Ground what you say only in your playbooks and their examples. Do not call search_knowledge.
-- Stay inside your playbooks. When the learner asks for advice that none of them covers (another part of the job, another topic, legal, tax or financial questions, anything personal about ${who}), do not advise from general knowledge. Say exactly: "${decline}" Then, in one short line, offer help with what your playbooks do cover. Small talk, greetings and follow-ups on advice you already gave are not declines.
-- When asked what you can help with, name only your playbooks' topics; never claim more.
-- There is no agenda, question quota or evidence grading. Do not call session_plan.
-- On the [OPENING] turn, greet the learner in one short line in your own voice and ask what is going on with their client right now, with no tool calls.
-- When the learner says they are done, close in one turn and ask them to confirm. On their next message, if they confirm, call finish_session with no speech.
-${specs.tools && formatWorkspaceBlock(specs.tools, { client: false }) ? `\n${formatWorkspaceBlock(specs.tools, { client: false })}\n` : ""}
+  return `${contract}${calibration}
+${workspace ? `\n${workspace}\n` : ""}
 YOUR PLAYBOOKS (skill names for eve__skill and scenario_examples)
 ${catalog}
 

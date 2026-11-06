@@ -1,34 +1,6 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import { describe, test } from "node:test";
-import { BASE_INSTRUCTIONS_HEADER, baseInstructions, coreInstructions, CORE_HEADINGS } from "../../../agent/lib/base-instructions";
 import { formatSessionSpec, isAllSkillsTwin, playbookSkillNames, twinDeclineLine, type SessionSpecs, type TwinPlaybook } from "../../../agent/lib/brain";
-
-const full = await readFile(new URL("../../../prompts/base-instructions.md", import.meta.url), "utf8");
-
-describe("base instructions", () => {
-  test("interview sessions get the whole file, framed as eve framed static instructions", () => {
-    assert.equal(baseInstructions(full, false), BASE_INSTRUCTIONS_HEADER + full.trim());
-  });
-
-  test("playbook and twin sessions get every core section, verbatim and much shorter", () => {
-    const core = coreInstructions(full);
-    assert.ok(core, "a core heading is missing from base-instructions.md");
-    for (const heading of CORE_HEADINGS) assert.ok(core.includes(heading));
-    assert.ok(core.includes("ABSOLUTE BAN on Markdown formatting"));
-    assert.ok(core.includes("NEVER speak for the candidate"));
-    assert.ok(!core.includes("Session Plan & Progress Tracking"));
-    assert.ok(!core.includes("Resume interview claim boundary"));
-    for (const block of core.split("\n\n")) assert.ok(full.includes(block), `not verbatim: ${block.slice(0, 60)}`);
-    assert.ok(core.length < full.length / 3);
-  });
-
-  test("a missing core heading falls back to the whole file", () => {
-    const edited = full.replace("## 2. Identity & Name Lock Rules", "## 2. Identity");
-    assert.equal(coreInstructions(edited), null);
-    assert.equal(baseInstructions(edited, true), BASE_INSTRUCTIONS_HEADER + edited.trim());
-  });
-});
 
 const playbook = (id: string, name: string): TwinPlaybook => ({ slug: `acme-${id}`, id, name, description: `${name} desc`, steps: [], skill: `# ${name}` });
 
@@ -95,7 +67,7 @@ describe("twin-creator skills", () => {
       mode: "voice", documents: [], phases: [], twin: { playbooks: [playbook("off-plan-waiting", "Buyers who wait for prices")] },
     } as unknown as SessionSpecs);
     assert.ok(prompt.startsWith("TWIN — OPERATING INSTRUCTIONS FOR THIS SESSION"));
-    assert.ok(prompt.includes("This is not a lesson and not a role play."));
+    assert.ok(prompt.includes("This is not a lesson, not an interview and not a role play."));
     assert.ok(prompt.includes("A playbook holds your knowledge, decisions, patterns and approach on one topic"));
   });
 });

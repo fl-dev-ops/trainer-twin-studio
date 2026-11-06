@@ -1,4 +1,3 @@
-import { studioFetch } from "./studio";
 import { formatWorkspaceBlock, NO_TOOLS, type ToolSettings } from "./agent-tools";
 
 /**
@@ -104,6 +103,9 @@ ${workspace}`
 # Opening
 On the [OPENING] turn, with no tool calls, say exactly: ${roleplay.opening ? `"${roleplay.opening}"` : `a short, natural greeting as ${name} answering the call`}
 
+# Silence
+On [USER INACTIVE] the learner has gone quiet. Stay in character: one short, natural line as ${name}, such as asking whether they are still there.
+
 # Your reply (most important)
 Everything you write is ${voice ? "spoken aloud" : "sent"} to the learner word for word. Write ONLY the words ${name} says on this call, nothing else.
 Never write your reasoning, analysis, plans, notes, guard levels, rule checks, headings, labels, lists, asterisks or stage directions. Do all tracking silently.
@@ -118,66 +120,4 @@ ROLE PLAY
 ${blocks.learnerBlock}
 
 OPERATING MODE: ${voice ? "voice" : "text chat"}`;
-}
-
-// ---- Tool guard -------------------------------------------------------------
-
-type GuardContext = {
-  session?: {
-    auth?: {
-      current?: { principalId?: string; attributes?: Record<string, unknown> } | null;
-      initiator?: { principalId?: string } | null;
-    };
-  };
-};
-
-const CACHE_TTL_MS = 10 * 60_000;
-const roleplayCache = new Map<string, { at: number; value: Promise<boolean> }>();
-const cacheKey = (orgId: string, sessionId?: string, agentSlug?: string) => `${orgId}:${sessionId ?? ""}:${agentSlug ?? ""}`;
-
-/** Whether the current eve session runs a client role play (cached per session). */
-export async function isRoleplaySession(ctx: GuardContext): Promise<boolean> {
-  const auth = ctx.session?.auth;
-  const orgId = auth?.initiator?.principalId ?? auth?.current?.principalId;
-  const attributes = auth?.current?.attributes ?? {};
-  const sessionId = typeof attributes.sessionId === "string" ? attributes.sessionId : undefined;
-  const agentSlug = typeof attributes.agentSlug === "string" ? attributes.agentSlug : undefined;
-  if (!orgId || (!sessionId && !agentSlug)) return false;
-
-  const key = cacheKey(orgId, sessionId, agentSlug);
-  const cached = roleplayCache.get(key);
-  if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.value;
-  const value = studioFetch<{ agent?: { kind?: string | null; data?: unknown } | null }>(orgId, { action: "getSessionContext", sessionId, agentSlug })
-    .then((result) => roleplaySkill(result.agent?.kind, result.agent?.data) !== undefined)
-    .catch(() => {
-      roleplayCache.delete(key);
-      return false;
-    });
-  roleplayCache.set(key, { at: Date.now(), value });
-  if (roleplayCache.size > 500) {
-    const oldest = roleplayCache.keys().next().value;
-    if (oldest) roleplayCache.delete(oldest);
-  }
-  return value;
-}
-
-/** Seeds the guard cache from a context the session already loaded (avoids a second fetch). */
-export function primeRoleplayCache(orgId: string, sessionId: string | undefined, agentSlug: string | undefined, isRoleplay: boolean) {
-  if (!sessionId && !agentSlug) return;
-  roleplayCache.set(cacheKey(orgId, sessionId, agentSlug), { at: Date.now(), value: Promise.resolve(isRoleplay) });
-}
-
-export const ROLEPLAY_DISABLED = {
-  disabled: true,
-  reason: "Not available in client role play. Stay in character and answer as the client.",
-} as const;
-
-/** The disabled result for role-play sessions, or null to run the tool normally. */
-export async function roleplayGuard(ctx: GuardContext): Promise<typeof ROLEPLAY_DISABLED | null> {
-  return (await isRoleplaySession(ctx)) ? ROLEPLAY_DISABLED : null;
-}
-
-/** Test hook. */
-export function clearRoleplayCache() {
-  roleplayCache.clear();
 }

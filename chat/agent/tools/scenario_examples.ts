@@ -1,6 +1,6 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
-import { isRoleplaySession } from "../lib/roleplay";
+import { isRoleplaySession } from "../lib/session-mode-lookup";
 import { studioFetch } from "../lib/studio";
 
 export default defineTool({

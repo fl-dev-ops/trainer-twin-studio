@@ -6,6 +6,8 @@ import { createQuestionBridge } from "../lib/question-bridge";
 import { followUpGradesFor } from "../lib/turn-grades";
 import { summarizeToolInput, summarizeToolOutput, withoutImageBytes } from "../lib/tool-trace";
 import { thinkingBudgetSchema } from "../lib/thinking-budget";
+import { CALIBRATION_FEEDBACK_EVENT, userInactiveEvent } from "../lib/session-mode";
+import { sessionModeFor } from "../lib/session-mode-lookup";
 import { studioFetch } from "../lib/studio";
 
 /** Lookups shown in "Why this answer" (the web describes and resolves them; UI tools are left out). */
@@ -42,10 +44,6 @@ function usedClaimsFor(sessionId: string) {
 const USER_INACTIVE_SIGNAL = "__TRAINERTWIN_USER_INACTIVE__";
 /** Calibration: the trainer pressed "Feels off" on the twin's reply (the page sends it as their message). */
 const isFeelsOff = (text: string) => /^feels? off$/.test(text.toLowerCase().replace(/[^a-z ]/g, "").replace(/\s+/g, " ").trim());
-const CALIBRATION_FEELS_OFF =
-  "[CALIBRATION FEEDBACK] The trainer is calibrating you, their twin, and pressed \"Feels off\" on your last reply: it did not sound like them. " +
-  "Do not continue the session, do not answer it as a learner message, and call no tools. Ask them in one short sentence, in your own voice, what felt off about that reply. " +
-  "When they explain on their next turn, thank them in a few words and continue with your next question, picking up where the session was.";
 
 /** Pure side-effect tools that do not require conversational follow-up speech. */
 const PURE_SIDE_EFFECT_TOOLS = new Set([
@@ -137,9 +135,8 @@ function mapLatestMessage(messages: ChatMessage[]): string | null {
   if (!text) return null;
   // LiveKit transport control messages become explicit internal events for Eve.
   if (text === "session-start") return "[OPENING] Generate the session opening.";
-  if (text === USER_INACTIVE_SIGNAL) {
-    return "[USER INACTIVE] The learner has been silent for 60 seconds. Adapt to the current moment in the session. Do not advance the interview or ask a new interview question.";
-  }
+  // Its text depends on the session mode; the handler fills it in (userInactiveEvent).
+  if (text === USER_INACTIVE_SIGNAL) return USER_INACTIVE_SIGNAL;
 
   let previousTurnIndex = -1;
   for (let index = latestIndex - 1; index >= 0; index -= 1) {
@@ -256,14 +253,16 @@ export default defineChannel({
       }
 
       let message = mapLatestMessage(body?.messages ?? []);
-      const calibrationSessionId = request.headers.get("x-trainertwin-session-id")?.trim();
-      if (message && calibrationSessionId && isFeelsOff(message)) {
-        const { calibration } = await studioFetch<{ calibration: boolean }>(orgId, { action: "isCalibrationSession", sessionId: calibrationSessionId })
-          .catch((error) => {
-            console.error("[openai-compat] calibration check failed", error);
-            return { calibration: false };
-          });
-        if (calibration) message = CALIBRATION_FEELS_OFF;
+      // Runtime events whose meaning depends on the session mode (lib/session-mode.ts).
+      const sessionRef = {
+        orgId,
+        sessionId: request.headers.get("x-trainertwin-session-id")?.trim() || undefined,
+        agentSlug: request.headers.get("x-trainertwin-agent-slug")?.trim() || undefined,
+      };
+      if (message === USER_INACTIVE_SIGNAL) {
+        message = userInactiveEvent(await sessionModeFor(sessionRef));
+      } else if (message && sessionRef.sessionId && isFeelsOff(message) && (await sessionModeFor(sessionRef)) === "twin-calibration") {
+        message = CALIBRATION_FEEDBACK_EVENT;
       }
       // One line per transport request (before any early return) so dropped/rejected turns are visible.
       console.info("[openai-compat] request " + JSON.stringify({

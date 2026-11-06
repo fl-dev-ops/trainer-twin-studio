@@ -6,7 +6,7 @@ import { fetchProjectKnowledge, projectKnowledgeEnabled } from "../lib/project-k
 import { studioFetch } from "../lib/studio";
 import { moveToNextMainQuestion, recordAnswerOnce, summarizeSessionPlan } from "../lib/session-plan";
 import { executeWorkspaceTool } from "../lib/workspace-tools";
-import { roleplayGuard } from "../lib/roleplay";
+import { roleplayGuard } from "../lib/session-mode-lookup";
 
 const evidenceStatus = z.enum(["untested", "partial", "sufficient", "weak", "unresolved"]);
 

@@ -1,6 +1,6 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
-import { roleplayGuard } from "../lib/roleplay";
+import { roleplayGuard } from "../lib/session-mode-lookup";
 import { callStudio } from "../lib/studio";
 
 const SHARED_KNOWLEDGE_BASE_SLUG = "acme-knowledge";

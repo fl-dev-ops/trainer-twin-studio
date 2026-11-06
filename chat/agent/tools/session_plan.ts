@@ -11,7 +11,7 @@ import { planState, resumeCandidateState } from "../lib/plan-state";
 import { resumeClaimCandidates } from "../lib/resume-candidates";
 import { studioFetch } from "../lib/studio";
 import { scenarioPlaybook, twinSessionPlaybooks } from "../lib/brain";
-import { roleplayGuard } from "../lib/roleplay";
+import { roleplayGuard } from "../lib/session-mode-lookup";
 
 /** Returned instead of a plan for scenario-ingest scenarios (run from their playbook) and twins (open conversation). */
 export const PLAYBOOK_SESSION_NOTE = {
