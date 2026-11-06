@@ -28,7 +28,15 @@ export const auth = betterAuth({
     },
   },
   socialProviders: process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
-    ? { google: { clientId: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET } }
+    ? {
+        google: {
+          clientId: process.env.GOOGLE_CLIENT_ID,
+          clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+          // Sign-in must not adopt scopes the user granted to the Drive/YouTube connectors (same OAuth client):
+          // their combination is rejected by Google ("scopes that cannot be requested together").
+          includeGrantedScopes: false,
+        },
+      }
     : {},
   databaseHooks: {
     session: {

@@ -285,11 +285,14 @@ export async function assignTwinAndInvite(input: {
     accessUntil: input.accessUntil,
     assignedByUserId: input.by.id,
   });
-  const deliveries = await Promise.all(invites.map(({ to, shareCode }) => sendTwinAssignmentEmail({
+  // The readable twin link: the personal /s/<code> link would work too, but the assignment is already bound to
+  // the invited email, so matching it by sign-in (lib/pages/learner.ts) is all the learner needs.
+  const sharePath = await twinSharePath(input.org.id, input.org.slug, input.agent.id);
+  const deliveries = await Promise.all(invites.map(({ to }) => sendTwinAssignmentEmail({
     to,
     twinName: input.agent.name,
     minutes: input.minutes,
-    practiceUrl: twinUrl(input.org.slug, shareCode),
+    practiceUrl: twinShareUrl(input.org.slug, sharePath),
     trainerName: input.by.name,
   })));
   return { ...stats, emailFailures: deliveries.filter(({ success }) => !success).length };
