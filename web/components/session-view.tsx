@@ -43,6 +43,8 @@ import { Aurora } from "@/components/session/aurora";
 import { CandidateTile } from "@/components/session/candidate-tile";
 import { SessionControlBar } from "@/components/session/session-control-bar";
 import { SessionSidebar } from "@/components/session/session-sidebar";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { ReportIssueButton } from "@/components/report-issue-button";
 import { LiveSubtitles } from "@/components/session/live-subtitles";
 import { ChoicePanel } from "@/components/session/choice";
@@ -189,6 +191,7 @@ export function SessionView({
   const screenShareAutoPromptedRef = useRef(false);
   const screenShareValidationPendingRef = useRef(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const isMobile = useIsMobile();
   const [latestSpokenText, setLatestSpokenText] = useState("");
   const [elapsed, setElapsed] = useState(0);
 
@@ -1226,8 +1229,8 @@ export function SessionView({
             <Stage aurora={!surface}>
               <div
                 className={cn(
-                  "relative flex min-h-0 w-full",
-                  surface ? "gap-3 p-3" : "flex-col items-center justify-center gap-6 overflow-y-auto p-6 sm:flex-row sm:gap-8",
+                  "relative flex min-h-0 w-full max-md:flex-1",
+                  surface ? "gap-3 p-3" : "flex-col items-center justify-start gap-6 overflow-y-auto p-6 sm:flex-row sm:gap-8 md:justify-center",
                 )}
               >
                 {/* Surface Presentation Mode (Left Large Workspace) */}
@@ -1355,11 +1358,30 @@ export function SessionView({
               </div>
 
               {/* YouTube / Prime Video Style Streaming Subtitles */}
-              <LiveSubtitles text={latestSpokenText} visible={!sidebarOpen} />
+              <LiveSubtitles
+                text={latestSpokenText}
+                visible={!sidebarOpen}
+                className="max-md:pointer-events-auto max-md:relative max-md:bottom-auto max-md:left-auto max-md:z-10 max-md:max-h-[30%] max-md:w-full max-md:max-w-none max-md:shrink-0 max-md:translate-x-0 max-md:overflow-y-auto max-md:px-3 max-md:pb-3"
+              />
             </Stage>
 
-            {/* Chat Sidebar (Pure Chat, exact same height as stage!) */}
-            <AnimatePresence initial={false}>
+            {/* Bottom sheet on mobile; the desktop chat stays beside the stage. */}
+            {isMobile ? (
+              <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+                <SheetContent side="bottom" showCloseButton={false} className="h-[70dvh]! max-h-[85dvh] gap-0 overflow-hidden">
+                  <SheetTitle className="sr-only">Chat</SheetTitle>
+                  <SheetDescription className="sr-only">Your conversation with {trainerName}. Send a message or close chat to return to the call.</SheetDescription>
+                  <SessionSidebar
+                    entries={entries}
+                    trainerName={trainerName}
+                    onSendMessage={handleSendMessage}
+                    onClose={() => setSidebarOpen(false)}
+                    disabled={!connected}
+                    className="w-full rounded-none border-0"
+                  />
+                </SheetContent>
+              </Sheet>
+            ) : <AnimatePresence initial={false}>
               {sidebarOpen && (
                 <motion.div
                   initial={reduceMotion ? false : { opacity: 0, width: 0 }}
@@ -1378,11 +1400,11 @@ export function SessionView({
                   />
                 </motion.div>
               )}
-            </AnimatePresence>
+            </AnimatePresence>}
           </main>
 
-          <footer className="grid h-20 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 sm:px-6">
-            <time className="font-mono text-sm tabular-nums" aria-label="Session time">{elapsedLabel}</time>
+          <footer className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 px-3 py-2 md:h-20 md:grid-cols-[1fr_auto_1fr] md:gap-3 md:px-6 md:py-0">
+            <time className="col-span-2 text-center font-mono text-sm tabular-nums md:col-span-1 md:text-left" aria-label="Session time">{elapsedLabel}</time>
             <SessionControlBar
               room={room}
               isConnected={connected}
@@ -1443,7 +1465,7 @@ const GET_READY_SECONDS = 5;
 /** The stage card: #f7f7f7 with the prototype's aurora, light in both themes like the role-play cards. */
 function Stage({ aurora = true, children }: { aurora?: boolean; children: React.ReactNode }) {
   return (
-    <div className="relative flex min-h-0 flex-1 overflow-hidden rounded-3xl bg-stage">
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl bg-stage md:flex-row">
       {aurora ? <Aurora className="pointer-events-none absolute inset-0 size-full opacity-80" /> : null}
       {children}
     </div>
@@ -1459,14 +1481,14 @@ function SessionHeader({ title, linkHome, children }: { title: string; linkHome:
     </>
   );
   return (
-    <header className="grid h-[72px] shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 px-6">
+    <header className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-4 py-3 md:h-[72px] md:grid-cols-[1fr_auto_1fr] md:gap-4 md:px-6 md:py-0">
       {linkHome ? (
         <Link href="/" className="flex w-fit items-center gap-2">{logo}</Link>
       ) : (
         <div className="flex items-center gap-2">{logo}</div>
       )}
-      <h1 className="max-w-[40vw] truncate text-center text-body font-medium">{title}</h1>
-      <div className="flex items-center justify-end gap-3">{children}</div>
+      <h1 className="col-span-2 row-start-2 min-w-0 truncate text-body font-medium md:col-span-1 md:col-start-2 md:row-start-1 md:max-w-[40vw] md:text-center">{title}</h1>
+      <div className="col-start-2 row-start-1 flex items-center justify-end gap-3 md:col-start-3">{children}</div>
     </header>
   );
 }

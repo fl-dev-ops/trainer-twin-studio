@@ -14,11 +14,11 @@ import {
 import { cn } from "@/lib/utils";
 
 const CONTROL =
-  "grid size-10 shrink-0 place-items-center rounded-full outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:size-[18px]";
+  "grid size-11 shrink-0 place-items-center rounded-full outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 md:size-10 [&_svg]:size-[18px]";
 
 /**
  * Call controls (V2 prototype): the toggle pill and the End button.
- * Renders two grid cells, so the parent footer must be a 3-column grid (timer | controls | end).
+ * Renders two grid cells: controls + end on mobile, timer | controls | end on desktop.
  */
 export function SessionControlBar({
   room,
@@ -47,11 +47,11 @@ export function SessionControlBar({
 
   return (
     <>
-      <div aria-label="Session controls" role="toolbar" className="col-start-2 flex items-center gap-2 rounded-full bg-muted p-1.5">
+      <div aria-label="Session controls" role="toolbar" className="col-start-1 flex w-fit items-center gap-1 rounded-full bg-muted p-1 md:col-start-2 md:gap-2 md:p-1.5">
         {!canPlayAudio && (
-          <button {...audioProps} type="button" className={cn(CONTROL, "w-auto gap-2 bg-card px-4 text-sm font-medium")}>
+          <button {...audioProps} type="button" title="Enable audio" className={cn(CONTROL, "bg-card text-sm font-medium md:flex md:w-auto md:gap-2 md:px-4")}>
             <Volume2 />
-            Enable audio
+            <span className="sr-only md:not-sr-only">Enable audio</span>
           </button>
         )}
         <button
@@ -100,10 +100,10 @@ export function SessionControlBar({
         type="button"
         onClick={() => setConfirmOpen(true)}
         aria-label="End session"
-        className="col-start-3 inline-flex h-10 items-center gap-2 justify-self-end rounded-full bg-live px-5 text-body font-medium text-white outline-none transition-colors hover:bg-live-hover focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="col-start-2 inline-flex size-11 items-center justify-center gap-2 justify-self-end rounded-full bg-live text-body font-medium text-white outline-none transition-colors hover:bg-live-hover focus-visible:ring-3 focus-visible:ring-ring/50 md:col-start-3 md:h-10 md:w-auto md:px-5"
       >
         <PhoneOff className="size-[18px]" />
-        End
+        <span className="sr-only md:not-sr-only">End</span>
       </button>
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
