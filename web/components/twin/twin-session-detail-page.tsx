@@ -135,7 +135,7 @@ export function TwinSessionDetailPage({ session }: { session: SessionDetail }) {
             {session.turns.map((turn, i) => {
               const isTwin = turn.who === "twin";
               return (
-                <div key={i} className="flex flex-col gap-1 max-w-[85%]">
+                <div key={i} className="flex w-full flex-col gap-1">
                   {/* Files the learner attached sit above their message, as in copilot chat. */}
                   {turn.attached?.length ? (
                     <div className="flex flex-wrap justify-end gap-2">
@@ -151,7 +151,7 @@ export function TwinSessionDetailPage({ session }: { session: SessionDetail }) {
                   ) : null}
                   {turn.text.trim() ? <div
                     className={cn(
-                      "flex flex-col gap-1 rounded-xl p-4 text-sm leading-6",
+                      "flex max-w-[85%] flex-col gap-1 rounded-xl p-4 text-sm leading-6",
                       isTwin
                         ? "self-start bg-(--sidebar) text-(--foreground)"
                         : "self-end bg-(--brand) text-white font-normal",
