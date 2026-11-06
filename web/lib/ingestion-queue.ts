@@ -1,7 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { SendMessageCommand, SQSClient } from "@aws-sdk/client-sqs";
 import { db } from "@/lib/db";
-import { ingestionMessageSchema, type IngestionMessage } from "@/lib/ingestion-message";
+import { ingestionMessageSchema, knowledgeFileMessageSchema, type IngestionMessage } from "@/lib/ingestion-message";
+import { presignedGetUrl } from "@/lib/s3";
+
+// The worker may retry a message for hours (visibility timeouts, a DLQ redrive); the URL must outlive that.
+const SOURCE_URL_TTL_SECONDS = 24 * 60 * 60;
 
 export function defaultIdentityKey(kbId: string, connector: string, externalId: string): string {
   return `${kbId}:${connector}:${externalId}`;
@@ -40,6 +44,29 @@ export async function publishIngestionMessage(message: IngestionMessage): Promis
       MessageBody: JSON.stringify(payload),
     })
   );
+  return true;
+}
+
+/**
+ * Queues one uploaded knowledge file for the Python worker. Returns false when no queue is configured
+ * (local dev), so the upload stays "uploaded" and can be re-queued later with reindexDocument.
+ */
+export async function queueKnowledgeFile(file: {
+  docId: string; orgId: string; kbId: string; filename: string; sourceKey: string;
+}): Promise<boolean> {
+  const targetQueue = queueUrl();
+  if (!targetQueue) {
+    console.warn(`[IngestionQueue] INGESTION_QUEUE_URL not configured. Not queueing document ${file.docId}`);
+    return false;
+  }
+  const message = knowledgeFileMessageSchema.parse({
+    docId: file.docId,
+    orgId: file.orgId,
+    kbId: file.kbId,
+    filename: file.filename,
+    sourceUrl: await presignedGetUrl(file.sourceKey, SOURCE_URL_TTL_SECONDS),
+  });
+  await getSqsClient().send(new SendMessageCommand({ QueueUrl: targetQueue, MessageBody: JSON.stringify(message) }));
   return true;
 }
 

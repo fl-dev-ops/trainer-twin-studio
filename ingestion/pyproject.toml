@@ -1,0 +1,33 @@
+[project]
+name = "trainertwin-ingestion"
+version = "0.1.0"
+description = "Knowledge-base uploads: raw file -> redacted markdown -> LLM chunks -> embeddings"
+requires-python = ">=3.12"
+dependencies = [
+    "chonkie[litellm]>=1.7,<2",
+    "firecrawl-anydoc>=0.2",     # office docs + PDFs -> markdown (pure Rust, no models)
+    "openai>=1.50",              # chunking LLM client (Qwen via OpenRouter)
+    "pydantic>=2",
+    "requests>=2.32",            # vendor/pii_redact.py
+    "python-dotenv>=1",
+    "boto3>=1.34",               # SQS only
+    "httpx>=0.28",
+    "pyyaml>=6",
+]
+
+[project.scripts]
+ingest = "ingestion.cli:main"
+ingestion-worker = "ingestion.worker:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ingestion"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

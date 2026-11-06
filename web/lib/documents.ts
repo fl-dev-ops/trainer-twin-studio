@@ -9,6 +9,13 @@ export const SUPPORTED_DOCUMENT_EXTENSIONS = [
 const PLAIN_EXTENSIONS = ["md", "txt", "json", "csv"] as const;
 export const ALL_DOCUMENT_EXTENSIONS = [...SUPPORTED_DOCUMENT_EXTENSIONS, ...PLAIN_EXTENSIONS] as const;
 
+/** Everything the ingestion worker converts: documents, plain text, audio/video (transcribed), images (OCR). */
+export const KNOWLEDGE_UPLOAD_EXTENSIONS = [
+  ...SUPPORTED_DOCUMENT_EXTENSIONS, "csv", "md", "markdown", "txt", "json",
+  "mp3", "m4a", "wav", "aac", "ogg", "flac", "mp4", "mov", "webm", "mkv",
+  "png", "jpg", "jpeg", "webp",
+] as const;
+
 export async function documentToMarkdown(file: File, maxBytes = 25 * 1024 * 1024) {
   const ext = (file.name.split(".").pop() ?? "").toLowerCase();
   const isPlain = (PLAIN_EXTENSIONS as readonly string[]).includes(ext);

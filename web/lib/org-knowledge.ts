@@ -1,10 +1,9 @@
 import type { Where } from "chromadb";
 import { db } from "@/lib/db";
-import { ChromaTenantService } from "@/lib/chroma-tenant";
 import { MainCollectionService } from "@/lib/main-collection";
 import { deletePrefix, kbPrefix, orgPrefix, presignedGetUrl, putObject } from "@/lib/s3";
-import { documentToMarkdown } from "@/lib/documents";
-import { enqueueIngestionWork } from "@/lib/ingestion-queue";
+import { KNOWLEDGE_UPLOAD_EXTENSIONS } from "@/lib/documents";
+import { queueKnowledgeFile } from "@/lib/ingestion-queue";
 
 export type OrgKnowledgeDoc = {
   id: string;
@@ -149,9 +148,18 @@ export class OrganizationKnowledgeService {
     };
   }
 
-  /** Stores the original and Markdown separately. Upload is complete after both writes; ingestion is paused. */
-  static async uploadDocument(orgId: string, file: File): Promise<OrgKnowledgeDoc & { jobId: string | null }> {
-    const { ext, bytes, markdown } = await documentToMarkdown(file);
+  /**
+   * Stores the original file and queues it for the ingestion worker, which converts it to redacted
+   * Markdown, chunks and embeds it, and reports back to /api/internal/ingestion/results.
+   */
+  static async uploadDocument(orgId: string, file: File, maxBytes = 25 * 1024 * 1024): Promise<OrgKnowledgeDoc & { jobId: string | null }> {
+    const ext = (file.name.split(".").pop() ?? "").toLowerCase();
+    if (!(KNOWLEDGE_UPLOAD_EXTENSIONS as readonly string[]).includes(ext)) {
+      throw new Error(`Unsupported file type .${ext} — supported: ${KNOWLEDGE_UPLOAD_EXTENSIONS.join(", ")}`);
+    }
+    if (file.size > maxBytes) throw new Error(`File larger than ${Math.floor(maxBytes / 1024 / 1024)} MB`);
+    if (file.size === 0) throw new Error("File is empty");
+    const bytes = new Uint8Array(await file.arrayBuffer());
     const kb = await getOrCreateOrgKnowledgeBase(orgId);
 
     const baseSlug = file.name
@@ -176,31 +184,31 @@ export class OrganizationKnowledgeService {
       },
     });
 
-    // Per-document folders prevent filename collisions and let deletion remove both copies safely.
+    // Per-document folders prevent filename collisions and let deletion remove every copy safely.
     const sourceKey = `${orgPrefix(orgId)}/knowledge/files/${doc.id}/${slug}`;
-    const markdownKey = `${orgPrefix(orgId)}/ingest/files/${doc.id}/content.md`;
     try {
       await putObject(sourceKey, bytes, file.type || "application/octet-stream");
-      await putObject(markdownKey, markdown, "text/markdown; charset=utf-8");
-      await db.knowledgeDocument.update({
-        where: { id: doc.id },
-        data: { s3SourceKey: sourceKey, s3MarkdownKey: markdownKey, status: "uploaded" },
-      });
     } catch (error) {
-      // Keep the keys for cleanup if only one copy made it to S3; never report a partial upload as complete.
+      // Keep the key for cleanup; never report a partial upload as complete.
       await db.knowledgeDocument.update({
         where: { id: doc.id },
-        data: {
-          s3SourceKey: sourceKey,
-          s3MarkdownKey: markdownKey,
-          status: "failed",
-          error: error instanceof Error ? error.message : "Upload failed",
-        },
+        data: { s3SourceKey: sourceKey, status: "failed", error: error instanceof Error ? error.message : "Upload failed" },
       });
       throw error;
     }
 
-    const result: OrgKnowledgeDoc & { jobId: string | null } = {
+    let status = "uploaded";
+    let error: string | null = null;
+    try {
+      if (await queueKnowledgeFile({ docId: doc.id, orgId, kbId: kb.id, filename: slug, sourceKey })) status = "queued";
+    } catch (queueError) {
+      // The file is stored; reindexDocument can queue it again.
+      console.error(`[OrgKnowledge] could not queue document ${doc.id}:`, queueError);
+      error = "Stored, but processing could not be queued. Retry from the document menu.";
+    }
+    await db.knowledgeDocument.update({ where: { id: doc.id }, data: { s3SourceKey: sourceKey, status, error } });
+
+    return {
       id: doc.id,
       kbId: kb.id,
       kbSlug: kb.slug,
@@ -208,8 +216,8 @@ export class OrganizationKnowledgeService {
       title: doc.title,
       ext: doc.ext,
       size: doc.size,
-      status: "uploaded",
-      error: null,
+      status,
+      error,
       chunkCount: 0,
       sourceId: null,
       connector: "upload",
@@ -218,29 +226,6 @@ export class OrganizationKnowledgeService {
       indexedAt: null,
       createdAt: doc.createdAt.toISOString(),
     };
-
-    // Ingestion paused: uncomment this block to queue processing after both files have been stored.
-    // await ChromaTenantService.createOrgDatabase(orgId);
-    // const queueResult = await enqueueIngestionWork({
-    //   orgId,
-    //   kbId: kb.id,
-    //   connector: "upload",
-    //   externalId: doc.id,
-    //   sourceUrl: `upload://${slug}`,
-    //   rootWorkItem: {
-    //     workKey: doc.id,
-    //     kind: "resource",
-    //     payload: { docId: doc.id, title: doc.title, slug: doc.slug },
-    //   },
-    // });
-    // await db.knowledgeDocument.update({
-    //   where: { id: doc.id },
-    //   data: { sourceId: queueResult.sourceId, status: "queued" },
-    // });
-
-    // return { ...result, status: "queued", sourceId: queueResult.sourceId, sourceStatus: "syncing", jobId: queueResult.jobId };
-
-    return result;
   }
 
   /**
@@ -281,54 +266,21 @@ export class OrganizationKnowledgeService {
     await db.knowledgeDocument.delete({ where: { id: doc.id } });
   }
 
-  /**
-   * Re-indexes an existing document asynchronously by dispatching an SQS job.
-   */
+  /** Queues an uploaded document for the ingestion worker again (re-redact, re-chunk, re-embed). */
   static async reindexDocument(orgId: string, docId: string): Promise<{
     ok: true;
     jobId: string;
     documentId: string;
     status: "queued";
   }> {
-    const doc = await db.knowledgeDocument.findFirst({
-      where: { id: docId, kb: { orgId } },
-      include: { kb: { select: { id: true, slug: true } } },
-    });
+    const doc = await db.knowledgeDocument.findFirst({ where: { id: docId, kb: { orgId } } });
     if (!doc) throw new Error("Document not found");
-    if (!doc.s3MarkdownKey || doc.s3MarkdownKey === "pending") {
-      throw new Error("Document has no markdown stored in S3");
+    if (!doc.s3SourceKey || doc.s3SourceKey === "pending") throw new Error("Document has no stored file");
+    if (!(await queueKnowledgeFile({ docId: doc.id, orgId, kbId: doc.kbId, filename: doc.slug, sourceKey: doc.s3SourceKey }))) {
+      throw new Error("Ingestion queue is not configured");
     }
-
-    await ChromaTenantService.createOrgDatabase(orgId);
-
-    const queueResult = await enqueueIngestionWork({
-      orgId,
-      kbId: doc.kbId,
-      connector: "upload",
-      externalId: doc.id,
-      sourceUrl: `upload://${doc.slug}`,
-      rootWorkItem: {
-        workKey: doc.id,
-        kind: "resource",
-        payload: { docId: doc.id, title: doc.title, slug: doc.slug },
-      },
-    });
-
-    await db.knowledgeDocument.update({
-      where: { id: doc.id },
-      data: {
-        sourceId: queueResult.sourceId,
-        status: "queued",
-        error: null,
-      },
-    });
-
-    return {
-      ok: true,
-      jobId: queueResult.jobId,
-      documentId: doc.id,
-      status: "queued",
-    };
+    await db.knowledgeDocument.update({ where: { id: doc.id }, data: { status: "queued", error: null } });
+    return { ok: true, jobId: doc.id, documentId: doc.id, status: "queued" };
   }
 
   /**

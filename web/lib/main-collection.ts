@@ -354,6 +354,36 @@ export class MainCollectionService {
   }
 
   /**
+   * Upserts chunks embedded by the ingestion worker; the vectors are stored as given (no second embedding).
+   * Ids kb_<docId>#<index> make a retried batch overwrite itself.
+   */
+  static async upsertKnowledgeChunks(
+    orgId: string,
+    meta: { kbId: string; docId: string; source: string; title: string; chunkingVersion: string },
+    chunks: { index: number; text: string; embedding: number[] }[],
+  ): Promise<void> {
+    if (!chunks.length) return;
+    const collection = await this.getCollection(orgId);
+    await collection.upsert({
+      ids: chunks.map((c) => `kb_${meta.docId}#${c.index}`),
+      embeddings: chunks.map((c) => c.embedding),
+      documents: chunks.map((c) => c.text),
+      metadatas: chunks.map((c) => ({
+        type: "knowledge" as const, orgId, kbId: meta.kbId, docId: meta.docId, source: meta.source,
+        title: meta.title, chunkIndex: c.index, chunkingVersion: meta.chunkingVersion,
+      })),
+    });
+  }
+
+  /** Drops a document's chunks from a previous, longer run (chunkIndex >= the new count). */
+  static async pruneKnowledgeChunks(orgId: string, docId: string, keep: number): Promise<void> {
+    const collection = await this.getCollection(orgId);
+    await collection.delete({
+      where: { $and: [{ type: "knowledge" }, { docId }, { chunkIndex: { $gte: keep } }] } as Where,
+    });
+  }
+
+  /**
    * Removes all knowledge chunks for a document from the organization's main collection.
    */
   static async removeKnowledgeDoc(orgId: string, docId: string): Promise<void> {
