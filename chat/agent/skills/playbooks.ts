@@ -1,5 +1,5 @@
 import { defineDynamic, defineSkill } from "eve/skills";
-import { type AgentKind, type TwinExample, type TwinPlaybook, inlineTwinPlaybooks, playbookSkillNames, twinSessionPlaybooks } from "../lib/brain";
+import { type AgentKind, type TwinPlaybook, inlineTwinPlaybooks, playbookSkillNames, twinSessionPlaybooks } from "../lib/brain";
 import { studioFetch } from "../lib/studio";
 
 /**
@@ -20,7 +20,6 @@ export default defineDynamic({
       const context = await studioFetch<{
         agent: { slug?: string; kind?: AgentKind | null; data?: Record<string, unknown> } | null;
         twinPlaybooks?: TwinPlaybook[];
-        scenarioExamples?: Record<string, TwinExample[]>;
       }>(orgId, {
         action: "getSessionContext",
         sessionId: attributes.sessionId,
@@ -30,7 +29,7 @@ export default defineDynamic({
       const playbooks = twinSessionPlaybooks(context.agent, context.twinPlaybooks) ?? [];
       if (playbooks.length === 0) return null;
       // A small twin has every playbook in its prompt already (formatTwinSession); skills would only invite a load call.
-      if (inlineTwinPlaybooks(playbooks, context.scenarioExamples)) return null;
+      if (inlineTwinPlaybooks(playbooks)) return null;
 
       const names = playbookSkillNames(playbooks);
       return Object.fromEntries(

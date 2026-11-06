@@ -1,16 +1,17 @@
 import { timingSafeEqual } from "node:crypto";
+import { after } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { embedTexts, searchKnowledge } from "@/lib/knowledge";
 import { specDraftBundleSchema } from "@/lib/spec-draft-schema";
 import { publishSpecDraft, readSpecDraft, saveSpecDraft } from "@/lib/spec-drafts";
-import { MainCollectionService, type ScenarioSearchTimings, type ScenarioStep } from "@/lib/main-collection";
+import { MainCollectionService, type ScenarioStep } from "@/lib/main-collection";
 import { type PinnedTwinSkill, TWIN_SOURCE, twinPlaybooks } from "@/lib/twins";
 import { redactLearnerNames } from "@/lib/persona-voice";
 import { enqueueWorkspaceCommand } from "@/lib/workspace-commands";
 import { buildSessionContext, getCachedSessionContext } from "@/lib/session-context";
 import { unusedResumeClaims } from "@/lib/resume-interview";
-import { recordTurnEvidence, turnEvidenceSchema } from "@/lib/twin/evidence";
+import { recordTurnEvidence, recordTurnLines, turnEvidenceSchema } from "@/lib/twin/evidence";
 
 export const runtime = "nodejs";
 
@@ -51,6 +52,8 @@ const requestSchema = z.discriminatedUnion("action", [
     playbook: z.string().trim().min(1).max(200).optional(),
     /** All-skills twin sessions: search only the skills pinned when the session started. */
     sessionId: z.string().min(1).max(100).optional(),
+    /** Small twins' per-turn lines: keep what was returned for this turn's "Why this answer" (lib/twin/evidence.ts). */
+    recordTurnLines: z.object({ heard: z.string().max(4000), situation: z.string().max(500) }).strict().optional(),
   }).strict(),
   z.object({
     action: z.literal("readDocument"),
@@ -252,30 +255,20 @@ export async function POST(request: Request) {
 
   // Real lines from a scenario-ingest scenario (items.json), for the chat tool scenario_examples.
   if (input.action === "searchScenarioItems") {
-    // Per-stage timing for the scenario_examples latency work (logged as [scenario-timing]).
-    const requestStartedAt = Date.now();
-    let startedAt = requestStartedAt;
-    const timing: Record<string, number | null> = { agent_ms: null, pinned_ms: null, playbooks_ms: null };
-    const search: ScenarioSearchTimings = { chroma_ms: [], hits: [] };
     // The embedding needs only the query: start it now so it runs alongside the DB lookups below.
     const queryEmbedding = embedTexts([input.query]).then(([embedding]) => embedding);
     queryEmbedding.catch(() => {}); // awaited in searchScenarioItems; this only stops an early DB error leaving it unhandled
     // scenario.json's steps map the newer items' `action` to a step, and a step to its moves.
     const agent = await db.agent.findFirst({ where: { slug: input.agentSlug, orgId }, select: { data: true, personaId: true, kind: true } });
-    timing.agent_ms = Date.now() - startedAt;
     const data = agent?.data as { source?: unknown; scenario?: { steps?: unknown; situations?: unknown } } | null;
     let scope: { slugs: string[]; steps: ScenarioStep[] };
     if (agent?.kind === "TWIN" && data?.source === TWIN_SOURCE) {
       // The all-skills twin searches its persona's skill twins: all of them, or the one the model has loaded.
-      startedAt = Date.now();
       const pinned = input.sessionId
         ? (await db.interviewSession.findFirst({ where: { id: input.sessionId, orgId, agentSlug: input.agentSlug }, select: { compiledSnapshot: true } }))
           ?.compiledSnapshot as { twinSkills?: PinnedTwinSkill[] } | null | undefined
         : undefined;
-      timing.pinned_ms = Date.now() - startedAt;
-      startedAt = Date.now();
       const all = await twinPlaybooks(orgId, agent.personaId, Array.isArray(pinned?.twinSkills) ? pinned.twinSkills : undefined);
-      timing.playbooks_ms = Date.now() - startedAt;
       const named = input.playbook ? all.filter((p) => p.id === input.playbook || p.slug === input.playbook) : [];
       // An unknown name (e.g. a sanitised skill name) widens to all playbooks rather than finding nothing.
       const chosen = named.length > 0 ? named : all;
@@ -290,22 +283,16 @@ export async function POST(request: Request) {
       role: input.role,
       limit: input.limit,
       steps: scope.steps,
-      timings: search,
       queryEmbedding,
     });
-    console.info("[scenario-timing] " + JSON.stringify({
-      sessionId: input.sessionId ?? null,
-      agentSlug: input.agentSlug,
-      playbooks: scope.slugs.length,
-      step: input.step ?? null,
-      ...timing,
-      collection_ms: search.collection_ms ?? null,
-      embed_ms: search.embed_ms ?? null,
-      chroma_ms: search.chroma_ms,
-      fallback: search.chroma_ms.length > 1,
-      hits: search.hits,
-      total_ms: Date.now() - requestStartedAt,
-    }));
+    const turnLines = input.recordTurnLines;
+    if (turnLines && input.sessionId) {
+      const sessionId = input.sessionId;
+      // After the response: the twin's turn never waits for this write.
+      after(() => recordTurnLines(orgId, sessionId, { ...turnLines, examples }).catch((error) => {
+        console.error("[twin-evidence] turn lines failed", error);
+      }));
+    }
     return Response.json({ query: input.query, examples });
   }
 

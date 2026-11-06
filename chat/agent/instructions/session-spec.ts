@@ -2,6 +2,8 @@ import { defineDynamic, defineInstructions } from "eve/instructions";
 import BASE from "../../prompts/base-instructions.md?raw";
 import { baseInstructions } from "../lib/base-instructions";
 import { formatSessionSpec, loadSessionContext } from "../lib/brain";
+import { twinLinesState } from "../lib/plan-state";
+import { studioFetch } from "../lib/studio";
 
 /**
  * Base instructions plus per-session grounding: pulls scenario specs, persona traits, and attached
@@ -25,6 +27,18 @@ export default defineDynamic({
 
       try {
         const specs = await loadSessionContext(orgId, sessionId, agentSlug, personaSlug, mode, clientTools);
+        // A small twin gets its lines per turn instead of searching for them (agent/instructions/twin-lines.ts).
+        if (specs.twin?.inline) {
+          twinLinesState.update(() => ({
+            agentSlug: specs.agentSlug,
+            personaName: specs.personaName ?? specs.personaSlug ?? "the trainer",
+            playbooks: specs.twin!.inline!,
+          }));
+          // Warm the lookup path (vector store connection, embeddings) during the countdown, so the first learner
+          // turn's lines don't hit a cold start. Best effort.
+          void studioFetch(orgId, { action: "searchScenarioItems", agentSlug: specs.agentSlug, query: "warm up", role: "trainer", limit: 1, sessionId })
+            .catch(() => {});
+        }
         const base = baseInstructions(BASE, Boolean(specs.twin || specs.playbook || specs.roleplay));
         return defineInstructions({ content: `${base}\n\n${formatSessionSpec(specs)}` });
       } catch (err) {

@@ -1,9 +1,6 @@
 import { z } from "zod";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
-import { MainCollectionService } from "@/lib/main-collection";
-import { TWIN_SKILL_SOURCE } from "@/lib/scenario-ingest";
-import { getCachedSessionContext } from "@/lib/session-context";
 
 /**
  * "Why this answer": per brain turn of a twin session, what the twin heard, what it looked up and the moments that came
@@ -29,14 +26,19 @@ export async function recordTurnEvidence(orgId: string, input: TurnEvidenceInput
   });
   if (!session) return { stored: false };
   const { sessionId, ...data } = input;
-  // A small twin has all its lines in the prompt and no longer searches: match the closest ones to what the learner
-  // said, after the reply (this runs off the turn's critical path), so the panel still shows the moments behind it.
-  if (data.inputKind === "learner" && data.heard.trim() && !data.calls.some((call) => call.tool === "scenario_examples")) {
-    const matched = await matchAfterReply(orgId, sessionId, data.heard).catch((error) => {
-      console.error("[twin-evidence] match after reply failed", error);
-      return null;
+  // A small twin gets its lines before each turn (chat/agent/instructions/twin-lines.ts), recorded by the studio search
+  // as a pending row: move them onto this turn, so the panel shows exactly the lines the twin was given.
+  if (data.inputKind === "learner" && !data.calls.some((call) => call.tool === "scenario_examples")) {
+    const pending = await db.twinTurnEvidence.findFirst({
+      where: { sessionId, createdAt: { gte: new Date(Date.now() - TURN_LINES_MAX_AGE_MS) } },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, data: true },
     });
-    if (matched) data.calls = [...data.calls, matched];
+    const lines = asRecord(pending?.data);
+    if (pending && lines.inputKind === TURN_LINES && text(lines.heard) === text(data.heard)) {
+      data.calls = [...data.calls, ...(Array.isArray(lines.calls) ? lines.calls : []).map(asRecord).map((call) => ({ tool: String(call.tool), input: call.input, output: call.output }))];
+      await db.twinTurnEvidence.delete({ where: { id: pending.id } });
+    }
   }
   // Tool outputs can be long: keep the row bounded (calls are dropped, heard/reply stay).
   const fits = JSON.stringify(data).length <= MAX_EVIDENCE_BYTES;
@@ -46,17 +48,23 @@ export async function recordTurnEvidence(orgId: string, input: TurnEvidenceInput
   return { stored: true };
 }
 
-/** The session's playbook lines closest to what the learner said, as a scenario_examples call the panel can render. */
-async function matchAfterReply(orgId: string, sessionId: string, heard: string) {
-  const context = await getCachedSessionContext(orgId, sessionId);
-  const agentSource = (context.agent?.data as Record<string, unknown> | undefined)?.source;
-  const slugs = context.twinPlaybooks
-    ? context.twinPlaybooks.map((playbook) => playbook.slug)
-    : agentSource === TWIN_SKILL_SOURCE && context.agent?.slug ? [context.agent.slug] : [];
-  if (slugs.length === 0) return null;
-  const situation = heard.trim().slice(0, 500);
-  const examples = await MainCollectionService.searchScenarioItems(orgId, slugs, situation, { role: "trainer", limit: 3 });
-  return { tool: "scenario_examples", input: { situation, matchedAfterReply: true }, output: { examples } };
+/** A pending row of the lines a small twin was given for a turn, until recordTurnEvidence moves them onto that turn. */
+const TURN_LINES = "turn_lines";
+/** Lines older than this belong to a turn that never got a reply; they are left out. */
+const TURN_LINES_MAX_AGE_MS = 5 * 60_000;
+
+/** Keeps the lines a small twin's turn was given (studio searchScenarioItems with recordTurnLines), off its critical path. */
+export async function recordTurnLines(
+  orgId: string,
+  sessionId: string,
+  input: { heard: string; situation: string; examples: unknown[] },
+) {
+  const session = await db.interviewSession.findFirst({ where: { id: sessionId, orgId, agent: { kind: "TWIN" } }, select: { id: true } });
+  if (!session) return;
+  const calls = [{ tool: "scenario_examples", input: { situation: input.situation }, output: { examples: input.examples } }];
+  await db.twinTurnEvidence.create({
+    data: { sessionId, data: { inputKind: TURN_LINES, heard: input.heard, calls } as Prisma.InputJsonValue },
+  });
 }
 
 const asRecord = (value: unknown): Record<string, unknown> =>
@@ -100,7 +108,7 @@ export async function sessionEvidence(orgId: string, sessionId: string): Promise
     orderBy: { createdAt: "asc" },
     select: { id: true, data: true },
   });
-  const turns = rows.map((row) => {
+  const turns = rows.filter((row) => asRecord(row.data).inputKind !== TURN_LINES).map((row) => {
     const data = asRecord(row.data);
     const calls = (Array.isArray(data.calls) ? data.calls : []).map(asRecord);
     const lookups = calls.filter((call) => typeof call.tool === "string" && call.tool in LOOKUPS);

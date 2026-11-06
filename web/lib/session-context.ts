@@ -2,8 +2,6 @@ import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 import { personaBrief } from "@/lib/persona";
 import { findOrgOrGlobalPersona } from "@/lib/specs";
-import { MainCollectionService } from "@/lib/main-collection";
-import { TWIN_SKILL_SOURCE } from "@/lib/scenario-ingest";
 import { type PinnedTwinSkill, TWIN_SOURCE, twinPlaybooks } from "@/lib/twins";
 
 const SHARED_KNOWLEDGE_BASE_SLUG = "acme-knowledge";
@@ -135,24 +133,11 @@ export async function buildSessionContext(input: {
   const playbooks = isAllSkillsTwin && liveAgent?.personaId
     ? await twinPlaybooks(input.orgId, liveAgent.personaId, Array.isArray(snapshot?.twinSkills) ? snapshot.twinSkills : undefined)
     : undefined;
-  // A twin's own lines per playbook, so a small twin can carry them in its prompt instead of searching every turn.
-  // Best effort: without them the twin falls back to the scenario_examples tool.
-  const agentSource = (agent?.data as Record<string, unknown> | undefined)?.source;
-  const exampleSlugs = playbooks
-    ? playbooks.map((playbook) => playbook.slug)
-    : liveAgent?.kind === "TWIN" && agentSource === TWIN_SKILL_SOURCE && agent?.slug ? [agent.slug] : [];
-  const scenarioExamples = exampleSlugs.length
-    ? await MainCollectionService.listScenarioItems(input.orgId, exampleSlugs, "trainer").catch((error) => {
-        console.error("[session-context] scenario examples failed", error);
-        return undefined;
-      })
-    : undefined;
 
   return {
     sessionId: session?.id ?? input.sessionId ?? null,
     agent: agent ? { slug: agent.slug, version: agent.version, kind: liveAgent?.kind ?? null, data: agent.data } : null,
     ...(playbooks ? { twinPlaybooks: playbooks } : {}),
-    ...(scenarioExamples ? { scenarioExamples } : {}),
     persona: persona ?? null,
     // The trainer's own persona speaks as herself (identity only); any other persona is a character to play.
     personaBrief: persona ? personaBrief(persona.data, livePersona?.isOwn ? "self" : "character") : null,
@@ -168,6 +153,6 @@ export async function buildSessionContext(input: {
 /** Session context is immutable after activation; prime this during the intro. */
 export const getCachedSessionContext = unstable_cache(
   (orgId: string, sessionId: string) => buildSessionContext({ orgId, sessionId }),
-  ["session-context-v2"],
+  ["session-context-v1"],
   { revalidate: 86_400 },
 );
