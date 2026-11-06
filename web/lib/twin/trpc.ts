@@ -90,6 +90,8 @@ function sessionItem(row: SessionRow) {
     agentName: row.agent.name,
     at: (row.startedAt ?? row.createdAt).toISOString(),
     seconds: durationSeconds(row.startedAt, row.endedAt),
+    /** Learner questions the report counted (0 until the report is ready). */
+    questionsCount: isTwinReport(row.report) ? row.report.questions.length : 0,
     /** Topics discussed, from the after-call report (empty until it's ready). */
     topics: isTwinReport(row.report) ? row.report.topics : [],
     question,

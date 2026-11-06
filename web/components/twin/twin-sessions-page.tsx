@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { cn } from "@/lib/utils";
 import { DATE_RANGES, FilterDropdown, inDateRange } from "@/components/filter-dropdown";
 import { SessionsIcon } from "@/components/icons";
 import { PageHeader, SectionHeader } from "@/components/page-header";
-import { TwinSessionItem, type TwinSessionItemData } from "@/components/twin/twin-session-item";
+import { TWIN_SESSION_GRID, TwinSessionItem, type TwinSessionItemData } from "@/components/twin/twin-session-item";
 import { Card } from "@/components/ui/card";
 import { PageContainer } from "@/components/page-container";
 
@@ -44,6 +45,15 @@ export function TwinSessionsPage({ sessions }: { sessions: TwinSessionItemData[]
 
       {/* Reference sess-list */}
       <Card size="lg" className="mt-4 gap-0 py-0">
+      <div className={cn(TWIN_SESSION_GRID, "border-b px-5 py-2.5 text-body-s font-medium uppercase text-muted-foreground max-sm:hidden")}>
+        <span /> {/* avatar */}
+        <span>Learner</span>
+        <span>Twin</span>
+        <span>Minutes</span>
+        <span>Questions discussed</span>
+        <span>Helpfulness</span>
+        <span /> {/* arrow */}
+      </div>
       <ul className="m-0 flex list-none flex-col p-0">
         {filteredSessions.length === 0 ? (
           <li className="p-8 text-center text-sm text-muted-foreground">No sessions match these filters.</li>
