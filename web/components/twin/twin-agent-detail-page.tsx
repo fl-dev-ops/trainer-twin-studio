@@ -267,7 +267,7 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
           {/* Usage Credit Box pinned to bottom */}
           <div className="mt-auto pt-6">
             <div className="flex flex-col gap-2 rounded-tt-md bg-sidebar p-5">
-              <p className={cn(OVERLINE, "text-muted-foreground")}>Usage credit</p>
+              <p className={cn(OVERLINE, "text-muted-foreground")}>Learner minutes</p>
               {minutes ? (
                 <>
                   <p className="m-0 text-title-m leading-6 font-semibold tabular-nums">
