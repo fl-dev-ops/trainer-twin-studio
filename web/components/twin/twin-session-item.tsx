@@ -73,11 +73,6 @@ export function TwinSessionItem({
             <SessionTime iso={session.at} />
             {minutes ? <span className="sm:hidden"> · {minutes} min</span> : null}
           </span>
-          {session.question ? (
-            <span className="truncate text-body-s leading-body-s text-muted-foreground">
-              “{session.question}”{session.answer ? ` · ${session.answer}` : ""}
-            </span>
-          ) : null}
           {/* Small screens: the columns are hidden, so the score badge stays inline here. */}
           {score !== null && score > 0 ? (
             <span className="mt-1 sm:hidden">
