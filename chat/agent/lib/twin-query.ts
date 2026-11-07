@@ -1,12 +1,14 @@
-import { gateway, generateObject } from "ai";
+import { generateObject } from "ai";
 import { z } from "zod";
 import type { TwinPlaybook } from "./brain";
+import { cerebrasProviderOptions, isCerebrasModel, resolveModel } from "./cerebras";
 
 /**
  * The step the old scenario_examples flow got from the twin's own model (decide the moment, then search), done by a
  * small fast model outside the conversation: which playbook and situation the learner's turn is about, and a
  * one-sentence search for the trainer's lines. Raw learner speech searches poorly; the stored lines lead with a
  * situation sentence ("Why you tell a waiting client that the timing window has already closed"), so this matches.
+ * TWIN_QUERY_MODEL=cerebras/<id> calls Cerebras directly with our own key (lib/cerebras.ts); others use the gateway.
  */
 export const TWIN_QUERY_MODEL = process.env.TWIN_QUERY_MODEL?.trim() || "openai/gpt-4.1-mini";
 
@@ -26,7 +28,8 @@ export async function writeTwinQuery(
     ].join("\n"))
     .join("\n");
   const { object } = await generateObject({
-    model: gateway(TWIN_QUERY_MODEL),
+    model: resolveModel(TWIN_QUERY_MODEL),
+    ...(isCerebrasModel(TWIN_QUERY_MODEL) ? { providerOptions: cerebrasProviderOptions() } : {}),
     temperature: 0,
     abortSignal,
     schema: z.object({

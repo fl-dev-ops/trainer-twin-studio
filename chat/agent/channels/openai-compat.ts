@@ -574,7 +574,9 @@ export default defineChannel({
                 model,
                 // Mirrors agent.ts model resolution: the model Eve actually ran, not the request label.
                 llm_model: requestedModel || process.env.CHAT_AGENT_MODEL || "google/gemini-3.5-flash-lite",
-                llm_route: process.env.GEMINI_GATEWAY_PROVIDER?.trim() || "google",
+                llm_route: (requestedModel || process.env.CHAT_AGENT_MODEL || "").startsWith("cerebras/")
+                  ? "cerebras-direct"
+                  : process.env.GEMINI_GATEWAY_PROVIDER?.trim() || "google",
                 ...questionBridge.trace(t_start),
                 started_at_ms: t_start,
                 status: ev.type,
