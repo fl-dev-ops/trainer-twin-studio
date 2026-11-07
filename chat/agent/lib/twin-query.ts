@@ -1,4 +1,4 @@
-import { generateObject } from "ai";
+import { generateText, Output } from "ai";
 import { z } from "zod";
 import type { TwinPlaybook } from "./brain";
 import { cerebrasProviderOptions, isCerebrasModel, resolveModel } from "./cerebras";
@@ -31,17 +31,17 @@ export async function writeTwinQuery(
       ...playbook.steps.map((step) => `  - situation ${step.id}: ${step.name || step.id}`),
     ].join("\n"))
     .join("\n");
-  const { object } = await generateObject({
+  const { output: object } = await generateText({
     model: resolveModel(TWIN_QUERY_MODEL),
     ...(isCerebrasModel(TWIN_QUERY_MODEL) ? { providerOptions: cerebrasProviderOptions() } : {}),
     temperature: 0,
     abortSignal,
-    schema: z.object({
+    output: Output.object({ schema: z.object({
       search: z.boolean().describe("false when the message brings no client moment to advise on: greetings, thanks, okay, small talk, a question about the call itself, or a request outside every playbook"),
       playbook: z.enum(playbooks.map((playbook) => playbook.slug) as [string, ...string[]]),
       situation: z.string().describe("The situation id from that playbook, or \"none\" if none fits"),
       query: z.string().describe("One sentence: what is happening with the client right now"),
-    }),
+    }) }),
     system: [
       "A sales agent is asking their trainer for advice about a real client. First decide whether their latest message brings a client moment to advise on; if not, set search to false. Otherwise decide which of the trainer's playbooks and situations it is about, then write one sentence describing the client moment, to search the trainer's recorded answers.",
       "Read the trainer's previous reply for context: a short follow-up continues that moment. Describe what the client said or did and what the agent faces, e.g. \"client says it is not the right time and wants to wait six months for the market\". No advice, no names.",

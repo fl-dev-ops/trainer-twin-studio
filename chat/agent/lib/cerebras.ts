@@ -7,7 +7,7 @@ const cerebras = createOpenAICompatible({
   baseURL: "https://api.cerebras.ai/v1",
   apiKey: process.env.CEREBRAS_API_KEY,
   includeUsage: true,
-  // Cerebras honours response_format json_schema; without this generateObject sends no schema (lib/twin-query.ts).
+  // Cerebras honours response_format json_schema; without this a structured output (Output.object) sends no schema (lib/twin-query.ts).
   supportsStructuredOutputs: true,
 });
 
