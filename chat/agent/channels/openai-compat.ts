@@ -297,6 +297,10 @@ export default defineChannel({
         clientTools: [...advertisedTools].sort().join(","),
         ...(requestedModel ? { model: requestedModel } : {}),
       };
+      // What this turn delivers: turn.started instruction resolvers see history without it (agent/instructions/twin-lines.ts).
+      attributes.turnText = message.slice(0, 1000);
+      // Turn evidence is kept only for real sessions (the session header); the same gate as recordTurnEvidence below.
+      if (sessionIdHeader) attributes.recordEvidence = "1";
       const agentSlug = request.headers.get("x-trainertwin-agent-slug")?.trim();
       const personaSlug = request.headers.get("x-trainertwin-persona-slug")?.trim();
       if (agentSlug) attributes.agentSlug = agentSlug;
@@ -573,7 +577,9 @@ export default defineChannel({
                 model,
                 // Mirrors agent.ts model resolution: the model Eve actually ran, not the request label.
                 llm_model: requestedModel || process.env.CHAT_AGENT_MODEL || "google/gemini-3.5-flash-lite",
-                llm_route: process.env.GEMINI_GATEWAY_PROVIDER?.trim() || "google",
+                llm_route: (requestedModel || process.env.CHAT_AGENT_MODEL || "").startsWith("cerebras/")
+                  ? "cerebras-direct"
+                  : process.env.GEMINI_GATEWAY_PROVIDER?.trim() || "google",
                 ...questionBridge.trace(t_start),
                 started_at_ms: t_start,
                 status: ev.type,

@@ -1,6 +1,7 @@
 import { gateway, wrapLanguageModel } from "ai";
 import { defineAgent, defineDynamic } from "eve";
 import type { AgentModelOptionsDefinition } from "eve";
+import { cerebrasModel, cerebrasProviderOptions, isCerebrasModel } from "./lib/cerebras";
 import { hedgedStreamMiddleware, routeTo } from "./lib/hedge";
 import { thinkingBudgetSchema } from "./lib/thinking-budget";
 
@@ -36,7 +37,15 @@ export default defineAgent({
         const attributes = (auth?.attributes ?? {}) as Record<string, string | undefined>;
         const requestedModel = attributes.model || process.env.CHAT_AGENT_MODEL || "google/gemini-3.5-flash-lite";
 
-        // All models route through the Vercel AI Gateway with provider-specific options.
+        // Cerebras direct with our own key (lib/cerebras.ts): CHAT_AGENT_MODEL=cerebras/qwen-3.8-27b.
+        if (isCerebrasModel(requestedModel)) {
+          return {
+            model: cerebrasModel(requestedModel),
+            modelOptions: { providerOptions: cerebrasProviderOptions(attributes.reasoningEffort) },
+          };
+        }
+
+        // Other models route through the Vercel AI Gateway with provider-specific options.
         let options: AgentModelOptionsDefinition | undefined;
         if (requestedModel.startsWith("google/")) {
           const rawBudget = attributes.thinkingBudget ?? process.env.GEMINI_THINKING_BUDGET;

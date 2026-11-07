@@ -1,14 +1,15 @@
 import { timingSafeEqual } from "node:crypto";
+import { after } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { searchKnowledge } from "@/lib/knowledge";
+import { embedTexts, searchKnowledge } from "@/lib/knowledge";
 import { MainCollectionService, type ScenarioScope, type ScenarioStep } from "@/lib/main-collection";
 import { type PinnedTwinSkill, TWIN_SOURCE, twinPlaybooks } from "@/lib/twins";
 import { redactLearnerNames } from "@/lib/persona-voice";
 import { enqueueWorkspaceCommand } from "@/lib/workspace-commands";
 import { buildSessionContext, getCachedSessionContext } from "@/lib/session-context";
 import { unusedResumeClaims } from "@/lib/resume-interview";
-import { recordTurnEvidence, turnEvidenceSchema } from "@/lib/twin/evidence";
+import { recordTurnEvidence, recordTurnLines, turnEvidenceSchema } from "@/lib/twin/evidence";
 import { modelImage } from "@/lib/model-image";
 import { uploadBytes } from "@/lib/upload-bytes";
 import { resolveUpload, UploadError } from "@/lib/uploads";
@@ -51,6 +52,8 @@ const requestSchema = z.discriminatedUnion("action", [
     playbook: z.string().trim().min(1).max(200).optional(),
     /** All-skills twin sessions: search only the skills pinned when the session started. */
     sessionId: z.string().min(1).max(100).optional(),
+    /** Small twins' per-turn lines: keep what was returned for this turn's "Why this answer" (lib/twin/evidence.ts). */
+    recordTurnLines: z.object({ heard: z.string().max(4000), situation: z.string().max(500) }).strict().optional(),
   }).strict(),
   z.object({
     action: z.literal("readDocument"),
@@ -293,6 +296,9 @@ export async function POST(request: Request) {
 
   // Real lines from a scenario-ingest scenario (items.json), for the chat tool scenario_examples.
   if (input.action === "searchScenarioItems") {
+    // The embedding needs only the query: start it now so it runs alongside the DB lookups below.
+    const queryEmbedding = embedTexts([input.query]).then(([embedding]) => embedding);
+    queryEmbedding.catch(() => {}); // awaited in searchScenarioItems; this only stops an early DB error leaving it unhandled
     // scenario.json's steps map the newer items' `action` to a step, and a step to its moves.
     const agent = await db.agent.findFirst({ where: { slug: input.agentSlug, orgId }, select: { data: true, personaId: true, kind: true, version: true } });
     const data = agent?.data as { source?: unknown; scenario?: { steps?: unknown; situations?: unknown } } | null;
@@ -324,7 +330,16 @@ export async function POST(request: Request) {
       role: input.role,
       limit: input.limit,
       steps: scope.steps,
+      queryEmbedding,
     });
+    const turnLines = input.recordTurnLines;
+    if (turnLines && input.sessionId) {
+      const sessionId = input.sessionId;
+      // After the response: the twin's turn never waits for this write.
+      after(() => recordTurnLines(orgId, sessionId, { ...turnLines, examples }).catch((error) => {
+        console.error("[twin-evidence] turn lines failed", error);
+      }));
+    }
     return Response.json({ query: input.query, examples });
   }
 

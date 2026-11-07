@@ -26,12 +26,45 @@ export async function recordTurnEvidence(orgId: string, input: TurnEvidenceInput
   });
   if (!session) return { stored: false };
   const { sessionId, ...data } = input;
+  // A small twin gets its lines before each turn (chat/agent/instructions/twin-lines.ts), recorded by the studio search
+  // as a pending row: move them onto this turn, so the panel shows exactly the lines the twin was given.
+  if (data.inputKind === "learner" && !data.calls.some((call) => call.tool === "scenario_examples")) {
+    const pending = await db.twinTurnEvidence.findFirst({
+      where: { sessionId, createdAt: { gte: new Date(Date.now() - TURN_LINES_MAX_AGE_MS) } },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, data: true },
+    });
+    const lines = asRecord(pending?.data);
+    if (pending && lines.inputKind === TURN_LINES && text(lines.heard) === text(data.heard)) {
+      data.calls = [...data.calls, ...(Array.isArray(lines.calls) ? lines.calls : []).map(asRecord).map((call) => ({ tool: String(call.tool), input: call.input, output: call.output }))];
+      await db.twinTurnEvidence.delete({ where: { id: pending.id } });
+    }
+  }
   // Tool outputs can be long: keep the row bounded (calls are dropped, heard/reply stay).
   const fits = JSON.stringify(data).length <= MAX_EVIDENCE_BYTES;
   await db.twinTurnEvidence.create({
     data: { sessionId, data: (fits ? data : { ...data, calls: [], truncated: true }) as Prisma.InputJsonValue },
   });
   return { stored: true };
+}
+
+/** A pending row of the lines a small twin was given for a turn, until recordTurnEvidence moves them onto that turn. */
+const TURN_LINES = "turn_lines";
+/** Lines older than this belong to a turn that never got a reply; they are left out. */
+const TURN_LINES_MAX_AGE_MS = 5 * 60_000;
+
+/** Keeps the lines a small twin's turn was given (studio searchScenarioItems with recordTurnLines), off its critical path. */
+export async function recordTurnLines(
+  orgId: string,
+  sessionId: string,
+  input: { heard: string; situation: string; examples: unknown[] },
+) {
+  const session = await db.interviewSession.findFirst({ where: { id: sessionId, orgId, agent: { kind: "TWIN" } }, select: { id: true } });
+  if (!session) return;
+  const calls = [{ tool: "scenario_examples", input: { situation: input.situation }, output: { examples: input.examples } }];
+  await db.twinTurnEvidence.create({
+    data: { sessionId, data: { inputKind: TURN_LINES, heard: input.heard, calls } as Prisma.InputJsonValue },
+  });
 }
 
 const asRecord = (value: unknown): Record<string, unknown> =>
@@ -76,7 +109,7 @@ export async function sessionEvidence(orgId: string, sessionId: string): Promise
     orderBy: { createdAt: "asc" },
     select: { id: true, data: true },
   });
-  const turns = rows.map((row) => {
+  const turns = rows.filter((row) => asRecord(row.data).inputKind !== TURN_LINES).map((row) => {
     const data = asRecord(row.data);
     const calls = (Array.isArray(data.calls) ? data.calls : []).map(asRecord);
     const lookups = calls.filter((call) => typeof call.tool === "string" && call.tool in LOOKUPS);

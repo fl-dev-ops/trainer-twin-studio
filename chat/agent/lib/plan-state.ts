@@ -1,4 +1,5 @@
 import { defineState } from "eve/context";
+import type { TwinPlaybook } from "./brain";
 import type { ProjectKnowledge } from "./project-knowledge";
 import type { ResumeClaimCandidate } from "./resume-candidates";
 import type { StyleCache } from "./style-cache";
@@ -22,3 +23,9 @@ export const styleCacheState = defineState<{ cache: StyleCache | null }>("traine
 
 /** Knowledge snippets for the resume project currently being discussed (replaced per new question). */
 export const projectKnowledgeState = defineState<{ current: ProjectKnowledge | null }>("trainertwin.project_knowledge", () => ({ current: null }));
+
+/**
+ * Small-twin sessions (playbooks in the prompt): the playbooks and the session's agent, so each learner turn can be
+ * given the trainer's lines for that moment (agent/instructions/twin-lines.ts). Null for every other session.
+ */
+export const twinLinesState = defineState<{ agentSlug: string; personaName: string; playbooks: TwinPlaybook[] } | null>("trainertwin.twin_lines", () => null);

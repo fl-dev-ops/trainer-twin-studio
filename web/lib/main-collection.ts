@@ -571,11 +571,18 @@ export class MainCollectionService {
     /** One scenario and version, or several (a twin searches all of its persona's playbooks, at the versions its call pinned). */
     scope: ScenarioScope[],
     query: string,
-    options: { step?: string; role?: ScenarioItemRole; limit?: number; steps?: ScenarioStep[] } = {},
+    options: {
+      step?: string;
+      role?: ScenarioItemRole;
+      limit?: number;
+      steps?: ScenarioStep[];
+      /** The query's embedding, when the caller started it early (in parallel with its own lookups). */
+      queryEmbedding?: Promise<number[]>;
+    } = {},
   ): Promise<{ text: string; context: string; step?: string; move?: string; role: string; score: number; scenario: string; source?: string }[]> {
     if (scope.length === 0) return [];
     const collection = await this.getCollection(orgId);
-    const [queryEmbedding] = await embedTexts([query]);
+    const queryEmbedding = await (options.queryEmbedding ?? embedTexts([query]).then(([embedding]) => embedding));
     const index = scenarioStepIndex(options.steps ?? []);
     const run = async (step: string | undefined, versioned: boolean) => {
       const conditions: Where[] = [{ type: "scenario_item" }, versioned ? scenarioScopeWhere(scope) : scenarioSlugsWhere(scope)];

@@ -15,7 +15,7 @@ const platform = await readFile(new URL("../../../prompts/platform.md", import.m
 const playbook: TwinPlaybook = { slug: "olga-objections", id: "objections", name: "Objections", description: "", steps: [], skill: "# Objections" };
 const twinSpecs = {
   agentName: "Olga's twin", agentSlug: "olga-olga-twin", objective: "Answers questions", personaName: "Olga Sinenko", personaSlug: "olga",
-  mode: "voice", documents: [], phases: [], twin: { playbooks: [playbook] },
+  mode: "voice", documents: [], phases: [], twin: { playbooks: [playbook], inline: null },
   warmOpening: { style: { phrasingStyle: [{ text: "Hi, tell me", score: 1 }] } },
 } as unknown as SessionSpecs;
 const clientSpecs = {
@@ -67,6 +67,18 @@ describe("composed instructions", () => {
     const [contract] = learner.split("\nYOUR PLAYBOOKS");
     assert.ok(calibration.startsWith(contract));
     for (const word of INTERVIEW_WORDS) assert.doesNotMatch(calibration, word);
+  });
+
+  test("a small twin carries its playbooks in full and its per-turn lines, still without interview wording", () => {
+    const prompt = composeInstructions({ ...twinSpecs, twin: { playbooks: [playbook], inline: [playbook] } } as SessionSpecs);
+    assert.ok(prompt.includes("YOUR PLAYBOOKS (in full)\n### Objections\n# Objections"));
+    assert.ok(prompt.includes("do not call eve__skill or scenario_examples"));
+    assert.ok(prompt.includes("[LINES FOR THIS MOMENT]"));
+    assert.ok(prompt.includes("Never add a question after your advice"));
+    assert.ok(!prompt.includes("load it with eve__skill"), "not the skills flow");
+    assert.ok(!/end with one short question/.test(prompt));
+    assert.ok(!/\{\{[A-Z_]+\}\}/.test(prompt), "every placeholder filled");
+    for (const word of INTERVIEW_WORDS) assert.doesNotMatch(prompt, word);
   });
 
   test("a client role play gets the platform rules, not the interview base", () => {
