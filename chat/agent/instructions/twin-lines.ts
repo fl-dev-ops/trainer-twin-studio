@@ -45,11 +45,17 @@ export default defineDynamic({
 
       // 1. A small fast model names the playbook and situation and writes the search, as the old flow's model did.
       const startedAt = Date.now();
-      const written = await writeTwinQuery(twin.playbooks, heard, lastReply, AbortSignal.timeout(QUERY_TIMEOUT_MS)).catch((error) => {
+      const reading = await writeTwinQuery(twin.playbooks, heard, lastReply, AbortSignal.timeout(QUERY_TIMEOUT_MS)).catch((error) => {
         console.error("[twin-lines] query model failed", error instanceof Error ? error.message : error);
         return null;
       });
       const queryMs = Date.now() - startedAt;
+      // The query model saw no client moment (thanks, small talk, a question about the call): no lines this turn.
+      if (reading && "skip" in reading) {
+        console.info("[twin-lines] " + JSON.stringify({ sessionId: attributes.sessionId ?? null, at_ms: Date.now(), heard_words: heard.split(/\s+/).length, query_ms: queryMs, skipped: true }));
+        return null;
+      }
+      const written = reading;
       // 2. The trainer's lines for it; without a written query, the learner's words across every playbook.
       const query = written?.query ?? twinLinesQuery(heard, lastReply);
       const result = await studioFetch<{ examples?: TwinExample[] }>(orgId, {
