@@ -8,9 +8,10 @@ import { cerebrasProviderOptions, isCerebrasModel, resolveModel } from "./cerebr
  * small fast model outside the conversation: which playbook and situation the learner's turn is about, and a
  * one-sentence search for the trainer's lines. Raw learner speech searches poorly; the stored lines lead with a
  * situation sentence ("Why you tell a waiting client that the timing window has already closed"), so this matches.
- * TWIN_QUERY_MODEL=cerebras/<id> calls Cerebras directly with our own key (lib/cerebras.ts); others use the gateway.
+ * Qwen on Cerebras, called directly with CEREBRAS_API_KEY (lib/cerebras.ts): ~0.45 s, the same picks as gpt-4.1-mini at
+ * ~1.3 s. TWIN_QUERY_MODEL overrides it (a gateway id such as openai/gpt-4.1-mini, or another cerebras/<id>).
  */
-export const TWIN_QUERY_MODEL = process.env.TWIN_QUERY_MODEL?.trim() || "openai/gpt-4.1-mini";
+export const TWIN_QUERY_MODEL = process.env.TWIN_QUERY_MODEL?.trim() || "cerebras/qwen-3.8-27b";
 
 export type TwinQuery = { playbook: string; step?: string; query: string };
 /** The query model's verdict that this turn needs no lines (small talk, thanks, a question about the call itself). */
