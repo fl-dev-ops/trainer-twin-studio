@@ -34,7 +34,7 @@ import { cn } from "@/lib/utils";
 import { PageContainer } from "@/components/page-container";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from "@/components/ui/item";
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from "@/components/ui/item";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type TwinDetail = TwinOutputs["agents"]["get"];
@@ -363,11 +363,6 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
                       </ItemTitle>
                       {doc.exists ? null : <ItemDescription>No longer in the knowledge base</ItemDescription>}
                     </ItemContent>
-                    <ItemActions>
-                      <span className="text-sm tabular-nums text-muted-foreground">
-                        {doc.items} {doc.items === 1 ? "item" : "items"}
-                      </span>
-                    </ItemActions>
                   </Item>
                 ))}
               </ItemGroup>
