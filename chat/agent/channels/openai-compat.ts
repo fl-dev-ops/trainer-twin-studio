@@ -1,5 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
-import { defineChannel, POST, type Session } from "eve/channels";
+import { defineChannel, POST } from "eve/channels";
+import type { Delivery } from "eve/sessions";
+import { createLegacyStream, type LegacyEvent } from "../lib/legacy-stream";
 import { fetchUpload, UPLOAD_POLICY, withAttachments } from "../lib/uploads";
 import { SPEAKING_MODEL, SPEAKING_ROUTE } from "../lib/models";
 import { studioPrincipal } from "../lib/auth";
@@ -155,24 +157,6 @@ function mapLatestMessage(messages: ChatMessage[]): string | null {
   return `[SCREEN OBSERVER CONTEXT]\n${observerNotes.join("\n")}\n[CANDIDATE]\n${text}`;
 }
 
-type StreamEvent = {
-  type: string;
-  data: Record<string, unknown> & {
-    messageDelta?: string;
-    actions?: { kind: string; callId: string; toolName: string; input: unknown }[];
-    result?: {
-      kind?: string;
-      callId?: string;
-      toolName?: string;
-      /** "eve__skill" loads: the loaded skill's name. */
-      name?: string;
-      isError?: boolean;
-      output?: unknown;
-    };
-    usage?: { inputTokens?: number; outputTokens?: number; cacheReadTokens?: number; cacheWriteTokens?: number };
-  };
-};
-
 function serviceAuthorized(request: Request) {
   const expected = process.env.COPILOT_SERVICE_SECRET;
   const actual = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
@@ -197,7 +181,7 @@ export default defineChannel({
       }
       return Response.json({ ready: true, sessionId, existing: Boolean(await resolveSession(sessionId)) });
     }),
-    POST("/v1/chat/completions", async (request, { from, resolveSession, waitUntil }) => {
+    POST("/v1/chat/completions", async (request, { from, waitUntil }) => {
       const principal = studioPrincipal(request);
       const orgHeader = request.headers.get("x-trainertwin-org-id")?.trim();
       const bearer = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
@@ -329,13 +313,12 @@ export default defineChannel({
               : "learner";
       const t_start = Date.now();
       const source = from(address);
-      const existing = await resolveSession(address);
+      // eve 0.91: a delivery streams from its own admission, so there is no session lookup or tail index to read first.
       const t_resolved = Date.now();
-      const tailIndex = existing ? await existing.getStreamTailIndex() : 0;
-      const t_tail = Date.now();
-      let session: Session;
+      const t_tail = t_resolved;
+      let delivery: Delivery;
       try {
-        session = await source.send(inputKind === "learner" ? withAttachments(message) : message, { auth, turnPolicy: "steer" });
+        delivery = await source.send(inputKind === "learner" ? withAttachments(message) : message, { auth, turnPolicy: "steer" });
       } catch (sendErr) {
         console.error("[EVE SEND ERROR]", sendErr);
         return Response.json({ error: String(sendErr) }, { status: 400 });
@@ -344,16 +327,17 @@ export default defineChannel({
 
       // Hook up client abort to cooperative turn cancellation (barge-in support)
       request.signal.addEventListener("abort", () => {
-        void session.cancel().catch(() => {});
+        void source.cancel().catch(() => {});
       });
 
       const completionId = `chatcmpl-${crypto.randomUUID()}`;
       const created = Math.floor(Date.now() / 1000);
       const model = requestedModel ?? body?.model ?? "trainertwin-brain";
 
-      const stream = await session.getEventStream(tailIndex === undefined ? {} : { startIndex: tailIndex });
+      const readAbort = new AbortController();
+      const facts = delivery.stream({ signal: readAbort.signal })[Symbol.asyncIterator]();
+      const legacy = createLegacyStream(delivery.deliveryId);
       const t_stream = Date.now();
-      const reader = stream.getReader();
 
       const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
       const writer = writable.getWriter();
@@ -375,6 +359,7 @@ export default defineChannel({
         // (Eve runs the requested tools inside the same step before step.completed).
         const llmSteps: Array<{
           stepIndex: number;
+          runId?: string;
           start_ms: number;
           end_ms?: number;
           duration_ms?: number;
@@ -423,10 +408,20 @@ export default defineChannel({
         const finishReason = () => "stop";
 
         try {
-          while (true) {
-            const { done, value: event } = await reader.read();
-            if (done) break;
-            const ev = event as StreamEvent;
+          let streamDone = false;
+          turnLoop: while (true) {
+            // The v27 facts of this delivery, read as the v26 events this loop was written for (lib/legacy-stream.ts).
+            let batch: LegacyEvent[];
+            if (streamDone) break;
+            const next = await facts.next();
+            if (next.done) {
+              streamDone = true;
+              batch = legacy.flush();
+              if (!batch.length) break;
+            } else {
+              batch = legacy.push(next.value);
+            }
+            for (const ev of batch) {
             if (!tFirstEvent) tFirstEvent = Date.now() - t_start;
 
             if (ev.type === "turn.started") {
@@ -438,6 +433,7 @@ export default defineChannel({
               currentStepStart = Date.now();
               llmSteps.push({
                 stepIndex: stepCount,
+                runId: ev.runId,
                 start_ms: currentStepStart - t_start,
               });
             }
@@ -538,27 +534,27 @@ export default defineChannel({
                   if (currentStep.decision_ms !== undefined) {
                     currentStep.tools_ms = currentStep.duration_ms - currentStep.decision_ms;
                   }
-                  if (ev.data.usage) {
-                    currentStep.input_tokens = ev.data.usage.inputTokens ?? 0;
-                    currentStep.output_tokens = ev.data.usage.outputTokens ?? 0;
-                    currentStep.cached_input_tokens = ev.data.usage.cacheReadTokens ?? 0;
-                  }
                 }
                 currentStepStart = null;
-              }
-              if (ev.data.usage) {
-                usage = ev.data.usage;
-                totals.inputTokens += ev.data.usage.inputTokens ?? 0;
-                totals.outputTokens += ev.data.usage.outputTokens ?? 0;
               }
               continue;
             }
 
-            const terminal =
-              (sawTurnStarted && ev.type === "session.waiting") ||
-              ev.type === "turn.cancelled" ||
-              ev.type === "session.failed" ||
-              ev.type === "session.completed";
+            // eve 0.91 reports a step's usage as its own fact, keyed by the model run.
+            if (ev.type === "usage") {
+              const step = llmSteps.find((s) => s.runId !== undefined && s.runId === ev.runId) ?? llmSteps[llmSteps.length - 1];
+              if (step) {
+                step.input_tokens = (step.input_tokens ?? 0) + (ev.usage.inputTokens ?? 0);
+                step.output_tokens = (step.output_tokens ?? 0) + (ev.usage.outputTokens ?? 0);
+                step.cached_input_tokens = (step.cached_input_tokens ?? 0) + (ev.usage.cacheReadTokens ?? 0);
+              }
+              usage = ev.usage;
+              totals.inputTokens += ev.usage.inputTokens ?? 0;
+              totals.outputTokens += ev.usage.outputTokens ?? 0;
+              continue;
+            }
+
+            const terminal = ev.type === "terminal";
 
             if (terminal && (sawActivity || sawTurnStarted)) {
               const wallMs = Date.now() - t_start;
@@ -581,7 +577,7 @@ export default defineChannel({
                 llm_route: SPEAKING_ROUTE,
                 ...questionBridge.trace(t_start),
                 started_at_ms: t_start,
-                status: ev.type,
+                status: ev.status,
                 input_kind: inputKind,
                 eve_overhead_ms: {
                   resolve_session: t_resolved - t_start,
@@ -657,7 +653,8 @@ export default defineChannel({
                     }
                   : {}),
               });
-              break;
+              break turnLoop;
+            }
             }
           }
         } catch {
@@ -665,7 +662,8 @@ export default defineChannel({
         } finally {
           await writer.write(encoder.encode("data: [DONE]\n\n")).catch(() => {});
           await writer.close().catch(() => {});
-          await reader.cancel().catch(() => {});
+          readAbort.abort();
+          await facts.return?.().catch(() => {});
         }
       })();
 

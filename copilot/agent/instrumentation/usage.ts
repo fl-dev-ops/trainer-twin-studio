@@ -18,7 +18,8 @@ export default defineInstrumentation({
       };
       ctx.state.set(state);
     },
-    "model.call.completed": (event, ctx) => {
+    "model.call.settled": (event, ctx) => {
+      if (event.outcome !== "completed") return; // a failed call spent nothing to record (eve 0.91 settles both)
       const state = ctx.state.get() as CallState | undefined;
       if (!state?.orgId) return; // local dev without the studio proxy
       trackUsage({

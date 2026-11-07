@@ -11,13 +11,15 @@ async function complete(budget?: string) {
   let sentAttributes: Record<string, string> | undefined;
   console.info = (...args: unknown[]) => { logs.push(args); };
   try {
+    // eve 0.91 (v27) facts for one turn: a bridged question call, its result, usage, then the delivery settles.
     const events = [
-      { type: "turn.started", data: {} },
-      { type: "step.started", data: {} },
-      { type: "actions.requested", data: { actions: [{ kind: "tool-call", callId: "q1", toolName: "start_resume_question", input: { claimId: "c1", question: `${privateText}?` } }] } },
-      { type: "action.result", data: { result: { kind: "tool-result", callId: "q1", toolName: "start_resume_question", output: { status: "highlighted" } } } },
-      { type: "step.completed", data: { usage: { inputTokens: 10, outputTokens: 5 } } },
-      { type: "session.waiting", data: {} },
+      { type: "turn.started", data: { turnId: "t1" } },
+      { type: "model.started", data: { runId: "r1", modelId: "m", attempt: 0 } },
+      { type: "call.requested", data: { callId: "q1", capability: { kind: "tool", name: "start_resume_question" }, input: { claimId: "c1", question: `${privateText}?` } } },
+      { type: "call.settled", data: { callId: "q1", outcome: "completed", output: { status: "highlighted" } } },
+      { type: "usage.recorded", data: { kind: "model", owner: { runId: "r1" }, usage: { inputTokens: 10, outputTokens: 5, cacheReadTokens: 0, cacheWriteTokens: 0 } } },
+      { type: "model.settled", data: { runId: "r1", outcome: "completed" } },
+      { type: "delivery.settled", data: { deliveryId: "d1", outcome: "completed" } },
     ];
     const request = new Request("http://localhost/v1/chat/completions", {
       method: "POST",
@@ -25,13 +27,9 @@ async function complete(budget?: string) {
       body: JSON.stringify({ messages: [{ role: "user", content: privateText }] }),
     });
     const response: Response = await handler(request, {
-      resolveSession: async () => undefined,
-      from: () => ({ send: async (_message: string, { auth }: { auth: { attributes: Record<string, string> } }) => {
+      from: () => ({ cancel: async () => {}, send: async (_message: string, { auth }: { auth: { attributes: Record<string, string> } }) => {
         sentAttributes = auth.attributes;
-        return { cancel: async () => {}, getEventStream: async () => new ReadableStream({ start(controller) {
-          for (const event of events) controller.enqueue(event);
-          controller.close();
-        } }) };
+        return { sessionId: "s1", deliveryId: "d1", stream: async function* () { yield* events; } };
       } }),
     });
     return { response, body: await response.text(), logs, sentAttributes };

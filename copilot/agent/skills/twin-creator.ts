@@ -63,5 +63,5 @@ scratch and never create a second skill on the same topic.
 export default defineSkill({
   description:
     "Build or update one twin skill: the trainer's knowledge, decisions, patterns and approach on one topic, which their twin uses to advise learners. Use for a twin, twin skill, 'my approach' or 'how I handle X' request, and to add new material to an existing twin skill. Never a role play.",
-  markdown: `${procedure}\n${twinRequirementsText()}`,
+  content: `${procedure}\n${twinRequirementsText()}`,
 });

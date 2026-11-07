@@ -16,10 +16,14 @@ function studioReturns(data: unknown, ok = true) {
   globalThis.fetch = (async () => new Response(JSON.stringify({ agent: { kind: "ROLEPLAY", data } }), { status: ok ? 200 : 500 })) as typeof fetch;
 }
 /** A fresh session each time, so the per-session cache never answers for another test. */
-const ctx = () => ({ session: { auth: { current: { principalId: "org1", attributes: { orgId: "org1", sessionId: `s${++call}` } } } } });
+const ctx = () => {
+  const sessionId = `s${++call}`;
+  return { session: { id: sessionId, auth: { current: { principalId: "org1", attributes: { orgId: "org1", sessionId } } } }, memo: (_key: unknown, fn: () => unknown) => fn() };
+};
 const resolve = async (tools: Partial<ToolSettings> | undefined) => {
   studioReturns(tools === undefined ? {} : { tools });
-  const result = await (workspace as unknown as { events: Record<string, (e: unknown, c: unknown) => Promise<unknown>> }).events["session.started"]({}, ctx());
+  // eve 0.91: defineDynamic keeps its function under Symbol.for("eve.dynamic").
+  const result = await (workspace as unknown as Record<symbol, (c: unknown) => Promise<unknown>>)[Symbol.for("eve.dynamic")](ctx());
   return result ? Object.keys(result as object).sort() : null;
 };
 const on = (patch: Partial<ToolSettings>): ToolSettings => ({ ...NO_TOOLS, ...patch });
@@ -51,7 +55,7 @@ describe("workspace tools resolver: a session gets only its switched-on tools", 
     assert.equal(await resolve({ canvas: false }), null);
     assert.equal(await resolve(undefined), null);
     studioReturns({ tools: { codeEditor: true } }, false);
-    const failed = await (workspace as unknown as { events: Record<string, (e: unknown, c: unknown) => Promise<unknown>> }).events["session.started"]({}, ctx());
+    const failed = await (workspace as unknown as Record<symbol, (c: unknown) => Promise<unknown>>)[Symbol.for("eve.dynamic")](ctx());
     assert.equal(failed, null);
   });
 });

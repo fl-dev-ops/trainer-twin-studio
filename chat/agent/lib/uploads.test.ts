@@ -15,6 +15,6 @@ test("each [ATTACHED id] becomes a file part pointing at the upload", () => {
 });
 
 test("duplicates collapse and at most four files go through", () => {
-  const content = withAttachments(`[ATTACHED a] ${["a", "b", "c", "d", "e"].map((id) => `[ATTACHED ${id}]`).join(" ")}`) as Array<{ type: string }>;
+  const content = withAttachments(`[ATTACHED a] ${["a", "b", "c", "d", "e"].map((id) => `[ATTACHED ${id}]`).join(" ")}`) as ReadonlyArray<{ type: string }>;
   assert.equal(content.filter((part) => part.type === "file").length, 4);
 });

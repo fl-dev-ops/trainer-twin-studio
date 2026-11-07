@@ -1,11 +1,11 @@
 "use client";
 
 import type { ComponentProps } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import type { FileUIPart, UserContent } from "ai";
-import type { EveDynamicToolPart, EveMessage } from "eve/react";
+import type { FileUIPart } from "ai";
+import type { EveMessage, EveToolPart } from "eve/react";
 import { useEveAgent } from "eve/react";
 import {
   Check,
@@ -142,9 +142,9 @@ async function resumable(sessionId: string): Promise<boolean> {
     );
     if (response.status === 404 || response.status === 403) return false;
     if (response.status === 409) {
-      // "stranded" (built by an older copilot deploy) can never continue; "not ready yet" can.
+      // "stranded" (built by an older copilot deploy) or an earlier eve protocol can never continue; "not ready yet" can.
       const body = (await response.json().catch(() => null)) as { code?: string } | null;
-      return body?.code !== "session_stranded";
+      return body?.code !== "session_stranded" && body?.code !== "session_version_unsupported";
     }
     return true;
   } catch {
@@ -219,7 +219,6 @@ function CopilotConversation({
     () => sessionStorage.getItem(INPUT_KEY) ?? "",
   );
   const [localError, setLocalError] = useState<string>();
-  const mountedAt = useRef(Date.now());
   const [blueprintOpen, setBlueprintOpen] = useState(false);
   // Composer extras: the skill picked from "/", knowledge files picked from Files, the highlighted "/" entry.
   const [skill, setSkill] = useState<CopilotSkillName>();
@@ -227,35 +226,22 @@ function CopilotConversation({
   const [uploading, setUploading] = useState(false);
   const [slashActive, setSlashActive] = useState(0);
   const agent = useEveAgent({
-    host: "/api",
+    baseUrl: "/api",
     initialSession: savedSession,
     resume: savedSession !== undefined,
     onSessionChange(session) {
       if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
       else localStorage.removeItem(SESSION_KEY);
     },
-    onEvent(event) {
-      if (
-        event.type === "turn.failed" &&
-        Date.parse(event.meta.at) >= mountedAt.current
-      ) {
-        setLocalError(
-          event.data.code === "MODEL_CALL_FAILED"
-            ? "The AI model is temporarily unavailable. Please try again."
-            : event.data.message,
-        );
-      }
-    },
   });
-  // While the copilot waits on an approval card the stream stays open; that wait is the trainer's turn, not "busy",
+  // While the copilot waits on an approval card, that wait is the trainer's turn, not "busy",
   // or the card's own buttons (and the composer) would be disabled.
-  const awaitingApproval = agent.data.messages.some((message) =>
-    message.parts.some((part) => part.type === "dynamic-tool" && part.state === "approval-requested"),
+  const awaitingApproval = agent.messages.some((message) =>
+    message.parts.some((part) => part.type === "tool" && part.interaction?.status === "open"),
   );
-  const busy = (agent.status === "submitted" || agent.status === "streaming") && !awaitingApproval;
-  const restoring =
-    savedSession !== undefined && agent.events.length === 0 && busy;
-  const todos = findTodos(agent.data.messages);
+  const restoring = agent.status === "resuming";
+  const busy = agent.status === "busy" && !awaitingApproval;
+  const todos = findTodos(agent.messages);
   const workspaceVisible = todos.length > 0;
   const showWorkspace = !panel && workspaceVisible;
   const slash = skill ? null : slashQuery(input);
@@ -263,7 +249,7 @@ function CopilotConversation({
 
   // Send a message queued by another page (e.g. "Create a twin skill" on the twin agents page).
   useEffect(() => {
-    if (restoring || busy || agent.data.messages.length > 0) return;
+    if (restoring || busy || agent.messages.length > 0) return;
     const seed = takeCopilotSeed();
     if (seed) void send(seed).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -278,7 +264,7 @@ function CopilotConversation({
 
   async function send(text: string, files: FileUIPart[] = []) {
     const typed = text.trim();
-    if ((!typed && files.length === 0 && pickedFiles.length === 0) || busy || uploading) return;
+    if ((!typed && files.length === 0 && pickedFiles.length === 0) || busy || restoring || uploading) return;
     setLocalError(undefined);
     // Attached files go to S3 first; the message carries pointers the copilot loads (copilot/agent/lib/uploads.ts).
     let uploaded: { id: string; name: string; mediaType: string }[] = [];
@@ -301,16 +287,15 @@ function CopilotConversation({
       }
     }
     const message = encodeCopilotMessage({ skill, files: pickedFiles, text: typed });
-    const content: UserContent = [];
-    if (message) content.push({ type: "text", text: message });
-    content.push(
+    const content = [
+      ...(message ? [{ type: "text" as const, text: message }] : []),
       ...uploaded.map(({ id, name, mediaType }) => ({
         type: "file" as const,
         data: copilotUploadUrl(id),
         mediaType,
         filename: copilotUploadFilename(id, name),
       })),
-    );
+    ];
     setInput("");
     sessionStorage.removeItem(INPUT_KEY);
     const sentSkill = skill;
@@ -342,7 +327,7 @@ function CopilotConversation({
     setSkill(undefined);
     setPickedFiles([]);
     setBlueprintOpen(false);
-    agent.reset();
+    agent.newSession();
   }
 
   const content = (
@@ -437,7 +422,7 @@ function CopilotConversation({
             {panel && workspaceVisible && (
               <WorkspacePanel todos={todos} busy={busy} />
             )}
-            {agent.data.messages.length === 0 && !restoring ? (
+            {agent.messages.length === 0 && !restoring ? (
               <ConversationEmptyState
                 title=""
                 description=""
@@ -467,7 +452,7 @@ function CopilotConversation({
                 </div>
               </ConversationEmptyState>
             ) : (
-              agent.data.messages.map((message) => (
+              agent.messages.map((message) => (
                 <ChatMessage
                   key={message.id}
                   message={message}
@@ -482,7 +467,9 @@ function CopilotConversation({
                 role="alert"
                 className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
               >
-                {agent.error.message}
+                {agent.error.name === "MODEL_CALL_FAILED"
+                  ? "The AI model is temporarily unavailable. Please try again."
+                  : agent.error.message}
               </div>
             )}
           </ConversationContent>
@@ -577,7 +564,7 @@ function CopilotConversation({
                   <KnowledgeFilePicker selected={pickedFiles} onChange={setPickedFiles} disabled={busy} />
                 </PromptInputTools>
                 <PromptInputSubmit
-                  status={uploading || agent.status === "resuming" ? "submitted" : agent.status}
+                  status={uploading || restoring ? "submitted" : busy ? "streaming" : "ready"}
                   onStop={() => void agent.cancel()}
                   aria-label={busy ? "Stop response" : "Send message"}
                 />
@@ -660,7 +647,7 @@ function ChatMessage({
   });
   // A message of files only has no bubble.
   const hasBody = message.parts.some((part) =>
-    part.type === "dynamic-tool" ||
+    (part.type === "tool" && part.kind !== "control") ||
     (part.type === "text" && (message.role !== "user" || Boolean(decodeCopilotMessage(part.text).text || decodeCopilotMessage(part.text).skill))));
   return (
     <Message from={message.role}>
@@ -689,11 +676,12 @@ function ChatMessage({
               <UserText key={index} raw={part.text} />
             );
           }
-          if (part.type === "dynamic-tool") {
-            if (part.toolName === "todo") return null;
+          if (part.type === "tool") {
+            // Task controls (eve__task_*) are eve's bookkeeping, not the trainer's.
+            if (part.name === "todo" || part.kind === "control") return null;
             return (
               <ToolPartView
-                key={part.toolCallId}
+                key={part.callId}
                 part={part}
                 respond={respond}
                 busy={busy}
@@ -713,11 +701,12 @@ function ToolPartView({
   respond,
   busy,
 }: {
-  part: EveDynamicToolPart;
+  part: EveToolPart;
   respond: Respond;
   busy: boolean;
 }) {
-  const request = part.toolMetadata?.eve?.inputRequest;
+  const interaction = part.interaction?.status === "open" ? part.interaction : undefined;
+  const request = interaction?.request;
   const [answer, setAnswer] = useState("");
   // One answer per card: the buttons lock once clicked, until the copilot moves on.
   const [answered, setAnswered] = useState(false);
@@ -725,15 +714,13 @@ function ToolPartView({
     setAnswered(true);
     void respond(response).catch(() => setAnswered(false));
   };
-  const title =
-    TOOL_TITLES[part.toolName] ?? part.toolName.replaceAll("_", " ");
+  const title = TOOL_TITLES[part.name] ?? part.label;
 
-  if (request && part.state === "approval-requested") {
-    const approval = "approval" in part ? part.approval : undefined;
+  if (interaction && request) {
     return (
-      <Confirmation approval={approval} state={part.state}>
+      <Confirmation approval={{ id: interaction.interactionId }} state="approval-requested">
         <ConfirmationTitle>
-          {request.kind === "tool-approval"
+          {request.kind === "approval"
             ? "Approve this change"
             : "One decision needed"}
         </ConfirmationTitle>
@@ -747,7 +734,7 @@ function ToolPartView({
                   variant={option.style === "primary" ? "default" : "outline"}
                   disabled={busy || answered}
                   onClick={() =>
-                    reply([{ requestId: request.requestId, optionId: option.id }])
+                    reply([{ interactionId: interaction.interactionId, optionId: option.id }])
                   }
                 >
                   {option.label}
@@ -761,7 +748,7 @@ function ToolPartView({
               onSubmit={(event) => {
                 event.preventDefault();
                 if (answer.trim())
-                  reply([{ requestId: request.requestId, text: answer.trim() }]);
+                  reply([{ interactionId: interaction.interactionId, text: answer.trim() }]);
               }}
             >
               <input
@@ -783,7 +770,7 @@ function ToolPartView({
   return (
     <div
       className="flex min-h-7 items-center gap-2 py-1 text-sm"
-      title={part.state === "output-error" ? part.errorText : undefined}
+      title={part.state === "failed" ? part.error?.message : undefined}
     >
       <ToolStateIcon state={part.state} />
       <span className="font-medium">tool_call</span>
@@ -792,11 +779,11 @@ function ToolPartView({
   );
 }
 
-function ToolStateIcon({ state }: { state: EveDynamicToolPart["state"] }) {
-  if (state === "input-available" || state === "input-streaming") {
+function ToolStateIcon({ state }: { state: EveToolPart["state"] }) {
+  if (state === "streaming" || state === "requested" || state === "running") {
     return <CircularLoader size="sm" className="shrink-0" />;
   }
-  if (state === "output-available" || state === "approval-responded") {
+  if (state === "completed") {
     return (
       <Check
         className="size-4 shrink-0 text-muted-foreground"
@@ -808,7 +795,7 @@ function ToolStateIcon({ state }: { state: EveDynamicToolPart["state"] }) {
     <CircleAlert
       className="size-4 shrink-0 text-destructive"
       aria-label={
-        state === "approval-requested" ? "Waiting for input" : "Tool error"
+        state === "approval" || state === "blocked" ? "Waiting for input" : "Tool error"
       }
     />
   );
@@ -925,13 +912,8 @@ function findTodos(messages: readonly EveMessage[]): TodoItem[] {
     const parts = messages[messageIndex].parts;
     for (let partIndex = parts.length - 1; partIndex >= 0; partIndex--) {
       const part = parts[partIndex];
-      if (part.type !== "dynamic-tool" || part.toolName !== "todo") continue;
-      const value =
-        part.state === "output-available"
-          ? part.output
-          : "input" in part
-            ? part.input
-            : undefined;
+      if (part.type !== "tool" || part.name !== "todo") continue;
+      const value = part.state === "completed" ? part.output : part.input;
       if (
         !value ||
         typeof value !== "object" ||

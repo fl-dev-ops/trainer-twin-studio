@@ -1,4 +1,4 @@
-import type { UserContent } from "ai";
+import type { MessageContent } from "eve/channels";
 import { attachmentError } from "eve/channels";
 import { studioFetch } from "./studio";
 
@@ -12,7 +12,7 @@ const MARKER = /\[ATTACHED ([A-Za-z0-9_-]{1,120})\]/g;
 const MAX_FILES_PER_MESSAGE = 4;
 
 /** The message as eve content: plain text, or text plus the attached files. */
-export function withAttachments(message: string): string | UserContent {
+export function withAttachments(message: string): MessageContent {
   const ids = [...new Set([...message.matchAll(MARKER)].map((match) => match[1]))].slice(0, MAX_FILES_PER_MESSAGE);
   if (!ids.length) return message;
   const text = message.replace(MARKER, (_, id: string) => `(document ID ${id})`).trim();

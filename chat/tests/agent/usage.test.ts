@@ -50,11 +50,12 @@ test("model call → one delta keyed by eve idempotencyKey, attributed by runtim
     runtimeContext: { "trainertwin.session.id": "sess-1", "trainertwin.org.id": "org-1" },
     scope: {},
   }, ctx);
-  handlers["model.call.completed"]({
+  handlers["model.call.settled"]({
+    outcome: "completed",
     idempotencyKey: "call-1",
     finishReason: "stop",
     usage: { inputTokens: 100, outputTokens: 20 },
-    scope: { turnId: "t1", stepIndex: 0 },
+    scope: { turnId: "t1", runId: "r1" },
   }, ctx); // returns immediately; post happens in the background
   await flushUsage();
 
@@ -67,14 +68,14 @@ test("model call → one delta keyed by eve idempotencyKey, attributed by runtim
       { provider: "gateway", model: "google/gemini-3.5-flash-lite", metric: "input_tokens", value: 100 },
       { provider: "gateway", model: "google/gemini-3.5-flash-lite", metric: "output_tokens", value: 20 },
     ],
-    meta: { finishReason: "stop", turnId: "t1", stepIndex: 0 },
+    meta: { finishReason: "stop", turnId: "t1", runId: "r1" },
   });
 });
 
 test("calls without a TrainerTwin session are not reported", async () => {
   const ctx = stateSlot();
   handlers["model.call.started"]({ idempotencyKey: "x", model: { provider: "gateway", modelId: "m" }, scope: {} }, ctx);
-  handlers["model.call.completed"]({ idempotencyKey: "x", finishReason: "stop", usage: { inputTokens: 5 }, scope: {} }, ctx);
+  handlers["model.call.settled"]({ outcome: "completed", idempotencyKey: "x", finishReason: "stop", usage: { inputTokens: 5 }, scope: {} }, ctx);
   await flushUsage();
   assert.equal(posted.length, 0);
 });

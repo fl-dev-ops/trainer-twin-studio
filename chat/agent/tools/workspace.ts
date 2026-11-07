@@ -61,10 +61,9 @@ function surfaceDescription(tools: ToolSettings): string {
   return `Open or change the learner-visible workspace. Actions available in this conversation: ${actions.join("; ")}. For documents, pass a SESSION DATA fileId; never invent IDs.`;
 }
 
-export default defineDynamic({
-  events: {
-    "session.started": async (_event, ctx) => {
-      const tools = await sessionToolSettings(ctx);
+export default defineDynamic(async (ctx) => {
+      // Once per session (eve runs this before every model call): this agent's tool switches, as JSON.
+      const tools = await ctx.memo(["workspace-tools", ctx.session.id], () => sessionToolSettings(ctx));
       if (!anyToolOn(tools)) return null;
       return {
         surface: defineTool({ description: surfaceDescription(tools), inputSchema: surfaceInput, execute: runSurface }),
@@ -136,6 +135,4 @@ export default defineDynamic({
           }),
         }),
       };
-    },
-  },
 });

@@ -9,38 +9,33 @@ import { studioFetch } from "../lib/studio";
  * question needs it, so the prompt never carries every playbook. Other sessions get none, and neither do small twins,
  * whose playbooks are all in the prompt (inlineTwinPlaybooks).
  */
-export default defineDynamic({
-  events: {
-    "session.started": async (_event, ctx) => {
-      const attributes = (ctx.session.auth.current?.attributes ?? {}) as Record<string, string | undefined>;
-      const orgId = attributes.orgId;
-      if (!orgId || (!attributes.sessionId && !attributes.agentSlug)) return null;
+export default defineDynamic(async (ctx) => {
+  const attributes = (ctx.session.auth.current?.attributes ?? {}) as Record<string, string | undefined>;
+  const orgId = attributes.orgId;
+  if (!orgId || (!attributes.sessionId && !attributes.agentSlug)) return null;
 
-      // Same call as the session-spec instructions; web caches it per session.
-      const context = await studioFetch<{
-        agent: { slug?: string; kind?: AgentKind | null; data?: Record<string, unknown> } | null;
-        twinPlaybooks?: TwinPlaybook[];
-      }>(orgId, {
-        action: "getSessionContext",
-        sessionId: attributes.sessionId,
-        agentSlug: attributes.agentSlug,
-        personaSlug: attributes.personaSlug,
-      });
-      const playbooks = twinSessionPlaybooks(context.agent, context.twinPlaybooks) ?? [];
-      if (playbooks.length === 0) return null;
-      // A small twin has every playbook in its prompt already (formatTwinSession); skills would only invite a load call.
-      if (inlineTwinPlaybooks(playbooks)) return null;
-
-      const names = playbookSkillNames(playbooks);
-      return Object.fromEntries(
-        playbooks.map((playbook, i) => [
-          names[i],
-          defineSkill({
-            description: `${playbook.name}${playbook.description ? `: ${playbook.description}` : ""} Load before advising on a real situation of this kind.`.slice(0, 1024),
-            markdown: playbook.skill,
-          }),
-        ]),
-      );
-    },
-  },
+  // Once per session (eve runs this before every model call): the playbooks to offer as skills, as JSON.
+  const skills = await ctx.memo(["playbooks", ctx.session.id], async () => {
+    // Same call as the session-spec instructions; web caches it per session.
+    const context = await studioFetch<{
+      agent: { slug?: string; kind?: AgentKind | null; data?: Record<string, unknown> } | null;
+      twinPlaybooks?: TwinPlaybook[];
+    }>(orgId, {
+      action: "getSessionContext",
+      sessionId: attributes.sessionId,
+      agentSlug: attributes.agentSlug,
+      personaSlug: attributes.personaSlug,
+    });
+    const playbooks = twinSessionPlaybooks(context.agent, context.twinPlaybooks) ?? [];
+    // A small twin has every playbook in its prompt already (formatTwinSession); skills would only invite a load call.
+    if (playbooks.length === 0 || inlineTwinPlaybooks(playbooks)) return [];
+    const names = playbookSkillNames(playbooks);
+    return playbooks.map((playbook, i) => ({
+      name: names[i],
+      description: `${playbook.name}${playbook.description ? `: ${playbook.description}` : ""} Load before advising on a real situation of this kind.`.slice(0, 1024),
+      content: playbook.skill,
+    }));
+  });
+  if (skills.length === 0) return null;
+  return Object.fromEntries(skills.map((skill) => [skill.name, defineSkill({ description: skill.description, content: skill.content })]));
 });

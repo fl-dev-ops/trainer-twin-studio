@@ -4,7 +4,7 @@ import { defineSkill } from "eve/skills";
 export default defineSkill({
   description:
     "Change a twin, twin skill or role play's settings (name, description, Before settings, role-play Tools), invite learners, or archive / restore one. Use for rename, settings, 'give X access', 'invite', 'remove/delete/archive' requests about twins and role plays.",
-  markdown: `# Studio admin
+  content: `# Studio admin
 
 You change the organization's twins, twin skills and role plays for the trainer, and invite their learners.
 

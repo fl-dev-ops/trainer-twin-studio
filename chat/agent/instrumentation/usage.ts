@@ -6,7 +6,7 @@ type CallState = { provider: string; model: string; sessionId?: string; orgId?: 
 /**
  * One ledger delta per model call. Our InterviewSession id is not on lifecycle events (eve's own
  * session id differs), so it comes from runtimeContext set in ./langfuse.ts and is carried from
- * model.call.started to model.call.completed via ctx.state.
+ * model.call.started to model.call.settled via ctx.state.
  */
 export default defineInstrumentation({
   tracePolicy: () => ({ emit: true, recordInputs: false, recordOutputs: false }),
@@ -22,7 +22,8 @@ export default defineInstrumentation({
       };
       ctx.state.set(state);
     },
-    "model.call.completed": (event, ctx) => {
+    "model.call.settled": (event, ctx) => {
+      if (event.outcome !== "completed") return; // a failed call spent nothing to record (eve 0.91 settles both)
       const state = ctx.state.get() as CallState | undefined;
       if (!state?.sessionId) return; // not a TrainerTwin session (e.g. local dev without headers)
       trackUsage({
@@ -32,7 +33,7 @@ export default defineInstrumentation({
         orgId: state.orgId,
         idempotencyKey: `eve:${event.idempotencyKey}`,
         items: tokenItems(state.provider, event.responseModelId ?? state.model, event.usage),
-        meta: { finishReason: event.finishReason, turnId: event.scope.turnId, stepIndex: event.scope.stepIndex },
+        meta: { finishReason: event.finishReason, turnId: event.scope.turnId, runId: event.scope.runId },
       });
     },
   },

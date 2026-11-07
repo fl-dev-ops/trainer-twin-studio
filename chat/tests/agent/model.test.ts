@@ -17,16 +17,18 @@ afterEach(() => {
   }
 });
 
+/** Runs the agent's dynamic model function (eve 0.91: `defineDynamic(ctx => …)`) on a fake session frame. */
 function step(attributes: Record<string, string> = {}, messages: unknown[] = []) {
-  return (agent.model as any).events["step.started"]({}, { session: { auth: { current: { attributes } } }, messages });
+  const resolve = (agent.model as any)[Symbol.for("eve.dynamic")];
+  return resolve({ session: { auth: { current: { attributes } } }, messages: async () => messages });
 }
-const thinking = (attributes: Record<string, string> = {}, messages: unknown[] = []) =>
-  step(attributes, messages).modelOptions.providerOptions.google.thinkingConfig;
+const thinking = async (attributes: Record<string, string> = {}, messages: unknown[] = []) =>
+  (await step(attributes, messages)).modelOptions.providerOptions.google.thinkingConfig;
 
-test("every reply runs on Gemini on Vertex; the decision model is Qwen on Cerebras", () => {
+test("every reply runs on Gemini on Vertex; the decision model is Qwen on Cerebras", async () => {
   process.env.CHAT_AGENT_MODEL = "cerebras/qwen-3.8-27b";
   for (const model of [undefined, "cerebras/qwen-3.8-27b", "openai/gpt-5.4", "google/gemini-3.5-flash-lite"]) {
-    const result = step(model ? { model } : {});
+    const result = await step(model ? { model } : {});
     assert.equal(result.model, "google/gemini-3.8-flash");
     assert.deepEqual(result.modelOptions.providerOptions.gateway, { only: ["vertex"] });
   }
@@ -36,28 +38,28 @@ test("every reply runs on Gemini on Vertex; the decision model is Qwen on Cerebr
   assert.equal(DECISION_MODEL, "cerebras/qwen-3.8-27b");
 });
 
-test("keeps low thinking by default and accepts supported integer overrides", () => {
-  assert.deepEqual(thinking(), { thinkingLevel: "low" });
+test("keeps low thinking by default and accepts supported integer overrides", async () => {
+  assert.deepEqual(await thinking(), { thinkingLevel: "low" });
   for (const budget of ["-1", "0", "512", " 256 "]) {
-    assert.deepEqual(thinking({ thinkingBudget: budget }), { thinkingBudget: Number(budget) });
+    assert.deepEqual(await thinking({ thinkingBudget: budget }), { thinkingBudget: Number(budget) });
   }
   process.env.GEMINI_THINKING_BUDGET = "1024";
-  assert.deepEqual(thinking(), { thinkingBudget: 1024 });
-  assert.deepEqual(thinking({ thinkingBudget: "0" }), { thinkingBudget: 0 });
+  assert.deepEqual(await thinking(), { thinkingBudget: 1024 });
+  assert.deepEqual(await thinking({ thinkingBudget: "0" }), { thinkingBudget: 0 });
 });
 
-test("rejects malformed header attributes and environment budgets before model calls", () => {
+test("rejects malformed header attributes and environment budgets before model calls", async () => {
   for (const budget of ["", "not-a-number", "NaN", "Infinity", "1.5", "-2", "9007199254740992", " "]) {
-    assert.throws(() => thinking({ thinkingBudget: budget }));
+    await assert.rejects(() => thinking({ thinkingBudget: budget }));
   }
   process.env.GEMINI_THINKING_BUDGET = "not-a-number";
-  assert.throws(() => thinking());
+  await assert.rejects(() => thinking());
 });
 
-test("preserves explicit asymmetric thinking on tool follow-ups", () => {
+test("preserves explicit asymmetric thinking on tool follow-ups", async () => {
   const attributes = { thinkingBudget: "256", asymmetricThinking: "1" };
-  assert.deepEqual(thinking(attributes), { thinkingBudget: 256 });
-  assert.deepEqual(thinking(attributes, [{ role: "tool" }]), { thinkingBudget: 0 });
-  assert.deepEqual(thinking({ asymmetricThinking: "1" }, [{ role: "tool" }]), { thinkingLevel: "low" });
-  assert.throws(() => thinking({ thinkingBudget: "invalid", asymmetricThinking: "1" }, [{ role: "tool" }]));
+  assert.deepEqual(await thinking(attributes), { thinkingBudget: 256 });
+  assert.deepEqual(await thinking(attributes, [{ role: "tool" }]), { thinkingBudget: 0 });
+  assert.deepEqual(await thinking({ asymmetricThinking: "1" }, [{ role: "tool" }]), { thinkingLevel: "low" });
+  await assert.rejects(() => thinking({ thinkingBudget: "invalid", asymmetricThinking: "1" }, [{ role: "tool" }]));
 });

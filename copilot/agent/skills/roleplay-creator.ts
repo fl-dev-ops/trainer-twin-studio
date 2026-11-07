@@ -39,5 +39,5 @@ Check \`list_roleplays\` first; never create a second role play for the same pra
 export default defineSkill({
   description:
     "Build or change one role play (a practice session the AI leads) from a trainer's recordings, or change an existing role play. Use only for a role-play, practice or rehearsal request, never for a twin skill.",
-  markdown: `${procedure}\n${requirementsText()}`,
+  content: `${procedure}\n${requirementsText()}`,
 });

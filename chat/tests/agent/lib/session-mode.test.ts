@@ -106,11 +106,10 @@ describe("runtime events", () => {
     console.info = () => {};
     try {
       const response: Response = await handler(request, {
-        resolveSession: async () => undefined,
         waitUntil: () => {},
-        from: () => ({ send: async (text: string) => {
+        from: () => ({ cancel: async () => {}, send: async (text: string) => {
           message = text;
-          return { cancel: async () => {}, getEventStream: async () => new ReadableStream({ start(controller) { controller.close(); } }) };
+          return { sessionId: "s1", deliveryId: "d1", stream: async function* () {} };
         } }),
       });
       await response.text();
