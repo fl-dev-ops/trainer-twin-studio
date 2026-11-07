@@ -49,7 +49,7 @@ a ~60 s warmup (torch.compile + CUDA-graph capture).
 
 ## Web-app side (one-time)
 
-1. `cd application/web && npx prisma migrate dev --name add-voice` (adds the `Voice` model).
+1. `cd application/web && bunx prisma migrate dev --name add-voice` (adds the `Voice` model).
 2. Set env on the web app:
    - `TTS_APP_KEY` — shared secret, must equal the TTS container's `APP_API_KEY`
    - `TTS_SERVICE_URL` — e.g. `http://localhost:8000`

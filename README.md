@@ -65,9 +65,9 @@ bun run dev               # :3000
 
 # 3. Spec Copilot
 cd ../copilot
-npm install
+bun install
 cp .env.example .env      # preserve the same COPILOT_SERVICE_SECRET as web/.env
-npm run dev               # :2000
+bun run dev               # :2000
 
 # 4. Voice agent
 cd ../agent

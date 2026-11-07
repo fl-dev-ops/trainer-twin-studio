@@ -8,14 +8,10 @@ BASE_DOMAIN="trainertwin.localhost"
 
 log() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 
-# 1. Portless present? (Node 24+ required for npm install path)
+# 1. Portless present?
 if ! command -v portless >/dev/null 2>&1; then
   log "Portless missing, installing globally"
-  if command -v bun >/dev/null 2>&1; then
-    bun add -g portless
-  else
-    npm install -g portless
-  fi
+  bun add -g portless
 fi
 
 # 2. CA must exist (generated on first proxy start)
