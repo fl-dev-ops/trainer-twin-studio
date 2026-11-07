@@ -28,7 +28,8 @@ export async function GET(request: Request) {
     }),
     db.member.count({ where: { organizationId: api.org.id, role: LEARNER_ROLE, disabledAt: null } }),
     db.invitation.findMany({
-      where: { organizationId: api.org.id, status: "pending" },
+      // Learner invitations only: invitations to the studio team are not part of the learner API.
+      where: { organizationId: api.org.id, status: "pending", role: LEARNER_ROLE },
       orderBy: { createdAt: "desc" },
       select: { id: true, email: true, status: true, expiresAt: true, createdAt: true },
     }),

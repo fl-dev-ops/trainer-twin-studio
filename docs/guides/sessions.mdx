@@ -67,4 +67,6 @@ The detail response includes:
 - Session status, delivery mode, and timestamps.
 - Transcript data when available.
 - Evidence data when available.
-- `audioUrl` — a presigned download URL for the recording, valid for one hour (`null` when no recording exists).
+- `audioUrl` and `videoUrl` — presigned download URLs for the audio and video recordings, valid for one hour (`null` when that recording doesn't exist).
+
+`startedAt` is `null` for a session the learner has not started yet (for example `assigned` or `failed` before it began).

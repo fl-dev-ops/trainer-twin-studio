@@ -9,10 +9,11 @@ const listSelect = {
   order: true,
   createdAt: true,
   updatedAt: true,
-  deployments: { select: { _count: { select: { assignments: true } } } },
+  // Learners currently assigned: pending or used (cancelled and expired ones don't count).
+  deployments: { select: { _count: { select: { assignments: { where: { status: { in: ["pending", "used"] as string[] } } } } } } },
 } as const;
 
-/** List the organization's published role-play scenarios. Read-only: scenario
+/** List the organization's published (not archived) role-play scenarios, in dashboard order. Read-only: scenario
  * configuration itself stays dashboard-only. Twins are not part of the public API. */
 export async function GET(request: Request) {
   const api = await requireExternalApi(request, "scenarios", "read");
@@ -22,13 +23,13 @@ export async function GET(request: Request) {
 
   const [scenarios, total] = await Promise.all([
     db.agent.findMany({
-      where: { orgId: api.org.id, kind: "ROLEPLAY" },
+      where: { orgId: api.org.id, kind: "ROLEPLAY", archivedAt: null },
       orderBy: [{ order: "asc" }, { createdAt: "desc" }],
       skip: page.offset,
       take: page.limit,
       select: listSelect,
     }),
-    db.agent.count({ where: { orgId: api.org.id, kind: "ROLEPLAY" } }),
+    db.agent.count({ where: { orgId: api.org.id, kind: "ROLEPLAY", archivedAt: null } }),
   ]);
 
   return Response.json({

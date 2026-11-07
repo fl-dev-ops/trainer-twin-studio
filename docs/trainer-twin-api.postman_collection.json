@@ -2485,7 +2485,7 @@
             "method": "POST",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"userId\": \"<string>\",\n  \"scenario\": \"jp\"\n}",
+              "raw": "{\n  \"userId\": \"<string>\",\n  \"scenario\": \"react-mock-interview\"\n}",
               "options": {
                 "raw": {
                   "headerFamily": "json",
@@ -3207,7 +3207,7 @@
                 "method": "PATCH",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"userId\": \"<string>\",\n  \"scenario\": \"hFfMhpkZfUd\"\n}",
+                  "raw": "{\n  \"userId\": \"<string>\",\n  \"scenario\": \"system-design-interview\"\n}",
                   "options": {
                     "raw": {
                       "headerFamily": "json",

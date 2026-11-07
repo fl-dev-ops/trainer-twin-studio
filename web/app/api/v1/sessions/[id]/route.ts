@@ -33,7 +33,10 @@ export async function GET(request: Request, { params }: Params) {
   });
   if (!session) return Response.json({ error: "Session not found" }, { status: 404 });
   // Presigned download URL for the recording (1 hour); null when no audio exists.
-  const audioUrl = session.s3AudioKey ? await presignedGetUrl(session.s3AudioKey, 3600) : null;
+  const audioUrl = session.s3AudioKey ? await presignedGetUrl(session.s3AudioKey, 3600).catch((error) => {
+    console.error("Failed to presign audio recording:", error);
+    return null;
+  }) : null;
   const internal = session as { s3AudioKey?: string | null; videoEgressId?: string | null };
   // Video recording: evidence carries the explicit S3 key; otherwise the standard
   // composite-egress recording path is used when a video egress was started.

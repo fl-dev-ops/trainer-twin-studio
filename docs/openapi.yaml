@@ -21,14 +21,14 @@ tags:
   - name: Scenarios
     description: Read the organization's published role-play scenarios.
   - name: Sessions
-    description: Start, inspect, and manage practice sessions.
+    description: Read practice sessions and their results (read-only).
 paths:
   /scenarios:
     get:
       operationId: listScenarios
       tags: [Scenarios]
       summary: List scenarios
-      description: Lists the organization's role-play scenarios, most relevant first.
+      description: Lists the organization's published role-play scenarios in dashboard order (`order` ascending, newest first within the same order). Archived scenarios are not listed.
       parameters:
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Offset'
@@ -47,6 +47,8 @@ paths:
                       $ref: '#/components/schemas/ScenarioSummary'
                   pagination:
                     $ref: '#/components/schemas/Pagination'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '429':
@@ -58,7 +60,7 @@ paths:
       operationId: getScenario
       tags: [Scenarios]
       summary: Get a scenario
-      description: Returns one scenario including its role-play configuration (`data`). The data payload is dashboard-controlled and may gain fields at any time.
+      description: Returns one published scenario including its role-play configuration (`data`). The data payload is dashboard-controlled and may gain fields at any time. Archived scenarios return `404`.
       responses:
         '200':
           description: Scenario details.
@@ -81,7 +83,7 @@ paths:
       operationId: listUsers
       tags: [Users]
       summary: List learners
-      description: Lists learners and pending invitations in the API key's organization.
+      description: Lists learners and pending learner invitations in the API key's organization. `limit` and `offset` page through `users`; `invitations` lists every pending invitation.
       parameters:
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Offset'
@@ -104,6 +106,8 @@ paths:
                       $ref: '#/components/schemas/Invitation'
                   pagination:
                     $ref: '#/components/schemas/Pagination'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '429':
@@ -243,8 +247,15 @@ paths:
       operationId: listAssignments
       tags: [Assignments]
       summary: List assignments
+      description: Lists the organization's assignments, newest first.
       parameters:
         - $ref: '#/components/parameters/UserIdFilter'
+        - name: email
+          in: query
+          description: Filter by the email the scenario was assigned to (for learners who have not joined yet).
+          schema:
+            type: string
+            format: email
         - $ref: '#/components/parameters/ScenarioFilter'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Offset'
@@ -263,6 +274,8 @@ paths:
                       $ref: '#/components/schemas/AssignmentDetail'
                   pagination:
                     $ref: '#/components/schemas/Pagination'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '429':
@@ -271,7 +284,11 @@ paths:
       operationId: createAssignment
       tags: [Assignments]
       summary: Create an assignment
-      description: Idempotently assigns a published scenario to a learner. Email failure does not roll back the assignment.
+      description: |
+        Idempotently assigns a published scenario to a learner (by `userId`) or to an email address (for someone who has not joined yet).
+        A pending or used assignment for the same learner and scenario is returned as it is, with `created: false` and no email.
+        A cancelled or expired one is reopened with a new `practiceUrl` and email (`201`, `created: true`).
+        Email failure does not roll back the assignment.
       requestBody:
         required: true
         content:
@@ -329,7 +346,7 @@ paths:
       operationId: updateAssignment
       tags: [Assignments]
       summary: Update an assignment
-      description: Moves an assignment to another learner, published scenario, or both.
+      description: Moves an assignment to another learner, published scenario, or both. A change issues a new `practiceUrl` (the old link stops working) and emails the learner. Moving onto a learner and scenario pair that already has an assignment returns `409`.
       requestBody:
         required: true
         content:
@@ -342,6 +359,11 @@ paths:
                 userId:
                   type: string
                   example: user_123
+                email:
+                  type: string
+                  format: email
+                  description: Move the assignment to this email address instead of a learner ID.
+                  example: learner@example.com
                 scenario:
                   type: string
                   pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'
@@ -436,7 +458,7 @@ paths:
       operationId: getSession
       tags: [Sessions]
       summary: Get a session
-      description: Returns pinned configuration versions, transcript, evidence, and a presigned download URL for the recording when available.
+      description: Returns pinned configuration versions, transcript, evidence, and presigned download URLs for the audio and video recordings when available.
       responses:
         '200':
           description: Session details.
@@ -550,7 +572,7 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
     Forbidden:
-      description: API key creator is no longer an organization trainer.
+      description: API key creator is no longer an organization trainer (admin or team member).
       content:
         application/json:
           schema:
@@ -623,6 +645,7 @@ components:
           format: date-time
     Invitation:
       type: object
+      description: A pending invitation for a learner to join the organization.
       required: [id, email, status, expiresAt]
       properties:
         id:
@@ -679,7 +702,7 @@ components:
           example: 0
         assignmentCount:
           type: integer
-          description: Learners currently assigned to this scenario.
+          description: Learners currently assigned to this scenario (pending or used assignments).
           example: 12
         createdAt:
           type: string
@@ -709,7 +732,7 @@ components:
           example: 0
         assignmentCount:
           type: integer
-          description: Learners currently assigned to this scenario.
+          description: Learners currently assigned to this scenario (pending or used assignments).
           example: 12
         createdAt:
           type: string
@@ -726,18 +749,28 @@ components:
     AssignmentTarget:
       type: object
       additionalProperties: false
-      required: [userId, scenario]
+      required: [scenario]
+      anyOf:
+        - required: [userId]
+        - required: [email]
       properties:
         userId:
           type: string
+          description: A learner ID from `GET /users`. Send `userId` or `email`.
           example: user_123
+        email:
+          type: string
+          format: email
+          maxLength: 320
+          description: Assign to an email address (someone who has not joined yet). Send `userId` or `email`.
+          example: learner@example.com
         scenario:
           type: string
           pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'
           example: react-mock-interview
     Assignment:
       type: object
-      required: [id, assignedAt, userId, scenario]
+      required: [id, assignedAt, userId, email, scenario]
       properties:
         id:
           type: string
@@ -746,8 +779,13 @@ components:
           type: string
           format: date-time
         userId:
-          type: string
+          type: [string, 'null']
+          description: The learner, or null when the email belongs to someone who has not joined yet.
           example: user_123
+        email:
+          type: string
+          format: email
+          example: avery@example.com
         scenario:
           type: string
           example: react-mock-interview
@@ -780,12 +818,13 @@ components:
           $ref: '#/components/schemas/AssignmentStatus'
         user:
           type: object
+          description: The learner; `id` and `name` are null when the email belongs to someone who has not joined yet.
           required: [id, name, email]
           properties:
             id:
-              type: string
+              type: [string, 'null']
             name:
-              type: string
+              type: [string, 'null']
             email:
               type: string
               format: email
@@ -852,8 +891,9 @@ components:
           type: string
           format: date-time
         startedAt:
-          type: string
+          type: [string, 'null']
           format: date-time
+          description: Null until the learner starts the session.
         endedAt:
           type: [string, 'null']
           format: date-time
@@ -869,5 +909,8 @@ components:
               description: Structured evaluation evidence when available.
               type: [object, array, 'null']
             audioUrl:
-              description: Presigned recording download URL, valid for one hour. Null when no recording exists.
+              description: Presigned audio recording download URL, valid for one hour. Null when no audio recording exists.
+              type: [string, 'null']
+            videoUrl:
+              description: Presigned video recording download URL, valid for one hour. Null when no video recording exists.
               type: [string, 'null']

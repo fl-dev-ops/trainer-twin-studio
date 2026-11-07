@@ -1,22 +1,23 @@
 import { z } from "zod";
-import { BASE_DOMAIN } from "@/lib/base-domain";
 import { assignmentExpiresAt, newAssignmentShareCode } from "@/lib/assignments";
 import { db } from "@/lib/db";
 import { ensureDeployment } from "@/lib/deployments";
-import { sendRolePlayAssignmentEmail } from "@/lib/email";
-import { contextUploadFromAgentData } from "@/lib/context-upload";
-import { isApiError, paginationFromUrl, requireExternalApi } from "@/lib/external-api";
-import { STUDIO_ROLES } from "@/lib/org";
+import { findOrgLearner, isApiError, paginationFromUrl, requireExternalApi } from "@/lib/external-api";
+import {
+  assignmentDetails,
+  assignmentDetailSelect,
+  assignmentView,
+  emailAssignment,
+  findKeyTrainer,
+  findScenario,
+  practiceUrl,
+} from "@/lib/external-api-assignments";
 
 const createSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(320).optional(),
   userId: z.string().min(1).optional(),
   scenario: z.string().regex(/^[a-z0-9][a-z0-9._-]*$/i),
 }).strict().refine((value) => value.email || value.userId, "email or userId is required");
-
-function practiceUrl(orgSlug: string, shareCode: string) {
-  return `https://${orgSlug}.${BASE_DOMAIN}/s/${shareCode}`;
-}
 
 export async function GET(request: Request) {
   const api = await requireExternalApi(request, "assignments", "read");
@@ -27,43 +28,19 @@ export async function GET(request: Request) {
   const scenario = url.searchParams.get("scenario") || undefined;
   const page = paginationFromUrl(url);
   if (page instanceof Response) return page;
-  const user = userId
-    ? await db.user.findUnique({ where: { id: userId }, select: { email: true } })
-    : null;
-  const recipientEmail = requestedEmail ?? user?.email;
+  // A userId outside the org (or unknown) matches nothing.
+  const learner = userId ? await findOrgLearner(api.org.id, { id: userId }) : null;
+  const recipientEmail = requestedEmail ?? learner?.email.toLowerCase() ?? (userId ? "" : undefined);
   const where = {
     orgId: api.org.id,
-    ...(recipientEmail ? { recipientEmail } : {}),
-    ...(userId && !user ? { recipientEmail: "" } : {}),
+    ...(recipientEmail !== undefined ? { recipientEmail } : {}),
     ...(scenario ? { deployment: { agent: { slug: scenario } } } : {}),
   };
-  const [assignments, total] = await Promise.all([
-    db.rolePlayAssignment.findMany({
-      where,
-      orderBy: { assignedAt: "desc" },
-      skip: page.offset,
-      take: page.limit,
-      select: {
-        id: true,
-        assignedAt: true,
-        shareCode: true,
-        status: true,
-        recipientEmail: true,
-        member: { select: { user: { select: { id: true, name: true, email: true } } } },
-        deployment: { select: { agent: { select: { slug: true, name: true, version: true, visibility: true } } } },
-      },
-    }),
+  const [rows, total] = await Promise.all([
+    db.rolePlayAssignment.findMany({ where, orderBy: { assignedAt: "desc" }, skip: page.offset, take: page.limit, select: assignmentDetailSelect }),
     db.rolePlayAssignment.count({ where }),
   ]);
-  return Response.json({
-    assignments: assignments.map(({ member, deployment, shareCode, ...assignment }) => ({
-      ...assignment,
-      user: member?.user ?? { id: null, name: null, email: assignment.recipientEmail },
-      scenario: deployment.agent,
-      practiceUrl: practiceUrl(api.org.slug, shareCode),
-    })),
-    pagination: { ...page, total },
-  });
+  return Response.json({ assignments: await assignmentDetails(api.org.id, api.org.slug, rows), pagination: { ...page, total } });
 }
 
 export async function POST(request: Request) {
@@ -73,73 +50,50 @@ export async function POST(request: Request) {
   if (!parsed.success) return Response.json({ error: "email or userId and a valid scenario slug are required" }, { status: 400 });
 
   const [user, agent, trainer] = await Promise.all([
-    parsed.data.userId
-      ? db.user.findUnique({
-          where: { id: parsed.data.userId },
-          select: { id: true, name: true, email: true },
-        })
-      : null,
-    db.agent.findFirst({
-      where: { orgId: api.org.id, slug: parsed.data.scenario, kind: "ROLEPLAY" }, // twins use twin assignments
-      select: { id: true, slug: true, name: true, version: true, data: true },
-    }),
-    db.member.findFirst({
-      where: {
-        organizationId: api.org.id,
-        role: { in: [...STUDIO_ROLES] },
-        ...(api.actorUserId ? { userId: api.actorUserId } : {}),
-      },
-      select: { userId: true, user: { select: { name: true } } },
-    }),
+    parsed.data.userId ? findOrgLearner(api.org.id, { id: parsed.data.userId }) : null,
+    findScenario(api.org.id, parsed.data.scenario),
+    findKeyTrainer(api.org.id, api.actorUserId),
   ]);
   if (parsed.data.userId && !user) return Response.json({ error: "User not found" }, { status: 404 });
   if (!agent) return Response.json({ error: "Scenario not found" }, { status: 404 });
   if (!trainer) return Response.json({ error: "API key creator is no longer an organization trainer" }, { status: 403 });
 
-  const recipientEmail = parsed.data.email ?? user?.email.toLowerCase();
-  if (!recipientEmail) return Response.json({ error: "Email is required" }, { status: 400 });
+  const recipientEmail = parsed.data.email ?? user!.email.toLowerCase();
+  // With an email only, the learner is the org learner with that email, if they have joined.
+  const learner = user ?? await findOrgLearner(api.org.id, { email: recipientEmail });
   const deployment = await ensureDeployment(api.org.id, agent.id);
   const existing = await db.rolePlayAssignment.findFirst({
     // ponytail: dashboard/API requests are serialized; add a DB unique index if concurrent assignment creation appears.
     where: { deploymentId: deployment.id, recipientEmail },
     select: { id: true, assignedAt: true, shareCode: true, status: true },
   });
-  if (existing) return Response.json({
-    assignment: { ...existing, email: recipientEmail, userId: user?.id ?? null, scenario: agent.slug },
-    practiceUrl: practiceUrl(api.org.slug, existing.shareCode),
-    created: false,
-  });
+  // Idempotent: a live assignment (pending or used) is returned as it is, with no second email.
+  if (existing && (existing.status === "pending" || existing.status === "used")) {
+    return Response.json({
+      assignment: assignmentView(existing, recipientEmail, learner?.id ?? null, agent.slug),
+      practiceUrl: practiceUrl(api.org.slug, existing.shareCode),
+      created: false,
+    });
+  }
 
-  const assignment = await db.rolePlayAssignment.create({
-    data: {
-      orgId: api.org.id,
-      deploymentId: deployment.id,
-      recipientEmail,
-      assignedByUserId: trainer.userId,
-      shareCode: newAssignmentShareCode(),
-      expiresAt: assignmentExpiresAt(),
-    },
-    select: { id: true, assignedAt: true, shareCode: true },
-  });
+  // New, or a cancelled / expired one reopened with a fresh link (as the dashboard's Assign does).
+  const fields = {
+    assignedByUserId: trainer.userId,
+    shareCode: newAssignmentShareCode(),
+    status: "pending",
+    assignedAt: new Date(),
+    expiresAt: assignmentExpiresAt(),
+  };
+  const select = { id: true, assignedAt: true, shareCode: true } as const;
+  const assignment = existing
+    ? await db.rolePlayAssignment.update({ where: { id: existing.id }, data: { ...fields, memberId: null, usedAt: null }, select })
+    : await db.rolePlayAssignment.create({ data: { ...fields, orgId: api.org.id, deploymentId: deployment.id, recipientEmail }, select });
   const url = practiceUrl(api.org.slug, assignment.shareCode);
-  const data = agent.data as { objective?: unknown } | null;
-  const upload = contextUploadFromAgentData(agent.data);
-  const requiredArtifact = upload.required && upload.prompt
-    ? { label: upload.label, prompt: upload.prompt }
-    : null;
-  const delivery = await sendRolePlayAssignmentEmail({
-    to: recipientEmail,
-    userName: user?.name,
-    rolePlayName: agent.name,
-    rolePlayObjective: typeof data?.objective === "string" ? data.objective : undefined,
-    practiceUrl: url,
-    trainerName: trainer.user.name,
-    requiredArtifact,
-  });
+  const emailSent = await emailAssignment({ to: recipientEmail, userName: learner?.name, scenario: agent, practiceUrl: url, trainerName: trainer.user.name });
   return Response.json({
-    assignment: { id: assignment.id, assignedAt: assignment.assignedAt, email: recipientEmail, userId: user?.id ?? null, scenario: agent.slug },
+    assignment: assignmentView(assignment, recipientEmail, learner?.id ?? null, agent.slug),
     created: true,
     practiceUrl: url,
-    emailSent: delivery.success,
+    emailSent,
   }, { status: 201 });
 }

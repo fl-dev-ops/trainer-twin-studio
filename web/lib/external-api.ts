@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { LEARNER_ROLE } from "@/lib/org";
 
 export type ExternalApiResource = "users" | "sessions" | "assignments" | "scenarios";
 
@@ -56,6 +57,23 @@ export async function requireExternalApi(
 
 export function isApiError(value: ExternalApiContext | Response): value is Response {
   return value instanceof Response;
+}
+
+/**
+ * A learner of the key's organization, by user ID or email (active members only). Every API lookup of a user goes
+ * through here: a user of another organization answers like an unknown one (docs/limits.mdx, organization isolation).
+ */
+export async function findOrgLearner(orgId: string, by: { id: string } | { email: string }) {
+  const member = await db.member.findFirst({
+    where: {
+      organizationId: orgId,
+      role: LEARNER_ROLE,
+      disabledAt: null,
+      ...("id" in by ? { userId: by.id } : { user: { email: by.email } }),
+    },
+    select: { user: { select: { id: true, name: true, email: true } } },
+  });
+  return member?.user ?? null;
 }
 
 /** Collection pagination per the API contract: limit 1–100 (default 50), offset >= 0

@@ -3,7 +3,7 @@ title: "Scenarios"
 description: "Read the organization's role-play scenarios and their configuration."
 ---
 
-Scenarios are the role-plays learners can practice (called agents in the dashboard). The API is **read-only** — creating or editing scenario configuration stays in the dashboard.
+Scenarios are the role-plays learners can practice (called agents in the dashboard). The API is **read-only** — creating or editing scenario configuration stays in the dashboard. Only published scenarios are returned: an archived scenario is not listed and returns `404`.
 
 The API covers role plays only. Twins (the trainer's own AI, used through twin assignments and links) are not listed, and their sessions are not returned.
 
@@ -34,7 +34,7 @@ Returns `200`:
 }
 ```
 
-`assignmentCount` is how many learners currently have the scenario assigned — the same number you get from `GET /assignments?scenario=<slug>` with `limit=0` semantics.
+Scenarios come in dashboard order. `assignmentCount` is how many learners currently have the scenario assigned: pending and used assignments count, cancelled and expired ones don't.
 
 ## Get a scenario
 

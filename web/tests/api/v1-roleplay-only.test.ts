@@ -53,15 +53,15 @@ beforeEach(() => {
 
 test("GET /scenarios lists and counts role plays only", async () => {
   expect((await listScenarios(call("/scenarios"))).status).toBe(200);
-  expect(seen["agent.findMany"]).toEqual([{ orgId: "org1", kind: "ROLEPLAY" }]);
-  expect(seen["agent.count"]).toEqual([{ orgId: "org1", kind: "ROLEPLAY" }]);
+  expect(seen["agent.findMany"]).toEqual([{ orgId: "org1", kind: "ROLEPLAY", archivedAt: null }]);
+  expect(seen["agent.count"]).toEqual([{ orgId: "org1", kind: "ROLEPLAY", archivedAt: null }]);
 });
 
 test("GET /scenarios/:slug answers 404 for a twin, like an unknown scenario", async () => {
   const twin = await getScenario(call("/scenarios/acme-twin"), { params: Promise.resolve({ slug: "acme-twin" }) });
   expect(twin.status).toBe(404);
   expect(await twin.json()).toEqual({ error: "Scenario not found" });
-  expect(seen["agent.findFirst"]).toEqual([{ orgId: "org1", slug: "acme-twin", kind: "ROLEPLAY" }]);
+  expect(seen["agent.findFirst"]).toEqual([{ orgId: "org1", slug: "acme-twin", kind: "ROLEPLAY", archivedAt: null }]);
 });
 
 test("GET /sessions only returns role-play sessions", async () => {

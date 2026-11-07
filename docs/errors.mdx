@@ -27,4 +27,4 @@ Errors use a standard JSON shape:
 
 Retry `429` and transient `5xx` responses. Do not automatically retry validation, authentication, authorization, or conflict responses.
 
-Assignment creation is idempotent for the same learner and scenario. A repeated request returns the existing assignment and does not send another email.
+Assignment creation is idempotent for the same learner and scenario. While the assignment is pending or used, a repeated request returns it and does not send another email; a cancelled or expired one is reopened with a new link.

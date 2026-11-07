@@ -9,7 +9,7 @@ Assignments place published scenarios prominently in a learner's portal. They ar
 
 You need:
 
-- A learner `userId` from `GET /users`.
+- A learner `userId` from `GET /users` — or just an `email`, to assign someone who has not joined your organization yet.
 - A published scenario slug from `GET /scenarios` or the TrainerTwin dashboard.
 
 Scenario and persona configuration remains dashboard-only.
@@ -35,6 +35,7 @@ A new assignment returns `201`:
     "id": "assignment_123",
     "assignedAt": "2026-09-01T09:30:00.000Z",
     "userId": "user_123",
+    "email": "avery@example.com",
     "scenario": "react-mock-interview"
   },
   "practiceUrl": "https://your-org.trainertwin.com/s/AbC123",
@@ -45,7 +46,9 @@ A new assignment returns `201`:
 
 `practiceUrl` is the learner's direct practice link — send it through your own channel instead of (or alongside) the TrainerTwin email.
 
-Creating the same learner-scenario pair again is safe. TrainerTwin returns the existing assignment with `created: false` and does not send another email.
+Creating the same learner-scenario pair again is safe. While the assignment is pending or used, TrainerTwin returns it with `created: false` and does not send another email. A cancelled or expired assignment is reopened instead: it gets a new `practiceUrl`, the learner gets an email, and the response is `201` with `created: true`.
+
+`userId` is `null` when the email belongs to someone who has not joined yet.
 
 <Note>
   Assignment persistence succeeds even when email delivery fails. Check `emailSent` instead of retrying the assignment immediately.
@@ -63,7 +66,7 @@ curl "https://dash.trainertwin.com/api/v1/assignments/assignment_123" \
   --data '{ "scenario": "system-design-interview" }'
 ```
 
-A changed assignment sends a notification to the target learner and returns a new `practiceUrl` (the old link stops working). A no-op update returns `changed: false`, the existing `practiceUrl`, and sends no email.
+You can also move it to an `email` address. A changed assignment sends a notification to the target learner and returns a new `practiceUrl` (the old link stops working). A no-op update returns `changed: false`, the existing `practiceUrl`, and sends no email. Moving onto a learner who already has that scenario assigned returns `409`.
 
 ## Inspect an assignment
 
@@ -72,7 +75,9 @@ curl "https://dash.trainertwin.com/api/v1/assignments/assignment_123" \
   --header "x-api-key: $TRAINERTWIN_API_KEY"
 ```
 
-Returns the learner, scenario, current `status` (`pending`, `used`, `expired`, or `cancelled`), and `practiceUrl`.
+Returns the learner, scenario, current `status` (`pending`, `used`, `expired`, or `cancelled`), and `practiceUrl`. For an assignment made to the email of someone who has not joined yet, the learner's `id` and `name` are `null`.
+
+List assignments with `GET /assignments`, filtered by `userId`, `email`, or `scenario`.
 
 ## Remove an assignment
 
