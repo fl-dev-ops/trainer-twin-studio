@@ -56,7 +56,8 @@ SECRET=...; ORG=...; curl -N -X POST http://localhost:2001/v1/chat/completions \
 
 ## Env
 
-- `OPENROUTER_API_KEY` — the LLM (`CHAT_AGENT_MODEL`, default `openai/gpt-4.1-mini`)
+- `CEREBRAS_API_KEY` — the LLM: every turn and the twin-lines query run on Qwen on Cerebras (`cerebras/qwen-3.8-27b`, locked in `agent/lib/cerebras.ts`)
+- `AI_GATEWAY_API_KEY` — embeddings (style search)
 - `COPILOT_SERVICE_SECRET` — authenticates to the web studio
 - `STUDIO_URL` — web origin (default `http://localhost:3000`)
 - `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` — export Eve agent,

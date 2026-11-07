@@ -5,7 +5,8 @@ import { studioFetch } from "./studio";
 /**
  * Files attached during a conversation (plans/uploads-to-s3.md). The browser sends "I've attached a file: <name>
  * [ATTACHED <id>]" over lk.chat; the channel turns each marker into a file part pointing at trainertwin-upload://<id>,
- * and eve stages it through fetchFile below, so the model sees the image or PDF itself (Gemini reads both).
+ * and eve stages it through fetchFile below: the model sees an image itself, and a PDF as its extracted text
+ * (the studio converts it; Qwen on Cerebras reads images but not PDFs).
  */
 export const UPLOAD_SCHEME = "trainertwin-upload://";
 const MARKER = /\[ATTACHED ([A-Za-z0-9_-]{1,120})\]/g;

@@ -11,6 +11,13 @@ const cerebras = createOpenAICompatible({
   supportsStructuredOutputs: true,
 });
 
+/**
+ * The chat agent's model for every turn and the twin-lines query: Qwen on Cerebras, direct. Locked: neither
+ * CHAT_AGENT_MODEL nor a per-request model changes it. It reads images; PDFs come as their text (the studio's
+ * resolveUpload for this channel).
+ */
+export const CHAT_MODEL = "cerebras/qwen-3.8-27b";
+
 export const isCerebrasModel = (modelId: string) => modelId.startsWith("cerebras/");
 
 export const cerebrasModel = (modelId: string) => cerebras(modelId.slice("cerebras/".length));

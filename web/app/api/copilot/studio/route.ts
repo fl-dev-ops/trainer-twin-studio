@@ -68,7 +68,7 @@ const requestSchema = z.discriminatedUnion("action", [
     page: z.number().int().min(1).max(500).optional(),
   }).strict(),
   z.object({
-    // The chat channel's fetchFile (trainertwin-upload://<id>): a file attached to this session, as an S3 link.
+    // The chat channel's fetchFile (trainertwin-upload://<id>): a file attached to this session (an image as an S3 link, a PDF as text).
     action: z.literal("resolveUpload"),
     documentId: z.string().trim().min(1).max(120),
     sessionId: z.string().trim().min(1).max(100),
@@ -192,7 +192,8 @@ export async function POST(request: Request) {
 
   if (input.action === "resolveUpload") {
     try {
-      return Response.json(await resolveUpload({ orgId, id: input.documentId, sessionId: input.sessionId }));
+      // The chat model (Qwen on Cerebras) reads images but not PDFs: a PDF comes as its extracted text.
+      return Response.json(await resolveUpload({ orgId, id: input.documentId, sessionId: input.sessionId, pdfAsText: true }));
     } catch (error) {
       if (error instanceof UploadError) return Response.json({ error: error.message }, { status: error.status });
       throw error;

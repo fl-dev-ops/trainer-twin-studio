@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { defineChannel, POST, type Session } from "eve/channels";
 import { fetchUpload, UPLOAD_POLICY, withAttachments } from "../lib/uploads";
+import { CHAT_MODEL } from "../lib/cerebras";
 import { studioPrincipal } from "../lib/auth";
 import { createQuestionBridge } from "../lib/question-bridge";
 import { followUpGradesFor } from "../lib/turn-grades";
@@ -575,11 +576,9 @@ export default defineChannel({
                 sessionId,
                 mode,
                 model,
-                // Mirrors agent.ts model resolution: the model Eve actually ran, not the request label.
-                llm_model: requestedModel || process.env.CHAT_AGENT_MODEL || "google/gemini-3.5-flash-lite",
-                llm_route: (requestedModel || process.env.CHAT_AGENT_MODEL || "").startsWith("cerebras/")
-                  ? "cerebras-direct"
-                  : process.env.GEMINI_GATEWAY_PROVIDER?.trim() || "google",
+                // The model Eve actually ran (locked in agent.ts), not the request label.
+                llm_model: CHAT_MODEL,
+                llm_route: "cerebras-direct",
                 ...questionBridge.trace(t_start),
                 started_at_ms: t_start,
                 status: ev.type,
