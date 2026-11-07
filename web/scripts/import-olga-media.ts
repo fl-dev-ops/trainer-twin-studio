@@ -30,7 +30,8 @@ const dryRun = process.argv.includes("--dry-run");
 const transcriptOnly = process.argv.includes("--transcript-only");
 const ext = transcriptOnly ? "md" : "mp4";
 if ((kind !== "loom" && kind !== "youtube") || !dir || !arg("org")) throw new Error("--org, --kind loom|youtube and --dir are required");
-if (process.env.DATABASE_URL?.includes("ep-mute-pine") && process.env.S3_BASE_PREFIX !== "trainertwin/kb") throw new Error("prod DB needs S3_BASE_PREFIX=trainertwin/kb");
+// The deployed app's prefix (its newest uploads are under it).
+if (process.env.DATABASE_URL?.includes("ep-mute-pine") && process.env.S3_BASE_PREFIX !== "prod/trainertwin/kb") throw new Error("prod DB needs S3_BASE_PREFIX=prod/trainertwin/kb");
 const bucket = process.env.S3_BUCKET;
 if (!bucket) throw new Error("S3_BUCKET is not set");
 // Loom (HLS) and YouTube (DASH) are streamed by their own scripts: same contract, <url> <s3://bucket/key>.
