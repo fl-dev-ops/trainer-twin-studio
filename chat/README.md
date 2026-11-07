@@ -56,8 +56,8 @@ SECRET=...; ORG=...; curl -N -X POST http://localhost:2001/v1/chat/completions \
 
 ## Env
 
-- `CEREBRAS_API_KEY` — the LLM: every turn and the twin-lines query run on Qwen on Cerebras (`cerebras/qwen-3.8-27b`, locked in `agent/lib/cerebras.ts`)
-- `AI_GATEWAY_API_KEY` — embeddings (style search)
+- `AI_GATEWAY_API_KEY` — the speaking model (Gemini on Vertex AI through the Vercel AI Gateway) and embeddings
+- `CEREBRAS_API_KEY` — the decision model (Qwen on Cerebras: the twin-lines query before each turn). Both models are locked in `agent/lib/models.ts`
 - `COPILOT_SERVICE_SECRET` — authenticates to the web studio
 - `STUDIO_URL` — web origin (default `http://localhost:3000`)
 - `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` — export Eve agent,

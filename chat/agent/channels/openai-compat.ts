@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { defineChannel, POST, type Session } from "eve/channels";
 import { fetchUpload, UPLOAD_POLICY, withAttachments } from "../lib/uploads";
-import { CHAT_MODEL } from "../lib/cerebras";
+import { SPEAKING_MODEL, SPEAKING_ROUTE } from "../lib/models";
 import { studioPrincipal } from "../lib/auth";
 import { createQuestionBridge } from "../lib/question-bridge";
 import { followUpGradesFor } from "../lib/turn-grades";
@@ -577,8 +577,8 @@ export default defineChannel({
                 mode,
                 model,
                 // The model Eve actually ran (locked in agent.ts), not the request label.
-                llm_model: CHAT_MODEL,
-                llm_route: "cerebras-direct",
+                llm_model: SPEAKING_MODEL,
+                llm_route: SPEAKING_ROUTE,
                 ...questionBridge.trace(t_start),
                 started_at_ms: t_start,
                 status: ev.type,

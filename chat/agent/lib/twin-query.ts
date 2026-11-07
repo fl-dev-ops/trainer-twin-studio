@@ -1,7 +1,8 @@
 import { generateObject } from "ai";
 import { z } from "zod";
 import type { TwinPlaybook } from "./brain";
-import { CHAT_MODEL, cerebrasProviderOptions, isCerebrasModel, resolveModel } from "./cerebras";
+import { cerebrasProviderOptions, isCerebrasModel, resolveModel } from "./cerebras";
+import { DECISION_MODEL } from "./models";
 
 /**
  * The step the old scenario_examples flow got from the twin's own model (decide the moment, then search), done by a
@@ -9,9 +10,9 @@ import { CHAT_MODEL, cerebrasProviderOptions, isCerebrasModel, resolveModel } fr
  * one-sentence search for the trainer's lines. Raw learner speech searches poorly; the stored lines lead with a
  * situation sentence ("Why you tell a waiting client that the timing window has already closed"), so this matches.
  * Qwen on Cerebras, called directly with CEREBRAS_API_KEY (lib/cerebras.ts): ~0.45 s, the same picks as gpt-4.1-mini at
- * ~1.3 s. Locked to the chat model (CHAT_MODEL).
+ * ~1.3 s. Locked (lib/models.ts).
  */
-export const TWIN_QUERY_MODEL = CHAT_MODEL;
+export const TWIN_QUERY_MODEL = DECISION_MODEL;
 
 export type TwinQuery = { playbook: string; step?: string; query: string };
 /** The query model's verdict that this turn needs no lines (small talk, thanks, a question about the call itself). */
