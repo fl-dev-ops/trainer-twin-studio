@@ -11,6 +11,7 @@ dependencies = [
     "requests>=2.32",            # vendor/pii_redact.py
     "python-dotenv>=1",
     "boto3>=1.34",               # SQS only
+    "yt-dlp[default]>=2026.10.26",  # fetch stage; needs node or bun + ffmpeg on the host
     "httpx>=0.28",
     "pyyaml>=6",
 ]

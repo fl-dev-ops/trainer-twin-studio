@@ -25,3 +25,17 @@ export const knowledgeFileMessageSchema = z
   .strict();
 
 export type KnowledgeFileMessage = z.infer<typeof knowledgeFileMessageSchema>;
+
+/** A video page (YouTube, Loom) for the worker's fetch stage: yt-dlp download, then PUT to the signed S3 URL. */
+export const videoFetchMessageSchema = z
+  .object({
+    type: z.literal("fetch"),
+    docId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/),
+    orgId: z.string().min(1),
+    kbId: z.string().min(1),
+    url: z.string().url().startsWith("https://"),
+    uploadUrl: z.string().url().startsWith("https://"),
+  })
+  .strict();
+
+export type VideoFetchMessage = z.infer<typeof videoFetchMessageSchema>;

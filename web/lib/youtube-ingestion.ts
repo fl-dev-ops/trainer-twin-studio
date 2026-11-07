@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { parseYouTubeVideoId, type YouTubeImportInput } from "@/lib/youtube";
-import { enqueueIngestionWork } from "@/lib/ingestion-queue";
+import { defaultIdentityKey, queueVideoFetch } from "@/lib/ingestion-queue";
+import { orgPrefix } from "@/lib/s3";
 import { youtubeClient } from "@/lib/youtube-server";
 import { YouTubeError } from "@shared/youtube/types";
 import { getOrCreateOrgKnowledgeBase } from "@/lib/org-knowledge";
@@ -116,7 +117,7 @@ export async function listYouTubeImports(orgId: string, kbIdOrSlug?: string) {
   };
 }
 
-/** Preview uses owner credentials on the server; worker rechecks independently. */
+/** Preview checks ownership with the owner's credentials; private videos are refused (they can't be fetched). */
 export async function previewYouTubeImport(input: ImportContext & YouTubeImportInput) {
   const kb = await resolveKnowledgeBase(input.orgId, input.kbId, input.kbSlug);
   const connection = await verifyActiveConnection(input.orgId, input.connectionId);
@@ -124,7 +125,7 @@ export async function previewYouTubeImport(input: ImportContext & YouTubeImportI
   if (!videoId) throw new YouTubeError("INVALID_URL", "Invalid YouTube video URL");
 
   const scope = { connectionId: connection.id, orgId: input.orgId, userId: connection.userId };
-  const video = await youtubeClient().inspectOwnedVideo(scope, videoId);
+  const video = await youtubeClient().verifyOwnedVideo(scope, videoId);
   const existing = await db.knowledgeDocument.findFirst({
     where: {
       kbId: kb.id,
@@ -138,59 +139,50 @@ export async function previewYouTubeImport(input: ImportContext & YouTubeImportI
   return { ...video, alreadyIndexed: Boolean(existing) };
 }
 
-/** Persists one video job using the connector-neutral enqueueIngestionWork boundary. */
+/**
+ * Imports one owned video: the ingestion worker downloads it into our S3 (fetch stage), then the
+ * results route queues processing (transcription with speaker labels, redaction, chunks, embeddings).
+ */
 export async function queueYouTubeSync(input: ImportContext & YouTubeImportInput) {
-  const startedAt = Date.now();
-  console.info(`[JOB:youtube-enqueue] start url=${input.url}`);
-  try {
-    const videoId = parseYouTubeVideoId(input.url);
-    if (!videoId) throw new YouTubeError("INVALID_URL", "Invalid YouTube video URL");
+  const videoId = parseYouTubeVideoId(input.url);
+  if (!videoId) throw new YouTubeError("INVALID_URL", "Invalid YouTube video URL");
+  const kb = await resolveKnowledgeBase(input.orgId, input.kbId, input.kbSlug);
+  const connection = await verifyActiveConnection(input.orgId, input.connectionId);
+  const video = await youtubeClient().verifyOwnedVideo(
+    { connectionId: connection.id, orgId: input.orgId, userId: connection.userId }, videoId);
 
-    const kb = await resolveKnowledgeBase(input.orgId, input.kbId, input.kbSlug);
-    await verifyActiveConnection(input.orgId, input.connectionId);
-
-    // If not a force refresh, check if already indexed
-    if (!input.refresh) {
-      const indexed = await db.knowledgeDocument.findFirst({
-        where: {
-          kbId: kb.id,
-          externalId: videoId,
-          status: "indexed",
-          source: { connector: "youtube" },
-        },
-        select: { id: true },
-      });
-      if (indexed) {
-        return { alreadyIndexed: true, documentId: indexed.id, status: "indexed" };
-      }
-    }
-
-    const result = await enqueueIngestionWork({
-      orgId: input.orgId,
-      kbId: kb.id,
-      connector: "youtube",
-      externalId: videoId,
-      sourceUrl: `https://www.youtube.com/watch?v=${videoId}`,
-      youtubeConfig: {
-        connectionId: input.connectionId,
-      },
-      rootWorkItem: {
-        workKey: videoId,
-        kind: "resource",
-      },
+  if (!input.refresh) {
+    const indexed = await db.knowledgeDocument.findFirst({
+      where: { kbId: kb.id, externalId: videoId, status: "indexed", source: { connector: "youtube" } },
+      select: { id: true },
     });
-
-    console.info(`[JOB:youtube-enqueue] complete jobId=${result.jobId} elapsedMs=${Date.now() - startedAt}`);
-    return {
-      ok: true,
-      jobId: result.jobId,
-      sourceId: result.sourceId,
-      status: result.status,
-    };
-  } catch (error) {
-    console.error(`[JOB:youtube-enqueue] failed elapsedMs=${Date.now() - startedAt} error=${error instanceof Error ? error.message : String(error)}`);
-    throw error;
+    if (indexed) return { alreadyIndexed: true, documentId: indexed.id, status: "indexed" };
   }
+
+  const pageUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  const identityKey = defaultIdentityKey(kb.id, "youtube", videoId);
+  const source = await db.knowledgeSource.upsert({
+    where: { identityKey },
+    create: {
+      orgId: input.orgId, kbId: kb.id, connector: "youtube", externalId: videoId, identityKey, sourceUrl: pageUrl,
+      status: "syncing", youtube: { create: { connectionId: input.connectionId } },
+    },
+    update: { status: "syncing", error: null },
+  });
+  const slug = `youtube-${videoId}.mp4`;
+  let doc = await db.knowledgeDocument.upsert({
+    where: { sourceId_externalId: { sourceId: source.id, externalId: videoId } },
+    create: { kbId: kb.id, sourceId: source.id, externalId: videoId, slug, title: video.title, ext: "mp4", size: 0, s3SourceKey: "pending", status: "fetching" },
+    update: { title: video.title, status: "fetching", error: null },
+  });
+  const sourceKey = `${orgPrefix(input.orgId)}/knowledge/files/${doc.id}/${slug}`;
+  doc = await db.knowledgeDocument.update({ where: { id: doc.id }, data: { s3SourceKey: sourceKey } });
+
+  const queued = await queueVideoFetch({ docId: doc.id, orgId: input.orgId, kbId: kb.id, url: pageUrl, sourceKey });
+  if (!queued) {
+    await db.knowledgeDocument.update({ where: { id: doc.id }, data: { status: "failed", error: "Ingestion queue is not configured" } });
+  }
+  return { ok: true, jobId: doc.id, documentId: doc.id, sourceId: source.id, status: queued ? "queued" : "failed" };
 }
 
 /** Resolves document -> YouTube source -> active connection and queues refresh. */

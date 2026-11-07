@@ -113,3 +113,43 @@ def test_real_download_never_logs_its_signed_url(tmp_path, caplog, monkeypatch):
     with caplog.at_level(logging.DEBUG):
         worker.download(MSG["sourceUrl"], tmp_path / "f.md")
     assert (tmp_path / "f.md").read_bytes() == b"hello" and "SECRET123" not in caplog.text
+
+
+FETCH = {"type": "fetch", "docId": "vid1", "orgId": "org1", "kbId": "kb1",
+         "url": "https://www.youtube.com/watch?v=7H9AfVyuliU", "uploadUrl": "https://bucket.s3.amazonaws.com/raw/v.mp4" + SIGNED}
+
+
+def test_fetch_downloads_uploads_then_reports_fetched(tmp_path):
+    steps, sent = [], []
+
+    def download(url, out_dir):
+        steps.append(("download", url))
+        (out_dir / "video.mp4").write_bytes(b"\x00" * 1234)
+        return out_dir / "video.mp4", 72.0
+
+    def upload(url, path):
+        steps.append(("upload", url.split("?")[0], path.stat().st_size))
+
+    assert worker.handle(json.dumps(FETCH), 1, send=sent.append, download=download, upload=upload) is True
+    assert steps == [("download", FETCH["url"]), ("upload", "https://bucket.s3.amazonaws.com/raw/v.mp4", 1234)]
+    assert sent == [{"type": "fetched", "docId": "vid1", "orgId": "org1", "kbId": "kb1", "size": 1234, "durationSeconds": 72.0}]
+
+
+def test_fetch_failure_is_reported_and_retried(caplog):
+    sent = []
+    def download(url, out_dir):
+        raise RuntimeError("yt-dlp failed: ERROR: [youtube] 7H9AfVyuliU: Sign in to confirm you're not a bot")
+    with caplog.at_level(logging.INFO):
+        assert worker.handle(json.dumps(FETCH), 1, send=sent.append, download=download, upload=lambda *a: None) is False
+    assert sent[0]["type"] == "failed" and "not a bot" in sent[0]["error"] and "SECRET123" not in caplog.text
+
+
+@pytest.mark.parametrize("url", ["https://evil.example/watch?v=x", "http://www.youtube.com/watch?v=x", "file:///etc/passwd"])
+def test_fetch_only_accepts_https_youtube_or_loom(url):
+    with pytest.raises(ValueError, match="invalid message"):
+        worker.parse(json.dumps({**FETCH, "url": url}))
+
+
+def test_messages_without_a_type_are_still_processed():
+    assert type(worker.parse(json.dumps(MSG))).__name__ == "Job"
+    assert type(worker.parse(json.dumps(FETCH))).__name__ == "FetchJob"

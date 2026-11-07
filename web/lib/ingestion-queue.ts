@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { SendMessageCommand, SQSClient } from "@aws-sdk/client-sqs";
 import { db } from "@/lib/db";
-import { ingestionMessageSchema, knowledgeFileMessageSchema, type IngestionMessage } from "@/lib/ingestion-message";
-import { presignedGetUrl } from "@/lib/s3";
+import { ingestionMessageSchema, knowledgeFileMessageSchema, videoFetchMessageSchema, type IngestionMessage } from "@/lib/ingestion-message";
+import { presignedGetUrl, presignedPutUrl } from "@/lib/s3";
 
 // The worker may retry a message for hours (visibility timeouts, a DLQ redrive); the URL must outlive that.
 const SOURCE_URL_TTL_SECONDS = 24 * 60 * 60;
@@ -70,6 +70,30 @@ export async function queueKnowledgeFile(file: {
   return true;
 }
 
+/**
+ * Queues a video page (YouTube, Loom) for the worker's fetch stage. The worker downloads it, PUTs it to
+ * sourceKey through this signed URL, and reports "fetched"; the results route then queues processing.
+ */
+export async function queueVideoFetch(video: {
+  docId: string; orgId: string; kbId: string; url: string; sourceKey: string;
+}): Promise<boolean> {
+  const targetQueue = queueUrl();
+  if (!targetQueue) {
+    console.warn(`[IngestionQueue] INGESTION_QUEUE_URL not configured. Not queueing video ${video.docId}`);
+    return false;
+  }
+  const message = videoFetchMessageSchema.parse({
+    type: "fetch",
+    docId: video.docId,
+    orgId: video.orgId,
+    kbId: video.kbId,
+    url: video.url,
+    uploadUrl: await presignedPutUrl(video.sourceKey, "video/mp4", SOURCE_URL_TTL_SECONDS),
+  });
+  await getSqsClient().send(new SendMessageCommand({ QueueUrl: targetQueue, MessageBody: JSON.stringify(message) }));
+  return true;
+}
+
 export type EnqueueIngestionParams = {
   orgId: string;
   kbId: string;
@@ -88,7 +112,7 @@ export type EnqueueIngestionParams = {
   rootWorkItem?: {
     workKey?: string;
     kind?: string;
-    payload?: any;
+    payload?: unknown;
   };
 };
 

@@ -2,13 +2,31 @@ import type { ConnectionStore } from "./connection-store.server";
 import { googleRequest, listOwnedChannels, type YouTubeConfig } from "./http.server";
 import { createAuthorizedRequests } from "./tokens.server";
 import { parseCaptionSrt, transcriptMarkdown } from "./captions";
-import { YouTubeError, type ConnectionScope, type OwnedVideo, type OwnedTranscript } from "./types";
+import { YouTubeError, type ConnectionScope, type OwnedVideo, type OwnedVideoInfo, type OwnedTranscript } from "./types";
 
 type Caption = { id: string; snippet: { language: string; trackKind: string; status: string; isDraft: boolean; lastUpdated: string } };
 
 /** Official owner-only acquisition. Credentials and caption selection stay behind this interface. */
 export function createYouTubeClient(store: ConnectionStore, config: YouTubeConfig) {
   const authorized = createAuthorizedRequests(store, config);
+  /** The connected channel owns this video. Private videos are refused: they can't be fetched without the owner's login. */
+  async function verifyOwnedVideo(scope: ConnectionScope, videoId: string): Promise<OwnedVideoInfo> {
+    if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) throw new YouTubeError("INVALID_URL", "Invalid YouTube video URL");
+    return authorized(scope, async (token, connection) => {
+      const channels = await listOwnedChannels(token);
+      if (!channels.some((channel) => channel.id === connection.channelId)) throw new YouTubeError("WRONG_CHANNEL", "Reconnect the channel that owns this video");
+      const videos = JSON.parse(await googleRequest("video-details", `https://www.googleapis.com/youtube/v3/videos?part=snippet,status&id=${videoId}`,
+        { headers: { Authorization: `Bearer ${token}` } })) as {
+        items?: { id: string; snippet: { title: string; channelId: string; channelTitle: string }; status?: { privacyStatus?: string } }[];
+      };
+      const video = videos.items?.[0];
+      if (!video) throw new YouTubeError("NOT_FOUND", "Video is unavailable to this YouTube connection");
+      if (video.snippet.channelId !== connection.channelId) throw new YouTubeError("NOT_OWNED", "Only videos owned by the connected channel can be imported");
+      const privacyStatus = video.status?.privacyStatus ?? "unknown";
+      if (privacyStatus === "private") throw new YouTubeError("PRIVATE_VIDEO", "Private videos can't be imported. Set the video to unlisted in YouTube Studio, then retry.");
+      return { videoId, title: video.snippet.title, channelId: connection.channelId, channelTitle: video.snippet.channelTitle, privacyStatus };
+    });
+  }
   async function inspectOwnedVideo(scope: ConnectionScope, videoId: string): Promise<OwnedVideo> {
     if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) throw new YouTubeError("INVALID_URL", "Invalid YouTube video URL");
     return authorized(scope, async (token, connection) => {
@@ -36,6 +54,7 @@ export function createYouTubeClient(store: ConnectionStore, config: YouTubeConfi
     });
   }
   return {
+    verifyOwnedVideo,
     inspectOwnedVideo,
     async checkConnection(scope: ConnectionScope) {
       return authorized(scope, async (token, connection) => {

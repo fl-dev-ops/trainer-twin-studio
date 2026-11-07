@@ -1,4 +1,5 @@
 export type TranscriptSegment = { text: string; startSeconds: number; endSeconds: number };
+export type OwnedVideoInfo = { videoId: string; title: string; channelId: string; channelTitle: string; privacyStatus: string };
 export type OwnedVideo = {
   videoId: string;
   title: string;

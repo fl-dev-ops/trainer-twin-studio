@@ -1,12 +1,13 @@
 import { beforeEach, expect, mock, test } from "bun:test";
 
-type Doc = { id: string; kbId: string; orgId: string; slug: string; title: string; status: string; error?: string | null; s3MarkdownKey?: string; indexedAt?: Date };
+type Doc = { id: string; kbId: string; orgId: string; slug: string; title: string; status: string; s3SourceKey: string; size?: number; error?: string | null; s3MarkdownKey?: string; indexedAt?: Date };
 let docs: Doc[] = [];
 let objects = new Map<string, string>();
 let deletedPrefixes: string[] = [];
 const upsert = mock(async (_orgId: string, _meta: unknown, _chunks: unknown[]) => {});
 const prune = mock(async (_orgId: string, _docId: string, _keep: number) => {});
 const createDb = mock(async () => ({ tenantId: "t", database: "org_org-1" }));
+const queueFile = mock(async (_file: { docId: string; orgId: string; kbId: string; filename: string; sourceKey: string }) => true);
 const prefix = "test/org-1";
 
 mock.module("@/lib/db", () => ({
@@ -26,6 +27,7 @@ mock.module("@/lib/s3", () => ({
 }));
 mock.module("@/lib/main-collection", () => ({ MainCollectionService: { upsertKnowledgeChunks: upsert, pruneKnowledgeChunks: prune } }));
 mock.module("@/lib/chroma-tenant", () => ({ ChromaTenantService: { createOrgDatabase: createDb } }));
+mock.module("@/lib/ingestion-queue", () => ({ queueKnowledgeFile: queueFile }));
 
 const { POST } = await import("@/app/api/internal/ingestion/results/route");
 const ids = { docId: "doc-1", orgId: "org-1", kbId: "kb-1" };
@@ -37,10 +39,10 @@ const chunk = (index: number) => ({ index, text: `chunk ${index}`, startIndex: i
 
 beforeEach(() => {
   process.env.INTERNAL_API_SECRET = "s3cret";
-  docs = [{ id: "doc-1", kbId: "kb-1", orgId: "org-1", slug: "call.m4a", title: "call", status: "queued" }];
+  docs = [{ id: "doc-1", kbId: "kb-1", orgId: "org-1", slug: "call.m4a", title: "call", status: "queued", s3SourceKey: `${prefix}/knowledge/files/doc-1/call.m4a` }];
   objects = new Map([[`${prefix}/ingest/files/doc-1/chunks/part-0009.jsonl`, "stale"]]);
   deletedPrefixes = [];
-  for (const fn of [upsert, prune, createDb]) fn.mockClear();
+  for (const fn of [upsert, prune, createDb, queueFile]) fn.mockClear();
 });
 
 test("rejects a request without the internal secret", async () => {
@@ -85,4 +87,11 @@ test("malformed results are rejected before touching storage", async () => {
   expect((await send({ type: "chunks", ...ids, batch: 0, chunkingVersion: "v1", chunks: [] })).status).toBe(400);
   expect((await send({ type: "nope", ...ids })).status).toBe(400);
   expect(upsert).not.toHaveBeenCalled();
+});
+
+test("fetched: the downloaded video is in S3, so processing is queued from there", async () => {
+  docs[0].status = "fetching";
+  expect((await send({ type: "fetched", ...ids, size: 168405385, durationSeconds: 4217 })).status).toBe(200);
+  expect(docs[0]).toMatchObject({ status: "queued", size: 168405385, error: null });
+  expect(queueFile).toHaveBeenCalledWith({ docId: "doc-1", orgId: "org-1", kbId: "kb-1", filename: "call.m4a", sourceKey: docs[0].s3SourceKey });
 });

@@ -1,4 +1,5 @@
-"""SQS worker for knowledge-base uploads. One message = one uploaded file.
+"""SQS worker for knowledge-base items. One message = one file: "fetch" (download a video page into S3)
+or process (the default: a stored file -> redacted markdown, chunks, embeddings).
 
 The worker has no Postgres, S3 or Chroma access. It downloads the file from a signed URL, runs the
 pipeline and POSTs the results to the web app (INGESTION_RESULTS_URL), which stores the files in S3 and
@@ -6,6 +7,10 @@ writes the chunks to the org's Chroma database.
 
 Message body (sent by web/lib/ingestion-queue.ts):
   {"docId": "...", "orgId": "...", "kbId": "...", "filename": "lesson.m4a", "sourceUrl": "https://..."}
+
+Fetch message (sent by web/lib/youtube-ingestion.ts): {"type": "fetch", ids, "url": "<YouTube/Loom page>",
+  "uploadUrl": "<signed S3 PUT, video/mp4>"} -> yt-dlp download -> PUT -> {"type": "fetched", ids, "size", "durationSeconds"};
+  the web app then queues the process message for the stored file.
 
 Results, each a POST with header x-internal-secret (Vercel caps a request at 4.5 MB, hence batches):
   {"type": "start", ids}                                    worker has the results; web clears old chunk files
@@ -34,6 +39,7 @@ import httpx
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from . import CHUNKING_VERSION, build_pipeline, default_embeddings, default_genie
+from .fetch import FetchJob, fetch
 
 log = logging.getLogger("ingestion.worker")
 # httpx logs every request URL at INFO, which would print signed URLs.
@@ -96,7 +102,9 @@ def process(job: Job, *, send: Callable[[dict[str, Any]], None] = send_result, g
             embeddings: Any = None, **pipeline_kw: Any) -> int:
     """Runs one job end to end and reports it. Returns the chunk count; raises on any failure."""
     with tempfile.TemporaryDirectory(prefix="ingest-") as tmp:
-        src = Path(tmp) / ("source" + Path(job.filename).suffix.lower())
+        # Named after the file (sanitized): its stem is the fallback title in the markdown's front matter.
+        name = re.sub(r"[^A-Za-z0-9._-]", "_", Path(job.filename).name)[-120:] or "source"
+        src = Path(tmp) / (Path(name).stem + Path(name).suffix.lower())
         out = Path(tmp) / "out"
         t = time.monotonic()
         download(job.sourceUrl, src)
@@ -148,9 +156,12 @@ class _Heartbeat:
         self.thread.join()
 
 
-def parse(body: str) -> Job:
+def parse(body: str) -> Job | FetchJob:
+    """A message with "type": "fetch" is a video to download; anything else is a file to process."""
     try:
-        return Job.model_validate(json.loads(body))
+        data = json.loads(body)
+        return FetchJob.model_validate(data) if isinstance(data, dict) and data.get("type") == "fetch" \
+            else Job.model_validate(data)
     except (json.JSONDecodeError, ValidationError) as e:
         # Never echo the body: it holds a signed URL.
         fields = [".".join(map(str, err["loc"])) for err in e.errors()] if isinstance(e, ValidationError) else []
@@ -160,9 +171,13 @@ def parse(body: str) -> Job:
 def handle(body: str, attempt: int = 1, *, send: Callable[[dict[str, Any]], None] = send_result, **kw: Any) -> bool:
     """Processes one message body. Returns True when the message should be deleted."""
     job = parse(body)  # an invalid message raises: it stays on the queue and ends in the DLQ
-    log.info("start docId=%s orgId=%s attempt=%d ext=%s", job.docId, job.orgId, attempt, Path(job.filename).suffix)
+    stage = "fetch" if isinstance(job, FetchJob) else "process"
+    log.info("start %s docId=%s orgId=%s attempt=%d", stage, job.docId, job.orgId, attempt)
     try:
-        process(job, send=send, **kw)
+        if isinstance(job, FetchJob):
+            fetch(job, send, **{k: v for k, v in kw.items() if k in ("download", "upload")})
+        else:
+            process(job, send=send, **{k: v for k, v in kw.items() if k not in ("download", "upload")})
         return True
     except DocumentGone:
         log.info("document %s was deleted; dropping its message", job.docId)
