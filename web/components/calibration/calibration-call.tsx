@@ -18,8 +18,7 @@ import {
   PhoneIcon,
 } from "@/components/calibration/call-icons";
 import type { CalibrationTurn, Rating } from "@/components/calibration/mock";
-import { Bubble, CalibrationStats, PILL, RatingLabel, SOFT_SHADOW, TwinPortrait } from "@/components/calibration/parts";
-import { MessageFileCard } from "@/components/copilot-composer";
+import { AttachedTurn, Bubble, CalibrationStats, PILL, RatingLabel, SOFT_SHADOW, TwinPortrait, type AttachedFiles } from "@/components/calibration/parts";
 import { WhyButton, WhyPanel, useEvidenceTurns } from "@/components/calibration/why-panel";
 import { CallWaves } from "@/components/calibration/call-waves";
 import { lookupEvidence } from "@/lib/twin/evidence-match";
@@ -34,7 +33,6 @@ import { isFeelsOffMessage, joinsLearnerTurn, type CalibrationScore } from "@/li
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { attachedMessage, uploadFile } from "@/lib/upload-client";
-import { stripAttachments } from "@/lib/markers";
 import { DURING_UPLOAD_ACCEPT, DURING_UPLOAD_RULE, duringUploadProblem } from "@/lib/context-upload";
 
 /** ready: the pre-join (mic access, Start); leaving: a saved twin calibration on its way to its page. */
@@ -85,7 +83,7 @@ type CallProps = {
   attach?: boolean;
 };
 
-export type CallResult = { sessionId: string | null; seconds: number; turns: CalibrationTurn[] };
+export type CallResult = { sessionId: string | null; seconds: number; turns: CalibrationTurn[]; files: AttachedFiles };
 export type LearnerCall = {
   /** The learner's assignment code; null for a studio member's preview (started by slug: no minutes, not counted). */
   code: string | null;
@@ -376,7 +374,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
   // A learner's call hands its result to the learner page (which shows the summary and feedback).
   const onEnded = learner?.onEnded;
   useEffect(() => {
-    if (phase === "ended" && onEnded) onEnded({ sessionId: connectionRef.current?.sessionId ?? null, seconds, turns: turnsRef.current });
+    if (phase === "ended" && onEnded) onEnded({ sessionId: connectionRef.current?.sessionId ?? null, seconds, turns: turnsRef.current, files: attachedFiles });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per ended call, with the values at that moment
   }, [phase, onEnded]);
 
@@ -658,22 +656,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                   captions.map((turn) => {
                     const evidence = lookupEvidence(evidenceTurns ?? [], turn.text);
                     if (turn.speaker === "you" && turn.text.includes("[ATTACHED")) {
-                      const split = stripAttachments(turn.text);
-                      return (
-                        <div key={turn.id} className="flex flex-col items-end gap-2">
-                          <div className="flex flex-wrap justify-end gap-2">
-                            {split.files.map((file) => (
-                              <MessageFileCard
-                                key={file.id}
-                                name={attachedFiles.get(file.id)?.name ?? file.name}
-                                mediaType={attachedFiles.get(file.id)?.mediaType ?? undefined}
-                                previewUrl={attachedFiles.get(file.id)?.mediaType?.startsWith("image/") ? `/api/uploads/${file.id}/view` : undefined}
-                              />
-                            ))}
-                          </div>
-                          {split.text.trim() ? <Bubble speaker="you" className="max-w-[440px]">{split.text}</Bubble> : null}
-                        </div>
-                      );
+                      return <AttachedTurn key={turn.id} text={turn.text} files={attachedFiles} className="max-w-[440px]" />;
                     }
                     return turn.speaker === "you" ? (
                       <Bubble key={turn.id} speaker="you" className="max-w-[440px]">

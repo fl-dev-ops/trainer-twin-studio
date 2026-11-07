@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { CalibrationCall, type CallResult } from "@/components/calibration/calibration-call";
 import { CallEndedIcon, PhoneIcon } from "@/components/calibration/call-icons";
-import { Bubble, PILL, TwinPortrait } from "@/components/calibration/parts";
+import { AttachedTurn, Bubble, PILL, TwinPortrait } from "@/components/calibration/parts";
 import { BrandMark } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -352,7 +352,13 @@ function Summary({ twin, trainer, result, minutesLeft, preview, onReport, onAgai
         <CollapsibleContent>
           <div className="mt-4 flex flex-col gap-3">
             {result.turns.length ? (
-              result.turns.map((turn) => <Bubble key={turn.id} speaker={turn.speaker}>{turn.text}</Bubble>)
+              result.turns.map((turn) =>
+                turn.speaker === "you" && turn.text.includes("[ATTACHED") ? (
+                  <AttachedTurn key={turn.id} text={turn.text} files={result.files} />
+                ) : (
+                  <Bubble key={turn.id} speaker={turn.speaker}>{turn.text}</Bubble>
+                ),
+              )
             ) : (
               <p className="m-0 text-sm text-muted-foreground">Nothing was said.</p>
             )}

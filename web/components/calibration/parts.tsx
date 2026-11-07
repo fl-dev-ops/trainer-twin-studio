@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import { FeelsLikeMeIcon, FeelsOffIcon } from "@/components/calibration/call-icons";
+import { MessageFileCard } from "@/components/copilot-composer";
 import type { CalibrationTurn, Rating } from "@/components/calibration/mock";
 import { Spinner } from "@/components/ui/spinner";
+import { stripAttachments } from "@/lib/markers";
 import { accuracyOf, type CalibrationScore } from "@/lib/twin/stats";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +28,32 @@ export function TwinPortrait({ name, photoUrl = null, className }: { name: strin
       )}
     >
       {name.charAt(0).toUpperCase()}
+    </div>
+  );
+}
+
+/** Files the call attached, by upload id: their names and kinds for the file cards. */
+export type AttachedFiles = ReadonlyMap<string, { name: string; mediaType: string | null }>;
+
+/** Your line with the files it attached (its `[ATTACHED <id>]` markers) shown as file cards above the text. */
+export function AttachedTurn({ text, files, className }: { text: string; files?: AttachedFiles; className?: string }) {
+  const split = stripAttachments(text);
+  return (
+    <div className="flex flex-col items-end gap-2">
+      <div className="flex flex-wrap justify-end gap-2">
+        {split.files.map((file) => {
+          const known = files?.get(file.id);
+          return (
+            <MessageFileCard
+              key={file.id}
+              name={known?.name ?? file.name}
+              mediaType={known?.mediaType ?? undefined}
+              previewUrl={known?.mediaType?.startsWith("image/") ? `/api/uploads/${file.id}/view` : undefined}
+            />
+          );
+        })}
+      </div>
+      {split.text.trim() ? <Bubble speaker="you" className={className}>{split.text}</Bubble> : null}
     </div>
   );
 }
