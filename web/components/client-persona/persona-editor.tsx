@@ -3,9 +3,19 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, Check, ImagePlus, Mic, Paperclip, Plus, X } from "lucide-react";
+import { ArrowLeft, Check, ImagePlus, Mic, Paperclip, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { VoicePlayButton } from "@/components/client-persona/voice-play-button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
@@ -59,7 +69,8 @@ export function PersonaEditor({
   const [documents, setDocuments] = useState<PersonaDocument[]>(initialDocuments);
   const [phraseDraft, setPhraseDraft] = useState("");
   const [link, setLink] = useState("");
-  const [busy, setBusy] = useState<"save" | "upload" | "link" | "photo" | null>(null);
+  const [busy, setBusy] = useState<"save" | "upload" | "link" | "photo" | "delete" | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const photoInput = useRef<HTMLInputElement>(null);
@@ -202,6 +213,26 @@ export function PersonaEditor({
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save the persona");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function deletePersona() {
+    if (!slug) return;
+    setBusy("delete");
+    try {
+      const response = await fetch(`/api/client-personas/${encodeURIComponent(slug)}`, { method: "DELETE" });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(result?.error ?? "Could not delete the persona");
+      setDirty(false);
+      setDeleteOpen(false);
+      toast.success("Persona deleted");
+      router.push("/personas");
+      router.refresh();
+    } catch (error) {
+      setDeleteOpen(false);
+      toast.error(error instanceof Error ? error.message : "Could not delete the persona");
     } finally {
       setBusy(null);
     }
@@ -504,12 +535,36 @@ export function PersonaEditor({
 
       <footer className="shrink-0 border-t bg-background">
         <div className="mx-auto flex max-w-[720px] items-center justify-between px-4 py-3">
-          <Button variant="ghost" nativeButton={false} render={<Link href="/personas" />}>Cancel</Button>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" nativeButton={false} render={<Link href="/personas" />}>Cancel</Button>
+            {slug && (
+              <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setDeleteOpen(true)} disabled={busy !== null}>
+                <Trash2 data-icon="inline-start" /> Delete
+              </Button>
+            )}
+          </div>
           <Button className="h-10 rounded-full px-5" onClick={save} disabled={busy === "save"}>
             {busy === "save" ? <Spinner data-icon="inline-start" /> : <Check data-icon="inline-start" />} Save persona
           </Button>
         </div>
       </footer>
+
+      <AlertDialog open={deleteOpen} onOpenChange={(open) => { if (busy !== "delete") setDeleteOpen(open); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {form.name || "this persona"}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes the persona and its uploaded photo. It can&apos;t be undone. Personas used in a role play can&apos;t be deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy === "delete"}>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={deletePersona} disabled={busy === "delete"}>
+              {busy === "delete" ? <Spinner data-icon="inline-start" /> : <Trash2 data-icon="inline-start" />} Delete persona
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

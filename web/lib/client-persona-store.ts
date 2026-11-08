@@ -1,7 +1,10 @@
 import yaml from "js-yaml";
 import { db } from "@/lib/db";
-import { clientPersonaSchema, personaDataFromForm } from "@/lib/client-persona";
+import { clientPersonaSchema, isUploadedPersonaPhoto, personaDataFromForm } from "@/lib/client-persona";
+import { isPersonaPhotoName, personaPhotoKey } from "@/lib/client-persona-photo";
+import { MainCollectionService } from "@/lib/main-collection";
 import { isClientPersonaData } from "@/lib/roleplay";
+import { deletePrefix } from "@/lib/s3";
 import { saveSpec } from "@/lib/specs";
 
 export class ClientPersonaError extends Error {}
@@ -52,4 +55,39 @@ export async function saveClientPersona(orgId: string, input: unknown, slug?: st
     orgId,
   );
   return { slug: target!, version: result.version ?? 1 };
+}
+
+/**
+ * Deletes a client persona with its uploaded photo and source files. Refused while a scenario (saved or draft)
+ * still uses it, so no role play loses its client.
+ */
+export async function deleteClientPersona(orgId: string, slug: string): Promise<void> {
+  const row = await db.persona.findUnique({
+    where: { orgId_slug: { orgId, slug } },
+    select: { id: true, data: true, sources: { select: { id: true, s3Key: true } } },
+  });
+  if (!row || !isClientPersonaData(row.data)) throw new ClientPersonaError("Persona not found");
+
+  const [agents, drafts] = await Promise.all([
+    db.agent.findMany({ where: { personaId: row.id }, select: { name: true } }),
+    db.specDraft.findMany({ where: { orgId, personaSlug: slug, status: "draft" }, select: { name: true } }),
+  ]);
+  const usedIn = [...agents, ...drafts].map((item) => `"${item.name}"`);
+  if (usedIn.length) {
+    throw new ClientPersonaError(
+      `Used in ${usedIn.slice(0, 3).join(", ")}${usedIn.length > 3 ? ` and ${usedIn.length - 3} more` : ""}. Pick a different persona there first.`,
+    );
+  }
+
+  await db.persona.delete({ where: { id: row.id } });
+
+  // Files go after the row, so a failed cleanup never leaves a persona pointing at missing files.
+  const avatar = (row.data as { avatar?: unknown }).avatar;
+  const photoName = typeof avatar === "string" && isUploadedPersonaPhoto(avatar) ? avatar.split("/").pop()! : null;
+  await Promise.allSettled([
+    ...(photoName && isPersonaPhotoName(photoName) ? [deletePrefix(personaPhotoKey(orgId, photoName))] : []),
+    ...row.sources.flatMap((source) => [deletePrefix(source.s3Key), MainCollectionService.removePersonaSource(orgId, source.id)]),
+  ]).then((results) => {
+    for (const result of results) if (result.status === "rejected") console.error("Persona file cleanup failed", result.reason);
+  });
 }
