@@ -17,7 +17,7 @@ tags:
   - name: Users
     description: Invite and manage organization learners.
   - name: Assignments
-    description: Give learners published scenarios to practise, one attempt each.
+    description: Give learners published scenarios to practise, as often as their credits allow.
   - name: Scenarios
     description: Read the organization's published role-play scenarios.
   - name: Sessions
@@ -294,8 +294,8 @@ paths:
         A pending or used assignment for the same learner and scenario is returned as it is, with `created: false` and no email.
         A cancelled or expired one is reopened with a new `practiceUrl` and email (`201`, `created: true`).
         Someone new to the organization's credits gets 30 (1 credit = 1 minute of practice) from its prepaid balance;
-        `409` when the balance can't cover them. Each assignment is one attempt through its personal `practiceUrl`; the
-        learner signs in with the assigned email. Email failure does not roll back the assignment.
+        `409` when the balance can't cover them. The learner practises through its personal `practiceUrl` as many times
+        as their credits allow, signing in with the assigned email. Email failure does not roll back the assignment.
       requestBody:
         required: true
         content:
@@ -435,6 +435,7 @@ paths:
             $ref: '#/components/schemas/SessionStatus'
         - $ref: '#/components/parameters/UserIdFilter'
         - $ref: '#/components/parameters/ScenarioFilter'
+        - $ref: '#/components/parameters/AssignmentFilter'
         - $ref: '#/components/parameters/FromFilter'
         - $ref: '#/components/parameters/ToFilter'
         - $ref: '#/components/parameters/Limit'
@@ -527,6 +528,12 @@ components:
       name: scenario
       in: query
       description: Filter by published scenario slug.
+      schema:
+        type: string
+    AssignmentFilter:
+      name: assignmentId
+      in: query
+      description: Filter by assignment ID (every practice of one assignment).
       schema:
         type: string
     ScenarioSlug:
@@ -815,7 +822,7 @@ components:
           format: uri
     AssignmentDetail:
       type: object
-      required: [id, assignedAt, status, user, scenario, practiceUrl]
+      required: [id, assignedAt, status, practiceCount, lastPracticedAt, user, scenario, practiceUrl]
       properties:
         id:
           type: string
@@ -825,6 +832,14 @@ components:
           format: date-time
         status:
           $ref: '#/components/schemas/AssignmentStatus'
+        practiceCount:
+          description: How many times the learner has practised it (sessions started from it).
+          type: integer
+          example: 3
+        lastPracticedAt:
+          description: When the latest practice started; null before the first.
+          type: [string, 'null']
+          format: date-time
         user:
           type: object
           description: The learner; `id` and `name` are null when the email belongs to someone who has not joined yet.
@@ -847,9 +862,9 @@ components:
       type: string
       enum: [pending, used, expired, cancelled]
       x-enum-descriptions:
-        pending: Assigned; the learner has not started yet.
-        used: The learner started a session from this assignment.
-        expired: The assignment link expired before use.
+        pending: Assigned; the learner has not practised it yet.
+        used: The learner has practised it at least once; the link still works.
+        expired: Only on assignments made before links stopped expiring; assigning again reopens it.
         cancelled: The assignment was cancelled (for example by reassignment).
     SessionStatus:
       type: string
@@ -888,6 +903,9 @@ components:
           example: react-mock-interview
         agentVersion:
           type: integer
+        assignmentId:
+          description: The assignment it was started from (each practice is a new session); null when started without one.
+          type: [string, 'null']
         status:
           $ref: '#/components/schemas/SessionStatus'
         mode:

@@ -4010,6 +4010,15 @@
                 {
                   "disabled": false,
                   "description": {
+                    "content": "Filter by assignment ID (every practice of one assignment).",
+                    "type": "text/plain"
+                  },
+                  "key": "assignmentId",
+                  "value": "<string>"
+                },
+                {
+                  "disabled": false,
+                  "description": {
                     "content": "Only include sessions started at or after this ISO 8601 timestamp.",
                     "type": "text/plain"
                   },

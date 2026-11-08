@@ -7,7 +7,7 @@ A session is a learner's practice run against a published role-play scenario. Se
 
 A few things shape a session:
 
-- A learner starts a role play from its assignment link, and each assignment is one attempt.
+- A learner starts a role play from its assignment link, as many times as they like: each practice is a new session with the same `assignmentId`.
 - A learner's call uses their credits (1 credit = 1 minute) and ends when they run out.
 - A learner has one call at a time in your organization: starting another ends the open one.
 
@@ -21,6 +21,7 @@ Combine any of these filters:
 | --- | --- |
 | `userId` | Sessions for one learner |
 | `scenario` | Sessions for one published scenario slug |
+| `assignmentId` | Every practice of one assignment |
 | `status` | `assigned`, `activating`, `active`, `completed`, `abandoned`, `failed`, or `revoked` |
 | `from` | Started at or after this ISO 8601 timestamp |
 | `to` | Started at or before this ISO 8601 timestamp |

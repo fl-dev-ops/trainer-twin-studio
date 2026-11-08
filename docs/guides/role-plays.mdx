@@ -17,7 +17,7 @@ In the [TrainerTwin dashboard](https://dash.trainertwin.com):
 
 | | What it controls | How they get it |
 | --- | --- | --- |
-| **An assignment** | *Which* role play they can do: one attempt, through a personal link | `POST /assignments` |
+| **An assignment** | *Which* role play they can do, through a personal link, as many times as they like | `POST /assignments` |
 | **Credits** | *How long* they can practise, shared by every twin and role play | 30 when first assigned or invited; more from the dashboard |
 
 ## The flow
@@ -66,31 +66,22 @@ Your platform                          TrainerTwin                           Lea
     curl "https://dash.trainertwin.com/api/v1/sessions?userId=user_123&scenario=react-mock-interview&status=completed" \
       --header "x-api-key: $TRAINERTWIN_API_KEY"
     ```
-    Then read one for its transcript, evidence, and recordings with `GET /sessions/{id}`. See [Sessions](/guides/sessions).
+    Then read one for its transcript, evidence, and recordings with `GET /sessions/{id}`. Every session has the `assignmentId` it came from. See [Sessions](/guides/sessions).
   </Step>
 </Steps>
 
-## Attempts
+## Practising again
 
-Each assignment is **one attempt**: once its session ends, the assignment is `used` and the link no longer starts a new call. A learner who drops mid-call can rejoin the same call while it is still open.
+There's no limit on attempts: a learner can practise an assigned role play as many times as their credits allow. After a call they can choose **Practise again**, or open the same `practiceUrl` later; each practice starts a new session. A learner whose connection drops mid-call rejoins the same call while it's still open.
 
-To give another attempt, cancel the assignment and assign it again:
+The link keeps working until you remove the assignment (`DELETE /assignments/{id}`). To read every practice of one assignment:
 
 ```bash
-curl "https://dash.trainertwin.com/api/v1/assignments/assignment_123" \
-  --request DELETE \
+curl "https://dash.trainertwin.com/api/v1/sessions?assignmentId=assignment_123" \
   --header "x-api-key: $TRAINERTWIN_API_KEY"
-
-curl "https://dash.trainertwin.com/api/v1/assignments" \
-  --request POST \
-  --header "x-api-key: $TRAINERTWIN_API_KEY" \
-  --header "content-type: application/json" \
-  --data '{ "email": "avery@example.com", "scenario": "react-mock-interview" }'
 ```
 
-The second request reopens it with a new `practiceUrl` and emails the learner. It doesn't give more credits.
-
-An unused link expires after 30 days (`expired`); assigning again reopens it the same way.
+`GET /assignments/{id}` also tells you how often it was practised (`practiceCount`) and when last (`lastPracticedAt`).
 
 ## Credits during practice
 
@@ -106,7 +97,7 @@ Giving a learner more credits, choosing how many a new learner starts with, and 
 
 | Request | Email | Link |
 | --- | --- | --- |
-| `POST /assignments` (new or reopened), `PATCH /assignments/{id}` (changed) | **New Role Play Assigned**: the role play, its objective, the minutes they have, and which email to sign in with | `practiceUrl`, their personal link |
+| `POST /assignments` (new or reopened), `PATCH /assignments/{id}` (changed) | **New Role Play Assigned**: the role play, its objective, the minutes they have (to use on it as often as they like), and which email to sign in with | `practiceUrl`, their personal link |
 | `POST /users` | **Join *your organization* on TrainerTwin** | Your organization's home page, where they continue with Google |
 
 You don't need `POST /users` before assigning a role play. Call it only when you want someone to join without a role play yet; they would otherwise get two emails. Every response reports `emailSent`. An assignment or invitation is kept even when its email fails, so you can send the link yourself.

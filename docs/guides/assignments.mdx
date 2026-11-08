@@ -3,7 +3,7 @@ title: "Assign"
 description: "Give learners a published role play to practise."
 ---
 
-An assignment gives a learner one attempt at a published role play, through a personal link (`practiceUrl`). A learner can only practise the role plays assigned to them. For the whole flow, from assigning to reading the result, see [Role plays end to end](/guides/role-plays).
+An assignment lets a learner practise a published role play through a personal link (`practiceUrl`), as many times as their credits allow. A learner can only practise the role plays assigned to them. For the whole flow, from assigning to reading the result, see [Role plays end to end](/guides/role-plays).
 
 ## Before you assign
 
@@ -60,9 +60,9 @@ Creating the same learner-scenario pair again is safe. While the assignment is p
 
 Someone new to your organization's credits gets **30** (1 credit = 1 minute of practice) from its prepaid balance when first assigned. If the balance can't cover them, the request returns `409` and nothing is assigned. Credits belong to the learner and are shared by every role play and twin, so assigning more role plays doesn't give more credits. A call ends when the learner's credits run out. Give learners more credits in the dashboard.
 
-## Attempts
+## Practising again
 
-An assignment is one attempt: when its session ends, its `status` becomes `used`. To give another attempt, remove the assignment and create it again; it reopens with a new `practiceUrl` and email. An unused assignment expires after 30 days.
+There's no limit on attempts. Each practice starts a new session from the same `practiceUrl`, and `status` becomes `used` after the first. The link keeps working until you remove the assignment. List an assignment's sessions with `GET /sessions?assignmentId=…`.
 
 ## Change an assignment
 
@@ -85,7 +85,7 @@ curl "https://dash.trainertwin.com/api/v1/assignments/assignment_123" \
   --header "x-api-key: $TRAINERTWIN_API_KEY"
 ```
 
-Returns the learner, scenario, current `status` (`pending`, `used`, `expired`, or `cancelled`), and `practiceUrl`. For an assignment made to the email of someone who has not joined yet, the learner's `id` and `name` are `null`.
+Returns the learner, scenario, current `status`, `practiceUrl`, how often it was practised (`practiceCount`), and when last (`lastPracticedAt`, or `null`). `status` is `pending` (not practised yet), `used` (practised at least once; the link still works), or `cancelled`. Assignments made before links stopped expiring may show `expired`; assigning again reopens them. For an assignment made to the email of someone who has not joined yet, the learner's `id` and `name` are `null`.
 
 List assignments with `GET /assignments`, filtered by `userId`, `email`, or `scenario`.
 
