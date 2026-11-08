@@ -62,10 +62,12 @@ export function UsersTable({ users }: { users: UsersRow[] }) {
                 {user.userId && user.twinSessions > 0 ? (
                   <Link
                     href={`/users/${user.userId}`}
+                    aria-label={`Open ${user.name}`}
                     className="absolute inset-0 outline-none transition-colors hover:bg-(--sidebar) focus-visible:bg-(--sidebar)"
                   />
                 ) : null}
-                <div className={cn(USERS_GRID, "relative items-center px-5 py-4")}>
+                {/* Above the link for painting, but clicks pass through to it. */}
+                <div className={cn(USERS_GRID, "pointer-events-none relative items-center px-5 py-4")}>
                   <span className="flex min-w-0 items-center gap-3">
                     <UserAvatar user={user} size="md" />
                     <span className="flex min-w-0 flex-col gap-0.5">
