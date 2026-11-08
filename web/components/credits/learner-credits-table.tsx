@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { CreditsPager, usePage } from "@/components/credits/credits-pager";
 import { LowCreditsBadge } from "@/components/credits/low-credits-badge";
 import { UserAvatar } from "@/components/user-avatar";
 import { LOW_LEARNER_MINUTES } from "@/lib/minutes-config";
@@ -21,10 +24,11 @@ const min = (value: number) => (
 );
 
 /**
- * Each learner's credits in total: everything given to them, what their calls used, and what's left (lowest first).
+ * Each learner's credits in total, 20 a page: everything given to them, what their calls used, and what's left (lowest first).
  * A learner who has signed up opens their page, where more can be added.
  */
-export function LearnerCreditsTable({ rows }: { rows: LearnerCreditsRow[] }) {
+export function LearnerCreditsTable({ rows, empty }: { rows: LearnerCreditsRow[]; empty: string }) {
+  const { rows: shown, ...pager } = usePage(rows);
   return (
     <div className="overflow-hidden rounded-tt-lg border border-(--card-border) bg-card shadow-card">
       <div className={`${GRID} bg-(--sidebar) px-5 py-2.5 text-overline font-medium tracking-overline uppercase text-(--text-secondary)`}>
@@ -34,10 +38,10 @@ export function LearnerCreditsTable({ rows }: { rows: LearnerCreditsRow[] }) {
         <span>Left</span>
       </div>
       {rows.length === 0 ? (
-        <p className="m-0 border-t border-(--border) px-5 py-6 text-center text-sm text-muted-foreground">No learner has credits yet. They get theirs when you invite or assign them.</p>
+        <p className="m-0 border-t border-(--border) px-5 py-6 text-center text-sm text-muted-foreground">{empty}</p>
       ) : (
         <ul className="m-0 list-none p-0">
-          {rows.map((row) => (
+          {shown.map((row) => (
             <li key={row.email} className={`${GRID} relative border-t border-(--border) px-5 py-3 text-sm`}>
               <span className="flex min-w-0 items-center gap-3">
                 <UserAvatar user={{ name: row.name ?? row.email, email: row.email, image: row.image }} size="sm" />
@@ -62,6 +66,7 @@ export function LearnerCreditsTable({ rows }: { rows: LearnerCreditsRow[] }) {
           ))}
         </ul>
       )}
+      <CreditsPager {...pager} />
     </div>
   );
 }
