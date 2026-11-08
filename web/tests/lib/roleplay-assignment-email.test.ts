@@ -36,8 +36,8 @@ describe("sendRolePlayAssignmentEmail content", () => {
     const { html, text, subject, to } = deliveries[0];
     expect(to).toBe(input.to);
     expect(subject).toBe("New Role Play Assigned: Customer support");
-    expect(html).toContain(`You have <strong>${minutes} minutes</strong> of practice.`);
-    expect(text).toContain(`You have ${minutes} minutes of practice.`);
+    expect(html).toContain(`You have <strong>${minutes} minutes</strong> of practice, and can do this role play as many times as you like while they last.`);
+    expect(text).toContain(`You have ${minutes} minutes of practice, and can do this role play as many times as you like while they last.`);
     expect(html).toContain(`sign in with <strong>${input.to}</strong>`);
     expect(text).toContain(`Sign in with ${input.to}`);
     expect(html).toContain("<strong>Your trainer</strong> has assigned you the <strong>Customer support</strong> role play.");
@@ -53,6 +53,7 @@ describe("sendRolePlayAssignmentEmail content", () => {
     expect(deliveries).toHaveLength(1);
     for (const content of [deliveries[0].html, deliveries[0].text]) {
       expect(content).not.toContain("minutes");
+      expect(content).not.toContain("as many times as you like");
     }
   });
 

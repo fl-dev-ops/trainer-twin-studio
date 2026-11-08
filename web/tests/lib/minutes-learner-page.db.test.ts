@@ -4,6 +4,9 @@ import * as sessionUser from "@/lib/session-user";
 import { ensureDeployment } from "@/lib/deployments";
 import { listUsers } from "@/lib/learners";
 import { loadSharedSession, loadTwinLink } from "@/lib/pages/learner";
+import { loadOrgHome } from "@/lib/pages/org-home";
+import { roleplayRouter } from "@/lib/roleplay/trpc";
+import { ROLEPLAY_SOURCE } from "@/lib/scenario-ingest";
 import { grantMinutes, recordSessionUsage, topUpOrg } from "@/lib/minutes";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
@@ -27,6 +30,77 @@ describe.skipIf(!localMinutesDb)("learner pages with minutes (local database)", 
     const session = await f.session({ allowedSeconds: 120, endedAt: new Date(new Date("2026-01-01T00:00:00Z").getTime() + (120 - seconds) * 1000) });
     await recordSessionUsage(session.id);
   };
+
+  test.each([
+    { status: "pending", pastStatus: "completed" },
+    { status: "used", pastStatus: "completed" },
+    { status: "used", pastStatus: "abandoned" },
+    { status: "used", pastStatus: "failed" },
+  ])("loadSharedSession opens a past-date $status link after a $pastStatus session", async ({ status, pastStatus }) => {
+    await balance(120);
+    const assignment = await db.rolePlayAssignment.update({ where: { shareCode: code }, data: { status, expiresAt: new Date(0) } });
+    await f.session({ assignmentId: assignment.id, status: pastStatus, startedAt: new Date(0), endedAt: new Date(0) });
+    expect(await loadSharedSession(code)).toMatchObject({ kind: "session", props: { sessionCode: code, minutesLeft: 2 } });
+    expect(await db.rolePlayAssignment.findUniqueOrThrow({ where: { id: assignment.id } })).toMatchObject({ status, expiresAt: new Date(0) });
+  });
+
+  test.each(["cancelled", "expired"])("loadSharedSession rejects %s status despite available minutes", async (status) => {
+    await balance(120);
+    await db.rolePlayAssignment.update({ where: { shareCode: code }, data: { status } });
+    expect(await loadSharedSession(code)).toEqual({ kind: "invalid" });
+  });
+
+  test("loadSharedSession asks the wrong account to switch on a used, past-date link", async () => {
+    await db.rolePlayAssignment.update({ where: { shareCode: code }, data: { status: "used", expiresAt: new Date(0) } });
+    identity.mockResolvedValue({ org: { ...f.org, accentColor: null }, user: f.trainer, signInUrl: "/sign-in" });
+    expect(await loadSharedSession(code)).toMatchObject({ kind: "switchAccount", email: f.trainer.email });
+  });
+
+  test("loadSharedSession rejects a link outside the current org", async () => {
+    identity.mockResolvedValue({ org: { ...f.org, id: `${f.org.id}-other`, accentColor: null }, user: f.learner, signInUrl: "/sign-in" });
+    expect(await loadSharedSession(code)).toEqual({ kind: "invalid" });
+  });
+
+  test("a practised, past-date link still shows outOfMinutes when its minutes run out", async () => {
+    await balance(0);
+    const assignment = await db.rolePlayAssignment.update({ where: { shareCode: code }, data: { status: "used", expiresAt: new Date(0) } });
+    await f.session({ assignmentId: assignment.id, startedAt: new Date(0), endedAt: new Date(0) });
+    expect(await loadSharedSession(code)).toEqual({ kind: "outOfMinutes", email: f.learner.email });
+  });
+
+  test("loadOrgHome lists pending and used role plays regardless of practice history or expiry date", async () => {
+    const original = await db.rolePlayAssignment.findUniqueOrThrow({ where: { shareCode: code } });
+    const visible: string[] = [];
+    for (const status of ["pending", "used", "cancelled", "expired"]) {
+      for (const past of [true, false]) {
+        const shareCode = `${code}-${status}-${past}`;
+        const assignment = await db.rolePlayAssignment.create({ data: {
+          orgId: f.org.id, deploymentId: original.deploymentId, recipientEmail: f.learner.email,
+          assignedByUserId: f.trainer.id, status, shareCode,
+          expiresAt: past ? new Date(0) : new Date(Date.now() + 3600_000),
+        } });
+        if (status === "used") await f.session({ assignmentId: assignment.id });
+        if (status === "pending" || status === "used") visible.push(`/s/${shareCode}`);
+      }
+    }
+    await db.rolePlayAssignment.create({ data: {
+      orgId: f.org.id, deploymentId: original.deploymentId, recipientEmail: f.trainer.email,
+      assignedByUserId: f.trainer.id, status: "pending", shareCode: `${code}-someone-else`, expiresAt: new Date(0),
+    } });
+    const home = await loadOrgHome();
+    expect(home.kind).toBe("home");
+    if (home.kind !== "home") throw new Error("Expected org home");
+    expect(home.props.roleplays.map((roleplay) => roleplay.href).sort()).toEqual([`/s/${code}`, ...visible].sort());
+  });
+
+  test("roleplay scenarios.get keeps an old pending member pending rather than deriving expired", async () => {
+    await db.agent.update({ where: { id: f.roleplay.id }, data: { data: { source: ROLEPLAY_SOURCE } } });
+    const assignment = await db.rolePlayAssignment.update({ where: { shareCode: code }, data: { expiresAt: new Date(0) } });
+    const caller = roleplayRouter.createCaller({ user: { ...f.trainer, orgId: f.org.id, orgSlug: f.org.slug, role: "admin" } });
+    const scenario = await caller.scenarios.get({ slug: f.roleplay.slug });
+    expect(scenario.members).toMatchObject([{ id: assignment.id, status: "pending" }]);
+    expect((await db.rolePlayAssignment.findUniqueOrThrow({ where: { id: assignment.id } })).status).toBe("pending");
+  });
 
   test.each([0, 59])("shared session shows outOfMinutes with %s seconds left", async (seconds) => {
     await balance(seconds);
