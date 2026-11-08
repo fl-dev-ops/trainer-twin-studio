@@ -144,3 +144,12 @@ export async function getOrgBySlug(slug: string): Promise<SessionOrg | null> {
   if (!org) return null;
   return { id: org.id, slug: org.slug, accentColor: parseAccentColor(org.metadata) };
 }
+
+/** Which of these emails are the org's admin and team, lower-cased (they practise without using credits). */
+export async function studioEmails(orgId: string, emails: string[]) {
+  const rows = await db.member.findMany({
+    where: { organizationId: orgId, role: { in: [...STUDIO_ROLES] }, OR: emails.map((email) => ({ user: { email: { equals: email, mode: "insensitive" as const } } })) },
+    select: { user: { select: { email: true } } },
+  });
+  return new Set(rows.map((row) => row.user.email.toLowerCase()));
+}

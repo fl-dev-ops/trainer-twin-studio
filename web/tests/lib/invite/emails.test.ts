@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { parseInviteEmails } from "@/lib/invite-emails";
+import { parseInviteEmails } from "@/lib/invite/emails";
 
 test("splits on commas, semicolons, spaces and new lines; lower-cases and de-duplicates", () => {
   expect(parseInviteEmails(" A@x.com, b@y.org;c@z.io\nd@w.co  a@X.com ,, ")).toEqual({

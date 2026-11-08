@@ -1,11 +1,8 @@
-import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { BASE_DOMAIN } from "@/lib/base-domain";
 import { db } from "@/lib/db";
-import { sendInvitationEmail } from "@/lib/email";
-import { giveStartingMinutes, MinutesError } from "@/lib/minutes";
 import { API_LEARNER_ROLE, isApiError, paginationFromUrl, requireExternalApi } from "@/lib/external-api";
-import { LEARNER_ROLE, STUDIO_ROLES } from "@/lib/org";
+import { InviteError, inviteLearnerByApi } from "@/lib/invite/org";
+import { LEARNER_ROLE } from "@/lib/org";
 
 const createSchema = z.object({ email: z.string().trim().email().max(320) }).strict();
 
@@ -50,68 +47,14 @@ export async function POST(request: Request) {
   const parsed = createSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "A valid email is required" }, { status: 400 });
 
-  const email = parsed.data.email.toLowerCase();
-  const existingMember = await db.member.findFirst({
-    where: { organizationId: api.org.id, user: { email } },
-    select: { id: true, disabledAt: true },
-  });
-  if (existingMember?.disabledAt) {
-    return Response.json({ error: "User was removed (disabled); re-enable them in Settings → Team and users" }, { status: 409 });
-  }
-  if (existingMember) return Response.json({ error: "User is already an organization member" }, { status: 409 });
-
-  const inviter = await db.member.findFirst({
-    where: {
-      organizationId: api.org.id,
-      role: { in: [...STUDIO_ROLES] },
-      ...(api.actorUserId ? { userId: api.actorUserId } : {}),
-    },
-    select: { userId: true, user: { select: { name: true } } },
-  });
-  if (!inviter) return Response.json({ error: "API key creator is no longer an organization trainer" }, { status: 403 });
-  // A new learner gets their starting minutes from the org balance (once; re-inviting is free).
   try {
-    await giveStartingMinutes({ orgId: api.org.id, emails: [email], actorUserId: inviter.userId });
+    const { invitation, created, emailSent } = await inviteLearnerByApi({ org: api.org, actorUserId: api.actorUserId, email: parsed.data.email });
+    return Response.json({
+      invitation: { id: invitation.id, email: invitation.email, status: invitation.status, expiresAt: invitation.expiresAt },
+      emailSent,
+    }, { status: created ? 201 : 200 });
   } catch (error) {
-    if (error instanceof MinutesError) return Response.json({ error: error.message }, { status: 409 });
+    if (error instanceof InviteError) return Response.json({ error: error.message }, { status: error.status });
     throw error;
   }
-
-  const existingInvitation = await db.invitation.findFirst({
-    where: { organizationId: api.org.id, email, status: "pending" },
-    select: { id: true },
-  });
-  const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
-  const invitation = existingInvitation
-    ? await db.invitation.update({
-        where: { id: existingInvitation.id },
-        data: { expiresAt, inviterId: inviter.userId },
-      })
-    : await db.invitation.create({
-        data: {
-          id: randomUUID(),
-          organizationId: api.org.id,
-          email,
-          role: LEARNER_ROLE,
-          status: "pending",
-          expiresAt,
-          inviterId: inviter.userId,
-        },
-      });
-  const delivery = await sendInvitationEmail({
-    to: email,
-    organizationName: api.org.name,
-    inviterName: inviter.user.name,
-    inviteUrl: `https://auth.${BASE_DOMAIN}/invite?token=${invitation.id}`,
-  });
-
-  return Response.json({
-    invitation: {
-      id: invitation.id,
-      email: invitation.email,
-      status: invitation.status,
-      expiresAt: invitation.expiresAt,
-    },
-    emailSent: delivery.success,
-  }, { status: existingInvitation ? 200 : 201 });
 }

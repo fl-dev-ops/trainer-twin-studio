@@ -5,11 +5,12 @@ import { beforeSettings } from "@/lib/context-upload";
 import { db } from "@/lib/db";
 import { isStudioRole } from "@/lib/org";
 import { updateRoleplay } from "@/lib/roleplay/manage";
-import { inviteToRoleplay } from "@/lib/roleplay/invites";
+import { inviteToRoleplay } from "@/lib/invite/roleplay";
 import { roleplayBuilderFrom } from "@/lib/roleplay/skill";
 import { getObjectText } from "@/lib/s3";
 import { ROLEPLAY_SOURCE, ScenarioIngestError, TWIN_SKILL_SOURCE } from "@/lib/scenario-ingest";
-import { accessUntilSchema, assignTwinAndInvite, listTwinAssignments } from "@/lib/twin-access";
+import { assignTwinAndInvite } from "@/lib/invite/twin";
+import { accessUntilSchema, listTwinAssignments } from "@/lib/twin-access";
 import { updateTwin } from "@/lib/twin/manage";
 import { TWIN_SOURCE } from "@/lib/twins";
 

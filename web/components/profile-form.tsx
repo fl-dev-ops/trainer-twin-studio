@@ -260,7 +260,7 @@ export function OrganizationForm({
                 aria-invalid={Boolean(websiteError)}
               />
               <FieldDescription>
-                The organization subdomain redirects here. Leave blank to use www.trainertwin.com.
+                Linked from your organization's home page, where learners sign in.
               </FieldDescription>
               <FieldError>{websiteError}</FieldError>
             </Field>

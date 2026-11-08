@@ -43,6 +43,7 @@ export default function SettingsPage() {
           <TabsContent value="team" className="pt-6">
             <TeamSection
               organizationId={organization.id}
+              organizationSlug={organization.slug}
               currentUserId={user.id}
               members={team.members}
               invitations={team.invitations}

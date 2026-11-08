@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { MinutesError } from "@/lib/minutes";
 import { getTrainerOrg } from "@/lib/org";
-import { accessUntilSchema, assignTwinAndInvite, findTwinAgent, listTwinAssignments, TwinAccessError, twinUrl, updateTwinAssignment } from "@/lib/twin-access";
+import { assignTwinAndInvite } from "@/lib/invite/twin";
+import { accessUntilSchema, findTwinAgent, listTwinAssignments, TwinAccessError, twinUrl, updateTwinAssignment } from "@/lib/twin-access";
 
 export const runtime = "nodejs";
 

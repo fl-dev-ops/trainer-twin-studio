@@ -1,13 +1,12 @@
 import { TRPCError } from "@trpc/server";
 import { headers } from "next/headers";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { MAX_INVITES } from "@/lib/invite-emails";
+import { MAX_INVITES } from "@/lib/invite/emails";
+import { inviteLearners } from "@/lib/invite/org";
 import {
   creditsAdded,
   DEFAULT_LEARNER_MINUTES,
-  giveStartingMinutes,
   grantMinutes,
   grantMinutesToMany,
   learnerMinutes,
@@ -16,7 +15,7 @@ import {
   orgBalanceSeconds,
   orgCreditsAddedSeconds,
 } from "@/lib/minutes";
-import { LEARNER_ROLE, STUDIO_ROLES } from "@/lib/org";
+import { STUDIO_ROLES, studioEmails } from "@/lib/org";
 import { studioProcedure, t } from "@/lib/trpc";
 
 /**
@@ -38,15 +37,6 @@ async function minutesCall<T>(fn: () => Promise<T>): Promise<T> {
     }
     throw error;
   }
-}
-
-/** The org's admin and team, by lower-case email: they practise without using credits. */
-async function studioEmails(orgId: string, emails: string[]) {
-  const rows = await db.member.findMany({
-    where: { organizationId: orgId, role: { in: [...STUDIO_ROLES] }, OR: emails.map((email) => ({ user: { email: { equals: email, mode: "insensitive" as const } } })) },
-    select: { user: { select: { email: true } } },
-  });
-  return new Set(rows.map((row) => row.user.email.toLowerCase()));
 }
 
 /** Credits are for learners: admin and team are never charged, so giving them credits would only waste the balance. */
@@ -109,25 +99,12 @@ export const minutesRouter = t.router({
       return { ...result, skipped: [...[...staff].map((email) => ({ email, reason: "is on the studio team (no credits needed)" })), ...result.skipped] };
     })),
 
-  /**
-   * Invites learners to the org (Settings > Users) with their starting credits. The credits are given first, all or
-   * nothing, so nobody is invited when the balance can't cover them; someone who already has credits keeps theirs.
-   * Then one invitation each (Better Auth: one org per person, emails); failures come back per email.
-   */
+  /** Invites learners to the org (Settings > Users) with their starting credits (lib/invite/org.ts). */
   invite: studioProcedure
     .input(z.object({ emails: z.array(emailInput).min(1).max(MAX_INVITES), minutes: amount.default(DEFAULT_LEARNER_MINUTES) }))
-    .mutation(({ ctx, input }) => minutesCall(async () => {
-      const staff = await studioEmails(ctx.user.orgId, input.emails);
-      if (staff.size) throw new MinutesError(`Already on the studio team: ${[...staff].join(", ")}`, 400);
-      await giveStartingMinutes({ orgId: ctx.user.orgId, emails: input.emails, minutes: input.minutes, actorUserId: ctx.user.id });
-      const requestHeaders = await headers();
-      const failed: { email: string; message: string }[] = [];
-      for (const email of input.emails) {
-        await auth.api.createInvitation({ headers: requestHeaders, body: { email, role: LEARNER_ROLE, organizationId: ctx.user.orgId } })
-          .catch((error: unknown) => failed.push({ email, message: error instanceof Error ? error.message : "Could not create the invite" }));
-      }
-      return { invited: input.emails.length - failed.length, failed };
-    })),
+    .mutation(({ ctx, input }) => minutesCall(async () =>
+      inviteLearners({ orgId: ctx.user.orgId, actorUserId: ctx.user.id, emails: input.emails, minutes: input.minutes, headers: await headers() }),
+    )),
 
   /** Adds credits to a learner, on top of what they have, from the org's balance. */
   add: studioProcedure.input(z.object({ email: emailInput, minutes: amount, note })).mutation(({ ctx, input }) => minutesCall(async () => {

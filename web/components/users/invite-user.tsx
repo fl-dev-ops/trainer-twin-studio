@@ -8,7 +8,7 @@ import { DurationInput, parseMinutes } from "@/components/duration-input";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { DEFAULT_LEARNER_MINUTES, MAX_LEARNER_MINUTES } from "@/lib/minutes-config";
-import { MAX_INVITES, parseInviteEmails } from "@/lib/invite-emails";
+import { MAX_INVITES, parseInviteEmails } from "@/lib/invite/emails";
 import { useRefresh } from "@/lib/use-refresh";
 
 /**

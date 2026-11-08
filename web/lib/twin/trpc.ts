@@ -8,9 +8,9 @@ import { assignablePeople } from "@/lib/learners";
 import { LEARNER_ROLE } from "@/lib/org";
 import { learnerMinutes, MAX_LEARNER_MINUTES, MinutesError } from "@/lib/minutes";
 import { studioProcedure, t } from "@/lib/trpc";
+import { assignTwinAndInvite } from "@/lib/invite/twin";
 import {
   accessUntilSchema,
-  assignTwinAndInvite,
   findTwinAgent,
   listTwinAssignments,
   TwinAccessError,

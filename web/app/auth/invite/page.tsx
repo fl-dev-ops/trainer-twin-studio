@@ -1,33 +1,32 @@
 import Link from "next/link";
 import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
-import { signInUrl } from "@/lib/base-domain";
-import { db } from "@/lib/db";
+import { redirect } from "next/navigation";
 import { InviteForm } from "@/components/auth/invite-form";
+import { auth } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { learnerInviteUrl } from "@/lib/invite/links";
+import { LEARNER_ROLE } from "@/lib/org";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * A studio invite (admin, team): Google sign-in with the invited email, then accept. A learner invite opens the org's
+ * home page instead (older learner emails still link here), which accepts it after Google sign-in (lib/invite/accept.ts).
+ */
 export default async function InvitePage({
   searchParams,
 }: {
   searchParams: Promise<{ token?: string }>;
 }) {
   const invitationId = (await searchParams).token;
-  const requestHeaders = await headers();
-  const session = await auth.api.getSession({ headers: requestHeaders });
+  const session = await auth.api.getSession({ headers: await headers() });
   const invitation = invitationId
     ? await db.invitation.findUnique({
         where: { id: invitationId },
-        select: { email: true, status: true },
+        select: { email: true, status: true, role: true, organization: { select: { name: true, slug: true } } },
       })
     : null;
-  // An invited email that already has an account signs in (then accepts) instead of signing up again.
-  const hasAccount = invitation && !session
-    ? Boolean(await db.user.findFirst({ where: { email: { equals: invitation.email, mode: "insensitive" } }, select: { id: true } }))
-    : false;
-  const signInHref = invitationId
-    ? signInUrl(requestHeaders.get("host") ?? "", `/invite?token=${encodeURIComponent(invitationId)}`)
-    : "/sign-in";
+  if (invitation?.role === LEARNER_ROLE) redirect(learnerInviteUrl(invitation.organization.slug));
 
   return (
     <main className="flex min-h-svh items-center justify-center p-4">
@@ -35,9 +34,8 @@ export default async function InvitePage({
         <InviteForm
           invitationId={invitationId}
           email={invitation.email}
+          organizationName={invitation.organization.name}
           signedInEmail={session?.user.email}
-          signInHref={hasAccount ? signInHref : undefined}
-          googleEnabled={Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)}
         />
       ) : (
         <div className="w-full max-w-sm text-center">

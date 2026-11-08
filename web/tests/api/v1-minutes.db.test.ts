@@ -3,6 +3,7 @@ import * as externalApi from "@/lib/external-api";
 import * as email from "@/lib/email";
 import { POST as inviteUser } from "@/app/api/v1/users/route";
 import { POST as assignRoleplay } from "@/app/api/v1/assignments/route";
+import { learnerInviteUrl } from "@/lib/invite/links";
 import { learnerBalance, topUpOrg } from "@/lib/minutes";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "../lib/minutes-test-db";
 
@@ -40,6 +41,8 @@ describe.skipIf(!localMinutesDb)("v1 minutes entrypoints (local database)", () =
     expect(await db.minuteLedger.count({ where: { orgId: f.org.id, type: "grant" } })).toBe(1);
     expect(await db.invitation.count({ where: { organizationId: f.org.id } })).toBe(1);
     expect(invitationEmail).toHaveBeenCalledTimes(2);
+    // Learners are sent to their org's home page, where they sign in with Google and join (lib/invite/accept.ts).
+    expect(invitationEmail.mock.calls[0][0].inviteUrl).toBe(learnerInviteUrl(f.org.slug));
   });
 
   test("POST /assignments returns 409 without assignment or mail when starting minutes are short", async () => {

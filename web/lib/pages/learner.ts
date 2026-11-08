@@ -150,19 +150,12 @@ export async function loadSharedSession(code: string): Promise<SharedSessionView
 }
 
 export type TwinLinkView = { kind: "notFound" } | { kind: "flow"; props: ComponentProps<typeof TwinLearnerFlow> };
+type FlowProps = ComponentProps<typeof TwinLearnerFlow>;
 
-/**
- * A twin's readable link: /t/<username> (the trainer's main twin) or /t/<slug> (a skill twin). What the twin is, the
- * person's access and minutes; studio members (admin, team) get a preview that uses no minutes.
- */
-export async function loadTwinLink(slug: string): Promise<TwinLinkView> {
-  const { org, user } = await resolveSessionUser();
-
-  const twin = org ? await resolveTwinPath(org.id, org.slug, slug) : null;
-  if (!org || !twin) return { kind: "notFound" };
-
+/** What a twin's page shows about it: the trainer whose twin it is, and the twin. Public (no sign-in needed). */
+export async function twinProfile(agentId: string): Promise<Pick<FlowProps, "trainer" | "twin">> {
   const agent = await db.agent.findUniqueOrThrow({
-    where: { id: twin.agentId },
+    where: { id: agentId },
     select: {
       slug: true,
       name: true,
@@ -170,47 +163,62 @@ export async function loadTwinLink(slug: string): Promise<TwinLinkView> {
       persona: { select: { name: true, data: true, avatar: { select: { s3ImageKey: true } } } },
     },
   });
-
-  // Signed in: their access to this twin (minutes left), or why they can't talk to it. Studio members (admin, team)
-  // get a preview: the learner page as learners see it, calls started like Try as learner (no minutes, not counted).
-  let access: LearnerAccess = null;
-  const membership = user ? await db.member.findFirst({ where: { organizationId: org.id, userId: user.id }, select: { role: true } }) : null;
-  if (user && isStudioRole(membership?.role)) {
-    access = { ok: true, preview: true, name: user.name || user.email, email: user.email };
-  } else if (user) {
-    try {
-      const found = await twinAssignmentCode({ orgId: org.id, user, agentId: twin.agentId });
-      // The learner's own minutes in this org, shared by every twin and role play they have.
-      const minutes = await learnerBalance(org.id, user.email);
-      access = minutes.balanceSeconds < 60
-        ? { ok: false, name: user.name || user.email, email: user.email, reason: "used" }
-        : { ok: true, preview: false, name: user.name || user.email, email: user.email, code: found.code, minutesLeft: Math.floor(minutes.balanceSeconds / 60), minutesTotal: Math.floor(minutes.grantedSeconds / 60) };
-    } catch (error) {
-      if (!(error instanceof TwinAccessError)) throw error;
-      // In the learner's words: why they can't talk (messages from usable() in lib/twin-access.ts).
-      const reason = /removed|ended/.test(error.message) ? "ended" : "unassigned";
-      access = { ok: false, name: user.name || user.email, email: user.email, reason };
-    }
-  }
-
   // Presigned here: the avatar route is for org members, and visitors on this page may not be signed in yet.
   const photoKey = agent.persona.avatar?.s3ImageKey;
   const photoUrl = photoKey ? await presignedGetUrl(photoKey, 3600).catch(() => null) : null;
   const persona = agent.persona.data && typeof agent.persona.data === "object" ? (agent.persona.data as Record<string, unknown>) : {};
   const data = agent.data && typeof agent.data === "object" ? (agent.data as Record<string, unknown>) : {};
   return {
-    kind: "flow",
-    props: {
-      path: `/t/${encodeURIComponent(slug)}`,
-      trainer: {
-        name: text(persona.name) ?? agent.persona.name,
-        title: [text(persona.role), text(persona.based_in)].filter(Boolean).join(" · ") || null,
-        bio: text(persona.background),
-        photoUrl,
-      },
-      // attach: the twin's "Enable upload" during the call (an image up to 5 MB or a PDF up to 10 MB; enforced by the attach route).
-      twin: { slug: agent.slug, name: agent.name, description: text(data.objective), attach: beforeSettings(agent.data).duringUpload },
-      access,
+    trainer: {
+      name: text(persona.name) ?? agent.persona.name,
+      title: [text(persona.role), text(persona.based_in)].filter(Boolean).join(" · ") || null,
+      bio: text(persona.background),
+      photoUrl,
     },
+    // attach: the twin's "Enable upload" during the call (an image up to 5 MB or a PDF up to 10 MB; enforced by the attach route).
+    twin: { slug: agent.slug, name: agent.name, description: text(data.objective), attach: beforeSettings(agent.data).duringUpload },
   };
+}
+
+/**
+ * The signed-in person's access to a twin (null: signed out): their minutes left, or why they can't talk to it.
+ * Studio members (admin, team) get a preview: calls started like Try as learner (no minutes, not counted).
+ */
+export async function twinAccessFor(org: { id: string }, user: { id: string; name: string; email: string } | null, agentId: string, studio: boolean): Promise<LearnerAccess> {
+  if (!user) return null;
+  if (studio) return { ok: true, preview: true, name: user.name || user.email, email: user.email };
+  try {
+    const found = await twinAssignmentCode({ orgId: org.id, user, agentId });
+    // The learner's own minutes in this org, shared by every twin and role play they have.
+    const minutes = await learnerBalance(org.id, user.email);
+    return minutes.balanceSeconds < 60
+      ? { ok: false, name: user.name || user.email, email: user.email, reason: "used" }
+      : { ok: true, preview: false, name: user.name || user.email, email: user.email, code: found.code, minutesLeft: Math.floor(minutes.balanceSeconds / 60), minutesTotal: Math.floor(minutes.grantedSeconds / 60) };
+  } catch (error) {
+    if (!(error instanceof TwinAccessError)) throw error;
+    // In the learner's words: why they can't talk (messages from usable() in lib/twin-access.ts).
+    const reason = /removed|ended/.test(error.message) ? "ended" : "unassigned";
+    return { ok: false, name: user.name || user.email, email: user.email, reason };
+  }
+}
+
+/** Whether this user is on the org's studio team (admin, team). */
+export async function isStudioMember(orgId: string, userId: string) {
+  const membership = await db.member.findFirst({ where: { organizationId: orgId, userId }, select: { role: true } });
+  return isStudioRole(membership?.role);
+}
+
+/**
+ * A twin's readable link: /t/<username> (the trainer's main twin) or /t/<slug> (a skill twin). What the twin is, the
+ * person's access and minutes; studio members (admin, team) get a preview that uses no minutes.
+ */
+export async function loadTwinLink(slug: string): Promise<TwinLinkView> {
+  const { org, user } = await resolveSessionUser();
+  const twin = org ? await resolveTwinPath(org.id, org.slug, slug) : null;
+  if (!org || !twin) return { kind: "notFound" };
+  const [profile, access] = await Promise.all([
+    twinProfile(twin.agentId),
+    twinAccessFor(org, user, twin.agentId, user ? await isStudioMember(org.id, user.id) : false),
+  ]);
+  return { kind: "flow", props: { path: `/t/${encodeURIComponent(slug)}`, ...profile, access } };
 }

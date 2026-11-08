@@ -2,7 +2,6 @@ import { z } from "zod";
 import { randomBytes } from "node:crypto";
 import { BASE_DOMAIN } from "@/lib/base-domain";
 import { db } from "@/lib/db";
-import { sendTwinAssignmentEmail } from "@/lib/email";
 import { DEFAULT_LEARNER_MINUTES, giveStartingMinutes, learnerMinutes } from "@/lib/minutes";
 import { TWIN_SOURCE } from "@/lib/twins";
 
@@ -32,7 +31,7 @@ export const twinShareUrl = (orgSlug: string, path: string) => `https://${orgSlu
 export const shortTwinSlug = (orgSlug: string, slug: string) =>
   slug.startsWith(`${orgSlug}-`) && slug.length > orgSlug.length + 1 ? slug.slice(orgSlug.length + 1) : slug;
 
-const isAllSkillsTwin = (data: unknown) => (data as Record<string, unknown> | null)?.source === TWIN_SOURCE;
+export const isAllSkillsTwin = (data: unknown) => (data as Record<string, unknown> | null)?.source === TWIN_SOURCE;
 
 /**
  * The /t/<path> of a twin. Main twin (all skills): its trainer's own persona slug (the username). Skill twin: the
@@ -224,7 +223,7 @@ export async function listTwinAssignments(orgId: string, agentId: string) {
 
 /**
  * Assigns a twin to people by email with an optional end date. A revoked assignment is reactivated with the new date;
- * an active one is left alone. Returns who needs an invite email. Minutes are the learner's own (assignTwinAndInvite
+ * an active one is left alone. Returns who needs an invite email. Minutes are the learner's own (lib/invite/twin.ts
  * gives new people their starting minutes).
  */
 export async function assignTwin(input: {
@@ -262,41 +261,6 @@ export async function assignTwin(input: {
     invites.push({ to: email, shareCode });
   }
   return { stats, invites };
-}
-
-/**
- * Gives new people their starting minutes (all or nothing: refused when the org balance is short), then assignTwin,
- * then emails each new or reactivated learner their link with the minutes they have.
- */
-export async function assignTwinAndInvite(input: {
-  org: { id: string; slug: string };
-  by: { id: string; name: string };
-  agent: { id: string; name: string };
-  emails: string[];
-  accessUntil?: Date | null;
-  /** Credits each new person starts with (default DEFAULT_LEARNER_MINUTES); people who already have credits keep theirs. */
-  startingMinutes?: number;
-}) {
-  await giveStartingMinutes({ orgId: input.org.id, emails: input.emails, minutes: input.startingMinutes, actorUserId: input.by.id });
-  const { stats, invites } = await assignTwin({
-    orgId: input.org.id,
-    agentId: input.agent.id,
-    emails: input.emails,
-    accessUntil: input.accessUntil,
-    assignedByUserId: input.by.id,
-  });
-  const balances = await learnerMinutes(input.org.id, invites.map((invite) => invite.to));
-  // The readable twin link: the personal /s/<code> link would work too, but the assignment is already bound to
-  // the invited email, so matching it by sign-in (lib/pages/learner.ts) is all the learner needs.
-  const sharePath = await twinSharePath(input.org.id, input.org.slug, input.agent.id);
-  const deliveries = await Promise.all(invites.map(({ to }) => sendTwinAssignmentEmail({
-    to,
-    twinName: input.agent.name,
-    minutes: Math.floor((balances.get(to)?.balanceSeconds ?? 0) / 60),
-    practiceUrl: twinShareUrl(input.org.slug, sharePath),
-    trainerName: input.by.name,
-  })));
-  return { ...stats, emailFailures: deliveries.filter(({ success }) => !success).length };
 }
 
 /** Revokes or restores one assignment. */

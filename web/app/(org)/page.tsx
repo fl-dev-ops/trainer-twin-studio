@@ -1,27 +1,21 @@
-import { headers } from "next/headers";
-import { redirect } from "next/navigation";
-import { db } from "@/lib/db";
-import { portalSlug } from "@/lib/base-domain";
+"use client";
 
-const FALLBACK_WEBSITE = "https://www.trainertwin.com";
+import { OrgHome } from "@/components/org/org-home";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { api, useApi } from "@/lib/api";
 
-export default async function OrganizationRedirectPage() {
-  const host = (await headers()).get("host") ?? "";
-  const org = await db.organization.findUnique({
-    where: { slug: portalSlug(host) },
-    select: { websiteUrl: true },
-  });
-
-  let destination = FALLBACK_WEBSITE;
-  if (org?.websiteUrl) {
-    try {
-      const url = new URL(org.websiteUrl);
-      if (url.protocol === "https:" && url.hostname !== host.split(":")[0]) {
-        destination = url.toString();
-      }
-    } catch {
-      // Invalid legacy/manual values use the safe product fallback.
-    }
-  }
-  redirect(destination);
+/** The org's home page (<org>.<base>/): the org, its trainers' twins and your role plays (lib/pages/org-home.ts). */
+export default function OrgHomePage() {
+  const loaded = useApi(["page.orgHome"], () => api.page.orgHome.query());
+  if (loaded.kind === "home") return <OrgHome {...loaded.props} />;
+  return (
+    <main className="grid min-h-svh place-items-center p-4">
+      <Card className="w-full max-w-md text-center">
+        <CardHeader>
+          <CardTitle>Organization not found</CardTitle>
+          <CardDescription>This address doesn&apos;t belong to an organization on TrainerTwin.</CardDescription>
+        </CardHeader>
+      </Card>
+    </main>
+  );
 }

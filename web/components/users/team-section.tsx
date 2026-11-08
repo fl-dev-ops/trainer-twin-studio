@@ -12,9 +12,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from "@/components/ui/item";
 import { CopyButton } from "@/components/users/copy-button";
 import { InviteUser } from "@/components/users/invite-user";
-import type { AwaitingUser } from "@/lib/awaiting-users";
+import type { AwaitingUser } from "@/lib/invite/awaiting";
+import { orgInviteUrl } from "@/lib/invite/links";
 import { authClient } from "@/lib/auth-client";
-import { BASE_DOMAIN } from "@/lib/base-domain";
 import { DEFAULT_LEARNER_MINUTES } from "@/lib/minutes-config";
 import { useRefresh } from "@/lib/use-refresh";
 import { SearchInput } from "@/components/search-input";
@@ -31,7 +31,6 @@ export type TeamMember = {
 export type TeamInvitation = { id: string; email: string; role: string; expiresAt: string };
 
 const ROLE_LABEL: Record<string, string> = { admin: "Admin", team: "Team", user: "User" };
-const inviteUrl = (id: string) => `https://auth.${BASE_DOMAIN}/invite?token=${id}`;
 const day = (iso: string) => new Date(iso).toLocaleDateString();
 // Divided rows (no boxes): avatar · name / email · status badge · actions on the right.
 function Initial({ name, email }: { name?: string | null; email: string }) {
@@ -49,6 +48,8 @@ function Initial({ name, email }: { name?: string | null; email: string }) {
  */
 export function TeamSection(props: {
   organizationId: string;
+  /** For invite links: a learner's opens the org's home page (lib/invite/links.ts). */
+  organizationSlug: string;
   currentUserId: string;
   members: TeamMember[];
   invitations: TeamInvitation[];
@@ -160,7 +161,7 @@ export function TeamSection(props: {
         </ItemContent>
         <ItemActions>
           <Badge variant="secondary">{ROLE_LABEL[invitation.role] ?? invitation.role}</Badge>
-          <CopyButton value={inviteUrl(invitation.id)} label="Copy link" />
+          <CopyButton value={orgInviteUrl(invitation, props.organizationSlug)} label="Copy link" />
           <Button variant="outline" size="sm" disabled={busy === invitation.id} onClick={() => resend(invitation)}>Resend</Button>
           <Button variant="ghost" size="sm" disabled={busy === invitation.id} onClick={() => cancel(invitation)}>Cancel</Button>
         </ItemActions>

@@ -35,21 +35,21 @@ export type LearnerAccess =
   | { ok: false; name: string; email: string; reason: "unassigned" | "ended" | "used" }
   | null;
 
-type Trainer = { name: string; title: string | null; bio: string | null; photoUrl: string | null };
-type Twin = { slug: string; name: string; description: string | null; attach?: boolean };
+export type Trainer = { name: string; title: string | null; bio: string | null; photoUrl: string | null };
+export type Twin = { slug: string; name: string; description: string | null; attach?: boolean };
 type Step = "profile" | "call" | "summary";
 
 // The dash's own scale (twin overview cards): 16px cards with the soft shadow, 11px labels, 18px titles, 15px body.
-const CARD = "rounded-tt-lg border border-(--card-border) bg-card p-6 shadow-card";
+export const CARD = "rounded-tt-lg border border-(--card-border) bg-card p-6 shadow-card";
 const LABEL = "m-0 text-overline font-medium tracking-overline uppercase";
-const TITLE = "m-0 text-section-title leading-7 font-semibold tracking-title";
-const BODY = "m-0 text-body leading-6 text-(--text-secondary)";
+export const TITLE = "m-0 text-section-title leading-7 font-semibold tracking-title";
+export const BODY = "m-0 text-body leading-6 text-(--text-secondary)";
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-const firstName = (name: string) => name.split(/[\s@]/)[0] || name;
+export const firstName = (name: string) => name.split(/[\s@]/)[0] || name;
 const ISSUES = ["Wrong or made-up answer", "Didn't understand me", "Audio or connection", "Too slow", "Something else"];
 
 /** Why someone can't talk, said plainly (title, what to do). */
-function noAccessCopy(reason: "unassigned" | "ended" | "used", trainer: string) {
+export function noAccessCopy(reason: "unassigned" | "ended" | "used", trainer: string) {
   if (reason === "used") return { title: "You've used all your minutes", body: `Ask ${trainer} for more time to keep practising.` };
   if (reason === "ended") return { title: "Your access has ended", body: `Ask ${trainer} if you'd like to keep practising.` };
   return { title: "You don't have access yet", body: `Ask ${trainer} to add you, or switch to the account ${trainer} invited.` };

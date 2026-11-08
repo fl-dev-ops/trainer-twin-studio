@@ -7,8 +7,8 @@ import { organizationAccess, organizationRoles } from "@/lib/auth-roles";
 import { nextCookies } from "better-auth/next-js";
 import { db } from "@/lib/db";
 import { BASE_DOMAIN, safeFamilyRedirect } from "@/lib/base-domain";
-import { sendInvitationEmail, sendPasswordResetEmail } from "@/lib/email";
-import { giveStartingMinutes, MinutesError } from "@/lib/minutes";
+import { sendPasswordResetEmail } from "@/lib/email";
+import { beforeOrgInvitation, emailOrgInvitation } from "@/lib/invite/org-hooks";
 import { ADMIN_ROLE, assertNoSecondAdmin, DISABLED_MESSAGE, isDisabledUser, NO_REMOVAL_MESSAGE, ONE_ADMIN_MESSAGE } from "@/lib/members";
 
 
@@ -67,13 +67,7 @@ export const auth = betterAuth({
         // People may belong to several orgs (the studio works in one at a time: lib/org.ts).
         beforeCreateInvitation: async ({ invitation, organization }) => {
           await assertNoSecondAdmin(invitation.role, organization.id);
-          // A learner invited from Settings gets their starting minutes from the org balance (once; a resend is free).
-          if (invitation.role === "user") { // LEARNER_ROLE (lib/org imports this module)
-            await giveStartingMinutes({ orgId: organization.id, emails: [invitation.email], actorUserId: invitation.inviterId }).catch((error: unknown) => {
-              if (error instanceof MinutesError) throw new APIError("BAD_REQUEST", { message: error.message });
-              throw error;
-            });
-          }
+          await beforeOrgInvitation(invitation, organization.id);
         },
         beforeAddMember: async ({ member, organization }) => {
           await assertNoSecondAdmin(member.role, organization.id);
@@ -86,21 +80,7 @@ export const auth = betterAuth({
           throw new APIError("FORBIDDEN", { message: NO_REMOVAL_MESSAGE });
         },
       },
-      sendInvitationEmail: async (data) => {
-        const inviteLink = `https://auth.${BASE_DOMAIN}/invite?token=${data.id}`;
-        const inviterName =
-          (data.inviter as { user?: { name?: string; email?: string } })?.user
-            ?.name ||
-          (data.inviter as { name?: string })?.name ||
-          "Your team";
-
-        await sendInvitationEmail({
-          to: data.email,
-          organizationName: data.organization.name,
-          inviterName,
-          inviteUrl: inviteLink,
-        });
-      },
+      sendInvitationEmail: emailOrgInvitation,
     }),
     apiKey({
       references: "organization",

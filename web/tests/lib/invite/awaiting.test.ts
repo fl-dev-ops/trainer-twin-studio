@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { awaitingUsers } from "@/lib/awaiting-users";
+import { awaitingUsers } from "@/lib/invite/awaiting";
 
 test("people assigned by email who aren't members or invited yet, grouped with what they got", () => {
   expect(awaitingUsers({

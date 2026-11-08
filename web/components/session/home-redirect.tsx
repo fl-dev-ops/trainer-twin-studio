@@ -1,10 +1,13 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-const HOME = "https://www.trainertwin.com";
+// This host's home page: on an org's learner host, the org's home page (its twins and role plays), not trainertwin.com.
+const HOME = "/";
 
 export function HomeRedirect({ delaySec = 5 }: { delaySec?: number }) {
+  const router = useRouter();
   const [left, setLeft] = useState(delaySec);
 
   useEffect(() => {
@@ -14,15 +17,15 @@ export function HomeRedirect({ delaySec = 5 }: { delaySec?: number }) {
       setLeft(remaining);
       if (remaining <= 0) {
         window.clearInterval(tick);
-        window.location.assign(HOME);
+        router.push(HOME);
       }
     }, 250);
     return () => window.clearInterval(tick);
-  }, [delaySec]);
+  }, [delaySec, router]);
 
   return (
     <p className="text-sm text-muted-foreground">
-      Redirecting to trainertwin.com in {left}s…
+      Back to the home page in {left}s…
     </p>
   );
 }

@@ -3,7 +3,7 @@ import { MAX_ASSIGNMENT_RECIPIENTS } from "@/lib/assignments";
 import { db } from "@/lib/db";
 import { getTrainerOrg } from "@/lib/org";
 import { MAX_LEARNER_MINUTES, MinutesError } from "@/lib/minutes";
-import { inviteToRoleplay } from "@/lib/roleplay/invites";
+import { inviteToRoleplay } from "@/lib/invite/roleplay";
 
 const bodySchema = z.object({
   emails: z

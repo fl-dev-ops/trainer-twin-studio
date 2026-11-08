@@ -212,7 +212,7 @@ export async function sendInvitationEmail({
       <p>
         ${inviterName ? `<strong>${inviterName}</strong> has` : "You have been"} invited to practice with AI interview twins and guided role plays on TrainerTwin.
       </p>
-      <p>Click the button below to accept your invitation and create your account:</p>
+      <p>Click the button below and continue with Google using <strong>${to}</strong>:</p>
       <div style="text-align: center; margin: 28px 0;">
         <a href="${inviteUrl}" class="btn" target="_blank">Accept Invitation</a>
       </div>
@@ -227,7 +227,7 @@ export async function sendInvitationEmail({
     to,
     subject,
     html,
-    text: `You have been invited to join ${organizationName} on TrainerTwin. Accept your invitation here: ${inviteUrl}`,
+    text: `You have been invited to join ${organizationName} on TrainerTwin. Open your invitation and continue with Google using ${to}: ${inviteUrl}`,
   });
 }
 

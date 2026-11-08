@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import * as email from "@/lib/email";
 import { auth } from "@/lib/auth";
 import { grantMinutes, learnerBalance, topUpOrg } from "@/lib/minutes";
-import { inviteToRoleplay } from "@/lib/roleplay/invites";
-import { assignTwinAndInvite, createTwinShareLink, twinAccessByCode } from "@/lib/twin-access";
+import { inviteToRoleplay } from "@/lib/invite/roleplay";
+import { assignTwinAndInvite } from "@/lib/invite/twin";
+import { createTwinShareLink, twinAccessByCode } from "@/lib/twin-access";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
 describe.skipIf(!localMinutesDb)("starting minutes entrypoints (local database)", () => {

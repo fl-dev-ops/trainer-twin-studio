@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { awaitingUsers } from "@/lib/awaiting-users";
+import { awaitingUsers } from "@/lib/invite/awaiting";
 import { db } from "@/lib/db";
 import { loadLatestFidelityReport } from "@/lib/fidelity-report.server";
 import { listUsers } from "@/lib/learners";
@@ -10,6 +10,7 @@ import { getPersonaBaseline } from "@/lib/persona-baseline";
 import { agentPhotoUrls, pickableVoices } from "@/lib/persona-media";
 import { getPersona, listPersonas } from "@/lib/personas";
 import { loadSharedSession, loadTwinLink } from "@/lib/pages/learner";
+import { loadOrgHome } from "@/lib/pages/org-home";
 import { loadRolePlayPreview } from "@/lib/pages/role-play-preview";
 import { loadSessionDetail, loadSessionsList } from "@/lib/pages/sessions";
 import { loadSpecResource } from "@/lib/pages/spec-resource";
@@ -290,4 +291,6 @@ export const pageRouter = t.router({
   // Learner portal (<org>.<base>): the org comes from the subdomain, visitors may not be signed in yet.
   sharedSession: publicProcedure.input(z.object({ code: z.string().min(1).max(200) })).query(({ input }) => loadSharedSession(input.code)),
   twinLink: publicProcedure.input(slugInput).query(({ input }) => loadTwinLink(input.slug)),
+  /** The org's home page (<org>.<base>/): public; signing in accepts a learner's pending invite (lib/invite/accept.ts). */
+  orgHome: publicProcedure.query(() => loadOrgHome()),
 });
