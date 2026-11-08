@@ -48,19 +48,48 @@ async function assertLearner(orgId: string, email: string) {
 const toMinutes = (seconds: number) => Math.floor(seconds / 60);
 
 export const minutesRouter = t.router({
-  /** The org's credits: what it can still give out, everything added to it, and its top-ups (the Credits page). */
+  /**
+   * The org's credits (the Credits page): what it can still give out, everything added to it, its top-ups, and each
+   * learner's totals (given, used, left), lowest left first. Admin and team are left out: they don't use credits.
+   */
   org: studioProcedure.query(async ({ ctx }) => {
-    const [balance, added, topups] = await Promise.all([
-      orgBalanceSeconds(ctx.user.orgId),
-      orgCreditsAddedSeconds(ctx.user.orgId),
-      creditsAdded(ctx.user.orgId),
+    const orgId = ctx.user.orgId;
+    const [balance, added, topups, perLearner] = await Promise.all([
+      orgBalanceSeconds(orgId),
+      orgCreditsAddedSeconds(orgId),
+      creditsAdded(orgId),
+      learnerMinutes(orgId),
     ]);
+    const emails = [...perLearner.keys()];
+    const [staff, users] = emails.length
+      ? await Promise.all([
+        studioEmails(orgId, emails),
+        db.user.findMany({ where: { email: { in: emails, mode: "insensitive" } }, select: { id: true, name: true, email: true, image: true } }),
+      ])
+      : [new Set<string>(), []];
+    const userByEmail = new Map(users.map((user) => [user.email.toLowerCase(), user]));
+    const learners = [...perLearner.values()]
+      .filter((row) => !staff.has(row.email))
+      .map((row) => {
+        const user = userByEmail.get(row.email);
+        return {
+          email: row.email,
+          userId: user?.id ?? null,
+          name: user?.name ?? null,
+          image: user?.image ?? null,
+          givenMinutes: toMinutes(row.grantedSeconds),
+          usedMinutes: Math.round(row.usedSeconds / 6) / 10,
+          leftMinutes: toMinutes(Math.max(0, row.balanceSeconds)),
+        };
+      })
+      .sort((a, b) => a.leftMinutes - b.leftMinutes || a.email.localeCompare(b.email));
     return {
       balanceMinutes: toMinutes(balance),
       addedMinutes: toMinutes(added),
       defaultMinutes: DEFAULT_LEARNER_MINUTES,
       maxMinutes: MAX_LEARNER_MINUTES,
       topups,
+      learners,
     };
   }),
 

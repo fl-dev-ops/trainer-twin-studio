@@ -3,7 +3,9 @@
 import { CreditsIcon } from "@/components/icons";
 import { CreditsHistoryTable } from "@/components/credits/credits-history-table";
 import { PageContainer } from "@/components/page-container";
-import { PageHeader, SectionHeader } from "@/components/page-header";
+import { LearnerCreditsTable } from "@/components/credits/learner-credits-table";
+import { PageHeader } from "@/components/page-header";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/lib/app-router";
 
@@ -11,7 +13,7 @@ export type OrgCredits = inferRouterOutputs<AppRouter>["minutes"]["org"];
 
 /**
  * The Credits page: what the organization has left to give its learners, and every credit added to the account
- * (top-ups). 1 credit = 1 minute of practice, used by learners' calls with twins and role plays.
+ * (top-ups), with each learner's balance. 1 credit = 1 minute of practice, used by learners' calls with twins and role plays.
  */
 export function CreditsPage({ credits }: { credits: OrgCredits }) {
   const low = credits.balanceMinutes < credits.defaultMinutes;
@@ -42,10 +44,18 @@ export function CreditsPage({ credits }: { credits: OrgCredits }) {
         </div>
       </section>
 
-      <SectionHeader title="Credits added" note="Every top-up to your account, newest first" className="mt-10" />
-      <div className="mt-4">
-        <CreditsHistoryTable rows={credits.topups} empty="No credits added yet. Contact TrainerTwin to top up your account." />
-      </div>
+      <Tabs defaultValue="learners" className="mt-10 gap-4">
+        <TabsList>
+          <TabsTrigger value="learners">Learner balances</TabsTrigger>
+          <TabsTrigger value="topups">Top-up history</TabsTrigger>
+        </TabsList>
+        <TabsContent value="learners">
+          <LearnerCreditsTable rows={credits.learners} />
+        </TabsContent>
+        <TabsContent value="topups">
+          <CreditsHistoryTable rows={credits.topups} empty="No credits added yet. Contact TrainerTwin to top up your account." />
+        </TabsContent>
+      </Tabs>
     </PageContainer>
   );
 }

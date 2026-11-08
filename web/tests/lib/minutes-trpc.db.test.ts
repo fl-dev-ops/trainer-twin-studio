@@ -27,7 +27,7 @@ describe.skipIf(!localMinutesDb)("minutes tRPC (local database)", () => {
 
   test.each(["admin", "team"])("%s queries exact credit shapes and adds normalized learner credits without changing earlier rows", async (role) => {
     const api = caller(role);
-    expect(await api.org()).toEqual({ balanceMinutes: 0, addedMinutes: 0, defaultMinutes: 30, maxMinutes: 360, topups: [] });
+    expect(await api.org()).toEqual({ balanceMinutes: 0, addedMinutes: 0, defaultMinutes: 30, maxMinutes: 360, topups: [], learners: [] });
     expect(await api.learner({ email: f.learner.email })).toEqual({ givenMinutes: 0, usedMinutes: 0, balanceMinutes: 0, orgBalanceMinutes: 0, maxMinutes: 360, added: [] });
 
     await fund(100);
@@ -58,6 +58,7 @@ describe.skipIf(!localMinutesDb)("minutes tRPC (local database)", () => {
     expect(await api.org()).toEqual({
       balanceMinutes: 85, addedMinutes: 120, defaultMinutes: 30, maxMinutes: 360,
       topups: [entry(savedTopups[0], f.trainer.name), entry(savedTopups[1], null)],
+      learners: [{ email: f.learner.email, userId: f.learner.id, name: f.learner.name, image: null, givenMinutes: 35, usedMinutes: 1.5, leftMinutes: 33 }],
     });
     expect(await api.learner({ email: ` ${f.learner.email.toUpperCase()} ` })).toEqual({
       givenMinutes: 35, usedMinutes: 1.5, balanceMinutes: 33, orgBalanceMinutes: 85, maxMinutes: 360,
