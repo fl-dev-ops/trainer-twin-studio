@@ -295,7 +295,11 @@ export async function activateSession(input: {
   if (existing && ["activating", "active"].includes(existing.status)) {
     const token = runtimeToken(existing.id);
     await db.interviewSession.update({ where: { id: existing.id }, data: { runtimeTokenHash: tokenHash(token) } });
-    return { id: existing.id, agentSlug: existing.agentSlug, status: existing.status, mode: existing.mode as DeliveryMode, runtimeToken: token };
+    // A resumed learner call keeps its deadline: what's left of the minutes it started with.
+    const secondsLeft = existing.allowedSeconds == null
+      ? null
+      : Math.max(0, existing.allowedSeconds - Math.floor((Date.now() - (existing.startedAt ?? existing.createdAt).getTime()) / 1000));
+    return { id: existing.id, agentSlug: existing.agentSlug, status: existing.status, mode: existing.mode as DeliveryMode, runtimeToken: token, secondsLeft };
   }
   if (assignmentId && assignmentStatus !== "pending") return null;
   if (existing?.status === "failed") {

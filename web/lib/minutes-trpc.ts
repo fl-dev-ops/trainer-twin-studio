@@ -33,7 +33,7 @@ async function minutesCall<T>(fn: () => Promise<T>): Promise<T> {
 
 /** Minutes are for learners: admin and team are never charged, so giving them minutes would only waste the balance. */
 async function assertLearner(orgId: string, email: string) {
-  const studio = await db.member.findFirst({ where: { organizationId: orgId, role: { in: [...STUDIO_ROLES] }, user: { email } }, select: { id: true } });
+  const studio = await db.member.findFirst({ where: { organizationId: orgId, role: { in: [...STUDIO_ROLES] }, user: { email: { equals: email, mode: "insensitive" } } }, select: { id: true } });
   if (studio) throw new MinutesError(`${email} is on the studio team; admin and team members practise without using minutes.`, 400);
 }
 

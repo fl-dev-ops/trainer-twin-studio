@@ -159,7 +159,7 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
   });
 
   // Known regression: the idempotent activation branch omits secondsLeft, removing the LiveKit deadline on retry.
-  test("BUG: resuming an active metered call returns its remaining seconds for deadline enforcement", async () => {
+  test("resuming an active metered call returns its remaining seconds for deadline enforcement", async () => {
     await fund();
     const first = await activate({ idempotencyKey: "retry" });
     await db.interviewSession.update({ where: { id: first!.id }, data: { startedAt: new Date(Date.now() - 60_000) } });

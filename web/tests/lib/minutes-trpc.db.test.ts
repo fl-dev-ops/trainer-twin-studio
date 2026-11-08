@@ -60,7 +60,7 @@ describe.skipIf(!localMinutesDb)("minutes tRPC (local database)", () => {
   });
 
   // Known regression: assertLearner compares the stored user.email case-sensitively.
-  test("BUG: studio email refusal is case-insensitive even when user.email contains capitals", async () => {
+  test("studio email refusal is case-insensitive even when user.email contains capitals", async () => {
     await fund(100);
     await db.user.update({ where: { id: f.trainer.id }, data: { email: f.trainer.email.toUpperCase() } });
     await expect(caller().add({ email: f.trainer.email, minutes: 1 })).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringContaining("studio team") });
