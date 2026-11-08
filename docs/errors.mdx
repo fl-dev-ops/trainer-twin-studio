@@ -19,7 +19,7 @@ Errors use a standard JSON shape:
 | `401` | The API key is missing, invalid, expired, or revoked | Replace or rotate the key |
 | `403` | The key creator is no longer an organization trainer | Generate a new key with a current owner or admin |
 | `404` | The resource does not exist in the key's organization | Verify the resource ID or scenario slug |
-| `409` | The requested state conflicts with existing data | Read the current resource before retrying |
+| `409` | The requested state conflicts with existing data, or your organization's credits can't cover a new learner | Read the current resource, or top up credits, before retrying |
 | `429` | The key exceeded 120 requests per minute | Wait for the next rate-limit window |
 | `500` | TrainerTwin could not complete the request | Retry with exponential backoff |
 

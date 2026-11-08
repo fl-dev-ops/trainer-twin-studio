@@ -3,7 +3,9 @@ title: "Users"
 description: "Invite, list, update, and remove learners in your organization."
 ---
 
-The users API manages learners, not trainers. Creating a user sends an organization invitation instead of creating an account with a password.
+The users API manages learners, not trainers. Creating a user sends an organization invitation instead of creating an account with a password: the email, **Join *your organization* on TrainerTwin**, links to your organization's home page, where the learner continues with Google using the invited email.
+
+To give someone a role play, you don't need to invite them first: [assign](/guides/assignments) it to their email. Inviting them as well sends a second email.
 
 ## Invite a learner
 
@@ -35,7 +37,7 @@ The response includes the invitation and whether its email was delivered.
 
 Inviting an existing learner returns `409`. Re-inviting a pending email refreshes that invitation's expiry.
 
-A new learner gets **30 practice minutes** from your organization's prepaid balance. Minutes are shared by every twin and role play and are used by the second during calls. When the balance can't cover a new learner, the invite returns `409`; contact TrainerTwin to top it up. Give a learner more minutes on their page in the dashboard.
+A new learner gets **30 credits** (1 credit = 1 minute of practice) from your organization's prepaid balance. Credits are shared by every twin and role play and are used by the second during calls; learners see them as minutes. When the balance can't cover a new learner, the invite returns `409`; contact TrainerTwin to top it up. Give a learner more credits in the dashboard (**Users**, or the learner's page).
 
 ## List learners
 

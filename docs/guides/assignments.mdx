@@ -1,15 +1,15 @@
 ---
 title: "Assign"
-description: "Recommend published scenarios to organization learners."
+description: "Give learners a published role play to practise."
 ---
 
-Assignments place published scenarios prominently in a learner's portal. They are persistent recommendations, not an access-control boundary.
+An assignment gives a learner one attempt at a published role play, through a personal link (`practiceUrl`). A learner can only practise the role plays assigned to them. For the whole flow, from assigning to reading the result, see [Role plays end to end](/guides/role-plays).
 
 ## Before you assign
 
 You need:
 
-- A learner `userId` from `GET /users` — or just an `email`, to assign someone who has not joined your organization yet.
+- A learner `userId` from `GET /users`, or just an `email`. Someone who hasn't joined your organization doesn't need an invitation first: they join when they start.
 - A published scenario slug from `GET /scenarios` or the TrainerTwin dashboard.
 
 Scenario and persona configuration remains dashboard-only.
@@ -44,7 +44,9 @@ A new assignment returns `201`:
 }
 ```
 
-`practiceUrl` is the learner's direct practice link — send it through your own channel instead of (or alongside) the TrainerTwin email.
+`practiceUrl` is the learner's personal practice link. Send it through your own channel instead of, or alongside, the TrainerTwin email. It works only for the email it was assigned to: the learner signs in with that email (Google or password).
+
+The email, **New Role Play Assigned**, names the role play and its objective, says how many minutes of practice the learner has, and which email to sign in with.
 
 Creating the same learner-scenario pair again is safe. While the assignment is pending or used, TrainerTwin returns it with `created: false` and does not send another email. A cancelled or expired assignment is reopened instead: it gets a new `practiceUrl`, the learner gets an email, and the response is `201` with `created: true`.
 
@@ -54,7 +56,13 @@ Creating the same learner-scenario pair again is safe. While the assignment is p
   Assignment persistence succeeds even when email delivery fails. Check `emailSent` instead of retrying the assignment immediately.
 </Note>
 
-Someone new to your organization's practice minutes gets **30 minutes** from its prepaid balance when first assigned. If the balance can't cover them, the request returns `409` and nothing is assigned. A call stops when the learner's minutes run out.
+## Credits
+
+Someone new to your organization's credits gets **30** (1 credit = 1 minute of practice) from its prepaid balance when first assigned. If the balance can't cover them, the request returns `409` and nothing is assigned. Credits belong to the learner and are shared by every role play and twin, so assigning more role plays doesn't give more credits. A call ends when the learner's credits run out. Give learners more credits in the dashboard.
+
+## Attempts
+
+An assignment is one attempt: when its session ends, its `status` becomes `used`. To give another attempt, remove the assignment and create it again; it reopens with a new `practiceUrl` and email. An unused assignment expires after 30 days.
 
 ## Change an assignment
 
@@ -68,7 +76,7 @@ curl "https://dash.trainertwin.com/api/v1/assignments/assignment_123" \
   --data '{ "scenario": "system-design-interview" }'
 ```
 
-You can also move it to an `email` address. A changed assignment sends a notification to the target learner and returns a new `practiceUrl` (the old link stops working). A no-op update returns `changed: false`, the existing `practiceUrl`, and sends no email. Moving onto a learner who already has that scenario assigned returns `409`.
+You can also move it to an `email` address. A changed assignment sends a notification to the target learner and returns a new `practiceUrl` (the old link stops working). Moving it to someone new to your organization's credits gives them their 30 first, or returns `409` when the balance can't cover them. A no-op update returns `changed: false`, the existing `practiceUrl`, and sends no email. Moving onto a learner who already has that scenario assigned returns `409`.
 
 ## Inspect an assignment
 

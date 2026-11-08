@@ -19,7 +19,10 @@ Use the TrainerTwin API to manage learners, inspect practice sessions, and assig
     Read practice sessions, transcripts, evidence, and recordings.
   </Card>
   <Card title="Assign role-plays" icon="clipboard-check" href="/guides/assignments">
-    Assign published scenarios and synchronize recommendations.
+    Give learners published role plays to practise.
+  </Card>
+  <Card title="Role plays end to end" icon="route" href="/guides/role-plays">
+    Assign, send the learner to practise, and read the result.
   </Card>
 </CardGroup>
 
@@ -41,7 +44,7 @@ All requests and responses use JSON unless the endpoint returns `204 No Content`
 | --- | --- |
 | Users | Invite and manage learners in your organization |
 | Scenarios | List published role-play scenarios and read their configuration (read-only) |
-| Assignments | Assign existing published scenarios to learners |
+| Assignments | Give learners published scenarios to practise, one attempt each |
 | Sessions | List sessions and read their results (read-only) |
 
 The API covers role plays only: twins are not listed and their sessions are not returned. Scenario, persona, knowledge, and voice configuration remain dashboard-only.

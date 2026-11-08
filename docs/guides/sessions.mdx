@@ -5,6 +5,14 @@ description: "Read practice sessions and their results."
 
 A session is a learner's practice run against a published role-play scenario. Sessions happen in the TrainerTwin app — learners start them from their assignment link or the learner portal. The API is **read-only** for sessions: list them and read their results.
 
+A few things shape a session:
+
+- A learner starts a role play from its assignment link, and each assignment is one attempt.
+- A learner's call uses their credits (1 credit = 1 minute) and ends when they run out.
+- A learner has one call at a time in your organization: starting another ends the open one.
+
+See [Role plays end to end](/guides/role-plays).
+
 ## List sessions
 
 Combine any of these filters:

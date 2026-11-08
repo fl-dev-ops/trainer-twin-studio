@@ -17,7 +17,7 @@ tags:
   - name: Users
     description: Invite and manage organization learners.
   - name: Assignments
-    description: Assign existing published scenarios to learners.
+    description: Give learners published scenarios to practise, one attempt each.
   - name: Scenarios
     description: Read the organization's published role-play scenarios.
   - name: Sessions
@@ -118,8 +118,10 @@ paths:
       summary: Invite a learner
       description: |
         Creates or refreshes a pending learner invitation. Email failure does not roll back the invitation.
-        A new learner gets 30 practice minutes from the organization's prepaid balance (once; re-inviting is free).
-        Returns `409` when the balance can't cover them.
+        The email links to the organization's home page, where the learner continues with Google. Assigning a role play
+        doesn't need an invitation first.
+        A new learner gets 30 credits (1 credit = 1 minute of practice) from the organization's prepaid balance (once;
+        re-inviting is free). Returns `409` when the balance can't cover them.
       requestBody:
         required: true
         content:
@@ -291,8 +293,9 @@ paths:
         Idempotently assigns a published scenario to a learner (by `userId`) or to an email address (for someone who has not joined yet).
         A pending or used assignment for the same learner and scenario is returned as it is, with `created: false` and no email.
         A cancelled or expired one is reopened with a new `practiceUrl` and email (`201`, `created: true`).
-        Someone new to the organization's practice minutes gets 30 minutes from its prepaid balance; `409` when the
-        balance can't cover them. Email failure does not roll back the assignment.
+        Someone new to the organization's credits gets 30 (1 credit = 1 minute of practice) from its prepaid balance;
+        `409` when the balance can't cover them. Each assignment is one attempt through its personal `practiceUrl`; the
+        learner signs in with the assigned email. Email failure does not roll back the assignment.
       requestBody:
         required: true
         content:
@@ -352,7 +355,7 @@ paths:
       operationId: updateAssignment
       tags: [Assignments]
       summary: Update an assignment
-      description: Moves an assignment to another learner, published scenario, or both. A change issues a new `practiceUrl` (the old link stops working) and emails the learner. Moving onto a learner and scenario pair that already has an assignment returns `409`.
+      description: Moves an assignment to another learner, published scenario, or both. A change issues a new `practiceUrl` (the old link stops working) and emails the learner. Moving onto a learner and scenario pair that already has an assignment returns `409`, as does moving it to someone new to the organization's credits when the balance can't cover their 30.
       requestBody:
         required: true
         content:
@@ -590,7 +593,7 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
     Conflict:
-      description: Request conflicts with existing organization data.
+      description: Request conflicts with existing organization data, or the organization's credits can't cover a new learner.
       content:
         application/json:
           schema:
