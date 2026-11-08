@@ -61,6 +61,17 @@ describe.skipIf(!localMinutesDb)("learner pages with minutes (local database)", 
     expect(rows.find((r) => r.email === f.trainer.email)).toBeUndefined();
   });
 
+  test.each(["admin", "team"])("listUsers gives null minutesLeft to an email with both learner and %s memberships", async (role) => {
+    await balance(119);
+    await db.member.create({ data: {
+      id: `${f.learner.id}-studio-member`, userId: f.learner.id, organizationId: f.org.id, role, createdAt: new Date(),
+    } });
+    // Keep the learner membership and assignment so this remains a Users-page row.
+    expect(await db.member.count({ where: { organizationId: f.org.id, userId: f.learner.id } })).toBe(2);
+    const rows = await listUsers(f.org.id);
+    expect(rows.find((row) => row.email === f.learner.email)).toMatchObject({ minutesLeft: null });
+  });
+
   test("a new common-link visitor can reach the session before starting minutes are granted", async () => {
     const link = await db.twinShareLink.create({ data: { orgId: f.org.id, agentId: f.twin.id, code: `${code}-common`, minutesPerUser: 30 } });
     expect(await loadSharedSession(link.code)).toMatchObject({ kind: "session", props: { minutesLeft: null } });

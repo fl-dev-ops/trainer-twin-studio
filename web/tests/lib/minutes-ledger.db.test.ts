@@ -130,18 +130,64 @@ describe.skipIf(!localMinutesDb)("minute ledger rules (local database)", () => {
     expect(await minutes.orgBalanceSeconds(f.org.id)).toBe(270 * 60);
   });
 
-  test("ledger history scopes org/learner, preserves signed seconds, notes and newest-first limit", async () => {
-    await topup(30);
-    await grant(10);
-    const session = await f.session();
-    await db.minuteLedger.create({ data: { orgId: f.org.id, email: f.learner.email, type: "usage", seconds: -90, sessionId: session.id, createdAt: new Date("2099-01-01") } });
-    const own = await minutes.ledgerHistory(f.org.id, f.learner.email.toUpperCase(), 1);
-    expect(own).toHaveLength(1);
-    expect(own[0]).toMatchObject({ type: "usage", seconds: -90, minutes: -1.5, sessionId: session.id, note: null, at: "2099-01-01T00:00:00.000Z" });
-    const org = await minutes.ledgerHistory(f.org.id);
-    expect(org.map((r) => r.type).sort()).toEqual(["grant", "topup"]);
-    expect(org.find((r) => r.type === "grant")?.note).toBe(f.learner.email);
-    expect(await minutes.ledgerHistory("missing-org")).toEqual([]);
+  test("creditsAdded scopes top-ups and learner grants, newest first, floors seconds and resolves actor name/email/null", async () => {
+    const other = minutesFixture();
+    try {
+      await other.create();
+      await db.user.update({ where: { id: f.learner.id }, data: { name: "" } });
+      const session = await f.session();
+      const additions = [
+        { seconds: 121, actorUserId: f.trainer.id, note: "Named actor", createdAt: new Date("2026-01-01T00:00:00Z") },
+        { seconds: 59, actorUserId: f.learner.id, note: "Email fallback", createdAt: new Date("2026-01-02T00:00:00Z") },
+        { seconds: 239, actorUserId: null, note: null, createdAt: new Date("2026-01-03T00:00:00Z") },
+      ];
+      // Insert out of order so newest-first cannot pass by insertion order alone.
+      for (const index of [1, 2, 0]) {
+        for (const type of ["topup", "grant"]) {
+          await db.minuteLedger.create({ data: {
+            orgId: f.org.id, id: `${f.org.id}-${type}-${index}`, type,
+            email: type === "grant" ? f.learner.email : null, ...additions[index],
+          } });
+        }
+      }
+      await db.minuteLedger.createMany({ data: [
+        { orgId: f.org.id, email: f.learner.email, type: "reclaim", seconds: -60 },
+        { orgId: f.org.id, email: f.learner.email, type: "usage", seconds: -90, sessionId: session.id },
+        { orgId: f.org.id, email: `other-${f.learner.email}`, type: "grant", seconds: 600 },
+        { orgId: other.org.id, type: "topup", seconds: 6000 },
+        { orgId: other.org.id, email: f.learner.email, type: "grant", seconds: 1200 },
+      ] });
+      for (const type of ["topup", "grant"]) {
+        const email = type === "grant" ? ` ${f.learner.email.toUpperCase()} ` : undefined;
+        const expected = [
+          { id: `${f.org.id}-${type}-2`, minutes: 3, note: null, at: "2026-01-03T00:00:00.000Z", by: null },
+          { id: `${f.org.id}-${type}-1`, minutes: 0, note: "Email fallback", at: "2026-01-02T00:00:00.000Z", by: f.learner.email },
+          { id: `${f.org.id}-${type}-0`, minutes: 2, note: "Named actor", at: "2026-01-01T00:00:00.000Z", by: f.trainer.name },
+        ];
+        expect(await minutes.creditsAdded(f.org.id, email)).toEqual(expected);
+        expect(await minutes.creditsAdded(f.org.id, email, 1)).toEqual(expected.slice(0, 1));
+      }
+      expect(await minutes.creditsAdded(other.org.id, other.learner.email)).toEqual([]);
+      expect(await minutes.creditsAdded("missing-org")).toEqual([]);
+      expect(await minutes.creditsAdded("missing-org", f.learner.email)).toEqual([]);
+    } finally { await other.clean(); }
+  });
+
+  test("orgCreditsAddedSeconds sums only top-ups, not grants, reclaims, usage or another org's top-ups", async () => {
+    const other = minutesFixture();
+    try {
+      await other.create();
+      expect(await minutes.orgCreditsAddedSeconds(f.org.id)).toBe(0);
+      await topup(30);
+      await topup(20);
+      await grant(10);
+      await minutes.reclaimMinutes({ orgId: f.org.id, email: f.learner.email, minutes: 1 });
+      await minutes.recordSessionUsage((await f.session()).id);
+      await minutes.topUpOrg({ orgId: other.org.id, minutes: 100, note: "Other org" });
+      expect(await minutes.orgCreditsAddedSeconds(f.org.id)).toBe(50 * 60);
+      expect(await minutes.orgBalanceSeconds(f.org.id)).toBe(41 * 60);
+      expect(await minutes.orgCreditsAddedSeconds("missing-org")).toBe(0);
+    } finally { await other.clean(); }
   });
 
   const badRows = [
