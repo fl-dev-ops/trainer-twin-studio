@@ -3,6 +3,7 @@ import { assignmentExpiresAt, newAssignmentShareCode } from "@/lib/assignments";
 import { db } from "@/lib/db";
 import { ensureDeployment } from "@/lib/deployments";
 import { findOrgLearner, isApiError, requireExternalApi } from "@/lib/external-api";
+import { giveStartingMinutes, MinutesError } from "@/lib/minutes";
 import {
   assignmentDetails,
   assignmentDetailSelect,
@@ -63,6 +64,13 @@ export async function PATCH(request: Request, { params }: Params) {
   // One assignment per learner and scenario: moving onto a pair that already exists would make a second one.
   const clash = await db.rolePlayAssignment.findFirst({ where: { deploymentId: deployment.id, recipientEmail, id: { not: id } }, select: { id: true } });
   if (clash) return Response.json({ error: "That learner already has this scenario assigned" }, { status: 409 });
+  // Moved to someone new to the org's credits: they get their starting credits first, as POST does.
+  try {
+    await giveStartingMinutes({ orgId: api.org.id, emails: [recipientEmail], actorUserId: trainer.userId });
+  } catch (error) {
+    if (error instanceof MinutesError) return Response.json({ error: error.message }, { status: 409 });
+    throw error;
+  }
 
   // The old link stops working: the assignment gets a fresh code, recipient and expiry.
   const assignment = await db.rolePlayAssignment.update({
@@ -81,7 +89,7 @@ export async function PATCH(request: Request, { params }: Params) {
     select: { id: true, assignedAt: true, shareCode: true },
   });
   const url = practiceUrl(api.org.slug, assignment.shareCode);
-  const emailSent = await emailAssignment({ to: recipientEmail, userName: learner?.name, scenario: target, practiceUrl: url, trainerName: trainer.user.name });
+  const emailSent = await emailAssignment({ orgId: api.org.id, to: recipientEmail, userName: learner?.name, scenario: target, practiceUrl: url, trainerName: trainer.user.name });
   return Response.json({
     assignment: assignmentView(assignment, recipientEmail, learner?.id ?? null, target.slug),
     practiceUrl: url,

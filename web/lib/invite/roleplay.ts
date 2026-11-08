@@ -3,7 +3,7 @@ import { assignmentExpiresAt, newAssignmentShareCode } from "@/lib/assignments";
 import { contextUploadFromAgentData } from "@/lib/context-upload";
 import { db } from "@/lib/db";
 import { ensureDeployment } from "@/lib/deployments";
-import { giveStartingMinutes } from "@/lib/minutes";
+import { giveStartingMinutes, learnerMinutes } from "@/lib/minutes";
 import { sendRolePlayAssignmentEmail } from "@/lib/email";
 
 /**
@@ -68,6 +68,7 @@ export async function inviteToRoleplay(input: {
   const objective = typeof data?.objective === "string" ? data.objective : undefined;
   const upload = contextUploadFromAgentData(input.agent.data);
   const requiredArtifact = upload.required && upload.prompt ? { label: upload.label, prompt: upload.prompt } : null;
+  const balances = await learnerMinutes(input.org.id, assignmentEmails.map(({ to }) => to));
   const deliveries = await Promise.all(
     assignmentEmails.map(({ to, practiceUrl: url }) =>
       sendRolePlayAssignmentEmail({
@@ -77,6 +78,7 @@ export async function inviteToRoleplay(input: {
         practiceUrl: url,
         trainerName: input.by.name,
         requiredArtifact,
+        minutes: Math.floor(Math.max(0, balances.get(to)?.balanceSeconds ?? 0) / 60),
       }),
     ),
   );

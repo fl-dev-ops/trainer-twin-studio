@@ -2,6 +2,7 @@ import { BASE_DOMAIN } from "@/lib/base-domain";
 import { contextUploadFromAgentData } from "@/lib/context-upload";
 import { db } from "@/lib/db";
 import { sendRolePlayAssignmentEmail } from "@/lib/email";
+import { learnerBalance } from "@/lib/minutes";
 import { LEARNER_ROLE, STUDIO_ROLES } from "@/lib/org";
 
 /** Shared by /api/v1/assignments and /api/v1/assignments/:id (docs/openapi.yaml, Assignments). */
@@ -26,6 +27,7 @@ export function findKeyTrainer(orgId: string, actorUserId: string | null) {
 
 /** The assignment email; delivery failure never undoes the assignment (the caller reports `emailSent`). */
 export async function emailAssignment(input: {
+  orgId: string;
   to: string;
   userName?: string | null;
   scenario: { name: string; data: unknown };
@@ -34,6 +36,7 @@ export async function emailAssignment(input: {
 }) {
   const data = input.scenario.data as { objective?: unknown } | null;
   const upload = contextUploadFromAgentData(input.scenario.data);
+  const { balanceSeconds } = await learnerBalance(input.orgId, input.to);
   const delivery = await sendRolePlayAssignmentEmail({
     to: input.to,
     userName: input.userName ?? undefined,
@@ -42,6 +45,7 @@ export async function emailAssignment(input: {
     practiceUrl: input.practiceUrl,
     trainerName: input.trainerName,
     requiredArtifact: upload.required && upload.prompt ? { label: upload.label, prompt: upload.prompt } : null,
+    minutes: Math.floor(Math.max(0, balanceSeconds) / 60),
   });
   return delivery.success;
 }

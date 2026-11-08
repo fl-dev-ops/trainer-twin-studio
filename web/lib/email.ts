@@ -308,14 +308,19 @@ export async function sendPasswordResetEmail({
 /**
  * Send a role play assignment notification email to a learner
  */
+/**
+ * A role play was assigned: the personal one-attempt link, what it's about, the practice minutes the learner has
+ * (shared by twins and role plays), and which email to sign in with (the link only works for that account).
+ */
 export async function sendRolePlayAssignmentEmail({
   to,
   userName,
   rolePlayName,
   rolePlayObjective,
   practiceUrl,
-  trainerName = "Vasanth",
+  trainerName = "Your trainer",
   requiredArtifact,
+  minutes,
 }: {
   to: string;
   userName?: string;
@@ -324,22 +329,25 @@ export async function sendRolePlayAssignmentEmail({
   practiceUrl: string;
   trainerName?: string;
   requiredArtifact?: { label: string; prompt: string } | null;
+  /** Practice minutes the learner has; left out of the email when unknown. */
+  minutes?: number;
 }) {
   const subject = `New Role Play Assigned: ${rolePlayName}`;
+  const minutesHtml = minutes === undefined ? "" : ` You have <strong>${minutes} minutes</strong> of practice.`;
   const html = renderEmailLayout({
-    title: subject,
-    previewText: `You have been assigned to practice "${rolePlayName}" on TrainerTwin.`,
+    title: escapeHtml(subject),
+    previewText: escapeHtml(`You have been assigned to practice "${rolePlayName}" on TrainerTwin.`),
     contentHtml: `
       <h1>New Role Play Assigned</h1>
       <p>
-        Hi ${userName || "there"},<br>
-        Your trainer <strong>${trainerName}</strong> has assigned you to practice the <strong>${rolePlayName}</strong> interview role play.
+        Hi ${escapeHtml(userName || "there")},<br>
+        <strong>${escapeHtml(trainerName)}</strong> has assigned you the <strong>${escapeHtml(rolePlayName)}</strong> role play.${minutesHtml}
       </p>
       ${
         rolePlayObjective
           ? `<div style="background: #f8fafc; border-left: 4px solid #EC3013; padding: 16px; border-radius: 8px; margin: 20px 0;">
               <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin: 0 0 6px;">Objective</p>
-              <p style="font-size: 14px; font-style: italic; margin: 0; color: #1e293b;">&ldquo;${rolePlayObjective}&rdquo;</p>
+              <p style="font-size: 14px; font-style: italic; margin: 0; color: #1e293b;">&ldquo;${escapeHtml(rolePlayObjective)}&rdquo;</p>
             </div>`
           : ""
       }
@@ -347,11 +355,11 @@ export async function sendRolePlayAssignmentEmail({
         requiredArtifact?.prompt
           ? `<div style="background: #f8fafc; border-left: 4px solid #EC3013; padding: 16px; border-radius: 8px; margin: 20px 0;">
               <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin: 0 0 6px;">What to bring</p>
-              <p style="font-size: 14px; margin: 0; color: #1e293b;">${requiredArtifact.prompt}</p>
+              <p style="font-size: 14px; margin: 0; color: #1e293b;">${escapeHtml(requiredArtifact.prompt)}</p>
             </div>`
           : ""
       }
-      <p>When you're ready, click the button below to start your guided practice session:</p>
+      <p>When you're ready, open the link below and sign in with <strong>${escapeHtml(to)}</strong> to start your practice session:</p>
       <div style="text-align: center; margin: 28px 0;">
         <a href="${practiceUrl}" class="btn" target="_blank">Start Practice Session</a>
       </div>
@@ -366,7 +374,7 @@ export async function sendRolePlayAssignmentEmail({
     to,
     subject,
     html,
-    text: `You have been assigned to practice "${rolePlayName}" on TrainerTwin.${requiredArtifact?.prompt ? ` What to bring: ${requiredArtifact.prompt}.` : ""} Start your practice here: ${practiceUrl}`,
+    text: `${trainerName} has assigned you the "${rolePlayName}" role play on TrainerTwin.${minutes === undefined ? "" : ` You have ${minutes} minutes of practice.`}${requiredArtifact?.prompt ? ` What to bring: ${requiredArtifact.prompt}.` : ""} Sign in with ${to} and start here: ${practiceUrl}`,
   });
 }
 
