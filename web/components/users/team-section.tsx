@@ -1,6 +1,7 @@
 "use client";
 
 import { Plus } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -90,12 +91,21 @@ export function TeamSection(props: {
     return members.map((member) => {
       const you = member.userId === props.currentUserId;
       const locked = you || member.role === "admin";
+      // A learner's row opens their page (/users/<id>): the name is the link, stretched over the row.
+      const learner = member.role === "user";
       return (
-        <Item key={member.id} role="listitem" size="row" data-disabled={member.disabledAt ? true : undefined}>
+        <Item key={member.id} role="listitem" size="row" className={learner ? "relative" : undefined} data-disabled={member.disabledAt ? true : undefined}>
           <Initial name={member.name} email={member.email} />
           <ItemContent>
             <ItemTitle className="text-body">
-              {member.name}
+              {learner ? (
+                <Link
+                  href={`/users/${member.userId}`}
+                  className="outline-none after:absolute after:inset-0 after:rounded-lg hover:underline focus-visible:after:ring-3 focus-visible:after:ring-ring/50"
+                >
+                  {member.name}
+                </Link>
+              ) : member.name}
               {you ? <span className="font-normal text-muted-foreground">(you)</span> : null}
             </ItemTitle>
             <ItemDescription className="line-clamp-none flex flex-wrap items-center gap-1.5">
@@ -105,7 +115,7 @@ export function TeamSection(props: {
               ) : null}
             </ItemDescription>
           </ItemContent>
-          <ItemActions>
+          <ItemActions className="relative">
             <Badge variant="secondary">{ROLE_LABEL[member.role] ?? member.role}</Badge>
             {locked ? null : (
               <Button variant="ghost" size="sm" disabled={busy === member.id} onClick={() => setDisabled(member, !member.disabledAt)}>
