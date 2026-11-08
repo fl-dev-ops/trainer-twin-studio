@@ -5,7 +5,7 @@ import { TWIN_SESSION_GRID, TwinSessionItem, type TwinSessionItemData } from "@/
 import { Card } from "@/components/ui/card";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader, SectionHeader } from "@/components/page-header";
-import { LearnerMinutes } from "@/components/users/learner-minutes";
+import { LearnerCredits } from "@/components/credits/learner-credits";
 import { cn } from "@/lib/utils";
 
 export type UserDetail = {
@@ -27,9 +27,7 @@ export function UserDetailPage({ user, sessions }: UserDetail) {
         </span>
       </PageContainer>
 
-      <div className="mt-8">
-        <LearnerMinutes email={user.email} />
-      </div>
+      <LearnerCredits email={user.email} name={user.name || user.email} />
 
       <SectionHeader
         title="Sessions"

@@ -164,7 +164,10 @@ export async function giveStartingMinutes(input: { orgId: string; emails: string
   });
 }
 
-/** Takes unused minutes back from a learner into the org's balance (never more than they have left). */
+/**
+ * Takes unused minutes back from a learner into the org's balance (never more than they have left). Not exposed in
+ * the studio (credits are only ever added there); kept for support corrections.
+ */
 export async function reclaimMinutes(input: { orgId: string; email: string; minutes: number; actorUserId?: string | null; note?: string | null }) {
   const amount = wholeMinutes(input.minutes);
   const email = lower(input.email);
@@ -201,23 +204,34 @@ export async function recordSessionUsage(sessionId: string) {
   });
 }
 
-export type LedgerEntry = { id: string; type: string; minutes: number; seconds: number; note: string | null; sessionId: string | null; at: string };
+/** One credit added: to the org (a top-up) or to a learner (a grant), with who added it. */
+export type CreditEntry = { id: string; minutes: number; note: string | null; at: string; by: string | null };
 
-/** One learner's movements (or, without email, the org's top-ups and grants), newest first. */
-export async function ledgerHistory(orgId: string, email?: string, take = 100): Promise<LedgerEntry[]> {
+/**
+ * Credits added, newest first: the org's top-ups (no email), or what one learner was given. Each addition is its own
+ * row and balances are sums, so this is the full record; nothing is ever changed in place.
+ */
+export async function creditsAdded(orgId: string, email?: string, take = 200): Promise<CreditEntry[]> {
   const rows = await db.minuteLedger.findMany({
-    where: { orgId, ...(email ? { email: lower(email) } : { type: { in: ["topup", "grant", "reclaim"] } }) },
+    where: { orgId, ...(email ? { email: lower(email), type: "grant" } : { type: "topup" }) },
     orderBy: { createdAt: "desc" },
     take,
-    select: { id: true, type: true, seconds: true, note: true, sessionId: true, createdAt: true, email: true },
+    select: { id: true, seconds: true, note: true, createdAt: true, actorUserId: true },
   });
+  const actorIds = [...new Set(rows.map((row) => row.actorUserId).filter((id): id is string => Boolean(id)))];
+  const actors = actorIds.length ? await db.user.findMany({ where: { id: { in: actorIds } }, select: { id: true, name: true, email: true } }) : [];
+  const nameOf = new Map(actors.map((actor) => [actor.id, actor.name || actor.email]));
   return rows.map((row) => ({
     id: row.id,
-    type: row.type,
-    seconds: row.seconds,
-    minutes: Math.round(row.seconds / 6) / 10,
-    note: row.note ?? (email ? null : row.email),
-    sessionId: row.sessionId,
+    minutes: Math.floor(row.seconds / 60),
+    note: row.note,
     at: row.createdAt.toISOString(),
+    by: row.actorUserId ? nameOf.get(row.actorUserId) ?? null : null,
   }));
+}
+
+/** Total credits ever added to the org (its top-ups). */
+export async function orgCreditsAddedSeconds(orgId: string): Promise<number> {
+  const total = await db.minuteLedger.aggregate({ where: { orgId, type: "topup" }, _sum: { seconds: true } });
+  return total._sum.seconds ?? 0;
 }

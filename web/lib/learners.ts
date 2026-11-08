@@ -84,8 +84,8 @@ export type UsersRow = {
   twinSessions: number;
   roleplaySessions: number;
   practiceSeconds: number;
-  /** Practice minutes left (lib/minutes.ts), shared by twins and role plays. */
-  minutesLeft: number;
+  /** Credits (practice minutes) left, shared by twins and role plays; null for admin and team, who don't use any. */
+  minutesLeft: number | null;
   lastActiveAt: string | null;
 };
 
@@ -119,8 +119,14 @@ export async function listUsers(orgId: string): Promise<UsersRow[]> {
       byEmail.set(key, merged);
     }
   }
-  const minutes = await learnerMinutes(orgId, [...byEmail.keys()]);
-  for (const row of byEmail.values()) row.minutesLeft = Math.floor(Math.max(0, minutes.get(row.email)?.balanceSeconds ?? 0) / 60);
+  const [minutes, studio] = await Promise.all([
+    learnerMinutes(orgId, [...byEmail.keys()]),
+    db.member.findMany({ where: { organizationId: orgId, role: { not: LEARNER_ROLE } }, select: { user: { select: { email: true } } } }),
+  ]);
+  const staff = new Set(studio.map((row) => row.user.email.toLowerCase()));
+  for (const row of byEmail.values()) {
+    row.minutesLeft = staff.has(row.email) ? null : Math.floor(Math.max(0, minutes.get(row.email)?.balanceSeconds ?? 0) / 60);
+  }
   return [...byEmail.values()].sort(
     (a, b) => (b.lastActiveAt ?? "").localeCompare(a.lastActiveAt ?? "") || a.name.localeCompare(b.name),
   );

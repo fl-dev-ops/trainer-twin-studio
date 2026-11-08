@@ -160,7 +160,7 @@ export function TeamSection(props: {
 
   const groups = [
     { title: "Team", role: "team", studio: true, invite: "Invite team member", hint: "Team members run the studio: twins, role plays, sessions and settings." },
-    { title: "Users", role: "user", studio: false, invite: "Invite user", hint: `Users practise with the twins and role plays you give them. Each new user gets ${DEFAULT_LEARNER_MINUTES} min of practice from your organization's minutes.` },
+    { title: "Users", role: "user", studio: false, invite: "Invite user", hint: `Users practise with the twins and role plays you give them. Each new user gets ${DEFAULT_LEARNER_MINUTES} credits (1 credit = 1 min of practice) from your organization's credits.` },
   ] as const;
   const matches = (needle: string, ...fields: string[]) => fields.some((field) => field.toLowerCase().includes(needle));
 

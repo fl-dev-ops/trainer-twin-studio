@@ -109,8 +109,8 @@ export function AssignDialog({ variant, open, onOpenChange, title, assignedCount
         )}
         {orgMinutes.data ? (
           <p className="m-0 text-xs text-muted-foreground">
-            Someone new gets {orgMinutes.data.defaultMinutes} min of practice from your organization&apos;s balance
-            ({orgMinutes.data.balanceMinutes.toLocaleString()} min left). Minutes are shared across twins and role plays.
+            Someone new gets {orgMinutes.data.defaultMinutes} credits (1 credit = 1 min) from your organization&apos;s
+            {" "}{orgMinutes.data.balanceMinutes.toLocaleString()} left. Credits are shared across twins and role plays.
           </p>
         ) : null}
 

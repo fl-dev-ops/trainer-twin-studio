@@ -357,7 +357,7 @@ export function TwinEditPage({
           <div>
             <h2 className="m-0 text-sm font-semibold uppercase tracking-wide text-(--foreground)">Learners</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {assigned.length} assigned. Minutes are each learner&apos;s own, shared across twins and role plays.
+              {assigned.length} assigned. Credits are each learner&apos;s own, shared across twins and role plays.
             </p>
           </div>
           <Button variant="brand" onClick={() => setAssignOpen(true)} >

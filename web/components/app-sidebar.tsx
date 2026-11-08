@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BrandMark, PersonaIcon, RoleplayIcon, SessionsIcon, SettingsIcon, SetupIcon, TwinIcon, UsersIcon } from "@/components/icons";
+import { SidebarCredits } from "@/components/credits/sidebar-credits";
 import { OrgSwitcher, type SwitchableOrg } from "@/components/org-switcher";
 import { SidebarAccountMenu } from "@/components/sidebar-account-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -44,7 +45,7 @@ const NAV_GROUPS = [
 /** Reference nav-item metrics: 32px row, 8px radius, 14px/20px text, 20px icon. */
 type NavItem = { title: string; href: string; icon: typeof TwinIcon; also?: string[] };
 const NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((group) => group.items);
-const NAV_HREFS = [...NAV_ITEMS.flatMap((item) => [item.href, ...(item.also ?? [])]), "/settings"];
+const NAV_HREFS = [...NAV_ITEMS.flatMap((item) => [item.href, ...(item.also ?? [])]), "/credits", "/settings"];
 
 const matches = (pathname: string, href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
@@ -120,6 +121,7 @@ export function AppSidebar({ hideRoleplay = false, orgs = [], orgId = null }: {
         {/* Reference "rail-foot": pinned to the bottom, 12px gap, 12px top padding. */}
         <div className="mt-auto flex flex-col gap-3 pt-3">
           <SidebarMenu className="gap-2">
+            <SidebarCredits active={isActive(pathname, "/credits")} />
             <SidebarMenuItem>
               <SidebarMenuButton
                 render={<Link href="/settings" />}

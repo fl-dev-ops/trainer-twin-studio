@@ -2,19 +2,23 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import {
+  creditsAdded,
   DEFAULT_LEARNER_MINUTES,
   grantMinutes,
   learnerMinutes,
-  ledgerHistory,
   MAX_LEARNER_MINUTES,
   MinutesError,
   orgBalanceSeconds,
-  reclaimMinutes,
+  orgCreditsAddedSeconds,
 } from "@/lib/minutes";
 import { STUDIO_ROLES } from "@/lib/org";
 import { studioProcedure, t } from "@/lib/trpc";
 
-/** Practice minutes over /api/trpc (`minutes`): the org's balance, a learner's minutes, and giving / taking back. Studio only. */
+/**
+ * Credits (practice minutes; 1 credit = 1 minute) over /api/trpc (`minutes`): the org's balance and top-ups, a
+ * learner's credits and what they were given, and adding credits to a learner. Studio only. Credits are only ever
+ * added: every addition is a new ledger row, and balances are sums.
+ */
 
 const emailInput = z.string().trim().toLowerCase().email().max(320);
 const amount = z.number().int().min(1).max(MAX_LEARNER_MINUTES);
@@ -31,43 +35,51 @@ async function minutesCall<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-/** Minutes are for learners: admin and team are never charged, so giving them minutes would only waste the balance. */
+/** Credits are for learners: admin and team are never charged, so giving them credits would only waste the balance. */
 async function assertLearner(orgId: string, email: string) {
   const studio = await db.member.findFirst({ where: { organizationId: orgId, role: { in: [...STUDIO_ROLES] }, user: { email: { equals: email, mode: "insensitive" } } }, select: { id: true } });
-  if (studio) throw new MinutesError(`${email} is on the studio team; admin and team members practise without using minutes.`, 400);
+  if (studio) throw new MinutesError(`${email} is on the studio team; admin and team members practise without using credits.`, 400);
 }
 
 const toMinutes = (seconds: number) => Math.floor(seconds / 60);
 
 export const minutesRouter = t.router({
-  /** The org's balance (what it can still give out), the defaults, and its recent top-ups and grants. */
-  org: studioProcedure.query(async ({ ctx }) => ({
-    balanceMinutes: toMinutes(await orgBalanceSeconds(ctx.user.orgId)),
-    defaultMinutes: DEFAULT_LEARNER_MINUTES,
-    maxMinutes: MAX_LEARNER_MINUTES,
-    history: await ledgerHistory(ctx.user.orgId, undefined, 50),
-  })),
+  /** The org's credits: what it can still give out, everything added to it, and its top-ups (the Credits page). */
+  org: studioProcedure.query(async ({ ctx }) => {
+    const [balance, added, topups] = await Promise.all([
+      orgBalanceSeconds(ctx.user.orgId),
+      orgCreditsAddedSeconds(ctx.user.orgId),
+      creditsAdded(ctx.user.orgId),
+    ]);
+    return {
+      balanceMinutes: toMinutes(balance),
+      addedMinutes: toMinutes(added),
+      defaultMinutes: DEFAULT_LEARNER_MINUTES,
+      maxMinutes: MAX_LEARNER_MINUTES,
+      topups,
+    };
+  }),
 
-  /** One learner's minutes: given, used, left, and every movement. */
+  /** One learner's credits: left, given, used, and every credit added to them. */
   learner: studioProcedure.input(z.object({ email: emailInput })).query(async ({ ctx, input }) => {
-    const own = (await learnerMinutes(ctx.user.orgId, [input.email])).get(input.email)!;
+    const [own, orgBalance, added] = await Promise.all([
+      learnerMinutes(ctx.user.orgId, [input.email]).then((rows) => rows.get(input.email)!),
+      orgBalanceSeconds(ctx.user.orgId),
+      creditsAdded(ctx.user.orgId, input.email),
+    ]);
     return {
       givenMinutes: toMinutes(own.grantedSeconds),
       usedMinutes: Math.round(own.usedSeconds / 6) / 10,
       balanceMinutes: toMinutes(Math.max(0, own.balanceSeconds)),
       maxMinutes: MAX_LEARNER_MINUTES,
-      orgBalanceMinutes: toMinutes(await orgBalanceSeconds(ctx.user.orgId)),
-      history: await ledgerHistory(ctx.user.orgId, input.email),
+      orgBalanceMinutes: toMinutes(orgBalance),
+      added,
     };
   }),
 
-  /** Gives a learner more minutes from the org's balance. */
+  /** Adds credits to a learner, on top of what they have, from the org's balance. */
   add: studioProcedure.input(z.object({ email: emailInput, minutes: amount, note })).mutation(({ ctx, input }) => minutesCall(async () => {
     await assertLearner(ctx.user.orgId, input.email);
     return grantMinutes({ orgId: ctx.user.orgId, email: input.email, minutes: input.minutes, actorUserId: ctx.user.id, note: input.note || "Added by trainer" });
   })),
-
-  /** Takes a learner's unused minutes back into the org's balance. */
-  takeBack: studioProcedure.input(z.object({ email: emailInput, minutes: amount, note })).mutation(({ ctx, input }) => minutesCall(() =>
-    reclaimMinutes({ orgId: ctx.user.orgId, email: input.email, minutes: input.minutes, actorUserId: ctx.user.id, note: input.note || "Taken back by trainer" }))),
 });
