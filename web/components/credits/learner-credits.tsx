@@ -25,13 +25,13 @@ export function LearnerCreditsSummary({ email, name }: { email: string; name: st
   const low = data ? data.balanceMinutes < LOW_LEARNER_MINUTES : false;
 
   return (
-    <section aria-label="Credits" className="flex items-center gap-6 rounded-tt-lg border border-(--card-border) bg-card px-5 py-4 shadow-card">
-      <div className="flex min-w-0 flex-col gap-1.5">
+    <section aria-label="Credits" className="flex items-center justify-between gap-6 rounded-tt-lg border border-(--card-border) bg-card px-5 py-4 shadow-card">
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <p className="m-0 text-overline font-medium tracking-overline uppercase text-(--text-secondary)">Credits left</p>
         <p className={cn("m-0 text-2xl font-semibold tabular-nums tracking-title", low && "text-caution")}>
           {data ? data.balanceMinutes.toLocaleString() : "…"} <span className="text-base font-normal text-muted-foreground">min</span>
         </p>
-        <span className="block h-1.5 w-44 max-w-full overflow-hidden rounded-full bg-(--tone-control)">
+        <span className="block h-1.5 w-full max-w-64 overflow-hidden rounded-full bg-(--tone-control)">
           <span className={cn("block h-full w-(--w) rounded-full", usedPct >= 90 ? "bg-caution" : "bg-foreground")} style={{ "--w": `${usedPct}%` } as CSSProperties} />
         </span>
         <p className="m-0 text-xs text-muted-foreground tabular-nums">{data ? `${data.usedMinutes} of ${data.givenMinutes} min used` : "Loading…"}</p>

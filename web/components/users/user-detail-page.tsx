@@ -20,7 +20,8 @@ export function UserDetailPage({ user, sessions }: UserDetail) {
     <PageContainer>
       <PageHeader back={{ href: "/users" }} />
 
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-6">
+      {/* Half profile, half credits; stacked on small screens. */}
+      <div className="mt-6 grid grid-cols-1 items-center gap-6 md:grid-cols-2">
         <div className="flex min-w-0 items-center gap-4">
           <UserAvatar user={user} size="2xl" />
           <span className="flex min-w-0 flex-col gap-0.5">
