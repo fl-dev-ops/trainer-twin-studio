@@ -25,7 +25,7 @@ import {
   listUploads,
 } from "@/lib/specs";
 import { protectedProcedure, publicProcedure, studioProcedure, t } from "@/lib/trpc";
-import { DEFAULT_TWIN_MINUTES, startableAgentSlugs } from "@/lib/twin-access";
+import { startableAgentSlugs } from "@/lib/twin-access";
 import { avatarState, ownTwinPersona } from "@/lib/twin/avatar";
 
 /**
@@ -44,7 +44,6 @@ const notFound = (): never => {
 export const pageRouter = t.router({
   // Twin pages (the twin router has the rest).
   ownTwinPersona: studioProcedure.query(async ({ ctx }) => (await ownTwinPersona(ctx.user.orgId))?.slug ?? null),
-  twinDefaultMinutes: studioProcedure.query(() => DEFAULT_TWIN_MINUTES),
 
   /** Twin's brain. Knowledge (connectors + recent uploads) and voice/avatar are real; coaching style is fixed text for now. */
   twinBrain: studioProcedure.query(async ({ ctx }) => {

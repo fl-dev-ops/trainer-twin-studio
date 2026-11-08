@@ -51,6 +51,7 @@ export const copilotStudioInput = z.discriminatedUnion("action", [
   }).strict(),
   z.object({
     action: z.literal("inviteLearners"), slug, emails,
+    /** Legacy, ignored: new learners get their starting minutes from the org balance. */
     minutes: z.number().int().min(1).max(10_000).optional(),
     accessUntil: accessUntilSchema,
   }).strict(),
@@ -140,7 +141,7 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
         const learners = await d.listTwinAssignments(orgId, agent.id);
         return {
           ...base,
-          learners: learners.map((row) => ({ email: row.recipientEmail, status: row.status, minutes: row.minutesLimit, minutesUsed: row.minutesUsed })),
+          learners: learners.map((row) => ({ email: row.recipientEmail, status: row.status, minutesGiven: row.minutesGiven, minutesUsed: row.minutesUsed })),
         };
       }
       const invites = await d.db.rolePlayAssignment.findMany({
@@ -219,10 +220,9 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
       const refused = input.emails.filter((email) => staff.has(email));
       if (!learners.length) return { invited: 0, refused, reason: "Studio members (admin / team) are not invited as learners." };
       if (agent.kind === "TWIN") {
-        if (!input.minutes) throw new ScenarioIngestError("Twin invites need minutes (each learner's practice budget)", 400);
         const result = await d.assignTwinAndInvite({
           org: actor.org, by: actor.user, agent: { id: agent.id, name: agent.name },
-          emails: learners, minutes: input.minutes, accessUntil: input.accessUntil,
+          emails: learners, accessUntil: input.accessUntil,
         });
         return { ...result, refused };
       }

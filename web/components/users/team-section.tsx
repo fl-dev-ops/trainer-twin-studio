@@ -14,6 +14,7 @@ import { InviteUser } from "@/components/users/invite-user";
 import type { AwaitingUser } from "@/lib/awaiting-users";
 import { authClient } from "@/lib/auth-client";
 import { BASE_DOMAIN } from "@/lib/base-domain";
+import { DEFAULT_LEARNER_MINUTES } from "@/lib/minutes-config";
 import { useRefresh } from "@/lib/use-refresh";
 import { SearchInput } from "@/components/search-input";
 
@@ -159,12 +160,12 @@ export function TeamSection(props: {
 
   const groups = [
     { title: "Team", role: "team", studio: true, invite: "Invite team member", hint: "Team members run the studio: twins, role plays, sessions and settings." },
-    { title: "Users", role: "user", studio: false, invite: "Invite user", hint: "Users practise with the twins and role plays you give them." },
+    { title: "Users", role: "user", studio: false, invite: "Invite user", hint: `Users practise with the twins and role plays you give them. Each new user gets ${DEFAULT_LEARNER_MINUTES} min of practice from your organization's minutes.` },
   ] as const;
   const matches = (needle: string, ...fields: string[]) => fields.some((field) => field.toLowerCase().includes(needle));
 
   return (
-    <div className="mt-6 grid gap-6">
+    <div className="grid gap-6">
       {groups.map((group) => {
         const all = props.members.filter((member) => (member.role !== "user") === group.studio);
         const pending = props.invitations.filter((invitation) => (invitation.role !== "user") === group.studio);

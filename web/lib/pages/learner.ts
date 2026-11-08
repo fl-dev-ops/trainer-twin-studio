@@ -10,6 +10,7 @@ import { agentPhotoUrls } from "@/lib/persona-media";
 import { presignedGetUrl } from "@/lib/s3";
 import { resolveSessionUser } from "@/lib/session-user";
 import { listAgentContextRequired, listAgentContextUploads, listScenarioIntroVideos } from "@/lib/specs";
+import { learnerBalance } from "@/lib/minutes";
 import { resolveTwinPath, TwinAccessError, twinAccessByCode, twinAssignmentCode } from "@/lib/twin-access";
 import { beforeSettings } from "@/lib/context-upload";
 
@@ -57,6 +58,7 @@ export type SharedSessionView =
   | { kind: "signIn"; url: string }
   | { kind: "twinUnavailable"; message: string; email: string }
   | { kind: "switchAccount"; email: string; returnTo: string }
+  | { kind: "outOfMinutes"; email: string }
   | { kind: "invalid" }
   | { kind: "session"; props: SessionViewProps };
 
@@ -65,6 +67,13 @@ export async function loadSharedSession(code: string): Promise<SharedSessionView
   const host = (await headers()).get("host") ?? "";
   const { org, user } = await resolveSessionUser();
   if (!user) return { kind: "signIn", url: signInUrl(host, `/s/${encodeURIComponent(code)}`) };
+  // A learner's minutes left in this org (null for admin and team, who practise without using minutes).
+  const minutesLeft = async (): Promise<number | null> => {
+    if (!org) return null;
+    const member = await db.member.findFirst({ where: { organizationId: org.id, userId: user.id }, select: { role: true } });
+    if (isStudioRole(member?.role)) return null;
+    return Math.floor(Math.max(0, (await learnerBalance(org.id, user.email)).balanceSeconds) / 60);
+  };
 
   const assignment = org ? await db.rolePlayAssignment.findUnique({
     where: { shareCode: code },
@@ -91,7 +100,12 @@ export async function loadSharedSession(code: string): Promise<SharedSessionView
       throw error;
     });
     if (twin instanceof TwinAccessError) return { kind: "twinUnavailable", message: twin.message, email: user.email };
-    if (twin) return { kind: "session", props: await twinSessionView(org.id, twin.agentId, code, user.name) };
+    if (twin) {
+      // Someone joining through a common link gets their starting minutes when the call starts.
+      const left = twin.assignmentId ? await minutesLeft() : null;
+      if (left !== null && left < 1) return { kind: "outOfMinutes", email: user.email };
+      return { kind: "session", props: { ...(await twinSessionView(org.id, twin.agentId, code, user.name)), minutesLeft: left } };
+    }
   }
   const spent = assignment
     ? (await db.interviewSession.count({
@@ -103,6 +117,8 @@ export async function loadSharedSession(code: string): Promise<SharedSessionView
     return { kind: "switchAccount", email: user.email, returnTo: signInUrl(host, `/s/${encodeURIComponent(code)}`) };
   }
   if (!open || !assignment || !org) return { kind: "invalid" };
+  const left = await minutesLeft();
+  if (left !== null && left < 1) return { kind: "outOfMinutes", email: user.email };
 
   const agent = assignment.deployment.agent;
   const [introVideos, agentPhotos, agentContextRequired, agentContextUploads] = await Promise.all([
@@ -128,6 +144,7 @@ export async function loadSharedSession(code: string): Promise<SharedSessionView
       autoStart: true,
       contexts: [],
       sessionCode: code,
+      minutesLeft: left,
     },
   };
 }
@@ -163,11 +180,15 @@ export async function loadTwinLink(slug: string): Promise<TwinLinkView> {
   } else if (user) {
     try {
       const found = await twinAssignmentCode({ orgId: org.id, user, agentId: twin.agentId });
-      access = { ok: true, preview: false, name: user.name || user.email, email: user.email, code: found.code, minutesLeft: Math.floor(found.secondsLeft / 60), minutesTotal: found.minutesLimit };
+      // The learner's own minutes in this org, shared by every twin and role play they have.
+      const minutes = await learnerBalance(org.id, user.email);
+      access = minutes.balanceSeconds < 60
+        ? { ok: false, name: user.name || user.email, email: user.email, reason: "used" }
+        : { ok: true, preview: false, name: user.name || user.email, email: user.email, code: found.code, minutesLeft: Math.floor(minutes.balanceSeconds / 60), minutesTotal: Math.floor(minutes.grantedSeconds / 60) };
     } catch (error) {
       if (!(error instanceof TwinAccessError)) throw error;
       // In the learner's words: why they can't talk (messages from usable() in lib/twin-access.ts).
-      const reason = /minutes/.test(error.message) ? "used" : /removed|ended/.test(error.message) ? "ended" : "unassigned";
+      const reason = /removed|ended/.test(error.message) ? "ended" : "unassigned";
       access = { ok: false, name: user.name || user.email, email: user.email, reason };
     }
   }

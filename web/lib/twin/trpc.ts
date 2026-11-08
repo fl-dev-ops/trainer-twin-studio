@@ -6,6 +6,7 @@ import type { Prisma } from "@/lib/generated/prisma/client";
 import { beforeSettings } from "@/lib/context-upload";
 import { assignablePeople } from "@/lib/learners";
 import { LEARNER_ROLE } from "@/lib/org";
+import { learnerMinutes, MinutesError } from "@/lib/minutes";
 import { studioProcedure, t } from "@/lib/trpc";
 import {
   accessUntilSchema,
@@ -36,7 +37,7 @@ const slugInput = z.object({ slug: z.string().min(1).max(200) });
 const asRecord = (value: unknown) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
 const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : null);
 
-/** twin-access errors keep their meaning over tRPC. */
+/** twin-access and minutes errors keep their meaning over tRPC. */
 async function twinCall<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
@@ -45,6 +46,7 @@ async function twinCall<T>(fn: () => Promise<T>): Promise<T> {
       throw new TRPCError({ code: error.status === 404 ? "NOT_FOUND" : error.status === 400 ? "BAD_REQUEST" : "FORBIDDEN", message: error.message });
     }
     if (error instanceof AvatarError) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+    if (error instanceof MinutesError) throw new TRPCError({ code: error.status === 409 ? "CONFLICT" : error.status === 403 ? "FORBIDDEN" : "BAD_REQUEST", message: error.message });
     throw error;
   }
 }
@@ -107,7 +109,7 @@ function sessionItem(row: SessionRow) {
  * older sessions shows fewer, upgrade to a grouped query if twins get that busy.
  */
 export function learnerActivity(
-  assignments: { recipientEmail: string; minutesLimit: number; minutesUsed: number; accessUntil: Date | null; user: { id: string; name: string | null; image: string | null } | null }[],
+  assignments: { recipientEmail: string; minutesGiven: number; minutesUsed: number; accessUntil: Date | null; user: { id: string; name: string | null; image: string | null } | null }[],
   sessions: SessionRow[],
 ) {
   return assignments
@@ -121,7 +123,8 @@ export function learnerActivity(
         name: row.user?.name || row.recipientEmail,
         image: row.user?.image ?? null,
         pending: !row.user,
-        minutes: row.minutesLimit,
+        /** The learner's minutes (given / used), shared with every twin and role play they have. */
+        minutes: row.minutesGiven,
         used: row.minutesUsed,
         until: row.accessUntil?.toISOString() ?? null,
         sessions: mine.length,
@@ -275,7 +278,8 @@ const agentsRouter = t.router({
         : [{ agentId: found.id, version: agent.version }]),
       settings: beforeSettings(data),
       credit: {
-        minutes: active.reduce((sum, row) => sum + row.minutesLimit, 0),
+        // Minutes of this twin's learners (each learner's own, shared with their other twins and role plays).
+        minutes: active.reduce((sum, row) => sum + row.minutesGiven, 0),
         used: Math.round(active.reduce((sum, row) => sum + row.minutesUsed, 0)),
       },
       report: {
@@ -356,7 +360,7 @@ const assignmentsRouter = t.router({
         return {
           ...person,
           assigned: row?.status === "active",
-          minutes: row?.minutesLimit ?? null,
+          minutes: row ? row.minutesGiven : null,
           minutesUsed: row?.minutesUsed ?? 0,
           until: row?.accessUntil?.toISOString() ?? null,
         };
@@ -364,11 +368,10 @@ const assignmentsRouter = t.router({
       .sort((a, b) => Number(b.assigned) - Number(a.assigned) || a.name.localeCompare(b.name));
   })),
 
-  /** Gives people the twin with a minutes budget each and emails them their link. */
+  /** Gives people the twin (new people get their starting minutes from the org balance) and emails them their link. */
   assign: studioProcedure
     .input(slugInput.extend({
       emails: z.array(z.string().trim().toLowerCase().email().max(320)).min(1).max(100),
-      minutes: z.number().int().min(1).max(10_000),
       accessUntil: accessUntilSchema,
     }))
     .mutation(({ ctx, input }) => twinCall(async () => {
@@ -378,7 +381,6 @@ const assignmentsRouter = t.router({
         by: { id: ctx.user.id, name: ctx.user.name },
         agent,
         emails: input.emails,
-        minutes: input.minutes,
         accessUntil: input.accessUntil,
       });
     })),
@@ -470,44 +472,44 @@ async function sessionReportState(orgId: string, id: string) {
 const laterEnd = (a: Date | null, b: Date | null) => (a && b ? (a > b ? a : b) : null);
 
 const usersRouter = t.router({
-  /** Everyone with twin access: how many twins, minutes given and used (active assignments). */
+  /** Everyone with twin access: how many twins, and their minutes (given and used, shared by twins and role plays). */
   list: studioProcedure.query(async ({ ctx }) => {
     const rows = await db.twinAssignment.findMany({
       where: { orgId: ctx.user.orgId, status: "active" },
-      select: { id: true, recipientEmail: true, minutesLimit: true, accessUntil: true, user: { select: { name: true, image: true } } },
+      select: { id: true, recipientEmail: true, accessUntil: true, user: { select: { name: true, image: true } } },
     });
-    const used = await db.$queryRaw<{ id: string; seconds: number }[]>`
-      SELECT "twinAssignmentId" AS id, coalesce(sum(least(10800, extract(epoch FROM (
-        coalesce("endedAt", CASE WHEN status IN ('activating', 'active') THEN now() AT TIME ZONE 'UTC' ELSE "startedAt" END)
-        - "startedAt")))), 0)::float8 AS seconds
-      FROM "InterviewSession"
-      WHERE "orgId" = ${ctx.user.orgId} AND "twinAssignmentId" IS NOT NULL AND "startedAt" IS NOT NULL
-      GROUP BY "twinAssignmentId"`;
-    const secondsOf = new Map(used.map((row) => [row.id, row.seconds]));
+    const minutes = await learnerMinutes(ctx.user.orgId, rows.map((row) => row.recipientEmail));
     // until: when this person's access ends; the latest of their twins, null when any twin has no end date.
     const people = new Map<string, { email: string; name: string; image: string | null; agents: number; minutes: number; used: number; until: Date | null }>();
     for (const row of rows) {
       const known = people.get(row.recipientEmail);
+      const own = minutes.get(row.recipientEmail);
       const person = known
-        ?? { email: row.recipientEmail, name: row.user?.name || row.recipientEmail, image: row.user?.image ?? null, agents: 0, minutes: 0, used: 0, until: row.accessUntil };
+        ?? {
+          email: row.recipientEmail, name: row.user?.name || row.recipientEmail, image: row.user?.image ?? null, agents: 0,
+          minutes: Math.floor((own?.grantedSeconds ?? 0) / 60), used: Math.round((own?.usedSeconds ?? 0) / 60), until: row.accessUntil,
+        };
       if (known) person.until = laterEnd(person.until, row.accessUntil);
       person.agents += 1;
-      person.minutes += row.minutesLimit;
-      person.used += (secondsOf.get(row.id) ?? 0) / 60;
       people.set(row.recipientEmail, person);
     }
     return [...people.values()]
-      .map((person) => ({ ...person, used: Math.round(person.used), until: person.until?.toISOString() ?? null }))
+      .map((person) => ({ ...person, until: person.until?.toISOString() ?? null }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }),
 
   /** One learner across all twins: who they are and their twin sessions, newest first (the /users/<id> page). */
   get: studioProcedure.input(z.object({ id: z.string().min(1).max(100) })).query(async ({ ctx, input }) => {
-    const user = await db.user.findFirst({
-      where: { id: input.id, members: { some: { organizationId: ctx.user.orgId } } },
-      select: { id: true, name: true, email: true, image: true },
-    });
-    if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+    const found = await db.user.findUnique({ where: { id: input.id }, select: { id: true, name: true, email: true, image: true } });
+    // In this org: a member, or someone given a twin or role play by email who hasn't joined yet.
+    const email = found?.email.toLowerCase() ?? "";
+    const belongs = found && (
+      await db.member.count({ where: { organizationId: ctx.user.orgId, userId: found.id } })
+      || await db.twinAssignment.count({ where: { orgId: ctx.user.orgId, recipientEmail: email } })
+      || await db.rolePlayAssignment.count({ where: { orgId: ctx.user.orgId, recipientEmail: email } })
+    );
+    if (!found || !belongs) throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+    const user = found;
     const rows = await db.interviewSession.findMany({
       where: { ...learnerSessions(ctx.user.orgId), userId: user.id },
       orderBy: { createdAt: "desc" },

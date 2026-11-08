@@ -64,6 +64,7 @@ export function PreJoin({
   contextPrompt,
   contextLabel,
   sessionCode,
+  minutesLeft = null,
   onJoin,
 }: {
   scenarioName: string;
@@ -81,6 +82,8 @@ export function PreJoin({
   contextPrompt?: string;
   contextLabel?: string;
   sessionCode: string;
+  /** The learner's practice minutes left (null: not metered); the call stops when they run out. */
+  minutesLeft?: number | null;
   onJoin: (settings: PreJoinMediaSettings, contextId?: string) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -353,9 +356,14 @@ export function PreJoin({
 
       <div className="flex flex-1 items-center justify-center px-5 py-6 sm:px-8">
         <div className="w-full max-w-5xl">
-          <h1 className="mb-8 text-center text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+          <h1 className={cn("text-center text-2xl font-bold tracking-tight text-foreground sm:text-3xl", minutesLeft === null ? "mb-8" : "mb-2")}>
             {scenarioName}
           </h1>
+          {minutesLeft !== null ? (
+            <p className="mb-8 text-center text-sm text-muted-foreground tabular-nums">
+              {minutesLeft} min of practice left · the call ends when they run out
+            </p>
+          ) : null}
 
         <div
           className={cn(

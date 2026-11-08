@@ -3,6 +3,7 @@ import { assignmentExpiresAt, newAssignmentShareCode } from "@/lib/assignments";
 import { contextUploadFromAgentData } from "@/lib/context-upload";
 import { db } from "@/lib/db";
 import { ensureDeployment } from "@/lib/deployments";
+import { giveStartingMinutes } from "@/lib/minutes";
 import { sendRolePlayAssignmentEmail } from "@/lib/email";
 
 /**
@@ -18,6 +19,8 @@ export async function inviteToRoleplay(input: {
   resendPending?: boolean;
 }) {
   const emails = [...new Set(input.emails.map((email) => email.trim().toLowerCase()))];
+  // New people get their starting minutes (all or nothing: refused when the org balance is short).
+  await giveStartingMinutes({ orgId: input.org.id, emails, actorUserId: input.by.id });
   const deployment = await ensureDeployment(input.org.id, input.agent.id);
   const assignments = await db.rolePlayAssignment.findMany({
     where: { deploymentId: deployment.id, recipientEmail: { in: emails } },

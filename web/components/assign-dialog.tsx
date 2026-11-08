@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Check } from "lucide-react";
-import { DurationInput, parseMinutes } from "@/components/duration-input";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -17,13 +18,13 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * Assign a twin or a role play (reference assign dialog): the org's learners who are not assigned yet, searchable,
- * plus anyone invited by email; twins also set minutes per person and an optional end date. `onAssign` does the work
- * and closes on success.
+ * plus anyone invited by email; twins also take an optional end date. Minutes are the learner's own: someone new gets
+ * the starting minutes from the org's balance (shown here). `onAssign` does the work and closes on success.
  */
 /** Today as "YYYY-MM-DD" in this browser's time zone (the date input's earliest day). */
 const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
 
-export function AssignDialog({ variant, open, onOpenChange, title, assignedCount, people, defaultMinutes = 30, onAssign }: {
+export function AssignDialog({ variant, open, onOpenChange, title, assignedCount, people, onAssign }: {
   variant: "twin" | "roleplay";
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -32,27 +33,25 @@ export function AssignDialog({ variant, open, onOpenChange, title, assignedCount
   assignedCount: number;
   /** Who can be picked: the org's learners minus the ones already assigned (the caller filters). */
   people: AssignPerson[];
-  defaultMinutes?: number;
   /** accessUntil: the end of the chosen day in this browser's time zone (ISO), or null for no end date. */
-  onAssign: (emails: string[], minutes: number | null, accessUntil: string | null) => Promise<boolean>;
+  onAssign: (emails: string[], accessUntil: string | null) => Promise<boolean>;
 }) {
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<string[]>([]);
   const [invited, setInvited] = useState<string[]>([]);
   const [invite, setInvite] = useState("");
-  const [minutes, setMinutes] = useState(String(defaultMinutes));
+  const orgMinutes = useQuery({ queryKey: ["minutes.org"], queryFn: () => api.minutes.org.query(), enabled: open });
   /** "YYYY-MM-DD" from the date input; empty = no end date. */
   const [until, setUntil] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const minutesValue = variant === "twin" ? parseMinutes(minutes) : null;
   const known = new Set(people.map((p) => p.email.toLowerCase()));
   const rows: AssignPerson[] = [...invited.map((email) => ({ email, name: email, image: null })), ...people];
   const q = query.trim().toLowerCase();
   const shown = q ? rows.filter((p) => `${p.name} ${p.email}`.toLowerCase().includes(q)) : rows;
   const inviteEmails = invite.split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter(Boolean);
   const inviteValid = inviteEmails.length > 0 && inviteEmails.every((e) => EMAIL.test(e));
-  const canAssign = picked.length > 0 && !busy && (variant === "roleplay" || minutesValue !== null);
+  const canAssign = picked.length > 0 && !busy;
 
   const toggle = (email: string) => setPicked((prev) => (prev.includes(email) ? prev.filter((e) => e !== email) : [...prev, email]));
   function addInvites() {
@@ -66,7 +65,6 @@ export function AssignDialog({ variant, open, onOpenChange, title, assignedCount
     setPicked([]);
     setInvited([]);
     setInvite("");
-    setMinutes(String(defaultMinutes));
     setUntil("");
   }
 
@@ -76,7 +74,7 @@ export function AssignDialog({ variant, open, onOpenChange, title, assignedCount
     try {
       // The whole chosen day counts: access ends at its last moment, in the assigner's time zone.
       const accessUntil = variant === "twin" && until ? new Date(`${until}T23:59:59.999`).toISOString() : null;
-      if (await onAssign(picked, minutesValue, accessUntil)) {
+      if (await onAssign(picked, accessUntil)) {
         reset();
         onOpenChange(false);
       }
@@ -99,10 +97,6 @@ export function AssignDialog({ variant, open, onOpenChange, title, assignedCount
         {variant === "twin" ? (
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-4">
-              <label htmlFor="assign-minutes" className="text-sm font-medium">Minutes per person</label>
-              <DurationInput id="assign-minutes" value={minutes} onChange={setMinutes} />
-            </div>
-            <div className="flex items-center justify-between gap-4">
               <label htmlFor="assign-until" className="flex flex-col text-sm font-medium">
                 Access until
                 <span className="text-xs font-normal text-muted-foreground">Optional. No calls can start after this day.</span>
@@ -113,6 +107,12 @@ export function AssignDialog({ variant, open, onOpenChange, title, assignedCount
         ) : (
           <p className="m-0 text-xs text-muted-foreground">Each person gets an email with their own link: one attempt, valid for 30 days.</p>
         )}
+        {orgMinutes.data ? (
+          <p className="m-0 text-xs text-muted-foreground">
+            Someone new gets {orgMinutes.data.defaultMinutes} min of practice from your organization&apos;s balance
+            ({orgMinutes.data.balanceMinutes.toLocaleString()} min left). Minutes are shared across twins and role plays.
+          </p>
+        ) : null}
 
         <SearchInput placeholder="Search by name or email" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search learners" />
 

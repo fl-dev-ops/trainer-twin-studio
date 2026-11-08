@@ -22,3 +22,12 @@ def test_goodbye_comes_shortly_before_the_end():
     # too short to fit a goodbye: just end at the limit
     assert goodbye_delay(GOODBYE_LEAD_SECONDS * 2) is None
     assert goodbye_delay(5.0) is None
+
+
+def test_goodbye_is_the_clients_own_in_a_role_play():
+    from agent import GOODBYE_LINE, ROLEPLAY_GOODBYE_LINE, goodbye_line
+
+    assert goodbye_line({"agent_kind": "ROLEPLAY"}) == ROLEPLAY_GOODBYE_LINE
+    assert goodbye_line({"agent_kind": "TWIN"}) == GOODBYE_LINE
+    assert goodbye_line({}) == GOODBYE_LINE
+    assert "minute" not in ROLEPLAY_GOODBYE_LINE.lower()

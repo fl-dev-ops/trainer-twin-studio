@@ -10,6 +10,7 @@ import { isStudioRole, LEARNER_ROLE } from "@/lib/org";
 import { TwinAccessError, twinAccessByAgent, twinAccessByCode } from "@/lib/twin-access";
 import { pinTwinSkills, TWIN_SOURCE } from "@/lib/twins";
 import { beforeSettings, usesBeforeSettings } from "@/lib/context-upload";
+import { learnerBalance, MinutesError, OUT_OF_MINUTES, recordSessionUsage } from "@/lib/minutes";
 import { BEFORE_UPLOAD_REFUSED, uploadAllowed } from "@/lib/context-upload";
 
 const shareCode = () => randomBytes(18).toString("base64url");
@@ -43,7 +44,14 @@ export function mergeSessionEvidence(
   return incoming ? { ...jsonRecord(current), ...jsonRecord(incoming) } : undefined;
 }
 
-export async function finalizeInterviewSession(input: {
+export async function finalizeInterviewSession(input: Parameters<typeof finalizeSessionRow>[0]) {
+  const finalized = await finalizeSessionRow(input);
+  // A learner's call: its seconds come off their minutes (once, however many times it is finalized).
+  if (finalized && input.requestedStatus) await recordSessionUsage(finalized.id);
+  return finalized;
+}
+
+async function finalizeSessionRow(input: {
   sessionId: string;
   requestedStatus?: SessionEndStatus;
   transcript?: Prisma.InputJsonValue;
@@ -204,9 +212,12 @@ export async function activateSession(input: {
   let deploymentId: string;
   let agentId: string;
   let activationKey: string;
-  // Twin sessions: the assignment that pays for the minutes (null for admin/team, who have no limit).
-  let twin: { assignmentId: string | null; secondsLeft: number | null } | null = null;
+  // Twin sessions: the learner's assignment on that twin (null for admin/team trying it).
+  let twin: { assignmentId: string | null } | null = null;
   const person = { id: input.userId, email: input.userEmail ?? "" };
+  // Learners' calls use their minutes; admin and team (trying agents, calibrating twins) are never charged.
+  const membership = await db.member.findFirst({ where: { userId: input.userId, organizationId: input.orgId }, select: { role: true } });
+  const metered = !isStudioRole(membership?.role);
 
   const roleplayInvite = input.shareCode
     ? await db.rolePlayAssignment.findFirst({
@@ -222,7 +233,7 @@ export async function activateSession(input: {
     // Not a role-play invite: a twin assignment code or a twin share link (joining creates the user's assignment).
     const access = await twinAccessByCode({ orgId: input.orgId, user: person, code: input.shareCode, join: true });
     if (!access) return null;
-    twin = { assignmentId: access.assignmentId, secondsLeft: access.secondsLeft };
+    twin = { assignmentId: access.assignmentId };
     agentId = access.agentId;
     deploymentId = (await ensureDeployment(input.orgId, agentId)).id;
     activationKey = input.idempotencyKey
@@ -267,20 +278,18 @@ export async function activateSession(input: {
     // A twin started directly (portal, talk page, API key): admin and team without limits, others need their assignment.
     const agentRow = await db.agent.findFirst({ where: { id: agentId, orgId: input.orgId }, select: { kind: true } });
     if (agentRow?.kind === "TWIN") {
-      const membership = await db.member.findFirst({
-        where: { userId: input.userId, organizationId: input.orgId },
-        select: { role: true },
-      });
-      if (isStudioRole(membership?.role)) {
-        twin = { assignmentId: null, secondsLeft: null };
+      if (!metered) {
+        twin = { assignmentId: null };
       } else {
         const access = await twinAccessByAgent({ orgId: input.orgId, user: person, agentId });
-        twin = { assignmentId: access.assignmentId, secondsLeft: access.secondsLeft };
+        twin = { assignmentId: access.assignmentId };
       }
     }
   }
   // All twin sessions go through LiveKit (also enforced by a DB trigger).
   if (twin && mode !== "voice") throw new TwinAccessError("Twin sessions are voice only", 400);
+  // Minutes are cut by the voice agent at the deadline; a chat session has no one to cut it.
+  if (metered && mode !== "voice") throw new MinutesError("Practice sessions are voice only", 400);
 
   const existing = await db.interviewSession.findUnique({ where: { activationKey } });
   if (existing && ["activating", "active"].includes(existing.status)) {
@@ -299,6 +308,23 @@ export async function activateSession(input: {
       });
     }
     return null;
+  }
+
+  // A learner has one live call per org: a new one ends the others (each pays for the time it ran), then the
+  // balance decides how long this one may run.
+  let allowedSeconds: number | null = null;
+  if (metered) {
+    const email = person.email || (await db.user.findUniqueOrThrow({ where: { id: input.userId }, select: { email: true } })).email;
+    const live = await db.interviewSession.findMany({
+      where: { orgId: input.orgId, userId: input.userId, status: { in: ["activating", "active"] } },
+      select: { id: true },
+    });
+    if (live.length) {
+      const { closeInterviewSession } = await import("@/lib/session-lifecycle");
+      for (const row of live) await closeInterviewSession(row.id, "abandoned");
+    }
+    allowedSeconds = (await learnerBalance(input.orgId, email)).balanceSeconds;
+    if (allowedSeconds <= 0) throw new MinutesError(OUT_OF_MINUTES, 403);
   }
 
   const snapshot = await sessionSnapshot(input.orgId, agentId, input.contextId, requestedDocs);
@@ -335,6 +361,7 @@ export async function activateSession(input: {
         deploymentId,
         assignmentId,
         twinAssignmentId: twin?.assignmentId ?? null,
+        allowedSeconds,
         shareCode: shareCode(),
         activationKey,
         mode,
@@ -381,8 +408,8 @@ export async function activateSession(input: {
     throw error;
   }
 
-  // twinSecondsLeft: the call must end after this many seconds (twin assignments only; null = no limit).
-  return { id: session.id, agentSlug: session.agentSlug, status: "active", mode, runtimeToken: token, twinSecondsLeft: twin?.secondsLeft ?? null };
+  // secondsLeft: the call must end after this many seconds (learners' calls; null = not metered).
+  return { id: session.id, agentSlug: session.agentSlug, status: "active", mode, runtimeToken: token, secondsLeft: allowedSeconds };
 }
 
 /** Gives a learner with no membership role `user` in the org (no-op when they already belong to it). */

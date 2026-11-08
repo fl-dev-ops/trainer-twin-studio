@@ -3,6 +3,7 @@ import { z } from "zod";
 import { BASE_DOMAIN } from "@/lib/base-domain";
 import { db } from "@/lib/db";
 import { sendInvitationEmail } from "@/lib/email";
+import { giveStartingMinutes, MinutesError } from "@/lib/minutes";
 import { API_LEARNER_ROLE, isApiError, paginationFromUrl, requireExternalApi } from "@/lib/external-api";
 import { LEARNER_ROLE, STUDIO_ROLES } from "@/lib/org";
 
@@ -68,6 +69,13 @@ export async function POST(request: Request) {
     select: { userId: true, user: { select: { name: true } } },
   });
   if (!inviter) return Response.json({ error: "API key creator is no longer an organization trainer" }, { status: 403 });
+  // A new learner gets their starting minutes from the org balance (once; re-inviting is free).
+  try {
+    await giveStartingMinutes({ orgId: api.org.id, emails: [email], actorUserId: inviter.userId });
+  } catch (error) {
+    if (error instanceof MinutesError) return Response.json({ error: error.message }, { status: 409 });
+    throw error;
+  }
 
   const existingInvitation = await db.invitation.findFirst({
     where: { organizationId: api.org.id, email, status: "pending" },

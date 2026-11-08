@@ -10,6 +10,7 @@ import { listSessions } from "@/lib/specs";
 import { processEndedSession } from "@/lib/session-processing";
 import { MemberError } from "@/lib/members";
 import { TwinAccessError } from "@/lib/twin-access";
+import { MinutesError } from "@/lib/minutes";
 import { BEFORE_UPLOAD_REFUSED } from "@/lib/context-upload";
 
 export async function GET() {
@@ -55,6 +56,7 @@ export async function POST(req: Request) {
   } catch (error) {
     if (error instanceof MemberError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof TwinAccessError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error instanceof MinutesError) return NextResponse.json({ error: error.message, code: "minutes" }, { status: error.status });
     console.error("Session activation failed", error);
     const message = error instanceof Error ? error.message : "";
     if (message === "Context not found" || message === BEFORE_UPLOAD_REFUSED || message.startsWith("Deployment does not allow ")) {

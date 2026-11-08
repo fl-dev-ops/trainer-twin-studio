@@ -76,8 +76,9 @@ test("an invite of only studio members sends nothing", async () => {
   expect(result).toMatchObject({ invited: 0, refused: ["admin@olga.com"] });
 });
 
-test("twin invites need minutes", async () => {
-  await expect(run({ action: "inviteLearners", slug: "olga-objection-handling", emails: ["new@x.com"] })).rejects.toThrow(/minutes/);
+test("twin invites take no minutes: new learners get their starting minutes from the org balance", async () => {
+  const result = await run({ action: "inviteLearners", slug: "olga-objection-handling", emails: ["new@x.com"] });
+  expect(result).toMatchObject({ refused: [] });
 });
 
 test("archive is soft and restorable; the main twin can't be archived", async () => {

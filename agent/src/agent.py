@@ -82,17 +82,24 @@ def parse_metadata(raw: str | None) -> dict[str, Any]:
 
 
 def seconds_until_end(metadata: dict[str, Any], now: float) -> float | None:
-    """Twin minutes: seconds left until `ends_at` (unix seconds, set by the web), or None when unlimited."""
+    """Learner minutes: seconds left until `ends_at` (unix seconds, set by the web), or None when not metered."""
     ends_at = metadata.get("ends_at")
     if isinstance(ends_at, bool) or not isinstance(ends_at, (int, float)) or ends_at <= 0:
         return None
     return max(0.0, float(ends_at) - now)
 
 
-# Twin minutes: the twin says goodbye this long before the call is cut, then the learner's mic goes off.
-# shortcut: one fixed English line in the twin's voice; persona-written or localized goodbyes when needed.
+# Learner minutes: the agent says goodbye this long before the call is cut, then the learner's mic goes off.
+# shortcut: fixed English lines in the agent's voice; persona-written or localized goodbyes when needed.
 GOODBYE_LEAD_SECONDS = 20.0
 GOODBYE_LINE = "We're nearly out of time for today, so let's stop here. Thanks for talking it through with me."
+# A role play's client ends the call in character: no mention of minutes or practice.
+ROLEPLAY_GOODBYE_LINE = "Sorry, I have to jump to another call now. Let's pick this up another time. Bye for now."
+
+
+def goodbye_line(metadata: dict[str, Any]) -> str:
+    """The goodbye before the minutes run out: the client's own for a role play, the twin's otherwise."""
+    return ROLEPLAY_GOODBYE_LINE if metadata.get("agent_kind") == "ROLEPLAY" else GOODBYE_LINE
 
 
 def goodbye_delay(limit: float) -> float | None:
@@ -533,14 +540,14 @@ async def entrypoint(ctx: agents.JobContext) -> None:
                 return
 
     async def end_at_deadline(limit: float) -> None:
-        """Twin minutes: say goodbye shortly before the budget runs out, then close the room at the limit;
+        """Learner minutes: say goodbye shortly before the balance runs out, then close the room at the limit;
         on_session_end posts the completion webhook as for any other ending."""
         started = time.monotonic()
         notice = goodbye_delay(limit)
         if notice is not None:
             await asyncio.sleep(notice)
             try:
-                handle = session.say(GOODBYE_LINE, allow_interruptions=False)
+                handle = session.say(goodbye_line(metadata), allow_interruptions=False)
                 await asyncio.wait_for(handle.wait_for_playout(), timeout=GOODBYE_LEAD_SECONDS)
                 # No new turn after the goodbye: a reply started now would be cut off mid-sentence.
                 session.input.set_audio_enabled(False)

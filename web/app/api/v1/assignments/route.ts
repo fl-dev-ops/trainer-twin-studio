@@ -2,6 +2,7 @@ import { z } from "zod";
 import { assignmentExpiresAt, newAssignmentShareCode } from "@/lib/assignments";
 import { db } from "@/lib/db";
 import { ensureDeployment } from "@/lib/deployments";
+import { giveStartingMinutes, MinutesError } from "@/lib/minutes";
 import { findOrgLearner, isApiError, paginationFromUrl, requireExternalApi } from "@/lib/external-api";
 import {
   assignmentDetails,
@@ -76,7 +77,14 @@ export async function POST(request: Request) {
     });
   }
 
-  // New, or a cancelled / expired one reopened with a fresh link (as the dashboard's Assign does).
+  // New, or a cancelled / expired one reopened with a fresh link (as the dashboard's Assign does). Someone new to the
+  // org's minutes gets their starting minutes from its balance first.
+  try {
+    await giveStartingMinutes({ orgId: api.org.id, emails: [recipientEmail], actorUserId: trainer.userId });
+  } catch (error) {
+    if (error instanceof MinutesError) return Response.json({ error: error.message }, { status: 409 });
+    throw error;
+  }
   const fields = {
     assignedByUserId: trainer.userId,
     shareCode: newAssignmentShareCode(),

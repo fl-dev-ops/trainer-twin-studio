@@ -54,6 +54,8 @@ Creating the same learner-scenario pair again is safe. While the assignment is p
   Assignment persistence succeeds even when email delivery fails. Check `emailSent` instead of retrying the assignment immediately.
 </Note>
 
+Someone new to your organization's practice minutes gets **30 minutes** from its prepaid balance when first assigned. If the balance can't cover them, the request returns `409` and nothing is assigned. A call stops when the learner's minutes run out.
+
 ## Change an assignment
 
 Move an assignment to another learner, scenario, or both:

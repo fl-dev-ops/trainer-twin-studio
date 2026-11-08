@@ -383,6 +383,9 @@ model InterviewSession {
   // are the sum of these sessions' startedAt..endedAt.
   twinAssignmentId String?
   twinAssignment   TwinAssignment?     @relation(fields: [twinAssignmentId], references: [id], onDelete: SetNull)
+  // Learner sessions: the learner's minutes balance (seconds) when the call started; the call is cut there and its
+  // usage is capped at it. Null: not metered (admin and team trying an agent, calibrations).
+  allowedSeconds   Int?
   twinCalibration  TwinCalibration?
   turnEvidence     TwinTurnEvidence[]
 
@@ -525,6 +528,7 @@ model Organization {
   issueReports       IssueReport[]
   avatars            Avatar[]
   copilotSessions    CopilotSession[]
+  minuteLedger       MinuteLedger[]
 
   @@unique([slug])
   @@map("organization")
@@ -1020,3 +1024,32 @@ model SkillSource {
   @@id([agentId, version, documentId])
   @@index([orgId, documentId])
 }
+
+// ---- Practice minutes (migration minute_ledger) ----
+
+/// Prepaid practice minutes, in seconds: one row per movement, never edited (lib/minutes.ts is the only writer).
+/// TrainerTwin tops up an org (topup); the org gives learners minutes from it (grant) and can take unused ones back
+/// (reclaim); learner calls use them (usage, one row per session). Org balance = topups - grants - reclaims (reclaims
+/// are negative); a learner's = their grants + reclaims + usage. Learners are keyed by email, so people who have not
+/// joined yet can hold minutes.
+model MinuteLedger {
+  id          String   @id @default(cuid())
+  orgId       String
+  /// The learner, lower case; null for an org top-up.
+  email       String?
+  userId      String?
+  type        String // topup | grant | reclaim | usage (CHECK)
+  /// Signed: topup and grant > 0, reclaim < 0, usage <= 0 (CHECK).
+  seconds     Int
+  /// Usage rows: the session it paid for (one usage row per session).
+  sessionId   String?  @unique
+  actorUserId String?
+  note        String?
+  createdAt   DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, email])
+  @@index([orgId, type])
+}
+

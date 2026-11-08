@@ -3,7 +3,7 @@ import { learnerActivity } from "@/lib/twin/trpc";
 
 const session = (email: string, at: string, rating: number | null) =>
   ({ user: { email }, startedAt: new Date(at), createdAt: new Date(at), feedbackRating: rating }) as unknown as Parameters<typeof learnerActivity>[1][number];
-const assignment = (email: string, user: { name: string } | null) => ({ recipientEmail: email, minutesLimit: 30, minutesUsed: 12, accessUntil: null, user: user && { ...user, image: null } });
+const assignment = (email: string, user: { name: string } | null) => ({ recipientEmail: email, minutesGiven: 30, minutesUsed: 12, accessUntil: null, user: user && { ...user, image: null } });
 
 test("learner activity: per-learner sessions, last active, mean rating; active first, never-started last", () => {
   const rows = learnerActivity(

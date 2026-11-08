@@ -116,7 +116,10 @@ paths:
       operationId: inviteUser
       tags: [Users]
       summary: Invite a learner
-      description: Creates or refreshes a pending learner invitation. Email failure does not roll back the invitation.
+      description: |
+        Creates or refreshes a pending learner invitation. Email failure does not roll back the invitation.
+        A new learner gets 30 practice minutes from the organization's prepaid balance (once; re-inviting is free).
+        Returns `409` when the balance can't cover them.
       requestBody:
         required: true
         content:
@@ -288,7 +291,8 @@ paths:
         Idempotently assigns a published scenario to a learner (by `userId`) or to an email address (for someone who has not joined yet).
         A pending or used assignment for the same learner and scenario is returned as it is, with `created: false` and no email.
         A cancelled or expired one is reopened with a new `practiceUrl` and email (`201`, `created: true`).
-        Email failure does not roll back the assignment.
+        Someone new to the organization's practice minutes gets 30 minutes from its prepaid balance; `409` when the
+        balance can't cover them. Email failure does not roll back the assignment.
       requestBody:
         required: true
         content:
@@ -316,6 +320,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '429':
           $ref: '#/components/responses/RateLimited'
   /assignments/{assignmentId}:

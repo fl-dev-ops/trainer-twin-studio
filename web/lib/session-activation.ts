@@ -34,7 +34,7 @@ export async function activateInterviewRuntime(input: {
       id: true,
       assignmentId: true,
       agentSlug: true,
-      agent: { select: { data: true, persona: { select: { voiceId: true } } } },
+      agent: { select: { data: true, kind: true, persona: { select: { voiceId: true } } } },
       livekitRoom: true,
       livekitDispatchId: true,
       audioEgressId: true,
@@ -66,10 +66,11 @@ export async function activateInterviewRuntime(input: {
       agentSlug: row.agentSlug,
       holdOpening: Boolean(agentData?.introVideo) || Boolean(input.holdOpening),
       voice: configuredVoice?.id ?? sharedDefault?.id,
-      // Twin minutes: the voice agent ends the call at this moment (absolute, so agent and web count the same span).
-      endsAt: "twinSecondsLeft" in session && session.twinSecondsLeft != null
-        ? Math.floor(Date.now() / 1000) + session.twinSecondsLeft
+      // Learner minutes: the voice agent ends the call at this moment (absolute, so agent and web count the same span).
+      endsAt: "secondsLeft" in session && session.secondsLeft != null
+        ? Math.floor(Date.now() / 1000) + session.secondsLeft
         : undefined,
+      agentKind: row.agent.kind,
     });
     await db.interviewSession.update({
       where: { id: session.id },

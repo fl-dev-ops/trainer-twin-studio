@@ -1,11 +1,11 @@
 import { beforeEach, expect, mock, test } from "bun:test";
 
-type Assignment = { id: string; orgId: string; agentId: string; minutesLimit: number; status: string; userId: string | null; recipientEmail: string; shareCode: string; shareLinkId?: string | null };
+type Assignment = { id: string; orgId: string; agentId: string; minutesLimit?: number; status: string; userId: string | null; recipientEmail: string; shareCode: string; shareLinkId?: string | null };
 type Link = { id: string; orgId: string; agentId: string; code: string; minutesPerUser: number; status: string };
 let assignments: Assignment[] = [];
 let links: Link[] = [];
-let usedSeconds: Record<string, number> = {};
 let created = 0;
+let started: string[][] = [];
 
 mock.module("@/lib/db", () => ({
   db: {
@@ -27,8 +27,13 @@ mock.module("@/lib/db", () => ({
         Object.assign(assignments.find((a) => a.id === where.id)!, data),
     },
     twinShareLink: { findUnique: async ({ where }: { where: { code: string } }) => links.find((l) => l.code === where.code) ?? null },
-    $queryRaw: async (_strings: TemplateStringsArray, id: string) => [{ seconds: usedSeconds[id] ?? 0 }],
   },
+}));
+// Minutes are the learner's own (lib/minutes.ts, tested on a real database); twin access only gives the starting ones.
+mock.module("@/lib/minutes", () => ({
+  DEFAULT_LEARNER_MINUTES: 30,
+  giveStartingMinutes: async ({ emails }: { emails: string[] }) => (started.push(emails), { given: emails }),
+  learnerMinutes: async () => new Map(),
 }));
 
 const { twinAccessByAgent, twinAccessByCode, TwinAccessError } = await import("@/lib/twin-access");
@@ -36,9 +41,9 @@ const learner = { id: "u1", email: "Learner@Example.com" };
 
 beforeEach(() => {
   assignments = [{ id: "a1", orgId: "org", agentId: "twin", minutesLimit: 30, status: "active", userId: null, recipientEmail: "learner@example.com", shareCode: "personal" }];
-  links = [{ id: "l1", orgId: "org", agentId: "twin2", code: "common", minutesPerUser: 20, status: "active" }];
-  usedSeconds = {};
+  links = [{ id: "l1", orgId: "org", agentId: "twin2", code: "common", minutesPerUser: 20, status: "active", createdByUserId: "t1" } as Link];
   created = 0;
+  started = [];
 });
 
 const rejects = async (promise: Promise<unknown>, status: number, message: string) => {
@@ -51,34 +56,32 @@ test("a code that is not a twin code is not handled here", async () => {
   expect(await twinAccessByCode({ orgId: "org", user: learner, code: "nope", join: true })).toBeNull();
 });
 
-test("personal code: minutes left, and the user is bound on first use", async () => {
-  usedSeconds.a1 = 600;
+test("personal code: access, and the user is bound on first use", async () => {
   expect(await twinAccessByCode({ orgId: "org", user: learner, code: "personal", join: true }))
-    .toEqual({ assignmentId: "a1", agentId: "twin", secondsLeft: 1200 });
+    .toEqual({ assignmentId: "a1", agentId: "twin" });
   expect(assignments[0].userId).toBe("u1");
 });
 
-test("personal code: wrong person, other org, revoked and used-up are refused", async () => {
+test("personal code: wrong person, other org and revoked are refused", async () => {
   await rejects(twinAccessByCode({ orgId: "org", user: { id: "u2", email: "other@example.com" }, code: "personal", join: true }), 403, "This twin is not assigned to your account");
   await rejects(twinAccessByCode({ orgId: "other", user: learner, code: "personal", join: true }), 403, "This twin link belongs to another organization");
   assignments[0].status = "revoked";
   await rejects(twinAccessByCode({ orgId: "org", user: learner, code: "personal", join: true }), 403, "Your access to this twin was removed");
-  assignments[0].status = "active";
-  usedSeconds.a1 = 30 * 60;
-  await rejects(twinAccessByCode({ orgId: "org", user: learner, code: "personal", join: true }), 403, "You have used all your minutes with this twin");
 });
 
-test("common link: preview creates nothing; joining creates one assignment with the link's minutes", async () => {
+test("common link: preview creates nothing; joining creates one assignment and gives the starting minutes", async () => {
   expect(await twinAccessByCode({ orgId: "org", user: learner, code: "common", join: false }))
-    .toEqual({ assignmentId: null, agentId: "twin2", secondsLeft: 1200 });
+    .toEqual({ assignmentId: null, agentId: "twin2" });
   expect(created).toBe(0);
+  expect(started).toEqual([]);
   const joined = await twinAccessByCode({ orgId: "org", user: learner, code: "common", join: true });
-  expect(joined).toMatchObject({ agentId: "twin2", secondsLeft: 1200 });
-  expect(assignments.at(-1)).toMatchObject({ agentId: "twin2", recipientEmail: "learner@example.com", userId: "u1", minutesLimit: 20, shareLinkId: "l1" });
-  // Opening the link again reuses the same assignment and never adds minutes.
-  usedSeconds[joined!.assignmentId!] = 15 * 60;
-  expect(await twinAccessByCode({ orgId: "org", user: learner, code: "common", join: true })).toMatchObject({ assignmentId: joined!.assignmentId, secondsLeft: 300 });
+  expect(joined).toMatchObject({ agentId: "twin2" });
+  expect(assignments.at(-1)).toMatchObject({ agentId: "twin2", recipientEmail: "learner@example.com", userId: "u1", shareLinkId: "l1" });
+  expect(started).toEqual([["learner@example.com"]]);
+  // Opening the link again reuses the same assignment.
+  expect(await twinAccessByCode({ orgId: "org", user: learner, code: "common", join: true })).toMatchObject({ assignmentId: joined!.assignmentId });
   expect(created).toBe(1);
+  expect(started).toHaveLength(1);
 });
 
 test("common link: a disabled link refuses new joins", async () => {
@@ -88,6 +91,6 @@ test("common link: a disabled link refuses new joins", async () => {
 });
 
 test("direct start needs the user's own assignment on that twin", async () => {
-  expect(await twinAccessByAgent({ orgId: "org", user: learner, agentId: "twin" })).toMatchObject({ assignmentId: "a1", secondsLeft: 1800 });
+  expect(await twinAccessByAgent({ orgId: "org", user: learner, agentId: "twin" })).toEqual({ assignmentId: "a1", agentId: "twin" });
   await rejects(twinAccessByAgent({ orgId: "org", user: learner, agentId: "twin2" }), 403, "This twin is not assigned to your account");
 });

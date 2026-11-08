@@ -111,6 +111,8 @@ type Props = {
   agentPhotos?: Record<string, string | null>;
   /** Learner-facing entries: no start button, the session starts on page load. */
   autoStart?: boolean;
+  /** The learner's practice minutes left, shown before joining (null: not metered). */
+  minutesLeft?: number | null;
 };
 
 function formatBytes(n: number) {
@@ -136,6 +138,7 @@ export function SessionView({
   introVideos = {},
   agentPhotos = {},
   autoStart = false,
+  minutesLeft = null,
 }: Props) {
   // One stable Room instance for the whole mount
   const room = useMemo(
@@ -954,6 +957,7 @@ export function SessionView({
         contextPrompt={contextUpload?.prompt}
         contextLabel={contextUpload?.label}
         sessionCode={sessionCode}
+        minutesLeft={minutesLeft}
         onJoin={(settings, contextId) => {
           setPrejoinMedia(settings);
           setContextIds(contextId ? [contextId] : []);

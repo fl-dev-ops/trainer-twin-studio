@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import type { AgentKind } from "@/lib/generated/prisma/client";
+import { learnerMinutes } from "@/lib/minutes";
 import { LEARNER_ROLE } from "@/lib/org";
 
 type Person = { id: string; name: string; email: string; image: string | null };
@@ -83,6 +84,8 @@ export type UsersRow = {
   twinSessions: number;
   roleplaySessions: number;
   practiceSeconds: number;
+  /** Practice minutes left (lib/minutes.ts), shared by twins and role plays. */
+  minutesLeft: number;
   lastActiveAt: string | null;
 };
 
@@ -104,6 +107,7 @@ export async function listUsers(orgId: string): Promise<UsersRow[]> {
         twinSessions: 0,
         roleplaySessions: 0,
         practiceSeconds: 0,
+        minutesLeft: 0,
         lastActiveAt: row.lastActiveAt,
       };
       merged.name ||= row.name;
@@ -115,6 +119,8 @@ export async function listUsers(orgId: string): Promise<UsersRow[]> {
       byEmail.set(key, merged);
     }
   }
+  const minutes = await learnerMinutes(orgId, [...byEmail.keys()]);
+  for (const row of byEmail.values()) row.minutesLeft = Math.floor(Math.max(0, minutes.get(row.email)?.balanceSeconds ?? 0) / 60);
   return [...byEmail.values()].sort(
     (a, b) => (b.lastActiveAt ?? "").localeCompare(a.lastActiveAt ?? "") || a.name.localeCompare(b.name),
   );

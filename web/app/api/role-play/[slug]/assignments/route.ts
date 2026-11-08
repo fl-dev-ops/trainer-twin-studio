@@ -2,6 +2,7 @@ import { z } from "zod";
 import { MAX_ASSIGNMENT_RECIPIENTS } from "@/lib/assignments";
 import { db } from "@/lib/db";
 import { getTrainerOrg } from "@/lib/org";
+import { MinutesError } from "@/lib/minutes";
 import { inviteToRoleplay } from "@/lib/roleplay/invites";
 
 const bodySchema = z.object({
@@ -62,11 +63,16 @@ export async function PUT(
   });
   if (!agent) return Response.json({ error: "Published role play not found" }, { status: 404 });
 
-  return Response.json(await inviteToRoleplay({
-    org: { id: trainer.id, slug: trainer.slug },
-    by: { id: trainer.user.id, name: trainer.user.name },
-    agent,
-    emails: parsed.data.emails,
-    resendPending: parsed.data.resendPending === "send",
-  }));
+  try {
+    return Response.json(await inviteToRoleplay({
+      org: { id: trainer.id, slug: trainer.slug },
+      by: { id: trainer.user.id, name: trainer.user.name },
+      agent,
+      emails: parsed.data.emails,
+      resendPending: parsed.data.resendPending === "send",
+    }));
+  } catch (error) {
+    if (error instanceof MinutesError) return Response.json({ error: error.message }, { status: error.status });
+    throw error;
+  }
 }

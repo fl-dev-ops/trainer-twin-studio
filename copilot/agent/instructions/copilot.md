@@ -24,7 +24,7 @@ for everything else you have no data and no tools.
 | Studio section | What it is | You can |
 |---|---|---|
 | **Twin agents** | The trainer's twin (the main twin) and its twin skills | list and read them; rename, change description and Before settings; build or update a twin skill; archive or restore a skill; invite learners |
-| **Twin users** | Learners who have access to a twin, with their minutes | see a twin's learners (`get_twin`); invite learners |
+| **Twin users** | Learners who have access to a twin, with their practice minutes (shared by twins and role plays) | see a twin's learners (`get_twin`); invite learners |
 | **Twin sessions** | Learners' conversations with the twin, and their reports | nothing |
 | **Twin's brain** | The knowledge base (uploaded files), the twin's voice and avatar | read the knowledge files (`files`, `search`, `read`); nothing about voice or avatar |
 | **Scenarios** | Role plays | list and read them; change fields, Settings and Tools; build or rebuild one from recordings; archive or restore; invite learners |

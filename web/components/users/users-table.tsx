@@ -20,7 +20,7 @@ function formatPractice(seconds: number) {
 }
 
 /** Grid shared by the header row and the rows on the Users page. */
-const USERS_GRID = "grid grid-cols-[minmax(0,1.6fr)_120px_150px_130px] gap-4";
+const USERS_GRID = "grid grid-cols-[minmax(0,1.6fr)_120px_150px_130px_110px] gap-4";
 
 /** Users page: every learner with their twin and role-play activity. Search in the header, no filters. */
 export function UsersTable({ users }: { users: UsersRow[] }) {
@@ -49,6 +49,7 @@ export function UsersTable({ users }: { users: UsersRow[] }) {
           <span>Twin sessions</span>
           <span>Roleplay sessions</span>
           <span>Total duration</span>
+          <span>Minutes left</span>
         </div>
         {filtered.length === 0 ? (
           <p className="px-5 py-8 text-center text-sm text-muted-foreground">
@@ -58,8 +59,8 @@ export function UsersTable({ users }: { users: UsersRow[] }) {
           <ul className="m-0 flex list-none flex-col p-0">
             {filtered.map((user, idx) => (
               <li key={user.email} className={cn("relative", idx > 0 && "border-t border-border")}>
-                {/* Stretched link: the whole row opens the user's page when they have twin sessions to show. */}
-                {user.userId && user.twinSessions > 0 ? (
+                {/* Stretched link: the whole row opens the user's page (their minutes and twin sessions). */}
+                {user.userId ? (
                   <Link
                     href={`/users/${user.userId}`}
                     aria-label={`Open ${user.name}`}
@@ -80,6 +81,7 @@ export function UsersTable({ users }: { users: UsersRow[] }) {
                   <span className="tabular-nums">{user.twinSessions || "—"}</span>
                   <span className="tabular-nums">{user.roleplaySessions || "—"}</span>
                   <span className="tabular-nums">{formatPractice(user.practiceSeconds)}</span>
+                  <span className={cn("tabular-nums", user.minutesLeft < 5 && "text-(--color-danger)")}>{user.minutesLeft} min</span>
                 </div>
               </li>
             ))}

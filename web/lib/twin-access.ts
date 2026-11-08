@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { BASE_DOMAIN } from "@/lib/base-domain";
 import { db } from "@/lib/db";
 import { sendTwinAssignmentEmail } from "@/lib/email";
+import { DEFAULT_LEARNER_MINUTES, giveStartingMinutes, learnerMinutes } from "@/lib/minutes";
 import { TWIN_SOURCE } from "@/lib/twins";
 
 /**
@@ -70,37 +71,24 @@ export async function resolveTwinPath(orgId: string, orgSlug: string, path: stri
   return null;
 }
 
-/** Minutes a learner gets when nobody chose otherwise (assign screen default, share links). */
-export const DEFAULT_TWIN_MINUTES = 30;
-
 /**
- * Seconds already used on an assignment. A session still running counts up to now; one that ended
- * without endedAt (crashed, failed) counts as 0. Timestamps are naive UTC, so "now" is taken in UTC:
- * the database session time zone may be anything. Each session counts at most 3 hours (as learners.ts), so a
- * call that never ended (stuck "active") cannot keep using minutes forever.
+ * Legacy: TwinAssignment.minutesLimit and TwinShareLink.minutesPerUser are still required columns, but minutes are
+ * per learner now (lib/minutes.ts); new rows get this value and nothing reads it. shortcut: drop both columns once the
+ * minutes ledger has run a release.
  */
-export async function twinSecondsUsed(assignmentId: string): Promise<number> {
-  const [row] = await db.$queryRaw<{ seconds: number }[]>`
-    SELECT coalesce(sum(least(10800, extract(epoch FROM (
-      coalesce("endedAt", CASE WHEN status IN ('activating', 'active') THEN now() AT TIME ZONE 'UTC' ELSE "startedAt" END)
-      - "startedAt")))), 0)::float8 AS seconds
-    FROM "InterviewSession"
-    WHERE "twinAssignmentId" = ${assignmentId} AND "startedAt" IS NOT NULL`;
-  return Math.max(0, row?.seconds ?? 0);
-}
+export const DEFAULT_TWIN_MINUTES = DEFAULT_LEARNER_MINUTES;
 
 type Person = { id: string; email: string };
 type AssignmentRow = {
   id: string;
   agentId: string;
-  minutesLimit: number;
   status: string;
   userId: string | null;
   recipientEmail: string;
   accessUntil: Date | null;
 };
 
-const assignmentSelect = { id: true, agentId: true, minutesLimit: true, status: true, userId: true, recipientEmail: true, accessUntil: true } as const;
+const assignmentSelect = { id: true, agentId: true, status: true, userId: true, recipientEmail: true, accessUntil: true } as const;
 
 /** An assignment's end date (set when assigning): optional, and only a future date makes sense. */
 export const accessUntilSchema = z.coerce
@@ -114,16 +102,17 @@ export const withinAccess = (accessUntil: Date | null, now = new Date()) => !acc
 const belongsTo = (assignment: AssignmentRow, user: Person) =>
   assignment.userId ? assignment.userId === user.id : assignment.recipientEmail === user.email.trim().toLowerCase();
 
-/** Active, owned by the user, within its end date, minutes left; binds the user on first use. Throws TwinAccessError otherwise. */
+/**
+ * Active, owned by the user, within its end date; binds the user on first use. Throws TwinAccessError otherwise.
+ * Access only: how long a call may run comes from the learner's minutes (lib/minutes.ts), checked when it starts.
+ */
 async function usable(assignment: AssignmentRow | null, user: Person) {
   if (!assignment || !belongsTo(assignment, user)) throw new TwinAccessError("This twin is not assigned to your account", 403);
   if (assignment.status !== "active") throw new TwinAccessError("Your access to this twin was removed", 403);
-  // Checked when a call starts; a call already running finishes (its minutes still cap it).
+  // Checked when a call starts; a call already running finishes.
   if (!withinAccess(assignment.accessUntil)) throw new TwinAccessError("Your access to this twin has ended", 403);
-  const secondsLeft = assignment.minutesLimit * 60 - (await twinSecondsUsed(assignment.id));
-  if (secondsLeft <= 0) throw new TwinAccessError("You have used all your minutes with this twin", 403);
   if (!assignment.userId) await db.twinAssignment.update({ where: { id: assignment.id }, data: { userId: user.id } });
-  return { assignmentId: assignment.id, agentId: assignment.agentId, secondsLeft: Math.floor(secondsLeft) };
+  return { assignmentId: assignment.id, agentId: assignment.agentId };
 }
 
 /** What a /s/<code> code is for twins: a personal assignment or a common share link (null: not a twin code). */
@@ -132,15 +121,15 @@ export async function findTwinCode(code: string) {
   if (assignment) return { type: "assignment" as const, orgId: assignment.orgId, agentId: assignment.agentId, assignment };
   const link = await db.twinShareLink.findUnique({
     where: { code },
-    select: { id: true, orgId: true, agentId: true, minutesPerUser: true, status: true },
+    select: { id: true, orgId: true, agentId: true, minutesPerUser: true, status: true, createdByUserId: true },
   });
   return link ? { type: "link" as const, orgId: link.orgId, agentId: link.agentId, link } : null;
 }
 
 /**
  * Twin access for a session start through a code (personal assignment or common link). Opening a link
- * reuses the user's assignment on that twin, or creates one with the link's minutes when `join` is set;
- * opening it again never adds minutes. Returns null when the code is not a twin code.
+ * reuses the user's assignment on that twin, or creates one when `join` is set (with the starting minutes for
+ * someone new to the org's minutes). Returns null when the code is not a twin code.
  */
 export async function twinAccessByCode(input: { orgId: string; user: Person; code: string; join: boolean }) {
   const found = await findTwinCode(input.code);
@@ -155,14 +144,15 @@ export async function twinAccessByCode(input: { orgId: string; user: Person; cod
     select: assignmentSelect,
   });
   if (existing) return usable(existing, input.user);
-  if (!input.join) return { assignmentId: null, agentId: found.agentId, secondsLeft: found.link.minutesPerUser * 60 };
+  if (!input.join) return { assignmentId: null, agentId: found.agentId };
+  await giveStartingMinutes({ orgId: input.orgId, emails: [email], actorUserId: found.link.createdByUserId });
   const created = await db.twinAssignment.create({
     data: {
       orgId: input.orgId,
       agentId: found.agentId,
       recipientEmail: email,
       userId: input.user.id,
-      minutesLimit: found.link.minutesPerUser,
+      minutesLimit: DEFAULT_TWIN_MINUTES,
       shareCode: newTwinShareCode(),
       shareLinkId: found.link.id,
     },
@@ -181,13 +171,13 @@ export async function twinAccessByCode(input: { orgId: string; user: Person; cod
 }
 
 /**
- * /t/<path> access: the user's own active assignment on that twin (minutes left, bound on first use). Returns its
- * personal code, which the call starts with, and the minutes left / given; throws TwinAccessError when not assigned / revoked / used up.
+ * /t/<path> access: the user's own active assignment on that twin (bound on first use). Returns its personal code,
+ * which the call starts with; throws TwinAccessError when not assigned / revoked / past its end date.
  */
 export async function twinAssignmentCode(input: { orgId: string; user: Person; agentId: string }) {
   const access = await twinAccessByAgent(input);
-  const assignment = await db.twinAssignment.findUniqueOrThrow({ where: { id: access.assignmentId }, select: { shareCode: true, minutesLimit: true } });
-  return { code: assignment.shareCode, secondsLeft: access.secondsLeft, minutesLimit: assignment.minutesLimit };
+  const assignment = await db.twinAssignment.findUniqueOrThrow({ where: { id: access.assignmentId }, select: { shareCode: true } });
+  return { code: assignment.shareCode };
 }
 
 /** Twin access for a direct start (portal / talk page): the user's own assignment on that twin. */
@@ -212,29 +202,35 @@ export async function findTwinAgent(orgId: string, slug: string) {
   return agent;
 }
 
-/** Every user assigned to a twin, with minutes used (link joiners included). */
+/**
+ * Every user assigned to a twin (link joiners included), with their minutes: given and used across every twin and role
+ * play of the org (minutes are per learner, not per twin).
+ */
 export async function listTwinAssignments(orgId: string, agentId: string) {
   const rows = await db.twinAssignment.findMany({
     where: { orgId, agentId },
     orderBy: { createdAt: "asc" },
     select: {
-      id: true, recipientEmail: true, minutesLimit: true, status: true, accessUntil: true, shareCode: true, shareLinkId: true, createdAt: true,
+      id: true, recipientEmail: true, status: true, accessUntil: true, shareCode: true, shareLinkId: true, createdAt: true,
       user: { select: { id: true, name: true, image: true } },
     },
   });
-  return Promise.all(rows.map(async (row) => ({ ...row, minutesUsed: Math.round((await twinSecondsUsed(row.id)) / 6) / 10 })));
+  const minutes = await learnerMinutes(orgId, rows.map((row) => row.recipientEmail));
+  return rows.map((row) => {
+    const own = minutes.get(row.recipientEmail);
+    return { ...row, minutesGiven: Math.floor((own?.grantedSeconds ?? 0) / 60), minutesUsed: Math.round((own?.usedSeconds ?? 0) / 6) / 10 };
+  });
 }
 
 /**
- * Assigns a twin to people by email with a minutes budget each and an optional end date. A revoked assignment is
- * reactivated with the new minutes and date; an active one is left alone (change minutes with updateTwinAssignment). Returns who needs
- * an invite email.
+ * Assigns a twin to people by email with an optional end date. A revoked assignment is reactivated with the new date;
+ * an active one is left alone. Returns who needs an invite email. Minutes are the learner's own (assignTwinAndInvite
+ * gives new people their starting minutes).
  */
 export async function assignTwin(input: {
   orgId: string;
   agentId: string;
   emails: string[];
-  minutes: number;
   accessUntil?: Date | null;
   assignedByUserId: string;
 }) {
@@ -255,11 +251,11 @@ export async function assignTwin(input: {
     }
     const shareCode = newTwinShareCode();
     if (current) {
-      await db.twinAssignment.update({ where: { id: current.id }, data: { status: "active", minutesLimit: input.minutes, accessUntil, shareCode } });
+      await db.twinAssignment.update({ where: { id: current.id }, data: { status: "active", accessUntil, shareCode } });
       stats.reactivated++;
     } else {
       await db.twinAssignment.create({
-        data: { orgId: input.orgId, agentId: input.agentId, recipientEmail: email, minutesLimit: input.minutes, accessUntil, shareCode, assignedByUserId: input.assignedByUserId },
+        data: { orgId: input.orgId, agentId: input.agentId, recipientEmail: email, minutesLimit: DEFAULT_TWIN_MINUTES, accessUntil, shareCode, assignedByUserId: input.assignedByUserId },
       });
       stats.added++;
     }
@@ -268,44 +264,47 @@ export async function assignTwin(input: {
   return { stats, invites };
 }
 
-/** assignTwin, then emails each new or reactivated learner their personal link. */
+/**
+ * Gives new people their starting minutes (all or nothing: refused when the org balance is short), then assignTwin,
+ * then emails each new or reactivated learner their link with the minutes they have.
+ */
 export async function assignTwinAndInvite(input: {
   org: { id: string; slug: string };
   by: { id: string; name: string };
   agent: { id: string; name: string };
   emails: string[];
-  minutes: number;
   accessUntil?: Date | null;
 }) {
+  await giveStartingMinutes({ orgId: input.org.id, emails: input.emails, actorUserId: input.by.id });
   const { stats, invites } = await assignTwin({
     orgId: input.org.id,
     agentId: input.agent.id,
     emails: input.emails,
-    minutes: input.minutes,
     accessUntil: input.accessUntil,
     assignedByUserId: input.by.id,
   });
+  const balances = await learnerMinutes(input.org.id, invites.map((invite) => invite.to));
   // The readable twin link: the personal /s/<code> link would work too, but the assignment is already bound to
   // the invited email, so matching it by sign-in (lib/pages/learner.ts) is all the learner needs.
   const sharePath = await twinSharePath(input.org.id, input.org.slug, input.agent.id);
   const deliveries = await Promise.all(invites.map(({ to }) => sendTwinAssignmentEmail({
     to,
     twinName: input.agent.name,
-    minutes: input.minutes,
+    minutes: Math.floor((balances.get(to)?.balanceSeconds ?? 0) / 60),
     practiceUrl: twinShareUrl(input.org.slug, sharePath),
     trainerName: input.by.name,
   })));
   return { ...stats, emailFailures: deliveries.filter(({ success }) => !success).length };
 }
 
-/** Changes one assignment's minutes or revokes / restores it. */
-export async function updateTwinAssignment(input: { orgId: string; agentId: string; assignmentId: string; minutesLimit?: number; status?: "active" | "revoked" }) {
+/** Revokes or restores one assignment. */
+export async function updateTwinAssignment(input: { orgId: string; agentId: string; assignmentId: string; status: "active" | "revoked" }) {
   const found = await db.twinAssignment.findFirst({ where: { id: input.assignmentId, orgId: input.orgId, agentId: input.agentId }, select: { id: true } });
   if (!found) throw new TwinAccessError("Twin assignment not found", 404);
   return db.twinAssignment.update({
     where: { id: found.id },
-    data: { ...(input.minutesLimit !== undefined ? { minutesLimit: input.minutesLimit } : {}), ...(input.status ? { status: input.status } : {}) },
-    select: { id: true, minutesLimit: true, status: true },
+    data: { status: input.status },
+    select: { id: true, status: true },
   });
 }
 

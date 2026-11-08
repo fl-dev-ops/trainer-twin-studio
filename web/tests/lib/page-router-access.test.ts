@@ -30,7 +30,6 @@ const codeOf = (promise: Promise<unknown>) => promise.then(() => "OK", (error: {
 
 const studioOnly: Record<string, (c: Caller) => Promise<unknown>> = {
   ownTwinPersona: (c) => c.ownTwinPersona(),
-  twinDefaultMinutes: (c) => c.twinDefaultMinutes(),
   twinBrain: (c) => c.twinBrain(),
   agents: (c) => c.agents(),
   rolePlayPreview: (c) => c.rolePlayPreview({ slug: "x" }),

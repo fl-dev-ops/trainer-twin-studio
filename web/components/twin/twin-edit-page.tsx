@@ -56,12 +56,10 @@ function CopyShareLinkButton({ slug }: { slug: string }) {
 export function TwinEditPage({
   twin,
   learners,
-  defaultMinutes,
   defaultTab = "general",
 }: {
   twin: Pick<TwinOutputs["agents"]["get"], "slug" | "name" | "description" | "settings">;
   learners: LearnerAssign[];
-  defaultMinutes: number;
   /** /edit opens on General, /assign on Learners. General saves with its button; the other tabs save as you go. */
   defaultTab?: "general" | "conversation" | "learners";
 }) {
@@ -113,10 +111,10 @@ export function TwinEditPage({
   const assigned = learners.filter((l) => l.assigned);
   const assignable = learners.filter((l) => !l.assigned);
 
-  /** The dialog's Assign: minutes per person; already-active people are skipped server-side. */
-  async function assignLearners(emails: string[], minutes: number | null, accessUntil: string | null) {
+  /** The dialog's Assign: new people get their starting minutes; already-active people are skipped server-side. */
+  async function assignLearners(emails: string[], accessUntil: string | null) {
     try {
-      const result = await twinClient.assignments.assign.mutate({ slug: id, emails, minutes: minutes ?? defaultMinutes, accessUntil });
+      const result = await twinClient.assignments.assign.mutate({ slug: id, emails, accessUntil });
       // Say what actually happened: assigned (and emailed), or already had access.
       const done = result.added + result.reactivated;
       const people = (n: number) => `${n} ${n === 1 ? "learner" : "learners"}`;
@@ -359,7 +357,7 @@ export function TwinEditPage({
           <div>
             <h2 className="m-0 text-sm font-semibold uppercase tracking-wide text-(--foreground)">Learners</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {assigned.length} assigned. Each gets their own minutes with this twin.
+              {assigned.length} assigned. Minutes are each learner&apos;s own, shared across twins and role plays.
             </p>
           </div>
           <Button variant="brand" onClick={() => setAssignOpen(true)} >
@@ -381,7 +379,7 @@ export function TwinEditPage({
                   </span>
                 </span>
                 <span className="flex shrink-0 flex-col items-end gap-0.5 text-xs text-muted-foreground tabular-nums">
-                  {u.minutesUsed} of {u.minutes} min used
+                  {u.minutesUsed} of {u.minutes} min used (all practice)
                   <AccessUntil until={u.until} />
                 </span>
               </li>
@@ -397,7 +395,6 @@ export function TwinEditPage({
           title={twin.name}
           assignedCount={assigned.length}
           people={assignable}
-          defaultMinutes={defaultMinutes}
           onAssign={assignLearners}
         />
       </article>

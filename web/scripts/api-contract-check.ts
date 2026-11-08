@@ -155,6 +155,8 @@ try {
   await db.apikey.deleteMany({ where: { id: created.id } });
   await db.rolePlayAssignment.deleteMany({ where: { orgId: org.id, recipientEmail: { in: [learnerEmail, inviteEmail] } } });
   await db.invitation.deleteMany({ where: { organizationId: org.id, email: { in: [learnerEmail, inviteEmail] } } });
+  // Their starting minutes go back: the check leaves the org's balance as it found it.
+  await db.minuteLedger.deleteMany({ where: { orgId: org.id, email: { in: [learnerEmail, inviteEmail] } } });
   await db.session.deleteMany({ where: { userId: learner.id } });
   await db.member.deleteMany({ where: { userId: learner.id } });
   await db.user.deleteMany({ where: { id: learner.id } });

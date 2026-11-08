@@ -5,6 +5,7 @@ import { PageContainer } from "@/components/page-container";
 import { SettingsIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { OrganizationForm, ProfileForm } from "@/components/profile-form";
+import { OrgMinutes } from "@/components/users/org-minutes";
 import { TeamSection } from "@/components/users/team-section";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, useApi } from "@/lib/api";
@@ -40,7 +41,8 @@ export default function SettingsPage() {
         </TabsContent>
 
         {team ? (
-          <TabsContent value="team">
+          <TabsContent value="team" className="grid gap-6 pt-6">
+            <OrgMinutes />
             <TeamSection
               organizationId={organization.id}
               currentUserId={user.id}

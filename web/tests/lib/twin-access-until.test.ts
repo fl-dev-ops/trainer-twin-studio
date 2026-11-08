@@ -7,8 +7,6 @@ mock.module("@/lib/db", () => ({
   db: {
     twinAssignment: { findUnique: async () => assignment, update: async () => assignment },
     twinShareLink: { findUnique: async () => null },
-    // twinSecondsUsed: nothing used yet.
-    $queryRaw: async () => [{ seconds: 0 }],
   },
 }));
 
@@ -21,7 +19,7 @@ beforeEach(() => {
 });
 
 test("no end date: the learner can start", async () => {
-  expect((await start())?.secondsLeft).toBe(1800);
+  expect(await start()).toEqual({ assignmentId: "a1", agentId: "t1" });
 });
 
 test("within the end date the learner can start; past it they can't, and are told it ended", async () => {

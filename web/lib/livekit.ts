@@ -76,8 +76,10 @@ export async function activateLiveKitSession(input: {
   agentSlug?: string;
   holdOpening?: boolean;
   voice?: string;
-  /** Unix seconds when the call must end (twin minutes); the voice agent closes the room then. */
+  /** Unix seconds when the call must end (the learner's minutes); the voice agent closes the room then. */
   endsAt?: number;
+  /** TWIN or ROLEPLAY: which goodbye the voice agent says before it ends the call at endsAt. */
+  agentKind?: string;
 }) {
   const { config, rooms, dispatches, egress } = clients();
   const room = input.sessionId;
@@ -89,6 +91,7 @@ export async function activateLiveKitSession(input: {
     hold_opening: Boolean(input.holdOpening),
     ...(input.voice ? { voice: input.voice } : {}),
     ...(input.endsAt ? { ends_at: input.endsAt } : {}),
+    ...(input.agentKind ? { agent_kind: input.agentKind } : {}),
   });
 
   if (!(await rooms.listRooms([room])).length) {

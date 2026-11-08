@@ -31,6 +31,21 @@ export default function SharedSessionPage() {
       </main>
     );
   }
+  if (loaded.kind === "outOfMinutes") {
+    return (
+      <main className="grid min-h-svh place-items-center p-4">
+        <Card className="w-full max-w-md text-center">
+          <CardHeader>
+            <CardTitle>Out of practice minutes</CardTitle>
+            <CardDescription>
+              You&apos;ve used all your practice minutes. Ask your trainer for more. You are signed in as {loaded.email}.
+              <HomeRedirect />
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </main>
+    );
+  }
   if (loaded.kind === "switchAccount") {
     return (
       <main className="grid min-h-svh place-items-center p-4">

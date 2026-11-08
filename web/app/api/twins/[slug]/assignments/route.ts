@@ -1,24 +1,24 @@
 import { z } from "zod";
+import { MinutesError } from "@/lib/minutes";
 import { getTrainerOrg } from "@/lib/org";
 import { accessUntilSchema, assignTwinAndInvite, findTwinAgent, listTwinAssignments, TwinAccessError, twinUrl, updateTwinAssignment } from "@/lib/twin-access";
 
 export const runtime = "nodejs";
 
-const minutes = z.number().int().min(1).max(10_000);
 const assignSchema = z.object({
   emails: z.array(z.string().trim().toLowerCase().email().max(320)).min(1).max(100),
-  minutes,
+  /** Legacy, ignored: minutes are per learner now (new people get their starting minutes from the org balance). */
+  minutes: z.number().int().min(1).max(10_000).optional(),
   /** Optional end date (ISO); calls can't start after it. */
   accessUntil: accessUntilSchema,
 }).strict();
 const updateSchema = z.object({
   assignmentId: z.string().min(1),
-  minutesLimit: minutes.optional(),
-  status: z.enum(["active", "revoked"]).optional(),
-}).strict().refine((body) => body.minutesLimit !== undefined || body.status !== undefined, "Nothing to change");
+  status: z.enum(["active", "revoked"]),
+}).strict();
 
 const failed = (error: unknown) => {
-  if (error instanceof TwinAccessError) return Response.json({ error: error.message }, { status: error.status });
+  if (error instanceof TwinAccessError || error instanceof MinutesError) return Response.json({ error: error.message }, { status: error.status });
   throw error;
 };
 
@@ -35,12 +35,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
   }
 }
 
-/** Assigns the twin to people by email with a minutes budget each, and emails them their link. */
+/** Assigns the twin to people by email (new people get their starting minutes), and emails them their link. */
 export async function PUT(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const trainer = await getTrainerOrg();
   if (!trainer) return Response.json({ error: "Forbidden" }, { status: 403 });
   const parsed = assignSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return Response.json({ error: "Give a list of emails, the minutes for each person, and an optional future accessUntil" }, { status: 400 });
+  if (!parsed.success) return Response.json({ error: "Give a list of emails and an optional future accessUntil" }, { status: 400 });
   try {
     const agent = await findTwinAgent(trainer.id, (await params).slug);
     return Response.json(await assignTwinAndInvite({
@@ -48,7 +48,6 @@ export async function PUT(request: Request, { params }: { params: Promise<{ slug
       by: { id: trainer.user.id, name: trainer.user.name },
       agent,
       emails: parsed.data.emails,
-      minutes: parsed.data.minutes,
       accessUntil: parsed.data.accessUntil,
     }));
   } catch (error) {
@@ -56,12 +55,12 @@ export async function PUT(request: Request, { params }: { params: Promise<{ slug
   }
 }
 
-/** Changes one person's minutes, or revokes / restores their access. */
+/** Revokes or restores one person's access (their minutes are managed on the person). */
 export async function PATCH(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const trainer = await getTrainerOrg();
   if (!trainer) return Response.json({ error: "Forbidden" }, { status: 403 });
   const parsed = updateSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return Response.json({ error: "Give an assignmentId and new minutes or status" }, { status: 400 });
+  if (!parsed.success) return Response.json({ error: "Give an assignmentId and a status" }, { status: 400 });
   try {
     const agent = await findTwinAgent(trainer.id, (await params).slug);
     return Response.json({ assignment: await updateTwinAssignment({ orgId: trainer.id, agentId: agent.id, ...parsed.data }) });
