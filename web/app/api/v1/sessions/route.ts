@@ -6,6 +6,7 @@ const querySchema = z.object({
   status: z.enum(["assigned", "activating", "active", "completed", "abandoned", "failed", "revoked"]).optional(),
   userId: z.string().min(1).optional(),
   scenario: z.string().min(1).optional(),
+  assignmentId: z.string().min(1).optional(),
   from: z.iso.datetime({ offset: true }).optional(),
   to: z.iso.datetime({ offset: true }).optional(),
 }).strict();
@@ -19,6 +20,7 @@ export async function GET(request: Request) {
     status: url.searchParams.get("status") || undefined,
     userId: url.searchParams.get("userId") || undefined,
     scenario: url.searchParams.get("scenario") || undefined,
+    assignmentId: url.searchParams.get("assignmentId") || undefined,
     from: url.searchParams.get("from") || undefined,
     to: url.searchParams.get("to") || undefined,
   });
@@ -36,6 +38,8 @@ export async function GET(request: Request) {
     ...(parsed.data.status ? { status: parsed.data.status } : {}),
     ...(parsed.data.userId ? { userId: parsed.data.userId } : {}),
     ...(parsed.data.scenario ? { agentSlug: parsed.data.scenario } : {}),
+    // Every practice of one assignment (a role play link starts a new session each time).
+    ...(parsed.data.assignmentId ? { assignmentId: parsed.data.assignmentId } : {}),
     ...(startedAtRange.length > 0 ? { startedAt: Object.assign({}, ...startedAtRange) } : {}),
   };
   const [sessions, total] = await Promise.all([
@@ -51,6 +55,7 @@ export async function GET(request: Request) {
         personaVersion: true,
         agentSlug: true,
         agentVersion: true,
+        assignmentId: true,
         status: true,
         mode: true,
         contextName: true,

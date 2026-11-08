@@ -333,7 +333,7 @@ export async function sendRolePlayAssignmentEmail({
   minutes?: number;
 }) {
   const subject = `New Role Play Assigned: ${rolePlayName}`;
-  const minutesHtml = minutes === undefined ? "" : ` You have <strong>${minutes} minutes</strong> of practice.`;
+  const minutesHtml = minutes === undefined ? "" : ` You have <strong>${minutes} minutes</strong> of practice, and can do this role play as many times as you like while they last.`;
   const html = renderEmailLayout({
     title: escapeHtml(subject),
     previewText: escapeHtml(`You have been assigned to practice "${rolePlayName}" on TrainerTwin.`),
@@ -374,7 +374,7 @@ export async function sendRolePlayAssignmentEmail({
     to,
     subject,
     html,
-    text: `${trainerName} has assigned you the "${rolePlayName}" role play on TrainerTwin.${minutes === undefined ? "" : ` You have ${minutes} minutes of practice.`}${requiredArtifact?.prompt ? ` What to bring: ${requiredArtifact.prompt}.` : ""} Sign in with ${to} and start here: ${practiceUrl}`,
+    text: `${trainerName} has assigned you the "${rolePlayName}" role play on TrainerTwin.${minutes === undefined ? "" : ` You have ${minutes} minutes of practice, and can do this role play as many times as you like while they last.`}${requiredArtifact?.prompt ? ` What to bring: ${requiredArtifact.prompt}.` : ""} Sign in with ${to} and start here: ${practiceUrl}`,
   });
 }
 

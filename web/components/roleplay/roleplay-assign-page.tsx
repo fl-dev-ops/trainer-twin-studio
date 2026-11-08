@@ -18,7 +18,7 @@ const STATUS: Record<string, string> = { pending: "Invited", used: "Practised", 
 
 /**
  * Assign a role play: its members and their invite status, and Assign, which opens the shared assign dialog
- * (role-play variant). Invites go through the existing role-play invite route (one attempt, 30 days, org lock).
+ * (role-play variant). Invites go through the existing role-play invite route (practised as often as credits allow; org lock).
  */
 export function RoleplayAssignPage({ roleplay, learners }: { roleplay: Detail; learners: AssignPerson[] }) {
   const refresh = useRefresh();

@@ -138,7 +138,6 @@ export function OrgHome({ org, viewer, twins, roleplays }: {
                 <div className="flex flex-col gap-1">
                   <h3 className={TITLE}>{roleplay.name}</h3>
                   {roleplay.description ? <p className={BODY}>{roleplay.description}</p> : null}
-                  <p className="m-0 text-xs text-muted-foreground">Open until {new Date(roleplay.expiresAt).toLocaleDateString()}</p>
                 </div>
                 <Button variant="brand" className="w-fit" nativeButton={false} render={<Link href={roleplay.href} />}>
                   <Sparkles data-icon="inline-start" />

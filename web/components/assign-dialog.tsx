@@ -118,7 +118,7 @@ export function AssignDialog({ variant, open, onOpenChange, title, assignedCount
             </div>
           </div>
         ) : (
-          <p className="m-0 text-xs text-muted-foreground">Each person gets an email with their own link: one attempt, valid for 30 days.</p>
+          <p className="m-0 text-xs text-muted-foreground">Each person gets an email with their own link. They can practise as many times as their credits allow.</p>
         )}
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between gap-4">

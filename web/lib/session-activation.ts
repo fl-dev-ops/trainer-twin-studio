@@ -98,7 +98,10 @@ export async function activateInterviewRuntime(input: {
       where: { id: session.id, status: { notIn: ["completed", "abandoned"] } },
       data: { status: "failed", endedAt: new Date(), runtimeTokenHash: null },
     });
-    if (failed.count === 1 && row.assignmentId) {
+    const practised = row.assignmentId
+      ? await db.interviewSession.count({ where: { assignmentId: row.assignmentId, id: { not: session.id }, startedAt: { not: null }, status: { not: "failed" } } })
+      : 0;
+    if (failed.count === 1 && row.assignmentId && !practised) {
       await db.rolePlayAssignment.updateMany({
         where: { id: row.assignmentId, status: "used" },
         data: { status: "pending", usedAt: null },

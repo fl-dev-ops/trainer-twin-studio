@@ -87,10 +87,22 @@ export async function assignmentDetails(orgId: string, orgSlug: string, rows: De
       })
     : [];
   const byEmail = new Map(learners.map(({ user }) => [user.email.toLowerCase(), user]));
+  // How often each was practised: sessions that started (a role play link starts a new one each time).
+  const practice = rows.length
+    ? await db.interviewSession.groupBy({
+        by: ["assignmentId"],
+        where: { assignmentId: { in: rows.map((row) => row.id) }, startedAt: { not: null }, status: { not: "failed" } },
+        _count: { _all: true },
+        _max: { startedAt: true },
+      })
+    : [];
+  const practiceById = new Map(practice.map((row) => [row.assignmentId, row]));
   return rows.map((row) => ({
     id: row.id,
     assignedAt: row.assignedAt,
     status: row.status,
+    practiceCount: practiceById.get(row.id)?._count._all ?? 0,
+    lastPracticedAt: practiceById.get(row.id)?._max.startedAt ?? null,
     user: row.member?.user ?? byEmail.get(row.recipientEmail) ?? { id: null, name: null, email: row.recipientEmail },
     scenario: row.deployment.agent,
     practiceUrl: practiceUrl(orgSlug, row.shareCode),

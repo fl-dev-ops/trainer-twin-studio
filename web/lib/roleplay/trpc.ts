@@ -186,7 +186,7 @@ const scenariosRouter = t.router({
         name: row.member?.user.name || row.recipientEmail,
         email: row.recipientEmail,
         image: row.member?.user.image ?? null,
-        status: row.status === "pending" && row.expiresAt < new Date() ? "expired" : row.status,
+        status: row.status,
         assignedAt: row.assignedAt.toISOString(),
       })),
       sessions: sessions.slice(0, 20),

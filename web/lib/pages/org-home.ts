@@ -44,14 +44,12 @@ export async function loadOrgHome(): Promise<OrgHomeView> {
     return { href: `/t/${encodeURIComponent(path)}`, ...profile, access };
   }));
 
-  // A learner's open role plays: still pending, not expired, not done (an ended session uses one up).
+  // A learner's role plays: assigned and not cancelled, practised or not (limited only by their minutes).
   const roleplays = user && !studio && !parseHideRoleplay(org.metadata)
     ? await db.rolePlayAssignment.findMany({
         where: {
           orgId: org.id,
-          status: "pending",
-          expiresAt: { gt: new Date() },
-          sessions: { none: { status: { in: ["completed", "abandoned"] } } },
+          status: { in: ["pending", "used"] },
           OR: [{ member: { userId: user.id } }, { memberId: null, recipientEmail: user.email.toLowerCase() }],
         },
         orderBy: { assignedAt: "desc" },

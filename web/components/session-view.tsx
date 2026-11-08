@@ -53,7 +53,6 @@ import { Whiteboard } from "@/components/session/whiteboard";
 import { PresentationViewer } from "@/components/session/presentation-viewer";
 import { PreJoin, type PreJoinMediaSettings } from "@/components/session/prejoin";
 import { PdfViewerSurface } from "@/components/session/pdf-viewer";
-import { HomeRedirect } from "@/components/session/home-redirect";
 import { ImageViewerSurface } from "@/components/session/image-viewer";
 import { LiveKitWorkspaceProvider } from "@/lib/livekit-workspaces";
 import { downloadIntroVideo } from "@/lib/intro-video-cache";
@@ -989,6 +988,7 @@ export function SessionView({
                       : "Your transcript and recording are being saved in Sessions."}
                 </CardDescription>
               </CardHeader>
+              {sessionCode ? <PractiseAgainActions /> : null}
               {!sessionCode && (
                 <CardContent className="flex justify-center gap-2">
                   <Button variant="outline" className="h-10" nativeButton={false} render={<Link href="/sessions" />}>
@@ -1497,6 +1497,23 @@ function SessionHeader({ title, linkHome, children }: { title: string; linkHome:
   );
 }
 
+/**
+ * After a role play: go home, or practise it again. The link starts a new call each time (limited only by the learner's
+ * minutes); reloading it shows the minutes left, or that they've run out.
+ */
+function PractiseAgainActions() {
+  return (
+    <CardContent className="flex justify-center gap-2">
+      <Button variant="outline" className="h-10" nativeButton={false} render={<Link href="/" />}>
+        Back to home
+      </Button>
+      <Button className="h-10" onClick={() => window.location.reload()}>
+        <Play data-icon="inline-start" /> Practise again
+      </Button>
+    </CardContent>
+  );
+}
+
 function SessionFeedback({ scenarioName, sessionId }: { scenarioName?: string; sessionId: string }) {
   const [rating, setRating] = useState<number | null>(null);
   const [note, setNote] = useState("");
@@ -1531,10 +1548,9 @@ function SessionFeedback({ scenarioName, sessionId }: { scenarioName?: string; s
             <Check className="size-6" aria-hidden="true" />
           </span>
           <CardTitle>Thanks for your feedback</CardTitle>
-          <CardDescription>
-            <HomeRedirect />
-          </CardDescription>
+          <CardDescription>Want another go? Practise again as long as you have minutes.</CardDescription>
         </CardHeader>
+        <PractiseAgainActions />
       </>
     );
   }
@@ -1597,6 +1613,9 @@ function SessionFeedback({ scenarioName, sessionId }: { scenarioName?: string; s
         {feedbackError && <p role="alert" className="text-sm text-destructive">{feedbackError}</p>}
         <Button disabled={rating === null || sending} onClick={() => void sendFeedback()} className="w-full">
           {sending ? "Sending…" : "Send feedback"}
+        </Button>
+        <Button variant="ghost" className="w-full" onClick={() => window.location.reload()}>
+          <Play data-icon="inline-start" /> Skip and practise again
         </Button>
       </CardContent>
     </>

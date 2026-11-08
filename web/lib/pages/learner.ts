@@ -81,7 +81,6 @@ export async function loadSharedSession(code: string): Promise<SharedSessionView
       id: true,
       orgId: true,
       status: true,
-      expiresAt: true,
       recipientEmail: true,
       member: { select: { userId: true } },
       deployment: {
@@ -107,12 +106,8 @@ export async function loadSharedSession(code: string): Promise<SharedSessionView
       return { kind: "session", props: { ...(await twinSessionView(org.id, twin.agentId, code, user.name)), minutesLeft: left } };
     }
   }
-  const spent = assignment
-    ? (await db.interviewSession.count({
-        where: { assignmentId: assignment.id, status: { in: ["completed", "abandoned"] } },
-      })) > 0
-    : false;
-  const open = assignment && assignment.orgId === org?.id && assignment.status === "pending" && !spent && assignment.expiresAt > new Date();
+  // Open while assigned, whether practised before or not, until cancelled: practice is limited only by minutes.
+  const open = assignment && assignment.orgId === org?.id && ["pending", "used"].includes(assignment.status);
   if (open && !assignmentMatchesUser(assignment, user)) {
     return { kind: "switchAccount", email: user.email, returnTo: signInUrl(host, `/s/${encodeURIComponent(code)}`) };
   }

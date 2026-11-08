@@ -208,7 +208,6 @@ export async function activateSession(input: {
   const mode = input.mode ?? "voice";
   const requestedDocs = Array.from(new Set([...(input.contextIds ?? []), ...(input.contextId ? [input.contextId] : [])]));
   let assignmentId: string | null = null;
-  let assignmentStatus: string | null = null;
   let deploymentId: string;
   let agentId: string;
   let activationKey: string;
@@ -247,16 +246,18 @@ export async function activateSession(input: {
       || !["pending", "used"].includes(found.status)
       || found.deployment.status !== "active"
     ) return null;
-    if (found.expiresAt <= new Date() && found.status === "pending") {
-      await db.rolePlayAssignment.update({ where: { id: found.id }, data: { status: "expired" } });
-      return null;
-    }
     if (!found.deployment.allowedModes.split(",").includes(mode)) throw new Error(`Deployment does not allow ${mode} sessions`);
     assignmentId = found.id;
-    assignmentStatus = found.status;
     deploymentId = found.deployment.id;
     agentId = found.deployment.agent.id;
-    activationKey = `assignment:${found.id}:${found.shareCode}`;
+    // A role play link starts a new call each time (practice is limited only by the learner's minutes); a call still
+    // live on it is resumed instead, so a dropped connection or a reload continues the same conversation.
+    const live = await db.interviewSession.findFirst({
+      where: { assignmentId: found.id, userId: input.userId, status: { in: ["activating", "active"] } },
+      orderBy: { createdAt: "desc" },
+      select: { activationKey: true },
+    });
+    activationKey = live?.activationKey ?? `assignment:${found.id}:${randomBytes(18).toString("base64url")}`;
   } else {
     const found = input.deploymentKey
       ? await db.deployment.findFirst({ where: { publicKey: input.deploymentKey, orgId: input.orgId, status: "active" } })
@@ -301,7 +302,6 @@ export async function activateSession(input: {
       : Math.max(0, existing.allowedSeconds - Math.floor((Date.now() - (existing.startedAt ?? existing.createdAt).getTime()) / 1000));
     return { id: existing.id, agentSlug: existing.agentSlug, status: existing.status, mode: existing.mode as DeliveryMode, runtimeToken: token, secondsLeft };
   }
-  if (assignmentId && assignmentStatus !== "pending") return null;
   if (existing?.status === "failed") {
     await db.interviewSession.delete({ where: { id: existing.id } });
   } else if (existing) {
