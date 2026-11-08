@@ -14,12 +14,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenuButton } from "@/components/ui/sidebar";
 import { authClient } from "@/lib/auth-client";
+import { pathAfterOrgSwitch } from "@/lib/org-switch-path";
 
 export type SwitchableOrg = { id: string; name: string; slug: string };
 
 /**
  * Sidebar org switcher, for people in two or more studio orgs (nothing otherwise): shows the org this page is in and
- * opens a list of the others. Switching makes it the session's active org and opens the studio home in it.
+ * opens a list of the others. Switching makes it the session's active org and reloads the same page in it (a single
+ * record's page falls back to its list, lib/org-switch-path.ts).
  */
 export function OrgSwitcher({ orgs, orgId }: { orgs: SwitchableOrg[]; orgId: string | null }) {
   const [switching, setSwitching] = useState(false);
@@ -36,8 +38,7 @@ export function OrgSwitcher({ orgs, orgId }: { orgs: SwitchableOrg[]; orgId: str
       return;
     }
     // A full load on purpose: the old org's pages and cached data (React Query) must not carry over.
-    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-    window.location.assign("/");
+    window.location.assign(pathAfterOrgSwitch(window.location.pathname, window.location.search));
   }
 
   return (
