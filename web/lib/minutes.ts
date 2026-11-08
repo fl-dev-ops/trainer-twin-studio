@@ -140,7 +140,7 @@ export async function grantMinutes(input: {
       if (given > 0) return { grantedMinutes: 0, balanceMinutes: minutes(learner.balanceSeconds), orgBalanceMinutes: minutes(orgBalance) };
     }
     if (orgBalance < amount * 60) {
-      throw new MinutesError(`Not enough minutes in your organization's balance: ${minutes(orgBalance)} min left. Ask TrainerTwin to top it up.`, 409);
+      throw new MinutesError(`Not enough credits in your organization's balance: ${minutes(orgBalance)} min left. Ask TrainerTwin to top it up.`, 409);
     }
     const room = MAX_LEARNER_MINUTES * 60 - learner.grantedSeconds;
     if (amount * 60 > room) {

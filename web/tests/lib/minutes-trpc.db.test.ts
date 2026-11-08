@@ -21,7 +21,7 @@ describe.skipIf(!localMinutesDb)("minutes tRPC (local database)", () => {
   });
 
   test("has no take-back procedure", () => {
-    expect(Object.keys(minutesRouter._def.procedures).sort()).toEqual(["add", "learner", "org"]);
+    expect(Object.keys(minutesRouter._def.procedures).sort()).toEqual(["add", "addMany", "invite", "learner", "org"]);
     expect(minutesRouter._def.procedures).not.toHaveProperty("takeBack");
   });
 

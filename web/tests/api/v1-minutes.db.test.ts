@@ -25,7 +25,7 @@ describe.skipIf(!localMinutesDb)("v1 minutes entrypoints (local database)", () =
     await fund(29);
     const response = await inviteUser(request({ email: `new-${f.learner.email}` }));
     expect(response.status).toBe(409);
-    expect(await response.json()).toMatchObject({ error: expect.stringContaining("Not enough minutes") });
+    expect(await response.json()).toMatchObject({ error: expect.stringContaining("Not enough credits") });
     expect(await db.invitation.count({ where: { organizationId: f.org.id } })).toBe(0);
     expect(await db.minuteLedger.count({ where: { orgId: f.org.id, type: "grant" } })).toBe(0);
     expect(invitationEmail).not.toHaveBeenCalled();
@@ -46,7 +46,7 @@ describe.skipIf(!localMinutesDb)("v1 minutes entrypoints (local database)", () =
     await fund(29);
     const response = await assignRoleplay(request({ email: f.learner.email, scenario: f.roleplay.slug }));
     expect(response.status).toBe(409);
-    expect(await response.json()).toMatchObject({ error: expect.stringContaining("Not enough minutes") });
+    expect(await response.json()).toMatchObject({ error: expect.stringContaining("Not enough credits") });
     expect(await db.rolePlayAssignment.count({ where: { orgId: f.org.id } })).toBe(0);
     expect(await db.minuteLedger.count({ where: { orgId: f.org.id, type: "grant" } })).toBe(0);
     expect(assignmentEmail).not.toHaveBeenCalled();

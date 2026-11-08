@@ -77,7 +77,7 @@ describe.skipIf(!localMinutesDb)("starting minutes entrypoints (local database)"
     const run = (role: string) => hook({ invitation: { role, email: f.learner.email, inviterId: f.trainer.id }, organization: { id: f.org.id } });
     await run("team");
     expect(await db.minuteLedger.count({ where: { orgId: f.org.id } })).toBe(0);
-    await expect(run("user")).rejects.toMatchObject({ status: "BAD_REQUEST", body: { message: expect.stringContaining("Not enough minutes") } });
+    await expect(run("user")).rejects.toMatchObject({ status: "BAD_REQUEST", body: { message: expect.stringContaining("Not enough credits") } });
     await fund(30);
     await run("user");
     await run("user");
