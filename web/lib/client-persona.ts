@@ -27,6 +27,8 @@ export const titleCase = (value: string) => value.charAt(0).toUpperCase() + valu
 
 export type ClientPersonaForm = {
   look: string;
+  /** Uploaded photo URL for a persona made from scratch (look = SCRATCH_LOOK); empty for presets. */
+  photo: string;
   name: string;
   role: string;
   age: string;
@@ -47,8 +49,14 @@ export type ClientPersonaForm = {
   knowledge: { documentIds: string[]; sourceIds: string[] };
 };
 
+/** The look of a persona made from scratch: an uploaded photo instead of a preset one. */
+export const SCRATCH_LOOK = "custom";
+/** Uploaded persona photos are served from this route (see lib/client-persona-photo.ts). */
+const PHOTO_URL = /^\/api\/client-persona-photos\/[A-Za-z0-9_-]{1,64}\/[0-9a-f-]{36}\.(jpg|png|webp)$/;
+export const isUploadedPersonaPhoto = (value: string) => PHOTO_URL.test(value);
+
 /** The ready-made people. Picking one fills the form; everything stays editable. */
-export const PERSONA_PRESETS: Array<{ id: string; label: string; avatar: string } & Omit<ClientPersonaForm, "look" | "knowledge">> = [
+export const PERSONA_PRESETS: Array<{ id: string; label: string; avatar: string } & Omit<ClientPersonaForm, "look" | "photo" | "knowledge">> = [
   {
     id: "daniel", label: "Daniel", avatar: "/roleplay/avatars/daniel.jpg",
     name: "Daniel Hart", role: "Buyer", age: "44", basedIn: "London",
@@ -124,12 +132,23 @@ export const PERSONA_PRESETS: Array<{ id: string; label: string; avatar: string 
 export function presetForm(id: string): ClientPersonaForm {
   const preset = PERSONA_PRESETS.find((item) => item.id === id) ?? PERSONA_PRESETS[0];
   return {
-    look: preset.id, name: preset.name, role: preset.role, age: preset.age, basedIn: preset.basedIn,
+    look: preset.id, photo: "", name: preset.name, role: preset.role, age: preset.age, basedIn: preset.basedIn,
     background: preset.background, behaviours: [...preset.behaviours], difficulty: preset.difficulty,
     openingStyle: preset.openingStyle, formality: preset.formality, answerLength: preset.answerLength,
     interrupts: preset.interrupts, pauses: preset.pauses, fillers: preset.fillers, phrases: [...preset.phrases],
     howTheyTalk: preset.howTheyTalk, voiceId: preset.voiceId, pace: preset.pace,
     knowledge: { documentIds: [], sourceIds: [] },
+  };
+}
+
+/** An empty persona to write from scratch. Speaking settings start from sensible defaults. */
+export function scratchForm(keep?: Pick<ClientPersonaForm, "voiceId" | "knowledge">): ClientPersonaForm {
+  return {
+    look: SCRATCH_LOOK, photo: "", name: "", role: "", age: "", basedIn: "", background: "",
+    behaviours: [], difficulty: "medium", openingStyle: "friendly", formality: "neutral", answerLength: "short",
+    interrupts: "never", pauses: true, fillers: false, phrases: [], howTheyTalk: "",
+    voiceId: keep?.voiceId ?? "", pace: "normal",
+    knowledge: keep?.knowledge ?? { documentIds: [], sourceIds: [] },
   };
 }
 
@@ -146,8 +165,10 @@ export function formFromPersonaData(data: unknown): ClientPersonaForm {
   const mannerisms = (record.mannerisms && typeof record.mannerisms === "object" ? record.mannerisms : {}) as Record<string, unknown>;
   const knowledge = (record.knowledge && typeof record.knowledge === "object" ? record.knowledge : {}) as Record<string, unknown>;
   const avatar = str(record.avatar);
+  const photo = isUploadedPersonaPhoto(avatar) ? avatar : "";
   return {
-    look: str(record.look) || (PERSONA_PRESETS.find((preset) => preset.avatar === avatar)?.id ?? ""),
+    look: str(record.look) || (photo ? SCRATCH_LOOK : PERSONA_PRESETS.find((preset) => preset.avatar === avatar)?.id ?? ""),
+    photo,
     name: str(record.name),
     role: str(record.role) || "Buyer",
     age: str(record.age),
@@ -171,8 +192,9 @@ export function formFromPersonaData(data: unknown): ClientPersonaForm {
 
 export const clientPersonaSchema = z.object({
   look: z.string().max(40).default(""),
+  photo: z.string().max(200).refine((value) => !value || isUploadedPersonaPhoto(value), "Upload the photo again").default(""),
   name: z.string().trim().min(1, "Name is required").max(120),
-  role: z.string().trim().min(1).max(60),
+  role: z.string().trim().min(1, "Add a role").max(60, "Keep the role under 60 characters"),
   age: z.string().trim().max(10).default(""),
   basedIn: z.string().trim().max(120).default(""),
   background: z.string().trim().max(2000).default(""),
@@ -219,7 +241,8 @@ export function personaDataFromForm(form: z.infer<typeof clientPersonaSchema>, e
       fillers: form.fillers,
     },
     signature_phrases: form.phrases,
-    avatar: preset?.avatar ?? existing.avatar,
+    // A preset's photo, else the uploaded one; a scratch persona without a photo shows its initial.
+    avatar: preset?.avatar ?? (form.photo || (form.look === SCRATCH_LOOK ? undefined : existing.avatar)),
     voiceId: form.voiceId || undefined,
     pace: form.pace,
     knowledge: form.knowledge,

@@ -35,8 +35,8 @@ export function PersonaLibrary({ personas, voices }: { personas: LibraryPersona[
       </header>
 
       <section className="mt-9 flex flex-col gap-1">
-        <h2 className="text-lg font-semibold tracking-[-0.01em]">Real estate sales personas</h2>
-        <p className="text-sm text-muted-foreground">Practise sales conversations with clients in real estate. Pick a default, or create your own.</p>
+        <h2 className="text-lg font-semibold tracking-[-0.01em]">Role-play personas</h2>
+        <p className="text-sm text-muted-foreground">The people your learners practise with. Start from a ready-made persona, or create your own from scratch.</p>
       </section>
 
       {personas.length === 0 ? (

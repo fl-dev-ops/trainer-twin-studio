@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, Check, Paperclip, Plus, X } from "lucide-react";
+import { ArrowLeft, Check, ImagePlus, Mic, Paperclip, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { VoicePlayButton } from "@/components/client-persona/voice-play-button";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,9 @@ import {
   PACE,
   PERSONA_DIFFICULTIES,
   PERSONA_PRESETS,
+  SCRATCH_LOOK,
   presetForm,
+  scratchForm,
   titleCase,
   type ClientPersonaForm,
 } from "@/lib/client-persona";
@@ -57,9 +59,11 @@ export function PersonaEditor({
   const [documents, setDocuments] = useState<PersonaDocument[]>(initialDocuments);
   const [phraseDraft, setPhraseDraft] = useState("");
   const [link, setLink] = useState("");
-  const [busy, setBusy] = useState<"save" | "upload" | "link" | null>(null);
+  const [busy, setBusy] = useState<"save" | "upload" | "link" | "photo" | null>(null);
   const [dirty, setDirty] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const photoInput = useRef<HTMLInputElement>(null);
+  const fromScratch = form.look === SCRATCH_LOOK;
 
   useEffect(() => {
     if (!dirty) return;
@@ -79,6 +83,31 @@ export function PersonaEditor({
     // Keep the voice and knowledge already chosen; fill everything else from the preset.
     const preset = presetForm(id);
     update({ ...preset, knowledge: form.knowledge, voiceId: form.voiceId || preset.voiceId });
+  }
+
+  function startFromScratch() {
+    if (fromScratch) return;
+    // Keep the voice and knowledge already chosen; everything else starts empty.
+    update(scratchForm({ voiceId: form.voiceId, knowledge: form.knowledge }));
+  }
+
+  async function uploadPhoto(files: FileList | null) {
+    const file = files?.[0];
+    if (!file) return;
+    setBusy("photo");
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const response = await fetch("/api/client-persona-photos", { method: "POST", body });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.url) throw new Error(result?.error ?? "Could not upload the photo");
+      update({ look: SCRATCH_LOOK, photo: result.url });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not upload the photo");
+    } finally {
+      if (photoInput.current) photoInput.current.value = "";
+      setBusy(null);
+    }
   }
 
   function toggleBehaviour(value: string) {
@@ -154,6 +183,10 @@ export function PersonaEditor({
       toast.error("Give the persona a name");
       return;
     }
+    if (!form.role.trim()) {
+      toast.error("Add a role");
+      return;
+    }
     setBusy("save");
     try {
       const response = await fetch(slug ? `/api/client-personas/${encodeURIComponent(slug)}` : "/api/client-personas", {
@@ -190,6 +223,25 @@ export function PersonaEditor({
             <div className="flex flex-col gap-3">
               <p className="text-sm font-medium">Pick a persona</p>
               <div className="flex flex-wrap gap-3" role="radiogroup" aria-label="Pick a persona">
+                <button type="button" role="radio" aria-checked={fromScratch} onClick={startFromScratch}
+                  className="flex w-24 flex-col items-center gap-1 text-center">
+                  <span className={cn("relative grid size-24 place-items-center overflow-hidden rounded-xl border border-dashed bg-muted/40 ring-offset-2 ring-offset-card",
+                    fromScratch && "border-transparent ring-2 ring-primary")}>
+                    {form.photo ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- uploaded persona photo
+                      <img src={form.photo} alt="" className="size-full object-cover" />
+                    ) : (
+                      <Plus className="size-6 text-muted-foreground" aria-hidden />
+                    )}
+                    {fromScratch ? (
+                      <span className="absolute top-1.5 right-1.5 grid size-5 place-items-center rounded-full bg-primary text-primary-foreground">
+                        <Check className="size-3" />
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="mt-1 text-sm font-medium">From scratch</span>
+                  <span className="text-xs text-muted-foreground">Your own</span>
+                </button>
                 {PERSONA_PRESETS.map((preset) => {
                   const selected = form.look === preset.id;
                   return (
@@ -216,17 +268,46 @@ export function PersonaEditor({
                   );
                 })}
               </div>
-              <Help>Each persona comes with a role, background and speaking style already filled in. Change anything below.</Help>
+              <Help>
+                {fromScratch
+                  ? "Write this persona yourself: add a photo, then fill in who they are and how they talk."
+                  : "Each persona comes with a role, background and speaking style already filled in. Change anything below."}
+              </Help>
             </div>
+
+            {fromScratch ? (
+              <div className="flex flex-col gap-3">
+                <p className="text-sm font-medium">Photo</p>
+                <div className="flex items-center gap-4">
+                  <span className="grid size-16 shrink-0 place-items-center overflow-hidden rounded-full bg-muted text-lg font-medium">
+                    {form.photo ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- uploaded persona photo
+                      <img src={form.photo} alt="" className="size-full object-cover" />
+                    ) : (form.name.trim().charAt(0).toUpperCase() || <ImagePlus className="size-5 text-muted-foreground" aria-hidden />)}
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" className="h-10 rounded-full" onClick={() => photoInput.current?.click()} disabled={busy === "photo"}>
+                      {busy === "photo" ? <Spinner data-icon="inline-start" /> : <ImagePlus data-icon="inline-start" />}
+                      {form.photo ? "Replace photo" : "Upload photo"}
+                    </Button>
+                    {form.photo ? <Button variant="ghost" className="h-10 rounded-full" onClick={() => update({ photo: "" })}>Remove</Button> : null}
+                  </div>
+                </div>
+                <input ref={photoInput} type="file" hidden accept="image/jpeg,image/png,image/webp" onChange={(event) => uploadPhoto(event.target.files)} />
+                <Help>JPG, PNG or WebP, up to 5 MB. Learners see it on the call. Without a photo, the persona shows their first initial.</Help>
+              </div>
+            ) : null}
 
             <Field label="Name" htmlFor="persona-name">
               <Input id="persona-name" className="h-11 rounded-xl" value={form.name} onChange={(event) => update({ name: event.target.value })} />
             </Field>
 
-            <Field label="Role" htmlFor="persona-role" help="Who they are on the call.">
-              <select id="persona-role" className={cn(fieldClass, "h-11")} value={form.role} onChange={(event) => update({ role: event.target.value })}>
-                {[...new Set([...CLIENT_ROLES, form.role])].map((role) => <option key={role} value={role}>{role}</option>)}
-              </select>
+            <Field label="Role" htmlFor="persona-role" help="Who they are on the call. Pick a suggestion or type your own, e.g. Head of Sales or Hiring manager.">
+              <Input id="persona-role" list="persona-role-options" className="h-11 rounded-xl" value={form.role} maxLength={60}
+                placeholder="e.g. Head of Sales" onChange={(event) => update({ role: event.target.value })} />
+              <datalist id="persona-role-options">
+                {CLIENT_ROLES.map((role) => <option key={role} value={role} />)}
+              </datalist>
             </Field>
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -342,6 +423,12 @@ export function PersonaEditor({
                 </div>
               );
             })}
+            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Mic className="size-4 shrink-0" aria-hidden />
+              <span>
+                Need a different voice? <Link href="/voice/cloning" className="underline">Clone one</Link> from a short recording. It shows up here under Your voices.
+              </span>
+            </p>
             <SegmentRow label="Speaking pace" help="How fast the persona talks."
               options={PACE.map((value) => ({ value, label: titleCase(value) }))}
               value={form.pace} onChange={(value) => update({ pace: value as ClientPersonaForm["pace"] })} />
