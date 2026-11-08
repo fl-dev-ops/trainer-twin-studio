@@ -4,6 +4,7 @@ import { beforeSettings } from "@/lib/context-upload";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { assignablePeople } from "@/lib/learners";
+import { creditsLeftFor } from "@/lib/minutes";
 import { listPersonas } from "@/lib/personas";
 import { isSessionReport } from "@/lib/session-report";
 import { roleplayBuilderFrom, roleplayBuilderSchema } from "@/lib/roleplay/skill";
@@ -322,8 +323,10 @@ const usersRouter = t.router({
       found.roleplays.add(row.agentId);
       found.sessions += 1;
     }
+    const credits = await creditsLeftFor(orgId, [...people.keys()]);
     return [...people.values()]
-      .map(({ roleplays, ...rest }) => ({ ...rest, roleplays: roleplays.size }))
+      // creditsLeft: their practice minutes left (shared with twins); null for admin and team.
+      .map(({ roleplays, ...rest }) => ({ ...rest, roleplays: roleplays.size, creditsLeft: credits.get(rest.email)?.left ?? null }))
       .sort((a, b) => b.sessions - a.sessions || a.name.localeCompare(b.name));
   }),
 });

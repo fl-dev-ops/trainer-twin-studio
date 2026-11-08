@@ -6,7 +6,7 @@ import type { Prisma } from "@/lib/generated/prisma/client";
 import { beforeSettings } from "@/lib/context-upload";
 import { assignablePeople } from "@/lib/learners";
 import { LEARNER_ROLE } from "@/lib/org";
-import { learnerMinutes, MinutesError } from "@/lib/minutes";
+import { learnerMinutes, MAX_LEARNER_MINUTES, MinutesError } from "@/lib/minutes";
 import { studioProcedure, t } from "@/lib/trpc";
 import {
   accessUntilSchema,
@@ -373,6 +373,8 @@ const assignmentsRouter = t.router({
     .input(slugInput.extend({
       emails: z.array(z.string().trim().toLowerCase().email().max(320)).min(1).max(100),
       accessUntil: accessUntilSchema,
+      /** Credits each new person starts with; people who already have credits keep theirs. */
+      startingMinutes: z.number().int().min(1).max(MAX_LEARNER_MINUTES).optional(),
     }))
     .mutation(({ ctx, input }) => twinCall(async () => {
       const agent = await findTwinAgent(ctx.user.orgId, input.slug);
@@ -382,6 +384,7 @@ const assignmentsRouter = t.router({
         agent,
         emails: input.emails,
         accessUntil: input.accessUntil,
+        startingMinutes: input.startingMinutes,
       });
     })),
 });

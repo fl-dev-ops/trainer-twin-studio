@@ -77,6 +77,23 @@ export async function learnerBalance(orgId: string, email: string, tx: Tx = db):
   return (await learnerMinutes(orgId, [email], tx)).get(lower(email))!;
 }
 
+/**
+ * What studio lists show per person: credits left and given, in whole minutes, or null for anyone on the org's
+ * studio team (admin and team practise without using credits).
+ */
+export async function creditsLeftFor(orgId: string, emails: string[]): Promise<Map<string, { left: number; given: number } | null>> {
+  const wanted = [...new Set(emails.map(lower))];
+  const [minutes, studio] = await Promise.all([
+    learnerMinutes(orgId, wanted),
+    db.member.findMany({ where: { organizationId: orgId, role: { in: ["admin", "team"] } }, select: { user: { select: { email: true } } } }),
+  ]);
+  const staff = new Set(studio.map((row) => row.user.email.toLowerCase()));
+  return new Map(wanted.map((email) => {
+    const own = minutes.get(email);
+    return [email, staff.has(email) ? null : { left: Math.floor(Math.max(0, own?.balanceSeconds ?? 0) / 60), given: Math.floor((own?.grantedSeconds ?? 0) / 60) }];
+  }));
+}
+
 /** Grants, take-backs and top-ups of one org run one at a time, so two admins can't spend the same minutes. */
 async function locked<T>(orgId: string, work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
   return db.$transaction(async (tx) => {
@@ -137,30 +154,67 @@ export async function grantMinutes(input: {
 }
 
 /**
- * The starting minutes for people invited or assigned: DEFAULT_LEARNER_MINUTES each, once per person (someone already
- * given minutes gets nothing more). All or nothing: refused when the org balance can't cover everyone new.
+ * The starting credits for people invited or assigned: `minutes` each (DEFAULT_LEARNER_MINUTES unless the trainer chose),
+ * once per person (someone already given credits gets nothing more). All or nothing: refused when the org balance
+ * can't cover everyone new.
  */
-export async function giveStartingMinutes(input: { orgId: string; emails: string[]; actorUserId?: string | null }) {
+export async function giveStartingMinutes(input: { orgId: string; emails: string[]; minutes?: number; actorUserId?: string | null }) {
+  const amount = input.minutes ?? DEFAULT_LEARNER_MINUTES;
+  wholeMinutes(amount);
+  if (amount > MAX_LEARNER_MINUTES) throw new MinutesError(`A learner can be given at most ${MAX_LEARNER_MINUTES} minutes in total.`, 400);
   const emails = [...new Set(input.emails.map(lower))];
   if (!emails.length) return { given: [] as string[] };
   return locked(input.orgId, async (tx) => {
     const had = await tx.minuteLedger.findMany({ where: { orgId: input.orgId, type: "grant", email: { in: emails } }, select: { email: true }, distinct: ["email"] });
     const known = new Set(had.map((row) => row.email));
     const given = emails.filter((email) => !known.has(email));
-    const need = given.length * DEFAULT_LEARNER_MINUTES * 60;
+    const need = given.length * amount * 60;
     const orgBalance = await orgBalanceSeconds(input.orgId, tx);
     if (need > orgBalance) {
       throw new MinutesError(
-        `Not enough minutes in your organization's balance: ${given.length} new ${given.length === 1 ? "person needs" : "people need"} ${minutes(need)} min, ${minutes(orgBalance)} min left. Ask TrainerTwin to top it up.`,
+        `Not enough credits in your organization's balance: ${given.length} new ${given.length === 1 ? "person needs" : "people need"} ${minutes(need)} min, ${minutes(orgBalance)} min left. Ask TrainerTwin to top it up.`,
         409,
       );
     }
     if (given.length) {
       await tx.minuteLedger.createMany({
-        data: given.map((email) => ({ orgId: input.orgId, email, type: "grant", seconds: DEFAULT_LEARNER_MINUTES * 60, actorUserId: input.actorUserId ?? null, note: "Starting minutes" })),
+        data: given.map((email) => ({ orgId: input.orgId, email, type: "grant", seconds: amount * 60, actorUserId: input.actorUserId ?? null, note: "Starting minutes" })),
       });
     }
     return { given };
+  });
+}
+
+/**
+ * Adds the same credits to several learners at once, from the org's balance. Anyone it would take past
+ * MAX_LEARNER_MINUTES in total is skipped (and said why); the rest are all given, or none when the org balance can't
+ * cover them.
+ */
+export async function grantMinutesToMany(input: { orgId: string; emails: string[]; minutes: number; actorUserId?: string | null; note?: string | null }) {
+  const amount = wholeMinutes(input.minutes);
+  const emails = [...new Set(input.emails.map(lower))];
+  return locked(input.orgId, async (tx) => {
+    const balances = await learnerMinutes(input.orgId, emails, tx);
+    const given: string[] = [];
+    const skipped: { email: string; reason: string }[] = [];
+    for (const email of emails) {
+      const room = MAX_LEARNER_MINUTES * 60 - (balances.get(email)?.grantedSeconds ?? 0);
+      if (amount * 60 > room) skipped.push({ email, reason: `can get at most ${minutes(Math.max(0, room))} more (${MAX_LEARNER_MINUTES} min in total)` });
+      else given.push(email);
+    }
+    const orgBalance = await orgBalanceSeconds(input.orgId, tx);
+    if (given.length * amount * 60 > orgBalance) {
+      throw new MinutesError(
+        `Not enough credits in your organization's balance: ${given.length} × ${amount} min = ${given.length * amount} min, ${minutes(orgBalance)} min left. Ask TrainerTwin to top it up.`,
+        409,
+      );
+    }
+    if (given.length) {
+      await tx.minuteLedger.createMany({
+        data: given.map((email) => ({ orgId: input.orgId, email, type: "grant", seconds: amount * 60, actorUserId: input.actorUserId ?? null, note: input.note ?? null })),
+      });
+    }
+    return { given, skipped, orgBalanceMinutes: minutes(orgBalance - given.length * amount * 60) };
   });
 }
 

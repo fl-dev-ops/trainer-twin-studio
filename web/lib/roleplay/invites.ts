@@ -17,10 +17,12 @@ export async function inviteToRoleplay(input: {
   agent: { id: string; name: string; data: unknown };
   emails: string[];
   resendPending?: boolean;
+  /** Credits each new person starts with (default DEFAULT_LEARNER_MINUTES); people who already have credits keep theirs. */
+  startingMinutes?: number;
 }) {
   const emails = [...new Set(input.emails.map((email) => email.trim().toLowerCase()))];
-  // New people get their starting minutes (all or nothing: refused when the org balance is short).
-  await giveStartingMinutes({ orgId: input.org.id, emails, actorUserId: input.by.id });
+  // New people get their starting credits (all or nothing: refused when the org balance is short).
+  await giveStartingMinutes({ orgId: input.org.id, emails, minutes: input.startingMinutes, actorUserId: input.by.id });
   const deployment = await ensureDeployment(input.org.id, input.agent.id);
   const assignments = await db.rolePlayAssignment.findMany({
     where: { deploymentId: deployment.id, recipientEmail: { in: emails } },

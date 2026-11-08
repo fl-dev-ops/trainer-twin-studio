@@ -112,9 +112,9 @@ export function TwinEditPage({
   const assignable = learners.filter((l) => !l.assigned);
 
   /** The dialog's Assign: new people get their starting minutes; already-active people are skipped server-side. */
-  async function assignLearners(emails: string[], accessUntil: string | null) {
+  async function assignLearners(emails: string[], accessUntil: string | null, startingMinutes: number) {
     try {
-      const result = await twinClient.assignments.assign.mutate({ slug: id, emails, accessUntil });
+      const result = await twinClient.assignments.assign.mutate({ slug: id, emails, accessUntil, startingMinutes });
       // Say what actually happened: assigned (and emailed), or already had access.
       const done = result.added + result.reactivated;
       const people = (n: number) => `${n} ${n === 1 ? "learner" : "learners"}`;

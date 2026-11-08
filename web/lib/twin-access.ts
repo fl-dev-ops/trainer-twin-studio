@@ -274,8 +274,10 @@ export async function assignTwinAndInvite(input: {
   agent: { id: string; name: string };
   emails: string[];
   accessUntil?: Date | null;
+  /** Credits each new person starts with (default DEFAULT_LEARNER_MINUTES); people who already have credits keep theirs. */
+  startingMinutes?: number;
 }) {
-  await giveStartingMinutes({ orgId: input.org.id, emails: input.emails, actorUserId: input.by.id });
+  await giveStartingMinutes({ orgId: input.org.id, emails: input.emails, minutes: input.startingMinutes, actorUserId: input.by.id });
   const { stats, invites } = await assignTwin({
     orgId: input.org.id,
     agentId: input.agent.id,

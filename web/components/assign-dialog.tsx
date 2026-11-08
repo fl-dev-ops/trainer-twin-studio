@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check } from "lucide-react";
+import { DurationInput, parseMinutes } from "@/components/duration-input";
 import { api } from "@/lib/api";
+import { DEFAULT_LEARNER_MINUTES, MAX_LEARNER_MINUTES } from "@/lib/minutes-config";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -33,14 +35,23 @@ export function AssignDialog({ variant, open, onOpenChange, title, assignedCount
   assignedCount: number;
   /** Who can be picked: the org's learners minus the ones already assigned (the caller filters). */
   people: AssignPerson[];
-  /** accessUntil: the end of the chosen day in this browser's time zone (ISO), or null for no end date. */
-  onAssign: (emails: string[], accessUntil: string | null) => Promise<boolean>;
+  /**
+   * accessUntil: the end of the chosen day in this browser's time zone (ISO), or null for no end date.
+   * startingMinutes: the credits each new person starts with (people who already have credits keep theirs).
+   */
+  onAssign: (emails: string[], accessUntil: string | null, startingMinutes: number) => Promise<boolean>;
 }) {
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<string[]>([]);
   const [invited, setInvited] = useState<string[]>([]);
   const [invite, setInvite] = useState("");
   const orgMinutes = useQuery({ queryKey: ["minutes.org"], queryFn: () => api.minutes.org.query(), enabled: open });
+  const [starting, setStarting] = useState(String(DEFAULT_LEARNER_MINUTES));
+  const startingParsed = parseMinutes(starting);
+  const startingMinutes = startingParsed !== null && startingParsed <= MAX_LEARNER_MINUTES ? startingParsed : null;
+  // The most the picked people could take from the balance (people who already have credits take nothing).
+  const mostNeeded = startingMinutes !== null ? startingMinutes * picked.length : 0;
+  const balance = orgMinutes.data?.balanceMinutes ?? null;
   /** "YYYY-MM-DD" from the date input; empty = no end date. */
   const [until, setUntil] = useState("");
   const [busy, setBusy] = useState(false);
@@ -51,7 +62,7 @@ export function AssignDialog({ variant, open, onOpenChange, title, assignedCount
   const shown = q ? rows.filter((p) => `${p.name} ${p.email}`.toLowerCase().includes(q)) : rows;
   const inviteEmails = invite.split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter(Boolean);
   const inviteValid = inviteEmails.length > 0 && inviteEmails.every((e) => EMAIL.test(e));
-  const canAssign = picked.length > 0 && !busy;
+  const canAssign = picked.length > 0 && !busy && startingMinutes !== null;
 
   const toggle = (email: string) => setPicked((prev) => (prev.includes(email) ? prev.filter((e) => e !== email) : [...prev, email]));
   function addInvites() {
@@ -66,6 +77,7 @@ export function AssignDialog({ variant, open, onOpenChange, title, assignedCount
     setInvited([]);
     setInvite("");
     setUntil("");
+    setStarting(String(DEFAULT_LEARNER_MINUTES));
   }
 
   async function assign() {
@@ -74,7 +86,8 @@ export function AssignDialog({ variant, open, onOpenChange, title, assignedCount
     try {
       // The whole chosen day counts: access ends at its last moment, in the assigner's time zone.
       const accessUntil = variant === "twin" && until ? new Date(`${until}T23:59:59.999`).toISOString() : null;
-      if (await onAssign(picked, accessUntil)) {
+      if (startingMinutes === null) return;
+      if (await onAssign(picked, accessUntil, startingMinutes)) {
         reset();
         onOpenChange(false);
       }
@@ -107,12 +120,24 @@ export function AssignDialog({ variant, open, onOpenChange, title, assignedCount
         ) : (
           <p className="m-0 text-xs text-muted-foreground">Each person gets an email with their own link: one attempt, valid for 30 days.</p>
         )}
-        {orgMinutes.data ? (
-          <p className="m-0 text-xs text-muted-foreground">
-            Someone new gets {orgMinutes.data.defaultMinutes} credits (1 credit = 1 min) from your organization&apos;s
-            {" "}{orgMinutes.data.balanceMinutes.toLocaleString()} left. Credits are shared across twins and role plays.
-          </p>
-        ) : null}
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-4">
+            <label htmlFor="assign-credits" className="flex flex-col text-sm font-medium">
+              Starting credits
+              <span className="text-xs font-normal text-muted-foreground">For people new to credits. Others keep what they have.</span>
+            </label>
+            <DurationInput id="assign-credits" value={starting} onChange={setStarting} />
+          </div>
+          {startingParsed !== null && startingParsed > MAX_LEARNER_MINUTES ? (
+            <p role="alert" className="m-0 text-xs text-destructive">At most {MAX_LEARNER_MINUTES} min per learner.</p>
+          ) : balance !== null ? (
+            <p className={cn("m-0 text-xs", picked.length && mostNeeded > balance ? "text-caution" : "text-muted-foreground")}>
+              Your organization has {balance.toLocaleString()} credits left
+              {picked.length && startingMinutes !== null ? `; this takes up to ${mostNeeded.toLocaleString()}` : ""}.
+              {picked.length && mostNeeded > balance ? " If everyone picked is new, it won't fit." : " 1 credit = 1 min, shared across twins and role plays."}
+            </p>
+          ) : null}
+        </div>
 
         <SearchInput placeholder="Search by name or email" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search learners" />
 

@@ -1,12 +1,14 @@
+import { LowCreditsBadge } from "@/components/credits/low-credits-badge";
 import { UsersIcon } from "@/components/icons";
+import { LOW_LEARNER_MINUTES } from "@/lib/minutes-config";
 import { UserAvatar } from "@/components/user-avatar";
 import type { RoleplayOutputs } from "@/lib/roleplay/trpc";
 import { cn } from "@/lib/utils";
 import { PageContainer } from "@/components/page-container";
 
 // Inline so the columns never depend on a freshly generated utility class.
-// Name, email, role plays assigned, sessions.
-const columns = "grid grid-cols-[minmax(0,1.3fr)_minmax(0,1.6fr)_150px_110px] items-center gap-3";
+// Name, email, role plays assigned, sessions, credits left.
+const columns = "grid grid-cols-[minmax(0,1.3fr)_minmax(0,1.6fr)_150px_110px_130px] items-center gap-3";
 
 /** Roleplay users (reference pageRoleUsers): everyone invited to or practising on the org's role plays. */
 export function RoleplayUsersPage({ users }: { users: RoleplayOutputs["users"]["list"] }) {
@@ -30,6 +32,7 @@ export function RoleplayUsersPage({ users }: { users: RoleplayOutputs["users"]["
           <span>Email</span>
           <span>Roleplays assigned</span>
           <span>Sessions</span>
+          <span>Credits left</span>
         </div>
         {users.length === 0 ? (
           <p className="border-t border-(--border) px-5 py-6 text-center text-sm text-muted-foreground">Nobody yet. Assign a role play to invite people.</p>
@@ -45,6 +48,14 @@ export function RoleplayUsersPage({ users }: { users: RoleplayOutputs["users"]["
               {user.roleplays} <span className="font-normal text-muted-foreground">{user.roleplays === 1 ? "roleplay" : "roleplays"}</span>
             </span>
             <span className="tabular-nums">{user.sessions}</span>
+            {user.creditsLeft === null ? (
+              <span className="text-muted-foreground" title="Admin and team practise without using credits">—</span>
+            ) : (
+              <span className="flex items-center gap-2 tabular-nums">
+                {user.creditsLeft} min
+                {user.creditsLeft < LOW_LEARNER_MINUTES ? <LowCreditsBadge /> : null}
+              </span>
+            )}
           </div>
         ))}
       </div>

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { MAX_ASSIGNMENT_RECIPIENTS } from "@/lib/assignments";
 import { db } from "@/lib/db";
 import { getTrainerOrg } from "@/lib/org";
-import { MinutesError } from "@/lib/minutes";
+import { MAX_LEARNER_MINUTES, MinutesError } from "@/lib/minutes";
 import { inviteToRoleplay } from "@/lib/roleplay/invites";
 
 const bodySchema = z.object({
@@ -11,6 +11,8 @@ const bodySchema = z.object({
     .min(1)
     .max(MAX_ASSIGNMENT_RECIPIENTS),
   resendPending: z.enum(["send", "ignore"]).default("ignore"),
+  /** Credits each new person starts with; people who already have credits keep theirs. */
+  startingMinutes: z.number().int().min(1).max(MAX_LEARNER_MINUTES).optional(),
 }).strict();
 
 const deleteSchema = z.object({
@@ -70,6 +72,7 @@ export async function PUT(
       agent,
       emails: parsed.data.emails,
       resendPending: parsed.data.resendPending === "send",
+      startingMinutes: parsed.data.startingMinutes,
     }));
   } catch (error) {
     if (error instanceof MinutesError) return Response.json({ error: error.message }, { status: error.status });

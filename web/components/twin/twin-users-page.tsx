@@ -1,5 +1,7 @@
 import type { CSSProperties } from "react";
+import { LowCreditsBadge } from "@/components/credits/low-credits-badge";
 import { UsersIcon } from "@/components/icons";
+import { LOW_LEARNER_MINUTES } from "@/lib/minutes-config";
 import type { TwinOutputs } from "@/lib/twin/trpc";
 import { cn } from "@/lib/utils";
 import { PageContainer } from "@/components/page-container";
@@ -30,9 +32,9 @@ export function TwinUsersPage({ learners }: { learners: TwinOutputs["users"]["li
           <span>Learner</span>
           <span>Email</span>
           <span>Assigned agents</span>
-          <span>Assigned minutes</span>
+          <span>Credits given</span>
           <span>Until</span>
-          <span>Usage (minutes)</span>
+          <span>Credits used</span>
         </div>
 
         {/* Rows */}
@@ -79,8 +81,9 @@ export function TwinUsersPage({ learners }: { learners: TwinOutputs["users"]["li
                     style={{ "--w": `${pct}%` } as CSSProperties}
                   />
                 </span>
-                <span className="text-body-s leading-body-s text-muted-foreground tabular-nums">
+                <span className="flex items-center gap-2 text-body-s leading-body-s text-muted-foreground tabular-nums">
                   {l.used} used · {left} left
+                  {left < LOW_LEARNER_MINUTES ? <LowCreditsBadge /> : null}
                 </span>
               </span>
             </div>

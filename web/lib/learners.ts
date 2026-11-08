@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import type { AgentKind } from "@/lib/generated/prisma/client";
-import { learnerMinutes } from "@/lib/minutes";
+import { creditsLeftFor } from "@/lib/minutes";
 import { LEARNER_ROLE } from "@/lib/org";
 
 type Person = { id: string; name: string; email: string; image: string | null };
@@ -86,6 +86,8 @@ export type UsersRow = {
   practiceSeconds: number;
   /** Credits (practice minutes) left, shared by twins and role plays; null for admin and team, who don't use any. */
   minutesLeft: number | null;
+  /** Credits given in total (grants; the per-learner cap counts these); null for admin and team. */
+  minutesGiven: number | null;
   lastActiveAt: string | null;
 };
 
@@ -108,6 +110,7 @@ export async function listUsers(orgId: string): Promise<UsersRow[]> {
         roleplaySessions: 0,
         practiceSeconds: 0,
         minutesLeft: 0,
+        minutesGiven: 0,
         lastActiveAt: row.lastActiveAt,
       };
       merged.name ||= row.name;
@@ -119,13 +122,11 @@ export async function listUsers(orgId: string): Promise<UsersRow[]> {
       byEmail.set(key, merged);
     }
   }
-  const [minutes, studio] = await Promise.all([
-    learnerMinutes(orgId, [...byEmail.keys()]),
-    db.member.findMany({ where: { organizationId: orgId, role: { not: LEARNER_ROLE } }, select: { user: { select: { email: true } } } }),
-  ]);
-  const staff = new Set(studio.map((row) => row.user.email.toLowerCase()));
+  const credits = await creditsLeftFor(orgId, [...byEmail.keys()]);
   for (const row of byEmail.values()) {
-    row.minutesLeft = staff.has(row.email) ? null : Math.floor(Math.max(0, minutes.get(row.email)?.balanceSeconds ?? 0) / 60);
+    const own = credits.get(row.email);
+    row.minutesLeft = own ? own.left : null;
+    row.minutesGiven = own ? own.given : null;
   }
   return [...byEmail.values()].sort(
     (a, b) => (b.lastActiveAt ?? "").localeCompare(a.lastActiveAt ?? "") || a.name.localeCompare(b.name),

@@ -27,12 +27,12 @@ export function RoleplayAssignPage({ roleplay, learners }: { roleplay: Detail; l
   const active = new Set(roleplay.members.filter((m) => m.status === "pending" || m.status === "used").map((m) => m.email.toLowerCase()));
   const assignable = learners.filter((person) => !active.has(person.email.toLowerCase()));
 
-  async function assign(emails: string[]) {
+  async function assign(emails: string[], startingMinutes: number) {
     try {
       const res = await fetch(`/api/role-play/${encodeURIComponent(roleplay.slug)}/assignments`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ emails, resendPending: "ignore" }),
+        body: JSON.stringify({ emails, resendPending: "ignore", startingMinutes }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error ?? "Could not assign");
@@ -93,7 +93,7 @@ export function RoleplayAssignPage({ roleplay, learners }: { roleplay: Detail; l
         title={roleplay.name}
         assignedCount={active.size}
         people={assignable}
-        onAssign={(emails) => assign(emails)}
+        onAssign={(emails, _until, startingMinutes) => assign(emails, startingMinutes)}
       />
     </PageContainer>
   );
