@@ -57,6 +57,21 @@ export function createPaymentLink(input: {
   });
 }
 
+export type RazorpayLinkPayment = { payment_id: string; amount: number; status: string };
+export type RazorpayPaymentLinkState = RazorpayPaymentLink & { amount_paid: number; payments: RazorpayLinkPayment[] | null };
+
+/** A payment link as it stands now, with the payments made on it (reconciliation). */
+export function fetchPaymentLink(id: string) {
+  return call<RazorpayPaymentLinkState>(`/payment_links/${encodeURIComponent(id)}`);
+}
+
+export type RazorpayRefund = { id: string; payment_id: string; amount: number; currency: string; status: string };
+
+/** A payment's refunds (reconciliation). */
+export async function fetchRefunds(paymentId: string) {
+  return (await call<{ items: RazorpayRefund[] }>(`/payments/${encodeURIComponent(paymentId)}/refunds`)).items;
+}
+
 export type RazorpayInvoice = { id: string; status: string; amount: number; amount_paid: number; currency: string; short_url: string | null; payment_id: string | null };
 
 export function fetchInvoice(id: string) {

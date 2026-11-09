@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { refundOrg, topUpOrg } from "@/lib/minutes";
-import { createPaymentLink, fetchInvoice } from "@/lib/razorpay";
+import { createPaymentLink, fetchInvoice, fetchPaymentLink, fetchRefunds } from "@/lib/razorpay";
 
 /**
  * Credits an org buys from TrainerTwin, at its own price (CreditPurchase). Two ways in, both through Razorpay:
@@ -174,4 +174,65 @@ export async function purchaseRefunded(input: { refundId: string; paymentId: str
     alongside: mark,
   });
   return { ...result, credits };
+}
+
+export type ReconcileLine = { purchase: string; razorpayId: string | null; org: string; action: "paid" | "refunded" | "still unpaid" | "error"; detail: string };
+
+/**
+ * Webhooks are best effort: a payment or refund whose webhook never arrived leaves the ledger behind Razorpay. This
+ * asks Razorpay directly and applies what's missing through the same purchasePaid / purchaseRefunded the webhook
+ * uses (each still happens once). Checks purchases unpaid for more than `olderThanHours` (younger ones may still be
+ * mid-checkout), and the refunds of purchases paid in the last `refundDays`. `apply: false` only reports.
+ */
+export async function reconcilePurchases(input: { olderThanHours: number; refundDays: number; apply: boolean }) {
+  const lines: ReconcileLine[] = [];
+  const unpaid = await db.creditPurchase.findMany({
+    where: { status: "created", razorpayId: { not: null }, createdAt: { lt: new Date(Date.now() - input.olderThanHours * 3_600_000) } },
+    select: { id: true, razorpayId: true, kind: true, currency: true, organization: { select: { slug: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+  for (const purchase of unpaid) {
+    const line = (action: ReconcileLine["action"], detail: string) =>
+      lines.push({ purchase: purchase.id, razorpayId: purchase.razorpayId, org: purchase.organization.slug, action, detail });
+    try {
+      let paid: { paymentId: string; amountPaid: number; currency: string } | null = null;
+      if (purchase.kind === "payment_link") {
+        const link = await fetchPaymentLink(purchase.razorpayId!);
+        const payment = link.status === "paid" ? (link.payments ?? []).find((p) => p.status === "captured") : undefined;
+        if (payment) paid = { paymentId: payment.payment_id, amountPaid: payment.amount, currency: link.currency };
+      } else {
+        const invoice = await fetchInvoice(purchase.razorpayId!);
+        if (invoice.status === "paid" && invoice.payment_id) paid = { paymentId: invoice.payment_id, amountPaid: invoice.amount_paid, currency: invoice.currency };
+      }
+      if (!paid) {
+        line("still unpaid", "not paid at Razorpay");
+        continue;
+      }
+      if (input.apply) await purchasePaid({ razorpayId: purchase.razorpayId!, ...paid });
+      line("paid", `${formatMoney(paid.amountPaid, paid.currency)} · ${paid.paymentId}${input.apply ? " · credits added" : " · would add credits"}`);
+    } catch (error) {
+      line("error", error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  const paidRecently = await db.creditPurchase.findMany({
+    where: { status: { in: ["paid", "partially_refunded"] }, paymentId: { not: null }, paidAt: { gt: new Date(Date.now() - input.refundDays * 86_400_000) } },
+    select: { id: true, razorpayId: true, paymentId: true, organization: { select: { slug: true } } },
+    orderBy: { paidAt: "asc" },
+  });
+  for (const purchase of paidRecently) {
+    const line = (action: ReconcileLine["action"], detail: string) =>
+      lines.push({ purchase: purchase.id, razorpayId: purchase.razorpayId, org: purchase.organization.slug, action, detail });
+    try {
+      const refunds = (await fetchRefunds(purchase.paymentId!)).filter((refund) => refund.status === "processed");
+      const known = new Set((await db.minuteLedger.findMany({ where: { externalId: { in: refunds.map((r) => r.id) } }, select: { externalId: true } })).map((r) => r.externalId));
+      for (const refund of refunds.filter((r) => !known.has(r.id))) {
+        if (input.apply) await purchaseRefunded({ refundId: refund.id, paymentId: refund.payment_id, amount: refund.amount, currency: refund.currency });
+        line("refunded", `${formatMoney(refund.amount, refund.currency)} · ${refund.id}${input.apply ? " · credits taken back" : " · would take credits back"}`);
+      }
+    } catch (error) {
+      line("error", error instanceof Error ? error.message : String(error));
+    }
+  }
+  return lines;
 }
