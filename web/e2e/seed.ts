@@ -39,6 +39,11 @@ for (const p of everyone) {
 }
 await topUpOrg({ orgId: ORG.id, minutes: 500, note: "Starting balance" });
 
+// A link made by the payment-link script; browser tests deliver its signed payment/refund webhooks.
+const purchase = await db.creditPurchase.create({
+  data: { orgId: ORG.id, kind: "payment_link", razorpayId: "plink_e2e_credits", currency: "INR", credits: 100, amount: 80000 },
+});
+
 const persona = await db.persona.create({ data: { orgId: ORG.id, slug: "e2e-trainer", name: "E2E Trainer", data: {}, isOwn: true } });
 const roleplay = await db.agent.create({
   data: { id: "e2e-roleplay", orgId: ORG.id, personaId: persona.id, kind: "ROLEPLAY", slug: "e2e-pitch", name: "Pitch practice", data: { objective: "Pitch the product in two minutes." } },
@@ -64,6 +69,7 @@ const codes = Object.fromEntries((await db.rolePlayAssignment.findMany({ where: 
 mkdirSync(new URL("./.state", import.meta.url), { recursive: true });
 writeFileSync(new URL("./.state/seed.json", import.meta.url), JSON.stringify({
   org: ORG, password: PASSWORD, admin, learner, broke, more,
+  purchase: { id: purchase.id, razorpayId: purchase.razorpayId, paymentId: `pay_e2e_${purchase.id}`, refundId: `rfnd_e2e_${purchase.id}` },
   codes: { learner: codes[learner.email], broke: codes[broke.email] },
 }, null, 2));
 console.log(`seeded ${ORG.slug}: ${everyone.length} people`);

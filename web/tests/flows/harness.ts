@@ -41,7 +41,7 @@ export function outsideServices() {
     }),
     http.post("https://api.razorpay.com/v1/payment_links", async ({ request }) => {
       const body = (await request.json()) as Json;
-      const id = `plink_flow${++next}`;
+      const id = `plink_flow_${body.reference_id}`;
       paymentLinks.push({ id, ...body });
       return HttpResponse.json({ id, short_url: `https://rzp.io/test/${id}`, amount: body.amount, currency: body.currency, status: "created" });
     }),
