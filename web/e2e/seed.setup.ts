@@ -9,9 +9,11 @@ import { E2E_BASE, e2eUrl } from "./env";
  * https auth host, which this port doesn't serve.
  */
 setup("seed and sign in", async () => {
+  setup.setTimeout(180_000);
   execFileSync("bun", ["e2e/seed.ts"], { stdio: "inherit" });
   const seed = JSON.parse(readFileSync("e2e/.state/seed.json", "utf8"));
   mkdirSync("e2e/.auth", { recursive: true });
+  const signedIn: Record<string, string> = {};
   for (const who of ["admin", "learner", "broke"] as const) {
     const response = await fetch(e2eUrl("dash", "/api/auth/sign-in/email"), {
       method: "POST",
@@ -26,5 +28,14 @@ setup("seed and sign in", async () => {
       return { name, value: value.join("="), domain: `.${E2E_BASE}`, path: "/", expires: -1, httpOnly: true, secure: true, sameSite: "Lax" as const };
     });
     writeFileSync(`e2e/.auth/${who}.json`, JSON.stringify({ cookies, origins: [] }));
+    signedIn[who] = cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
   }
+  // next dev compiles a page on its first request (can take 20 s+): do it now, not inside a test's time limit.
+  const warm = [
+    ["admin", e2eUrl("dash", "/credits")],
+    ["admin", e2eUrl("dash", "/users")],
+    ["learner", e2eUrl(seed.org.slug)],
+    ["learner", e2eUrl(seed.org.slug, `/s/${seed.codes.learner}`)],
+  ] as const;
+  for (const [who, url] of warm) await fetch(url, { headers: { cookie: signedIn[who] } }).catch(() => {});
 });

@@ -8,8 +8,6 @@ import path from "path";
 const nextConfig: NextConfig = {
   // The browser tests' dev server (e2e/) builds into its own folder, so it runs next to the normal one.
   distDir: process.env.NEXT_DIST_DIR || ".next",
-  // That server leaves AGENTS.md as it is (it would rewrite Next's block on each start).
-  ...(process.env.NEXT_DIST_DIR ? { agentRules: false } : {}),
   // Allow dev assets (HMR etc.) on the portless subdomains
   allowedDevOrigins: ["trainertwin.localhost", "*.trainertwin.localhost"],
   experimental: {
