@@ -10,3 +10,8 @@ package-lock.json
 .vercel
 /.swc
 !.env.test
+/.next-e2e/
+/e2e/.auth/
+/e2e/.state/
+/e2e/.report/
+/e2e/.results/

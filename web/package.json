@@ -19,7 +19,9 @@
     "test:setup": "bun scripts/test-db-setup.ts",
     "test:unit": "bun test --parallel --path-ignore-patterns='**/*.db.test.ts' --path-ignore-patterns='tests/flows/**' tests",
     "test:db": "bun test --parallel .db.test",
-    "test:flows": "bun test --parallel tests/flows"
+    "test:flows": "bun test --parallel tests/flows",
+    "test:e2e": "playwright test",
+    "e2e:server": "bun e2e/server.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1161.0",
