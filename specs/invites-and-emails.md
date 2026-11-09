@@ -1,0 +1,250 @@
+# Invites and emails
+
+> TrainerTwin invites people either to an organization or to a particular twin or role play. These are different records, with different links and acceptance rules. This module also covers the platform's email templates, who receives them, and what a failed send means. This describes the current code, including old expiry fields that no longer limit role-play practice.
+
+## Who uses it
+
+| Person | What they do here | Code |
+| --- | --- | --- |
+| Organization admin or team member (the studio team) | Invite team members and learners in Settings; assign twins and role plays; copy, resend or cancel organization invites. | `web/components/users/team-section.tsx`, `web/components/users/invite-user.tsx`, `web/lib/auth-roles.ts` |
+| Learner (`user` role) | Sign in with the invited email, join an organization, and open assigned practice links. | `web/lib/invite/accept.ts`, `web/lib/pages/learner.ts` |
+| API integrator | Invite a learner through `POST /api/v1/users`; assign or move role-play access through the assignments API. | `web/app/api/v1/users/route.ts`, `web/app/api/v1/assignments/route.ts`, `web/app/api/v1/assignments/[id]/route.ts` |
+| Copilot acting for a studio member | Invite learners to a twin or role play, not studio members. | `copilot/agent/tools/invite_learners.ts`, `web/lib/copilot-studio.ts` `inviteLearners` |
+| TrainerTwin operator | Generate a founder link or run the role-play invite script. | `web/scripts/founder-invite.ts`, `web/scripts/assign-session-invite.ts` |
+| Signed-in reporter / support team | Report an issue / receive its email alert. | `web/app/api/issues/route.ts`, `web/lib/issue-alerts.ts` |
+
+Role management and disabling belong to [Orgs and roles](orgs-and-roles.md). Sign-in methods, cookies and founder onboarding belong to [Auth](auth.md).
+
+## Words used here
+
+| Term | Meaning |
+| --- | --- |
+| Organization invite (`Invitation`, table `invitation`) | An offer of an organization membership role, tied to an email. It is not a twin or role-play assignment. (`web/prisma/schema.prisma` `Invitation`.) |
+| Studio / learner | Studio roles are `admin` and `team`; the learner role is `user`. The public API calls the learner role `member`. (`web/lib/org.ts`, `web/lib/external-api.ts` `API_LEARNER_ROLE`.) |
+| Assignment | Access to a particular role play (`RolePlayAssignment`) or twin (`TwinAssignment`), including access given before the recipient has an account. (`web/prisma/schema.prisma`.) |
+| Personal code | Random code in `/s/<code>`, bound to the assigned recipient, not permission for anyone holding the URL. (`web/lib/assignments.ts` `assignmentMatchesUser`, `web/lib/twin-access.ts` `usable`.) |
+| Common share link (`TwinShareLink`) | An opaque `/s/<code>` link through which a signed-in person can obtain their own twin assignment. Not the same as the readable `/t/<path>` link. (`web/lib/twin-access.ts` `twinAccessByCode`.) |
+| Starting credits / minutes | The first credit grant for an email in an organization. One credit is one practice minute, shared across that learner's twins and role plays. See [Credits](credits.md). (`web/lib/minutes.ts` `giveStartingMinutes`.) |
+| Awaiting user | Someone assigned by email who is not yet listed as a member or a live organization invite. Settings groups their assigned titles by email. (`web/lib/invite/awaiting.ts` `awaitingUsers`, `web/lib/pages/router.ts` settings query.) |
+| Base domain | `NEXT_PUBLIC_BASE_DOMAIN`, default `trainertwin.localhost`; link helpers below use HTTPS. (`web/lib/base-domain.ts` `BASE_DOMAIN`.) |
+| Delivery success | Resend accepted the send request without an API error. It is not proof of inbox delivery. (`web/lib/email.ts` `sendEmail`.) |
+
+## Data
+
+These are the invite records and the assignment fields needed at this boundary. Full access and session behavior belongs to [Twins](twins.md), [Role plays](roleplays.md) and [Sessions](sessions.md).
+
+| Record | Key fields and writers | Lifecycle |
+| --- | --- | --- |
+| `Invitation` | `id` is also the studio invite token; `organizationId`, `email`, `role` (`admin`, `team`, `user`, DB CHECK), `inviterId`, `status`, `createdAt`, `expiresAt`. Better Auth creates Settings invites; `inviteLearnerByApi` writes REST invites directly. No unique organization/email constraint in the Prisma model. | `pending → accepted`, `pending → rejected`, cancellation sets `canceled` (one l). Expiry is a time check, not an automatic status change in these flows. Resend refreshes expiry. |
+| `RolePlayAssignment` | Organization, deployment (published practice access), `recipientEmail`, nullable `memberId`, `assignedByUserId`, unique `shareCode`, `mode` (default `voice`), `status`, `assignedAt`, `expiresAt`, nullable `usedAt`. Written by `inviteToRoleplay`, REST assignment routes and the operator script; activation creates membership when needed and marks use, but does not fill `memberId`. | New `pending → used`; both are playable. Explicit `cancelled` / legacy `expired` rows can be reopened as `pending` with a new code and cleared member/use fields. Studio DELETE removes pending rows; public API DELETE hard-deletes any matched row. |
+| `TwinAssignment` | Organization, twin `agentId`, lower-case `recipientEmail`, nullable bound `userId`, unique `shareCode`, optional `shareLinkId`, assigning user, `status`, optional `accessUntil`. Unique `(agentId, recipientEmail)`. `minutesLimit` is a required legacy field, not the current budget. | New `active`; `active ↔ revoked`. Assigning a revoked row reactivates it with a fresh code and new end date; an already-active row is skipped, even if its end date has passed. First authorized use binds `userId`. |
+| `TwinShareLink` | Organization, twin, unique `code`, `status`, creator, timestamps. `minutesPerUser` is stored but no longer determines starting credits. Multiple links per twin are possible. | `active ↔ disabled`; no expiry field. Joining creates a separate assignment, not an organization invitation. |
+| `FounderInvite` | Unique random `token`, optional `email`, nullable `acceptedAt`, creation time; no expiry field. Operator script creates it, onboarding consumes it. | Unused → accepted. No automatic email is sent. |
+
+Sources: `web/prisma/schema.prisma` models above; `web/lib/invite/org.ts`; `web/lib/invite/roleplay.ts`; `web/lib/twin-access.ts`; `web/lib/interview-sessions.ts` `activateSession`; `web/app/api/role-play/[slug]/assignments/route.ts` DELETE; `web/app/api/v1/assignments/[id]/route.ts` DELETE; `web/app/api/onboarding/route.ts` POST. Organization statuses and resend behavior come from Better Auth's installed `web/node_modules/better-auth/dist/plugins/organization/routes/crud-invites.mjs`.
+
+### Expiry is different for each kind
+
+- **Organization invites: 48 hours.** `web/lib/auth.ts` does not override Better Auth's default `172800` seconds (`web/node_modules/better-auth/dist/plugins/organization/adapter.mjs` `createInvitation`). Better Auth resend renews the same ID for another 48 hours (`routes/crud-invites.mjs` `createInvitation`). REST explicitly sets `now + 48 hours`, including when refreshing an expired-but-still-pending row (`web/lib/invite/org.ts` `inviteLearnerByApi`).
+- **Role-play assignments: 30 days stored, not enforced as a deadline.** `web/lib/assignments.ts` `assignmentExpiresAt` writes that date. The page and activation allow `pending` and `used` without checking `expiresAt`; the same link can start repeated practice. A row whose *status* is `expired` is still refused. (`web/lib/pages/learner.ts` `loadSharedSession`, `web/lib/interview-sessions.ts` `activateSession`.)
+- **Twin assignments:** no 48-hour acceptance deadline. Optional `accessUntil` must be in the future when supplied; access requires `accessUntil > now` or null. A call already running may finish. (`web/lib/twin-access.ts` `accessUntilSchema`, `withinAccess`, `usable`.)
+- **Founder invite / common twin link:** neither has an expiry field. Founder use checks `acceptedAt`; common twin access checks link status. (`web/prisma/schema.prisma`, `web/app/api/onboarding/route.ts`, `web/lib/twin-access.ts`.)
+
+## How it works
+
+### 1. Settings: invite team or learner
+
+1. Settings exposes separate Team and Users groups. The dialog fixes the role to `team` or `user`; it does not offer `admin`. Pending live organization invites have Copy link, Resend and Cancel actions. (`web/components/users/team-section.tsx`.)
+2. The form splits pasted emails on commas, semicolons or whitespace, trims, lower-cases and de-duplicates them. Any invalid entry blocks the whole submission; 1–50 distinct emails are allowed. Learners also require whole starting minutes from 1–360, default 30. (`web/lib/invite/emails.ts`, `web/components/users/invite-user.tsx`.)
+3. Team invites call `authClient.organization.inviteMember` sequentially. Learners call studio-only tRPC `minutes.invite`, which rejects studio-team emails, grants starting credits to the batch, then creates one Better Auth invitation per email. The auth hook grants default learner credits too, but the existing grant makes this a no-op. Team invites get no grant. (`web/lib/minutes-trpc.ts` `invite`, `web/lib/invite/org.ts` `inviteLearners`, `web/lib/invite/org-hooks.ts` `beforeOrgInvitation`.)
+4. Better Auth validates the inviter's invitation permission and rejects existing members and pending duplicates unless `resend: true`. A second admin is refused by the application hook. The email hook sends the organization template using the role-specific URL below. (`web/lib/auth.ts`, `web/lib/members.ts` `assertNoSecondAdmin`, Better Auth `routes/crud-invites.mjs` `createInvitation`.)
+5. Creation failures are returned per email, retained in the form and shown with their reasons; successful entries are cleared. Credits are committed before invitation creation, so later invite failures do not undo them. Email delivery failure is **not** a creation failure: `emailOrgInvitation` ignores the send result. (`web/lib/invite/org.ts` `inviteLearners`, `web/lib/invite/org-hooks.ts` `emailOrgInvitation`, `web/components/users/invite-user.tsx`.)
+6. Resend uses the original role and ID, renews expiry, and sends again; it bypasses the before-create hook. Cancel sets `canceled`; neither action reclaims credits. Settings lists only pending invites with `expiresAt > now`. (`web/components/users/team-section.tsx`, `web/lib/pages/router.ts`, Better Auth `routes/crud-invites.mjs`.)
+
+### 2. REST: invite a learner without creating an account
+
+`POST /api/v1/users` (public docs call this `POST /v1/users`) requires an organization API key with `users:write`. It accepts only a trimmed valid email, at most 320 characters; unknown body fields are refused. (`web/app/api/v1/users/route.ts` POST.)
+
+`web/lib/invite/org.ts` `inviteLearnerByApi` then:
+
+1. Lower-cases the email. Returns 409 for an existing member, including a specific re-enable message for a disabled member.
+2. Finds the key creator as a current admin/team member; a missing creator ID falls back to a studio member. No match returns 403.
+3. Gives default starting credits; a `MinutesError` becomes 409, before an invite or email is created.
+4. Finds a pending invitation by organization/email, with **no role or expiry filter**. Refreshes its expiry and inviter, or creates a learner invite with a UUID ID and 48-hour expiry. Refresh does not change the existing role.
+5. Emails the **organization home URL**, even when the reused pending row has another role. Returns 201 for a new row, 200 for reuse, with `invitation` and `emailSent`. A failed send leaves both credits and invitation intact.
+
+### 3. Accept an organization invite
+
+**Learner home acceptance:** loading `<org>.<base>/` while signed in calls `acceptLearnerInvite`. Existing members are left alone. Otherwise it finds the newest pending `user` invite in that org, with future expiry and a case-insensitive email match. It calls Better Auth `acceptInvitation` with the request headers. An error is logged and returns false; the page still loads. Merely visiting signed out does not accept anything. (`web/lib/pages/org-home.ts` `loadOrgHome`, `web/lib/invite/accept.ts`.)
+
+**Studio acceptance:** `/invite?token=<invitation ID>` on the auth host fetches the record. A learner-role record redirects to the org home **before** checking status or expiry, supporting older learner emails. A pending studio record shows `InviteForm`; missing/unknown/non-pending tokens show “Invite required”. The page does not pre-check expiry. Signed-out visitors get Google sign-in; the wrong email gets a switch-account action; the matching signed-in email gets an explicit Accept invitation button. (`web/app/auth/invite/page.tsx`, `web/components/auth/invite-form.tsx`.)
+
+Better Auth checks pending status, expiry and the signed-in email again, creates membership with the invitation role and sets the active organization. If member creation fails, it restores the invitation to pending. Form errors are displayed; successful studio acceptance fetches `/api/me/home` and navigates to its returned destination. Acceptance itself sends no email. (`web/node_modules/better-auth/dist/plugins/organization/routes/crud-invites.mjs` `acceptInvitation`, `web/components/auth/invite-form.tsx`; see [Auth](auth.md) for destination selection.)
+
+### 4. Role-play assign: no organization invitation required
+
+`PUT /api/role-play/[slug]/assignments` requires a studio member and an unarchived role play in their org. It accepts 1–100 valid emails, optional starting minutes 1–360, and `resendPending: "send" | "ignore"` (default ignore). (`web/app/api/role-play/[slug]/assignments/route.ts`.)
+
+`web/lib/invite/roleplay.ts` `inviteToRoleplay` normalizes/de-duplicates emails, grants starting credits to new people first, ensures a deployment, then processes each recipient:
+
+| Existing row | Result |
+| --- | --- |
+| None | Create pending assignment, personal code and stored 30-day expiry; count `added`; email it. |
+| `cancelled` or `expired` | Reopen the row with a fresh code/date, clear `memberId` and `usedAt`; count `added`; email it. |
+| `pending`, resend requested | Count `resent`; email the **same** code; do not renew dates. |
+| `pending` without resend, or `used` | Count `skipped`; no email. |
+
+Emails include the role-play name, optional objective, required upload instructions when present, invited sign-in email and the learner's current whole-minute balance. Sends run together after assignment writes; failed sends count in `emailFailures` without undoing access or credits. (`web/lib/invite/roleplay.ts`, `web/lib/email.ts` `sendRolePlayAssignmentEmail`.)
+
+Opening `/s/<code>` requires sign-in. An unbound role-play assignment matches by email case-insensitively; once bound it matches the member's user ID. Wrong-account access returns a switch-account view; unknown, wrong-org or closed-status access is invalid. First session start creates learner membership if absent; successful activation marks the assignment `used`, which does **not** consume the link. These paths do not fill `memberId`, so email-created assignments keep matching by email. Session failures and resumption belong to [Sessions](sessions.md). (`web/lib/pages/learner.ts` `loadSharedSession`, `web/lib/assignments.ts` `assignmentMatchesUser`, `web/lib/interview-sessions.ts` `activateSession`, `ensureLearnerMember`.)
+
+**REST role-play assignments:** `POST /api/v1/assignments` accepts an email or existing org learner `userId`, plus scenario slug; an explicit email wins when both are supplied. Pending/used pairs return the existing link with `created: false`, no email or new credits. New/reopened pairs get default starting credits, a new link and an email, returning 201 and `emailSent`. `PATCH /api/v1/assignments/:id` sends to the target learner only when recipient or scenario changes, replacing the code, resetting membership/use and renewing the stored expiry. A no-op sends nothing; a conflicting target pair returns 409. Credits failures are 409. Both use `emailAssignment`; send failure does not undo the write. (`web/app/api/v1/assignments/route.ts`, `web/app/api/v1/assignments/[id]/route.ts`, `web/lib/external-api-assignments.ts`.)
+
+### 5. Twin assign and shared links
+
+The twin assign UI uses studio-only `twin.assignments.assign`: 1–100 emails, optional future `accessUntil`, optional starting minutes 1–360. The older `PUT /api/twins/[slug]/assignments` accepts `minutes` 1–10,000 but **ignores** it and uses default starting credits. (`web/lib/twin/trpc.ts` assignments router, `web/app/api/twins/[slug]/assignments/route.ts`.)
+
+`assignTwinAndInvite` grants starting credits first, then calls `assignTwin`. A new recipient gets an active personal assignment; a revoked one gets a fresh code and new end date; an active one is skipped without changing access or sending again. New/reactivated recipients receive the readable twin URL and their actual whole-minute balance, not a per-twin grant. Failures count in `emailFailures`; assignments and credits remain. (`web/lib/invite/twin.ts`, `web/lib/twin-access.ts` `assignTwin`.)
+
+There are **two different kinds of sharing**:
+
+- **Readable `/t/<path>`:** the studio Share action only returns a URL; it creates no link, assignment, credit or email. Main twins use the trainer's own persona slug; skill twins use a short agent slug unless that collides with an own-persona username, then the full slug. The public page shows the twin profile, but a learner needs their own active, in-date assignment to talk. Authorized lookup can bind its `userId` before a call starts. (`web/lib/twin/trpc.ts` `agents.shareLink`, `web/lib/twin-access.ts` `twinSharePath`, `resolveTwinPath`, `twinAssignmentCode`, `web/lib/pages/learner.ts` `loadTwinLink`, `twinAccessFor`.)
+- **Opaque common `/s/<code>`:** the REST share-link endpoint creates `TwinShareLink` records. Preview uses `join: false`, giving no credits or new assignment. First session start uses `join: true`, gives default starting credits if needed, and creates the person's own assignment. Concurrent joins recover the existing row after a unique-key collision. An existing assignment is reused and still must be active, owned and in date. A revoked assignment is not restored by a common link. No email is sent on link creation or join. (`web/app/api/twins/[slug]/share-links/route.ts`, `web/lib/twin-access.ts` `twinAccessByCode`, `web/lib/pages/learner.ts`, `web/lib/interview-sessions.ts`.)
+
+A disabled common code refuses access through that code, even to a previous joiner; their separate assignment still works through its personal code or readable URL. (`web/lib/twin-access.ts` `twinAccessByCode`, `setTwinShareLinkStatus`.)
+
+### 6. Copilot and operator links
+
+- Copilot `invite_learners` has no approval-card requirement. It sends `inviteLearners` to the internal studio API, whose route requires the ingest bearer secret (`SCENARIO_INGEST_SECRET`), org/user headers and a non-disabled studio membership. It refuses studio-member emails per recipient, dispatches other recipients to the shared twin/role-play invite helper, and returns its counts plus `refused`. Optional end date reaches twins only. Legacy `minutes` is accepted internally but ignored; new people get 30. It cannot invite team/admin, resend pending role-play mail on request, or manage credits/roles through this action. (`copilot/agent/tools/invite_learners.ts`, `copilot/agent/lib/studio.ts`, `web/app/api/internal/copilot-studio/route.ts`, `web/lib/scenario-ingest.ts` `ingestAuthorized`, `web/lib/copilot-studio.ts`.)
+- `web/scripts/assign-session-invite.ts <scenario-slug> <email> [--new]` sends the role-play template. It requires an existing active deployment, reuses pending (also checks legacy `in_progress`) codes, otherwise resets or creates a row; `--new` forces a new row. It does **not** grant starting credits or include minutes in the email. It logs the link and send result; send failure leaves the assignment. Its domain default is `trainertwin.com`, unlike the general localhost default.
+- `web/scripts/founder-invite.ts <email>` refuses an already-registered exact email, creates a random 24-byte base64url token, prints the onboarding URL and sends **no email**. Onboarding requires sign-in, an unused token and a matching email when the invite has one; it creates an admin membership in a new org. See [Auth](auth.md) for the rest. (`web/app/api/onboarding/route.ts`, `web/app/auth/onboarding/page.tsx`.)
+
+### 7. Link reference
+
+| Case | Destination | Source |
+| --- | --- | --- |
+| Organization learner email / Settings Copy link | `https://<org>.<base>/` (no token) | `web/lib/invite/links.ts` `learnerInviteUrl`, `orgInviteUrl` |
+| Organization team/admin email / Copy link | `https://auth.<base>/invite?token=<encoded invitation ID>` | `web/lib/invite/links.ts` `teamInviteUrl` |
+| Role-play assignment email / API practice URL | `https://<org>.<base>/s/<personal code>` | `web/lib/invite/roleplay.ts`, `web/lib/external-api-assignments.ts` `practiceUrl` |
+| Twin assignment email | `https://<org>.<base>/t/<username-or-short/full-slug>` | `web/lib/invite/twin.ts`, `web/lib/twin-access.ts` `twinSharePath`, `twinShareUrl` |
+| Legacy/personal twin code; common twin code | `https://<org>.<base>/s/<code>` | `web/lib/twin-access.ts` `twinUrl`, `web/app/api/twins/[slug]/share-links/route.ts` |
+| Founder link (printed, not emailed) | `https://auth.<base>/onboarding?t=<token>` | `web/scripts/founder-invite.ts` |
+| Password reset | Better Auth's supplied `data.url`, passed unchanged to the template | `web/lib/auth.ts` `sendResetPassword` |
+
+### 8. Every email template and notification
+
+All six application templates below live in `web/lib/email.ts` and use the same branded HTML layout plus plain text. Only five have production callers; OTP is an unused export. Link copying, accepting/cancelling invites, common-link joins, credit grants and session completion do not call these email functions. The repository's send call sites are `web/lib/auth.ts`, `web/lib/invite/*`, `web/lib/external-api-assignments.ts`, `web/lib/issue-alerts.ts` and `web/scripts/assign-session-invite.ts`.
+
+| Template / exact subject | Trigger and recipient | Link / content | Send failure |
+| --- | --- | --- | --- |
+| `sendInvitationEmail`: `Join ${organizationName} on TrainerTwin` | New or resent organization invite, to that invite's email; Settings, Better Auth or REST users flow. | Role-specific org/auth URL above. Names inviter/org and asks for Google sign-in using the recipient email. No starting-credit amount or expiry is stated. | Better Auth hook ignores the result; REST returns `emailSent: false`; invite and credits remain. (`web/lib/invite/org-hooks.ts`, `web/lib/invite/org.ts`.) |
+| `sendRolePlayAssignmentEmail`: `New Role Play Assigned: ${rolePlayName}` | Role-play new/reopened assignment, requested pending resend, changed REST assignment, or operator script; to assigned email. | Personal `/s/` URL, role-play name, optional objective, optional required-artifact prompt, sign-in email; minutes sentence only when supplied. Default trainer is `Your trainer`. | Shared helper counts `emailFailures`; REST returns `emailSent`; script logs failure. No rollback. (`web/lib/invite/roleplay.ts`, `web/lib/external-api-assignments.ts`, `web/scripts/assign-session-invite.ts`.) |
+| `sendTwinAssignmentEmail`: `You can now talk to ${twinName}` | Newly assigned/reactivated twin access through shared helper; to assigned email. | Readable `/t/` URL, twin/trainer name and remaining minutes. Default trainer is `Your trainer`. | `emailFailures` increments; access/credits remain. Active assignment retries are skipped. (`web/lib/invite/twin.ts`.) |
+| `sendPasswordResetEmail`: `Reset your TrainerTwin password` | Better Auth email/password reset request; to `data.user.email`, using their name when present. | `data.url` as button and fallback URL; missing name becomes `there`. | Auth callback awaits the helper but ignores its failure result, so a failed delivery is not thrown to the auth caller. (`web/lib/auth.ts` `emailAndPassword.sendResetPassword`.) |
+| `sendOtpEmail`: `Your TrainerTwin ${purpose} code: ${otp}` | **No current caller or OTP plugin in `web/lib/auth.ts`.** If directly called, goes to supplied `to`; purpose defaults to `Sign In`. | No link; supplied code. Template says 6 digits and “expires in 10 minutes”, but this function generates/stores/enforces neither. | Returns the shared send failure; no active calling flow. (`web/lib/email.ts` `sendOtpEmail`.) |
+| `sendIssueReportEmail`: `Issue reported (${kind})${org ? " · " + org : ""} · ${reporter.name || reporter.email}` | A signed-in user's saved issue report, after the HTTP response. To `devops@foreverlearning.in`; CC `harini@foreverlearning.in`, `cathy@foreverlearning.in`. No acknowledgement email to reporter. | Reporter identity, kind (`bug`, `feature`, `other`), org and message; optional PostHog event, replay, page and validated org-session URL. Session link is `https://dash.<base>/<twin-or-roleplay>/sessions/<id>`. | Logs `[issues] Issue report email failed`; saved report and 201 response remain. Outer alert exceptions are also logged. (`web/lib/issue-alerts.ts` `alertIssueReport`, `web/app/api/issues/route.ts`.) |
+
+**Razorpay-generated email:** `web/scripts/org-payment-link.ts` → `web/lib/credit-purchases.ts` `createPaymentLinkPurchase` → `web/lib/razorpay.ts` `createPaymentLink` asks Razorpay to notify the supplied payer when `customer.email` exists (`notify.email: true`). Recipient is the payer, not every org admin or learner. It contains the provider's payment link (`short_url` returned to TrainerTwin); subject/body are provider-controlled, not defined here. `RESEND_API_KEY` has no effect. A failed link-creation API call throws and attempts to delete the provisional purchase; this code does not track later notification delivery. Linking an existing invoice fetches it, not a send call. See [Payments](payments.md) for payment/invoice lifecycle.
+
+### 9. Missing credentials and failed delivery
+
+`web/lib/email.ts` reads `RESEND_API_KEY` **at module load**. Without it, every application send logs a warning with subject and recipient and returns `{ success: false, error: "RESEND_API_KEY is not set" }`. It makes no network call and does not throw. This applies in production too, despite the development-only wording in its comment.
+
+With a key, `sendEmail` sends through Resend. API errors log `[Email Error]:` and return the API error message; thrown errors log `[Email Exception]:` and return the exception message or `Unknown error sending email`. There is no application-level delivery queue, persisted email status, retry loop or bounce handler in these call sites. Callers handle the returned result as listed above. (`web/lib/email.ts` `sendEmail` and callers in §8.)
+
+The default sender is `RESEND_FROM_EMAIL || "TrainerTwin <no-reply@trainertwin.com>"`; all sends use reply-to `support@trainertwin.com`. The helper accepts a sender override and optional CC; issue reporting supplies CC. (`web/lib/email.ts` `DEFAULT_FROM_EMAIL`, `SendEmailOptions`, `sendEmail`.)
+
+## Rules
+
+1. Only studio members may use the Settings learner-invite mutation or studio assignment routes. Learners cannot invite through those entry points. REST users/assignment writes require their corresponding API-key write scopes. (`web/lib/minutes-trpc.ts` `invite`, `web/lib/trpc.ts` `studioProcedure`, studio route `getTrainerOrg` checks, `web/app/api/v1/users/route.ts`, `web/app/api/v1/assignments/route.ts`.)
+2. Settings accepts at most 50 distinct parsed emails and sends none while any parsed entry is invalid. Assignment and copilot request arrays allow 1–100 emails; their shared helpers normalize and de-duplicate. (`web/lib/invite/emails.ts`, `web/components/users/invite-user.tsx`, `web/lib/minutes-trpc.ts`, `web/app/api/role-play/[slug]/assignments/route.ts`, `web/lib/twin/trpc.ts`, `web/lib/copilot-studio.ts`, `web/lib/twin-access.ts` `assignTwin`.)
+3. Default starting credits are 30. Custom starting amounts must be whole numbers 1–360 at the current Settings/assign entry points. A prior **grant row**, even if spent or reclaimed, prevents a second starting grant in that org. Starting credit is keyed by normalized email and org, not account, twin or role play. (`web/lib/minutes-config.ts`, `web/lib/minutes.ts` `giveStartingMinutes`; see [Credits](credits.md).)
+4. Starting credits for a batch are all-or-nothing under the org's ledger lock. Insufficient balance creates no starting grants and stops invitation/assignment work. Later invite, deployment, DB or email failures do not automatically refund already-committed grants. (`web/lib/minutes.ts` `giveStartingMinutes`, `web/lib/invite/org.ts`, `web/lib/invite/roleplay.ts`, `web/lib/invite/twin.ts`.)
+5. A team invite does not grant credits. Direct Better Auth learner-invite creation grants default starting credits; resend does not run its creation hook. Settings learner invites grant the chosen amount before invoking Better Auth. (`web/lib/invite/org-hooks.ts`, `web/lib/invite/org.ts`, Better Auth `routes/crud-invites.mjs`.)
+6. Organization invite acceptance requires a pending, unexpired record and a matching signed-in email. The home-page auto-accept only considers learner-role invites and never changes existing membership. The studio form is not the final authorization check. (`web/lib/invite/accept.ts`, `web/components/auth/invite-form.tsx`, Better Auth `acceptInvitation`.)
+7. A learner organization invite alone does not assign a twin. Twin use still requires separate active, in-date access; copying `/t/` grants none. (`web/lib/pages/learner.ts` `twinAccessFor`, `web/lib/twin/trpc.ts` `agents.shareLink`.)
+8. Role-play pending resend keeps its code and dates. Reopening cancelled/expired access rotates the code. Used links remain playable while credits permit, with no deadline check on `expiresAt`. (`web/lib/invite/roleplay.ts`, `web/lib/pages/learner.ts`, `web/lib/interview-sessions.ts`.)
+9. Assigning an active twin again sends no email, does not change its end date and does not replenish credits. Reactivation of a revoked row rotates the personal code and uses the supplied end date or null. (`web/lib/twin-access.ts` `assignTwin`, `web/lib/invite/twin.ts`.)
+10. Common twin-link preview must not grant credits or create access. Join grants once per org/email and creates at most one assignment per twin/email; a disabled link or revoked/ended existing assignment refuses access. (`web/lib/twin-access.ts` `twinAccessByCode`, `usable`.)
+11. Copilot rejects studio-member recipients without rejecting the other learner recipients. It sends no organization/team invite and ignores legacy `minutes`. (`web/lib/copilot-studio.ts` `inviteLearners`.)
+12. Send failure alone must not remove an invite, assignment, starting grant or issue report. It must be observable through `emailSent`, `emailFailures` or logs according to the caller, not treated as inbox delivery success. (`web/lib/email.ts`, §8 call sites.)
+
+## Entry points
+
+| Entry point | File / handler |
+| --- | --- |
+| Settings Team / Users dialogs and pending actions | `web/app/dash/settings/page.tsx`, `web/components/users/team-section.tsx`, `web/components/users/invite-user.tsx` |
+| tRPC `minutes.invite` | `web/lib/minutes-trpc.ts` (served by `/api/trpc`) |
+| Better Auth POST `/api/auth/organization/invite-member`, `/accept-invitation`, `/cancel-invitation`, `/reject-invitation` under the same organization prefix | `web/app/api/auth/[...all]/route.ts`, `web/lib/auth.ts`; implementation in installed Better Auth `routes/crud-invites.mjs` |
+| POST / GET `/api/v1/users` | `web/app/api/v1/users/route.ts`; GET lists pending learner invites without an expiry filter |
+| Auth host `/invite?token=…` | `web/app/auth/invite/page.tsx`, `web/components/auth/invite-form.tsx` |
+| Org host `/`, `/s/[code]`, `/t/[slug]` | `web/app/(org)/page.tsx`, `web/app/(org)/s/[code]/page.tsx`, `web/app/(org)/t/[slug]/page.tsx`; loaders in `web/lib/pages/org-home.ts`, `web/lib/pages/learner.ts` |
+| PUT / DELETE `/api/role-play/[slug]/assignments` | `web/app/api/role-play/[slug]/assignments/route.ts` |
+| POST / GET `/api/v1/assignments`; GET / PATCH / DELETE `/api/v1/assignments/:id` | `web/app/api/v1/assignments/route.ts`, `web/app/api/v1/assignments/[id]/route.ts` |
+| tRPC `twin.assignments.assign`, `twin.agents.shareLink` | `web/lib/twin/trpc.ts` (served by `/api/trpc` as `twin.*`, also `/api/twin` without that prefix) |
+| GET / PUT / PATCH `/api/twins/[slug]/assignments` | `web/app/api/twins/[slug]/assignments/route.ts`; PATCH revokes/restores without emailing |
+| GET / POST / PATCH `/api/twins/[slug]/share-links` | `web/app/api/twins/[slug]/share-links/route.ts`; no email on any operation |
+| Copilot `invite_learners` → POST `/api/internal/copilot-studio`, action `inviteLearners` | `copilot/agent/tools/invite_learners.ts`, `web/app/api/internal/copilot-studio/route.ts`, `web/lib/copilot-studio.ts` |
+| POST `/api/issues` | `web/app/api/issues/route.ts`, after-response `alertIssueReport` |
+| Better Auth POST `/api/auth/request-password-reset` | `web/app/api/auth/[...all]/route.ts`, callback in `web/lib/auth.ts`; email implementation `web/lib/email.ts` |
+| Operator scripts / founder onboarding | `web/scripts/assign-session-invite.ts`, `web/scripts/founder-invite.ts`, `web/app/auth/onboarding/page.tsx`, POST `web/app/api/onboarding/route.ts` |
+| Emails | All subjects, recipients and triggers in §8; templates `web/lib/email.ts`; provider notification `web/lib/razorpay.ts` |
+
+## Talks to
+
+- **Better Auth / PostgreSQL:** invitation creation and acceptance, membership, active organization, permission checks. REST users writes invitation rows directly and relies on Better Auth later for acceptance. (`web/lib/auth.ts`, `web/lib/invite/org.ts`, `web/lib/invite/accept.ts`.)
+- **Credits:** requests `giveStartingMinutes` before access creation and reads learner balances for assignment emails. Credit accounting, cap and usage belong to [Credits](credits.md). (`web/lib/invite/*`, `web/lib/external-api-assignments.ts`.)
+- **Twins / Role plays / Sessions:** creates access, supplies a learner URL; session start consumes that access and can create membership. It does not create an account or begin a call when an email is sent. See [Twins](twins.md), [Role plays](roleplays.md), [Sessions](sessions.md). (`web/lib/invite/roleplay.ts`, `web/lib/invite/twin.ts`, `web/lib/interview-sessions.ts`.)
+- **Resend:** receives sender, reply-to, recipients, optional CC, subject, HTML and text; returns API acceptance/error. (`web/lib/email.ts` `sendEmail`.)
+- **PostHog:** issue alerts include an event URL only when PostHog is available and configured; reporter-supplied replay/page URLs and a verified org-session link are included when present. See [Platform](platform.md). (`web/lib/issue-alerts.ts`.)
+- **Razorpay:** requests payer notification when creating payment links; no application email template or delivery receipt. See [Payments](payments.md). (`web/lib/razorpay.ts` `createPaymentLink`.)
+
+## Edge cases and limits
+
+- Membership and assignments can span organizations; this invite code does not apply the historical one-org-per-person lock. Organization creation limits are a different rule. (`web/lib/auth.ts` organization-hook comment, `web/lib/invite/roleplay.ts`, `web/lib/interview-sessions.ts` `ensureLearnerMember`.)
+- API learner invites bypass Better Auth's creation permission/hooks, pending-invite cap and second-admin checks; the application performs its own key/trainer checks. Better Auth's default invitation cap is 100 pending live invites and acceptance membership limit is 100. This is separate from the Settings 50-per-submit limit; acceptance through session membership creation does not run Better Auth acceptance. (`web/lib/invite/org.ts`, `web/lib/auth.ts`, Better Auth `routes/crud-invites.mjs`, `web/lib/interview-sessions.ts` `ensureLearnerMember`.)
+- A pending invitation reused by REST may be a studio invitation; its role stays unchanged even though REST sends an org-home learner link and grants credits. (`web/lib/invite/org.ts` `inviteLearnerByApi`.)
+- Organization invite cancellation/expiry does not cancel existing assignments or reclaim credits. An assignment-based first start may create membership while an unrelated organization invitation remains pending. (`web/lib/invite/org-hooks.ts`, Better Auth `cancelInvitation`, `web/lib/interview-sessions.ts` `ensureLearnerMember`.)
+- Role-play `(deploymentId, recipientEmail)` has an index, not a unique constraint; the REST creation comment assumes serialized dashboard/API requests. Concurrent creation can produce duplicates while `memberId` is null. Twin/email uniqueness is enforced. (`web/prisma/schema.prisma`, `web/app/api/v1/assignments/route.ts` POST comment.)
+- `minutesLimit` and `minutesPerUser` remain required legacy columns. A `shortcut:` comment says to drop them after the minutes ledger has run a release. Supplying 1,000 minutes to the old REST twin assignment/share-link APIs does not give 1,000 credits. (`web/lib/twin-access.ts` `DEFAULT_TWIN_MINUTES`, `web/app/api/twins/[slug]/assignments/route.ts`, `web/lib/minutes.ts`.)
+- HTML interpolation is not uniform. Role-play, twin and issue templates escape names/message fields; org invite and reset templates interpolate names/URLs without equivalent escaping. Link attributes in assignment templates use caller-supplied URLs directly. (`web/lib/email.ts` `escapeHtml` and templates.)
+- Settings learner invite explicitly rejects studio emails; copilot filters them. Shared role-play/twin assignment helpers do not perform that studio-recipient check themselves. (`web/lib/invite/org.ts` `inviteLearners`, `web/lib/copilot-studio.ts`, `web/lib/invite/roleplay.ts`, `web/lib/invite/twin.ts`.)
+
+## Mismatches
+
+- `plans/roleplay-preservation.md` and the comments in `web/prisma/schema.prisma` describe role-play email links as “one attempt, 30 days”. Current page/activation allows repeat use of pending/used links without a date check. Current `docs/guides/assignments.mdx` describes the repeat-practice behavior. (`web/lib/pages/learner.ts`, `web/lib/interview-sessions.ts`.)
+- `plans/twin-share-link.md` proposes `/t/…` automatically joining through an active common link. Current Share creates nothing and the readable page requires an existing assignment. Only opaque common `/s/…` codes enroll new people. (`web/lib/twin/trpc.ts` `agents.shareLink`, `web/lib/pages/learner.ts` `twinAccessFor`, `web/lib/twin-access.ts`.)
+- `plans/twin-roleplay-db-split.md` describes per-twin budgets, no twin expiry and a single-org lock. Current credits are per learner/org, `accessUntil` exists, and the invite/activation helpers allow multiple org memberships. Some schema/helper header comments still describe per-assignment budgets. (`web/lib/minutes.ts`, `web/lib/twin-access.ts`, `web/lib/auth.ts`, `web/lib/interview-sessions.ts`.)
+- `plans/twin-wiring-and-reliability.md` describes a default-30, 1–10,000 per-assignment minutes input. Current tRPC uses optional `startingMinutes` 1–360 for new org-credit recipients; the legacy REST `minutes` field is ignored. (`web/lib/twin/trpc.ts`, `web/app/api/twins/[slug]/assignments/route.ts`.)
+- Early sections of `plans/copilot-v2.md` propose approval for learner assignment and access-changing tools. Its final decisions say invite-only, without an approval card; the current invite tool follows the final decision. Its proposed bearer secret is `COPILOT_SERVICE_SECRET`, but the actual internal studio endpoint uses ingest authorization (`SCENARIO_INGEST_SECRET`). (`copilot/agent/tools/invite_learners.ts`, `web/lib/copilot-studio.ts`, `web/app/api/internal/copilot-studio/route.ts`, `web/lib/scenario-ingest.ts`.)
+- The `InviteUser` team branch comment claims Better Auth checks “one org per person”; current auth hooks explicitly allow several org memberships. (`web/components/users/invite-user.tsx`, `web/lib/auth.ts`.)
+- `copilot/agent/tools/invite_learners.ts` describes every invitation as a personal link, but twin emails now carry the readable `/t/` URL, not a personal `/s/` code. (`web/lib/invite/twin.ts`.)
+- `web/lib/external-api-assignments.ts` comments describe email assignments becoming member-bound when opened, but current page/activation paths do not write `RolePlayAssignment.memberId`; they keep matching by email. (`web/lib/pages/learner.ts`, `web/lib/interview-sessions.ts` `activateSession`, `ensureLearnerMember`.)
+- The invalid-link UI says a completed role play cannot be reopened, while the loader accepts `used` assignments. (`web/app/(org)/s/[code]/page.tsx` versus `web/lib/pages/learner.ts` `loadSharedSession`.)
+- The email helper comment describes graceful missing-key behavior “in development”; no environment check limits it to development. (`web/lib/email.ts` `sendEmail`.)
+- `PRODUCT.md` does not define invite expiry, starting credits, acceptance or email delivery. Its general product/authorship principles add no conflicting rule for this module.
+
+## Open questions
+
+1. Should API learner invitation refresh restrict itself to `role: "user"`? Today it can refresh a pending team/admin invite without changing the role, then email a learner URL that cannot auto-accept it. (`web/lib/invite/org.ts` `inviteLearnerByApi` versus `web/lib/invite/accept.ts` learner-role filter.)
+2. Should an invitation-creation failure after a starting grant reclaim that grant, or remain a funded email awaiting retry? Current grant and invite writes are separate; expiry/cancellation does not reclaim. (`web/lib/invite/org.ts` `inviteLearners`, `web/lib/minutes.ts` `giveStartingMinutes`.)
+3. Should email send failure appear in Settings and password-reset UI? Current callbacks ignore delivery results, unlike REST `emailSent` and assignment `emailFailures`. (`web/lib/invite/org-hooks.ts`, `web/lib/auth.ts` versus `web/lib/invite/org.ts`, `web/lib/invite/roleplay.ts`, `web/lib/invite/twin.ts`.)
+4. Should the operator assignment script grant starting credits and preserve used links? It currently sends no balance, grants nothing and resets a `used` row, unlike the shared helper. (`web/scripts/assign-session-invite.ts` versus `web/lib/invite/roleplay.ts`.)
+5. Should studio-recipient rejection apply to every assignment entry point? Settings org invites and copilot reject/filter staff, but direct twin/role-play assign routes call helpers without that guard. (`web/lib/invite/org.ts`, `web/lib/copilot-studio.ts` versus `web/lib/invite/twin.ts`, `web/lib/invite/roleplay.ts`.)
+6. Should accepting through Better Auth and joining through a session have the same member-count limit? Better Auth defaults to 100; `ensureLearnerMember` inserts directly. (`web/node_modules/better-auth/dist/plugins/organization/routes/crud-invites.mjs` `acceptInvitation` versus `web/lib/interview-sessions.ts`.)
+
+## Tests today
+
+| Layer | Existing tests and coverage |
+| --- | --- |
+| Unit (`web/tests/lib`) | `invite/emails.test.ts` parsing; `invite/links.test.ts` org versus studio URL; `invite/awaiting.test.ts` grouped awaiting recipients; `roleplay-assignment-email.test.ts` subject, minutes, sign-in email, required prompt and HTML escaping using captured Resend requests; `assignments.test.ts` recipient matching; `assigned-activation.test.ts` invalid statuses/deployments/account; `twin-access.test.ts`, `twin-access-until.test.ts`, `twin-links.test.ts` binding, join, preview, disabled/revoked/date/link resolution; `copilot-studio.test.ts` learner dispatch and studio refusal; `issue-alerts.test.ts` alert destinations and links. |
+| DB (`*.db.test.ts`) | `web/tests/lib/invite/accept.db.test.ts` pending learner auto-accept, case matching, existing membership/expiry/status/role refusal and caught failure (auth accept is spied); `minutes-entrypoints.db.test.ts` default grants across helper/hook/link entry points; `minutes-stage-two-entrypoints.db.test.ts` custom starting amounts and short-balance refusal; `invite-roleplay-minutes.db.test.ts` balances in email; `web/tests/api/v1-minutes.db.test.ts` invitation/assignment grant-once and short funds; `v1-assignment-email-minutes.db.test.ts` assignment email balance. These suites are gated on their local test DB fixture. |
+| API unit | `web/tests/api/v1-users-contract.test.ts` API learner role wording; `v1-assignments-isolation.test.ts` foreign-org user refusal. |
+| Flows (`web/tests/flows`) | `trainer-credits.flow.test.ts` real Better Auth invitation creation/hooks and captured emails, followed by role-play/twin assignments and credits usage; `credits-purchase-practice.flow.test.ts` funded purchase through assignment/practice. External services are intercepted; these are not live email delivery checks. |
+| Browser (`web/e2e`) | `trainer-credits.spec.ts` Settings user invite and twin/role-play custom starting credits; `learner.spec.ts` learner practice boundary. No complete Google invitation-acceptance/inbox delivery test here. |
+| SQL | `web/tests/sql/assigned-learner-session.sql`, `org-roles.sql`, `twin-access.sql` cover DB access/role invariants; they do not test email delivery. |
+| Python (`agent/tests`), chat (`chat/tests`) | No application invitation acceptance or email sending here; runtime/session limits belong to [Sessions](sessions.md) and [Voice agent and chat](voice-agent-and-chat.md). |
+
+Focused check while writing this spec: 28 tests passed across nine unit files (invite parsing/links/awaiting, role-play email content, assigned activation, twin end dates/links, copilot studio and issue alerts). `web/tests/lib/twin-access.test.ts` failed before running tests: its `@/lib/minutes` mock lacks the `MinutesError` export required by the imported module graph. No code/tests were changed. DB, browser, live OAuth and real email delivery were not run.
+
+Important gaps: full Better Auth accept/reject/cancel and 48-hour resend contracts; expired studio-page behavior; API reuse of a studio-role invitation; concurrent role-play duplicates; no-refund behavior after invite creation failure; missing-key/Resend error behavior at each caller; twin email HTML content; password-reset and issue-alert delivery failure UI. The existing accept DB test mocks Better Auth rather than proving membership creation, and email-content tests capture requests rather than checking inboxes. (Test sources above; implementation pointers in the matching flows.)
