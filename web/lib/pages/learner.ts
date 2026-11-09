@@ -147,29 +147,30 @@ export async function loadSharedSession(code: string): Promise<SharedSessionView
 export type TwinLinkView = { kind: "notFound" } | { kind: "flow"; props: ComponentProps<typeof TwinLearnerFlow> };
 type FlowProps = ComponentProps<typeof TwinLearnerFlow>;
 
-/** What a twin's page shows about it: the trainer whose twin it is, and the twin. Public (no sign-in needed). */
-export async function twinProfile(agentId: string): Promise<Pick<FlowProps, "trainer" | "twin">> {
-  const agent = await db.agent.findUniqueOrThrow({
-    where: { id: agentId },
-    select: {
-      slug: true,
-      name: true,
-      data: true,
-      persona: { select: { name: true, data: true, avatar: { select: { s3ImageKey: true } } } },
-    },
+/** A trainer as their twin pages show them: photo, full name, role · place, and about. Public (no sign-in needed). */
+export async function trainerProfile(personaId: string): Promise<FlowProps["trainer"]> {
+  const found = await db.persona.findUniqueOrThrow({
+    where: { id: personaId },
+    select: { name: true, data: true, avatar: { select: { s3ImageKey: true } } },
   });
   // Presigned here: the avatar route is for org members, and visitors on this page may not be signed in yet.
-  const photoKey = agent.persona.avatar?.s3ImageKey;
+  const photoKey = found.avatar?.s3ImageKey;
   const photoUrl = photoKey ? await presignedGetUrl(photoKey, 3600).catch(() => null) : null;
-  const persona = agent.persona.data && typeof agent.persona.data === "object" ? (agent.persona.data as Record<string, unknown>) : {};
+  const persona = found.data && typeof found.data === "object" ? (found.data as Record<string, unknown>) : {};
+  return {
+    name: text(persona.name) ?? found.name,
+    title: [text(persona.role), text(persona.based_in)].filter(Boolean).join(" · ") || null,
+    bio: text(persona.background),
+    photoUrl,
+  };
+}
+
+/** What a twin's page shows about it: the trainer whose twin it is, and the twin. Public (no sign-in needed). */
+export async function twinProfile(agentId: string): Promise<Pick<FlowProps, "trainer" | "twin">> {
+  const agent = await db.agent.findUniqueOrThrow({ where: { id: agentId }, select: { slug: true, name: true, data: true, personaId: true } });
   const data = agent.data && typeof agent.data === "object" ? (agent.data as Record<string, unknown>) : {};
   return {
-    trainer: {
-      name: text(persona.name) ?? agent.persona.name,
-      title: [text(persona.role), text(persona.based_in)].filter(Boolean).join(" · ") || null,
-      bio: text(persona.background),
-      photoUrl,
-    },
+    trainer: await trainerProfile(agent.personaId),
     // attach: the twin's "Enable upload" during the call (an image up to 5 MB or a PDF up to 10 MB; enforced by the attach route).
     twin: { slug: agent.slug, name: agent.name, description: text(data.objective), attach: beforeSettings(agent.data).duringUpload },
   };
