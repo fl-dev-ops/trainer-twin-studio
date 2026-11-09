@@ -28,6 +28,9 @@ export function outsideServices() {
   const emails: Email[] = [];
   const paymentLinks: Json[] = [];
   const invoices = new Map<string, Json>();
+  const paymentLinkStates = new Map<string, Json | HttpResponse>();
+  const refunds = new Map<string, Json[]>();
+  const razorpayReads: string[] = [];
   const livekit: string[] = [];
   const chatSessions: string[] = [];
   const unexpected: string[] = [];
@@ -45,7 +48,17 @@ export function outsideServices() {
       paymentLinks.push({ id, ...body });
       return HttpResponse.json({ id, short_url: `https://rzp.io/test/${id}`, amount: body.amount, currency: body.currency, status: "created" });
     }),
+    http.get("https://api.razorpay.com/v1/payment_links/:id", ({ params }) => {
+      razorpayReads.push(`/payment_links/${params.id}`);
+      const link = paymentLinkStates.get(String(params.id));
+      return link instanceof HttpResponse ? link : link ? HttpResponse.json(link) : HttpResponse.json({ error: { description: "The id provided does not exist" } }, { status: 400 });
+    }),
+    http.get("https://api.razorpay.com/v1/payments/:id/refunds", ({ params }) => {
+      razorpayReads.push(`/payments/${params.id}/refunds`);
+      return HttpResponse.json({ items: refunds.get(String(params.id)) ?? [] });
+    }),
     http.get("https://api.razorpay.com/v1/invoices/:id", ({ params }) => {
+      razorpayReads.push(`/invoices/${params.id}`);
       const invoice = invoices.get(String(params.id));
       return invoice ? HttpResponse.json(invoice) : HttpResponse.json({ error: { description: "The id provided does not exist" } }, { status: 400 });
     }),
@@ -66,7 +79,7 @@ export function outsideServices() {
   let after: { mockRestore(): void } | null = null;
 
   return {
-    emails, paymentLinks, invoices, livekit, chatSessions, unexpected,
+    emails, paymentLinks, invoices, paymentLinkStates, refunds, razorpayReads, livekit, chatSessions, unexpected,
     start() {
       server.listen({ onUnhandledRequest: "bypass" });
       after = spyOn(nextServer, "after").mockImplementation(() => {});
@@ -75,9 +88,9 @@ export function outsideServices() {
       server.close();
       after?.mockRestore();
     },
-    /** Clears what was recorded between tests (not the invoices set up for them). */
+    /** Clears what was recorded between tests (not the Razorpay registries set up for them). */
     reset() {
-      emails.length = 0; paymentLinks.length = 0; livekit.length = 0; chatSessions.length = 0; unexpected.length = 0;
+      emails.length = 0; paymentLinks.length = 0; razorpayReads.length = 0; livekit.length = 0; chatSessions.length = 0; unexpected.length = 0;
     },
   };
 }
