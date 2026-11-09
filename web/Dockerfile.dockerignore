@@ -1,0 +1,24 @@
+# Used by web/Dockerfile (context = repo root). Only shared/ and web/ are copied; keep secrets and build junk out.
+**/node_modules
+**/.next
+**/.next-e2e
+**/.env*
+!**/.env.example
+**/.vercel
+**/logs
+**/*.tsbuildinfo
+web/e2e
+web/tests
+web/playwright-report
+web/test-results
+.git
+agent
+chat
+copilot
+ingestion
+tts
+evals
+voice-samples
+storybook
+docs
+plans
