@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getLiveKitConfig } from "../../../lib/livekit";
+import { getLiveKitConfig } from "../../lib/livekit";
 
 const configured = {
   LIVEKIT_URL: "wss://example.livekit.cloud",

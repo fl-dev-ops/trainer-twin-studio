@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeSessionReportStatus } from "../../../lib/session-report";
+import { normalizeSessionReportStatus } from "../../lib/session-report";
 
 test("session report status never presents missing feedback as completed", () => {
   assert.equal(normalizeSessionReportStatus("completed", false), "none");

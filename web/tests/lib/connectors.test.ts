@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseNotionPageId, notionImportSchema } from "../../../lib/notion";
-import { parseYouTubeVideoId, youtubeImportSchema } from "../../../lib/youtube";
-import { ingestionMessageSchema } from "../../../lib/ingestion-message";
+import { parseNotionPageId, notionImportSchema } from "../../lib/notion";
+import { parseYouTubeVideoId, youtubeImportSchema } from "../../lib/youtube";
+import { ingestionMessageSchema } from "../../lib/ingestion-message";
 
 test("Notion page ID parsing handles standard URLs, short URLs, and raw UUIDs", () => {
   const standardUrl =
@@ -99,7 +99,7 @@ test("Ingestion message schema strictly enforces identifier-only payload", () =>
 
 test("Notion token encryption binds to connection scope via AAD", async () => {
   process.env.NOTION_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64");
-  const { encryptNotionToken, decryptNotionToken, notionTokenBinding } = await import("../../../lib/notion-token");
+  const { encryptNotionToken, decryptNotionToken, notionTokenBinding } = await import("../../lib/notion-token");
 
   const scope1 = { orgId: "org-1", userId: "user-1", connectionId: "conn-1" };
   const scope2 = { orgId: "org-2", userId: "user-2", connectionId: "conn-2" };
@@ -121,7 +121,7 @@ test("Notion token encryption binds to connection scope via AAD", async () => {
 });
 
 test("defaultIdentityKey produces consistent derivation across connectors", async () => {
-  const { defaultIdentityKey } = await import("../../../lib/ingestion-queue");
+  const { defaultIdentityKey } = await import("../../lib/ingestion-queue");
   assert.equal(defaultIdentityKey("kb-1", "youtube", "video-123"), "kb-1:youtube:video-123");
   assert.equal(defaultIdentityKey("kb-1", "notion", "page-456"), "kb-1:notion:page-456");
   assert.equal(defaultIdentityKey("kb-1", "notion_public", "page-456"), "kb-1:notion_public:page-456");

@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MainCollectionService } from "../../../lib/main-collection";
+import { MainCollectionService } from "../../lib/main-collection";
 import {
   filterRelevantKnowledgeHits,
   knowledgeCollectionName,
   MIN_KNOWLEDGE_SCORE,
   searchKnowledge,
   type KnowledgeHit,
-} from "../../../lib/knowledge";
+} from "../../lib/knowledge";
 
 const hit = (id: string, score: number): KnowledgeHit => ({
   id,

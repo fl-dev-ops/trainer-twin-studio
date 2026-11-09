@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { formatSessionReportGrounding } from "../../../lib/session-report-grounding";
+import { formatSessionReportGrounding } from "../../lib/session-report-grounding";
 
 describe("formatSessionReportGrounding", () => {
   it("includes scenario criteria and recorded evidence", () => {

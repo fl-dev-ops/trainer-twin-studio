@@ -3,7 +3,7 @@ import {
   interviewConfigSchema,
   resumeInterviewConfigSchema,
   DEFAULT_RESUME_INTERVIEW_CONFIG,
-} from "../../../lib/interview-config-schema";
+} from "../../lib/interview-config-schema";
 
 describe("interview-config-schema", () => {
   it("defaults main_questions to 4 for resume interview config when omitted", () => {

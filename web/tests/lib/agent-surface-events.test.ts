@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { parseAgentSurfaceMessage } from "../../../lib/agent-surface-events";
-import { parseWorkspaceCommandSurface } from "../../../lib/livekit-workspaces";
+import { parseAgentSurfaceMessage } from "../../lib/agent-surface-events";
+import { parseWorkspaceCommandSurface } from "../../lib/livekit-workspaces";
 
 describe("session document surfaces", () => {
   it("opens an attached PDF at the requested page with highlight term", () => {

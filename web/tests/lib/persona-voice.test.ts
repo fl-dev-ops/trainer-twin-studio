@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createPersonaStyleMoment, createPersonaVoiceEpisode, extractPersonaVoiceChunks, extractPersonaVoiceMoments, personaCollectionName, personaCoverageLevel, shouldRebuildPersona } from "../../../lib/persona-voice";
+import { createPersonaStyleMoment, createPersonaVoiceEpisode, extractPersonaVoiceChunks, extractPersonaVoiceMoments, personaCollectionName, personaCoverageLevel, shouldRebuildPersona } from "../../lib/persona-voice";
 
 test("storage identity uses immutable persona IDs", () => {
   assert.equal(personaCollectionName("persona-id-a"), "persona_persona-id-a");
