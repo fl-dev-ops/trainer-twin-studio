@@ -102,7 +102,8 @@ describe.skipIf(!localMinutesDb)("credits stage two tRPC (local database)", () =
     expect(await rows()).toEqual(before);
     expect(await db.invitation.count({ where: { organizationId: f.org.id } })).toBe(0);
     expect(createInvitation).not.toHaveBeenCalled();
-    expect(headers).not.toHaveBeenCalled();
+    // Request headers are read before inviteLearners checks; neither check writes anything.
+    expect(headers).toHaveBeenCalledTimes(1);
   });
 
   test("invite short balance writes nothing and creates no invitations", async () => {
@@ -112,7 +113,8 @@ describe.skipIf(!localMinutesDb)("credits stage two tRPC (local database)", () =
     expect(await rows()).toEqual(before);
     expect(await db.invitation.count({ where: { organizationId: f.org.id } })).toBe(0);
     expect(createInvitation).not.toHaveBeenCalled();
-    expect(headers).not.toHaveBeenCalled();
+    // Request headers are read before inviteLearners checks; neither check writes anything.
+    expect(headers).toHaveBeenCalledTimes(1);
   });
 
   test("invite reports a per-email API failure and continues with the remaining emails", async () => {

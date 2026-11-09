@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { test as setup } from "@playwright/test";
-import { E2E_BASE, e2eUrl } from "./env";
+import { E2E_BASE, e2eServerEnv, e2eUrl } from "./env";
 
 /**
  * Before the browser tests: fresh data (e2e/seed.ts), then each test person signed in through the app's own sign-in
@@ -10,7 +10,7 @@ import { E2E_BASE, e2eUrl } from "./env";
  */
 setup("seed and sign in", async () => {
   setup.setTimeout(180_000);
-  execFileSync("bun", ["e2e/seed.ts"], { stdio: "inherit" });
+  execFileSync("bun", ["e2e/seed.ts"], { stdio: "inherit", env: { ...process.env, ...e2eServerEnv() } });
   const seed = JSON.parse(readFileSync("e2e/.state/seed.json", "utf8"));
   mkdirSync("e2e/.auth", { recursive: true });
   const signedIn: Record<string, string> = {};

@@ -22,5 +22,7 @@ test("Credits: the org's remaining credits, learners' balances (searchable, page
   await expect(rows.first()).toContainText("30");
 
   await page.getByRole("tab", { name: "Top-up history" }).click();
-  await expect(page.getByText("Starting balance")).toBeVisible();
+  const topup = page.locator("main li").filter({ hasText: "Starting balance" });
+  await expect(topup).toContainText("+500 min");
+  await expect(topup).toContainText("TrainerTwin");
 });

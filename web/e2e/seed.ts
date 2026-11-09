@@ -9,6 +9,7 @@ import { hashPassword } from "better-auth/crypto";
 import { db } from "@/lib/db";
 import { inviteToRoleplay } from "@/lib/invite/roleplay";
 import { giveStartingMinutes, recordSessionUsage, topUpOrg } from "@/lib/minutes";
+import { ROLEPLAY_SOURCE } from "@/lib/scenario-ingest";
 
 export const PASSWORD = "e2e-password";
 const ORG = { id: "e2e-org", slug: "e2e", name: "E2E Academy" };
@@ -46,7 +47,10 @@ const purchase = await db.creditPurchase.create({
 
 const persona = await db.persona.create({ data: { orgId: ORG.id, slug: "e2e-trainer", name: "E2E Trainer", data: {}, isOwn: true } });
 const roleplay = await db.agent.create({
-  data: { id: "e2e-roleplay", orgId: ORG.id, personaId: persona.id, kind: "ROLEPLAY", slug: "e2e-pitch", name: "Pitch practice", data: { objective: "Pitch the product in two minutes." } },
+  data: { id: "e2e-roleplay", orgId: ORG.id, personaId: persona.id, kind: "ROLEPLAY", slug: "e2e-pitch", name: "Pitch practice", data: { source: ROLEPLAY_SOURCE, objective: "Pitch the product in two minutes." } },
+});
+const twin = await db.agent.create({
+  data: { id: "e2e-twin", orgId: ORG.id, personaId: persona.id, kind: "TWIN", slug: "e2e-coach", name: "E2E Coach", data: {} },
 });
 const by = { id: admin.id, name: admin.name };
 await inviteToRoleplay({ org: ORG, by, agent: roleplay, emails: [learner.email], startingMinutes: 30 });
@@ -69,6 +73,7 @@ const codes = Object.fromEntries((await db.rolePlayAssignment.findMany({ where: 
 mkdirSync(new URL("./.state", import.meta.url), { recursive: true });
 writeFileSync(new URL("./.state/seed.json", import.meta.url), JSON.stringify({
   org: ORG, password: PASSWORD, admin, learner, broke, more,
+  roleplay: { slug: roleplay.slug }, twin: { slug: twin.slug },
   purchase: { id: purchase.id, razorpayId: purchase.razorpayId, paymentId: `pay_e2e_${purchase.id}`, refundId: `rfnd_e2e_${purchase.id}` },
   codes: { learner: codes[learner.email], broke: codes[broke.email] },
 }, null, 2));
