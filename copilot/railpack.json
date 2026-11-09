@@ -2,10 +2,6 @@
   "$schema": "https://schema.railpack.com",
   "provider": "node",
   "packages": { "node": "24", "bun": "1" },
-  "steps": {
-    "install": { "commands": ["bun install --frozen-lockfile"] },
-    "build": { "commands": ["node_modules/.bin/eve build"] }
-  },
   "deploy": {
     "startCommand": "node_modules/.bin/eve start --host 0.0.0.0 --port ${PORT:-2001}",
     "variables": { "NODE_ENV": "production" }
