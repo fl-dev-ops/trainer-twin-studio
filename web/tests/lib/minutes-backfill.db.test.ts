@@ -52,8 +52,8 @@ describe.skipIf(!localMinutesDb)("minutes backfill script (local database)", () 
   }, 20_000);
 
   test("production-looking URL is refused before any connection without --production", async () => {
-    // The script detects neon.tech anywhere in the URL; keep even an accidental connection strictly on loopback.
-    const result = await backfill(["--apply", "--org", f.org.slug], { ...process.env, DATABASE_URL: "postgresql://fake:fake@127.0.0.1:1/neon.tech" });
+    // Any host but this machine counts as production; .invalid never resolves, so nothing can connect anyway.
+    const result = await backfill(["--apply", "--org", f.org.slug], { ...process.env, DATABASE_URL: "postgresql://fake:fake@prod.invalid:5432/db" });
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain("refusing: this is a production database; add --production");
     expect(result.stderr).not.toContain("ECONNREFUSED");

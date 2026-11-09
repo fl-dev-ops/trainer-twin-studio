@@ -13,6 +13,7 @@
 import { db } from "@/lib/db";
 import { grantMinutes, MinutesError, orgBalanceSeconds, topUpOrg } from "@/lib/minutes";
 import { LEARNER_ROLE, STUDIO_ROLES } from "@/lib/org";
+import { isRemoteDatabase } from "./razorpay-script-guard";
 
 const ORG_MINUTES = 1000;
 const LEARNER_MINUTES = 60;
@@ -20,7 +21,7 @@ const LEARNER_MINUTES = 60;
 const args = process.argv.slice(2);
 const apply = args.includes("--apply");
 const onlyOrg = args.includes("--org") ? args[args.indexOf("--org") + 1] : null;
-const remote = /neon\.tech|amazonaws\.com/.test(process.env.DATABASE_URL ?? "");
+const remote = isRemoteDatabase();
 if (apply && remote && !args.includes("--production")) throw new Error("refusing: this is a production database; add --production to write to it");
 
 /** Who in an org gets the learner minutes, by lower-case email. */

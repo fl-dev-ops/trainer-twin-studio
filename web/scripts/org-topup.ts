@@ -7,6 +7,7 @@
  */
 import { db } from "@/lib/db";
 import { topUpOrg } from "@/lib/minutes";
+import { isRemoteDatabase } from "./razorpay-script-guard";
 
 const args = process.argv.slice(2);
 const arg = (name: string) => (args.includes(`--${name}`) ? args[args.indexOf(`--${name}`) + 1] : undefined);
@@ -14,7 +15,7 @@ const slug = arg("org");
 const minutes = Number(arg("minutes"));
 const note = arg("note");
 if (!slug || !Number.isInteger(minutes) || minutes < 1 || !note) throw new Error('usage: bun scripts/org-topup.ts --org <slug> --minutes <whole number> --note "<why>"');
-if (/neon\.tech|amazonaws\.com/.test(process.env.DATABASE_URL ?? "") && !args.includes("--production")) {
+if (isRemoteDatabase() && !args.includes("--production")) {
   throw new Error("refusing: this is a production database; add --production to write to it");
 }
 
