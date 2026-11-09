@@ -13,11 +13,19 @@ import { reconcilePurchases } from "@/lib/credit-purchases";
 import { db } from "@/lib/db";
 import { checkScriptKeys } from "./razorpay-script-guard";
 
+const USAGE = "usage: bun scripts/reconcile-purchases.ts [--apply] [--older-than <hours>] [--refund-days <days>]";
 const args = process.argv.slice(2);
-const arg = (name: string) => (args.includes(`--${name}`) ? args[args.indexOf(`--${name}`) + 1] : undefined);
+/** An option's value; an option given without one is refused, never quietly defaulted. */
+const arg = (name: string) => {
+  const at = args.indexOf(`--${name}`);
+  if (at < 0) return undefined;
+  const value = args[at + 1];
+  if (value === undefined || value.startsWith("--")) throw new Error(USAGE);
+  return value;
+};
 const olderThanHours = Number(arg("older-than") ?? 1);
 const refundDays = Number(arg("refund-days") ?? 30);
-if (!(olderThanHours >= 0) || !(refundDays > 0)) throw new Error("usage: bun scripts/reconcile-purchases.ts [--apply] [--older-than <hours>] [--refund-days <days>]");
+if (!(olderThanHours >= 0) || !(refundDays > 0)) throw new Error(USAGE);
 const apply = args.includes("--apply");
 if (apply) checkScriptKeys(args);
 

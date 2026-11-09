@@ -51,7 +51,7 @@ describe.skipIf(!localMinutesDb)("flow: reconcile-purchases operator script safe
     expect(await snapshot()).toEqual(before);
   });
 
-  test.each(["--older-than", "--refund-days"])("BUG: %s without a value must be rejected, not silently defaulted", async (option) => {
+  test.each(["--older-than", "--refund-days"])("%s without a value is rejected, not silently defaulted", async (option) => {
     const before = await snapshot();
     const result = await run([option]);
     expect(await snapshot()).toEqual(before);
