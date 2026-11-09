@@ -32,7 +32,7 @@ export function CreditsHistoryTable({ rows, empty, byFallback = "TrainerTwin" }:
           {shown.map((row) => (
             <li key={row.id} className={`${GRID} border-t border-(--border) px-5 py-3 text-sm`}>
               <time dateTime={row.at} className="text-muted-foreground tabular-nums">{when(row.at)}</time>
-              <span className="font-medium tabular-nums">+{row.minutes.toLocaleString()} <span className="font-normal text-muted-foreground">min</span></span>
+              <span className={`font-medium tabular-nums ${row.minutes < 0 ? "text-caution" : ""}`}>{row.minutes < 0 ? "−" : "+"}{Math.abs(row.minutes).toLocaleString()} <span className="font-normal text-muted-foreground">min</span></span>
               <span className="truncate text-muted-foreground">{row.note ?? "—"}</span>
               <span className="truncate">{row.by ?? byFallback}</span>
             </li>

@@ -529,6 +529,7 @@ model Organization {
   avatars            Avatar[]
   copilotSessions    CopilotSession[]
   minuteLedger       MinuteLedger[]
+  creditPurchases    CreditPurchase[]
 
   @@unique([slug])
   @@map("organization")
@@ -1035,14 +1036,16 @@ model SkillSource {
 model MinuteLedger {
   id          String   @id @default(cuid())
   orgId       String
-  /// The learner, lower case; null for an org top-up.
+  /// The learner, lower case; null for the org's own rows (top-ups and refunds).
   email       String?
   userId      String?
-  type        String // topup | grant | reclaim | usage (CHECK)
-  /// Signed: topup and grant > 0, reclaim < 0, usage <= 0 (CHECK).
+  type        String // topup | refund | grant | reclaim | usage (CHECK)
+  /// Signed: topup and grant > 0, refund and reclaim < 0, usage <= 0 (CHECK).
   seconds     Int
   /// Usage rows: the session it paid for (one usage row per session).
   sessionId   String?  @unique
+  /// A paid top-up: its Razorpay payment (pay_…); a refund: its Razorpay refund (rfnd_…). One row each.
+  externalId  String?  @unique
   actorUserId String?
   note        String?
   createdAt   DateTime @default(now())
@@ -1051,5 +1054,31 @@ model MinuteLedger {
 
   @@index([orgId, email])
   @@index([orgId, type])
+}
+
+/// Credits an org buys from TrainerTwin through Razorpay: a payment link (INR or USD) or a GST invoice made in the
+/// Razorpay Dashboard. Paying it adds `credits` to the org (a topup row); a refund takes back the refunded share.
+model CreditPurchase {
+  id             String    @id @default(cuid())
+  orgId          String
+  credits        Int
+  /// In the currency's smallest unit (paise, cents).
+  amount         Int
+  currency       String // INR | USD (CHECK)
+  kind           String // payment_link | invoice (CHECK)
+  /// plink_… or inv_…; null only while the payment link is being created.
+  razorpayId     String?   @unique
+  /// The payment that paid it (pay_…).
+  paymentId      String?   @unique
+  status         String    @default("created") // created | paid | partially_refunded | refunded (CHECK)
+  refundedAmount Int       @default(0)
+  url            String?
+  note           String?
+  createdAt      DateTime  @default(now())
+  paidAt         DateTime?
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
 }
 

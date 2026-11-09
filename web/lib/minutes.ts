@@ -23,11 +23,14 @@ type Tx = Prisma.TransactionClient | typeof db;
 const lower = (email: string) => email.trim().toLowerCase();
 const minutes = (seconds: number) => Math.floor(seconds / 60);
 
-/** The org's unallocated balance: top-ups minus what it has given out (take-backs come back). */
+/**
+ * The org's unallocated balance: top-ups (less refunds) minus what it has given out (take-backs come back). A refund
+ * after the credits were given out can leave it below zero; nothing more can be given until it's topped up.
+ */
 export async function orgBalanceSeconds(orgId: string, tx: Tx = db): Promise<number> {
   const [row] = await tx.$queryRaw<{ seconds: number }[]>`
-    SELECT coalesce(sum(CASE WHEN "type" = 'topup' THEN "seconds" ELSE -"seconds" END), 0)::int AS seconds
-    FROM "MinuteLedger" WHERE "orgId" = ${orgId} AND "type" IN ('topup', 'grant', 'reclaim')`;
+    SELECT coalesce(sum(CASE WHEN "type" IN ('topup', 'refund') THEN "seconds" ELSE -"seconds" END), 0)::int AS seconds
+    FROM "MinuteLedger" WHERE "orgId" = ${orgId} AND "type" IN ('topup', 'refund', 'grant', 'reclaim')`;
   return row?.seconds ?? 0;
 }
 
@@ -107,13 +110,39 @@ function wholeMinutes(value: number) {
   return value;
 }
 
-/** TrainerTwin adds minutes to an org's balance (the top-up script now; payments later). */
-export async function topUpOrg(input: { orgId: string; minutes: number; note: string; actorUserId?: string | null }) {
+type OrgMovement = {
+  orgId: string;
+  minutes: number;
+  note: string;
+  actorUserId?: string | null;
+  /** The Razorpay payment or refund it records: written once, however often it's reported (`duplicate` then). */
+  externalId?: string;
+  /** Runs in the same transaction, only when the row is written (a purchase marking itself paid or refunded). */
+  alongside?: (tx: Prisma.TransactionClient) => Promise<unknown>;
+};
+
+async function orgMovement(type: "topup" | "refund", input: OrgMovement) {
   const amount = wholeMinutes(input.minutes);
   return locked(input.orgId, async (tx) => {
-    await tx.minuteLedger.create({ data: { orgId: input.orgId, type: "topup", seconds: amount * 60, note: input.note, actorUserId: input.actorUserId ?? null } });
-    return { orgBalanceMinutes: minutes(await orgBalanceSeconds(input.orgId, tx)) };
+    const duplicate = input.externalId ? Boolean(await tx.minuteLedger.findUnique({ where: { externalId: input.externalId }, select: { id: true } })) : false;
+    if (!duplicate) {
+      await tx.minuteLedger.create({
+        data: { orgId: input.orgId, type, seconds: (type === "topup" ? 1 : -1) * amount * 60, note: input.note, actorUserId: input.actorUserId ?? null, externalId: input.externalId ?? null },
+      });
+      await input.alongside?.(tx);
+    }
+    return { orgBalanceMinutes: minutes(await orgBalanceSeconds(input.orgId, tx)), duplicate };
   });
+}
+
+/** TrainerTwin adds minutes to an org's balance: the top-up script, or a paid purchase (lib/credit-purchases.ts). */
+export function topUpOrg(input: OrgMovement) {
+  return orgMovement("topup", input);
+}
+
+/** A refunded purchase takes its credits back from the org's balance, even below zero (lib/credit-purchases.ts). */
+export function refundOrg(input: OrgMovement & { externalId: string }) {
+  return orgMovement("refund", input);
 }
 
 /**
@@ -258,7 +287,7 @@ export async function recordSessionUsage(sessionId: string) {
   });
 }
 
-/** One credit added: to the org (a top-up) or to a learner (a grant), with who added it. */
+/** One credit movement: added to the org (a top-up; a refund is negative) or to a learner (a grant), with who did it. */
 export type CreditEntry = { id: string; minutes: number; note: string | null; at: string; by: string | null };
 
 /**
@@ -267,7 +296,7 @@ export type CreditEntry = { id: string; minutes: number; note: string | null; at
  */
 export async function creditsAdded(orgId: string, email?: string, take = 200): Promise<CreditEntry[]> {
   const rows = await db.minuteLedger.findMany({
-    where: { orgId, ...(email ? { email: lower(email), type: "grant" } : { type: "topup" }) },
+    where: { orgId, ...(email ? { email: lower(email), type: "grant" } : { type: { in: ["topup", "refund"] } }) },
     orderBy: { createdAt: "desc" },
     take,
     select: { id: true, seconds: true, note: true, createdAt: true, actorUserId: true },
@@ -284,8 +313,8 @@ export async function creditsAdded(orgId: string, email?: string, take = 200): P
   }));
 }
 
-/** Total credits ever added to the org (its top-ups). */
+/** Total credits ever added to the org: its top-ups, less refunds. */
 export async function orgCreditsAddedSeconds(orgId: string): Promise<number> {
-  const total = await db.minuteLedger.aggregate({ where: { orgId, type: "topup" }, _sum: { seconds: true } });
+  const total = await db.minuteLedger.aggregate({ where: { orgId, type: { in: ["topup", "refund"] } }, _sum: { seconds: true } });
   return total._sum.seconds ?? 0;
 }

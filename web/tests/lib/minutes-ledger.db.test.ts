@@ -10,7 +10,7 @@ describe.skipIf(!localMinutesDb)("minute ledger rules (local database)", () => {
   const grant = (amount: number, email = f.learner.email) => minutes.grantMinutes({ orgId: f.org.id, email, minutes: amount });
 
   test("top-ups, normalized grants and take-backs conserve org and learner credit", async () => {
-    expect(await topup(100)).toEqual({ orgBalanceMinutes: 100 });
+    expect(await topup(100)).toEqual({ orgBalanceMinutes: 100, duplicate: false });
     expect(await grant(60, ` ${f.learner.email.toUpperCase()} `)).toEqual({ grantedMinutes: 60, balanceMinutes: 60, orgBalanceMinutes: 40 });
     expect(await minutes.reclaimMinutes({ orgId: f.org.id, email: f.learner.email.toUpperCase(), minutes: 10 }))
       .toEqual({ reclaimedMinutes: 10, balanceMinutes: 50, orgBalanceMinutes: 50 });
