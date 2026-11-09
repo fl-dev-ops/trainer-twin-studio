@@ -19,6 +19,32 @@ const deleteSchema = z.object({
   assignmentId: z.string().min(1),
 }).strict();
 
+/** Learner emails in the org and those already holding a pending link, for the assign dialog. */
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ slug: string }> },
+) {
+  const trainer = await getTrainerOrg();
+  if (!trainer) return Response.json({ error: "Forbidden" }, { status: 403 });
+
+  const { slug } = await params;
+  const [members, pending] = await Promise.all([
+    db.member.findMany({
+      where: { organizationId: trainer.id, role: "member" },
+      select: { user: { select: { email: true } } },
+    }),
+    db.rolePlayAssignment.findMany({
+      where: { orgId: trainer.id, status: "pending", deployment: { agent: { slug } } },
+      select: { recipientEmail: true },
+    }),
+  ]);
+
+  return Response.json({
+    memberEmails: members.map((member) => member.user.email),
+    pendingEmails: pending.map((assignment) => assignment.recipientEmail),
+  });
+}
+
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ slug: string }> },
@@ -133,6 +159,7 @@ export async function PUT(
         practiceUrl,
         trainerName: trainer.user.name,
         requiredArtifact,
+        kindLabel: trainer.type === "SALES" ? "role play" : undefined,
       }),
     ),
   );

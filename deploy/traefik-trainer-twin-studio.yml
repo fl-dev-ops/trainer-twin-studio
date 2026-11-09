@@ -1,0 +1,19 @@
+http:
+  routers:
+    tt-studio:
+      rule: "Host(`trainertwin.216.48.181.196.nip.io`) || Host(`auth.trainertwin.216.48.181.196.nip.io`) || Host(`dash.trainertwin.216.48.181.196.nip.io`) || Host(`careerwithvasanth.trainertwin.216.48.181.196.nip.io`) || Host(`latencytest.trainertwin.216.48.181.196.nip.io`) || Host(`sales.trainertwin.216.48.181.196.nip.io`)"
+      entryPoints: [websecure]
+      service: tt-studio
+      tls: { certResolver: letsencrypt }
+    # Org portal subdomains: served with Traefik's default cert until added to the rule above.
+    tt-studio-orgs:
+      rule: "HostRegexp(`^[a-z0-9-]+\\.trainertwin\\.216\\.48\\.181\\.196\\.nip\\.io$`)"
+      priority: 1
+      entryPoints: [websecure]
+      service: tt-studio
+      tls: {}
+  services:
+    tt-studio:
+      loadBalancer:
+        servers:
+          - url: "http://tt-studio-web:3000"

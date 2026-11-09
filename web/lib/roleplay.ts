@@ -69,6 +69,8 @@ export const roleplayInputSchema = z.object({
     learnerRole: z.string().trim().min(1, "Learner role is required").max(200),
     agreesWhen: z.string().trim().max(2000).optional(),
     declinesWhen: z.string().trim().max(2000).optional(),
+    /** What counts as a win for the learner. Stored only; nothing reads it at runtime yet. */
+    success: z.string().trim().max(2000).optional(),
   }),
   learnerGoals: z.array(line).min(1, "Add at least one learner goal").max(MAX_LEARNER_GOALS, `Five learner goals at most`),
   agent: z.object({
@@ -96,6 +98,7 @@ export type StoredRoleplay = {
     learner_role: string;
     agrees_when?: string;
     declines_when?: string;
+    success?: string;
   };
   agent: {
     character_role: string;
@@ -134,6 +137,7 @@ function storedRoleplay(input: RoleplayInput): StoredRoleplay {
       learner_role: input.situation.learnerRole,
       ...(optional(input.situation.agreesWhen) ? { agrees_when: optional(input.situation.agreesWhen) } : {}),
       ...(optional(input.situation.declinesWhen) ? { declines_when: optional(input.situation.declinesWhen) } : {}),
+      ...(optional(input.situation.success) ? { success: optional(input.situation.success) } : {}),
     },
     agent: {
       character_role: input.agent.characterRole,
@@ -236,6 +240,7 @@ export function roleplayInputFromSpec(agentData: Record<string, unknown>): Parti
       learnerRole: stored.situation?.learner_role ?? "",
       agreesWhen: stored.situation?.agrees_when,
       declinesWhen: stored.situation?.declines_when,
+      success: stored.situation?.success,
     },
     learnerGoals: keys.map((key) => definitions[key]).filter((goal): goal is string => typeof goal === "string"),
     agent: {

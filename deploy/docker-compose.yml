@@ -1,0 +1,71 @@
+# TrainerTwin studio full stack on the E2E VM. Run from /opt/trainer-twin-studio/deploy.
+name: tt-studio
+x-base: &base
+  restart: unless-stopped
+  networks: [internal]
+
+services:
+  postgres:
+    <<: *base
+    image: postgres:18-alpine
+    env_file: db.env
+    volumes: [pgdata:/var/lib/postgresql]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      retries: 20
+
+  chroma:
+    <<: *base
+    image: chromadb/chroma:latest
+    volumes: [../chroma-data:/data]
+
+  web:
+    <<: *base
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+      args: { NEXT_PUBLIC_BASE_DOMAIN: "${BASE_DOMAIN}" }
+    image: tt-studio-web:local
+    container_name: tt-studio-web
+    env_file: [../web/.env, db.env]
+    environment:
+      NEXT_PUBLIC_BASE_DOMAIN: ${BASE_DOMAIN}
+      BETTER_AUTH_URL: https://${BASE_DOMAIN}
+      CHROMA_URL: http://chroma:8000
+      EVE_ORIGIN: http://chat:2000
+      CHAT_URL: http://chat:2000
+      LIVEKIT_AGENT_NAME: ${AGENT_NAME}
+      NOTION_OAUTH_REDIRECT_URI: https://dash.${BASE_DOMAIN}/api/notion/oauth/callback
+      YOUTUBE_OAUTH_REDIRECT_URI: https://dash.${BASE_DOMAIN}/api/youtube/oauth/callback
+    depends_on:
+      postgres: { condition: service_healthy }
+      chroma: { condition: service_started }
+    networks: [internal, public]
+
+  chat:
+    <<: *base
+    build: { context: .., dockerfile: deploy/chat.Dockerfile }
+    image: tt-studio-chat:local
+    env_file: ../chat/.env
+    environment:
+      STUDIO_URL: http://web:3000
+
+  agent:
+    <<: *base
+    build: ../agent
+    image: tt-studio-agent:local
+    env_file: ../agent/.env
+    environment:
+      AGENT_NAME: ${AGENT_NAME}
+      WEB_URL: http://web:3000
+      LLM_BASE_URL: http://chat:2000/v1
+    stop_grace_period: 30s
+
+volumes:
+  pgdata:
+
+networks:
+  internal:
+  public:
+    external: true

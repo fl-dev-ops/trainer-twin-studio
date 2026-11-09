@@ -32,3 +32,6 @@ agent/.local/
 storybook/
 web/storybook/
 .storybook/
+
+# deploy secrets (E2E VM)
+deploy/db.env

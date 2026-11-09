@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useMemo, useState, useSyncExternalStore } from "react";
-import { LayoutGrid, List, MoreVertical, Pencil, Play, Plus, Search, UserRoundCheck } from "lucide-react";
+import { LayoutGrid, List, MoreVertical, Pencil, Play, Plus, Search, UserPlus, UserRoundCheck } from "lucide-react";
+import { AssignDialog } from "@/components/assign-dialog";
 import { useOrgCopy } from "@/components/org-type-provider";
 import { Button } from "@/components/ui/button";
 import {
@@ -71,17 +72,17 @@ function relativeTime(iso: string | null): string {
   return then.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 
-function initials(name: string) {
-  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "?";
+function initials(name: string, letters = 2) {
+  return name.split(/\s+/).filter(Boolean).slice(0, letters).map((part) => part[0]?.toUpperCase()).join("") || "?";
 }
 
-function Avatar({ name, src, className }: { name: string; src?: string; className?: string }) {
+function Avatar({ name, src, className, letters }: { name: string; src?: string; className?: string; letters?: number }) {
   return src ? (
     // eslint-disable-next-line @next/next/no-img-element
     <img src={src} alt="" className={cn("rounded-full object-cover", className)} />
   ) : (
     <span className={cn("grid place-items-center rounded-full bg-control text-[10px] font-semibold text-text-secondary", className)}>
-      {initials(name)}
+      {initials(name, letters)}
     </span>
   );
 }
@@ -198,25 +199,34 @@ export function ScenarioList({ cards, onNew, actions }: {
 }
 
 function ScenarioMenu({ card }: { card: ScenarioCard }) {
+  const [assignOpen, setAssignOpen] = useState(false);
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={<Button variant="ghost" size="icon-sm" aria-label={`Actions for ${card.name}`} />}
-        onClick={(event) => event.preventDefault()}
-      >
-        <MoreVertical />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-40">
-        <DropdownMenuItem render={<Link href={`/agents/${encodeURIComponent(card.slug)}/edit`} />}>
-          <Pencil /> Edit
-        </DropdownMenuItem>
-        {card.status === "published" && (
-          <DropdownMenuItem render={<Link href={card.kind === "roleplay" ? `/talk?agent=${encodeURIComponent(card.slug)}` : `/agents/${encodeURIComponent(card.slug)}`} />}>
-            <Play /> {card.kind === "roleplay" ? "Try role play" : "Open"}
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={<Button variant="ghost" size="icon-sm" aria-label={`Actions for ${card.name}`} />}
+          onClick={(event) => event.preventDefault()}
+        >
+          <MoreVertical />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-40">
+          <DropdownMenuItem render={<Link href={`/agents/${encodeURIComponent(card.slug)}/edit`} />}>
+            <Pencil /> Configure
           </DropdownMenuItem>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+          {card.status === "published" && (
+            <DropdownMenuItem render={<Link href={card.kind === "roleplay" ? `/talk?agent=${encodeURIComponent(card.slug)}` : `/agents/${encodeURIComponent(card.slug)}`} />}>
+              <Play /> {card.kind === "roleplay" ? "Try as learner" : "Open"}
+            </DropdownMenuItem>
+          )}
+          {card.status === "published" && (
+            <DropdownMenuItem onClick={() => setAssignOpen(true)}>
+              <UserPlus /> Assign
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <AssignDialog slug={card.slug} name={card.name} open={assignOpen} onOpenChange={setAssignOpen} />
+    </>
   );
 }
 
@@ -264,7 +274,7 @@ function LearnerStack({ card }: { card: ScenarioCard }) {
     <div className="flex items-center -space-x-1.5" aria-label={`${card.learnerCount} learner${card.learnerCount === 1 ? "" : "s"}`}>
       {card.learners.map((learner) => (
         <span key={learner.name} title={learner.name} className="rounded-full ring-2 ring-card">
-          <Avatar name={learner.name} src={learner.image} className="size-6" />
+          <Avatar name={learner.name} src={learner.image} letters={1} className="size-6" />
         </span>
       ))}
       {extra > 0 && (

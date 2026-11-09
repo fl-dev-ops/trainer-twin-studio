@@ -49,9 +49,20 @@ const DEFAULT_OPENS = [
   "Gives an easy way out of the call",
 ];
 const DEFAULT_AGREES = "Agrees to a short Zoom or a dated follow-up once the agent has lowered their guard.";
+const DEFAULT_SUCCESS = "A booked meeting or a dated follow-up, never a purchase on the call.";
 const DEFAULT_DECLINES = "Politely ends the call if the agent pressures, argues or pitches. Never agrees to buy on this call.";
 
 type CharacterRole = RoleplayInput["agent"]["characterRole"];
+
+const STEPS = [
+  { id: "scenario", label: "Scenario", title: "Scenario", description: "The situation the client is in, and what is really going on." },
+  { id: "client", label: "AI’s role", title: "AI’s role: the client", description: "Who the AI plays. Behaviour, difficulty and voice come from the persona." },
+  { id: "learner", label: "Learner", title: "Who is the learner: the agent", description: "Their role in the conversation and what they should practise." },
+  { id: "rubric", label: "Rubric", title: "Rubric", description: "How the agent is scored." },
+  { id: "success", label: "Success", title: "What success means", description: "The outcome the conversation is working towards." },
+] as const;
+
+type StepId = (typeof STEPS)[number]["id"];
 
 /** A first line in the client's voice when none was written (V4 wording per character). */
 function openingFor(character: CharacterRole, scenario: string): string {
@@ -74,7 +85,7 @@ export type RoleplayBuilderProps = {
   revision?: number;
 };
 
-/** One-page role-play builder (V4): assistant prompt, then every field in one collapsible card. */
+/** Role-play builder: assistant prompt, then the fields in one collapsible card, split into steps. */
 export function RoleplayBuilder({ slug, initial, clientPersonas, publishedVersion, revision }: RoleplayBuilderProps) {
   const router = useRouter();
   const existing = Boolean(publishedVersion || revision);
@@ -87,11 +98,13 @@ export function RoleplayBuilder({ slug, initial, clientPersonas, publishedVersio
   const [goalDraft, setGoalDraft] = useState("");
   const [agreesWhen, setAgreesWhen] = useState(initial?.situation?.agreesWhen ?? DEFAULT_AGREES);
   const [declinesWhen, setDeclinesWhen] = useState(initial?.situation?.declinesWhen ?? DEFAULT_DECLINES);
+  const [success, setSuccess] = useState(initial?.situation?.success ?? DEFAULT_SUCCESS);
   const [rubric, setRubric] = useState<RubricCriterion[]>(initial?.rubric ?? rubricPreset("sales"));
   const [rubricName, setRubricName] = useState("");
   const [rubricPoints, setRubricPoints] = useState("");
   const [opening, setOpening] = useState(initial?.opening ?? "");
   const [open, setOpen] = useState(existing || Boolean(initial?.situation?.scenario));
+  const [step, setStep] = useState<StepId>("scenario");
   const [ask, setAsk] = useState("");
   const [busy, setBusy] = useState<"save" | "try" | "ask" | "scenario" | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -109,6 +122,8 @@ export function RoleplayBuilder({ slug, initial, clientPersonas, publishedVersio
   };
 
   const selected = clientPersonas.find((card) => card.slug === persona);
+  const characterRole = (selected?.behaviours.find((item) => (CHARACTER_ROLES as readonly string[]).includes(item))
+    ?? initial?.agent?.characterRole ?? "Warm but Cautious") as CharacterRole;
   const rubricTotal = rubric.reduce((sum, row) => sum + (Number.isFinite(row.points) ? row.points : 0), 0);
 
   async function draftFromAsk(text: string) {
@@ -193,17 +208,25 @@ export function RoleplayBuilder({ slug, initial, clientPersonas, publishedVersio
     !rubric.length && "at least one rubric score",
   ].filter(Boolean) as string[];
 
+  const stepDone: Record<StepId, boolean> = {
+    scenario: Boolean(name.trim() && scenario.trim()),
+    client: Boolean(persona),
+    learner: Boolean(learnerRole.trim() && goals.length),
+    rubric: rubric.length > 0,
+    success: Boolean(success.trim() && agreesWhen.trim() && declinesWhen.trim()),
+  };
+  const stepIndex = STEPS.findIndex((item) => item.id === step);
+
   /** Saves and publishes; the client's character, difficulty and way of talking come from the persona. */
   async function save(mode: "save" | "try") {
     if (missing.length) {
       setOpen(true);
+      setStep(STEPS.find((item) => !stepDone[item.id])?.id ?? step);
       toast.error(`Add ${missing.join(", ")}.`);
       return;
     }
     if (busy) return;
     setBusy(mode);
-    const characterRole = (selected?.behaviours.find((item) => (CHARACTER_ROLES as readonly string[]).includes(item))
-      ?? initial?.agent?.characterRole ?? "Warm but Cautious") as CharacterRole;
     const difficulty: Difficulty = selected?.difficulty ?? initial?.agent?.difficulty ?? "medium";
     try {
       const response = await fetch(`/api/agents/${encodeURIComponent(slug)}/generate`, {
@@ -221,6 +244,7 @@ export function RoleplayBuilder({ slug, initial, clientPersonas, publishedVersio
             learnerRole: learnerRole.trim(),
             agreesWhen: agreesWhen.trim() || undefined,
             declinesWhen: declinesWhen.trim() || undefined,
+            success: success.trim() || undefined,
           },
           learnerGoals: goals,
           agent: {
@@ -261,7 +285,7 @@ export function RoleplayBuilder({ slug, initial, clientPersonas, publishedVersio
           </Link>
         </div>
 
-        <div className="mx-auto flex max-w-[720px] flex-col gap-4 px-4 pt-10 pb-12">
+        <div className="mx-auto flex max-w-[960px] flex-col gap-4 px-4 pt-10 pb-12">
           {existing ? null : (
             <AssistCard ask={ask} onAsk={setAsk} busy={busy === "ask"}
               onSubmit={() => draftFromAsk(ask)} onSuggest={(text) => { setAsk(text); void draftFromAsk(text); }} />
@@ -272,140 +296,206 @@ export function RoleplayBuilder({ slug, initial, clientPersonas, publishedVersio
               className="flex w-full items-center justify-between gap-4 px-6 py-6 text-left">
               <span className="flex min-w-0 flex-col gap-0.5">
                 <span className="truncate text-lg font-semibold">{name.trim() || "New roleplay"}</span>
-                <span className="text-sm text-muted-foreground">Persona, scenario, learner role and goals</span>
+                <span className="text-sm text-muted-foreground">Scenario, AI’s role, learner, rubric and success</span>
               </span>
               <ChevronDown className={cn("size-4 shrink-0 transition-transform", open && "rotate-180")} aria-hidden />
             </button>
 
             {open ? (
-              <div id="roleplay-fields" className="flex flex-col gap-3 px-6 pb-6">
-                <Label htmlFor="rp-name">Roleplay name</Label>
-                <Input id="rp-name" className="h-11 rounded-xl" placeholder="Example: The wait-and-see investor" autoComplete="off"
-                  value={name} onChange={(event) => touch(setName)(event.target.value)} />
+              <div id="roleplay-fields" className="grid gap-6 px-6 pb-6 md:grid-cols-[13rem_minmax(0,1fr)]">
+                <nav aria-label="Roleplay sections" className="flex gap-1 overflow-x-auto rounded-2xl bg-muted/70 p-2 md:flex-col md:self-start">
+                  {STEPS.map((item, index) => {
+                    const current = item.id === step;
+                    return (
+                      <button key={item.id} type="button" aria-current={current ? "step" : undefined} onClick={() => setStep(item.id)}
+                        className={cn("flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors",
+                          current ? "bg-card font-medium shadow-xs" : "text-muted-foreground hover:text-foreground")}>
+                        <span className={cn("grid size-6 shrink-0 place-items-center rounded-full text-xs font-semibold",
+                          current ? "bg-primary text-primary-foreground"
+                            : stepDone[item.id] ? "border border-emerald-600/40 text-emerald-600" : "border text-muted-foreground")}>
+                          {!current && stepDone[item.id] ? <Check className="size-3.5" /> : index + 1}
+                        </span>
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </nav>
 
-                <Label>Pick a persona</Label>
-                {clientPersonas.length ? (
-                  <div className="flex flex-wrap gap-3" role="radiogroup" aria-label="Persona">
-                    {clientPersonas.map((card) => {
-                      const on = card.slug === persona;
-                      return (
-                        <div key={card.slug} className="flex w-24 flex-col items-center gap-0.5 text-center">
-                          <button type="button" role="radio" aria-checked={on} aria-label={`Pick ${card.name}`}
-                            onClick={() => touch(setPersona)(card.slug)}
-                            className={cn("relative block size-24 overflow-hidden rounded-xl ring-offset-2 ring-offset-card", on && "ring-2 ring-primary")}>
-                            {card.avatar ? (
-                              // eslint-disable-next-line @next/next/no-img-element -- persona photos are static or uploaded URLs
-                              <img src={card.avatar} alt="" className="size-full object-cover" />
-                            ) : (
-                              <span className="grid size-full place-items-center bg-muted text-2xl font-semibold">{card.name.charAt(0)}</span>
-                            )}
-                            {on ? (
-                              <span className="absolute top-1.5 right-1.5 grid size-5 place-items-center rounded-full bg-primary text-primary-foreground">
-                                <Check className="size-3" />
-                              </span>
-                            ) : null}
-                          </button>
-                          <span className="mt-1 flex items-center gap-0.5">
-                            <span className="text-sm font-medium">{card.name.split(" ")[0]}</span>
-                            {/* The persona editor opens in its own tab so the role play being built stays where it is. */}
-                            <a href={`/personas/${encodeURIComponent(card.slug)}`} target="_blank" rel="noreferrer"
-                              aria-label={`Edit ${card.name}`} title="Edit persona"
-                              className="grid size-6 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
-                              <Pencil className="size-3" />
-                            </a>
-                          </span>
-                          <span className="text-xs text-muted-foreground">{card.role}</span>
-                        </div>
-                      );
-                    })}
+                <div className="flex min-w-0 flex-col gap-3">
+                  <div className="flex items-start gap-3">
+                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-muted text-sm font-medium">{stepIndex + 1}</span>
+                    <div className="flex flex-col gap-0.5">
+                      <h3 className="text-lg font-semibold">{STEPS[stepIndex].title}</h3>
+                      <p className="text-sm text-muted-foreground">{STEPS[stepIndex].description}</p>
+                    </div>
                   </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    No personas yet. <Link href="/personas/new" className="underline">Create a persona</Link> first.
-                  </p>
-                )}
 
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-                  <label htmlFor="rp-scenario" className="text-[15px] font-semibold">Scenario</label>
-                  <button type="button" onClick={generateScenario} disabled={busy === "scenario"}
-                    className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground disabled:opacity-60">
-                    {busy === "scenario" ? <Spinner /> : <Sparkles className="size-4" />} Generate from recent activity
-                  </button>
+                  {step === "scenario" ? (
+                    <>
+                      <Label htmlFor="rp-name">Roleplay name</Label>
+                      <Input id="rp-name" className="h-11 rounded-xl" placeholder="Example: The wait-and-see investor" autoComplete="off"
+                        value={name} onChange={(event) => touch(setName)(event.target.value)} />
+
+                      <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+                        <label htmlFor="rp-scenario" className="text-[15px] font-semibold">Scenario</label>
+                        <button type="button" onClick={generateScenario} disabled={busy === "scenario"}
+                          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground disabled:opacity-60">
+                          {busy === "scenario" ? <Spinner /> : <Sparkles className="size-4" />} Generate from recent activity
+                        </button>
+                      </div>
+                      <TextArea id="rp-scenario" rows={4} value={scenario} onChange={touch(setScenario)}
+                        placeholder="Example: You are an off-plan buyer who wants to wait for prices to drop." />
+
+                      <Label htmlFor="rp-hidden">What’s really going on</Label>
+                      <TextArea id="rp-hidden" rows={3} value={hiddenTruth} onChange={touch(setHiddenTruth)}
+                        placeholder="Example: You are not scared of the market. You are scared of making a mistake with your family’s savings." />
+                      <Hint>Hidden from the agent. The persona only reveals it if the agent earns it.</Hint>
+                    </>
+                  ) : null}
+
+                  {step === "client" ? (
+                    <>
+                      <Label>Persona library</Label>
+                      {clientPersonas.length ? (
+                        <div className="flex flex-wrap gap-3" role="radiogroup" aria-label="Persona">
+                          {clientPersonas.map((card) => {
+                            const on = card.slug === persona;
+                            return (
+                              <div key={card.slug} className="flex w-24 flex-col items-center gap-0.5 text-center">
+                                <button type="button" role="radio" aria-checked={on} aria-label={`Pick ${card.name}`}
+                                  onClick={() => touch(setPersona)(card.slug)}
+                                  className={cn("relative block size-24 overflow-hidden rounded-xl ring-offset-2 ring-offset-card", on && "ring-2 ring-primary")}>
+                                  {card.avatar ? (
+                                    // eslint-disable-next-line @next/next/no-img-element -- persona photos are static or uploaded URLs
+                                    <img src={card.avatar} alt="" className="size-full object-cover" />
+                                  ) : (
+                                    <span className="grid size-full place-items-center bg-muted text-2xl font-semibold">{card.name.charAt(0)}</span>
+                                  )}
+                                  {on ? (
+                                    <span className="absolute top-1.5 right-1.5 grid size-5 place-items-center rounded-full bg-primary text-primary-foreground">
+                                      <Check className="size-3" />
+                                    </span>
+                                  ) : null}
+                                </button>
+                                <span className="mt-1 flex items-center gap-0.5">
+                                  <span className="text-sm font-medium">{card.name.split(" ")[0]}</span>
+                                  {/* The persona editor opens in its own tab so the role play being built stays where it is. */}
+                                  <a href={`/personas/${encodeURIComponent(card.slug)}`} target="_blank" rel="noreferrer"
+                                    aria-label={`Edit ${card.name}`} title="Edit persona"
+                                    className="grid size-6 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
+                                    <Pencil className="size-3" />
+                                  </a>
+                                </span>
+                                <span className="text-xs text-muted-foreground">{card.role}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          No personas yet. <Link href="/personas/new" className="underline">Create a persona</Link> first.
+                        </p>
+                      )}
+
+                      <Label htmlFor="rp-opening">Opening line</Label>
+                      <Input id="rp-opening" className="h-11 rounded-xl" autoComplete="off" placeholder={openingFor(characterRole, scenario)}
+                        value={opening} onChange={(event) => touch(setOpening)(event.target.value)} />
+                      <Hint>The first thing the client says. Leave it empty to use a line that fits the persona.</Hint>
+                    </>
+                  ) : null}
+
+                  {step === "learner" ? (
+                    <>
+                      <Label htmlFor="rp-learner">Learner role</Label>
+                      <Input id="rp-learner" className="h-11 rounded-xl" placeholder="Example: Off-plan agent on a first call"
+                        value={learnerRole} onChange={(event) => touch(setLearnerRole)(event.target.value)} />
+
+                      <Label>Learner goals</Label>
+                      <details className="rounded-xl bg-muted/70 px-3 py-2.5 text-sm">
+                        <summary className="cursor-pointer select-none">Tips to create good learner goals</summary>
+                        <ol className="mt-2 list-decimal pl-5 text-sm leading-6 text-muted-foreground">
+                          {GOAL_TIPS.map((tip) => <li key={tip}>{tip}</li>)}
+                        </ol>
+                      </details>
+                      {goals.length ? (
+                        <ol className="flex flex-col">
+                          {goals.map((goal, index) => (
+                            <li key={`${index}:${goal}`} className="flex items-center justify-between gap-3 py-1.5 text-sm">
+                              <span className="min-w-0">{goal}</span>
+                              <Button variant="ghost" size="sm" className="font-semibold"
+                                onClick={() => touch(setGoals)(goals.filter((_, i) => i !== index))}>Remove</Button>
+                            </li>
+                          ))}
+                        </ol>
+                      ) : null}
+                      <Input aria-label="Learner goal" className="h-11 rounded-xl" placeholder="Example: Hold the price objection without offering a discount"
+                        value={goalDraft} disabled={goals.length >= MAX_LEARNER_GOALS} onChange={(event) => setGoalDraft(event.target.value)}
+                        onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addGoal(); } }} />
+                      <Button variant="outline" className="h-10 w-fit rounded-full" onClick={addGoal} disabled={goals.length >= MAX_LEARNER_GOALS}>
+                        <Plus data-icon="inline-start" /> Add goal
+                      </Button>
+                      <Hint>Agents are scored on these. Five at most.</Hint>
+                    </>
+                  ) : null}
+
+                  {step === "rubric" ? (
+                    <>
+                      <Label>Scoring rubric</Label>
+                      <ol className="flex flex-col">
+                        {rubric.map((row, index) => (
+                          <li key={`${index}:${row.name}`} className="flex items-center gap-3 py-1.5 text-sm">
+                            <span className="min-w-0 flex-1">{row.name}</span>
+                            <span className="flex items-center gap-2 text-muted-foreground">
+                              <Input type="number" min={1} max={100} inputMode="numeric" aria-label={`Points for ${row.name}`}
+                                className="h-9 w-16 rounded-lg text-center tabular-nums" value={Number.isFinite(row.points) ? row.points : ""}
+                                onChange={(event) => touch(setRubric)(rubric.map((item, i) => (i === index ? { ...item, points: Math.round(Number(event.target.value)) } : item)))}
+                                onBlur={() => touch(setRubric)(rubric.map((item, i) => (i === index ? { ...item, points: Math.min(100, Math.max(1, Math.round(item.points) || 1)) } : item)))} />
+                              pts
+                            </span>
+                            <Button variant="ghost" size="sm" className="font-semibold"
+                              onClick={() => touch(setRubric)(rubric.filter((_, i) => i !== index))}>Remove</Button>
+                          </li>
+                        ))}
+                      </ol>
+                      <div className="flex flex-wrap gap-2">
+                        <Input aria-label="Score name" className="h-11 min-w-0 flex-1 rounded-xl" placeholder="Example: Handles the price objection"
+                          autoComplete="off" value={rubricName} disabled={rubric.length >= MAX_RUBRIC_CRITERIA}
+                          onChange={(event) => setRubricName(event.target.value)}
+                          onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addScore(); } }} />
+                        <Input aria-label="Points" type="number" min={1} max={100} inputMode="numeric" className="h-11 w-24 rounded-xl" placeholder="Points"
+                          value={rubricPoints} disabled={rubric.length >= MAX_RUBRIC_CRITERIA} onChange={(event) => setRubricPoints(event.target.value)} />
+                        <Button variant="outline" className="h-11 rounded-full" onClick={addScore} disabled={rubric.length >= MAX_RUBRIC_CRITERIA}>
+                          <Plus data-icon="inline-start" /> Add score
+                        </Button>
+                      </div>
+                      <Hint>Agents are scored out of <span className="tabular-nums">{rubricTotal}</span> points across these. Eight at most.</Hint>
+                    </>
+                  ) : null}
+
+                  {step === "success" ? (
+                    <>
+                      <label htmlFor="rp-success" className="sr-only">What success means</label>
+                      <TextArea id="rp-success" rows={2} value={success} onChange={touch(setSuccess)}
+                        placeholder="Example: A dated Zoom with the client and their partner. Never a purchase on the call." />
+                      <Label>How the call can end</Label>
+                      <label htmlFor="rp-agrees" className="text-sm text-muted-foreground">Agrees when</label>
+                      <TextArea id="rp-agrees" rows={2} value={agreesWhen} onChange={touch(setAgreesWhen)} />
+                      <label htmlFor="rp-declines" className="text-sm text-muted-foreground">Declines when</label>
+                      <TextArea id="rp-declines" rows={2} value={declinesWhen} onChange={touch(setDeclinesWhen)} />
+                    </>
+                  ) : null}
+
+                  <div className="mt-6 flex items-center justify-between border-t pt-4">
+                    {stepIndex > 0 ? (
+                      <Button variant="ghost" onClick={() => setStep(STEPS[stepIndex - 1].id)}>Back</Button>
+                    ) : <span />}
+                    {stepIndex < STEPS.length - 1 ? (
+                      <Button variant="outline" className="h-10 rounded-full px-4" onClick={() => setStep(STEPS[stepIndex + 1].id)}>
+                        Next: {STEPS[stepIndex + 1].label}
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
-                <TextArea id="rp-scenario" rows={4} value={scenario} onChange={touch(setScenario)}
-                  placeholder="Example: You are an off-plan buyer who wants to wait for prices to drop." />
-
-                <Label htmlFor="rp-hidden">What’s really going on</Label>
-                <TextArea id="rp-hidden" rows={3} value={hiddenTruth} onChange={touch(setHiddenTruth)}
-                  placeholder="Example: You are not scared of the market. You are scared of making a mistake with your family’s savings." />
-                <Hint>Hidden from the agent. The persona only reveals it if the agent earns it.</Hint>
-
-                <Label htmlFor="rp-learner">Learner role</Label>
-                <Input id="rp-learner" className="h-11 rounded-xl" placeholder="Example: Off-plan agent on a first call"
-                  value={learnerRole} onChange={(event) => touch(setLearnerRole)(event.target.value)} />
-
-                <Label>Learner goals</Label>
-                <details className="rounded-xl bg-muted/70 px-3 py-2.5 text-sm">
-                  <summary className="cursor-pointer select-none">Tips to create good learner goals</summary>
-                  <ol className="mt-2 list-decimal pl-5 text-sm leading-6 text-muted-foreground">
-                    {GOAL_TIPS.map((tip) => <li key={tip}>{tip}</li>)}
-                  </ol>
-                </details>
-                {goals.length ? (
-                  <ol className="flex flex-col">
-                    {goals.map((goal, index) => (
-                      <li key={`${index}:${goal}`} className="flex items-center justify-between gap-3 py-1.5 text-sm">
-                        <span className="min-w-0">{goal}</span>
-                        <Button variant="ghost" size="sm" className="font-semibold"
-                          onClick={() => touch(setGoals)(goals.filter((_, i) => i !== index))}>Remove</Button>
-                      </li>
-                    ))}
-                  </ol>
-                ) : null}
-                <Input aria-label="Learner goal" className="h-11 rounded-xl" placeholder="Example: Hold the price objection without offering a discount"
-                  value={goalDraft} disabled={goals.length >= MAX_LEARNER_GOALS} onChange={(event) => setGoalDraft(event.target.value)}
-                  onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addGoal(); } }} />
-                <Button variant="outline" className="h-10 w-fit rounded-full" onClick={addGoal} disabled={goals.length >= MAX_LEARNER_GOALS}>
-                  <Plus data-icon="inline-start" /> Add goal
-                </Button>
-                <Hint>Agents are scored on these. Five at most.</Hint>
-
-                <Label>How the call can end</Label>
-                <label htmlFor="rp-agrees" className="text-sm text-muted-foreground">Agrees when</label>
-                <TextArea id="rp-agrees" rows={2} value={agreesWhen} onChange={touch(setAgreesWhen)} />
-                <label htmlFor="rp-declines" className="text-sm text-muted-foreground">Declines when</label>
-                <TextArea id="rp-declines" rows={2} value={declinesWhen} onChange={touch(setDeclinesWhen)} />
-                <Hint>The best outcome is a booked meeting or a dated follow-up, never a purchase.</Hint>
-
-                <Label>Scoring rubric</Label>
-                <ol className="flex flex-col">
-                  {rubric.map((row, index) => (
-                    <li key={`${index}:${row.name}`} className="flex items-center gap-3 py-1.5 text-sm">
-                      <span className="min-w-0 flex-1">{row.name}</span>
-                      <span className="flex items-center gap-2 text-muted-foreground">
-                        <Input type="number" min={1} max={100} inputMode="numeric" aria-label={`Points for ${row.name}`}
-                          className="h-9 w-16 rounded-lg text-center tabular-nums" value={Number.isFinite(row.points) ? row.points : ""}
-                          onChange={(event) => touch(setRubric)(rubric.map((item, i) => (i === index ? { ...item, points: Math.round(Number(event.target.value)) } : item)))}
-                          onBlur={() => touch(setRubric)(rubric.map((item, i) => (i === index ? { ...item, points: Math.min(100, Math.max(1, Math.round(item.points) || 1)) } : item)))} />
-                        pts
-                      </span>
-                      <Button variant="ghost" size="sm" className="font-semibold"
-                        onClick={() => touch(setRubric)(rubric.filter((_, i) => i !== index))}>Remove</Button>
-                    </li>
-                  ))}
-                </ol>
-                <div className="flex flex-wrap gap-2">
-                  <Input aria-label="Score name" className="h-11 min-w-0 flex-1 rounded-xl" placeholder="Example: Handles the price objection"
-                    autoComplete="off" value={rubricName} disabled={rubric.length >= MAX_RUBRIC_CRITERIA}
-                    onChange={(event) => setRubricName(event.target.value)}
-                    onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addScore(); } }} />
-                  <Input aria-label="Points" type="number" min={1} max={100} inputMode="numeric" className="h-11 w-24 rounded-xl" placeholder="Points"
-                    value={rubricPoints} disabled={rubric.length >= MAX_RUBRIC_CRITERIA} onChange={(event) => setRubricPoints(event.target.value)} />
-                  <Button variant="outline" className="h-11 rounded-full" onClick={addScore} disabled={rubric.length >= MAX_RUBRIC_CRITERIA}>
-                    <Plus data-icon="inline-start" /> Add score
-                  </Button>
-                </div>
-                <Hint>Agents are scored out of <span className="tabular-nums">{rubricTotal}</span> points across these. Eight at most.</Hint>
               </div>
             ) : null}
           </section>
@@ -413,7 +503,7 @@ export function RoleplayBuilder({ slug, initial, clientPersonas, publishedVersio
       </div>
 
       <footer className="shrink-0 border-t bg-background">
-        <div className="mx-auto flex max-w-[720px] items-center justify-between gap-3 px-4 py-3">
+        <div className="mx-auto flex max-w-[960px] items-center justify-between gap-3 px-4 py-3">
           <Button variant="ghost" nativeButton={false} render={<Link href="/agents" />}>Cancel</Button>
           <div className="flex items-center gap-2">
             <Button variant="outline" className="h-10 rounded-full px-4" onClick={() => save("try")} disabled={busy !== null}>

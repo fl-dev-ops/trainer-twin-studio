@@ -313,6 +313,7 @@ export async function sendRolePlayAssignmentEmail({
   practiceUrl,
   trainerName = "Vasanth",
   requiredArtifact,
+  kindLabel = "interview role play",
 }: {
   to: string;
   userName?: string;
@@ -321,6 +322,8 @@ export async function sendRolePlayAssignmentEmail({
   practiceUrl: string;
   trainerName?: string;
   requiredArtifact?: { label: string; prompt: string } | null;
+  /** What the assignment is called in the email body, e.g. "role play" for sales orgs. */
+  kindLabel?: string;
 }) {
   const subject = `New Role Play Assigned: ${rolePlayName}`;
   const html = renderEmailLayout({
@@ -330,7 +333,7 @@ export async function sendRolePlayAssignmentEmail({
       <h1>New Role Play Assigned</h1>
       <p>
         Hi ${userName || "there"},<br>
-        Your trainer <strong>${trainerName}</strong> has assigned you to practice the <strong>${rolePlayName}</strong> interview role play.
+        Your trainer <strong>${trainerName}</strong> has assigned you to practice the <strong>${rolePlayName}</strong> ${kindLabel}.
       </p>
       ${
         rolePlayObjective
