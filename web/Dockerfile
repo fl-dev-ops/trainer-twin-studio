@@ -28,7 +28,9 @@ ENV NEXT_PUBLIC_BASE_DOMAIN=$NEXT_PUBLIC_BASE_DOMAIN \
 RUN SKIP_ENV_VALIDATION=1 bun run build
 
 FROM node:24-bookworm-slim
-RUN npm i -g bun@1 && useradd -u 10001 -m app
+# openssl: Prisma probes libssl at startup (warns and guesses without it).
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/* \
+ && npm i -g bun@1 && useradd -u 10001 -m app
 WORKDIR /app
 COPY --from=build --chown=app:app /app /app
 WORKDIR /app/web
