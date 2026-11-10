@@ -136,6 +136,44 @@ describe.skipIf(!localMinutesDb)("org credits from Meteroid", () => {
     expect(await refreshOrgCredits("unknown", at)).toEqual({ counted: true });
   });
 
+  test.each([
+    ["new grant catches up on first re-read", "2020-01-03T00:00:00Z", 2, 2],
+    ["new grant needs two re-reads", "2020-01-03T00:00:00Z", 3, 3],
+    ["grant predates as_of", "2020-01-01T00:00:00Z", null, 1],
+    ["grant equals as_of", "2020-01-02T00:00:00Z", null, 1],
+    ["grant has no creation time", null, null, 1],
+    ["new grant never catches up", "2020-01-03T00:00:00Z", null, 6],
+  ] as const)("refresh funded wallet: %s", async (_label, createdAt, catchUpOn, expectedReads) => {
+    await fundOrg({ orgId: f.org.id, minutes: 10 });
+    grants.set(customer(), [{ id: "funded", amount: 20, credit_unit: "MINS", status: "ACTIVE", created_at: createdAt }]);
+    let reads = 0;
+    outside.use(http.get("https://meteroid.test/api/v1/customers/:id/wallets/check", () => {
+      reads++;
+      return HttpResponse.json({ balance: 10 + reads, as_of: catchUpOn && reads >= catchUpOn ? "2020-01-04T00:00:00Z" : "2020-01-02T00:00:00Z" });
+    }));
+    // Only skip the recount sleep; leave database and MSW timers alone.
+    const timeout = globalThis.setTimeout;
+    const waits: number[] = [];
+    const timer = spyOn(globalThis, "setTimeout").mockImplementation((...args: Parameters<typeof setTimeout>) => {
+      if (args[1] === 2000) { waits.push(args[1]); args[1] = 0; }
+      return timeout(...args);
+    });
+    try {
+      await refreshOrgCredits(f.org.id);
+      expect(reads).toBe(expectedReads);
+      expect(waits).toEqual(Array(expectedReads - 1).fill(2000));
+      expect(usageEvents).toEqual([]);
+      expect(await db.orgBilling.findUniqueOrThrow({ where: { orgId: f.org.id } })).toMatchObject({
+        balanceMinutes: 10 + expectedReads,
+        balanceAsOf: new Date(catchUpOn ? "2020-01-04" : "2020-01-02"),
+        grants: [{ id: "funded", minutes: 20, status: "ACTIVE", createdAt, reason: null, expiresAt: null }],
+        syncedAt: expect.any(Date),
+      });
+    } finally {
+      timer.mockRestore();
+    }
+  });
+
   test.each([["completed", true], ["exhausted", false]] as const)("refresh expiry recount %s: zero-minute events, bounded re-reads and safe cached balance", async (_label, recounts) => {
     await fundOrg({ orgId: f.org.id, minutes: 20 });
     const expired = [
@@ -201,6 +239,57 @@ describe.skipIf(!localMinutesDb)("org credits from Meteroid", () => {
     grants.set(customer(), [{ id: "expired", amount: 10, credit_unit: "MINS", status: "EXPIRED", reason: "Trial", expires_at: "2026-01-02T00:00:00Z" }]);
     expect(await api().org()).toMatchObject({ balanceMinutes: 9, grants: [{ note: "Trial · expired 2 Jan 2026" }] });
     expect(reports).toEqual([f.org.id]);
+  });
+
+  async function version() {
+    const requests: string[] = [];
+    outside.use(http.all("https://meteroid.test/*", ({ request }) => {
+      requests.push(`${request.method} ${request.url}`);
+      return new HttpResponse(null, { status: 500 });
+    }));
+    try {
+      const value = await api().version();
+      expect(typeof value).toBe("string");
+      expect(requests).toEqual([]);
+      return value;
+    } finally {
+      outside.resetHandlers();
+    }
+  }
+
+  test("minutes.version is stable without billing or ledger, and changes with cached balance and grant status without Meteroid", async () => {
+    const empty = await version();
+    expect(await version()).toBe(empty);
+    await fundOrg({ orgId: f.org.id, minutes: 10 });
+    const funded = await version();
+    expect(funded).not.toBe(empty);
+    expect(await version()).toBe(funded);
+    await db.orgBilling.update({ where: { orgId: f.org.id }, data: { balanceMinutes: 20 } });
+    const changedBalance = await version();
+    expect(changedBalance).not.toBe(funded);
+    const billing = await db.orgBilling.findUniqueOrThrow({ where: { orgId: f.org.id } });
+    await db.orgBilling.update({ where: { orgId: f.org.id }, data: { grants: (billing.grants as { id: string; status: string }[]).map((grant) => ({ ...grant, status: "EXPIRED" })) } });
+    const changedStatus = await version();
+    expect(changedStatus).not.toBe(changedBalance);
+    await db.orgBilling.update({ where: { orgId: f.org.id }, data: { syncedAt: new Date(0) } });
+    expect(await version()).toBe(changedStatus);
+  });
+
+  test("minutes.version changes after giving learner credits and staff usage, and tracks the newest ledger row", async () => {
+    await fundOrg({ orgId: f.org.id, minutes: 10 });
+    const initial = await version();
+    await grantMinutes({ orgId: f.org.id, email: f.learner.email, minutes: 2 });
+    const given = await version();
+    expect(given).not.toBe(initial);
+    expect(await version()).toBe(given);
+    await db.minuteLedger.updateMany({ where: { orgId: f.org.id }, data: { createdAt: new Date("2020-01-01") } });
+    const session = await f.session({ chargesOrg: true, userId: f.trainer.id });
+    await recordSessionUsage(session.id);
+    expect(await db.minuteLedger.findUniqueOrThrow({ where: { sessionId: session.id } })).toMatchObject({ type: "org_usage" });
+    const used = await version();
+    expect(used).not.toBe(given);
+    await db.minuteLedger.create({ data: { orgId: f.org.id, email: f.learner.email, type: "grant", seconds: 60, createdAt: new Date("2019-01-01") } });
+    expect(await version()).toBe(used);
   });
 
   async function webhook(event: unknown, delta = 0, bad = false) {

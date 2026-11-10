@@ -69,10 +69,16 @@ Each answer should land back in the module's spec (and become a test or a fix). 
 4. Should the operator assignment script grant starting credits and preserve used links? It currently sends no balance, grants nothing and resets a `used` row, unlike the shared helper. (`web/scripts/assign-session-invite.ts` versus `web/lib/invite/roleplay.ts`.)
 5. Should studio-recipient rejection apply to every assignment entry point? Settings org invites and copilot reject/filter staff, but direct twin/role-play assign routes call helpers without that guard. (`web/lib/invite/org.ts`, `web/lib/copilot-studio.ts` versus `web/lib/invite/twin.ts`, `web/lib/invite/roleplay.ts`.)
 6. Should accepting through Better Auth and joining through a session have the same member-count limit? Better Auth defaults to 100; `ensureLearnerMember` inserts directly. (`web/node_modules/better-auth/dist/plugins/organization/routes/crud-invites.mjs` `acceptInvitation` versus `web/lib/interview-sessions.ts`.)
+7. Should copilot surface queued versus delivered email status? Shared invite results now return `emailFailures: 0` while emails are still queued (`emailsQueued`/`emailProgress`); this is not confirmed delivery, and copilot does not follow the progress toast stream. (`web/lib/copilot-studio.ts`; `web/lib/schedule-assignment-emails.ts`.)
+8. Should public REST assignment emails adopt the workflow? `/api/v1/assignments*` still send inline and return `emailSent`, without queued progress or workflow retries. (`web/app/api/v1/assignments/route.ts`, `web/app/api/v1/assignments/[id]/route.ts`; `web/lib/external-api-assignments.ts`.)
 
 ## [Credits](credits.md)
 
 Resolved Meteroid expiry question: live dev-tenant verification of Meteroid 2.2.1 found stale `wallets/check` credits until usage recount and no `credit_grant.expired` webhook. The app now subtracts full lapsed grants conservatively, schedules sync, and sends zero-minute `expired-<grantId>` events with up to five two-second balance rechecks. If still stale, the stored balance remains conservative at read time; see [Credits — Send and refresh](credits.md#send-and-refresh) (`web/lib/org-credits.ts`).
+
+Resolved funded-wallet race: live verification found `wallet.funded` arrives about two seconds before `wallets/check` counts the new grant. Refresh now waits while a grant's creation is later than balance `as_of`, sharing the bounded five two-second rechecks with expiry recounts. It stores the last read if still behind, so a later sync may be needed; see [Credits — Send and refresh](credits.md#send-and-refresh).
+
+Live studio refresh is now database-only `minutes.version` polling every five seconds: a changed fingerprint invalidates org, Credits page, learner and Users credit queries; the first value does not. No page reload or Meteroid request is needed for the version check. This follows the cache sync, not the webhook itself, and is not a background-tab latency guarantee (`web/lib/minutes-trpc.ts`; `web/components/credits/sidebar-credits.tsx`; [Credits — Live studio refresh](credits.md#live-studio-refresh)).
 
 ### Mismatches
 

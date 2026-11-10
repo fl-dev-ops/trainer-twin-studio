@@ -16,18 +16,20 @@ describe.skipIf(!localMinutesDb)("minutes tRPC (local database)", () => {
       const api = minutesRouter.createCaller(ctx);
       const code = !ctx.user && !ctx.signedIn ? "UNAUTHORIZED" : "FORBIDDEN";
       await expect(api.org()).rejects.toMatchObject({ code });
+      await expect(api.version()).rejects.toMatchObject({ code });
       await expect(api.learner({ email: f.learner.email })).rejects.toMatchObject({ code });
       await expect(api.add({ email: f.learner.email, minutes: 1 })).rejects.toMatchObject({ code });
     }
   });
 
   test("has no take-back procedure", () => {
-    expect(Object.keys(minutesRouter._def.procedures).sort()).toEqual(["add", "addMany", "invite", "learner", "org"]);
+    expect(Object.keys(minutesRouter._def.procedures).sort()).toEqual(["add", "addMany", "invite", "learner", "org", "version"]);
     expect(minutesRouter._def.procedures).not.toHaveProperty("takeBack");
   });
 
   test.each(["admin", "team"])("%s queries exact credit shapes and adds normalized learner credits without changing earlier rows", async (role) => {
     const api = caller(role);
+    expect(typeof await api.version()).toBe("string");
     expect(await api.org()).toEqual({ balanceMinutes: 0, addedMinutes: 0, defaultMinutes: 30, maxMinutes: 360, billed: false, grants: [], learners: [] });
     expect(await api.learner({ email: f.learner.email })).toEqual({ givenMinutes: 0, usedMinutes: 0, balanceMinutes: 0, orgBalanceMinutes: 0, maxMinutes: 360, added: [] });
 

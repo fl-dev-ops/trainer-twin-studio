@@ -55,9 +55,17 @@ Finalization floors elapsed seconds, clamps to zero/allowance and records one ro
 
 `reportOrgUsage` sends once, then polls refresh up to 20 times with 3-second sleeps until Meteroid's `as_of` is strictly later than sentAt. `syncOrgCredits` only refreshes.
 
-`refreshOrgCredits` reads MINS grants and balance. For grants expired after that balance's `as_of`, it sends one zero-minute `voice_minutes` event per grant: ID `expired-<grantId>`, `properties.minutes = "0"`, kind `recount_after_expiry`, and `grant = <grantId>`. Meteroid deduplicates these IDs. Refresh then re-reads balance up to five times, waiting two seconds before each check, stopping when no grant is lapsed relative to the returned `as_of`. It stores the last balance/as_of, grants (including expired history) and sync time even if recount has not completed; `orgCredits` still applies the conservative subtraction then. After recount, subsequent refreshes send no expiry events. `counted` still only compares `as_of > sentAt` (or is true without `sentAt`); it is not an expiry-recount success flag.
+`refreshOrgCredits` reads MINS grants and balance. For grants expired after that balance's `as_of`, it sends one zero-minute `voice_minutes` event per grant: ID `expired-<grantId>`, `properties.minutes = "0"`, kind `recount_after_expiry`, and `grant = <grantId>`. Meteroid deduplicates these IDs. Meteroid also sends `wallet.funded` before `wallets/check` includes the new grant (about two seconds later, verified live). Refresh re-reads balance while any grant is lapsed relative to `as_of` **or** has `createdAt > as_of`: up to five re-reads, waiting two seconds before each (at most ten seconds of sleeps). It stops when both conditions clear; grants created at/before `as_of` or without a creation time alone cause no wait. It stores the last balance/as_of, grants (including expired history) and sync time even if still behind; `orgCredits` still applies the conservative expiry subtraction then. A newly funded grant may remain invisible in the balance until a later sync if all five re-reads stay behind. After recount, subsequent refreshes send no expiry events. `counted` still only compares `as_of > sentAt` (or is true without `sentAt`); it is not an expiry-recount success flag.
 
 Schedulers log errors and never throw; unsent rows remain recoverable on later spending or a stale Credits page (`web/workflows/org-credits.ts`, `org-credits-steps.ts`; `web/lib/schedule-org-credits.ts`).
+
+Assignment emails are a separate workflow, queued only after starting grants and assignment writes. Queued `emailFailures: 0` is not delivery confirmation; the studio follows an org-signed NDJSON progress token. Startup failure falls back to inline sending, and send failures never refund grants or remove assignments. Public REST assignment sends remain inline. See [Invites and emails — Assignment email workflow and progress](invites-and-emails.md#10-assignment-email-workflow-and-progress) (`web/lib/invite/twin.ts`, `roleplay.ts`; `web/lib/schedule-assignment-emails.ts`).
+
+### Live studio refresh
+
+The studio sidebar polls studio-only `minutes.version` every five seconds. This opaque string fingerprint reads only `OrgBilling.balanceMinutes`, grant IDs/statuses and the newest org `MinuteLedger` row ID: no Meteroid call. Repeated reads without those changes are stable; giving learner credits, recording staff `org_usage`, or changing the cached balance/grant status changes it (`web/lib/minutes-trpc.ts`).
+
+The first value establishes a baseline without invalidation. Each changed value invalidates `minutes.org`, `page.credits`, `minutes.learner` and `page.users`, so mounted credit displays (including the sidebar and Remaining credits card) update without a reload, normally within one five-second polling interval after the database sync. Polling does not itself sync Meteroid, and background-tab timer throttling/network delays can extend that time (`web/components/credits/sidebar-credits.tsx` `useLiveCredits`).
 
 ## Rules
 
@@ -69,7 +77,7 @@ Schedulers log errors and never throw; unsent rows remain recoverable on later s
 
 ## Entry points
 
-- `/credits`, learner dialogs and users/assignment grant forms: `web/components/credits/*`; `web/lib/minutes-trpc.ts` (`org`, `learner`, `add`, `addMany`, `invite`).
+- `/credits`, learner dialogs and users/assignment grant forms: `web/components/credits/*`; `web/lib/minutes-trpc.ts` (`org`, `version`, `learner`, `add`, `addMany`, `invite`).
 - Invites and assignment/link joins use starting grants: `web/lib/invite/*`; `web/lib/twin-access.ts`; `web/app/api/v1/users/route.ts`, `assignments/route.ts`.
 - `bun scripts/meteroid-setup.ts` configures MINS, the SUM `voice_minutes` metric and Credits plan. `bun scripts/meteroid-link-org.ts --org <slug>` links the customer/subscription; optional `--minutes`, `--expires`, `--reason`, `--grant-key` grant promotional credits. Remote writes require `--production` and non-sandbox keys; local requires `pv_dev_…` (`web/scripts/meteroid-setup.ts`, `meteroid-link-org.ts`).
 - POST `/api/meteroid/webhook`: Standard Webhooks signature, ±300 seconds, HMAC-SHA256 over `id.timestamp.body`, base64 key after `whsec_`. Valid wallet funded/debited/depleted/recovered and credit_grant.expired events schedule sync; customer may be top-level or under data. Unknown types/customers return ignored 200; bad signatures return 401 (`web/app/api/meteroid/webhook/route.ts`; `web/lib/meteroid.ts` `verifyWebhook`).
@@ -96,7 +104,7 @@ Legacy ledger rows and some comments still mention top-ups/take-backs. They do n
 
 ## Tests today
 
-- DB: `web/tests/lib/org-credits.db.test.ts`, `minutes-ledger.db.test.ts`, `minutes-sessions.db.test.ts`, `minutes-trpc.db.test.ts`, `minutes-stage-two*.db.test.ts` cover arithmetic, fallback, lapsed-grant subtraction/sync, zero-minute expiry events, bounded recount polling (fake delays), post-recount repeat calls, expired history, webhook, permissions, session charging and parallel grant/cap/starting-minute safety.
+- DB: `web/tests/lib/org-credits.db.test.ts`, `minutes-ledger.db.test.ts`, `minutes-sessions.db.test.ts`, `minutes-trpc.db.test.ts`, `minutes-stage-two*.db.test.ts` cover arithmetic, fallback, lapsed-grant subtraction/sync, zero-minute expiry events, bounded expiry/funding polling (fake delays, caught-up and exhausted reads), post-recount repeat calls, expired history, webhook, database-only version changes/stability, studio permissions, session charging and parallel grant/cap/starting-minute safety.
 - Unit: `web/tests/lib/meteroid.test.ts`, `org-credits-workflow.test.ts` cover signatures and polling.
 - Flows: `web/tests/flows/trainer-credits.flow.test.ts`, `credits-purchase-practice.flow.test.ts`, `credit-purchases.flow.test.ts` use MSW Meteroid alongside other outside services (`harness.ts`; `web/tests/setup/meteroid.ts`).
-- Browser: `web/e2e/credits.spec.ts`, `payments.spec.ts` use a seeded cache and local Meteroid fake (`web/e2e/meteroid.ts`), never real billing. Deleted-script tests were removed.
+- Browser: `web/e2e/credits.spec.ts`, `payments.spec.ts` use a seeded cache and local Meteroid fake (`web/e2e/meteroid.ts`), never real billing. The Credits spec also writes the balance cache directly to simulate an external sync and checks both sidebar and Remaining credits update without navigation/reload (20-second browser budget after route warm-up), restoring the cache afterward. Component tests are server-render-only, so polling effects are covered in the browser. Deleted-script tests were removed.
