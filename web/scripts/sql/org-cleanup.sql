@@ -1,6 +1,6 @@
 -- One org's clean-up (psql -v org=<slug> -v keep_emails="'a@x','b@y'" -v keep_sessions="'id1','id2'"):
 -- keeps the listed members (their member rows with the highest role) and sessions; removes every other member,
--- session, and their minutes, assignments and pending invitations. Order matters: sessions before the twin
+-- session, and their minutes, assignments and pending invitations. Safe to run again (the second run removes nothing). Order matters: sessions before the twin
 -- assignments they belong to (DB rule), assignments before members.
 create temp table org on commit drop as select id from organization where slug = :'org';
 create temp table keep_emails on commit drop as select lower(e) as email from unnest(array[:keep_emails]::text[]) e;
@@ -19,5 +19,8 @@ delete from "UsageEvent" where "sessionId" in (select id from gone_sessions);
 delete from "InterviewSession" where id in (select id from gone_sessions);
 delete from "TwinAssignment" where "orgId" = (select id from org) and lower("recipientEmail") in (select email from gone_emails);
 delete from "RolePlayAssignment" where "orgId" = (select id from org) and lower("recipientEmail") in (select email from gone_emails);
-delete from invitation where "organizationId" = (select id from org) and lower(email) not in (select email from keep_emails);
+-- pending invitations: anyone not kept, and anyone already a member (e.g. a stale learner invite for a team member)
+delete from invitation where "organizationId" = (select id from org)
+  and (lower(email) not in (select email from keep_emails)
+    or lower(email) in (select lower(u.email) from member m join "user" u on u.id = m."userId" where m."organizationId" = (select id from org)));
 delete from member where id in (select id from gone_members);

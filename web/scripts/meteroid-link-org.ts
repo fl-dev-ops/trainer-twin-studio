@@ -1,7 +1,7 @@
 /**
  * Bills an existing org through Meteroid (new orgs are set up by onboarding, workflows/onboard-org.ts): links it to its
- * Meteroid customer and Credits subscription (lib/org-billing-setup.ts), and optionally adds minutes. From then on the org's credits are Meteroid's (lib/org-credits.ts). Safe to run again:
- * the grant is made once per --grant-key.
+ * Meteroid customer and Credits subscription (lib/org-billing-setup.ts), and optionally adds minutes. From then on the
+ * org's credits are Meteroid's (lib/org-credits.ts). Safe to run again: each grant is made once per key and customer.
  *
  *   bun scripts/meteroid-link-org.ts --org olga
  *   bun scripts/meteroid-link-org.ts --org olga --trial 2026-11-11        the free trial (TRIAL_MINUTES for TRIAL_DAYS from that day)
@@ -40,7 +40,8 @@ if (trial) await grantTrialMinutes(org, customerId, new Date(`${trial}T00:00:00Z
 if (minutes > 0) {
   await grantMinutes({
     customerId, minutes, type: "PROMOTIONAL", reason: reason!,
-    expiresAt: new Date(`${expires}T23:59:59Z`), idempotencyKey: arg("grant-key") ?? `link-${slug}-${minutes}-${expires}`,
+    // Meteroid keys are unique per tenant: with the customer in it, a recreated customer can still get its grant.
+    expiresAt: new Date(`${expires}T23:59:59Z`), idempotencyKey: `${arg("grant-key") ?? `link-${slug}-${minutes}-${expires}`}-${customerId}`,
   });
 }
 await new Promise((resolve) => setTimeout(resolve, 3000)); // Meteroid counts a new grant within a few seconds
