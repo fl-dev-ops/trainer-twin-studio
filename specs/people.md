@@ -40,7 +40,8 @@
    and workflow in `web/` that lists or looks up an org's people uses it; a test fails on any other direct read of
    `member` lists.
 6. **One way in.** Every entry point that adds people (Settings, assign twin, assign role play, REST API, copilot,
-   shared twin link) calls `addPeopleToOrg`. Session start never creates a member; it refuses someone who isn't one.
+   shared twin link, when its page is opened) calls `addPeopleToOrg`. Session start never creates a member; it refuses
+   someone who isn't one.
 7. **Roles.** One admin per org: adding a second admin is refused. Adding someone already in the org keeps their role
    (no role change through "add"). A learner assign (twin / role play) refuses admin and team people, who practise
    from the org's credits instead (see [Credits](credits.md)).
@@ -66,7 +67,9 @@
     A brand-new learner given a twin gets one email covering "added", the twin and their credits. Joining through a
     shared twin link sends none. Each email is sent at most once per event (Resend idempotency key).
 12. **Emails go out through workflows** (`web/workflows/`), each email retried on its own. A failed email never undoes
-    the action.
+    the action. Two exceptions, both keeping the email's idempotency key: the REST API sends at once so its response
+    can say `emailSent` (a failure is then retried by the workflow), and when a workflow can't start the emails are
+    sent directly.
 
 ## Checks (must always hold; `web/scripts/check-org-people.ts`)
 
