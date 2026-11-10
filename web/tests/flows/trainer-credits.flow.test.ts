@@ -1,10 +1,11 @@
+import { fundOrg } from "../setup/meteroid";
 import "./flow-env";
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { hashPassword } from "better-auth/crypto";
 import * as nextHeaders from "next/headers";
 import { auth } from "@/lib/auth";
 import { inviteToRoleplay } from "@/lib/invite/roleplay";
-import { creditsLeftFor, topUpOrg } from "@/lib/minutes";
+import { creditsLeftFor } from "@/lib/minutes";
 import { minutesRouter } from "@/lib/minutes-trpc";
 import { activateInterviewRuntime } from "@/lib/session-activation";
 import { twinRouter } from "@/lib/twin/trpc";
@@ -44,7 +45,7 @@ describe.skipIf(!localMinutesDb)("flow: trainer gives learners credits → learn
 
   test("1. minutes.org starts empty; TrainerTwin funds 600 credits", async () => {
     expect(await api.org()).toMatchObject({ balanceMinutes: 0, addedMinutes: 0, learners: [] });
-    await topUpOrg({ orgId: f.org.id, minutes: 600, note: "Trainer credit story" });
+    await fundOrg({ orgId: f.org.id, minutes: 600, note: "Trainer credit story" });
     expect(await api.org()).toMatchObject({ balanceMinutes: 600, addedMinutes: 600 });
   });
 

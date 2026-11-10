@@ -72,33 +72,32 @@ Each answer should land back in the module's spec (and become a test or a fix). 
 
 ## [Credits](credits.md)
 
+Resolved Meteroid expiry question: live dev-tenant verification of Meteroid 2.2.1 found stale `wallets/check` credits until usage recount and no `credit_grant.expired` webhook. The app now subtracts full lapsed grants conservatively, schedules sync, and sends zero-minute `expired-<grantId>` events with up to five two-second balance rechecks. If still stale, the stored balance remains conservative at read time; see [Credits — Send and refresh](credits.md#send-and-refresh) (`web/lib/org-credits.ts`).
+
 ### Mismatches
 
 - `PRODUCT.md` does not define credit economics, starting amounts or caps. There is no direct product-rule conflict to resolve there.
 - `plans/twin-roleplay-db-split.md` §12 describes a separate budget per twin assignment and one role-play attempt with no time limit. Current code uses one org learner balance for both modules and allows repeated role-play practice while credit remains (`web/lib/minutes.ts` `learnerMinutes`; `web/lib/interview-sessions.ts` `activateSession`; `web/lib/pages/learner.ts` `loadSharedSession`; see [Role plays](roleplays.md)).
 - `plans/twin-share-link.md` describes granting the link's `minutesPerUser`. `twinAccessByCode` now gives the shared default only to a person without any grant in the org; legacy assignment/link minute fields are not the billing source (`web/lib/twin-access.ts`; `web/lib/minutes.ts`).
 - `plans/twin-wiring-and-reliability.md` §2 says assignment minutes allow 1–10,000. Current chosen starting-credit paths enforce 1–360 (`web/lib/twin/trpc.ts` assignments `assign`; `web/app/api/role-play/[slug]/assignments/route.ts`; `giveStartingMinutes`). The generic `DurationInput` still parses up to 10,000, but credit forms/server checks narrow that range (`web/components/duration-input.tsx`; `add-credits-dialog.tsx`; `web/lib/minutes-trpc.ts`).
-- The `MinuteLedger` schema's summary formula omits refunds; current `orgBalanceSeconds` and `orgCreditsAddedSeconds` include them (`web/prisma/schema.prisma` comment above `MinuteLedger`; `web/lib/minutes.ts`).
 - `creditsAdded` and history comments call the record “full” or say rows add up to everything added. Actual reads default to 200 rows, and learner history hides take-backs (`web/lib/minutes.ts` `creditsAdded`; `web/components/credits/credits-history-table.tsx`).
 
 ### Open questions
 
 - Must “one live call per learner per org” hold under simultaneous starts with different activation keys? `activateSession` closes previous calls and reads balance outside the session-creation transaction; it does not take `locked`'s org lock. Two starts can both pass that sequence. `InterviewSession` has no unique live-call constraint (`web/lib/interview-sessions.ts` `activateSession`; `web/lib/minutes.ts` `locked`; `web/prisma/schema.prisma` `InterviewSession`).
 - Should a learner with 1–59 seconds left be able to start? Activation accepts any positive second balance, but shared-session pages floor it to zero and show out-of-minutes; `twinAccessFor` rejects below 60 seconds (`web/lib/interview-sessions.ts` `activateSession`; `web/lib/pages/learner.ts` `loadSharedSession`, `twinAccessFor`).
-- Should support be allowed to reclaim unused credit during a live call? `reclaimMinutes` checks current balance including elapsed usage, but does not shorten the call's previously captured allowance. The call can later consume seconds that have been reclaimed (`web/lib/minutes.ts` `reclaimMinutes`, `learnerMinutes`; `web/lib/interview-sessions.ts` `activateSession`).
 
 ## [Payments](payments.md)
 
 ### Mismatches
 
-- `web/lib/credit-purchases.ts` `purchaseRefunded` describes taking back the refunded share “once per refund”, and the webhook header describes each refund happening once. The zero-credit shortcut deliberately records neither the refund nor its money, so this promise applies only to ledger-recorded refunds. The function's shortcut comment and `web/tests/lib/credit-purchases.db.test.ts` explicitly document that exception.
-- The refund-concurrency shortcut comment in `web/lib/credit-purchases.ts` warns only of rounding by a credit. The pre-lock read followed by an absolute `refundedAmount` update can also lose a cumulative money update when different refunds overlap (`purchaseRefunded`; `web/lib/minutes.ts` `locked`, `orgMovement`). This is not fixed by ledger external-ID uniqueness.
-- No payments-specific disagreement was found in `PRODUCT.md` or the current `plans/*.md`; neither defines a payment flow. The migration's header mentions “plans: payments”, but no `plans/payments.md` exists in this checkout. This spec follows the current branch's implementation, not an assumed missing plan. (`PRODUCT.md`; `plans/`; `web/prisma/migrations/20261109120000_credit_purchases/migration.sql`.)
+- Legacy refund states and refundedAmount remain in the schema; refund handling no longer updates them. The refund-days script option is accepted but ignored (`web/prisma/schema.prisma`; `web/lib/credit-purchases.ts`; `web/scripts/reconcile-purchases.ts`).
 
 ### Open questions
 
-- Does the one-at-a-time refund assumption also hold when reconciliation and live webhooks overlap? The sequential loop in `reconcilePurchases` cannot prevent a live `purchaseRefunded` call from reading the same old refund total. (`web/lib/credit-purchases.ts` refund shortcut and both functions; `web/lib/minutes.ts` org lock.)
-- Should linking validate that an invoice is really a GST invoice? The script calls itself a GST-invoice linker, but the fetched type and checks contain only ID, status, money, URL and payment ID, with no tax fields. Today that classification is the operator's responsibility. (`web/scripts/link-invoice.ts` header; `web/lib/razorpay.ts` `RazorpayInvoice`; `web/lib/credit-purchases.ts` `linkInvoicePurchase`.)
+- Refunds do not take credits back. Operators must adjust Meteroid by hand. When should this be automated? (`web/lib/credit-purchases.ts` `purchaseRefunded`.)
+- Credits plan overage is 0.25/min if usage exceeds credits; should overage ever be collected? (`web/scripts/meteroid-setup.ts`.)
+- Should invoice linking verify GST tax fields, rather than trusting the operator? (`web/lib/razorpay.ts` `RazorpayInvoice`; `web/lib/credit-purchases.ts` `linkInvoicePurchase`.)
 
 ## [Twins](twins.md)
 

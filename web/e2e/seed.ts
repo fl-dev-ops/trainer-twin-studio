@@ -7,8 +7,8 @@ import "./use-test-db";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { hashPassword } from "better-auth/crypto";
 import { db } from "@/lib/db";
-import { inviteToRoleplay } from "@/lib/invite/roleplay";
-import { giveStartingMinutes, recordSessionUsage, topUpOrg } from "@/lib/minutes";
+import { ensureDeployment } from "@/lib/deployments";
+import { recordSessionUsage } from "@/lib/minutes";
 import { ROLEPLAY_SOURCE } from "@/lib/scenario-ingest";
 
 export const PASSWORD = "e2e-password";
@@ -38,7 +38,10 @@ for (const p of everyone) {
   await db.account.create({ data: { id: `${p.id}-credential`, accountId: p.id, providerId: "credential", userId: p.id, password: hash } });
   await db.member.create({ data: { id: `${p.id}-member`, organizationId: ORG.id, userId: p.id, role: p === admin ? "admin" : "user", createdAt: new Date() } });
 }
-await topUpOrg({ orgId: ORG.id, minutes: 500, note: "Starting balance" });
+await db.orgBilling.create({ data: {
+  orgId: ORG.id, meteroidCustomerId: "e2e-customer", balanceMinutes: 500, balanceAsOf: new Date(0), syncedAt: new Date("2099-01-01"),
+  grants: [{ id: "e2e-starting", minutes: 500, reason: "Starting balance", expiresAt: null, status: "ACTIVE", createdAt: new Date().toISOString() }],
+} });
 
 // A link made by the payment-link script; browser tests deliver its signed payment/refund webhooks.
 const purchase = await db.creditPurchase.create({
@@ -52,10 +55,9 @@ const roleplay = await db.agent.create({
 const twin = await db.agent.create({
   data: { id: "e2e-twin", orgId: ORG.id, personaId: persona.id, kind: "TWIN", slug: "e2e-coach", name: "E2E Coach", data: {} },
 });
-const by = { id: admin.id, name: admin.name };
-await inviteToRoleplay({ org: ORG, by, agent: roleplay, emails: [learner.email], startingMinutes: 30 });
-await inviteToRoleplay({ org: ORG, by, agent: roleplay, emails: [broke.email], startingMinutes: 1 });
-await giveStartingMinutes({ orgId: ORG.id, emails: more.map((p) => p.email), minutes: 10, actorUserId: admin.id });
+const deployment = await ensureDeployment(ORG.id, roleplay.id);
+for (const p of [learner, broke]) await db.rolePlayAssignment.create({ data: { orgId: ORG.id, deploymentId: deployment.id, recipientEmail: p.email, assignedByUserId: admin.id, shareCode: `${p.id}-practice`, expiresAt: new Date("2099-01-01") } });
+await db.minuteLedger.createMany({ data: [learner, broke, ...more].map((p) => ({ orgId: ORG.id, email: p.email, type: "grant", seconds: (p === learner ? 30 : p === broke ? 1 : 10) * 60, actorUserId: admin.id })) });
 
 // The broke learner's one minute, spent on a call that ended.
 const brokeAssignment = await db.rolePlayAssignment.findFirstOrThrow({ where: { orgId: ORG.id, recipientEmail: broke.email } });

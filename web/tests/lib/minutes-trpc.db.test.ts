@@ -1,6 +1,7 @@
+import { fundOrg } from "../setup/meteroid";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { minutesRouter } from "@/lib/minutes-trpc";
-import { grantMinutes, recordSessionUsage, topUpOrg } from "@/lib/minutes";
+import { grantMinutes, recordSessionUsage } from "@/lib/minutes";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
 describe.skipIf(!localMinutesDb)("minutes tRPC (local database)", () => {
@@ -8,7 +9,7 @@ describe.skipIf(!localMinutesDb)("minutes tRPC (local database)", () => {
   beforeEach(async () => { f = minutesFixture(); await f.create(); });
   afterEach(async () => { await f.clean(); });
   const caller = (role = "admin") => minutesRouter.createCaller({ user: { ...f.trainer, orgId: f.org.id, orgSlug: f.org.slug, role } });
-  const fund = (amount: number) => topUpOrg({ orgId: f.org.id, minutes: amount, note: "test" });
+  const fund = (amount: number) => fundOrg({ orgId: f.org.id, minutes: amount, note: "test" });
 
   test("all procedures are studio-only, including anonymous and org-less users", async () => {
     for (const ctx of [{ user: null }, { user: null, signedIn: true }, { user: { ...f.learner, orgId: f.org.id, orgSlug: f.org.slug, role: "user" } }]) {
@@ -27,16 +28,11 @@ describe.skipIf(!localMinutesDb)("minutes tRPC (local database)", () => {
 
   test.each(["admin", "team"])("%s queries exact credit shapes and adds normalized learner credits without changing earlier rows", async (role) => {
     const api = caller(role);
-    expect(await api.org()).toEqual({ balanceMinutes: 0, addedMinutes: 0, defaultMinutes: 30, maxMinutes: 360, topups: [], learners: [] });
+    expect(await api.org()).toEqual({ balanceMinutes: 0, addedMinutes: 0, defaultMinutes: 30, maxMinutes: 360, billed: false, grants: [], learners: [] });
     expect(await api.learner({ email: f.learner.email })).toEqual({ givenMinutes: 0, usedMinutes: 0, balanceMinutes: 0, orgBalanceMinutes: 0, maxMinutes: 360, added: [] });
 
     await fund(100);
-    await topUpOrg({ orgId: f.org.id, minutes: 20, note: "Second top-up", actorUserId: f.trainer.id });
-    const topups = await db.minuteLedger.findMany({ where: { orgId: f.org.id }, orderBy: { seconds: "desc" } });
-    // Separate timestamps make newest-first assertions independent of database clock resolution.
-    for (const [index, row] of topups.entries()) {
-      await db.minuteLedger.update({ where: { id: row.id }, data: { createdAt: new Date(`2026-01-0${index + 1}T00:00:00Z`) } });
-    }
+    await fundOrg({ orgId: f.org.id, minutes: 20, note: "Second top-up" });
     expect(await api.add({ email: ` ${f.learner.email.toUpperCase()} `, minutes: 30 })).toEqual({ grantedMinutes: 30, balanceMinutes: 30, orgBalanceMinutes: 90 });
     const first = await db.minuteLedger.findFirstOrThrow({ where: { orgId: f.org.id, type: "grant" } });
     expect(first).toMatchObject({ actorUserId: f.trainer.id, note: "Added by trainer", seconds: 1800, email: f.learner.email });
@@ -54,10 +50,10 @@ describe.skipIf(!localMinutesDb)("minutes tRPC (local database)", () => {
     expect(added).toHaveLength(1);
     expect(added[0]).toMatchObject({ type: "grant", seconds: 300, email: f.learner.email, actorUserId: f.trainer.id, note: "Extra practice" });
     const entry = (row: typeof first, by: string | null) => ({ id: row.id, minutes: row.seconds / 60, note: row.note, at: row.createdAt.toISOString(), by });
-    const savedTopups = earlier.filter((row) => row.type === "topup").sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
     expect(await api.org()).toEqual({
       balanceMinutes: 85, addedMinutes: 120, defaultMinutes: 30, maxMinutes: 360,
-      topups: [entry(savedTopups[0], f.trainer.name), entry(savedTopups[1], null)],
+      billed: true, grants: expect.arrayContaining([expect.objectContaining({ minutes: 100, note: "test", by: null }), expect.objectContaining({ minutes: 20, note: "Second top-up", by: null })]),
       learners: [{ email: f.learner.email, userId: f.learner.id, name: f.learner.name, image: null, givenMinutes: 35, usedMinutes: 1.5, leftMinutes: 33 }],
     });
     expect(await api.learner({ email: ` ${f.learner.email.toUpperCase()} ` })).toEqual({
@@ -65,7 +61,7 @@ describe.skipIf(!localMinutesDb)("minutes tRPC (local database)", () => {
       added: [entry(added[0], f.trainer.name), entry(earlier.find((row) => row.id === first.id)!, f.trainer.name)],
     });
     expect(after.filter((row) => row.type === "grant").reduce((sum, row) => sum + row.seconds, 0)).toBe(35 * 60);
-    expect(after.reduce((sum, row) => sum + (row.type === "topup" ? row.seconds : row.type === "grant" ? -row.seconds : 0), 0)).toBe(85 * 60);
+    expect(after.some((row) => row.type === "topup")).toBe(false);
   });
 
   test("maps short balance to CONFLICT and learner cap to BAD_REQUEST", async () => {

@@ -1,9 +1,10 @@
+import { fundOrg } from "../setup/meteroid";
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import * as nextHeaders from "next/headers";
 import { auth } from "@/lib/auth";
 import { minutesRouter } from "@/lib/minutes-trpc";
-import { learnerBalance, topUpOrg } from "@/lib/minutes";
+import { learnerBalance } from "@/lib/minutes";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
 // Exercise the configured Better Auth hook, not a copy of its grant-once logic.
@@ -38,7 +39,7 @@ describe.skipIf(!localMinutesDb)("credits stage two tRPC (local database)", () =
     await f.clean();
   });
   const caller = (role = "admin") => minutesRouter.createCaller({ user: { ...f.trainer, orgId: f.org.id, orgSlug: f.org.slug, role } });
-  const fund = (minutes: number) => topUpOrg({ orgId: f.org.id, minutes, note: "stage two test" });
+  const fund = (minutes: number) => fundOrg({ orgId: f.org.id, minutes, note: "stage two test" });
   const rows = () => db.minuteLedger.findMany({ where: { orgId: f.org.id }, orderBy: { id: "asc" } });
 
   test.each(["admin", "team"])("addMany skips %s studio emails case-insensitively with a reason, giving only learners", async (role) => {

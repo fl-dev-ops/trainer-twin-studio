@@ -15,7 +15,7 @@ Not the public API docs (those are in `docs/`, published). Not plans (those are 
 3. **Simple words.** Short sentences, plain English, tables where they help. A new engineer or a tester should get
    it in one read. Explain each term the first time.
 4. **Rules are testable.** Write each rule so a test could check it: "A learner can be given at most 360 credits in
-   total (grants minus take-backs); a grant past that is refused with 400." Not "credits are limited".
+   total (usage does not free room); a grant past that is refused with 400." Not "credits are limited".
 5. **Stay in your module.** For something another module owns, link its spec (`see [Sessions](sessions.md)`) instead
    of re-describing it. Describe the boundary: what your module hands over and what it expects back.
 6. **Don't guess.** If the code is unclear or two places disagree, put it in *Open questions* with both pointers.
@@ -72,7 +72,7 @@ browser `web/e2e`, Python `agent/tests`, `chat/tests`), and the most important u
 | 1 | [auth.md](auth.md) | Signing in and up (email/password, Google), sessions and cookies across subdomains, which host serves what (dash./auth./`<org>`.), onboarding, no-org | `web/proxy.ts`, `web/lib/auth.ts`, `auth-client.ts`, `auth-home.ts`, `session-user.ts`, `base-domain.ts`, `web/app/auth/*` |
 | 2 | [orgs-and-roles.md](orgs-and-roles.md) | Organizations, roles (admin / team / user), members, disabling, switching orgs, what each role may see and do in the studio | `web/lib/org.ts`, `members.ts`, `auth-roles.ts`, `org-pin.ts`, `org-switch-path.ts`, `web/lib/pages/router.ts`, settings team UI |
 | 3 | [invites-and-emails.md](invites-and-emails.md) | Inviting team and learners (Settings, API, assign dialogs), accepting invites, links, and every email the platform sends | `web/lib/invite/*`, `web/lib/email.ts`, `web/app/auth/invite`, `web/components/users/invite-user.tsx` |
-| 4 | [credits.md](credits.md) | Prepaid credits/minutes: org balance, top-ups, giving learners credits, usage by calls, limits, the ledger | `web/lib/minutes.ts`, `minutes-trpc.ts`, `minutes-config.ts`, `learners.ts`, `web/components/credits/*`, `web/scripts/org-topup.ts`, `minutes-backfill.ts` |
+| 4 | [credits.md](credits.md) | Meteroid org credits, learner minutes, staff/learner call spending, usage sync, limits | `web/lib/org-credits.ts`, `meteroid.ts`, `minutes.ts`, `minutes-trpc.ts`, `web/workflows/org-credits.ts`, `web/scripts/meteroid-link-org.ts` |
 | 5 | [payments.md](payments.md) | Buying credits through Razorpay: payment links, GST invoices, webhook, refunds, reconciliation | `web/lib/credit-purchases.ts`, `razorpay.ts`, `web/app/api/razorpay/webhook`, `web/scripts/org-payment-link.ts`, `link-invoice.ts`, `reconcile-purchases.ts` |
 | 6 | [twins.md](twins.md) | Twins: the trainer's AI, skills, access (assignments, share links, access-until), calibration, the twin's brain | `web/lib/twins.ts`, `twin-access.ts`, `web/lib/twin/*`, `skill-sources.ts`, `web/app/dash/twin/*`, `web/app/api/twin*` |
 | 7 | [roleplays.md](roleplays.md) | Role plays (scenarios): building, publishing, versions, assigning, practice links, repeat practice, reports | `web/lib/roleplay/*`, `assignments.ts`, `deployments.ts`, `specs.ts`, `spec-drafts.ts`, `scenario-ingest.ts`, `web/app/dash/roleplay/*` |

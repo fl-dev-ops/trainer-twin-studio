@@ -1,9 +1,10 @@
+import { fundOrg } from "../setup/meteroid";
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import * as nextServer from "next/server";
 import * as livekit from "@/lib/livekit";
 import { ensureDeployment } from "@/lib/deployments";
 import { activateSession, finalizeInterviewSession } from "@/lib/interview-sessions";
-import { grantMinutes, learnerBalance, topUpOrg } from "@/lib/minutes";
+import { grantMinutes, learnerBalance } from "@/lib/minutes";
 import { activateInterviewRuntime } from "@/lib/session-activation";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
@@ -19,7 +20,8 @@ describe.skipIf(!localMinutesDb)("repeat role-play activation (local database)",
     f = minutesFixture(); await f.create();
     secret = process.env.COPILOT_SERVICE_SECRET;
     process.env.COPILOT_SERVICE_SECRET = "roleplay-test-secret";
-    fetchMock = spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+    const networkFetch = globalThis.fetch;
+    fetchMock = spyOn(globalThis, "fetch").mockImplementation((url, init) => String(url).includes("meteroid.test") ? networkFetch(url, init) : Promise.resolve(new Response(null, { status: 204 })));
     connect = spyOn(livekit, "activateLiveKitSession").mockResolvedValue({ room: "test-room", token: "test-token", dispatchId: "test-dispatch", videoEgressId: null, videoS3Key: null });
     close = spyOn(livekit, "closeLiveKitSession").mockResolvedValue(undefined);
     after = spyOn(nextServer, "after").mockImplementation(() => {});
@@ -28,8 +30,9 @@ describe.skipIf(!localMinutesDb)("repeat role-play activation (local database)",
       orgId: f.org.id, deploymentId: deployment.id, recipientEmail: f.learner.email,
       assignedByUserId: f.trainer.id, shareCode: `${f.org.id}-repeat`, expiresAt: new Date(0),
     } });
-    await topUpOrg({ orgId: f.org.id, minutes: 10, note: "test" });
+    await fundOrg({ orgId: f.org.id, minutes: 10, note: "test" });
     await grantMinutes({ orgId: f.org.id, email: f.learner.email, minutes: 10 });
+    fetchMock.mockClear();
   });
   afterEach(async () => {
     fetchMock?.mockRestore(); connect?.mockRestore(); close?.mockRestore(); after?.mockRestore();

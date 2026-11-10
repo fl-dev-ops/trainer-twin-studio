@@ -1,15 +1,16 @@
+import { fundOrg, availableOrgSeconds } from "../setup/meteroid";
 import "./flow-env";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { HttpResponse } from "msw";
 import { createPaymentLinkPurchase, linkInvoicePurchase, reconcilePurchases } from "@/lib/credit-purchases";
-import { orgBalanceSeconds } from "@/lib/minutes";
+import { } from "@/lib/minutes";
 import { db, localMinutesDb, minutesFixture } from "../lib/minutes-test-db";
 import { outsideServices, razorpayWebhook } from "./harness";
 
 describe.skipIf(!localMinutesDb)("flow: lost Razorpay webhooks → report → reconcile → late delivery", () => {
   const f = minutesFixture();
   const outside = outsideServices();
-  const balance = async () => (await orgBalanceSeconds(f.org.id)) / 60;
+  const balance = async () => (await availableOrgSeconds(f.org.id)) / 60;
   const purchases = () => db.creditPurchase.findMany({ where: { orgId: f.org.id }, orderBy: { id: "asc" } });
   const ledger = () => db.minuteLedger.findMany({ where: { orgId: f.org.id }, orderBy: { id: "asc" } });
   const reconcile = async (apply = true) => (await reconcilePurchases({ olderThanHours: 1, refundDays: 30, apply })).filter((line) => line.org === f.org.slug);
@@ -36,7 +37,7 @@ describe.skipIf(!localMinutesDb)("flow: lost Razorpay webhooks → report → re
   });
   let lost: Awaited<ReturnType<typeof buy>>;
   let lostPayment = "";
-  beforeAll(async () => { outside.start(); await f.create(); });
+  beforeAll(async () => { outside.start(); await f.create(); await fundOrg({ orgId: f.org.id, minutes: 0 }); });
   afterAll(async () => { await f.clean(); outside.stop(); });
 
   test("1. a paid link with no webhook is reported without changing purchases or ledger", async () => {
@@ -53,7 +54,7 @@ describe.skipIf(!localMinutesDb)("flow: lost Razorpay webhooks → report → re
     expect(await reconcile()).toEqual([expect.objectContaining({ purchase: lost.id, action: "paid", detail: expect.stringContaining("credits added") })]);
     expect(await balance()).toBe(100);
     expect(await db.creditPurchase.findUniqueOrThrow({ where: { id: lost.id } })).toMatchObject({ status: "paid", paymentId: lostPayment, paidAt: expect.any(Date) });
-    expect(await ledger()).toMatchObject([{ type: "topup", seconds: 6000, externalId: lostPayment }]);
+    expect(await ledger()).toEqual([]);
     const before = { purchases: await purchases(), ledger: await ledger() };
     expect(await reconcile()).toEqual([]);
     expect(await paidWebhook(lost.razorpayId!, lostPayment)).toMatchObject({ status: 200, body: { ok: true, result: { duplicate: true } } });
@@ -84,33 +85,17 @@ describe.skipIf(!localMinutesDb)("flow: lost Razorpay webhooks → report → re
     expect(await reconcile()).toContainEqual(expect.objectContaining({ purchase: linked.id, action: "paid" }));
     expect(await db.creditPurchase.findUniqueOrThrow({ where: { id: linked.id } })).toMatchObject({ status: "paid", paymentId: `pay_${id}` });
     expect(await balance()).toBe(200);
-    expect(await ledger()).toHaveLength(2);
+    expect(await ledger()).toHaveLength(0);
   });
 
-  test("5. only unseen processed refunds are reported and applied, including partially refunded purchases", async () => {
-    const known = `rfnd_known_${f.org.id}`;
-    const missing = `rfnd_lost_${f.org.id}`;
-    const pending = `rfnd_pending_${f.org.id}`;
-    expect(await refundWebhook(known, lostPayment, 20000)).toMatchObject({ status: 200, body: { ok: true } });
-    outside.refunds.set(lostPayment, [
-      { id: known, payment_id: lostPayment, amount: 20000, currency: "INR", status: "processed" },
-      { id: missing, payment_id: lostPayment, amount: 20000, currency: "INR", status: "processed" },
-      { id: pending, payment_id: lostPayment, amount: 40000, currency: "INR", status: "pending" },
-    ]);
-    const before = { purchases: await purchases(), ledger: await ledger() };
-    const report = (await reconcile(false)).filter((line) => line.action === "refunded");
-    expect(report).toEqual([expect.objectContaining({ purchase: lost.id, detail: expect.stringContaining(`${missing} · would take credits back`) })]);
-    expect(await purchases()).toEqual(before.purchases);
-    expect(await ledger()).toEqual(before.ledger);
-    expect((await reconcile()).filter((line) => line.action === "refunded")).toEqual([expect.objectContaining({ purchase: lost.id, detail: expect.stringContaining(`${missing} · credits taken back`) })]);
-    expect(await balance()).toBe(150);
-    expect(await db.creditPurchase.findUniqueOrThrow({ where: { id: lost.id } })).toMatchObject({ status: "partially_refunded", refundedAmount: 40000 });
-    expect((await ledger()).filter((row) => row.type === "refund")).toMatchObject([
-      { externalId: known, seconds: -1500 }, { externalId: missing, seconds: -1500 },
-    ]);
+  test("5. refunds are not fetched or reconciled, regardless of refundDays", async () => {
+    outside.refunds.set(lostPayment, [{ id: "ignored", payment_id: lostPayment, amount: 80000, currency: "INR", status: "processed" }]);
+    const before = await purchases();
+    outside.razorpayReads.length = 0;
     expect((await reconcile()).filter((line) => line.action === "refunded")).toEqual([]);
-    expect(await refundWebhook(missing, lostPayment, 20000)).toMatchObject({ status: 200, body: { result: { duplicate: true } } });
-    expect(await balance()).toBe(150);
+    expect(outside.razorpayReads.some((path) => path.includes("/refunds"))).toBe(false);
+    expect(await purchases()).toEqual(before);
+    expect(await balance()).toBe(200);
   });
 
   test("6. purchases paid outside the refund window are not fetched", async () => {
@@ -123,7 +108,7 @@ describe.skipIf(!localMinutesDb)("flow: lost Razorpay webhooks → report → re
     expect((await reconcile()).filter((line) => line.purchase === old.id)).toEqual([]);
     expect(outside.razorpayReads).not.toContain(`/payments/${paymentId}/refunds`);
     expect(await db.creditPurchase.findUniqueOrThrow({ where: { id: old.id } })).toMatchObject({ status: "paid", refundedAmount: 0 });
-    expect(await balance()).toBe(250);
+    expect(await balance()).toBe(300);
   });
 
   test("7. amount mismatch and Razorpay 500 are errors, not credits; a later purchase still reconciles", async () => {
@@ -143,8 +128,8 @@ describe.skipIf(!localMinutesDb)("flow: lost Razorpay webhooks → report → re
       expect(await db.creditPurchase.findUniqueOrThrow({ where: { id: purchase.id } })).toMatchObject({ status: "created", paymentId: null });
     }
     expect(await db.minuteLedger.findMany({ where: { externalId: { in: [`pay_${mismatch.id}`, `pay_${unavailable.id}`] } } })).toEqual([]);
-    expect(await db.minuteLedger.findMany({ where: { orgId: f.org.id, externalId: healthyPayment } })).toMatchObject([{ seconds: 6000, type: "topup" }]);
-    expect(await balance()).toBe(350);
+    expect(await db.minuteLedger.findMany({ where: { orgId: f.org.id, externalId: healthyPayment } })).toEqual([]);
+    expect(await balance()).toBe(400);
   });
 
   test("8. no unexpected outside request was made", () => {

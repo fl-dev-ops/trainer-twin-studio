@@ -1,3 +1,4 @@
+import { meteroidHandlers } from "../setup/meteroid";
 import { createHmac } from "node:crypto";
 import { spyOn } from "bun:test";
 import { http, HttpResponse } from "msw";
@@ -6,7 +7,7 @@ import * as nextServer from "next/server";
 
 /**
  * Flow tests run the app's real code and database; only the outside services are fake, answered at the network by
- * MSW: Razorpay, Resend (emails), LiveKit (rooms, agent dispatch) and the chat runtime. Every request is recorded, and
+ * MSW: Meteroid, Razorpay, Resend (emails), LiveKit (rooms, agent dispatch) and the chat runtime. Every request is recorded, and
  * one nobody answers is a failure (`unexpected`), so a flow can't quietly reach a real service.
  */
 
@@ -37,6 +38,7 @@ export function outsideServices() {
   let next = 0;
 
   const server = setupServer(
+    ...meteroidHandlers,
     http.post("https://api.resend.com/emails", async ({ request }) => {
       const body = (await request.json()) as { to: string | string[]; subject: string; html: string; text?: string };
       emails.push({ to: [body.to].flat(), subject: body.subject, html: body.html, text: body.text });
@@ -80,8 +82,10 @@ export function outsideServices() {
 
   return {
     emails, paymentLinks, invoices, paymentLinkStates, refunds, razorpayReads, livekit, chatSessions, unexpected,
+    use: server.use.bind(server),
+    resetHandlers: server.resetHandlers.bind(server),
     start() {
-      server.listen({ onUnhandledRequest: "bypass" });
+      server.listen({ onUnhandledRequest: "error" });
       after = spyOn(nextServer, "after").mockImplementation(() => {});
     },
     stop() {

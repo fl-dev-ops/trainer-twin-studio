@@ -153,7 +153,7 @@ The producer sends bearer service auth, refuses to send without a configured sec
 
 ## Rules
 
-1. A disabled user cannot activate through any `activateSession` path. Admin/team are unmetered; all others require positive balance for a new call (`web/lib/interview-sessions.ts` `activateSession`).
+1. A disabled user cannot activate through any `activateSession` path. Billed admin/team voice calls require positive org credits and set chargesOrg/allowedSeconds; staff chat and unbilled staff voice remain unmetered. Learners require positive personal balance for a new voice call (`web/lib/interview-sessions.ts` `activateSession`).
 2. Twins and metered learners cannot start chat. A role-play assignment must also allow the requested mode (`activateSession`).
 3. A role-play assignment in used status remains usable; a live call resumes, an ended call starts a new practice. Expiry timestamp alone is not an activation refusal (`activateSession`; `web/tests/lib/assigned-activation.test.ts`).
 4. Resuming cannot reset `startedAt` or replenish `allowedSeconds`; it returns remaining time, even zero (`activateSession`).

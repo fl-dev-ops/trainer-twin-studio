@@ -5,7 +5,7 @@ import { as, seed } from "./seed-data";
 
 test.use(as("admin"));
 
-test("Payments: signed top-up, duplicate delivery, partial refund and forged signature", async ({ page, request }) => {
+test("Payments: signed grant, duplicate delivery, partial refund and forged signature", async ({ page, request }) => {
   const { purchase } = seed();
   const post = (event: string, payload: Record<string, unknown>, forged = false) => {
     const raw = JSON.stringify({ event, payload });
@@ -24,7 +24,7 @@ test("Payments: signed top-up, duplicate delivery, partial refund and forged sig
   const before = Number((await remaining.innerText()).replace(/[^\d]/g, ""));
   const showHistory = async () => {
     await page.reload();
-    await page.getByRole("tab", { name: "Top-up history" }).click();
+    await page.getByRole("tab", { name: "Credits added" }).click();
   };
   const topup = page.locator("main li").filter({ hasText: `Paid ₹800 · Razorpay ${purchase.razorpayId}` });
 
@@ -47,16 +47,12 @@ test("Payments: signed top-up, duplicate delivery, partial refund and forged sig
     refund: { entity: { id: purchase.refundId, payment_id: purchase.paymentId, amount: 20000, currency: "INR" } },
   });
   expect(refunded.status()).toBe(200);
-  expect(await refunded.json()).toMatchObject({ ok: true, result: { credits: 25 } });
+  expect(await refunded.json()).toMatchObject({ ok: true, result: { creditsTakenBack: 0 } });
   await showHistory();
-  await expect(remaining).toHaveText(`${before + 75} min`);
-  const refund = page.locator("main li").filter({ hasText: `Refund ₹200 · Razorpay ${purchase.refundId}` });
-  await expect(refund).toHaveCount(1);
-  await expect(refund).toContainText("−25 min");
-  // text-caution is the design system's amber token for negative credits.
-  await expect(refund.getByText("−25 min", { exact: true })).toHaveClass(/text-caution/);
+  await expect(remaining).toHaveText(`${before + 100} min`);
+  await expect(page.locator("main li").filter({ hasText: `Refund ₹200` })).toHaveCount(0);
   await expect(topup).toHaveCount(1);
-  const history = await page.getByRole("tabpanel").innerText();
+  await expect(page.getByRole("tabpanel").locator("li")).toHaveCount(2);
 
   // A different refund id would not be a duplicate: only the signature must prevent this new refund.
   const forged = await post("refund.processed", {
@@ -65,6 +61,8 @@ test("Payments: signed top-up, duplicate delivery, partial refund and forged sig
   expect(forged.status()).toBe(401);
   expect(await forged.json()).toEqual({ error: "Invalid signature" });
   await showHistory();
-  await expect(remaining).toHaveText(`${before + 75} min`);
-  await expect(page.getByRole("tabpanel")).toHaveText(history, { useInnerText: true });
+  await expect(remaining).toHaveText(`${before + 100} min`);
+  await expect(page.getByRole("tabpanel").locator("li")).toHaveCount(2);
+  await expect(topup).toHaveCount(1);
+  await expect(page.locator("main li").filter({ hasText: "Starting balance" })).toHaveCount(1);
 });

@@ -1,7 +1,8 @@
+import { fundOrg, availableOrgSeconds } from "../setup/meteroid";
 import "./flow-env";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createPaymentLinkPurchase } from "@/lib/credit-purchases";
-import { learnerBalance, orgBalanceSeconds } from "@/lib/minutes";
+import { learnerBalance } from "@/lib/minutes";
 import { inviteToRoleplay } from "@/lib/invite/roleplay";
 import { activateInterviewRuntime } from "@/lib/session-activation";
 import { db, localMinutesDb, minutesFixture } from "../lib/minutes-test-db";
@@ -15,13 +16,14 @@ import { agentWebhook, outsideServices, practiceCode, razorpayWebhook } from "./
 describe.skipIf(!localMinutesDb)("flow: buy credits → assign → practise → refund", () => {
   const f = minutesFixture();
   const outside = outsideServices();
-  const orgMinutes = async () => Math.floor((await orgBalanceSeconds(f.org.id)) / 60);
+  const orgMinutes = async () => Math.floor((await availableOrgSeconds(f.org.id)) / 60);
   let code = "";
   let firstSession = "";
 
   beforeAll(async () => {
     outside.start();
     await f.create();
+    await fundOrg({ orgId: f.org.id, minutes: 0 });
   });
   afterAll(async () => {
     await f.clean();
@@ -87,10 +89,10 @@ describe.skipIf(!localMinutesDb)("flow: buy credits → assign → practise → 
     expect(second?.session.secondsLeft).toBeLessThanOrEqual(420);
   });
 
-  test("6. half the payment is refunded: 50 credits leave the org", async () => {
+  test("6. half the payment is refunded: credits stay with the org", async () => {
     const refunded = await razorpayWebhook("refund.processed", { refund: { entity: { id: "rfnd_flow1", payment_id: "pay_flow1", amount: 40000, currency: "INR" } } });
     expect(refunded.status).toBe(200);
-    expect(await orgMinutes()).toBe(40);
+    expect(await orgMinutes()).toBe(90);
   });
 
   test("nothing reached an outside service the flow didn't expect", () => {

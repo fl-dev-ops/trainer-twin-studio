@@ -1,3 +1,7 @@
+// @ts-expect-error Bun test types are provided by the test runner, not Next.
+import { beforeAll, afterAll, expect } from "bun:test";
+import { setupServer } from "msw/node";
+import { meteroidHandlers } from "../setup/meteroid";
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
@@ -49,3 +53,9 @@ export function minutesFixture() {
   };
 }
 export type MinutesFixture = ReturnType<typeof minutesFixture>;
+
+const meteroidServer = setupServer(...meteroidHandlers);
+const unexpectedMeteroid: string[] = [];
+meteroidServer.events.on("request:unhandled", ({ request }) => { if (request.url.includes("meteroid")) unexpectedMeteroid.push(request.url); });
+beforeAll(() => meteroidServer.listen({ onUnhandledRequest: "bypass" }));
+afterAll(() => { meteroidServer.close(); expect(unexpectedMeteroid).toEqual([]); });

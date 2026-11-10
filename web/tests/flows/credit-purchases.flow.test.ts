@@ -1,9 +1,11 @@
+import { minuteGrants } from "@/lib/meteroid";
+import { fundOrg, availableOrgSeconds } from "../setup/meteroid";
 import "./flow-env";
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { createPaymentLinkPurchase, linkInvoicePurchase } from "@/lib/credit-purchases";
 import * as externalApi from "@/lib/external-api";
 import { inviteToRoleplay } from "@/lib/invite/roleplay";
-import { creditsAdded, learnerBalance, orgBalanceSeconds } from "@/lib/minutes";
+import { learnerBalance } from "@/lib/minutes";
 import { POST as assignRoleplay } from "@/app/api/v1/assignments/route";
 import { POST as webhook } from "@/app/api/razorpay/webhook/route";
 import { db, localMinutesDb, minutesFixture } from "../lib/minutes-test-db";
@@ -12,9 +14,9 @@ import { outsideServices, razorpayWebhook } from "./harness";
 function story() {
   const f = minutesFixture();
   const outside = outsideServices();
-  beforeAll(async () => { outside.start(); await f.create(); });
+  beforeAll(async () => { outside.start(); await f.create(); await fundOrg({ orgId: f.org.id, minutes: 0 }); });
   afterAll(async () => { await f.clean(); outside.stop(); });
-  const balance = async () => (await orgBalanceSeconds(f.org.id)) / 60;
+  const balance = async () => (await availableOrgSeconds(f.org.id)) / 60;
   const buy = () => createPaymentLinkPurchase({ org: f.org, credits: 100, amount: 800, currency: "INR" });
   const paid = (id: string, paymentId: string, currency = "INR", amount = 80000) => razorpayWebhook("payment_link.paid", {
     payment_link: { entity: { id } }, payment: { entity: { id: paymentId, amount, currency } },
@@ -56,7 +58,7 @@ describe.skipIf(!localMinutesDb)("flow: Dashboard GST invoices → link → pay"
     expect(await balance()).toBe(175);
     expect((await paid(alreadyPaidId)).body).toMatchObject({ result: { duplicate: true } });
     expect(await balance()).toBe(175);
-    expect(await creditsAdded(f.org.id)).toHaveLength(2);
+    expect(await minuteGrants(`customer_${f.org.id}`)).toHaveLength(2);
   });
 
   test("4. a cancelled invoice cannot be linked and no unexpected service was reached", async () => {
@@ -90,19 +92,19 @@ describe.skipIf(!localMinutesDb)("flow: USD payment link → matching currency �
     expect(outside.paymentLinks[0]).toMatchObject({ currency: "USD", amount: 9950, customer: payer, notify: { email: true, sms: true }, accept_partial: false, reference_id: purchase.id, notes: { purchaseId: purchase.id, orgId: f.org.id, credits: "100" } });
     expect((await paid(linkId, paymentId, "INR", 9950)).body).toMatchObject({ ok: false, error: expect.stringContaining("no credits added") });
     expect(await balance()).toBe(0);
-    expect(await creditsAdded(f.org.id)).toEqual([]);
+    expect(await minuteGrants(`customer_${f.org.id}`)).toHaveLength(0);
     expect(await db.creditPurchase.findUniqueOrThrow({ where: { id: purchase.id } })).toMatchObject({ status: "created", paymentId: null });
   });
 
   test("3. paid in USD gives credits and the dollar note; no unexpected service calls", async () => {
     expect((await paid(linkId, paymentId, "USD", 9950)).body).toMatchObject({ ok: true, result: { duplicate: false } });
     expect(await balance()).toBe(100);
-    expect(await creditsAdded(f.org.id)).toMatchObject([{ minutes: 100, note: `Paid $99.50 · Razorpay ${linkId}` }]);
+    expect(await minuteGrants(`customer_${f.org.id}`)).toContainEqual(expect.objectContaining({ minutes: 100, reason: `Paid $99.50 · Razorpay ${linkId}` }));
     expect(outside.unexpected).toEqual([]);
   });
 });
 
-describe.skipIf(!localMinutesDb)("flow: spent purchase → refund debt → refuse invites → recover", () => {
+describe.skipIf(!localMinutesDb)("flow: spent purchase → logged refund → refuse invites → recover", () => {
   const { f, outside, balance, buy, paid, refund } = story();
   const paymentId = `pay_${f.org.id}`;
   const emails = [f.learner.email, `two-${f.learner.email}`, `three-${f.learner.email}`];
@@ -118,9 +120,9 @@ describe.skipIf(!localMinutesDb)("flow: spent purchase → refund debt → refus
     expect(outside.emails).toHaveLength(3);
   });
 
-  test("2. full refund leaves −90; a new invite returns 409 without any writes or email", async () => {
+  test("2. full refund preserves 10 credits; a new invite returns 409 without any writes or email", async () => {
     expect((await refund(`rfnd_${f.org.id}`, paymentId, 80000)).body).toMatchObject({ ok: true });
-    expect(await balance()).toBe(-90);
+    expect(await balance()).toBe(10);
     const ledger = await db.minuteLedger.count({ where: { orgId: f.org.id } });
     await expect(invite([nextEmail])).rejects.toMatchObject({ status: 409, message: expect.stringContaining("Not enough credits") });
     expect(await db.minuteLedger.count({ where: { orgId: f.org.id } })).toBe(ledger);
@@ -129,13 +131,13 @@ describe.skipIf(!localMinutesDb)("flow: spent purchase → refund debt → refus
     expect(outside.emails).toHaveLength(3);
   });
 
-  test("3. a second paid purchase clears the debt and funds a new assignment", async () => {
+  test("3. a second paid purchase adds credits and funds a new assignment", async () => {
     const purchase = await createPaymentLinkPurchase({ org: f.org, credits: 200, amount: 1600, currency: "INR" });
     expect((await paid(purchase.razorpayId!, `${paymentId}_recovery`, "INR", 160000)).body).toMatchObject({ ok: true });
-    expect(await balance()).toBe(110);
+    expect(await balance()).toBe(210);
     expect(await invite([nextEmail])).toMatchObject({ added: 1, emailFailures: 0 });
     expect((await learnerBalance(f.org.id, nextEmail)).balanceSeconds).toBe(1800);
-    expect(await balance()).toBe(80);
+    expect(await balance()).toBe(180);
     expect(await db.rolePlayAssignment.count({ where: { orgId: f.org.id } })).toBe(4);
     expect(outside.emails).toHaveLength(4);
     expect(outside.unexpected).toEqual([]);
@@ -170,33 +172,22 @@ describe.skipIf(!localMinutesDb)("flow: untrusted, irrelevant and repeated webho
     for (const response of responses) expect(response).toMatchObject({ status: 200, body: { ok: true } });
     expect(responses.filter((response) => (response.body.result as { duplicate: boolean }).duplicate === false)).toHaveLength(1);
     expect(await balance()).toBe(100);
-    expect(await db.minuteLedger.count({ where: { orgId: f.org.id, type: "topup" } })).toBe(1);
+    expect(await db.minuteLedger.count({ where: { orgId: f.org.id, type: "topup" } })).toBe(0);
   });
 
-  test("4. an unknown payment's refund is ignored; a partial refund delivered twice is taken once", async () => {
+  test("4. refunds are acknowledged without taking credits back or mutating purchases", async () => {
     expect((await refund(`rfnd_unknown_${f.org.id}`, `pay_unknown_${f.org.id}`, 20000)).body).toEqual({ ok: true, ignored: "not a credit purchase" });
+    const before = await db.creditPurchase.findUniqueOrThrow({ where: { razorpayId: linkId } });
+    for (let i = 0; i < 2; i++) expect((await refund(`rfnd_partial_${f.org.id}`, paymentId, 20000)).body).toMatchObject({ result: { creditsTakenBack: 0 } });
     expect(await balance()).toBe(100);
-    const id = `rfnd_partial_${f.org.id}`;
-    expect((await refund(id, paymentId, 20000)).body).toMatchObject({ result: { duplicate: false } });
-    expect((await refund(id, paymentId, 20000)).body).toMatchObject({ result: { duplicate: true } });
-    expect(await balance()).toBe(75);
-    expect(await db.creditPurchase.findUniqueOrThrow({ where: { razorpayId: linkId } })).toMatchObject({ status: "partially_refunded", refundedAmount: 20000 });
-    expect(await db.minuteLedger.count({ where: { orgId: f.org.id, type: "refund" } })).toBe(1);
-  });
-
-  test("5. successive partial refunds sum to full: status refunded and exactly 100 credits taken", async () => {
-    for (const [suffix, amount] of [["second", 30000], ["final", 30000]] as const) {
-      expect((await refund(`rfnd_${suffix}_${f.org.id}`, paymentId, amount)).body).toMatchObject({ ok: true });
-    }
-    expect(await balance()).toBe(0);
-    expect(await db.creditPurchase.findUniqueOrThrow({ where: { razorpayId: linkId } })).toMatchObject({ status: "refunded", refundedAmount: 80000 });
-    expect((await db.minuteLedger.aggregate({ where: { orgId: f.org.id, type: "refund" }, _sum: { seconds: true } }))._sum.seconds).toBe(-6000);
-    expect(await db.minuteLedger.count({ where: { orgId: f.org.id, type: "refund" } })).toBe(3);
+    expect(await db.creditPurchase.findUniqueOrThrow({ where: { razorpayId: linkId } })).toEqual(before);
+    expect(await db.minuteLedger.count({ where: { orgId: f.org.id } })).toBe(0);
     expect(outside.unexpected).toEqual([]);
   });
+
 });
 
-describe.skipIf(!localMinutesDb)("flow: partner assignment API funded by purchase → refund → 409", () => {
+describe.skipIf(!localMinutesDb)("flow: partner assignment API funded by purchase → refund → preserved credits", () => {
   const { f, outside, balance, buy, paid, refund } = story();
   const paymentId = `pay_${f.org.id}`;
   let api: ReturnType<typeof spyOn<typeof externalApi, "requireExternalApi">>;
@@ -218,15 +209,13 @@ describe.skipIf(!localMinutesDb)("flow: partner assignment API funded by purchas
     expect(outside.emails[0].text).toContain("30 minutes");
   });
 
-  test("2. full refund leaves debt; the same API refuses a new learner without grant, assignment or email", async () => {
-    expect((await refund(`rfnd_${f.org.id}`, paymentId, 80000)).body).toMatchObject({ ok: true });
-    expect(await balance()).toBe(-30);
+  test("2. full refund is logged; the API can still assign within the remaining balance", async () => {
+    expect((await refund(`rfnd_${f.org.id}`, paymentId, 80000)).body).toMatchObject({ result: { creditsTakenBack: 0 } });
+    expect(await balance()).toBe(70);
     const response = await assign(`next-${f.learner.email}`);
-    expect(response.status).toBe(409);
-    expect(await response.json()).toMatchObject({ error: expect.stringContaining("Not enough credits") });
-    expect(await db.rolePlayAssignment.count({ where: { orgId: f.org.id } })).toBe(1);
-    expect(await db.minuteLedger.count({ where: { orgId: f.org.id, type: "grant" } })).toBe(1);
-    expect(outside.emails).toHaveLength(1);
+    expect(response.status).toBe(201);
+    expect(await balance()).toBe(40);
+    expect(outside.emails).toHaveLength(2);
     expect(outside.unexpected).toEqual([]);
   });
 });

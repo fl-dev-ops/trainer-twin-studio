@@ -1,7 +1,8 @@
+import { fundOrg } from "../setup/meteroid";
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import * as email from "@/lib/email";
 import { inviteToRoleplay } from "@/lib/invite/roleplay";
-import { grantMinutes, learnerBalance, topUpOrg } from "@/lib/minutes";
+import { grantMinutes, learnerBalance } from "@/lib/minutes";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
 describe.skipIf(!localMinutesDb)("inviteToRoleplay email minutes (local database)", () => {
@@ -13,7 +14,7 @@ describe.skipIf(!localMinutesDb)("inviteToRoleplay email minutes (local database
     await f.create();
   });
   afterEach(async () => { assignmentEmail?.mockRestore(); await f.clean(); });
-  const fund = (minutes: number) => topUpOrg({ orgId: f.org.id, minutes, note: "test" });
+  const fund = (minutes: number) => fundOrg({ orgId: f.org.id, minutes, note: "test" });
   const invite = (emails = [f.learner.email], startingMinutes?: number, resendPending?: boolean) =>
     inviteToRoleplay({ org: f.org, by: f.trainer, agent: f.roleplay, emails, startingMinutes, resendPending });
 

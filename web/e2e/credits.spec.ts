@@ -3,10 +3,10 @@ import { as, seed } from "./seed-data";
 
 test.use(as("admin"));
 
-test("Credits: the org's remaining credits, learners' balances (searchable, paged), and top-ups", async ({ page }) => {
+test("Credits: the org's remaining credits, learners' balances (searchable, paged), and Meteroid grants", async ({ page }) => {
   const { more, learner } = seed();
   await page.goto("/credits");
-  // 500 topped up; 30 + 1 + 22 × 10 given out.
+  // 500 granted by Meteroid; 30 + 1 + 22 × 10 given out.
   await expect(page.getByText("Remaining credits")).toBeVisible();
   await expect(page.locator("main").getByText("249 min", { exact: true })).toBeVisible();
 
@@ -21,7 +21,7 @@ test("Credits: the org's remaining credits, learners' balances (searchable, page
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText("30");
 
-  await page.getByRole("tab", { name: "Top-up history" }).click();
+  await page.getByRole("tab", { name: "Credits added" }).click();
   const topup = page.locator("main li").filter({ hasText: "Starting balance" });
   await expect(topup).toContainText("+500 min");
   await expect(topup).toContainText("TrainerTwin");

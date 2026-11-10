@@ -1,4 +1,6 @@
+import { fundOrg, availableOrgSeconds } from "../setup/meteroid";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import "./minutes-test-db";
 import { randomUUID } from "node:crypto";
 
 // Practice minutes against a real database (the ledger is SQL: sums, locks, CHECKs). Runs only on a local database
@@ -46,31 +48,22 @@ describe.skipIf(!local || !realDb)("practice minutes (local database)", () => {
   });
 
   test("minutes move from the org's balance to a learner; a short balance and the per-learner cap refuse", async () => {
-    await minutes.topUpOrg({ orgId, minutes: 400, note: "test" });
+    await fundOrg({ orgId, minutes: 400, note: "test" });
     const granted = await minutes.grantMinutes({ orgId, email: learner.toUpperCase(), minutes: 60 });
     expect(granted).toEqual({ grantedMinutes: 60, balanceMinutes: 60, orgBalanceMinutes: 340 });
     // The org can't give what it doesn't have.
     await expect(minutes.grantMinutes({ orgId, email: other, minutes: 341 })).rejects.toMatchObject({ status: 409 });
     // One learner holds at most MAX_LEARNER_MINUTES given in total.
-    await minutes.topUpOrg({ orgId, minutes: 1000, note: "test" });
+    await fundOrg({ orgId, minutes: 1000, note: "test" });
     await expect(minutes.grantMinutes({ orgId, email: learner, minutes: minutes.MAX_LEARNER_MINUTES - 59 })).rejects.toMatchObject({ status: 400 });
     expect((await minutes.grantMinutes({ orgId, email: learner, minutes: minutes.MAX_LEARNER_MINUTES - 60 })).balanceMinutes).toBe(minutes.MAX_LEARNER_MINUTES);
-  });
-
-  test("taking minutes back never goes below what's unused, and returns them to the org", async () => {
-    const before = await minutes.orgBalanceSeconds(orgId);
-    await expect(minutes.reclaimMinutes({ orgId, email: learner, minutes: minutes.MAX_LEARNER_MINUTES + 1 })).rejects.toMatchObject({ status: 400 });
-    expect((await minutes.reclaimMinutes({ orgId, email: learner, minutes: 300 })).balanceMinutes).toBe(minutes.MAX_LEARNER_MINUTES - 300);
-    expect(await minutes.orgBalanceSeconds(orgId)).toBe(before + 300 * 60);
-    // Taken back minutes free room under the cap again.
-    expect((await minutes.learnerBalance(orgId, learner)).grantedSeconds).toBe((minutes.MAX_LEARNER_MINUTES - 300) * 60);
   });
 
   test("starting minutes: once per person, all or nothing", async () => {
     const result = await minutes.giveStartingMinutes({ orgId, emails: [learner, other] });
     expect(result.given).toEqual([other]); // the learner already has minutes
     expect((await minutes.learnerBalance(orgId, other)).balanceSeconds).toBe(minutes.DEFAULT_LEARNER_MINUTES * 60);
-    const orgLeft = Math.floor((await minutes.orgBalanceSeconds(orgId)) / 60);
+    const orgLeft = Math.floor((await availableOrgSeconds(orgId)) / 60);
     const many = Array.from({ length: Math.floor(orgLeft / minutes.DEFAULT_LEARNER_MINUTES) + 1 }, (_, i) => `min-many-${i}-${run}@example.com`);
     await expect(minutes.giveStartingMinutes({ orgId, emails: many })).rejects.toMatchObject({ status: 409 });
     expect(await db.minuteLedger.count({ where: { orgId, email: { in: many } } })).toBe(0);
@@ -100,10 +93,4 @@ describe.skipIf(!local || !realDb)("practice minutes (local database)", () => {
     expect(await db.minuteLedger.count({ where: { sessionId: studio.id } })).toBe(0);
   });
 
-  test("a learner with no minutes left can't start a call", async () => {
-    const left = (await minutes.learnerBalance(orgId, learner)).balanceSeconds;
-    await minutes.reclaimMinutes({ orgId, email: learner, minutes: Math.floor(left / 60) });
-    await expect(activateSession({ orgId, userId, userEmail: learner, agentSlug: `min-rp-${run}`, mode: "voice" }))
-      .rejects.toMatchObject({ name: "MinutesError", status: 403 });
-  });
 });

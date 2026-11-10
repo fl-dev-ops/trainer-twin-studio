@@ -1,3 +1,4 @@
+import { fundOrg } from "../setup/meteroid";
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import * as nextHeaders from "next/headers";
 import * as sessionUser from "@/lib/session-user";
@@ -7,7 +8,7 @@ import { loadSharedSession, loadTwinLink } from "@/lib/pages/learner";
 import { loadOrgHome } from "@/lib/pages/org-home";
 import { roleplayRouter } from "@/lib/roleplay/trpc";
 import { ROLEPLAY_SOURCE } from "@/lib/scenario-ingest";
-import { grantMinutes, recordSessionUsage, topUpOrg } from "@/lib/minutes";
+import { grantMinutes, recordSessionUsage } from "@/lib/minutes";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
 describe.skipIf(!localMinutesDb)("learner pages with minutes (local database)", () => {
@@ -25,7 +26,7 @@ describe.skipIf(!localMinutesDb)("learner pages with minutes (local database)", 
   });
   afterEach(async () => { headers?.mockRestore(); identity?.mockRestore(); await f.clean(); });
   const balance = async (seconds: number) => {
-    await topUpOrg({ orgId: f.org.id, minutes: 2, note: "test" });
+    await fundOrg({ orgId: f.org.id, minutes: 2, note: "test" });
     await grantMinutes({ orgId: f.org.id, email: f.learner.email, minutes: 2 });
     const session = await f.session({ allowedSeconds: 120, endedAt: new Date(new Date("2026-01-01T00:00:00Z").getTime() + (120 - seconds) * 1000) });
     await recordSessionUsage(session.id);
