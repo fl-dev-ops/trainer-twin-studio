@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import type { OrganizationUser, RolePlayData } from "@/components/role-play-preview";
 import { db } from "@/lib/db";
-import { LEARNER_ROLE } from "@/lib/org";
+import { LEARNER, orgPeople } from "@/lib/org-people";
 import { readSpecDraft } from "@/lib/spec-drafts";
 import { agentDisplayName, readSpec } from "@/lib/specs";
 
@@ -10,14 +10,7 @@ export async function loadRolePlayPreview(orgId: string, slug: string) {
   const [current, draft, members, assignments] = await Promise.all([
     readSpec("agents", slug, orgId).catch(() => null),
     readSpecDraft(slug, orgId).catch(() => null),
-    db.member.findMany({
-      where: { organizationId: orgId, role: LEARNER_ROLE },
-      orderBy: { createdAt: "asc" },
-      select: {
-        id: true,
-        user: { select: { name: true, email: true } },
-      },
-    }),
+    orgPeople(orgId, { roles: [LEARNER] }),
     db.rolePlayAssignment.findMany({
       where: { orgId, deployment: { agent: { slug } } },
       orderBy: { assignedAt: "desc" },
@@ -26,25 +19,24 @@ export async function loadRolePlayPreview(orgId: string, slug: string) {
         status: true,
         assignedAt: true,
         expiresAt: true,
-        recipientEmail: true,
         member: { select: { user: { select: { name: true, email: true } } } },
       },
     }),
   ]);
 
-  const assignmentSummaries = assignments.map(({ id, status, assignedAt, expiresAt, recipientEmail, member }) => ({
+  const assignmentSummaries = assignments.map(({ id, status, assignedAt, expiresAt, member }) => ({
     id,
     status,
     assignedAt: assignedAt.toISOString(),
     expiresAt: expiresAt.toISOString(),
-    userName: member?.user.name || recipientEmail,
-    userEmail: recipientEmail,
+    userName: member.user.name || member.user.email,
+    userEmail: member.user.email.toLowerCase(),
   }));
 
   const availableUsers: OrganizationUser[] = members.map((member) => ({
-    id: member.id,
-    name: member.user.name || "Unnamed User",
-    email: member.user.email,
+    id: member.memberId,
+    name: member.name,
+    email: member.email,
   }));
 
   let rolePlay: RolePlayData;

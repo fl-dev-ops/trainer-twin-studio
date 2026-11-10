@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { awaitingUsers } from "@/lib/invite/awaiting";
+import { orgPeople } from "@/lib/org-people";
 import { db } from "@/lib/db";
 import { loadLatestFidelityReport } from "@/lib/fidelity-report.server";
 import { listUsers } from "@/lib/learners";
@@ -236,53 +236,22 @@ export const pageRouter = t.router({
       where: { id: orgId },
       select: { id: true, name: true, slug: true, logo: true, websiteUrl: true, metadata: true },
     });
-    // Team: studio only (admin, team). Everyone in the org plus pending invites; disabled members stay listed. Users
-    // also lists people assigned a twin or role play by email who haven't joined yet (they join by opening their link).
-    const team = studio
-      ? await Promise.all([
-          db.member.findMany({
-            where: { organizationId: orgId },
-            orderBy: { createdAt: "asc" },
-            select: { id: true, userId: true, role: true, createdAt: true, disabledAt: true, user: { select: { name: true, email: true } } },
-          }),
-          db.invitation.findMany({
-            where: { organizationId: orgId, status: "pending", expiresAt: { gt: new Date() } },
-            orderBy: { createdAt: "desc" },
-            select: { id: true, email: true, role: true, expiresAt: true },
-          }),
-          db.twinAssignment.findMany({
-            where: { orgId, status: "active", userId: null },
-            orderBy: { createdAt: "desc" },
-            select: { recipientEmail: true, agent: { select: { name: true } } },
-          }),
-          db.rolePlayAssignment.findMany({
-            where: { orgId, status: "pending", memberId: null },
-            orderBy: { assignedAt: "desc" },
-            select: { recipientEmail: true, deployment: { select: { agent: { select: { name: true } } } } },
-          }),
-        ])
-      : null;
+    // Team: studio only (admin, team). Everyone in the org (lib/org-people.ts); disabled members stay listed.
+    const team = studio ? await orgPeople(orgId, { includeDisabled: true }) : null;
     return {
       user: { id: ctx.user.id, name: ctx.user.name, email: ctx.user.email },
       organization: { ...organization, accentColor: parseAccentColor(organization.metadata) },
       team: team
         ? {
-            members: team[0].map(({ user, createdAt, disabledAt, ...member }) => ({
-              ...member,
-              name: user.name,
-              email: user.email,
-              createdAt: createdAt.toISOString(),
-              disabledAt: disabledAt?.toISOString() ?? null,
+            members: team.map((person) => ({
+              id: person.memberId,
+              userId: person.userId,
+              role: person.role,
+              name: person.name,
+              email: person.email,
+              createdAt: person.addedAt.toISOString(),
+              disabledAt: person.disabledAt?.toISOString() ?? null,
             })),
-            invitations: team[1].map((invitation) => ({ ...invitation, expiresAt: invitation.expiresAt.toISOString() })),
-            awaiting: awaitingUsers({
-              memberEmails: team[0].map((member) => member.user.email),
-              invitedEmails: team[1].map((invitation) => invitation.email),
-              assignments: [
-                ...team[2].map((row) => ({ email: row.recipientEmail, title: row.agent.name })),
-                ...team[3].map((row) => ({ email: row.recipientEmail, title: row.deployment.agent.name })),
-              ],
-            }),
           }
         : null,
     };

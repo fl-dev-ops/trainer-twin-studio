@@ -1,4 +1,5 @@
-import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomBytes } from "node:crypto";
+import { orgPerson } from "@/lib/org-people";
 import { assignmentMatchesUser } from "@/lib/assignments";
 import { db } from "@/lib/db";
 import { Prisma } from "@/lib/generated/prisma/client";
@@ -6,7 +7,7 @@ import { ensureDeployment, type DeliveryMode } from "@/lib/deployments";
 import { initRuntimeState } from "@/lib/runtime/runtime";
 import { getAgentConfigForAgent } from "@/lib/specs";
 import { assertNotDisabledIn } from "@/lib/members";
-import { isStudioRole, LEARNER_ROLE } from "@/lib/org";
+import { isStudioRole } from "@/lib/org";
 import { TwinAccessError, twinAccessByAgent, twinAccessByCode } from "@/lib/twin-access";
 import { pinTwinSkills, TWIN_SOURCE } from "@/lib/twins";
 import { beforeSettings, usesBeforeSettings } from "@/lib/context-upload";
@@ -229,7 +230,7 @@ export async function activateSession(input: {
   const person = { id: input.userId, email: input.userEmail ?? "" };
   // Learners' calls use their minutes; admin and team voice calls (trying agents, calibrating twins) use the org's
   // credits when Meteroid bills the org (chargesOrg below), and are free otherwise.
-  const membership = await db.member.findFirst({ where: { userId: input.userId, organizationId: input.orgId }, select: { role: true } });
+  const membership = await orgPerson(input.orgId, { userId: input.userId });
   const metered = !isStudioRole(membership?.role);
 
   const roleplayInvite = input.shareCode
@@ -256,7 +257,7 @@ export async function activateSession(input: {
     const found = roleplayInvite;
     if (
       !found
-      || !assignmentMatchesUser(found, { id: input.userId, email: input.userEmail ?? "" })
+      || !assignmentMatchesUser(found, { id: input.userId })
       || !["pending", "used"].includes(found.status)
       || found.deployment.status !== "active"
     ) return null;
@@ -362,9 +363,11 @@ export async function activateSession(input: {
   if (snapshot.docIds.length && usesBeforeSettings(snapshot.agent.data, snapshot.agent.kind) && !beforeSettings(snapshot.agent.data).preUpload) {
     throw new TwinAccessError(snapshot.agent.kind === "TWIN" ? "This twin does not take documents" : "This role play does not take documents", 400);
   }
-  // An invited learner (role-play invite, twin assignment or twin link) joins the org as a `user` on first start
-  // (people may belong to several orgs).
-  if (assignmentId || twin?.assignmentId) await ensureLearnerMember(input.orgId, input.userId);
+  // Everyone who starts a call is a member of the org (specs/people.md rule 6): a twin share link added them above
+  // (twinAccessByCode); nothing here adds anyone.
+  if (!membership && !(await orgPerson(input.orgId, { userId: input.userId }))) {
+    throw new TwinAccessError("You are not a member of this organization. Ask your trainer to add you.", 403);
+  }
   const primaryId = snapshot.docIds[0];
   const primary = snapshot.documents.find((document) => document.id === primaryId);
   const compiledConfig = await getAgentConfigForAgent(agentId, input.orgId, primaryId, snapshot.docIds);
@@ -438,17 +441,6 @@ export async function activateSession(input: {
 
   // secondsLeft: the call must end after this many seconds (metered calls; null = not metered).
   return { id: session.id, agentSlug: session.agentSlug, status: "active", mode, runtimeToken: token, secondsLeft: allowedSeconds };
-}
-
-/** Gives a learner with no membership role `user` in the org (no-op when they already belong to it). */
-async function ensureLearnerMember(orgId: string, userId: string) {
-  const member = await db.member.findFirst({ where: { userId, organizationId: orgId }, select: { id: true } });
-  if (member) return;
-  await db.member.create({ data: { id: randomUUID(), organizationId: orgId, userId, role: LEARNER_ROLE, createdAt: new Date() } })
-    .catch(async (error: unknown) => {
-      // A parallel start created it first.
-      if (!(await db.member.findFirst({ where: { userId, organizationId: orgId }, select: { id: true } }))) throw error;
-    });
 }
 
 export async function authorizeRuntimeSession(idOrToken: string, tokenParam?: string) {

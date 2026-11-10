@@ -1,4 +1,5 @@
 import { refreshOrgCredits, sendOrgUsage } from "@/lib/org-credits";
+import { announceNewGrants } from "@/lib/org-credits-email";
 
 /** Steps of the report-org-usage and sync-org-credits workflows (lib/org-credits.ts). Retried on failure; safe to repeat. */
 
@@ -12,4 +13,10 @@ export async function sendUsage(orgId: string): Promise<string | null> {
 export async function refresh(orgId: string, sentAt: string | null): Promise<boolean> {
   "use step";
   return (await refreshOrgCredits(orgId, sentAt ? new Date(sentAt) : null)).counted;
+}
+
+/** Emails the org's admin about each grant not announced yet (once per grant). */
+export async function announce(orgId: string): Promise<number> {
+  "use step";
+  return (await announceNewGrants(orgId)).announced;
 }

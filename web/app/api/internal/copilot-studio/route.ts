@@ -1,3 +1,4 @@
+import { orgPerson } from "@/lib/org-people";
 import { db } from "@/lib/db";
 import { copilotStudioInput, runCopilotStudio } from "@/lib/copilot-studio";
 import { MinutesError } from "@/lib/minutes";
@@ -20,10 +21,9 @@ export async function POST(request: Request) {
   const userId = request.headers.get("x-trainertwin-user-id")?.trim();
   if (!orgId || !userId) return Response.json({ error: "Organization and user are required" }, { status: 400 });
 
-  const member = await db.member.findFirst({
-    where: { organizationId: orgId, userId, disabledAt: null },
-    select: { role: true, user: { select: { name: true } }, organization: { select: { slug: true } } },
-  });
+  const person = await orgPerson(orgId, { userId });
+  const org = await db.organization.findUnique({ where: { id: orgId }, select: { slug: true } });
+  const member = person && !person.disabled && org ? { role: person.role, user: { name: person.name }, organization: org } : null;
   if (!member || !isStudioRole(member.role)) return Response.json({ error: "Only studio members can use the copilot" }, { status: 403 });
 
   const parsed = copilotStudioInput.safeParse(await request.json().catch(() => null));

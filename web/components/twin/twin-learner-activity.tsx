@@ -1,5 +1,4 @@
 import { useRouter } from "next/navigation";
-import { PendingBadge } from "@/components/assign-dialog";
 import { SessionTime } from "@/components/sessions/session-time";
 import { helpfulTone } from "@/components/twin/twin-session-item";
 import { Badge } from "@/components/ui/badge";
@@ -31,7 +30,6 @@ export function TwinLearnerActivity({ learners }: { learners: TwinLearner[] }) {
               <span className="flex min-w-0 flex-col gap-0.5">
                 <span className="flex min-w-0 items-center gap-2">
                   <span className="truncate text-sm font-semibold">{learner.name}</span>
-                  {learner.pending ? <PendingBadge /> : null}
                 </span>
                 <span className="text-body-s leading-body-s text-muted-foreground">
                   {learner.sessions && learner.lastAt ? (

@@ -11,7 +11,7 @@ import type { TwinOutputs } from "@/lib/twin/trpc";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SwitchToggle } from "@/components/switch-toggle";
-import { AssignDialog, PendingBadge } from "@/components/assign-dialog";
+import { AssignDialog } from "@/components/assign-dialog";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
 import { useRefresh } from "@/lib/use-refresh";
@@ -122,7 +122,7 @@ export function TwinEditPage({
       if (done) toast.success(`${people(done)} assigned`);
       if (result.skipped) toast.info(`${people(result.skipped)} already had this twin`);
       if (result.emailProgress) void followEmailProgress(result.emailProgress, result.emailsQueued);
-      else if (result.emailFailures) toast.warning(`${result.emailFailures} invite email(s) could not be sent.`);
+      else if (result.emailFailures) toast.warning(`${result.emailFailures} email(s) could not be sent.`);
       refresh();
       return true;
     } catch (error) {
@@ -376,7 +376,6 @@ export function TwinEditPage({
                     <span className="truncate text-sm font-semibold">{u.name}</span>
                     <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
                       {u.name !== u.email ? <span className="truncate">{u.email}</span> : null}
-                      {u.pending ? <PendingBadge /> : null}
                     </span>
                   </span>
                 </span>

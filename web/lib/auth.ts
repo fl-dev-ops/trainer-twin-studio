@@ -2,13 +2,12 @@ import { apiKey } from "@better-auth/api-key";
 import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import { organization } from "better-auth/plugins";
+import { emailOTP, organization } from "better-auth/plugins";
 import { organizationAccess, organizationRoles } from "@/lib/auth-roles";
 import { nextCookies } from "better-auth/next-js";
 import { db } from "@/lib/db";
 import { BASE_DOMAIN, safeFamilyRedirect } from "@/lib/base-domain";
-import { sendPasswordResetEmail } from "@/lib/email";
-import { beforeOrgInvitation, emailOrgInvitation } from "@/lib/invite/org-hooks";
+import { sendOtpEmail } from "@/lib/email";
 import { ADMIN_ROLE, assertNoSecondAdmin, DISABLED_MESSAGE, isDisabledUser, NO_REMOVAL_MESSAGE, ONE_ADMIN_MESSAGE } from "@/lib/members";
 
 
@@ -18,16 +17,8 @@ export const auth = betterAuth({
   // The session is kept in a signed cookie for 5 minutes, so most requests skip the session lookup (the DB is far
   // from the functions). Studio access still re-checks the member (role, disabled) on every request (lib/org.ts).
   session: { cookieCache: { enabled: true, maxAge: 5 * 60 } },
-  emailAndPassword: {
-    enabled: true,
-    sendResetPassword: async (data) => {
-      await sendPasswordResetEmail({
-        to: data.user.email,
-        resetUrl: data.url,
-        userName: data.user.name,
-      });
-    },
-  },
+  // Sign-in is Google or a one-time email code (specs/people.md rule 10): no passwords anywhere.
+  emailAndPassword: { enabled: false },
   socialProviders: process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
     ? {
         google: {
@@ -52,6 +43,9 @@ export const auth = betterAuth({
   account: {
     accountLinking: {
       trustedProviders: ["google"],
+      // People added to an org get an account before they ever sign in (lib/org-people.ts), unverified. Google may
+      // link to it: with no passwords, nobody else can hold a way into that account.
+      requireLocalEmailVerified: false,
     },
   },
   plugins: [
@@ -65,9 +59,9 @@ export const auth = betterAuth({
       organizationLimit: 1,
       organizationHooks: {
         // People may belong to several orgs (the studio works in one at a time: lib/org.ts).
-        beforeCreateInvitation: async ({ invitation, organization }) => {
-          await assertNoSecondAdmin(invitation.role, organization.id);
-          await beforeOrgInvitation(invitation, organization.id);
+        // People are added straight to the org (lib/org-people.ts, Settings); there are no invitations to accept.
+        beforeCreateInvitation: async () => {
+          throw new APIError("FORBIDDEN", { message: "Add people from Settings; they sign in and are in." });
         },
         beforeAddMember: async ({ member, organization }) => {
           await assertNoSecondAdmin(member.role, organization.id);
@@ -80,7 +74,17 @@ export const auth = betterAuth({
           throw new APIError("FORBIDDEN", { message: NO_REMOVAL_MESSAGE });
         },
       },
-      sendInvitationEmail: emailOrgInvitation,
+    }),
+    emailOTP({
+      otpLength: 6,
+      expiresIn: 10 * 60,
+      allowedAttempts: 3,
+      storeOTP: "hashed",
+      sendVerificationOTP: async ({ email, otp, type }) => {
+        if (type !== "sign-in") return; // only sign-in codes are used
+        const result = await sendOtpEmail({ to: email, otp });
+        if (!result.success) throw new APIError("INTERNAL_SERVER_ERROR", { message: "Could not send the code. Try again, or use Google." });
+      },
     }),
     apiKey({
       references: "organization",

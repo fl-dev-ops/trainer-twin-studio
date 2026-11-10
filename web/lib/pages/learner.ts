@@ -7,6 +7,7 @@ import { assignmentMatchesUser } from "@/lib/assignments";
 import { signInUrl } from "@/lib/base-domain";
 import { db } from "@/lib/db";
 import { isStudioRole } from "@/lib/org";
+import { orgPerson } from "@/lib/org-people";
 import { agentPhotoUrls } from "@/lib/persona-media";
 import { presignedGetUrl } from "@/lib/s3";
 import { resolveSessionUser } from "@/lib/session-user";
@@ -71,7 +72,7 @@ export async function loadSharedSession(code: string): Promise<SharedSessionView
   // A learner's minutes left in this org (null for admin and team, who practise without using minutes).
   const minutesLeft = async (): Promise<number | null> => {
     if (!org) return null;
-    const member = await db.member.findFirst({ where: { organizationId: org.id, userId: user.id }, select: { role: true } });
+    const member = await orgPerson(org.id, { userId: user.id });
     if (isStudioRole(member?.role)) return null;
     return Math.floor(Math.max(0, (await learnerBalance(org.id, user.email)).balanceSeconds) / 60);
   };
@@ -82,7 +83,6 @@ export async function loadSharedSession(code: string): Promise<SharedSessionView
       id: true,
       orgId: true,
       status: true,
-      recipientEmail: true,
       member: { select: { userId: true } },
       deployment: {
         select: {
@@ -194,15 +194,15 @@ export async function twinAccessFor(org: { id: string }, user: { id: string; nam
   } catch (error) {
     if (!(error instanceof TwinAccessError)) throw error;
     // In the learner's words: why they can't talk (messages from usable() in lib/twin-access.ts).
-    const reason = /removed|ended/.test(error.message) ? "ended" : "unassigned";
+    const reason = /removed|ended/.test(error.message) ? "ended" : (await orgPerson(org.id, { userId: user.id })) ? "unassigned" : "notMember";
     return { ok: false, name: user.name || user.email, email: user.email, reason };
   }
 }
 
 /** Whether this user is on the org's studio team (admin, team). */
 export async function isStudioMember(orgId: string, userId: string) {
-  const membership = await db.member.findFirst({ where: { organizationId: orgId, userId }, select: { role: true } });
-  return isStudioRole(membership?.role);
+  const membership = await orgPerson(orgId, { userId });
+  return isStudioRole(membership?.role) && !membership?.disabled;
 }
 
 /**

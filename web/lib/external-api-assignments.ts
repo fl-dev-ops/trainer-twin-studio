@@ -1,9 +1,10 @@
-import { deliverInviteEmail } from "@/lib/schedule-invite-emails";
 import { BASE_DOMAIN } from "@/lib/base-domain";
 import { contextUploadFromAgentData } from "@/lib/context-upload";
 import { db } from "@/lib/db";
+import { orgName, personEmailFor } from "@/lib/invite/person-email";
 import { learnerBalance } from "@/lib/minutes";
-import { LEARNER_ROLE, STUDIO_ROLES } from "@/lib/org";
+import { addPeopleToOrg, LEARNER, orgPeople, type AddedPerson } from "@/lib/org-people";
+import { deliverEmail } from "@/lib/queue-emails";
 
 /** Shared by /api/v1/assignments and /api/v1/assignments/:id (docs/openapi.yaml, Assignments). */
 
@@ -18,43 +19,53 @@ export function findScenario(orgId: string, slug: string) {
 }
 
 /** The trainer the key acts for: its creator while they are still a studio member (403 otherwise). */
-export function findKeyTrainer(orgId: string, actorUserId: string | null) {
-  return db.member.findFirst({
-    where: { organizationId: orgId, role: { in: [...STUDIO_ROLES] }, ...(actorUserId ? { userId: actorUserId } : {}) },
-    select: { userId: true, user: { select: { name: true } } },
-  });
+export async function findKeyTrainer(orgId: string, actorUserId: string | null) {
+  const [trainer] = await orgPeople(orgId, { roles: ["admin", "team"], ...(actorUserId ? { userIds: [actorUserId] } : {}) });
+  return trainer ?? null;
 }
 
-/** The assignment email; delivery failure never undoes the assignment (the caller reports `emailSent`). */
+/**
+ * The learner an API call names (specs/people.md): by `userId`, an existing learner of the org; by email, added to the
+ * org as a learner when new (with their starting credits). Refused (PeopleError, MinutesError) like the dashboard.
+ */
+export async function learnerFor(orgId: string, by: { userId?: string; email?: string }, trainerUserId: string): Promise<AddedPerson | null> {
+  if (by.email) return (await addPeopleToOrg({ orgId, emails: [by.email], role: LEARNER, byUserId: trainerUserId }))[0];
+  const [person] = await orgPeople(orgId, { roles: [LEARNER], userIds: [by.userId!] });
+  return person ? { ...person, added: false, startingCredits: 0 } : null;
+}
+
+/** The assignment email ("added" too when they joined just now); delivery failure never undoes it (`emailSent`). */
 export async function emailAssignment(input: {
-  orgId: string;
-  /** One email per assignment link: a background retry (workflows/invite-emails.ts) can't send it twice. */
+  org: { id: string; slug: string };
+  /** One email per assignment link: a background retry (workflows/send-emails.ts) can't send it twice. */
   idempotencyKey: string;
-  to: string;
-  userName?: string | null;
+  person: AddedPerson;
   scenario: { name: string; data: unknown };
   practiceUrl: string;
   trainerName: string;
 }) {
   const data = input.scenario.data as { objective?: unknown } | null;
   const upload = contextUploadFromAgentData(input.scenario.data);
-  const { balanceSeconds } = await learnerBalance(input.orgId, input.to);
+  const { balanceSeconds } = await learnerBalance(input.org.id, input.person.email);
+  const email = personEmailFor({
+    person: input.person,
+    org: { slug: input.org.slug, name: await orgName(input.org.id) },
+    by: { name: input.trainerName },
+    key: input.idempotencyKey,
+    roleplay: {
+      name: input.scenario.name,
+      url: input.practiceUrl,
+      objective: typeof data?.objective === "string" ? data.objective : undefined,
+      requiredArtifact: upload.required && upload.prompt ? { label: upload.label, prompt: upload.prompt } : null,
+    },
+    balance: Math.floor(Math.max(0, balanceSeconds) / 60),
+  });
   // Sent now (the response says whether it went); a failure keeps being retried in the background.
-  const delivery = await deliverInviteEmail({ kind: "roleplay", idempotencyKey: input.idempotencyKey, args: {
-    to: input.to,
-    userName: input.userName ?? undefined,
-    rolePlayName: input.scenario.name,
-    rolePlayObjective: typeof data?.objective === "string" ? data.objective : undefined,
-    practiceUrl: input.practiceUrl,
-    trainerName: input.trainerName,
-    requiredArtifact: upload.required && upload.prompt ? { label: upload.label, prompt: upload.prompt } : null,
-    minutes: Math.floor(Math.max(0, balanceSeconds) / 60),
-  } });
-  return delivery.sent;
+  return (await deliverEmail({ ...email, idempotencyKey: input.idempotencyKey })).sent;
 }
 
 /** The documented `Assignment` object (POST and PATCH responses). */
-export const assignmentView = (row: { id: string; assignedAt: Date }, email: string, userId: string | null, scenario: string) =>
+export const assignmentView = (row: { id: string; assignedAt: Date }, email: string, userId: string, scenario: string) =>
   ({ id: row.id, assignedAt: row.assignedAt, userId, email, scenario });
 
 export const assignmentDetailSelect = {
@@ -62,7 +73,6 @@ export const assignmentDetailSelect = {
   assignedAt: true,
   shareCode: true,
   status: true,
-  recipientEmail: true,
   member: { select: { user: { select: { id: true, name: true, email: true } } } },
   deployment: { select: { agent: { select: { slug: true, name: true, version: true, visibility: true } } } },
 } as const;
@@ -72,24 +82,12 @@ type DetailRow = {
   assignedAt: Date;
   shareCode: string;
   status: string;
-  recipientEmail: string;
-  member: { user: { id: string; name: string; email: string } } | null;
+  member: { user: { id: string; name: string; email: string } };
   deployment: { agent: { slug: string; name: string; version: number; visibility: string } };
 };
 
-/**
- * The documented `AssignmentDetail` objects. The learner is the member who used the link, else the org learner with the
- * assigned email (an assignment made by userId is only bound to the member once they open it), else just the email.
- */
+/** The documented `AssignmentDetail` objects: the learner is always the assignment's member (specs/people.md). */
 export async function assignmentDetails(orgId: string, orgSlug: string, rows: DetailRow[]) {
-  const unbound = [...new Set(rows.filter((row) => !row.member).map((row) => row.recipientEmail))];
-  const learners = unbound.length
-    ? await db.member.findMany({
-        where: { organizationId: orgId, role: LEARNER_ROLE, disabledAt: null, user: { email: { in: unbound } } },
-        select: { user: { select: { id: true, name: true, email: true } } },
-      })
-    : [];
-  const byEmail = new Map(learners.map(({ user }) => [user.email.toLowerCase(), user]));
   // How often each was practised: sessions that started (a role play link starts a new one each time).
   const practice = rows.length
     ? await db.interviewSession.groupBy({
@@ -106,7 +104,7 @@ export async function assignmentDetails(orgId: string, orgSlug: string, rows: De
     status: row.status,
     practiceCount: practiceById.get(row.id)?._count._all ?? 0,
     lastPracticedAt: practiceById.get(row.id)?._max.startedAt ?? null,
-    user: row.member?.user ?? byEmail.get(row.recipientEmail) ?? { id: null, name: null, email: row.recipientEmail },
+    user: { ...row.member.user, email: row.member.user.email.toLowerCase() },
     scenario: row.deployment.agent,
     practiceUrl: practiceUrl(orgSlug, row.shareCode),
   }));

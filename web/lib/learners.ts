@@ -1,14 +1,14 @@
 import { db } from "@/lib/db";
 import type { AgentKind } from "@/lib/generated/prisma/client";
 import { creditsLeftFor } from "@/lib/minutes";
-import { LEARNER_ROLE } from "@/lib/org";
+import { LEARNER, orgPeople } from "@/lib/org-people";
 
 type Person = { id: string; name: string; email: string; image: string | null };
 
 export type LearnerRow = {
   email: string;
   name: string;
-  userId: string | null;
+  userId: string;
   image: string | null;
   scenarioCount: number;
   sessionCount: number;
@@ -17,49 +17,34 @@ export type LearnerRow = {
 };
 
 type Inputs = {
-  assignments: { recipientEmail: string; agentId: string }[];
-  sessions: { agentId: string; user: Person; startedAt: Date | null; endedAt: Date | null; createdAt: Date }[];
-  members: Person[];
-  /** Accounts for assignment-only emails (learners who have not practised yet). */
-  users: Person[];
+  /** The org's learners (lib/org-people.ts): every row is one of them. */
+  learners: Person[];
+  assignments: { userId: string; agentId: string }[];
+  sessions: { agentId: string; user: { id: string }; startedAt: Date | null; endedAt: Date | null; createdAt: Date }[];
 };
 
 // shortcut: a session whose end was never recorded is not counted; a runaway one is capped.
 // Upgrade to the usage ledger's connected_seconds once it is migrated and live.
 const MAX_SESSION_SECONDS = 3 * 60 * 60;
 
-/** One row per learner (by email): what they're assigned and how much they've practised. */
-export function summarizeLearners({ assignments, sessions, members, users }: Inputs): LearnerRow[] {
-  const rows = new Map<string, LearnerRow & { scenarios: Set<string> }>();
-  const userByEmail = new Map(users.map((u) => [u.email.toLowerCase(), u]));
+/** One row per learner: what they're assigned and how much they've practised. Sessions of anyone else are ignored. */
+export function summarizeLearners({ learners, assignments, sessions }: Inputs): LearnerRow[] {
+  const rows = new Map(learners.map((person) => [person.id, {
+    email: person.email.toLowerCase(),
+    name: person.name || person.email,
+    userId: person.id,
+    image: person.image,
+    scenarioCount: 0,
+    sessionCount: 0,
+    practiceSeconds: 0,
+    lastActiveAt: null as string | null,
+    scenarios: new Set<string>(),
+  }]));
 
-  const row = (email: string, person?: Person) => {
-    const key = email.toLowerCase();
-    let entry = rows.get(key);
-    const account = person ?? userByEmail.get(key);
-    if (!entry) {
-      entry = {
-        email: key,
-        name: account?.name || key,
-        userId: account?.id ?? null,
-        image: account?.image ?? null,
-        scenarioCount: 0,
-        sessionCount: 0,
-        practiceSeconds: 0,
-        lastActiveAt: null,
-        scenarios: new Set(),
-      };
-      rows.set(key, entry);
-    } else if (account && !entry.userId) {
-      Object.assign(entry, { name: account.name || entry.name, userId: account.id, image: account.image });
-    }
-    return entry;
-  };
-
-  for (const member of members) row(member.email, member);
-  for (const { recipientEmail, agentId } of assignments) row(recipientEmail).scenarios.add(agentId);
+  for (const { userId, agentId } of assignments) rows.get(userId)?.scenarios.add(agentId);
   for (const session of sessions) {
-    const entry = row(session.user.email, session.user);
+    const entry = rows.get(session.user.id);
+    if (!entry) continue;
     entry.scenarios.add(session.agentId);
     entry.sessionCount += 1;
     if (session.startedAt && session.endedAt) {
@@ -79,7 +64,7 @@ export function summarizeLearners({ assignments, sessions, members, users }: Inp
 export type UsersRow = {
   email: string;
   name: string;
-  userId: string | null;
+  userId: string;
   image: string | null;
   twinSessions: number;
   roleplaySessions: number;
@@ -133,57 +118,29 @@ export async function listUsers(orgId: string): Promise<UsersRow[]> {
   );
 }
 
-/** Learners of one module: role-play invites or twin assignments, and that module's sessions. */
+/** The org's learners for one module: their twin or role-play assignments and that module's sessions. */
 export async function listLearners(orgId: string, kind: AgentKind): Promise<LearnerRow[]> {
-  const person = { select: { id: true, name: true, email: true, image: true } } as const;
-  const [assignments, sessions, members] = await Promise.all([
+  const [learners, assignments, sessions] = await Promise.all([
+    orgPeople(orgId, { roles: [LEARNER], includeDisabled: true }),
     kind === "ROLEPLAY"
       ? db.rolePlayAssignment.findMany({
           where: { orgId, status: { in: ["pending", "used"] } },
-          select: { recipientEmail: true, deployment: { select: { agentId: true } } },
-        }).then((rows) => rows.map((a) => ({ recipientEmail: a.recipientEmail, agentId: a.deployment.agentId })))
-      : db.twinAssignment.findMany({ where: { orgId, status: "active" }, select: { recipientEmail: true, agentId: true } }),
-    // Only learners' sessions: admins testing their twins ("Try as learner") don't create a Users row.
+          select: { member: { select: { userId: true } }, deployment: { select: { agentId: true } } },
+        }).then((rows) => rows.map((a) => ({ userId: a.member.userId, agentId: a.deployment.agentId })))
+      : db.twinAssignment.findMany({ where: { orgId, status: "active" }, select: { userId: true, agentId: true } }),
     db.interviewSession.findMany({
-      where: { orgId, deletedAt: null, agent: { kind }, user: { members: { some: { organizationId: orgId, role: LEARNER_ROLE } } } },
-      select: { agentId: true, startedAt: true, endedAt: true, createdAt: true, user: person },
+      where: { orgId, deletedAt: null, agent: { kind } },
+      select: { agentId: true, startedAt: true, endedAt: true, createdAt: true, user: { select: { id: true } } },
     }),
-    db.member.findMany({ where: { organizationId: orgId, role: LEARNER_ROLE }, select: { user: person } }),
   ]);
-  const known = new Set([...sessions.map((s) => s.user.email), ...members.map((m) => m.user.email)].map((e) => e.toLowerCase()));
-  const missing = [...new Set(assignments.map((a) => a.recipientEmail.toLowerCase()))].filter((e) => !known.has(e));
-  const users = missing.length ? await db.user.findMany({ where: { email: { in: missing } }, ...person }) : [];
-
   return summarizeLearners({
+    learners: learners.map((person) => ({ id: person.userId, name: person.name, email: person.email, image: person.image })),
     assignments,
     sessions,
-    members: members.map((m) => m.user),
-    users,
   });
 }
 
-/**
- * Who an assign dialog can pick: the org's learners, plus people invited as users (Settings > Users) who haven't
- * accepted yet (`pending`), so they can be given a twin or role play right away. Emails lowercased, members first.
- */
-export async function assignablePeople(orgId: string): Promise<{ email: string; name: string; image: string | null; pending: boolean }[]> {
-  const [members, invitations] = await Promise.all([
-    db.member.findMany({
-      where: { organizationId: orgId, role: LEARNER_ROLE },
-      orderBy: { createdAt: "asc" },
-      select: { user: { select: { name: true, email: true, image: true } } },
-    }),
-    db.invitation.findMany({
-      where: { organizationId: orgId, role: LEARNER_ROLE, status: "pending", expiresAt: { gt: new Date() } },
-      orderBy: { createdAt: "desc" },
-      select: { email: true },
-    }),
-  ]);
-  const people = new Map<string, { email: string; name: string; image: string | null; pending: boolean }>();
-  for (const { user } of members) people.set(user.email.toLowerCase(), { email: user.email.toLowerCase(), name: user.name || user.email, image: user.image, pending: false });
-  for (const { email } of invitations) {
-    const key = email.toLowerCase();
-    if (!people.has(key)) people.set(key, { email: key, name: key, image: null, pending: true });
-  }
-  return [...people.values()];
+/** Who an assign dialog can pick: the org's learners (enabled), oldest first. */
+export async function assignablePeople(orgId: string): Promise<{ userId: string; email: string; name: string; image: string | null }[]> {
+  return (await orgPeople(orgId, { roles: [LEARNER] })).map(({ userId, email, name, image }) => ({ userId, email, name, image }));
 }

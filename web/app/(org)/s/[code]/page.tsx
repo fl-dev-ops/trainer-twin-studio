@@ -54,7 +54,7 @@ export default function SharedSessionPage() {
       <main className="grid min-h-svh place-items-center p-4">
         <Card className="w-full max-w-md text-center">
           <CardHeader>
-            <CardTitle>Use your invited account</CardTitle>
+            <CardTitle>Use the account you were added with</CardTitle>
             <CardDescription>
               You are signed in as {loaded.email}. Use the account your trainer assigned to open this practice link.
             </CardDescription>

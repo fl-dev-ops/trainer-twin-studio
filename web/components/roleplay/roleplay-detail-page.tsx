@@ -16,7 +16,7 @@ const card = "flex flex-col rounded-tt-lg border border-(--card-border) bg-card 
 const kicker = "text-overline font-medium tracking-overline uppercase text-muted-foreground";
 
 const STATUS: Record<string, { label: string; tone: string }> = {
-  pending: { label: "Invited", tone: "bg-info-subtle text-info" },
+  pending: { label: "Assigned", tone: "bg-info-subtle text-info" },
   used: { label: "Practised", tone: "bg-success-subtle text-success" },
   expired: { label: "Expired", tone: "bg-(--tone-control) text-muted-foreground" },
   cancelled: { label: "Cancelled", tone: "bg-(--tone-control) text-muted-foreground" },
@@ -115,7 +115,7 @@ export function RoleplayDetailPage({ roleplay }: { roleplay: Detail }) {
                     <span className="flex min-w-0 flex-col">
                       <span className="truncate text-sm font-medium">{member.name}</span>
                       <span className="truncate text-xs text-muted-foreground">
-                        {member.email} · invited <SessionTime iso={member.assignedAt} />
+                        {member.email} · assigned <SessionTime iso={member.assignedAt} />
                       </span>
                     </span>
                   </span>

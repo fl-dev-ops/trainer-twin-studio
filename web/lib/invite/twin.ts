@@ -1,7 +1,9 @@
-import { giveStartingMinutes, learnerMinutes } from "@/lib/minutes";
-import { queueInviteEmails } from "@/lib/schedule-invite-emails";
+import { learnerMinutes } from "@/lib/minutes";
+import { lastDay, orgName, personEmailFor } from "@/lib/invite/person-email";
+import { addPeopleToOrg, LEARNER } from "@/lib/org-people";
+import { queueEmails } from "@/lib/queue-emails";
 import { assignTwin, twinSharePath, twinShareUrl } from "@/lib/twin-access";
-import type { InviteEmail } from "@/workflows/invite-emails";
+import type { OutboundEmail } from "@/workflows/send-emails";
 
 export type TwinAssignInput = {
   org: { id: string; slug: string };
@@ -14,38 +16,39 @@ export type TwinAssignInput = {
 };
 
 /**
- * Gives new people their starting minutes (all or nothing: refused with MinutesError when the org balance is short),
- * then assignTwin; returns what happened and the emails each new or reactivated learner should get (their link and
- * minutes). The assign-twin workflow's first step (workflows/assign-twin.ts).
+ * Gives a twin to people by email (specs/people.md): adds them to the org as learners first (new ones with their
+ * starting credits; all or nothing), then assigns the twin, then one email each to whoever got new or restored access
+ * ("added" too when they joined just now). The assign-twin workflow's first step (workflows/assign-twin.ts).
  */
 export async function assignTwinLearners(input: TwinAssignInput) {
-  await giveStartingMinutes({ orgId: input.org.id, emails: input.emails, minutes: input.startingMinutes, actorUserId: input.by.id });
+  const people = await addPeopleToOrg({ orgId: input.org.id, emails: input.emails, role: LEARNER, byUserId: input.by.id, startingMinutes: input.startingMinutes });
   const { stats, invites } = await assignTwin({
     orgId: input.org.id,
     agentId: input.agent.id,
-    emails: input.emails,
+    people: people.map(({ userId, email }) => ({ userId, email })),
     accessUntil: input.accessUntil,
     assignedByUserId: input.by.id,
   });
+  const byEmail = new Map(people.map((person) => [person.email, person]));
   const balances = await learnerMinutes(input.org.id, invites.map((invite) => invite.to));
-  // The readable twin link: the personal /s/<code> link would work too, but the assignment is already bound to
-  // the invited email, so matching it by sign-in (lib/pages/learner.ts) is all the learner needs.
-  const sharePath = await twinSharePath(input.org.id, input.org.slug, input.agent.id);
-  const emails: InviteEmail[] = invites.map(({ to }) => ({
-    kind: "twin" as const,
-    args: {
-      to,
-      twinName: input.agent.name,
-      minutes: Math.floor((balances.get(to)?.balanceSeconds ?? 0) / 60),
-      practiceUrl: twinShareUrl(input.org.slug, sharePath),
-      trainerName: input.by.name,
-    },
-  }));
-  return { stats, emails };
+  const org = { slug: input.org.slug, name: await orgName(input.org.id) };
+  // The readable twin link: access is the signed-in member's own assignment (lib/pages/learner.ts).
+  const url = twinShareUrl(input.org.slug, await twinSharePath(input.org.id, input.org.slug, input.agent.id));
+  const emails: OutboundEmail[] = invites.map(({ to, shareCode }) =>
+    personEmailFor({
+      person: byEmail.get(to)!,
+      org,
+      by: input.by,
+      key: `twin:${shareCode}`,
+      twin: { name: input.agent.name, url, until: lastDay(input.accessUntil) },
+      balance: Math.floor(Math.max(0, balances.get(to)?.balanceSeconds ?? 0) / 60),
+    }),
+  );
+  return { stats: { ...stats, joined: people.filter((person) => person.added).length }, emails };
 }
 
 /** Both parts here, without the workflow (the copilot, and when the workflow can't start): assign, then email. */
 export async function assignTwinAndInvite(input: TwinAssignInput) {
   const { stats, emails } = await assignTwinLearners(input);
-  return { ...stats, ...(await queueInviteEmails(input.org.id, emails)) };
+  return { ...stats, ...(await queueEmails(input.org.id, emails)) };
 }

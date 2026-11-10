@@ -1,13 +1,13 @@
 ---
 title: "Users"
-description: "Invite, list, update, and remove learners in your organization."
+description: "Add, list, update, and remove learners in your organization."
 ---
 
-The users API manages learners, not trainers. Creating a user sends an organization invitation instead of creating an account with a password: the email, **Join *your organization* on TrainerTwin**, links to your organization's home page, where the learner continues with Google using the invited email.
+The users API manages learners, not trainers. Adding a learner makes them part of your organization right away (TrainerTwin creates their account if they don't have one). They get an email, **You've been added to *your organization* on TrainerTwin**, with a link to your organization's home page, where they sign in with Google or with a code sent to that email. There are no passwords and nothing to accept.
 
-To give someone a role play, you don't need to invite them first: [assign](/guides/assignments) it to their email. Inviting them as well sends a second email.
+To give someone a role play, you don't need to add them first: [assign](/guides/assignments) it to their email, and they're added the same way, with one email for both.
 
-## Invite a learner
+## Add a learner
 
 ```bash
 curl "https://dash.trainertwin.com/api/v1/users" \
@@ -17,27 +17,31 @@ curl "https://dash.trainertwin.com/api/v1/users" \
   --data '{ "email": "learner@example.com" }'
 ```
 
-The response includes the invitation and whether its email was delivered.
+The response includes the learner and whether the email was delivered (`201`).
 
 ```json
 {
-  "invitation": {
-    "id": "invitation_123",
+  "user": {
+    "id": "user_123",
+    "name": "learner",
     "email": "learner@example.com",
-    "status": "pending",
-    "expiresAt": "2026-09-03T09:30:00.000Z"
+    "emailVerified": false,
+    "createdAt": "2026-11-11T09:30:00.000Z",
+    "role": "member",
+    "memberId": "member_123"
   },
+  "created": true,
   "emailSent": true
 }
 ```
 
 <Note>
-  A delivery failure does not remove the invitation. Read `emailSent` and handle follow-up in your platform.
+  A delivery failure does not undo the add. Read `emailSent` and handle follow-up in your platform.
 </Note>
 
-Inviting an existing learner returns `409`. Re-inviting a pending email refreshes that invitation's expiry.
+Adding someone who is already a learner returns `200` with `created: false` and sends nothing. An email that belongs to one of your trainers (admin or team), or to a learner you removed, returns `409`.
 
-A new learner gets **30 credits** (1 credit = 1 minute of practice) from your organization's prepaid balance. Credits are shared by every twin and role play and are used by the second during calls; learners see them as minutes. When the balance can't cover a new learner, the invite returns `409`; contact TrainerTwin to top it up. Give a learner more credits in the dashboard (**Users**, or the learner's page).
+A new learner gets **30 credits** (1 credit = 1 minute of practice) from your organization's prepaid balance. Credits are shared by every twin and role play and are used by the second during calls; learners see them as minutes. When the balance can't cover a new learner, the call returns `409`; contact TrainerTwin to top it up. Give a learner more credits in the dashboard (**Users**, or the learner's page); they get an email saying so.
 
 ## List learners
 
@@ -46,7 +50,7 @@ curl "https://dash.trainertwin.com/api/v1/users?limit=50&offset=0" \
   --header "x-api-key: $TRAINERTWIN_API_KEY"
 ```
 
-The response contains accepted learners in `users` and outstanding invitations in `invitations`.
+The response contains your learners in `users`, newest first. `invitations` is always empty (there are no pending invitations; it's kept for older integrations).
 
 ## Update a learner name
 

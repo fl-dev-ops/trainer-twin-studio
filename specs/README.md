@@ -6,9 +6,19 @@ and for deciding what's a bug. One file per module; `credits.md` and `payments.m
 
 Not the public API docs (those are in `docs/`, published). Not plans (those are in `plans/`, intent and history).
 
-## Rules for writing a spec
+## Two kinds of spec
 
-1. **Describe what the code does, not what it should do.** Read the code. Every rule and flow points at where it
+- **Rule specs** (`people.md`) say how something *must* work. They are written and agreed **before** the code; the
+  code follows them, and a difference is a bug in the code. Each lists checks that must always hold.
+- **Module specs** (everything else) describe the code as it is, using the rules below. A module spec that
+  disagrees with a rule spec is a bug to fix in the code, listed under *Mismatches* until it is fixed.
+
+(Added 11 Nov 2026: module specs only ever described the code, so an email-based assignment model nobody wanted was
+documented as "how it works" and never questioned. See `plans/people-and-sign-in.md`.)
+
+## Rules for writing a module spec
+
+1. **Describe what the code does, not what it should do.** (Check it against the rule specs.) Read the code. Every rule and flow points at where it
    lives (`web/lib/minutes.ts` `grantMinutes`, `web/app/api/v1/users/route.ts` POST). No pointer, no claim.
 2. **Intent vs code.** Read `PRODUCT.md` and the relevant `plans/*.md`. Where they disagree with the code, say so in
    *Mismatches*; don't silently pick one.

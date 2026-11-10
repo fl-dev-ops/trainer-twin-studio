@@ -1,10 +1,22 @@
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { API_LEARNER_ROLE, isApiError, paginationFromUrl, requireExternalApi } from "@/lib/external-api";
-import { InviteError, inviteLearnerByApi } from "@/lib/invite/org";
-import { LEARNER_ROLE } from "@/lib/org";
+import { addLearnerByApi, ApiAddError } from "@/lib/invite/org";
+import { MinutesError } from "@/lib/minutes";
+import { LEARNER, orgPeople, PeopleError, type OrgPerson } from "@/lib/org-people";
 
 const createSchema = z.object({ email: z.string().trim().email().max(320) }).strict();
+
+/** The documented `User` object: every listed person is a learner, which the API calls `member` (API_LEARNER_ROLE). */
+const userView = (person: OrgPerson, emailVerified: boolean) => ({
+  id: person.userId,
+  name: person.name,
+  email: person.email,
+  emailVerified,
+  createdAt: person.addedAt,
+  role: API_LEARNER_ROLE,
+  memberId: person.memberId,
+});
 
 export async function GET(request: Request) {
   const api = await requireExternalApi(request, "users", "read");
@@ -12,32 +24,16 @@ export async function GET(request: Request) {
   const page = paginationFromUrl(new URL(request.url));
   if (page instanceof Response) return page;
 
-  const [members, total, invitations] = await Promise.all([
-    db.member.findMany({
-      where: { organizationId: api.org.id, role: LEARNER_ROLE, disabledAt: null },
-      orderBy: { createdAt: "desc" },
-      skip: page.offset,
-      take: page.limit,
-      select: {
-        id: true,
-        createdAt: true,
-        user: { select: { id: true, name: true, email: true, emailVerified: true } },
-      },
-    }),
-    db.member.count({ where: { organizationId: api.org.id, role: LEARNER_ROLE, disabledAt: null } }),
-    db.invitation.findMany({
-      // Learner invitations only: invitations to the studio team are not part of the learner API.
-      where: { organizationId: api.org.id, status: "pending", role: LEARNER_ROLE },
-      orderBy: { createdAt: "desc" },
-      select: { id: true, email: true, status: true, expiresAt: true, createdAt: true },
-    }),
-  ]);
-
+  // The org's learners (lib/org-people.ts), newest first. Everyone added is a member right away, so there are no
+  // pending invitations: `invitations` stays (always empty) for older integrations.
+  // shortcut: pages in memory over the org's learners; add skip/take to orgPeople if an org passes a few thousand.
+  const learners = (await orgPeople(api.org.id, { roles: [LEARNER] })).reverse();
+  const shown = learners.slice(page.offset, page.offset + page.limit);
+  const verified = await emailsVerified(shown.map((person) => person.userId));
   return Response.json({
-    // Every listed member is a learner; the API calls that role `member` (API_LEARNER_ROLE).
-    users: members.map(({ id: memberId, user, ...member }) => ({ ...user, ...member, role: API_LEARNER_ROLE, memberId })),
-    invitations,
-    pagination: { ...page, total },
+    users: shown.map((person) => userView(person, verified.has(person.userId))),
+    invitations: [],
+    pagination: { ...page, total: learners.length },
   });
 }
 
@@ -48,13 +44,20 @@ export async function POST(request: Request) {
   if (!parsed.success) return Response.json({ error: "A valid email is required" }, { status: 400 });
 
   try {
-    const { invitation, created, emailSent } = await inviteLearnerByApi({ org: api.org, actorUserId: api.actorUserId, email: parsed.data.email });
-    return Response.json({
-      invitation: { id: invitation.id, email: invitation.email, status: invitation.status, expiresAt: invitation.expiresAt },
-      emailSent,
-    }, { status: created ? 201 : 200 });
+    // Added to the org as a learner right away (with starting credits) and emailed; they just sign in.
+    const { person, created, emailSent } = await addLearnerByApi({ org: api.org, actorUserId: api.actorUserId, email: parsed.data.email });
+    const verified = await emailsVerified([person.userId]);
+    return Response.json({ user: userView(person, verified.has(person.userId)), created, emailSent }, { status: created ? 201 : 200 });
   } catch (error) {
-    if (error instanceof InviteError) return Response.json({ error: error.message }, { status: error.status });
+    if (error instanceof ApiAddError || error instanceof PeopleError || error instanceof MinutesError) {
+      return Response.json({ error: error.message }, { status: error instanceof MinutesError ? 409 : error.status });
+    }
     throw error;
   }
+}
+
+/** Which of these accounts have confirmed their email (signed in at least once). */
+async function emailsVerified(userIds: string[]) {
+  const rows = userIds.length ? await db.user.findMany({ where: { id: { in: userIds }, emailVerified: true }, select: { id: true } }) : [];
+  return new Set(rows.map((row) => row.id));
 }

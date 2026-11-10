@@ -1,6 +1,6 @@
-import { assignmentMatchesUser } from "@/lib/assignments";
 import { beforeSettings } from "@/lib/context-upload";
 import { db } from "@/lib/db";
+import { orgPerson } from "@/lib/org-people";
 import { resolveSessionUser } from "@/lib/session-user";
 import { twinAccessByCode } from "@/lib/twin-access";
 
@@ -17,23 +17,14 @@ async function twinCodeAllowsUpload(orgId: string, user: { id: string; email: st
 }
 
 /**
- * Who may upload here: a member of the org, or someone holding a role-play invite or twin code for it (a learner
- * before they join). Null when neither.
+ * Who may upload here: an enabled member of the org (role-play learners always are: specs/people.md), or someone
+ * holding a twin share code for it (they join the org when their call starts). Null when neither.
  */
 export async function uploader(shareCode: string | null | undefined) {
   const { org, user } = await resolveSessionUser();
   if (!org || !user) return null;
-  const member = await db.member.findFirst({ where: { organizationId: org.id, userId: user.id }, select: { id: true } });
-  if (member) return { org, user };
-  if (typeof shareCode !== "string" || !shareCode) return null;
-  const assignment = await db.rolePlayAssignment.findFirst({
-    where: { shareCode, orgId: org.id, status: "pending", expiresAt: { gt: new Date() }, deployment: { status: "active" } },
-    select: {
-      recipientEmail: true,
-      member: { select: { userId: true } },
-      sessions: { where: { status: { in: ["completed", "abandoned"] } }, select: { id: true }, take: 1 },
-    },
-  });
-  if (assignment) return assignmentMatchesUser(assignment, user) && !assignment.sessions.length ? { org, user } : null;
+  const member = await orgPerson(org.id, { userId: user.id });
+  if (member && !member.disabled) return { org, user };
+  if (member || typeof shareCode !== "string" || !shareCode) return null;
   return (await twinCodeAllowsUpload(org.id, user, shareCode)) ? { org, user } : null;
 }

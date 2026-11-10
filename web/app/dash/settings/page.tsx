@@ -41,14 +41,7 @@ export default function SettingsPage() {
 
         {team ? (
           <TabsContent value="team" className="pt-6">
-            <TeamSection
-              organizationId={organization.id}
-              organizationSlug={organization.slug}
-              currentUserId={user.id}
-              members={team.members}
-              invitations={team.invitations}
-              awaiting={team.awaiting}
-            />
+            <TeamSection currentUserId={user.id} members={team.members} />
           </TabsContent>
         ) : null}
 

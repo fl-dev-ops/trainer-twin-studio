@@ -18,8 +18,8 @@ create temp table kept_learners on commit drop as select email from keep_emails 
   select 1 from member m join "user" u on u.id = m."userId"
   where m."organizationId" = (select id from org) and lower(u.email) = k.email and m.role in ('admin', 'team'));
 select :'org' || ': removing ' || (select count(*) from gone_members) || ' member rows, ' || (select count(*) from gone_sessions) || ' sessions, '
-  || (select count(*) from "TwinAssignment" where "orgId" = (select id from org) and lower("recipientEmail") not in (select email from kept_learners))
-  + (select count(*) from "RolePlayAssignment" where "orgId" = (select id from org) and lower("recipientEmail") not in (select email from kept_learners))
+  || (select count(*) from "TwinAssignment" t join "user" u on u.id = t."userId" where t."orgId" = (select id from org) and lower(u.email) not in (select email from kept_learners))
+  + (select count(*) from "RolePlayAssignment" r join member m on m.id = r."memberId" join "user" u on u.id = m."userId" where r."orgId" = (select id from org) and lower(u.email) not in (select email from kept_learners))
   || ' assignments, '
   || (select count(*) from "MinuteLedger" where "orgId" = (select id from org) and type in ('grant', 'usage', 'reclaim') and lower(email) not in (select email from kept_learners))
   || ' learner minutes rows';
@@ -28,8 +28,9 @@ delete from "MinuteLedger" where "orgId" = (select id from org)
     or "sessionId" in (select id from gone_sessions));
 delete from "UsageEvent" where "sessionId" in (select id from gone_sessions);
 delete from "InterviewSession" where id in (select id from gone_sessions);
-delete from "TwinAssignment" where "orgId" = (select id from org) and lower("recipientEmail") not in (select email from kept_learners);
-delete from "RolePlayAssignment" where "orgId" = (select id from org) and lower("recipientEmail") not in (select email from kept_learners);
+delete from "TwinAssignment" t using "user" u where u.id = t."userId" and t."orgId" = (select id from org) and lower(u.email) not in (select email from kept_learners);
+delete from "RolePlayAssignment" r using member m, "user" u
+  where m.id = r."memberId" and u.id = m."userId" and r."orgId" = (select id from org) and lower(u.email) not in (select email from kept_learners);
 -- pending invitations: anyone not kept, and anyone already a member (e.g. a stale learner invite for a team member)
 delete from invitation where "organizationId" = (select id from org)
   and (lower(email) not in (select email from keep_emails)

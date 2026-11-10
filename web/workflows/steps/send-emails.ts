@@ -1,8 +1,8 @@
 import { FatalError, getStepMetadata, getWritable } from "workflow";
-import { sendInviteEmailNow } from "@/lib/invite-email-send";
-import type { EmailProgress, InviteEmail } from "../invite-emails";
+import { sendEmailNow } from "@/lib/send-email-now";
+import type { EmailProgress, OutboundEmail } from "../send-emails";
 
-/** Steps of the send-invite-emails workflow (../invite-emails.ts). Progress goes to the run's stream (app/api/runs/[token]). */
+/** Steps of the send-emails workflow (../send-emails.ts). Progress goes to the run's stream (app/api/runs/[token]). */
 
 async function report(event: EmailProgress) {
   const writer = getWritable<EmailProgress>().getWriter();
@@ -15,11 +15,11 @@ async function report(event: EmailProgress) {
  * it was first tried outside the workflow) or this step's id, so a retry after a lost reply never sends it twice. No
  * Resend key configured: no point retrying.
  */
-export async function sendOne(email: InviteEmail): Promise<void> {
+export async function sendOne(email: OutboundEmail): Promise<void> {
   "use step";
-  const result = await sendInviteEmailNow(email, email.idempotencyKey ?? getStepMetadata().stepId);
+  const result = await sendEmailNow(email, email.idempotencyKey ?? getStepMetadata().stepId);
   if (!result.success) {
-    const message = `Invite to ${email.args.to}: ${result.error}`;
+    const message = `Email to ${email.args.to}: ${result.error}`;
     if (result.error === "RESEND_API_KEY is not set") throw new FatalError(message);
     throw new Error(message);
   }

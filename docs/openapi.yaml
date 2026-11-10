@@ -83,13 +83,13 @@ paths:
       operationId: listUsers
       tags: [Users]
       summary: List learners
-      description: Lists learners and pending learner invitations in the API key's organization. `limit` and `offset` page through `users`; `invitations` lists every pending invitation.
+      description: Lists the learners in the API key's organization, newest first. `limit` and `offset` page through `users`. Learners are added straight to the organization, so there are no pending invitations; `invitations` is always empty and kept for older integrations.
       parameters:
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Offset'
       responses:
         '200':
-          description: Learners and pending invitations.
+          description: Learners.
           content:
             application/json:
               schema:
@@ -102,8 +102,9 @@ paths:
                       $ref: '#/components/schemas/User'
                   invitations:
                     type: array
-                    items:
-                      $ref: '#/components/schemas/Invitation'
+                    maxItems: 0
+                    description: Always empty (kept for older integrations).
+                    items: {}
                   pagination:
                     $ref: '#/components/schemas/Pagination'
         '400':
@@ -115,13 +116,15 @@ paths:
     post:
       operationId: inviteUser
       tags: [Users]
-      summary: Invite a learner
+      summary: Add a learner
       description: |
-        Creates or refreshes a pending learner invitation. Email failure does not roll back the invitation.
-        The email links to the organization's home page, where the learner continues with Google. Assigning a role play
-        doesn't need an invitation first.
-        A new learner gets 30 credits (1 credit = 1 minute of practice) from the organization's prepaid balance (once;
-        re-inviting is free). Returns `409` when the balance can't cover them.
+        Adds the email to the organization as a learner right away (creating their TrainerTwin account if needed) and
+        emails them that they were added, with a link to the organization's home page, where they sign in with Google
+        or an email code. Email failure does not undo the add. Adding someone who is already a learner changes nothing
+        and returns `200`. Assigning a role play by email adds the learner the same way, so this call is optional.
+        A new learner gets 30 credits (1 credit = 1 minute of practice) from the organization's prepaid balance (once).
+        Returns `409` when the balance can't cover them, or when the email belongs to a trainer (admin or team) or a
+        disabled learner of the organization.
       requestBody:
         required: true
         content:
@@ -138,29 +141,36 @@ paths:
                   example: learner@example.com
       responses:
         '201':
-          description: Invitation created.
+          description: Learner added.
           content:
             application/json:
               schema:
                 type: object
-                required: [invitation, emailSent]
+                required: [user, created, emailSent]
                 properties:
-                  invitation:
-                    $ref: '#/components/schemas/Invitation'
+                  user:
+                    $ref: '#/components/schemas/User'
+                  created:
+                    type: boolean
+                    const: true
                   emailSent:
                     type: boolean
         '200':
-          description: Existing pending invitation refreshed.
+          description: Already a learner of the organization; nothing changed and no email is sent.
           content:
             application/json:
               schema:
                 type: object
-                required: [invitation, emailSent]
+                required: [user, created, emailSent]
                 properties:
-                  invitation:
-                    $ref: '#/components/schemas/Invitation'
+                  user:
+                    $ref: '#/components/schemas/User'
+                  created:
+                    type: boolean
+                    const: false
                   emailSent:
                     type: boolean
+                    const: false
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -656,27 +666,6 @@ components:
         role:
           type: string
           const: member
-        createdAt:
-          type: string
-          format: date-time
-    Invitation:
-      type: object
-      description: A pending invitation for a learner to join the organization.
-      required: [id, email, status, expiresAt]
-      properties:
-        id:
-          type: string
-          example: invitation_123
-        email:
-          type: string
-          format: email
-          example: learner@example.com
-        status:
-          type: string
-          const: pending
-        expiresAt:
-          type: string
-          format: date-time
         createdAt:
           type: string
           format: date-time

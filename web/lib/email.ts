@@ -193,51 +193,6 @@ function renderEmailLayout({
 }
 
 /**
- * Send an organization / role play invitation email
- */
-export async function sendInvitationEmail({
-  to,
-  organizationName,
-  inviterName,
-  inviteUrl,
-  idempotencyKey,
-}: {
-  to: string;
-  organizationName: string;
-  inviterName?: string;
-  inviteUrl: string;
-  idempotencyKey?: string;
-}) {
-  const subject = `Join ${organizationName} on TrainerTwin`;
-  const html = renderEmailLayout({
-    title: subject,
-    previewText: `${inviterName || "Your team"} invited you to join ${organizationName} on TrainerTwin.`,
-    contentHtml: `
-      <h1>You're invited to join ${organizationName}</h1>
-      <p>
-        ${inviterName ? `<strong>${inviterName}</strong> has` : "You have been"} invited to practice with AI interview twins and guided role plays on TrainerTwin.
-      </p>
-      <p>Click the button below and continue with Google using <strong>${to}</strong>:</p>
-      <div style="text-align: center; margin: 28px 0;">
-        <a href="${inviteUrl}" class="btn" target="_blank">Accept Invitation</a>
-      </div>
-      <p style="font-size: 13px; color: #64748b; margin-top: 24px;">
-        Or copy and paste this link in your browser:<br>
-        <a href="${inviteUrl}" class="muted-link">${inviteUrl}</a>
-      </p>
-    `,
-  });
-
-  return sendEmail({
-    to,
-    subject,
-    html,
-    text: `You have been invited to join ${organizationName} on TrainerTwin. Open your invitation and continue with Google using ${to}: ${inviteUrl}`,
-    idempotencyKey,
-  });
-}
-
-/**
  * Send a Login OTP / Verification Code email
  */
 export async function sendOtpEmail({
@@ -271,170 +226,146 @@ export async function sendOtpEmail({
   });
 }
 
-/**
- * Send a Password Reset link email
- */
-export async function sendPasswordResetEmail({
-  to,
-  resetUrl,
-  userName,
-}: {
-  to: string;
-  resetUrl: string;
-  userName?: string;
-}) {
-  const subject = "Reset your TrainerTwin password";
-  const html = renderEmailLayout({
-    title: subject,
-    previewText: "Reset your password on TrainerTwin",
-    contentHtml: `
-      <h1>Reset your password</h1>
-      <p>
-        Hi ${userName || "there"},<br>
-        We received a request to reset your TrainerTwin password. Click the button below to choose a new password:
-      </p>
-      <div style="text-align: center; margin: 28px 0;">
-        <a href="${resetUrl}" class="btn" target="_blank">Reset Password</a>
-      </div>
-      <p style="font-size: 13px; color: #64748b; margin-top: 24px;">
-        If you didn't request a password reset, you can safely ignore this email.<br>
-        <a href="${resetUrl}" class="muted-link">${resetUrl}</a>
-      </p>
-    `,
-  });
-
-  return sendEmail({
-    to,
-    subject,
-    html,
-    text: `Reset your TrainerTwin password here: ${resetUrl}`,
-  });
-}
-
-/**
- * Send a role play assignment notification email to a learner
- */
-/**
- * A role play was assigned: the personal one-attempt link, what it's about, the practice minutes the learner has
- * (shared by twins and role plays), and which email to sign in with (the link only works for that account).
- */
-export async function sendRolePlayAssignmentEmail({
-  to,
-  userName,
-  rolePlayName,
-  rolePlayObjective,
-  practiceUrl,
-  trainerName = "Your trainer",
-  requiredArtifact,
-  minutes,
-  idempotencyKey,
-}: {
-  to: string;
-  userName?: string;
-  rolePlayName: string;
-  rolePlayObjective?: string;
-  practiceUrl: string;
-  trainerName?: string;
-  requiredArtifact?: { label: string; prompt: string } | null;
-  /** Practice minutes the learner has; left out of the email when unknown. */
-  minutes?: number;
-  idempotencyKey?: string;
-}) {
-  const subject = `New Role Play Assigned: ${rolePlayName}`;
-  const minutesHtml = minutes === undefined ? "" : ` You have <strong>${minutes} minutes</strong> of practice, and can do this role play as many times as you like while they last.`;
-  const html = renderEmailLayout({
-    title: escapeHtml(subject),
-    previewText: escapeHtml(`You have been assigned to practice "${rolePlayName}" on TrainerTwin.`),
-    contentHtml: `
-      <h1>New Role Play Assigned</h1>
-      <p>
-        Hi ${escapeHtml(userName || "there")},<br>
-        <strong>${escapeHtml(trainerName)}</strong> has assigned you the <strong>${escapeHtml(rolePlayName)}</strong> role play.${minutesHtml}
-      </p>
-      ${
-        rolePlayObjective
-          ? `<div style="background: #f8fafc; border-left: 4px solid #EC3013; padding: 16px; border-radius: 8px; margin: 20px 0;">
-              <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin: 0 0 6px;">Objective</p>
-              <p style="font-size: 14px; font-style: italic; margin: 0; color: #1e293b;">&ldquo;${escapeHtml(rolePlayObjective)}&rdquo;</p>
-            </div>`
-          : ""
-      }
-      ${
-        requiredArtifact?.prompt
-          ? `<div style="background: #f8fafc; border-left: 4px solid #EC3013; padding: 16px; border-radius: 8px; margin: 20px 0;">
-              <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin: 0 0 6px;">What to bring</p>
-              <p style="font-size: 14px; margin: 0; color: #1e293b;">${escapeHtml(requiredArtifact.prompt)}</p>
-            </div>`
-          : ""
-      }
-      <p>When you're ready, open the link below and sign in with <strong>${escapeHtml(to)}</strong> to start your practice session:</p>
-      <div style="text-align: center; margin: 28px 0;">
-        <a href="${practiceUrl}" class="btn" target="_blank">Start Practice Session</a>
-      </div>
-      <p style="font-size: 13px; color: #64748b; margin-top: 24px;">
-        Or access directly via this link:<br>
-        <a href="${practiceUrl}" class="muted-link">${practiceUrl}</a>
-      </p>
-    `,
-  });
-
-  return sendEmail({
-    to,
-    subject,
-    html,
-    text: `${trainerName} has assigned you the "${rolePlayName}" role play on TrainerTwin.${minutes === undefined ? "" : ` You have ${minutes} minutes of practice, and can do this role play as many times as you like while they last.`}${requiredArtifact?.prompt ? ` What to bring: ${requiredArtifact.prompt}.` : ""} Sign in with ${to} and start here: ${practiceUrl}`,
-    idempotencyKey,
-  });
-}
-
 const escapeHtml = (value: string) =>
   value.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
 
-/** A learner got access to a twin: talk to it by voice. `minutes`: the practice minutes they have (shared by twins and role plays). */
-export async function sendTwinAssignmentEmail({
-  to,
-  twinName,
-  minutes,
-  practiceUrl,
-  trainerName = "Your trainer",
-  idempotencyKey,
-}: {
+/** A section box (objective, what to bring). */
+const box = (label: string, body: string) => `<div style="background: #f8fafc; border-left: 4px solid #EC3013; padding: 16px; border-radius: 8px; margin: 20px 0;">
+  <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin: 0 0 6px;">${escapeHtml(label)}</p>
+  <p style="font-size: 14px; margin: 0; color: #1e293b;">${body}</p>
+</div>`;
+
+const ROLE_WORDS = { admin: "the admin", team: "a team member", user: "a learner" } as const;
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/**
+ * What changed for one person, as one email (specs/people.md rule 11): any of being added to an org, a twin, a role
+ * play, and credits added. A new learner given a twin gets one email with all three. The button opens what they were
+ * given (twin, then role play), else the sign-in link. Every value is escaped.
+ */
+export type PersonEmailArgs = {
   to: string;
-  twinName: string;
-  minutes: number;
-  practiceUrl: string;
-  trainerName?: string;
+  orgName: string;
+  /** Who did it ("Olga Sinenko"); "Your trainer" when unknown. */
+  byName?: string;
+  /** Added to the org just now. `signInUrl`: the org home (learners) or the studio (admin, team). */
+  added?: { role: "admin" | "team" | "user"; signInUrl: string };
+  /** `until`: the last day they can use it, already formatted ("30 Nov 2026"); none = no end date. */
+  twin?: { name: string; url: string; until?: string | null };
+  roleplay?: { name: string; url: string; objective?: string; requiredArtifact?: { label: string; prompt: string } | null };
+  /** Learner credits (1 credit = 1 minute of practice): `added` just now (if any) and the balance after. */
+  credits?: { added?: number; balance: number };
   idempotencyKey?: string;
-}) {
-  const subject = `You can now talk to ${twinName}`;
+};
+
+export function personEmail(args: PersonEmailArgs) {
+  const by = args.byName?.trim() || "Your trainer";
+  const subject = args.twin
+    ? `You can now talk to ${args.twin.name}`
+    : args.roleplay
+      ? `New role play: ${args.roleplay.name}`
+      : args.added
+        ? `You've been added to ${args.orgName} on TrainerTwin`
+        : `${plural(args.credits?.added ?? 0, "credit")} added to your TrainerTwin account`;
+  const button = args.twin
+    ? { label: "Start talking", url: args.twin.url }
+    : args.roleplay
+      ? { label: "Start practice", url: args.roleplay.url }
+      : args.added
+        ? { label: "Sign in", url: args.added.signInUrl }
+        : null;
+
+  const lines: string[] = [];
+  const text: string[] = [];
+  if (args.added) {
+    lines.push(`<strong>${escapeHtml(by)}</strong> added you to <strong>${escapeHtml(args.orgName)}</strong> on TrainerTwin as ${ROLE_WORDS[args.added.role]}.`);
+    text.push(`${by} added you to ${args.orgName} on TrainerTwin as ${ROLE_WORDS[args.added.role]}.`);
+  }
+  if (args.twin) {
+    const until = args.twin.until ? ` You can use it until ${escapeHtml(args.twin.until)}.` : "";
+    lines.push(`${args.added ? "You" : `<strong>${escapeHtml(by)}</strong> gave you`} ${args.added ? "can now talk to" : "access to"} <strong>${escapeHtml(args.twin.name)}</strong>: ask about the real situations you're working on, by voice.${until}`);
+    text.push(`You can now talk to ${args.twin.name}.${args.twin.until ? ` Until ${args.twin.until}.` : ""}`);
+  }
+  if (args.roleplay) {
+    lines.push(`${args.added || args.twin ? "You have" : `<strong>${escapeHtml(by)}</strong> gave you`} ${args.added || args.twin ? "a new role play:" : "the role play"} <strong>${escapeHtml(args.roleplay.name)}</strong>. You can practise it as many times as you like while your credits last.`);
+    text.push(`New role play: ${args.roleplay.name}.`);
+  }
+  if (args.credits) {
+    const added = args.credits.added ? `${args.added || args.twin || args.roleplay ? "You have" : `<strong>${escapeHtml(by)}</strong> added`} <strong>${plural(args.credits.added, "credit")}</strong>${args.added || args.twin || args.roleplay ? "" : " to your account"}. ` : "";
+    lines.push(`${added}Your balance is <strong>${plural(args.credits.balance, "credit")}</strong> (1 credit = 1 minute of practice, for any twin or role play).`);
+    text.push(`${args.credits.added ? `${plural(args.credits.added, "credit")} added. ` : ""}Your balance: ${plural(args.credits.balance, "credit")} (1 credit = 1 minute of practice).`);
+  }
+  const extras = [
+    args.roleplay?.objective ? box("Objective", `&ldquo;${escapeHtml(args.roleplay.objective)}&rdquo;`) : "",
+    args.roleplay?.requiredArtifact?.prompt ? box("What to bring", escapeHtml(args.roleplay.requiredArtifact.prompt)) : "",
+  ].join("");
+  const signIn = `Sign in with Google or an email code, using <strong>${escapeHtml(args.to)}</strong>.`;
+
   const html = renderEmailLayout({
     title: escapeHtml(subject),
-    previewText: escapeHtml(`${trainerName} gave you access to ${twinName} on TrainerTwin. You have ${minutes} minutes of practice.`),
+    previewText: escapeHtml(text[0] ?? subject),
     contentHtml: `
       <h1>${escapeHtml(subject)}</h1>
-      <p>
-        Hi there,<br>
-        <strong>${escapeHtml(trainerName)}</strong> gave you access to
-        <strong>${escapeHtml(twinName)}</strong>. Ask about the real situations you are working on, by voice.
-        You have <strong>${minutes} minutes</strong> of practice.
-      </p>
+      <p>Hi there,<br>${lines.join("<br><br>")}</p>
+      ${extras}
+      ${button ? `<p>${signIn}</p>
       <div style="text-align: center; margin: 28px 0;">
-        <a href="${practiceUrl}" class="btn" target="_blank">Start talking</a>
+        <a href="${escapeHtml(button.url)}" class="btn" target="_blank">${button.label}</a>
       </div>
       <p style="font-size: 13px; color: #64748b; margin-top: 24px;">
         Or open this link:<br>
-        <a href="${practiceUrl}" class="muted-link">${practiceUrl}</a>
-      </p>
+        <a href="${escapeHtml(button.url)}" class="muted-link">${escapeHtml(button.url)}</a>
+      </p>` : ""}
     `,
   });
-
-  return sendEmail({
-    to,
+  return {
     subject,
     html,
-    text: `${trainerName} gave you access to ${twinName} on TrainerTwin. You have ${minutes} minutes of practice. Start here: ${practiceUrl}`,
-    idempotencyKey,
+    text: `${text.join(" ")}${args.roleplay?.requiredArtifact?.prompt ? ` What to bring: ${args.roleplay.requiredArtifact.prompt}.` : ""}${button ? ` Sign in with Google or an email code, using ${args.to}: ${button.url}` : ""}`,
+  };
+}
+
+export function sendPersonEmail(args: PersonEmailArgs) {
+  return sendEmail({ to: args.to, ...personEmail(args), idempotencyKey: args.idempotencyKey });
+}
+
+/** Org credits arrived (Meteroid grant or top-up), to the org's admin: how many, the new balance, and when they expire. */
+export type OrgCreditsEmailArgs = {
+  to: string;
+  orgName: string;
+  added: number;
+  balance: number;
+  /** Formatted ("10 Nov 2027"); none = no expiry. */
+  expires?: string | null;
+  reason?: string | null;
+  creditsUrl: string;
+  idempotencyKey?: string;
+};
+
+export function orgCreditsEmail(args: OrgCreditsEmailArgs) {
+  const subject = `${plural(args.added, "credit")} added to ${args.orgName}`;
+  const expiry = args.expires ? ` They expire on ${escapeHtml(args.expires)}.` : "";
+  const html = renderEmailLayout({
+    title: escapeHtml(subject),
+    previewText: escapeHtml(`${subject}. New balance: ${plural(args.balance, "credit")}.`),
+    contentHtml: `
+      <h1>${escapeHtml(subject)}</h1>
+      <p>Hi there,<br><strong>${plural(args.added, "credit")}</strong>${args.reason ? ` (${escapeHtml(args.reason)})` : ""} were added to <strong>${escapeHtml(args.orgName)}</strong>.${expiry}
+      Your organization's balance is now <strong>${plural(args.balance, "credit")}</strong> (1 credit = 1 minute of practice).</p>
+      <div style="text-align: center; margin: 28px 0;">
+        <a href="${escapeHtml(args.creditsUrl)}" class="btn" target="_blank">See credits</a>
+      </div>
+    `,
   });
+  return {
+    subject,
+    html,
+    text: `${subject}${args.reason ? ` (${args.reason})` : ""}.${args.expires ? ` They expire on ${args.expires}.` : ""} New balance: ${plural(args.balance, "credit")}. ${args.creditsUrl}`,
+  };
+}
+
+export function sendOrgCreditsEmail(args: OrgCreditsEmailArgs) {
+  return sendEmail({ to: args.to, ...orgCreditsEmail(args), idempotencyKey: args.idempotencyKey });
 }
 
 /** A user's "Report an issue", for the team (lib/issue-alerts.ts): who, where, what they wrote, and where to look. */

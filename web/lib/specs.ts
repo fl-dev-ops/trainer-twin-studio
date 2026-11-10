@@ -1,4 +1,5 @@
 import yaml from "js-yaml";
+import { orgPeople, type OrgPerson } from "@/lib/org-people";
 import { randomUUID } from "node:crypto";
 import type { AgentKind, Prisma } from "@/lib/generated/prisma/client";
 import { deletePrefix, getObjectText, kbPrefix, presignedGetUrl, putObject } from "@/lib/s3";
@@ -88,20 +89,19 @@ export async function listSpecSummaries(type: "personas" | "agents", orgId: stri
     db.rolePlayAssignment.findMany({
       where: { orgId, status: { in: ["pending", "used"] } },
       orderBy: { assignedAt: "asc" },
-      select: { recipientEmail: true, deployment: { select: { agentId: true } } },
+      select: { memberId: true, deployment: { select: { agentId: true } } },
     }),
   ]);
-  const emails = [...new Set(assignments.map((a) => a.recipientEmail))];
-  const users = emails.length
-    ? await db.user.findMany({ where: { email: { in: emails } }, select: { email: true, name: true, image: true } })
-    : [];
-  const userByEmail = new Map(users.map((u) => [u.email, u]));
+  const people = assignments.length
+    ? new Map((await orgPeople(orgId, { memberIds: [...new Set(assignments.map((a) => a.memberId))], includeDisabled: true })).map((p) => [p.memberId, p]))
+    : new Map<string, OrgPerson>();
   const learnersByAgent = new Map<string, ScenarioLearner[]>();
-  for (const { recipientEmail, deployment } of assignments) {
+  for (const { memberId, deployment } of assignments) {
+    const person = people.get(memberId);
+    if (!person) continue;
     const list = learnersByAgent.get(deployment.agentId) ?? [];
-    if (list.some((l) => l.email === recipientEmail)) continue;
-    const user = userByEmail.get(recipientEmail);
-    list.push({ email: recipientEmail, name: user?.name || recipientEmail, image: user?.image ?? null });
+    if (list.some((l) => l.email === person.email)) continue;
+    list.push({ email: person.email, name: person.name, image: person.image });
     learnersByAgent.set(deployment.agentId, list);
   }
 

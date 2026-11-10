@@ -1,47 +1,57 @@
-import { InviteError, inviteOrgLearners, type OrgInviteInput } from "@/lib/invite/org";
+import { giveLearnerCredits, type GiveCreditsInput } from "@/lib/invite/credits";
+import { addOrgPeople, type AddPeopleInput } from "@/lib/invite/org";
 import { assignRoleplayLearners, type RoleplayAssignInput } from "@/lib/invite/roleplay";
 import { assignTwinLearners, type TwinAssignInput } from "@/lib/invite/twin";
 import { MinutesError } from "@/lib/minutes";
-import { queueInviteEmails } from "@/lib/schedule-invite-emails";
-import type { InviteEmail } from "../invite-emails";
+import { PeopleError } from "@/lib/org-people";
+import { queueEmails } from "@/lib/queue-emails";
+import type { OutboundEmail } from "../send-emails";
 
 /**
- * Steps of the assign-twin, assign-roleplay and invite-org-learners workflows (../assign-twin.ts, ../assign-roleplay.ts,
- * ../invite-org-learners.ts). None is retried: they write assignments and invitations a person is waiting on, and
- * send emails once. A refusal (not enough credits, already on the team) comes back as `{ ok: false }`.
+ * Steps of the add-org-people, assign-twin, assign-roleplay and give-credits workflows (../add-org-people.ts,
+ * ../assign-twin.ts, ../assign-roleplay.ts, ../give-credits.ts). None is retried: they write memberships, assignments
+ * and credits a person is waiting on, and send emails once. A refusal (not enough credits, a disabled or studio
+ * person, a second admin) comes back as `{ ok: false }`.
  */
 
 export type Refused = { ok: false; status: number; error: string };
 
 function refused(error: unknown): Refused {
-  if (error instanceof MinutesError || error instanceof InviteError) return { ok: false, status: error.status, error: error.message };
+  if (error instanceof MinutesError || error instanceof PeopleError) return { ok: false, status: error.status, error: error.message };
   throw error;
 }
 
-/** Starting minutes, then the twin access. */
+/** Adds the people to the org as learners, then the twin access. */
 export async function assignTwin(input: TwinAssignInput) {
   "use step";
   return assignTwinLearners(input).then((result) => ({ ok: true as const, ...result }), refused);
 }
 assignTwin.maxRetries = 0;
 
-/** Starting minutes, then the role-play assignments. */
+/** Adds the people to the org as learners, then the role-play assignments. */
 export async function assignRoleplay(input: RoleplayAssignInput) {
   "use step";
   return assignRoleplayLearners(input).then((result) => ({ ok: true as const, ...result }), refused);
 }
 assignRoleplay.maxRetries = 0;
 
-/** Starting minutes, then the org invitations. */
-export async function inviteLearners(input: OrgInviteInput) {
+/** Adds the people to the org with their role (learners with their starting credits). */
+export async function addPeople(input: AddPeopleInput) {
   "use step";
-  return inviteOrgLearners(input).then((result) => ({ ok: true as const, ...result }), refused);
+  return addOrgPeople(input).then((result) => ({ ok: true as const, ...result }), refused);
 }
-inviteLearners.maxRetries = 0;
+addPeople.maxRetries = 0;
 
-/** Hands the emails to the send-invite-emails workflow (each retried there); its progress token for the screen. */
-export async function sendEmails(orgId: string, emails: InviteEmail[]) {
+/** Gives learners credits. */
+export async function giveCredits(input: GiveCreditsInput) {
   "use step";
-  return queueInviteEmails(orgId, emails);
+  return giveLearnerCredits(input).then((result) => ({ ok: true as const, ...result }), refused);
+}
+giveCredits.maxRetries = 0;
+
+/** Hands the emails to the send-emails workflow (each retried there); its progress token for the screen. */
+export async function sendEmails(orgId: string, emails: OutboundEmail[]) {
+  "use step";
+  return queueEmails(orgId, emails);
 }
 sendEmails.maxRetries = 0;
