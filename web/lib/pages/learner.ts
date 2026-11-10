@@ -1,3 +1,4 @@
+import { MIN_START_MINUTES } from "@/lib/minutes-config";
 import { headers } from "next/headers";
 import type { ComponentProps } from "react";
 import type { SessionView } from "@/components/session-view";
@@ -58,7 +59,7 @@ export type SharedSessionView =
   | { kind: "signIn"; url: string }
   | { kind: "twinUnavailable"; message: string; email: string }
   | { kind: "switchAccount"; email: string; returnTo: string }
-  | { kind: "outOfMinutes"; email: string }
+  | { kind: "outOfMinutes"; email: string; minutesLeft: number }
   | { kind: "invalid" }
   | { kind: "session"; props: SessionViewProps };
 
@@ -102,7 +103,7 @@ export async function loadSharedSession(code: string): Promise<SharedSessionView
     if (twin) {
       // Someone joining through a common link gets their starting minutes when the call starts.
       const left = twin.assignmentId ? await minutesLeft() : null;
-      if (left !== null && left < 1) return { kind: "outOfMinutes", email: user.email };
+      if (left !== null && left < MIN_START_MINUTES) return { kind: "outOfMinutes", email: user.email, minutesLeft: Math.max(0, left) };
       return { kind: "session", props: { ...(await twinSessionView(org.id, twin.agentId, code, user.name)), minutesLeft: left } };
     }
   }
@@ -113,7 +114,7 @@ export async function loadSharedSession(code: string): Promise<SharedSessionView
   }
   if (!open || !assignment || !org) return { kind: "invalid" };
   const left = await minutesLeft();
-  if (left !== null && left < 1) return { kind: "outOfMinutes", email: user.email };
+  if (left !== null && left < MIN_START_MINUTES) return { kind: "outOfMinutes", email: user.email, minutesLeft: Math.max(0, left) };
 
   const agent = assignment.deployment.agent;
   const [introVideos, agentPhotos, agentContextRequired, agentContextUploads] = await Promise.all([

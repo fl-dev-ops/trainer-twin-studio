@@ -143,11 +143,14 @@ export async function purchasePaid(input: { razorpayId: string; purchaseId?: str
     where: { id: purchase.id, status: "created" },
     data: { status: "paid", paymentId: input.paymentId, paidAt: new Date(), razorpayId: input.razorpayId },
   });
-  if (claimed.count !== 1) {
-    // Lost the claim: read who won it (the copy read above may predate a concurrent delivery of this payment).
-    const current = await db.creditPurchase.findUnique({ where: { id: purchase.id }, select: { paymentId: true } });
-    if (current?.paymentId !== input.paymentId) throw new PurchaseError(`${input.razorpayId} was already paid; payment ${input.paymentId} added nothing`, 409);
+  // Lost the claim: read who won it (the copy read above may predate a concurrent delivery of this payment).
+  const current = await db.creditPurchase.findUnique({ where: { id: purchase.id }, select: { paymentId: true, paidAt: true } });
+  if (claimed.count !== 1 && current?.paymentId !== input.paymentId) {
+    throw new PurchaseError(`${input.razorpayId} was already paid; payment ${input.paymentId} added nothing`, 409);
   }
+  // Meteroid answers a repeated key with the first grant only for an identical request: the expiry comes from the
+  // recorded payment time, so a retry sends the same grant.
+  const paidAt = current?.paidAt ?? new Date();
   try {
     await grantMinutes({
       customerId: billing.meteroidCustomerId,
@@ -155,7 +158,7 @@ export async function purchasePaid(input: { razorpayId: string; purchaseId?: str
       type: "PAID",
       reason: `Paid ${formatMoney(purchase.amount, purchase.currency)} · Razorpay ${input.razorpayId}`,
       reference: input.paymentId,
-      expiresAt: new Date(Date.now() + PURCHASE_VALID_DAYS * 86_400_000),
+      expiresAt: new Date(paidAt.getTime() + PURCHASE_VALID_DAYS * 86_400_000),
       idempotencyKey: `razorpay:${input.paymentId}`,
     });
   } catch (error) {

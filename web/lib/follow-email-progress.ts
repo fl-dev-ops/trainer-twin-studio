@@ -1,10 +1,10 @@
 "use client";
 
 import { toast } from "sonner";
-import type { EmailProgress } from "@/workflows/assignment-emails";
+import type { EmailProgress } from "@/workflows/invite-emails";
 
 /**
- * Follows an assignment's invite emails (workflows/assignment-emails.ts) in one toast: "Sending… 2 of 5", then sent,
+ * Follows an assignment's invite emails (workflows/invite-emails.ts) in one toast: "Sending… 2 of 5", then sent,
  * or the addresses that still failed after retries. The people are already assigned; this is only their emails.
  */
 export async function followEmailProgress(token: string, total: number) {

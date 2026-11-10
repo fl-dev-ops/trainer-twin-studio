@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { MinutesError } from "@/lib/minutes";
 import { getTrainerOrg } from "@/lib/org";
-import { assignTwinAndInvite } from "@/lib/invite/twin";
+import { runTwinAssign } from "@/lib/workflow-runs";
 import { accessUntilSchema, findTwinAgent, listTwinAssignments, TwinAccessError, twinUrl, updateTwinAssignment } from "@/lib/twin-access";
 
 export const runtime = "nodejs";
@@ -44,7 +44,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ slug
   if (!parsed.success) return Response.json({ error: "Give a list of emails and an optional future accessUntil" }, { status: 400 });
   try {
     const agent = await findTwinAgent(trainer.id, (await params).slug);
-    return Response.json(await assignTwinAndInvite({
+    // The assign-twin workflow (workflows/assign-twin.ts): starting credits, access, then the emails.
+    return Response.json(await runTwinAssign({
       org: { id: trainer.id, slug: trainer.slug },
       by: { id: trainer.user.id, name: trainer.user.name },
       agent,

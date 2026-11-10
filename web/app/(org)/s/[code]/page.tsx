@@ -1,5 +1,6 @@
 "use client";
 
+import { MIN_START_MINUTES } from "@/lib/minutes-config";
 import { useParams } from "next/navigation";
 import { useEffect } from "react";
 import { SwitchAccountButton } from "@/components/auth/switch-account-button";
@@ -36,9 +37,11 @@ export default function SharedSessionPage() {
       <main className="grid min-h-svh place-items-center p-4">
         <Card className="w-full max-w-md text-center">
           <CardHeader>
-            <CardTitle>Out of practice minutes</CardTitle>
+            <CardTitle>{loaded.minutesLeft > 0 ? "Not enough practice minutes" : "Out of practice minutes"}</CardTitle>
             <CardDescription>
-              You&apos;ve used all your practice minutes. Ask your trainer for more. You are signed in as {loaded.email}.
+              {loaded.minutesLeft > 0
+                ? `You have ${loaded.minutesLeft} minutes left; a call needs at least ${MIN_START_MINUTES}. Ask your trainer for more.`
+                : "You've used all your practice minutes. Ask your trainer for more."} You are signed in as {loaded.email}.
               <HomeRedirect />
             </CardDescription>
           </CardHeader>

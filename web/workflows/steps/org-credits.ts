@@ -1,6 +1,6 @@
 import { refreshOrgCredits, sendOrgUsage } from "@/lib/org-credits";
 
-/** Steps of the org-credits workflows (lib/org-credits.ts). A failed step is retried; each is safe to repeat. */
+/** Steps of the report-org-usage and sync-org-credits workflows (lib/org-credits.ts). Retried on failure; safe to repeat. */
 
 /** Sends Meteroid the org's unsent spending; when the last was sent, as ISO (null: nothing to send). */
 export async function sendUsage(orgId: string): Promise<string | null> {

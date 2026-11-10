@@ -1,5 +1,6 @@
 import { start } from "workflow/api";
-import { reportOrgUsage, syncOrgCredits } from "@/workflows/org-credits";
+import { reportOrgUsage } from "@/workflows/report-org-usage";
+import { syncOrgCredits } from "@/workflows/sync-org-credits";
 
 /**
  * Starts the org-credits workflows. Never throws: a run that can't start leaves the usage unsent, and the next run

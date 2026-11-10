@@ -1,0 +1,76 @@
+import { start } from "workflow/api";
+import { InviteError, inviteLearners, type OrgInviteInput } from "@/lib/invite/org";
+import { inviteToRoleplay, type RoleplayAssignInput } from "@/lib/invite/roleplay";
+import { assignTwinAndInvite, type TwinAssignInput } from "@/lib/invite/twin";
+import { ChromaTenantService } from "@/lib/chroma-tenant";
+import { db } from "@/lib/db";
+import { MinutesError } from "@/lib/minutes";
+import { grantTrialMinutes, linkOrgToMeteroid } from "@/lib/org-billing-setup";
+import { assignRoleplayToLearners } from "@/workflows/assign-roleplay";
+import { assignTwinToLearners } from "@/workflows/assign-twin";
+import { inviteOrgLearners } from "@/workflows/invite-org-learners";
+import { onboardOrg } from "@/workflows/onboard-org";
+
+/**
+ * Runs the workflows a person waits on (web/workflows/*): assigning twins and role plays, inviting learners,
+ * onboarding an org (and, in lib/run-session-start.ts, starting a call). Each waits for its result. When a workflow
+ * can't start, the same parts run right here, so nothing a person does is blocked by the workflow runtime.
+ */
+
+// Someone is waiting: check for a workflow's result every 100 ms (the SDK's default is 1 s).
+process.env.WORKFLOW_RETURN_VALUE_POLL_INTERVAL_MS ??= "100";
+
+export async function runAndWait<A extends unknown[], R>(name: string, workflow: (...args: A) => Promise<R>, args: A, direct: (...args: A) => Promise<R>): Promise<R> {
+  let run;
+  try {
+    run = await start(workflow, args);
+  } catch (error) {
+    console.error(`[${name}] workflow did not start; running here:`, error instanceof Error ? error.message : error);
+    return direct(...args);
+  }
+  return run.returnValue as Promise<R>;
+}
+
+/** A refusal from a workflow, thrown as the error its callers already turn into a response. */
+function orThrow<T extends { ok: boolean }>(result: T | { ok: false; status: number; error: string }): Extract<T, { ok: true }> {
+  if (!result.ok) {
+    const refusal = result as { status: number; error: string };
+    throw new MinutesError(refusal.error, refusal.status);
+  }
+  const rest: Record<string, unknown> = { ...result };
+  delete rest.ok;
+  return rest as unknown as Extract<T, { ok: true }>;
+}
+
+const direct = <A extends unknown[], R>(run: (...args: A) => Promise<R>) =>
+  (...args: A) => run(...args).then((value) => ({ ok: true as const, ...value }), (error: unknown) => {
+    if (error instanceof MinutesError || error instanceof InviteError) return { ok: false as const, status: error.status, error: error.message };
+    throw error;
+  });
+
+/** Twin Assign page (workflows/assign-twin.ts). Throws MinutesError when refused. */
+export async function runTwinAssign(input: TwinAssignInput) {
+  return orThrow(await runAndWait("assign-twin", assignTwinToLearners, [input], direct(assignTwinAndInvite)));
+}
+
+/** Role-play Assign page (workflows/assign-roleplay.ts). Throws MinutesError when refused. */
+export async function runRoleplayAssign(input: RoleplayAssignInput) {
+  return orThrow(await runAndWait("assign-roleplay", assignRoleplayToLearners, [input], direct(inviteToRoleplay)));
+}
+
+/** Settings › Users learner invites (workflows/invite-org-learners.ts). Throws MinutesError when refused. */
+export async function runOrgInvite(input: OrgInviteInput) {
+  return orThrow(await runAndWait("invite-org-learners", inviteOrgLearners, [input], direct(inviteLearners)));
+}
+
+/** Founder onboarding (workflows/onboard-org.ts): the org's Chroma database, Meteroid customer and trial credits. */
+export async function runOnboarding(orgId: string) {
+  return runAndWait("onboard-org", onboardOrg, [orgId], async (id: string) => {
+    await ChromaTenantService.createOrgDatabase(id);
+    if (!process.env.METEROID_API_KEY?.trim()) return { ok: true as const, meteroidCustomerId: null };
+    const org = await db.organization.findUniqueOrThrow({ where: { id }, select: { id: true, slug: true, name: true, createdAt: true } });
+    const { customerId } = await linkOrgToMeteroid(org);
+    await grantTrialMinutes(org, customerId);
+    return { ok: true as const, meteroidCustomerId: customerId };
+  });
+}

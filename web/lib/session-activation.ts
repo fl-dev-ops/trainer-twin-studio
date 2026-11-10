@@ -1,11 +1,19 @@
+import { BEFORE_UPLOAD_REFUSED } from "@/lib/context-upload";
 import { db } from "@/lib/db";
 import { activateSession } from "@/lib/interview-sessions";
 import { activateLiveKitSession, closeLiveKitSession } from "@/lib/livekit";
-import { warmChatOpening } from "@/lib/session-warm";
-import { after } from "next/server";
+import { MemberError } from "@/lib/members";
+import { MinutesError } from "@/lib/minutes";
+import { TwinAccessError } from "@/lib/twin-access";
 import type { DeliveryMode } from "@/lib/deployments";
 
-export async function activateInterviewRuntime(input: {
+/**
+ * Starting a call (POST /api/sessions), in two parts the start-session workflow runs as steps
+ * (workflows/start-session.ts): openSession (access, minutes, the session row) and, for voice, connectVoice (LiveKit
+ * room, agent dispatch, recording). A refusal the person should see comes back as `{ ok: false }`, not thrown.
+ */
+
+export type StartSessionInput = {
   orgId: string;
   userId: string;
   userName?: string;
@@ -18,16 +26,47 @@ export async function activateInterviewRuntime(input: {
   idempotencyKey?: string;
   /** The page releases the opening itself ("begin-opening"), e.g. after its get-ready countdown. */
   holdOpening?: boolean;
-}) {
-  const session = await activateSession(input);
-  if (!session) return null;
-  // Prewarm the chat brain's opening (spec snapshot, surface command, opening
-  // style) while the learner connects. Never blocks or fails activation.
-  after(() => warmChatOpening(session.id, input.orgId).catch(() => {}));
-  if (input.mode === "chat") {
-    return { session, conversationToken: session.runtimeToken };
-  }
+};
 
+export type OpenedSession = NonNullable<Awaited<ReturnType<typeof activateSession>>>;
+export type Refusal = { ok: false; status: number; error: string; code?: "minutes" };
+export type SessionStart =
+  | Refusal
+  | { ok: true; session: OpenedSession; conversationToken?: string; participantToken?: string; room?: string };
+
+/** A refusal the person should see (access, minutes, documents), with its HTTP status; anything else: null. */
+export function startRefusal(error: unknown): Refusal | null {
+  if (error instanceof MinutesError) return { ok: false, status: error.status, error: error.message, code: "minutes" };
+  if (error instanceof MemberError || error instanceof TwinAccessError) return { ok: false, status: error.status, error: error.message };
+  const message = error instanceof Error ? error.message : "";
+  if (message === "Context not found" || message === BEFORE_UPLOAD_REFUSED || message.startsWith("Deployment does not allow ")) {
+    return { ok: false, status: 400, error: message };
+  }
+  return null;
+}
+
+/** Step 1: checks access and minutes and creates (or resumes) the session. */
+export async function openSession(input: StartSessionInput): Promise<Refusal | { ok: true; session: OpenedSession }> {
+  try {
+    const session = await activateSession(input);
+    return session ? { ok: true, session } : { ok: false, status: 403, error: "Invalid or already used session URL" };
+  } catch (error) {
+    const refusal = startRefusal(error);
+    if (refusal) return refusal;
+    throw error;
+  }
+}
+
+/** Both parts in order, without the workflow (when it can't start). */
+export async function startSessionNow(input: StartSessionInput): Promise<SessionStart> {
+  const opened = await openSession(input);
+  if (!opened.ok) return opened;
+  if (input.mode === "chat") return { ...opened, conversationToken: opened.session.runtimeToken };
+  return { ...opened, ...(await connectVoice(input, opened.session)) };
+}
+
+/** Step 2 (voice): the session's LiveKit room, the agent's dispatch and the recording. Failed: the session is closed. */
+export async function connectVoice(input: StartSessionInput, session: OpenedSession): Promise<{ participantToken: string; room: string }> {
   const row = await db.interviewSession.findUniqueOrThrow({
     where: { id: session.id },
     select: {
@@ -87,7 +126,7 @@ export async function activateInterviewRuntime(input: {
           : {}),
       },
     });
-    return { session, participantToken: livekit.token, room: livekit.room };
+    return { participantToken: livekit.token, room: livekit.room };
   } catch (error) {
     await closeLiveKitSession({
       room: row.livekitRoom,

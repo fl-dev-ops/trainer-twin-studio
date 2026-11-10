@@ -1,5 +1,9 @@
+// Workflow: twin session report.
+// After a learner's twin session ends, waits for the voice agent's final transcript, writes the report (summary,
+// topics, questions) and saves it. Started by lib/schedule-report.ts; steps in ./steps/twin-session-report.ts.
+
 import { sleep } from "workflow";
-import { failTwinReport, generateTwinReport, readTwinSession, storeTwinReport } from "./twin-session-report-steps";
+import { failTwinReport, generateTwinReport, readTwinSession, storeTwinReport } from "./steps/twin-session-report";
 
 /** How long to wait for the voice agent's full transcript before using the one the browser saved. */
 const TRANSCRIPT_CHECKS = 12;

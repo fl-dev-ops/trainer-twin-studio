@@ -1,9 +1,7 @@
 import { TRPCError } from "@trpc/server";
-import { headers } from "next/headers";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { MAX_INVITES } from "@/lib/invite/emails";
-import { inviteLearners } from "@/lib/invite/org";
 import type { CreditGrant } from "@/lib/meteroid";
 import {
   creditsAdded,
@@ -18,6 +16,7 @@ import {
 import { STUDIO_ROLES, studioEmails } from "@/lib/org";
 import { hasUnsentUsage, orgCredits, orgGrants, refreshOrgCredits } from "@/lib/org-credits";
 import { scheduleOrgUsage } from "@/lib/schedule-org-credits";
+import { runOrgInvite } from "@/lib/workflow-runs";
 import { studioProcedure, t } from "@/lib/trpc";
 
 /**
@@ -164,9 +163,11 @@ export const minutesRouter = t.router({
   /** Invites learners to the org (Settings > Users) with their starting credits (lib/invite/org.ts). */
   invite: studioProcedure
     .input(z.object({ emails: z.array(emailInput).min(1).max(MAX_INVITES), minutes: amount.default(DEFAULT_LEARNER_MINUTES) }))
-    .mutation(({ ctx, input }) => minutesCall(async () =>
-      inviteLearners({ orgId: ctx.user.orgId, actorUserId: ctx.user.id, emails: input.emails, minutes: input.minutes, headers: await headers() }),
-    )),
+    .mutation(({ ctx, input }) => minutesCall(async () => {
+      const org = await db.organization.findUniqueOrThrow({ where: { id: ctx.user.orgId }, select: { id: true, slug: true, name: true } });
+      // The invite-org-learners workflow (workflows/invite-org-learners.ts): starting credits, invitations, emails.
+      return runOrgInvite({ org, by: { id: ctx.user.id, name: ctx.user.name }, emails: input.emails, minutes: input.minutes });
+    })),
 
   /** Adds credits to a learner, on top of what they have, from the org's balance. */
   add: studioProcedure.input(z.object({ email: emailInput, minutes: amount, note })).mutation(({ ctx, input }) => minutesCall(async () => {

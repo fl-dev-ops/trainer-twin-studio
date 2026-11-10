@@ -1,5 +1,6 @@
 "use client";
 
+import { followEmailProgress } from "@/lib/follow-email-progress";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,8 @@ export function InviteUser({ organizationId, role, onDone }: { organizationId: s
       try {
         const result = await api.minutes.invite.mutate({ emails, minutes: startingMinutes! });
         failed.push(...result.failed);
+        if (result.emailProgress) void followEmailProgress(result.emailProgress, result.emailsQueued);
+        else if (result.emailFailures) toast.warning(`${result.emailFailures} invite email(s) could not be sent.`);
       } catch (error) {
         setBusy(false);
         return setErrors([error instanceof Error ? error.message : "Could not create the invites"]);

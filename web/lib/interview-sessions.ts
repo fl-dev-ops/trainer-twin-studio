@@ -11,6 +11,7 @@ import { TwinAccessError, twinAccessByAgent, twinAccessByCode } from "@/lib/twin
 import { pinTwinSkills, TWIN_SOURCE } from "@/lib/twins";
 import { beforeSettings, usesBeforeSettings } from "@/lib/context-upload";
 import { learnerBalance, MinutesError, OUT_OF_MINUTES, recordSessionUsage } from "@/lib/minutes";
+import { MIN_START_MINUTES } from "@/lib/minutes-config";
 import { orgCredits } from "@/lib/org-credits";
 import { BEFORE_UPLOAD_REFUSED, uploadAllowed } from "@/lib/context-upload";
 
@@ -25,6 +26,15 @@ const runtimeToken = (sessionId: string) => {
 export type SessionEndStatus = "completed" | "abandoned";
 
 export const ORG_OUT_OF_CREDITS = "Your organization has no credits left for calls. Contact TrainerTwin to add more.";
+
+const whole = (seconds: number) => Math.max(0, Math.floor(seconds / 60));
+/** Refused below MIN_START_MINUTES: nothing left, or too little for a call worth starting. */
+const learnerTooShort = (seconds: number) => seconds <= 0
+  ? OUT_OF_MINUTES
+  : `You need at least ${MIN_START_MINUTES} minutes to start a call; you have ${whole(seconds)}. Ask your trainer for more.`;
+const orgTooShort = (seconds: number) => seconds <= 0
+  ? ORG_OUT_OF_CREDITS
+  : `Your organization needs at least ${MIN_START_MINUTES} credits to start a call; it has ${whole(seconds)}. Contact TrainerTwin to add more.`;
 
 export function resolveSessionEndStatus(current: string, requested: SessionEndStatus): SessionEndStatus {
   return current === "completed" ? "completed" : requested;
@@ -332,13 +342,13 @@ export async function activateSession(input: {
       for (const row of live) await closeInterviewSession(row.id, "abandoned");
     }
     allowedSeconds = (await learnerBalance(input.orgId, email)).balanceSeconds;
-    if (allowedSeconds <= 0) throw new MinutesError(OUT_OF_MINUTES, 403);
+    if (allowedSeconds < MIN_START_MINUTES * 60) throw new MinutesError(learnerTooShort(allowedSeconds), 403);
   }
   let chargesOrg = false;
   if (!metered && mode === "voice") {
     const credits = await orgCredits(input.orgId, { fresh: true });
     if (credits.billed) {
-      if (credits.seconds <= 0) throw new MinutesError(ORG_OUT_OF_CREDITS, 403);
+      if (credits.seconds < MIN_START_MINUTES * 60) throw new MinutesError(orgTooShort(credits.seconds), 403);
       chargesOrg = true;
       allowedSeconds = credits.seconds;
     }

@@ -200,11 +200,13 @@ export async function sendInvitationEmail({
   organizationName,
   inviterName,
   inviteUrl,
+  idempotencyKey,
 }: {
   to: string;
   organizationName: string;
   inviterName?: string;
   inviteUrl: string;
+  idempotencyKey?: string;
 }) {
   const subject = `Join ${organizationName} on TrainerTwin`;
   const html = renderEmailLayout({
@@ -231,6 +233,7 @@ export async function sendInvitationEmail({
     subject,
     html,
     text: `You have been invited to join ${organizationName} on TrainerTwin. Open your invitation and continue with Google using ${to}: ${inviteUrl}`,
+    idempotencyKey,
   });
 }
 

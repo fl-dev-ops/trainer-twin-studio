@@ -1,8 +1,8 @@
 import { FatalError, getStepMetadata, getWritable } from "workflow";
-import { sendRolePlayAssignmentEmail, sendTwinAssignmentEmail } from "@/lib/email";
-import type { AssignmentEmail, EmailProgress } from "./assignment-emails";
+import { sendInviteEmailNow } from "@/lib/invite-email-send";
+import type { EmailProgress, InviteEmail } from "../invite-emails";
 
-/** Steps of the assignment-emails workflow. Progress goes to the run's stream (app/api/runs/[token]). */
+/** Steps of the send-invite-emails workflow (../invite-emails.ts). Progress goes to the run's stream (app/api/runs/[token]). */
 
 async function report(event: EmailProgress) {
   const writer = getWritable<EmailProgress>().getWriter();
@@ -11,15 +11,13 @@ async function report(event: EmailProgress) {
 }
 
 /**
- * One invite email. Resend failures are retried (step default backoff); the step id is the Resend idempotency key, so
- * a retry after a lost reply doesn't send it twice. No Resend key configured: no point retrying.
+ * One email. Resend failures are retried (step default backoff). The Resend idempotency key is the email's own (when
+ * it was first tried outside the workflow) or this step's id, so a retry after a lost reply never sends it twice. No
+ * Resend key configured: no point retrying.
  */
-export async function sendOne(email: AssignmentEmail): Promise<void> {
+export async function sendOne(email: InviteEmail): Promise<void> {
   "use step";
-  const { stepId } = getStepMetadata();
-  const result = email.kind === "twin"
-    ? await sendTwinAssignmentEmail({ ...email.args, idempotencyKey: stepId })
-    : await sendRolePlayAssignmentEmail({ ...email.args, idempotencyKey: stepId });
+  const result = await sendInviteEmailNow(email, email.idempotencyKey ?? getStepMetadata().stepId);
   if (!result.success) {
     const message = `Invite to ${email.args.to}: ${result.error}`;
     if (result.error === "RESEND_API_KEY is not set") throw new FatalError(message);

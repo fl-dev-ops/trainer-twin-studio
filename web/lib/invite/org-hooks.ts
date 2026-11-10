@@ -1,5 +1,5 @@
 import { APIError } from "better-auth/api";
-import { sendInvitationEmail } from "@/lib/email";
+import { deliverInviteEmail } from "@/lib/schedule-invite-emails";
 import { orgInviteUrl } from "@/lib/invite/links";
 import { giveStartingMinutes, MinutesError } from "@/lib/minutes";
 
@@ -17,7 +17,11 @@ export async function beforeOrgInvitation(invitation: { role: string; email: str
   });
 }
 
-/** The invitation email: learners get their org's home page, studio invites the auth invite page (lib/invite/links.ts). */
+/**
+ * The invitation email (Settings › Team invites go through Better Auth): learners get their org's home page, studio
+ * invites the auth invite page (lib/invite/links.ts). Sent now; a failure keeps being retried in the background by
+ * the send-invite-emails workflow (workflows/invite-emails.ts). Each send (or "send again") has its own key.
+ */
 export async function emailOrgInvitation(data: {
   id: string;
   email: string;
@@ -26,10 +30,14 @@ export async function emailOrgInvitation(data: {
   inviter: unknown;
 }) {
   const inviter = data.inviter as { user?: { name?: string }; name?: string } | undefined;
-  await sendInvitationEmail({
-    to: data.email,
-    organizationName: data.organization.name,
-    inviterName: inviter?.user?.name || inviter?.name || "Your team",
-    inviteUrl: orgInviteUrl({ id: data.id, role: data.role }, data.organization.slug),
+  await deliverInviteEmail({
+    kind: "invitation",
+    idempotencyKey: `invitation:${data.id}:${Date.now()}`,
+    args: {
+      to: data.email,
+      organizationName: data.organization.name,
+      inviterName: inviter?.user?.name || inviter?.name || "Your team",
+      inviteUrl: orgInviteUrl({ id: data.id, role: data.role }, data.organization.slug),
+    },
   });
 }

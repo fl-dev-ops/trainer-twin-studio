@@ -1,17 +1,15 @@
 import { NextResponse } from "next/server";
 import { authorizeRuntimeSession, type SessionEndStatus } from "@/lib/interview-sessions";
 import { closeInterviewSession } from "@/lib/session-lifecycle";
-import { activateInterviewRuntime } from "@/lib/session-activation";
+import { after } from "next/server";
+import { runSessionStart } from "@/lib/run-session-start";
+import { warmChatOpening } from "@/lib/session-warm";
 import { getTrainerOrg } from "@/lib/org";
 import { resolveSessionUser } from "@/lib/session-user";
 import { db } from "@/lib/db";
 import { isStudioRole } from "@/lib/org";
 import { listSessions } from "@/lib/specs";
 import { processEndedSession } from "@/lib/session-processing";
-import { MemberError } from "@/lib/members";
-import { TwinAccessError } from "@/lib/twin-access";
-import { MinutesError } from "@/lib/minutes";
-import { BEFORE_UPLOAD_REFUSED } from "@/lib/context-upload";
 
 export async function GET() {
   const trainer = await getTrainerOrg();
@@ -38,7 +36,8 @@ export async function POST(req: Request) {
   }
 
   try {
-    const activation = await activateInterviewRuntime({
+    // The start-session workflow (workflows/start-session.ts): access, minutes, the session, then its voice room.
+    const started = await runSessionStart({
       orgId: org.id,
       userId: user.id,
       userName: user.name,
@@ -51,17 +50,13 @@ export async function POST(req: Request) {
       idempotencyKey: typeof body.idempotencyKey === "string" ? body.idempotencyKey : undefined,
       holdOpening: body.holdOpening === true,
     });
-    if (!activation) return NextResponse.json({ error: "Invalid or already used session URL" }, { status: 403 });
+    if (!started.ok) return NextResponse.json({ error: started.error, ...(started.code ? { code: started.code } : {}) }, { status: started.status });
+    const activation = { session: started.session, participantToken: started.participantToken, room: started.room, conversationToken: started.conversationToken };
+    // Prewarm the chat brain's opening (spec snapshot, surface command, opening style) while the person connects.
+    after(() => warmChatOpening(activation.session.id, org.id).catch(() => {}));
     return NextResponse.json(activation);
   } catch (error) {
-    if (error instanceof MemberError) return NextResponse.json({ error: error.message }, { status: error.status });
-    if (error instanceof TwinAccessError) return NextResponse.json({ error: error.message }, { status: error.status });
-    if (error instanceof MinutesError) return NextResponse.json({ error: error.message, code: "minutes" }, { status: error.status });
     console.error("Session activation failed", error);
-    const message = error instanceof Error ? error.message : "";
-    if (message === "Context not found" || message === BEFORE_UPLOAD_REFUSED || message.startsWith("Deployment does not allow ")) {
-      return NextResponse.json({ error: message }, { status: 400 });
-    }
     return NextResponse.json({ error: "Could not start the session. Please try again or contact support." }, { status: 500 });
   }
 }
