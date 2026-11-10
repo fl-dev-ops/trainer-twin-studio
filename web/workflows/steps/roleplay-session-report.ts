@@ -9,7 +9,7 @@ import {
 } from "@/lib/roleplay/session-report";
 
 /**
- * Steps of the roleplay-session-report workflow (../roleplay-session-report.ts). Each is checkpointed: a retry of saving reuses the stored
+ * Report steps of the end-roleplay-session workflow (../end-roleplay-session.ts). Each is checkpointed: a retry of saving reuses the stored
  * model result instead of calling the model again.
  */
 
