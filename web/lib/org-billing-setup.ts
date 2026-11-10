@@ -43,7 +43,7 @@ export async function linkOrgToMeteroid(org: { id: string; slug: string; name: s
 /**
  * An org's free trial credits (TRIAL_MINUTES, expiring TRIAL_DAYS after `startsAt`: a new org's creation; for an org
  * that existed before Meteroid, the day it was linked, given to scripts/meteroid-link-org.ts --trial). Once per org,
- * however often it runs: Meteroid answers a repeated key with the first grant only when the request is identical, so
+ * however often it runs for that customer: Meteroid answers a repeated key with the first grant only when the request is identical, so
  * the expiry comes from a fixed date, not the clock.
  */
 export async function grantTrialMinutes(org: { id: string; createdAt: Date }, customerId: string, startsAt = org.createdAt) {
@@ -53,7 +53,8 @@ export async function grantTrialMinutes(org: { id: string; createdAt: Date }, cu
     type: "PROMOTIONAL",
     reason: "Free trial",
     expiresAt: new Date(startsAt.getTime() + TRIAL_DAYS * 86_400_000),
-    idempotencyKey: `trial-${org.id}`,
+    // Meteroid keys are unique per tenant, not per customer: with the customer in it, a recreated customer can still get its trial.
+    idempotencyKey: `trial-${org.id}-${customerId}`,
   });
 }
 

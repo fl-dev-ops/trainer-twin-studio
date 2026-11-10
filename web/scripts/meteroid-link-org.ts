@@ -26,10 +26,11 @@ const trial = arg("trial");
 if (trial !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(trial)) throw new Error(USAGE);
 if (!slug || !Number.isInteger(minutes) || minutes < 0 || (minutes > 0 && !(expires && /^\d{4}-\d{2}-\d{2}$/.test(expires) && reason))) throw new Error(USAGE);
 
-const sandboxKey = (process.env.METEROID_API_KEY ?? "").startsWith("pv_dev_");
+// Meteroid keys name their tenant: pv_prod_… (Production), pv_dev_… (Development), pv_sand_… (Sandbox, rehearsals).
+const productionKey = (process.env.METEROID_API_KEY ?? "").startsWith("pv_prod_");
 if (isRemoteDatabase() && !args.includes("--production")) throw new Error("refusing: this is a production database; add --production to write to it");
-if (isRemoteDatabase() && sandboxKey) throw new Error("refusing: a production database needs a production Meteroid key (not pv_dev_…)");
-if (!isRemoteDatabase() && !sandboxKey) throw new Error("refusing: a production Meteroid key with a local database");
+if (isRemoteDatabase() && !productionKey) throw new Error("refusing: a production database needs a production Meteroid key (pv_prod_…)");
+if (!isRemoteDatabase() && productionKey) throw new Error("refusing: a production Meteroid key with a local database");
 
 const org = await db.organization.findUnique({ where: { slug }, select: { id: true, name: true, createdAt: true } });
 if (!org) throw new Error(`No org "${slug}"`);
