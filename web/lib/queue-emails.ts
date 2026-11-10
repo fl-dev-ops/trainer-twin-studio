@@ -15,7 +15,8 @@ export async function queueEmails(orgId: string, emails: OutboundEmail[]): Promi
     return { emailFailures: 0, emailsQueued: emails.length, emailProgress: progressToken(orgId, run.runId) };
   } catch (error) {
     console.error("[send-emails] workflow did not start; sending now:", error instanceof Error ? error.message : error);
-    const results = await Promise.all(emails.map((email) => sendEmailNow(email)));
+    // Each email's own key, so it still goes out once if the same action is retried.
+    const results = await Promise.all(emails.map((email) => sendEmailNow(email, email.idempotencyKey)));
     return { emailFailures: results.filter(({ success }) => !success).length, emailsQueued: 0 };
   }
 }

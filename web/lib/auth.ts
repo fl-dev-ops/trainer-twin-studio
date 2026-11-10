@@ -8,7 +8,7 @@ import { nextCookies } from "better-auth/next-js";
 import { db } from "@/lib/db";
 import { BASE_DOMAIN, safeFamilyRedirect } from "@/lib/base-domain";
 import { sendOtpEmail } from "@/lib/email";
-import { ADMIN_ROLE, assertNoSecondAdmin, DISABLED_MESSAGE, isDisabledUser, NO_REMOVAL_MESSAGE, ONE_ADMIN_MESSAGE } from "@/lib/members";
+import { ADMIN_ROLE, assertNoSecondAdmin, DISABLED_MESSAGE, dropLearnerAssignments, isDisabledUser, NO_REMOVAL_MESSAGE, ONE_ADMIN_MESSAGE } from "@/lib/members";
 
 
 export const auth = betterAuth({
@@ -24,6 +24,7 @@ export const auth = betterAuth({
         google: {
           clientId: process.env.GOOGLE_CLIENT_ID,
           clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+          disableSignUp: true,
           // Sign-in must not adopt scopes the user granted to the Drive/YouTube connectors (same OAuth client):
           // their combination is rejected by Google ("scopes that cannot be requested together").
           includeGrantedScopes: false,
@@ -40,6 +41,8 @@ export const auth = betterAuth({
       },
     },
   },
+  // Google refusals without our own error URL land on the sign-in page (it explains them), not Better Auth's page.
+  onAPIError: { errorURL: `https://auth.${BASE_DOMAIN}/sign-in` },
   account: {
     accountLinking: {
       trustedProviders: ["google"],
@@ -70,12 +73,17 @@ export const auth = betterAuth({
           if (member.role === ADMIN_ROLE) throw new APIError("FORBIDDEN", { message: ONE_ADMIN_MESSAGE });
           await assertNoSecondAdmin(newRole, organization.id);
         },
+        // Admin and team hold no learner assignments (specs/people.md rule 7): moving to the studio drops them.
+        afterUpdateMemberRole: async ({ member, organization }) => {
+          if (member.role !== "user") await dropLearnerAssignments(organization.id, member.id);
+        },
         beforeRemoveMember: async () => {
           throw new APIError("FORBIDDEN", { message: NO_REMOVAL_MESSAGE });
         },
       },
     }),
     emailOTP({
+      disableSignUp: true,
       otpLength: 6,
       expiresIn: 10 * 60,
       allowedAttempts: 3,

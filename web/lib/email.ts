@@ -204,6 +204,12 @@ export async function sendOtpEmail({
   otp: string;
   purpose?: string;
 }) {
+  if (!resend && process.env.NODE_ENV === "development") {
+    // Local testing still uses a real, expiring OTP; never expose it in an HTTP response.
+    console.info(`[Dev sign-in] Code for ${to}: ${otp} (expires in 10 minutes)`);
+    return { success: true };
+  }
+
   const subject = `Your TrainerTwin ${purpose} code: ${otp}`;
   const html = renderEmailLayout({
     title: subject,
@@ -321,7 +327,7 @@ export function personEmail(args: PersonEmailArgs) {
   return {
     subject,
     html,
-    text: `${text.join(" ")}${args.roleplay?.requiredArtifact?.prompt ? ` What to bring: ${args.roleplay.requiredArtifact.prompt}.` : ""}${button ? ` Sign in with Google or an email code, using ${args.to}: ${button.url}` : ""}`,
+    text: `${text.join(" ")}${args.roleplay?.objective ? ` Objective: ${args.roleplay.objective}.` : ""}${args.roleplay?.requiredArtifact?.prompt ? ` What to bring: ${args.roleplay.requiredArtifact.prompt}.` : ""}${button ? ` Sign in with Google or an email code, using ${args.to}: ${button.url}` : ""}`,
   };
 }
 

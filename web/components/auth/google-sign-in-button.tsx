@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { authClient } from "@/lib/auth-client";
+import { BASE_DOMAIN } from "@/lib/base-domain";
 
 /* eslint-disable shadcn/no-raw-colors -- Google's own logo colours: a third-party mark, outside the palette by design. */
 function GoogleIcon(props: React.ComponentProps<"svg">) {
@@ -39,10 +40,15 @@ export function GoogleSignInButton({ label = "Continue with Google", callbackURL
     setBusy(true);
     setError(null);
     try {
+      const back = callbackURL ?? window.location.href;
+      const port = window.location.port ? `:${window.location.port}` : "";
       const result = await authClient.signIn.social({
         provider: "google",
-        // Return to this page so its existing redirect/invitation logic can finish.
-        callbackURL: callbackURL ?? window.location.href,
+        // Return to this page so its own logic can finish.
+        callbackURL: back,
+        // A refusal (e.g. no TrainerTwin account for that Google email: no self sign-up) lands on the sign-in page,
+        // which explains it and still offers both ways in, then returns here.
+        errorCallbackURL: `https://auth.${BASE_DOMAIN}${port}/sign-in?redirect=${encodeURIComponent(back)}`,
       });
       if (result.error) setError(result.error.message ?? "Google sign-in failed. Try again.");
     } catch {

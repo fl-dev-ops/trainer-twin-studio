@@ -13,7 +13,7 @@
 | Learner (`user`) | Signs in and practises what they were given. |
 | API integrator | Adds learners and role-play assignments with an org API key. |
 | Copilot (for a studio member) | Adds learners and assigns twins / role plays. |
-| Anyone with a shared twin link | Signs in, and is added to the org as a learner with that twin. |
+| Existing account with a shared twin link | Signs in, and is added to the org as a learner with that twin. |
 
 ## Words used here
 
@@ -27,7 +27,8 @@
 ## Rules
 
 1. **Account first.** Adding an email to an org creates its account when none exists (lower-cased email, name from
-   the part before `@`). No account is ever created by anything else except sign-in itself.
+   the part before `@`). Operators also create founder accounts with `web/scripts/founder-invite.ts`. Sign-in never
+   creates an account.
 2. **Then a member.** The account becomes a member of the org with the chosen role in the same action. There is no
    "invited, not joined" state for any role: a member just signs in. One member row per account per org (database
    unique `(organizationId, userId)`).
@@ -48,8 +49,10 @@
    [Credits](credits.md)). Starting credits are all or nothing for a batch: when the org can't cover them, nobody is
    added.
 10. **Sign-in is Google or an email code.** No passwords anywhere (no password sign-in, sign-up or reset). The code
-    is 6 digits, valid 10 minutes, 3 tries, sent through Resend. The first sign-in with an email that has no account
-    creates it (needed for shared twin links); signing in alone gives no org access.
+    is 6 digits, valid 10 minutes, 3 tries, sent through Resend. Only existing accounts may sign in, through either
+    method; operators create founders and org admins/team add other people. Unknown emails receive a generic success
+    response to a code request, but no code is sent and no account is created. Signing in alone gives no org access.
+    In development only, when Resend is not configured, the OTP is printed in the dev-server terminal instead.
 11. **Emails.** Each action sends one email per affected person, combining what applies:
 
     | Action | Email says |
@@ -70,6 +73,7 @@
 - Every member has an account; no account has two member rows in one org.
 - Every twin assignment has `userId`, and that account is a member of the assignment's org.
 - Every role-play assignment has `memberId`, and that member is in the assignment's org.
+- No admin or team member holds a twin or role-play assignment (moving someone to the studio removes theirs).
 - Every learner credits row (`MinuteLedger` types `grant`, `usage`, `reclaim`) belongs to an email that is a member of
   that org.
 

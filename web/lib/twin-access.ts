@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { BASE_DOMAIN } from "@/lib/base-domain";
 import { db } from "@/lib/db";
 import { DEFAULT_LEARNER_MINUTES, learnerMinutes } from "@/lib/minutes";
-import { addPeopleToOrg, LEARNER, orgPerson } from "@/lib/org-people";
+import { addPeopleToOrg, LEARNER, orgPeople, orgPerson } from "@/lib/org-people";
 import { TWIN_SOURCE } from "@/lib/twins";
 
 /**
@@ -201,8 +201,10 @@ export async function findTwinAgent(orgId: string, slug: string) {
  * role play of the org (minutes are per learner, not per twin). `email` is the member's account email.
  */
 export async function listTwinAssignments(orgId: string, agentId: string) {
+  // The org's learners only (specs/people.md rule 7: admin and team hold no learner assignments).
+  const learners = await orgPeople(orgId, { roles: [LEARNER], includeDisabled: true });
   const rows = await db.twinAssignment.findMany({
-    where: { orgId, agentId },
+    where: { orgId, agentId, userId: { in: learners.map((person) => person.userId) } },
     orderBy: { createdAt: "asc" },
     select: {
       id: true, status: true, accessUntil: true, shareCode: true, shareLinkId: true, createdAt: true,

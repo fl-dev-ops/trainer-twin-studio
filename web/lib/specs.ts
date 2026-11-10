@@ -93,7 +93,7 @@ export async function listSpecSummaries(type: "personas" | "agents", orgId: stri
     }),
   ]);
   const people = assignments.length
-    ? new Map((await orgPeople(orgId, { memberIds: [...new Set(assignments.map((a) => a.memberId))], includeDisabled: true })).map((p) => [p.memberId, p]))
+    ? new Map((await orgPeople(orgId, { roles: ["user"], memberIds: [...new Set(assignments.map((a) => a.memberId))], includeDisabled: true })).map((p) => [p.memberId, p]))
     : new Map<string, OrgPerson>();
   const learnersByAgent = new Map<string, ScenarioLearner[]>();
   for (const { memberId, deployment } of assignments) {

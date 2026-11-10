@@ -19,18 +19,21 @@ import { authClient } from "@/lib/auth-client";
 import { safeFamilyRedirect } from "@/lib/base-domain";
 
 /**
- * Sign-in (specs/people.md rule 10): Google, or a 6-digit code emailed to you. No passwords. The first sign-in with an
- * email creates the account; someone added to an org already has one and lands in it.
+ * Sign-in (specs/people.md rule 10): Google, or a 6-digit code emailed to you. No passwords or self-sign-up.
+ * Accounts are created by operators or when someone is added to an org.
  */
 export function SignInForm({
   redirectTo,
   googleEnabled,
+  error: initialError,
 }: {
   redirectTo?: string;
   googleEnabled: boolean;
+  /** Why the last Google sign-in was refused (the page reads it from ?error=). */
+  error?: string;
 }) {
   const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError ?? null);
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState("");
   const [codeSent, setCodeSent] = useState(false);
@@ -53,7 +56,7 @@ export function SignInForm({
     setError(null);
     const { error } = await authClient.signIn.emailOtp({ email: email.trim(), otp: code.trim() });
     if (error) {
-      setError(error.message ?? "That code didn't work");
+      setError(codeError(error));
       setBusy(false);
       return;
     }
@@ -138,7 +141,7 @@ export function SignInForm({
                 required
               />
               <FieldDescription>
-                We sent a code to {email.trim()}. It works for 10 minutes.{" "}
+                If {email.trim()} has a TrainerTwin account, we&apos;ve sent it a code. It works for 10 minutes.{" "}
                 <button type="button" className="text-foreground underline underline-offset-4" disabled={busy} onClick={() => void sendCode()}>
                   Send a new code
                 </button>
@@ -175,4 +178,12 @@ export function SignInForm({
       </FieldDescription>
     </div>
   );
+}
+
+/** A refused code, in the person's words. An unknown email gets no code (no self sign-up), so a wrong code says both. */
+function codeError(error: { code?: string; message?: string }) {
+  if (error.code === "OTP_EXPIRED") return "That code has expired. Send a new code.";
+  if (error.code === "TOO_MANY_ATTEMPTS") return "Too many tries with that code. Send a new code.";
+  if (error.code === "INVALID_OTP" || !error.message) return "That code didn't work. Check the code, and that this is the email your trainer added.";
+  return error.message; // e.g. a disabled member: "Your access has been disabled. Contact your trainer."
 }

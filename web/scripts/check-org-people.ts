@@ -22,6 +22,13 @@ export const PEOPLE_CHECKS = [
           where not exists (select 1 from member m where m.id = r."memberId" and m."organizationId" = r."orgId")`,
   },
   {
+    rule: "admin and team hold no twin or role-play assignment",
+    sql: `select (select count(*) from "TwinAssignment" t join member m on m."organizationId" = t."orgId" and m."userId" = t."userId"
+                  where m.role in ('admin', 'team'))
+               + (select count(*) from "RolePlayAssignment" r join member m on m.id = r."memberId" where m.role in ('admin', 'team'))
+               as n`,
+  },
+  {
     rule: "every learner credits row belongs to a member of its org",
     sql: `select count(*)::int as n from "MinuteLedger" l
           where l.type in ('grant', 'usage', 'reclaim')

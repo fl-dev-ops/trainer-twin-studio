@@ -113,7 +113,8 @@ async function invitesFor(orgId: string, agentIds: string[]) {
     orderBy: { assignedAt: "desc" },
     select: { id: true, memberId: true, status: true, assignedAt: true, expiresAt: true, deployment: { select: { agentId: true } } },
   });
-  const people = new Map((await orgPeople(orgId, { memberIds: [...new Set(rows.map((row) => row.memberId))], includeDisabled: true }))
+  // The org's learners only (specs/people.md rule 7: admin and team hold no learner assignments).
+  const people = new Map((await orgPeople(orgId, { roles: ["user"], memberIds: [...new Set(rows.map((row) => row.memberId))], includeDisabled: true }))
     .map((person) => [person.memberId, person]));
   return rows.flatMap((row) => {
     const person = people.get(row.memberId);

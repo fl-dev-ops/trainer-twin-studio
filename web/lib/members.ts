@@ -79,3 +79,16 @@ export async function setMemberDisabled(input: { orgId: string; memberId: string
   });
   for (const session of open) await closeInterviewSession(session.id, "abandoned");
 }
+
+/**
+ * A member who moved to admin or team keeps no learner assignments (specs/people.md rule 7): their twin and role-play
+ * assignments in that org are removed (sessions keep their history; the session's link to the assignment is cleared).
+ */
+export async function dropLearnerAssignments(orgId: string, memberId: string) {
+  const person = await orgPerson(orgId, { memberId });
+  if (!person) return;
+  await db.$transaction([
+    db.twinAssignment.deleteMany({ where: { orgId, userId: person.userId } }),
+    db.rolePlayAssignment.deleteMany({ where: { orgId, memberId } }),
+  ]);
+}

@@ -64,6 +64,13 @@ UPDATE "InterviewSession" s SET "assignmentId" = keep.id
 DELETE FROM "RolePlayAssignment" r USING rp_owner o WHERE r.id = o.id AND o.rank > 1;
 UPDATE "RolePlayAssignment" r SET "memberId" = o.member_id FROM rp_owner o WHERE r.id = o.id AND r."memberId" IS NULL;
 
+-- 3b. Admin and team hold no learner assignments (they practise from the org's credits): left over from before they
+--     joined the studio. Their sessions keep their history (the session's link to the assignment is cleared).
+DELETE FROM "TwinAssignment" t USING member m
+  WHERE m."organizationId" = t."orgId" AND m."userId" = t."userId" AND m.role IN ('admin', 'team');
+DELETE FROM "RolePlayAssignment" r USING member m
+  WHERE m.id = r."memberId" AND m.role IN ('admin', 'team');
+
 -- 4. The session check no longer matches assignments by email.
 CREATE OR REPLACE FUNCTION enforce_interview_session_org() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
