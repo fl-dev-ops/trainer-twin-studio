@@ -1,7 +1,9 @@
 import BASE from "../../prompts/base-instructions.md?raw";
 import PLATFORM from "../../prompts/platform.md?raw";
+import SPEAKING_REMINDER from "../../prompts/speaking-reminder.md?raw";
 import { formatSessionSpec, type SessionSpecs } from "./brain";
-import { sessionMode } from "./session-mode";
+import { SPEAKING_MODEL } from "./models";
+import { isTwinMode, sessionMode } from "./session-mode";
 
 /**
  * A session's instructions, in layers:
@@ -20,6 +22,10 @@ export const INSTRUCTIONS_HEADER = "Instructions (instructions)\n";
 export const FALLBACK_INSTRUCTIONS = INSTRUCTIONS_HEADER + BASE.trim();
 
 export function composeInstructions(specs: SessionSpecs): string {
-  const base = sessionMode(specs) === "roleplay-interview" ? BASE : PLATFORM;
-  return `${INSTRUCTIONS_HEADER}${base.trim()}\n\n${formatSessionSpec(specs)}`;
+  const mode = sessionMode(specs);
+  const base = mode === "roleplay-interview" ? BASE : PLATFORM;
+  // A non-Google speaking model (models.ts) gets prompts/speaking-reminder.md last: it keeps to the fifty-word,
+  // playbook-only, decline and closing rules less tightly than Gemini. Twin modes only; Gemini gets nothing extra.
+  const reminder = isTwinMode(mode) && !SPEAKING_MODEL.startsWith("google/") ? `\n\n${SPEAKING_REMINDER.trim()}` : "";
+  return `${INSTRUCTIONS_HEADER}${base.trim()}\n\n${formatSessionSpec(specs)}${reminder}`;
 }
