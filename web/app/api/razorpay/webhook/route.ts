@@ -1,5 +1,5 @@
 import { purchasePaid, purchaseRefunded, PurchaseError } from "@/lib/credit-purchases";
-import { verifyWebhookSignature } from "@/lib/razorpay";
+import { razorpayEnabled, verifyWebhookSignature } from "@/lib/razorpay";
 
 /**
  * Razorpay's webhook (Dashboard › Webhooks: https://dash.trainertwin.com/api/razorpay/webhook, secret =
@@ -20,6 +20,8 @@ type Event = {
 };
 
 export async function POST(request: Request) {
+  // Phase 1: Razorpay is switched off (lib/razorpay.ts razorpayEnabled); no webhook is configured in its dashboard.
+  if (!razorpayEnabled()) return Response.json({ error: "Not found" }, { status: 404 });
   const raw = await request.text();
   if (!verifyWebhookSignature(raw, request.headers.get("x-razorpay-signature"))) {
     return Response.json({ error: "Invalid signature" }, { status: 401 });

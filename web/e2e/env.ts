@@ -23,6 +23,7 @@ export function e2eServerEnv(): Record<string, string> {
     METEROID_API_URL: "http://127.0.0.1:3998/api/v1",
     METEROID_API_KEY: "e2e-meteroid",
     METEROID_WEBHOOK_SECRET: "whsec_dGVzdC1tZXRlcm9pZC1zZWNyZXQ=",
+    RAZORPAY_ENABLED: "true", // switched off in phase 1 (lib/razorpay.ts); its browser tests switch it on
     RAZORPAY_KEY_ID: "rzp_test_fake",
     RAZORPAY_KEY_SECRET: "fake-secret",
     RAZORPAY_WEBHOOK_SECRET: "test-webhook-secret",
