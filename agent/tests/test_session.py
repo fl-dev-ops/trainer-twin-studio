@@ -27,11 +27,8 @@ def test_build_agent_session_configuration():
     assert opts["interruption"]["resume_false_interruption"] is True
 
 
-def test_sarvam_uses_its_own_speaker(monkeypatch):
-    monkeypatch.setenv("TTS_PROVIDER", "sarvam")
-    monkeypatch.setenv("SARVAM_API_KEY", "test-key")
-    monkeypatch.setenv("SARVAM_SPEAKER", "rohan")
-
-    tts = build_tts(voice="voxcpm-cloned-voice-id")
-
-    assert tts._opts.speaker == "rohan"
+def test_build_tts_is_voxcpm2(monkeypatch):
+    monkeypatch.setenv("TTS_SERVICE_URL", "https://tts.example/v1/audio/speech")
+    wrapped = build_tts(voice="cloned-voice")
+    assert wrapped._wrapped_tts.voice == "cloned-voice"
+    assert wrapped._wrapped_tts.model_label == "voxcpm2"

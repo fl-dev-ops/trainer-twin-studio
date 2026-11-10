@@ -18,6 +18,7 @@ from livekit import agents, api, rtc
 from livekit.agents import Agent, room_io
 from livekit.plugins import noise_cancellation
 
+import telemetry
 from recording import post_completion_webhook
 from screen_feedback import ScreenFeedbackRuntime
 from session import build_agent_session
@@ -27,7 +28,7 @@ load_dotenv(override=True)
 
 # Trust the local portless CA for https://*.localhost if present. Use the
 # combined bundle (system roots + portless CA) — a CA-only file would break
-# TLS to LiveKit/Sarvam/AWS. setup.sh builds the bundle.
+# TLS to LiveKit/AWS. setup.sh builds the bundle.
 _ca_bundle = os.path.expanduser("~/.portless/ca-bundle.pem")
 _ca_only = os.path.expanduser("~/.portless/ca.pem")
 _default_ca = _ca_bundle if os.path.exists(_ca_bundle) else _ca_only
@@ -53,8 +54,6 @@ REQUIRED_ENV_VARS = (
     "WEB_URL",
     "LLM_BASE_URL",
     "DEEPGRAM_API_KEY",
-    "TTS_PROVIDER",
-    "SARVAM_API_KEY",
     "OPENROUTER_API_KEY",
     "AWS_REGION",
     "AWS_ACCESS_KEY_ID",
@@ -257,6 +256,14 @@ def register_latency_logging(session: Any, *, session_id: str, room_name: str) -
 
 
 async def entrypoint(ctx: agents.JobContext) -> None:
+    # Langfuse: enrich logs and flush buffered spans when the job shuts down
+    ctx.log_context_fields.update(telemetry.session_attributes())
+
+    async def flush_trace() -> None:
+        telemetry.force_flush()
+
+    ctx.add_shutdown_callback(flush_trace)
+
     raw_meta = ctx.job.metadata or ctx.job.room.metadata or ctx.room.metadata
     metadata = parse_metadata(raw_meta)
 
@@ -639,6 +646,10 @@ async def on_session_end(ctx: agents.JobContext) -> None:
     except Exception as exc:
         logger.debug("Room deletion note: %s", exc)
 
+
+# Runs at import: the cloud/Docker path (`livekit.agents start`) imports this
+# module and runs the server without ever calling main(). setup is idempotent.
+telemetry.setup_langfuse()
 
 server = agents.AgentServer()
 server.rtc_session(agent_name=AGENT_NAME, on_session_end=on_session_end)(entrypoint)

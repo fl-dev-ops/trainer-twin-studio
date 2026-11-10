@@ -41,7 +41,7 @@ application/
 - The voice agent joins the LiveKit room, streams the learner over Deepgram STT, and runs
   the interview runtime in `web/lib/runtime` (analyze → deterministic policy → persona
   render) over the Studio's `/api/v1` chat endpoint; responses are spoken through the
-  configured TTS provider (voxcpm2 or Sarvam).
+  VoxCPM2.
 - Evidence coverage streams to the UI; audio egress lands in S3 as the session recording.
 - `InterviewSession` rows in Postgres pin the exact persona/agent versions used.
 

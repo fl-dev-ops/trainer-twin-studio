@@ -21,7 +21,7 @@ def test_validate_environment_exits_with_missing_vars(monkeypatch, capsys):
 
     assert exc.value.code == 1
     err = capsys.readouterr().err
-    assert "LIVEKIT_URL" in err and "SARVAM_API_KEY" in err
+    assert "LIVEKIT_URL" in err and "DEEPGRAM_API_KEY" in err
     assert "AWS_S3_BUCKET/S3_BUCKET" in err
 
 
@@ -104,7 +104,7 @@ def test_latency_logging_emits_structured_turn_metrics(caplog):
                         "playback_latency": 0.03,
                         "e2e_latency": 2.23,
                         "llm_metadata": {"model_provider": "groq", "model_name": "gpt-oss-120b"},
-                        "tts_metadata": {"model_provider": "sarvam", "model_name": "bulbul:v3"},
+                        "tts_metadata": {"model_provider": "voxcpm2", "model_name": "voxcpm2"},
                     },
                 )
             )
@@ -136,7 +136,7 @@ def test_latency_logging_emits_structured_turn_metrics(caplog):
     assert assistant["playbackLatencyMs"] == 30.0
     assert assistant["e2eLatencyMs"] == 2230.0
     assert assistant["llmProvider"] == "groq"
-    assert assistant["ttsProvider"] == "sarvam"
+    assert assistant["ttsProvider"] == "voxcpm2"
 
 
 def test_on_session_end_sends_transcript(monkeypatch):
