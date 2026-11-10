@@ -4,8 +4,8 @@ import { verifyWebhookSignature } from "@/lib/razorpay";
 /**
  * Razorpay's webhook (Dashboard › Webhooks: https://dash.trainertwin.com/api/razorpay/webhook, secret =
  * RAZORPAY_WEBHOOK_SECRET; events payment_link.paid, invoice.paid, refund.processed). A paid credit purchase adds its
- * credits; a refund takes its share back. Each happens once, however often Razorpay retries; anything else is
- * acknowledged and ignored. A 2xx tells Razorpay to stop retrying, so only a failure worth retrying returns 5xx.
+ * credits to the org in Meteroid, once however often Razorpay retries; a refund is only logged for now; anything else
+ * is acknowledged and ignored. A 2xx tells Razorpay to stop retrying, so only a failure worth retrying returns 5xx.
  */
 
 type Entity<T> = { entity: T } | undefined;

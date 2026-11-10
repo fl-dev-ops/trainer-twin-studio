@@ -1,16 +1,20 @@
 import { db } from "@/lib/db";
 import { Prisma } from "@/lib/generated/prisma/client";
-import { refundOrg, topUpOrg } from "@/lib/minutes";
-import { createPaymentLink, fetchInvoice, fetchPaymentLink, fetchRefunds } from "@/lib/razorpay";
+import { grantMinutes } from "@/lib/meteroid";
+import { scheduleOrgSync } from "@/lib/schedule-org-credits";
+import { createPaymentLink, fetchInvoice, fetchPaymentLink } from "@/lib/razorpay";
 
 /**
  * Credits an org buys from TrainerTwin, at its own price (CreditPurchase). Two ways in, both through Razorpay:
  * - a payment link we create (scripts/org-payment-link.ts), in INR or USD;
  * - a GST invoice made in the Razorpay Dashboard (its API can't make GST invoices), linked to the org
  *   (scripts/link-invoice.ts).
- * Razorpay's webhook (app/api/razorpay/webhook) then adds the credits when it's paid, once, and takes the refunded
- * share back when it's refunded.
+ * Razorpay's webhook (app/api/razorpay/webhook) then adds the credits to the org in Meteroid when it's paid, once
+ * (lib/org-credits.ts). Refunds are not taken back yet: they're logged for a person.
  */
+
+/** Bought credits expire a year after they're paid (pricing decision, 9 Nov 2026). */
+const PURCHASE_VALID_DAYS = 365;
 
 export const CURRENCIES = ["INR", "USD"] as const;
 export type Currency = (typeof CURRENCIES)[number];
@@ -118,8 +122,8 @@ export async function linkInvoicePurchase(input: { org: { id: string }; invoiceI
 }
 
 /**
- * A payment link or invoice was paid (webhook): adds its credits to the org, once per payment. Not ours (another
- * Razorpay product, or a link made elsewhere): null. A different amount or currency than agreed adds nothing.
+ * A payment link or invoice was paid (webhook): adds its credits to the org in Meteroid, once per payment. Not ours
+ * (another Razorpay product, or a link made elsewhere): null. A different amount or currency than agreed adds nothing.
  */
 export async function purchasePaid(input: { razorpayId: string; purchaseId?: string; paymentId: string; amountPaid: number; currency: string }) {
   const purchase = await db.creditPurchase.findUnique({ where: { razorpayId: input.razorpayId } })
@@ -131,58 +135,56 @@ export async function purchasePaid(input: { razorpayId: string; purchaseId?: str
       422,
     );
   }
-  return topUpOrg({
-    orgId: purchase.orgId,
-    minutes: purchase.credits,
-    note: `Paid ${formatMoney(purchase.amount, purchase.currency)} · Razorpay ${input.razorpayId}`,
-    externalId: input.paymentId,
-    alongside: async (tx) => {
-      // Only a purchase not paid yet: a second, different payment for the same one adds nothing (rolled back).
-      const marked = await tx.creditPurchase.updateMany({
-        where: { id: purchase.id, status: "created" },
-        data: { status: "paid", paymentId: input.paymentId, paidAt: new Date(), razorpayId: input.razorpayId },
-      });
-      if (marked.count !== 1) throw new PurchaseError(`${input.razorpayId} was already paid; payment ${input.paymentId} added nothing`, 409);
-    },
+  const billing = await db.orgBilling.findUnique({ where: { orgId: purchase.orgId }, select: { meteroidCustomerId: true } });
+  if (!billing) throw new PurchaseError(`${input.razorpayId}: the org isn't billed by Meteroid yet (scripts/meteroid-link-org.ts); no credits added`, 409);
+  // Claim the purchase first: a second, different payment for the same one adds nothing. The same payment again (a
+  // webhook retry) grants again with the same key, which Meteroid answers with the first grant.
+  const claimed = await db.creditPurchase.updateMany({
+    where: { id: purchase.id, status: "created" },
+    data: { status: "paid", paymentId: input.paymentId, paidAt: new Date(), razorpayId: input.razorpayId },
   });
+  if (claimed.count !== 1) {
+    // Lost the claim: read who won it (the copy read above may predate a concurrent delivery of this payment).
+    const current = await db.creditPurchase.findUnique({ where: { id: purchase.id }, select: { paymentId: true } });
+    if (current?.paymentId !== input.paymentId) throw new PurchaseError(`${input.razorpayId} was already paid; payment ${input.paymentId} added nothing`, 409);
+  }
+  try {
+    await grantMinutes({
+      customerId: billing.meteroidCustomerId,
+      minutes: purchase.credits,
+      type: "PAID",
+      reason: `Paid ${formatMoney(purchase.amount, purchase.currency)} · Razorpay ${input.razorpayId}`,
+      reference: input.paymentId,
+      expiresAt: new Date(Date.now() + PURCHASE_VALID_DAYS * 86_400_000),
+      idempotencyKey: `razorpay:${input.paymentId}`,
+    });
+  } catch (error) {
+    // Not granted: unclaim, so Razorpay's retry (or reconciliation) tries again.
+    if (claimed.count === 1) await db.creditPurchase.updateMany({ where: { id: purchase.id, paymentId: input.paymentId }, data: { status: "created", paymentId: null, paidAt: null } });
+    throw error;
+  }
+  await scheduleOrgSync(purchase.orgId);
+  return { credits: purchase.credits, duplicate: claimed.count !== 1 };
 }
 
 /**
- * A payment was refunded, wholly or in part (webhook): takes the refunded share of the credits back from the org,
- * once per refund. The org's balance may go below zero when those credits were already given to learners.
+ * A payment was refunded (webhook). shortcut: the credits are not taken back from Meteroid yet (refunds are rare and
+ * handled by hand); the refund is logged for a person.
  */
 export async function purchaseRefunded(input: { refundId: string; paymentId: string; amount: number; currency: string }) {
-  const purchase = await db.creditPurchase.findUnique({ where: { paymentId: input.paymentId } });
+  const purchase = await db.creditPurchase.findUnique({ where: { paymentId: input.paymentId }, select: { id: true, orgId: true } });
   if (!purchase) return null;
-  if (input.currency !== purchase.currency) throw new PurchaseError(`Refund ${input.refundId} is in ${input.currency}, the purchase in ${purchase.currency}`, 422);
-  const refunded = Math.min(purchase.amount, purchase.refundedAmount + input.amount);
-  // The share of credits for everything refunded so far, less what earlier refunds already took back.
-  // shortcut: computed outside the org lock, so two refunds of one purchase arriving at the same moment could round
-  // off by a credit; Razorpay sends a payment's refunds one at a time.
-  const credits = Math.round((purchase.credits * refunded) / purchase.amount) - Math.round((purchase.credits * purchase.refundedAmount) / purchase.amount);
-  const mark = (tx: Prisma.TransactionClient) => tx.creditPurchase.update({
-    where: { id: purchase.id },
-    data: { refundedAmount: refunded, status: refunded >= purchase.amount ? "refunded" : "partially_refunded" },
-  });
-  // shortcut: a refund worth less than one credit isn't recorded (no ledger row to make it happen once).
-  if (credits < 1) return { orgBalanceMinutes: null, duplicate: false, credits: 0 };
-  const result = await refundOrg({
-    orgId: purchase.orgId,
-    minutes: credits,
-    note: `Refund ${formatMoney(input.amount, input.currency)} · Razorpay ${input.refundId}`,
-    externalId: input.refundId,
-    alongside: mark,
-  });
-  return { ...result, credits };
+  console.error(`[razorpay] refund ${input.refundId} (${formatMoney(input.amount, input.currency)}) of purchase ${purchase.id}: credits NOT taken back; adjust in Meteroid by hand`);
+  return { refundId: input.refundId, creditsTakenBack: 0 };
 }
 
 export type ReconcileLine = { purchase: string; razorpayId: string | null; org: string; action: "paid" | "refunded" | "still unpaid" | "error"; detail: string };
 
 /**
- * Webhooks are best effort: a payment or refund whose webhook never arrived leaves the ledger behind Razorpay. This
- * asks Razorpay directly and applies what's missing through the same purchasePaid / purchaseRefunded the webhook
- * uses (each still happens once). Checks purchases unpaid for more than `olderThanHours` (younger ones may still be
- * mid-checkout), and the refunds of purchases paid in the last `refundDays`. `apply: false` only reports.
+ * Webhooks are best effort: a payment whose webhook never arrived leaves its credits unadded. This asks Razorpay
+ * directly and applies what's missing through the same purchasePaid the webhook uses (still once). Checks purchases
+ * unpaid for more than `olderThanHours` (younger ones may still be mid-checkout). `apply: false` only reports.
+ * `refundDays` is ignored while refunds aren't taken back.
  */
 export async function reconcilePurchases(input: { olderThanHours: number; refundDays: number; apply: boolean }) {
   const lines: ReconcileLine[] = [];
@@ -215,24 +217,5 @@ export async function reconcilePurchases(input: { olderThanHours: number; refund
     }
   }
 
-  const paidRecently = await db.creditPurchase.findMany({
-    where: { status: { in: ["paid", "partially_refunded"] }, paymentId: { not: null }, paidAt: { gt: new Date(Date.now() - input.refundDays * 86_400_000) } },
-    select: { id: true, razorpayId: true, paymentId: true, organization: { select: { slug: true } } },
-    orderBy: { paidAt: "asc" },
-  });
-  for (const purchase of paidRecently) {
-    const line = (action: ReconcileLine["action"], detail: string) =>
-      lines.push({ purchase: purchase.id, razorpayId: purchase.razorpayId, org: purchase.organization.slug, action, detail });
-    try {
-      const refunds = (await fetchRefunds(purchase.paymentId!)).filter((refund) => refund.status === "processed");
-      const known = new Set((await db.minuteLedger.findMany({ where: { externalId: { in: refunds.map((r) => r.id) } }, select: { externalId: true } })).map((r) => r.externalId));
-      for (const refund of refunds.filter((r) => !known.has(r.id))) {
-        if (input.apply) await purchaseRefunded({ refundId: refund.id, paymentId: refund.payment_id, amount: refund.amount, currency: refund.currency });
-        line("refunded", `${formatMoney(refund.amount, refund.currency)} · ${refund.id}${input.apply ? " · credits taken back" : " · would take credits back"}`);
-      }
-    } catch (error) {
-      line("error", error instanceof Error ? error.message : String(error));
-    }
-  }
   return lines;
 }

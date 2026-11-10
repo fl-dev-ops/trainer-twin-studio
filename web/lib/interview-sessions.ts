@@ -11,6 +11,7 @@ import { TwinAccessError, twinAccessByAgent, twinAccessByCode } from "@/lib/twin
 import { pinTwinSkills, TWIN_SOURCE } from "@/lib/twins";
 import { beforeSettings, usesBeforeSettings } from "@/lib/context-upload";
 import { learnerBalance, MinutesError, OUT_OF_MINUTES, recordSessionUsage } from "@/lib/minutes";
+import { orgCredits } from "@/lib/org-credits";
 import { BEFORE_UPLOAD_REFUSED, uploadAllowed } from "@/lib/context-upload";
 
 const shareCode = () => randomBytes(18).toString("base64url");
@@ -22,6 +23,8 @@ const runtimeToken = (sessionId: string) => {
 };
 
 export type SessionEndStatus = "completed" | "abandoned";
+
+export const ORG_OUT_OF_CREDITS = "Your organization has no credits left for calls. Contact TrainerTwin to add more.";
 
 export function resolveSessionEndStatus(current: string, requested: SessionEndStatus): SessionEndStatus {
   return current === "completed" ? "completed" : requested;
@@ -214,7 +217,8 @@ export async function activateSession(input: {
   // Twin sessions: the learner's assignment on that twin (null for admin/team trying it).
   let twin: { assignmentId: string | null } | null = null;
   const person = { id: input.userId, email: input.userEmail ?? "" };
-  // Learners' calls use their minutes; admin and team (trying agents, calibrating twins) are never charged.
+  // Learners' calls use their minutes; admin and team voice calls (trying agents, calibrating twins) use the org's
+  // credits when Meteroid bills the org (chargesOrg below), and are free otherwise.
   const membership = await db.member.findFirst({ where: { userId: input.userId, organizationId: input.orgId }, select: { role: true } });
   const metered = !isStudioRole(membership?.role);
 
@@ -330,6 +334,15 @@ export async function activateSession(input: {
     allowedSeconds = (await learnerBalance(input.orgId, email)).balanceSeconds;
     if (allowedSeconds <= 0) throw new MinutesError(OUT_OF_MINUTES, 403);
   }
+  let chargesOrg = false;
+  if (!metered && mode === "voice") {
+    const credits = await orgCredits(input.orgId, { fresh: true });
+    if (credits.billed) {
+      if (credits.seconds <= 0) throw new MinutesError(ORG_OUT_OF_CREDITS, 403);
+      chargesOrg = true;
+      allowedSeconds = credits.seconds;
+    }
+  }
 
   const snapshot = await sessionSnapshot(input.orgId, agentId, input.contextId, requestedDocs);
   for (const document of snapshot.documents) {
@@ -366,6 +379,7 @@ export async function activateSession(input: {
         assignmentId,
         twinAssignmentId: twin?.assignmentId ?? null,
         allowedSeconds,
+        chargesOrg,
         shareCode: shareCode(),
         activationKey,
         mode,
@@ -412,7 +426,7 @@ export async function activateSession(input: {
     throw error;
   }
 
-  // secondsLeft: the call must end after this many seconds (learners' calls; null = not metered).
+  // secondsLeft: the call must end after this many seconds (metered calls; null = not metered).
   return { id: session.id, agentSlug: session.agentSlug, status: "active", mode, runtimeToken: token, secondsLeft: allowedSeconds };
 }
 
