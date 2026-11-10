@@ -1,6 +1,6 @@
 import { beforeEach, expect, mock, test } from "bun:test";
 
-type Row = { id: string; orgId: string; agentId: string; minutesLimit: number; status: string; userId: string | null; recipientEmail: string; accessUntil: Date | null };
+type Row = { id: string; orgId: string; agentId: string; minutesLimit: number; status: string; userId: string; accessUntil: Date | null };
 let assignment: Row;
 
 mock.module("@/lib/db", () => ({
@@ -15,7 +15,7 @@ const start = () => twinAccessByCode({ orgId: "org1", user: { id: "u1", email: "
 const day = 24 * 60 * 60 * 1000;
 
 beforeEach(() => {
-  assignment = { id: "a1", orgId: "org1", agentId: "t1", minutesLimit: 30, status: "active", userId: "u1", recipientEmail: "ana@x.com", accessUntil: null };
+  assignment = { id: "a1", orgId: "org1", agentId: "t1", minutesLimit: 30, status: "active", userId: "u1", accessUntil: null };
 });
 
 test("no end date: the learner can start", async () => {

@@ -1,4 +1,5 @@
-import { beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
+import * as people from "@/lib/org-people";
 import { type CopilotStudioDeps, runCopilotStudio } from "@/lib/copilot-studio";
 
 type Row = Record<string, unknown>;
@@ -55,7 +56,9 @@ const deps = {
 const run = (input: Parameters<typeof runCopilotStudio>[1]) => runCopilotStudio(actor, input, deps);
 const actor = { org: { id: "org1", slug: "olga" }, user: { id: "u1", name: "Olga" } };
 
+afterEach(() => { spyOn(people, "studioPeopleEmails").mockRestore(); });
 beforeEach(() => {
+  spyOn(people, "studioPeopleEmails").mockImplementation(async (_orgId, emails) => new Set((emails ?? []).filter((email) => email === "admin@olga.com")));
   delivery = { emailFailures: 0 };
   invited.length = 0;
   s3.clear();

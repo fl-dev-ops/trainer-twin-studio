@@ -1,104 +1,98 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { fundOrg } from "../../setup/meteroid";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "../minutes-test-db";
-import { inviteOrgLearners, inviteLearners, inviteLearnerByApi, InviteError } from "@/lib/invite/org";
-import { learnerInviteUrl } from "@/lib/invite/links";
-import * as delivery from "@/lib/schedule-invite-emails";
+import { NOTHING_BROKEN, peopleRulesBroken, removeAccountsOf } from "../people-test-db";
+import { addLearnerByApi, addOrgPeople, addOrgPeopleAndEmail, ApiAddError } from "@/lib/invite/org";
+import { signInUrl } from "@/lib/invite/links";
+import * as delivery from "@/lib/queue-emails";
 import { MinutesError } from "@/lib/minutes";
 
-describe.skipIf(!localMinutesDb)("invite/org: shared learner invitation writes", () => {
+// Settings › Team / Users and POST /api/v1/users (specs/people.md rules 2, 6, 7, 11): people become members at once,
+// no invitations, and each new member gets one "added" email keyed by their membership.
+describe.skipIf(!localMinutesDb)("invite/org: adding people to an org (local database)", () => {
   let f: MinutesFixture;
-  let queue: ReturnType<typeof spyOn<typeof delivery, "queueInviteEmails">>;
-  let send: ReturnType<typeof spyOn<typeof delivery, "deliverInviteEmail">>;
+  let queue: ReturnType<typeof spyOn<typeof delivery, "queueEmails">>;
+  let send: ReturnType<typeof spyOn<typeof delivery, "deliverEmail">>;
+  const email = (name: string) => `${name}-${f.org.id}@example.com`;
+  const input = (emails: string[], role: "admin" | "team" | "user" = "user", minutes?: number) => ({ org: f.org, by: f.trainer, emails, role, minutes });
+  const grants = () => db.minuteLedger.findMany({ where: { orgId: f.org.id, type: "grant" } });
+  const invitations = () => db.invitation.findMany({ where: { organizationId: f.org.id } });
   beforeEach(async () => {
     f = minutesFixture(); await f.create();
-    queue = spyOn(delivery, "queueInviteEmails").mockResolvedValue({ emailFailures: 0, emailsQueued: 1 });
-    send = spyOn(delivery, "deliverInviteEmail").mockResolvedValue({ sent: true, queued: false });
+    queue = spyOn(delivery, "queueEmails").mockResolvedValue({ emailFailures: 0, emailsQueued: 1 });
+    send = spyOn(delivery, "deliverEmail").mockResolvedValue({ sent: true });
   });
-  afterEach(async () => { queue?.mockRestore(); send?.mockRestore(); await f.clean(); });
-  const input = (emails = [`new-${f.learner.email}`], minutes = 30) => ({ org: f.org, by: f.trainer, emails, minutes });
-  const invitations = () => db.invitation.findMany({ where: { organizationId: f.org.id } });
-  const grants = () => db.minuteLedger.findMany({ where: { orgId: f.org.id, type: "grant" } });
+  afterEach(async () => { queue?.mockRestore(); send?.mockRestore(); await f.clean(); await removeAccountsOf(f.org.id); });
 
-  test("studio email refusal precedes all grants and invitations", async () => {
+  test("new learners become members with starting credits; one 'added' email each, keyed by membership", async () => {
     await fundOrg({ orgId: f.org.id, minutes: 100 });
-    const error = await inviteOrgLearners(input([`new-${f.learner.email}`, f.trainer.email.toUpperCase()])).catch((error: unknown) => error);
-    expect(error).toBeInstanceOf(MinutesError);
-    expect(error).toMatchObject({ status: 400, message: expect.stringContaining("studio team") });
-    expect(await grants()).toEqual([]);
+    const result = await addOrgPeople(input([email("a").toUpperCase(), email("a"), f.learner.email]));
+    expect(result).toMatchObject({ added: 1, already: 1 });
+    const member = await db.member.findFirstOrThrow({ where: { organizationId: f.org.id, user: { email: email("a") } } });
+    expect(member.role).toBe("user");
+    expect(result.emails).toEqual([{
+      kind: "person", idempotencyKey: `added:${member.id}`,
+      args: {
+        to: email("a"), orgName: f.org.name, byName: f.trainer.name,
+        added: { role: "user", signInUrl: signInUrl("user", f.org.slug) },
+        credits: { added: 30, balance: 30 },
+      },
+    }]);
     expect(await invitations()).toEqual([]);
     expect(queue).not.toHaveBeenCalled();
+    expect(await peopleRulesBroken(f.org.id)).toEqual(NOTHING_BROKEN);
   });
-  test("short batch credits are all-or-nothing before invitations or delivery", async () => {
+
+  test.each(["team", "admin"] as const)("%s people are added straight away (no invitation), told to sign in to the studio, no credits", async (role) => {
+    if (role === "admin") await db.member.update({ where: { id: `${f.trainer.id}-member` }, data: { role: "team" } });
+    const result = await addOrgPeople(input([email("coach")], role));
+    expect(result.added).toBe(1);
+    expect(result.emails).toEqual([expect.objectContaining({ args: expect.objectContaining({ added: { role, signInUrl: signInUrl(role, f.org.slug) } }) })]);
+    expect(result.emails[0].args).not.toHaveProperty("credits");
+    expect(await grants()).toEqual([]);
+    expect(await invitations()).toEqual([]);
+  });
+
+  test("people already in the org get no email; a second admin and short credits are refused with nothing written", async () => {
+    expect(await addOrgPeople(input([f.trainer.email], "team"))).toEqual({ added: 0, already: 1, emails: [] });
+    await expect(addOrgPeople(input([email("boss")], "admin"))).rejects.toMatchObject({ name: "PeopleError", status: 403 });
     await fundOrg({ orgId: f.org.id, minutes: 59 });
-    await expect(inviteLearners(input([`a-${f.learner.email}`, `b-${f.learner.email}`]))).rejects.toMatchObject({ name: "MinutesError", status: 409 });
+    await expect(addOrgPeople(input([email("x"), email("y")]))).rejects.toBeInstanceOf(MinutesError);
+    expect(await db.member.count({ where: { organizationId: f.org.id } })).toBe(2);
     expect(await grants()).toEqual([]);
-    expect(await invitations()).toEqual([]);
-    expect(queue).not.toHaveBeenCalled();
   });
-  test("normalizes once, refreshes pending invitations without duplicating grants, and keys emails by expiry", async () => {
+
+  test("addOrgPeopleAndEmail queues exactly the returned emails once", async () => {
     await fundOrg({ orgId: f.org.id, minutes: 30 });
-    const email = `new-${f.learner.email}`;
-    const before = Date.now();
-    const result = await inviteOrgLearners(input([` ${email.toUpperCase()} `, email]));
-    const [invitation] = await invitations();
-    expect(result).toEqual({ invited: 1, failed: [], emails: [{
-      kind: "invitation", idempotencyKey: `invitation:${invitation.id}:${invitation.expiresAt.getTime()}`,
-      args: { to: email, organizationName: f.org.name, inviterName: f.trainer.name, inviteUrl: learnerInviteUrl(f.org.slug) },
-    }] });
-    expect(invitation).toMatchObject({ email, role: "user", status: "pending", inviterId: f.trainer.id });
-    expect(invitation.expiresAt.getTime()).toBeGreaterThanOrEqual(before + 48 * 60 * 60 * 1000);
-    expect(invitation.expiresAt.getTime()).toBeLessThanOrEqual(Date.now() + 48 * 60 * 60 * 1000);
-    await db.invitation.update({ where: { id: invitation.id }, data: { expiresAt: new Date(0), inviterId: f.learner.id } });
-    const refreshed = await inviteOrgLearners(input([email], 60));
-    expect(await invitations()).toHaveLength(1);
-    expect((await invitations())[0]).toMatchObject({ id: invitation.id, inviterId: f.trainer.id, expiresAt: expect.any(Date) });
-    expect((await invitations())[0].expiresAt.getTime()).toBeGreaterThan(Date.now());
-    expect(refreshed.emails[0].idempotencyKey).toBe(`invitation:${invitation.id}:${(await invitations())[0].expiresAt.getTime()}`);
-    expect(await grants()).toHaveLength(1);
-    expect(queue).not.toHaveBeenCalled();
-  });
-  test.each([false, true])("member disabled=%s is a per-email failure; other recipients still get invited", async (disabled) => {
-    await fundOrg({ orgId: f.org.id, minutes: 60 });
-    if (disabled) await db.member.update({ where: { id: `${f.learner.id}-member` }, data: { disabledAt: new Date() } });
-    const email = `new-${f.learner.email}`;
-    const result = await inviteOrgLearners(input([f.learner.email, email]));
-    expect(result).toMatchObject({ invited: 1, failed: [{ email: f.learner.email, message: expect.stringContaining(disabled ? "disabled" : "already") }] });
-    expect(result.emails.map((email) => email.args.to)).toEqual([email]);
-    expect(await invitations()).toHaveLength(1);
-    expect(await grants()).toHaveLength(2); // Later invite refusals do not refund the committed starting grants.
-  });
-  test("direct inviteLearners queues the returned invitation batch once", async () => {
-    await fundOrg({ orgId: f.org.id, minutes: 30 });
-    expect(await inviteLearners(input())).toEqual({ invited: 1, failed: [], emailFailures: 0, emailsQueued: 1 });
+    expect(await addOrgPeopleAndEmail(input([email("q")]))).toEqual({ added: 1, already: 0, emailFailures: 0, emailsQueued: 1 });
     expect(queue).toHaveBeenCalledTimes(1);
-    expect(queue.mock.calls[0]).toEqual([f.org.id, [expect.objectContaining({ kind: "invitation", args: expect.objectContaining({ to: input().emails[0] }) })]]);
+    expect(queue.mock.calls[0]).toEqual([f.org.id, [expect.objectContaining({ kind: "person", args: expect.objectContaining({ to: email("q") }) })]]);
   });
-  test("inviteLearnerByApi creates then refreshes, preserves starting credits, and reports inline send status", async () => {
+
+  test("addLearnerByApi adds then returns the same person unchanged; emails only the first time", async () => {
     await fundOrg({ orgId: f.org.id, minutes: 30 });
-    const email = input().emails[0];
-    const apiInput = { org: f.org, actorUserId: f.trainer.id, email: email.toUpperCase() };
-    const first = await inviteLearnerByApi(apiInput);
-    expect(first).toMatchObject({ created: true, emailSent: true, invitation: { email, role: "user", inviterId: f.trainer.id } });
-    expect(send).toHaveBeenLastCalledWith({ kind: "invitation", idempotencyKey: `invitation:${first.invitation.id}:${first.invitation.expiresAt.getTime()}`, args: {
-      to: email, organizationName: f.org.name, inviterName: f.trainer.name, inviteUrl: learnerInviteUrl(f.org.slug),
-    } });
-    send.mockResolvedValue({ sent: false, queued: true });
-    expect(await inviteLearnerByApi({ ...apiInput, actorUserId: undefined })).toMatchObject({ created: false, emailSent: false, invitation: { id: first.invitation.id } });
-    expect(await invitations()).toHaveLength(1);
+    const run = (actorUserId?: string) => addLearnerByApi({ org: f.org, actorUserId, email: email("api").toUpperCase() });
+    const first = await run(f.trainer.id);
+    expect(first).toMatchObject({ created: true, emailSent: true, person: { email: email("api"), role: "user", added: true } });
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0][0]).toMatchObject({ kind: "person", idempotencyKey: `added:${first.person.memberId}`, args: { to: email("api"), byName: f.trainer.name, added: { role: "user" } } });
+    const again = await run(); // no creator recorded: acts as the org's admin
+    expect(again).toMatchObject({ created: false, emailSent: false, person: { memberId: first.person.memberId } });
+    expect(send).toHaveBeenCalledTimes(1);
     expect(await grants()).toHaveLength(1);
-    expect(queue).not.toHaveBeenCalled();
-  });
-  test("inviteLearnerByApi keeps member/disabled, missing creator, and credit refusals", async () => {
-    const run = (email: string, actorUserId = f.trainer.id) => inviteLearnerByApi({ org: f.org, actorUserId, email });
-    expect(await run(f.learner.email).catch((error: unknown) => error)).toBeInstanceOf(InviteError);
-    await expect(run(f.learner.email)).rejects.toMatchObject({ status: 409, message: expect.stringContaining("already") });
-    await db.member.update({ where: { id: `${f.learner.id}-member` }, data: { disabledAt: new Date() } });
-    await expect(run(f.learner.email)).rejects.toMatchObject({ status: 409, message: expect.stringContaining("disabled") });
-    await expect(run(input().emails[0], "missing")).rejects.toMatchObject({ status: 403 });
-    await expect(run(input().emails[0])).rejects.toMatchObject({ status: 409 });
     expect(await invitations()).toEqual([]);
-    expect(await grants()).toEqual([]);
+  });
+
+  test("addLearnerByApi refuses a gone creator, studio and disabled people, and short credits", async () => {
+    const run = (target: string, actorUserId = f.trainer.id) => addLearnerByApi({ org: f.org, actorUserId, email: target });
+    const gone = await run(email("n"), "missing").catch((e: unknown) => e);
+    expect(gone).toBeInstanceOf(ApiAddError);
+    expect(gone).toMatchObject({ status: 403 });
+    await expect(run(f.trainer.email)).rejects.toMatchObject({ name: "PeopleError", status: 409 });
+    await db.member.update({ where: { id: `${f.learner.id}-member` }, data: { disabledAt: new Date() } });
+    await expect(run(f.learner.email)).rejects.toMatchObject({ name: "PeopleError", status: 409, message: expect.stringContaining("Disabled") });
+    await expect(run(email("n"))).rejects.toMatchObject({ name: "MinutesError", status: 409 });
     expect(send).not.toHaveBeenCalled();
+    expect(await grants()).toEqual([]);
   });
 });

@@ -12,14 +12,14 @@ mock.module("@/lib/db", () => ({
     organization: { findUnique: async () => ({ id: "org1", slug: "acme", name: "Acme" }) },
     member: {
       // The routes must query learners by the database role.
-      findMany: async ({ where }: { where: { role: string } }) =>
-        where.role === "user" ? [{ id: "m1", createdAt: new Date(0), user: learner }] : [],
+      findMany: async ({ where }: { where: { role: { in: string[] } } }) =>
+        where.role.in.includes("user") ? [{ id: "m1", role: "user", disabledAt: null, createdAt: new Date(0), user: { ...learner, image: null } }] : [],
       count: async () => 1,
-      findFirst: async ({ where }: { where: { role: string } }) =>
-        where.role === "user" ? { id: "m1", createdAt: new Date(0), user: learner } : null,
+      findFirst: async ({ where }: { where: { userId: string } }) =>
+        where.userId === "u1" ? { id: "m1", role: "user", disabledAt: null, createdAt: new Date(0), user: { ...learner, image: null } } : null,
     },
     invitation: { findMany: async () => [] },
-    user: { update: async () => learner },
+    user: { update: async () => learner, findMany: async () => [learner], findUnique: async () => learner, findUniqueOrThrow: async () => learner },
   },
 }));
 

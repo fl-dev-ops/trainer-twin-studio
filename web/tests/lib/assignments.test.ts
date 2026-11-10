@@ -1,27 +1,8 @@
-import assert from "node:assert/strict";
-import test from "node:test";
-import { assignmentMatchesUser } from "../../lib/assignments";
+import { expect, test } from "bun:test";
+import { assignmentMatchesUser } from "@/lib/assignments";
 
-test("email assignments require the authenticated recipient while legacy assignments keep member ownership", () => {
-  assert.equal(
-    assignmentMatchesUser(
-      { recipientEmail: "Learner@Example.com", member: null },
-      { id: "learner", email: "learner@example.com" },
-    ),
-    true,
-  );
-  assert.equal(
-    assignmentMatchesUser(
-      { recipientEmail: "learner@example.com", member: null },
-      { id: "other", email: "other@example.com" },
-    ),
-    false,
-  );
-  assert.equal(
-    assignmentMatchesUser(
-      { recipientEmail: "learner@example.com", member: { userId: "legacy" } },
-      { id: "other", email: "learner@example.com" },
-    ),
-    false,
-  );
+test("role-play ownership is by the member's account, never the submitted email", () => {
+  const assignment = { member: { userId: "learner" } };
+  expect(assignmentMatchesUser(assignment, { id: "learner", email: "changed@example.com" })).toBe(true);
+  expect(assignmentMatchesUser(assignment, { id: "other", email: "learner@example.com" })).toBe(false);
 });

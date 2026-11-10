@@ -14,7 +14,7 @@ async function assigned(page: Page, email: string, minutes: number) {
   await page.getByLabel("Search learners").fill(email);
   const row = page.locator("main li").filter({ hasText: email });
   await expect(row).toHaveCount(1);
-  await expect(row).toContainText("Invite pending");
+  await expect(row).not.toContainText("Invite pending");
   await expect(row.locator(":scope > span").nth(1)).toHaveText(`${minutes} min`);
   await expect(row.locator(":scope > span").nth(3)).toHaveText(`${minutes} min`);
 }
@@ -79,13 +79,13 @@ test("Users bulk credits: preview total and org-after, add to two rows, and filt
   for (const person of people) await expect(page.getByRole("link", { name: `Open ${person.name}`, exact: true })).toBeHidden();
 });
 
-test("Role-play assign: a new email gets 25 starting credits and appears as Invite pending", async ({ page }) => {
+test("Role-play assign: a new email gets 25 starting credits and appears immediately as a member", async ({ page }) => {
   const email = "e2e-roleplay-starting@example.com";
   const before = await remaining(page);
   await page.goto(`/roleplay/${seed().roleplay.slug}/assign`);
   await page.getByRole("button", { name: "Assign learners", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Assign roleplay", exact: true });
-  await dialog.getByLabel("Invite by email").fill(email);
+  await dialog.getByLabel("Add by email").fill(email);
   await dialog.getByRole("button", { name: "Add", exact: true }).click();
   await dialog.locator("#assign-credits").fill("25");
   await dialog.getByRole("button", { name: "Assign", exact: true }).click();
@@ -94,18 +94,18 @@ test("Role-play assign: a new email gets 25 starting credits and appears as Invi
   await assigned(page, email, 25);
 });
 
-test("Settings Users invite: chosen 40 starting credits appear on Credits", async ({ page }) => {
+test("Settings add Users: chosen 40 starting credits appear on Credits", async ({ page }) => {
   const email = "e2e-settings-starting@example.com";
   const before = await remaining(page);
   await page.goto("/settings?tab=team");
   const users = page.locator('[data-slot="card"]').filter({ has: page.locator('[data-slot="card-title"]').filter({ hasText: /^Users/ }) });
-  await users.getByRole("button", { name: "Invite", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Invite user", exact: true });
+  await users.getByRole("button", { name: "Add", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Add users", exact: true });
   await dialog.getByLabel("Email addresses").fill(email);
   await dialog.locator("#invite-credits").fill("40");
-  await dialog.getByRole("button", { name: "Send invite", exact: true }).click();
+  await dialog.getByRole("button", { name: "Add", exact: true }).click();
   await expect(dialog).toBeHidden();
-  await expect(page.getByText("Invitation sent", { exact: true })).toBeVisible();
+  await expect(page.getByText("1 person added", { exact: true })).toBeVisible();
   expect(await remaining(page)).toBe(before - 40);
   await assigned(page, email, 40);
 });
@@ -116,7 +116,7 @@ test("Twin assign: a new email gets the chosen 15 starting credits", async ({ pa
   await page.goto(`/twin/${seed().twin.slug}/assign`);
   await page.getByRole("button", { name: "Assign learners", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Assign twin agent", exact: true });
-  await dialog.getByLabel("Invite by email").fill(email);
+  await dialog.getByLabel("Add by email").fill(email);
   await dialog.getByRole("button", { name: "Add", exact: true }).click();
   await dialog.locator("#assign-credits").fill("15");
   await dialog.getByRole("button", { name: "Assign", exact: true }).click();

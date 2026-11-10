@@ -2,40 +2,31 @@ import { beforeEach, expect, mock, test } from "bun:test";
 
 type Row = { agent: { kind: string; data?: unknown; name?: string }; twinCalibration: { id: string } | null; transcript?: unknown; status?: string; evidence?: unknown };
 let rows: Record<string, Row> = {};
-let claims: string[] = [];
-let roleplayScheduled: string[] = [];
 
 mock.module("@/lib/db", () => ({
   db: {
     interviewSession: {
       findUnique: async ({ where }: { where: { id: string } }) => rows[where.id] ?? null,
-      // Claim lost (count 0) so the twin path stops before after(); the call itself proves the route.
-      updateMany: async ({ where }: { where: { id: string } }) => { claims.push(where.id); return { count: 0 }; },
     },
   },
 }));
-mock.module("@/lib/session-report-jobs", () => ({
-  scheduleSessionReport: async (id: string) => { roleplayScheduled.push(id); return true; },
-}));
-
-const { processCompletedSession, processEndedSession, reportKindOf } = await import("@/lib/session-processing");
+const { reportFor } = await import("@/lib/session-close");
+const { reportKindOf } = await import("@/lib/session-after");
 const { isTwinReport, loadTwinReportInput, toTwinReport } = await import("@/lib/twin/session-report");
 const { mostAsked } = await import("@/lib/twin/stats");
 
-beforeEach(() => { rows = {}; claims = []; roleplayScheduled = []; });
+beforeEach(() => { rows = {}; });
 
-test("completed sessions go to the report for their kind; calibrations get none", async () => {
+test("completed sessions get the report for their kind; calibrations and missing sessions get none", async () => {
   rows = {
-    rp: { agent: { kind: "ROLEPLAY" }, twinCalibration: null },
-    tw: { agent: { kind: "TWIN" }, twinCalibration: null },
-    cal: { agent: { kind: "TWIN" }, twinCalibration: { id: "c1" } },
+    rp: { status: "completed", agent: { kind: "ROLEPLAY" }, twinCalibration: null },
+    tw: { status: "completed", agent: { kind: "TWIN" }, twinCalibration: null },
+    cal: { status: "completed", agent: { kind: "TWIN" }, twinCalibration: { id: "c1" } },
   };
-  await processCompletedSession("rp");
-  await processCompletedSession("tw");
-  await processCompletedSession("cal");
-  expect(await processCompletedSession("missing")).toBe(false);
-  expect(roleplayScheduled).toEqual(["rp"]);
-  expect(claims).toEqual(["tw"]);
+  expect(await reportFor("rp")).toBe("session");
+  expect(await reportFor("tw")).toBe("twin");
+  expect(await reportFor("cal")).toBeNull();
+  expect(await reportFor("missing")).toBeNull();
 });
 
 test("after.report decides the processing; without it twins get the twin report, others the session report", async () => {
@@ -43,10 +34,8 @@ test("after.report decides the processing; without it twins get the twin report,
   expect(reportKindOf({}, "ROLEPLAY")).toBe("session");
   expect(reportKindOf({ after: { report: "roleplay" } }, "ROLEPLAY")).toBe("roleplay");
   expect(reportKindOf({ after: { report: "nonsense" } }, "ROLEPLAY")).toBe("session");
-  rows = { rp2: { agent: { kind: "ROLEPLAY", data: { after: { report: "roleplay" } } }, twinCalibration: null } };
-  await processCompletedSession("rp2");
-  expect(roleplayScheduled).toEqual([]); // not the older session report:
-  expect(claims).toEqual(["rp2"]); // claimed for the role-play report workflow
+  rows = { rp2: { status: "completed", agent: { kind: "ROLEPLAY", data: { after: { report: "roleplay" } } }, twinCalibration: null } };
+  expect(await reportFor("rp2")).toBe("roleplay");
 });
 
 test("model reply becomes a twin report: trimmed, empties dropped, capped", () => {
@@ -93,24 +82,19 @@ test("most asked counts each question once per session, case/space-insensitive, 
 test("an abandoned twin learner call gets its report when the learner spoke; nothing else that didn't complete does", async () => {
   const talked = [{ role: "trainer", text: "Hi, what's going on with your client?" }, { role: "user", text: "He wants to wait for prices to drop." }];
   rows = {
-    spoke: { agent: { kind: "TWIN" }, twinCalibration: null, transcript: talked },
-    silent: { agent: { kind: "TWIN" }, twinCalibration: null, transcript: [{ role: "trainer", text: "Hi?" }] },
-    cal: { agent: { kind: "TWIN" }, twinCalibration: { id: "c1" }, transcript: talked },
-    rp: { agent: { kind: "ROLEPLAY", data: { after: { report: "roleplay" } } }, twinCalibration: null, transcript: talked },
+    spoke: { status: "abandoned", agent: { kind: "TWIN" }, twinCalibration: null, transcript: talked },
+    silent: { status: "abandoned", agent: { kind: "TWIN" }, twinCalibration: null, transcript: [{ role: "trainer", text: "Hi?" }] },
+    cal: { status: "abandoned", agent: { kind: "TWIN" }, twinCalibration: { id: "c1" }, transcript: talked },
+    rp: { status: "abandoned", agent: { kind: "ROLEPLAY", data: { after: { report: "roleplay" } } }, twinCalibration: null, transcript: talked },
+    v1: { status: "abandoned", agent: { kind: "ROLEPLAY", data: {} }, twinCalibration: null, transcript: talked },
   };
-  await processEndedSession("spoke", "abandoned");
-  expect(await processEndedSession("silent", "abandoned")).toBe(false);
-  expect(await processEndedSession("cal", "abandoned")).toBe(false);
-  expect(await processEndedSession("rp", "abandoned")).toBe(false);
-  expect(await processEndedSession("spoke", "failed")).toBe(false);
-  expect(claims).toEqual(["spoke"]);
-  expect(roleplayScheduled).toEqual([]);
+  expect(await reportFor("spoke")).toBe("twin");
+  for (const id of ["silent", "cal", "rp", "v1"]) expect(await reportFor(id)).toBeNull();
 });
 
-test("a completed session still goes through the usual processing", async () => {
-  rows = { tw: { agent: { kind: "TWIN" }, twinCalibration: null } };
-  await processEndedSession("tw", "completed");
-  expect(claims).toEqual(["tw"]);
+test.each(["active", "activating", "failed", "revoked", "assigned"])("%s sessions get no report even with learner speech", async (status) => {
+  rows = { tw: { status, agent: { kind: "TWIN" }, twinCalibration: null, transcript: [{ role: "user", text: "Hello" }] } };
+  expect(await reportFor("tw")).toBeNull();
 });
 
 test("report eligibility: completed, or abandoned after the learner spoke; never a calibration", async () => {

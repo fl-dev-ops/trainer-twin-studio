@@ -8,8 +8,7 @@ const assignment = {
   status: "pending",
   expiresAt: new Date(Date.now() + 60_000),
   deploymentActive: true,
-  recipientEmail: user.email,
-  member: null as { userId: string } | null,
+  member: { userId: user.id },
   sessions: [] as { id: string }[],
 };
 let saved = 0;
@@ -19,7 +18,7 @@ mock.module("@/lib/session-user", () => ({
 }));
 mock.module("@/lib/db", () => ({
   db: {
-    member: { findFirst: async () => member ? { id: "member" } : null },
+    member: { findFirst: async () => member ? { id: "member", role: "user", disabledAt: null, user: { ...user, name: "Learner", image: null } } : null },
     rolePlayAssignment: {
       findFirst: async ({ where }: { where: { shareCode: string; orgId: string; status: string; expiresAt: { gt: Date }; deployment: { status: string } } }) =>
         where.shareCode === assignment.shareCode && where.orgId === assignment.orgId
@@ -48,9 +47,9 @@ test("assigned learners can upload, other users and spent links cannot; members 
   expect((await POST(request())).status).toBe(200);
   expect(saved).toBe(1);
 
-  assignment.recipientEmail = "someone-else@example.com";
+  assignment.member = { userId: "someone-else" };
   expect((await POST(request())).status).toBe(403);
-  assignment.recipientEmail = user.email;
+  assignment.member = { userId: user.id };
   assignment.status = "used";
   expect((await POST(request())).status).toBe(403);
   assignment.status = "pending";
@@ -65,7 +64,7 @@ test("assigned learners can upload, other users and spent links cannot; members 
   assignment.sessions = [];
   assignment.member = { userId: "another-learner" };
   expect((await POST(request())).status).toBe(403);
-  assignment.member = null;
+  assignment.member = { userId: user.id };
   assignment.orgId = "another-org";
   expect((await POST(request())).status).toBe(403);
   assignment.orgId = "demo";

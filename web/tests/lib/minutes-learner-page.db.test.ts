@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import * as nextHeaders from "next/headers";
 import * as sessionUser from "@/lib/session-user";
 import { ensureDeployment } from "@/lib/deployments";
+import { dropLearnerAssignments } from "@/lib/members";
 import { listUsers } from "@/lib/learners";
 import { loadSharedSession, loadTwinLink } from "@/lib/pages/learner";
 import { loadOrgHome } from "@/lib/pages/org-home";
@@ -22,7 +23,7 @@ describe.skipIf(!localMinutesDb)("learner pages with minutes (local database)", 
     identity = spyOn(sessionUser, "resolveSessionUser").mockResolvedValue({ org: { ...f.org, accentColor: null }, user: f.learner, signInUrl: "/sign-in" });
     const deployment = await ensureDeployment(f.org.id, f.roleplay.id);
     code = `${f.org.id}-invite`;
-    await db.rolePlayAssignment.create({ data: { orgId: f.org.id, deploymentId: deployment.id, recipientEmail: f.learner.email, assignedByUserId: f.trainer.id, shareCode: code, expiresAt: new Date(Date.now() + 3600_000) } });
+    await db.rolePlayAssignment.create({ data: { orgId: f.org.id, deploymentId: deployment.id, memberId: `${f.learner.id}-member`, assignedByUserId: f.trainer.id, shareCode: code, expiresAt: new Date(Date.now() + 3600_000) } });
   });
   afterEach(async () => { headers?.mockRestore(); identity?.mockRestore(); await f.clean(); });
   const balance = async (seconds: number) => {
@@ -69,29 +70,24 @@ describe.skipIf(!localMinutesDb)("learner pages with minutes (local database)", 
     expect(await loadSharedSession(code)).toEqual({ kind: "outOfMinutes", email: f.learner.email, minutesLeft: 0 });
   });
 
-  test("loadOrgHome lists pending and used role plays regardless of practice history or expiry date", async () => {
+  test("loadOrgHome lists the learner's own pending and used role play regardless of practice history or expiry date", async () => {
     const original = await db.rolePlayAssignment.findUniqueOrThrow({ where: { shareCode: code } });
-    const visible: string[] = [];
-    for (const status of ["pending", "used", "cancelled", "expired"]) {
-      for (const past of [true, false]) {
-        const shareCode = `${code}-${status}-${past}`;
-        const assignment = await db.rolePlayAssignment.create({ data: {
-          orgId: f.org.id, deploymentId: original.deploymentId, recipientEmail: f.learner.email,
-          assignedByUserId: f.trainer.id, status, shareCode,
-          expiresAt: past ? new Date(0) : new Date(Date.now() + 3600_000),
-        } });
-        if (status === "used") await f.session({ assignmentId: assignment.id });
-        if (status === "pending" || status === "used") visible.push(`/s/${shareCode}`);
-      }
-    }
+    // Someone else's learner assignment never shows; studio members cannot hold learner assignments.
+    const other = await db.user.create({ data: { id: `${f.org.id}-other`, email: `other-${f.org.id}@example.com`, name: "Other learner", emailVerified: true } });
+    const member = await db.member.create({ data: { id: `${other.id}-member`, organizationId: f.org.id, userId: other.id, role: "user", createdAt: new Date() } });
     await db.rolePlayAssignment.create({ data: {
-      orgId: f.org.id, deploymentId: original.deploymentId, recipientEmail: f.trainer.email,
+      orgId: f.org.id, deploymentId: original.deploymentId, memberId: member.id,
       assignedByUserId: f.trainer.id, status: "pending", shareCode: `${code}-someone-else`, expiresAt: new Date(0),
     } });
-    const home = await loadOrgHome();
-    expect(home.kind).toBe("home");
-    if (home.kind !== "home") throw new Error("Expected org home");
-    expect(home.props.roleplays.map((roleplay) => roleplay.href).sort()).toEqual([`/s/${code}`, ...visible].sort());
+    await f.session({ assignmentId: original.id });
+    for (const status of ["pending", "used", "cancelled", "expired"]) {
+      for (const past of [true, false]) {
+        await db.rolePlayAssignment.update({ where: { id: original.id }, data: { status, expiresAt: past ? new Date(0) : new Date(Date.now() + 3600_000) } });
+        const home = await loadOrgHome();
+        if (home.kind !== "home") throw new Error("Expected org home");
+        expect(home.props.roleplays.map((roleplay) => roleplay.href)).toEqual(status === "pending" || status === "used" ? [`/s/${code}`] : []);
+      }
+    }
   });
 
   test("roleplay scenarios.get keeps an old pending member pending rather than deriving expired", async () => {
@@ -113,17 +109,19 @@ describe.skipIf(!localMinutesDb)("learner pages with minutes (local database)", 
     expect(await loadSharedSession(code)).toMatchObject({ kind: "session", props: { minutesLeft: Math.floor(seconds / 60) } });
   });
 
-  test.each(["admin", "team"])("studio %s sees no metering on shared sessions or twin preview", async (role) => {
+  test.each(["admin", "team"])("studio %s sees no metering on common shared sessions or twin preview, without learner assignments", async (role) => {
+    await dropLearnerAssignments(f.org.id, `${f.learner.id}-member`);
+    const link = await db.twinShareLink.create({ data: { orgId: f.org.id, agentId: f.twin.id, code: `${code}-studio`, minutesPerUser: 30 } });
     if (role === "admin") await db.member.update({ where: { id: `${f.trainer.id}-member` }, data: { role: "team" } });
     await db.member.update({ where: { id: `${f.learner.id}-member` }, data: { role } });
-    expect(await loadSharedSession(code)).toMatchObject({ kind: "session", props: { minutesLeft: null } });
+    expect(await loadSharedSession(link.code)).toMatchObject({ kind: "session", props: { minutesLeft: null } });
     const view = await loadTwinLink("twin");
     expect(view).toMatchObject({ kind: "flow", props: { access: { ok: true, preview: true } } });
     if (view.kind === "flow") expect(view.props.access).not.toHaveProperty("minutesLeft");
   });
 
   test("assigned twin shows used below a minute, then passes minutesLeft and minutesTotal", async () => {
-    await db.twinAssignment.create({ data: { orgId: f.org.id, agentId: f.twin.id, recipientEmail: f.learner.email, minutesLimit: 999, shareCode: `${code}-twin` } });
+    await db.twinAssignment.create({ data: { orgId: f.org.id, agentId: f.twin.id, userId: f.learner.id, minutesLimit: 999, shareCode: `${code}-twin` } });
     expect(await loadTwinLink("twin")).toMatchObject({ kind: "flow", props: { access: { ok: false, reason: "used" } } });
     await balance(119);
     expect(await loadTwinLink("twin")).toMatchObject({ kind: "flow", props: { access: { ok: true, preview: false, minutesLeft: 1, minutesTotal: 10 } } });
@@ -136,20 +134,16 @@ describe.skipIf(!localMinutesDb)("learner pages with minutes (local database)", 
     expect(rows.find((r) => r.email === f.trainer.email)).toBeUndefined();
   });
 
-  test.each(["admin", "team"])("listUsers gives null minutesLeft to an email with both learner and %s memberships", async (role) => {
+  test("listUsers leaves out someone moved to the studio team (one member row per account: their role decides)", async () => {
     await balance(119);
-    await db.member.create({ data: {
-      id: `${f.learner.id}-studio-member`, userId: f.learner.id, organizationId: f.org.id, role, createdAt: new Date(),
-    } });
-    // Keep the learner membership and assignment so this remains a Users-page row.
-    expect(await db.member.count({ where: { organizationId: f.org.id, userId: f.learner.id } })).toBe(2);
-    const rows = await listUsers(f.org.id);
-    expect(rows.find((row) => row.email === f.learner.email)).toMatchObject({ minutesLeft: null });
+    await dropLearnerAssignments(f.org.id, `${f.learner.id}-member`);
+    await db.member.update({ where: { id: `${f.learner.id}-member` }, data: { role: "team" } });
+    expect((await listUsers(f.org.id)).find((row) => row.email === f.learner.email)).toBeUndefined();
   });
 
   test.each([299, 300])("assigned twin shared link enforces the five-minute boundary (%s seconds)", async (seconds) => {
     const shareCode = `${code}-twin`;
-    await db.twinAssignment.create({ data: { orgId: f.org.id, agentId: f.twin.id, recipientEmail: f.learner.email, minutesLimit: 30, shareCode } });
+    await db.twinAssignment.create({ data: { orgId: f.org.id, agentId: f.twin.id, userId: f.learner.id, minutesLimit: 30, shareCode } });
     await balance(seconds);
     expect(await loadSharedSession(shareCode)).toMatchObject(seconds < 300
       ? { kind: "outOfMinutes", minutesLeft: 4, email: f.learner.email }

@@ -1,8 +1,7 @@
-import { meteroidHandlers } from "../setup/meteroid";
+import { meteroidServer } from "../lib/minutes-test-db";
 import { createHmac } from "node:crypto";
 import { spyOn } from "bun:test";
 import { http, HttpResponse } from "msw";
-import { setupServer } from "msw/node";
 import * as nextServer from "next/server";
 
 /**
@@ -11,7 +10,7 @@ import * as nextServer from "next/server";
  * one nobody answers is a failure (`unexpected`), so a flow can't quietly reach a real service.
  */
 
-export type Email = { to: string[]; subject: string; html: string; text?: string };
+export type Email = { to: string[]; subject: string; html: string; text?: string; idempotencyKey: string | null };
 type Json = Record<string, unknown>;
 
 const LIVEKIT_REPLIES: Record<string, Json> = {
@@ -37,15 +36,16 @@ export function outsideServices() {
   const unexpected: string[] = [];
   let next = 0;
 
-  const server = setupServer(
-    ...meteroidHandlers,
+  // Use the fixture's one interceptor: two MSW servers would handle and record each request twice.
+  const server = meteroidServer;
+  const handlers = [
     http.post("https://api.resend.com/emails", async ({ request }) => {
-      const body = (await request.json()) as { to: string | string[]; subject: string; html: string; text?: string };
-      emails.push({ to: [body.to].flat(), subject: body.subject, html: body.html, text: body.text });
+      const body = (await request.clone().json()) as { to: string | string[]; subject: string; html: string; text?: string };
+      emails.push({ to: [body.to].flat(), subject: body.subject, html: body.html, text: body.text, idempotencyKey: request.headers.get("idempotency-key") });
       return HttpResponse.json({ id: `email_${++next}` });
     }),
     http.post("https://api.razorpay.com/v1/payment_links", async ({ request }) => {
-      const body = (await request.json()) as Json;
+      const body = (await request.clone().json()) as Json;
       const id = `plink_flow_${body.reference_id}`;
       paymentLinks.push({ id, ...body });
       return HttpResponse.json({ id, short_url: `https://rzp.io/test/${id}`, amount: body.amount, currency: body.currency, status: "created" });
@@ -70,26 +70,26 @@ export function outsideServices() {
       return HttpResponse.json(LIVEKIT_REPLIES[method] ?? {});
     }),
     http.post("http://chat.test/internal/sessions", async ({ request }) => {
-      chatSessions.push(String(((await request.json()) as Json).sessionId));
+      chatSessions.push(String(((await request.clone().json()) as Json).sessionId));
       return new HttpResponse(null, { status: 204 });
     }),
-  );
-  server.events.on("request:unhandled", ({ request }) => {
-    unexpected.push(`${request.method} ${request.url}`);
-  });
+  ];
+  const unhandled = ({ request }: { request: Request }) => { unexpected.push(`${request.method} ${request.url}`); };
   // next/server's after() needs a live request; flows skip the background work (reports, LLM calls).
   let after: { mockRestore(): void } | null = null;
 
   return {
     emails, paymentLinks, invoices, paymentLinkStates, refunds, razorpayReads, livekit, chatSessions, unexpected,
     use: server.use.bind(server),
-    resetHandlers: server.resetHandlers.bind(server),
+    resetHandlers() { server.resetHandlers(); server.use(...handlers); },
     start() {
-      server.listen({ onUnhandledRequest: "error" });
+      server.use(...handlers);
+      server.events.on("request:unhandled", unhandled);
       after = spyOn(nextServer, "after").mockImplementation(() => {});
     },
     stop() {
-      server.close();
+      server.resetHandlers();
+      server.events.removeListener("request:unhandled", unhandled);
       after?.mockRestore();
     },
     /** Clears what was recorded between tests (not the Razorpay registries set up for them). */

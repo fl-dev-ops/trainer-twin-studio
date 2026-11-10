@@ -24,7 +24,7 @@ mock.module("@/lib/org", () => ({
 }));
 mock.module("@/lib/db", () => ({
   db: {
-    member: { findFirst: async () => role ? { role } : null },
+    member: { findFirst: async () => role ? { id: "member", role, disabledAt: null, user: { ...user, name: "Trainer", image: null } } : null },
     interviewSessionDocument: { findFirst: async ({ where }: { where: Record<string, unknown> }) => {
       documentWhere = where;
       return where.documentId === "owned" ? { document: { name: "resume.pdf", mimeType: "application/pdf", content: Buffer.from("pdf") } } : null;
@@ -50,7 +50,7 @@ const { POST: submitFeedback } = await import("../../app/api/sessions/[id]/feedb
 const { GET: listSessions } = await import("../../app/api/sessions/route");
 const context = (id: string) => ({ params: Promise.resolve({ id }) });
 
-test("assigned non-member can read only documents attached to their own session", async () => {
+test("an owner can read only documents attached to their own session", async () => {
   expect((await readDocument(new Request("https://demo.trainertwin.com/api/documents/owned/raw?sessionId=session"), context("owned"))).status).toBe(200);
   expect(documentWhere).toMatchObject({ sessionId: "session", documentId: "owned", session: { orgId: "demo", userId: "learner" } });
   expect((await readDocument(new Request("https://demo.trainertwin.com/api/documents/other/raw?sessionId=session"), context("other"))).status).toBe(404);

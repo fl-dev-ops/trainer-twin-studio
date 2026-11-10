@@ -6,12 +6,12 @@ import { expect, mock, test } from "bun:test";
 let role: string | null = "user";
 mock.module("next/headers", () => ({ headers: async () => new Headers() }));
 mock.module("@/lib/auth", () => ({
-  auth: { api: { getSession: async () => (role === null ? null : { user: { id: "u1", name: "U", email: "u@example.com" } }) } },
+  auth: { api: { getSession: async () => (role === null ? null : { user: { id: "u1", name: "U", email: "u@example.com" }, session: { activeOrganizationId: null } }) } },
 }));
 mock.module("@/lib/db", () => ({
   db: {
     member: {
-      findFirst: async () => (role === null ? null : { role, organization: { id: "org", slug: "acme", metadata: null } }),
+      findMany: async () => (role === null ? [] : [{ role, organization: { id: "org", slug: "acme", metadata: null } }]),
     },
     // Reached only when a studio member gets past the guards.
     twinCalibration: { findFirst: async () => null },

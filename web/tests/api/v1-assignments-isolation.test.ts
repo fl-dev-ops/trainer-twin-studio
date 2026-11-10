@@ -12,10 +12,10 @@ mock.module("@/lib/db", () => ({
     organization: { findUnique: async () => ({ id: "org1", slug: "acme", name: "Acme" }) },
     // Only org1's learner u1 exists in org1; u2 is a learner of another organization.
     member: {
-      findFirst: async ({ where }: { where: Record<string, unknown> }) => {
+      findMany: async ({ where }: { where: Record<string, any> }) => {
         memberWheres.push(where);
-        if (where.role === "user") return where.organizationId === "org1" && where.userId === "u1" ? { user: { id: "u1", name: "Avery", email: "avery@acme.com" } } : null;
-        return { userId: "t1", user: { name: "Trainer" } };
+        if (where.role.in.includes("user")) return [];
+        return [{ id: "trainer-member", role: "team", disabledAt: null, createdAt: new Date(0), user: { id: "t1", name: "Trainer", email: "trainer@acme.com", image: null } }];
       },
     },
     user: { findUnique: async () => ({ id: "u2", name: "Other", email: "other@elsewhere.com" }) },
@@ -35,5 +35,5 @@ test("POST /assignments with another organization's user ID answers 404 and reve
   const response = await create({ userId: "u2", scenario: "acme-rp" });
   expect(response.status).toBe(404);
   expect(await response.json()).toEqual({ error: "User not found" });
-  expect(memberWheres[0]).toMatchObject({ organizationId: "org1", userId: "u2", role: "user", disabledAt: null });
+  expect(memberWheres).toContainEqual(expect.objectContaining({ organizationId: "org1", userId: { in: ["u2"] }, role: { in: ["user"] }, disabledAt: null }));
 });

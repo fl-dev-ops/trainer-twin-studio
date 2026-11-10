@@ -1,6 +1,6 @@
 import { beforeEach, expect, mock, test } from "bun:test";
 import { progressToken } from "@/lib/run-progress";
-import type { EmailProgress } from "@/workflows/invite-emails";
+import type { EmailProgress } from "@/workflows/send-emails";
 
 let org: { id: string } | null = { id: "org-1" };
 let exists = true;

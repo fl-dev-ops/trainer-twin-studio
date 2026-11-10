@@ -8,7 +8,7 @@ let updatedStatus = "";
 mock.module("@/lib/db", () => ({ db: {
   rolePlayAssignment: {
     findFirst: async () => ({
-      id: "assignment", memberId: null, recipientEmail: "learner@example.com", status,
+      id: "assignment", memberId: "member", member: { userId: "learner" }, status,
       expiresAt: new Date(0), shareCode: "link",
       deployment: { id: "deployment", status: deploymentStatus, allowedModes: "voice", agent: { id: "agent" } },
     }),
@@ -54,7 +54,7 @@ test("inactive deployments, expired/cancelled statuses and mismatched assignment
   status = "expired";
   expect(await activateSession(input)).toBeNull();
   status = "pending";
-  expect(await activateSession({ ...input, userEmail: "outsider@example.com" })).toBeNull();
+  expect(await activateSession({ ...input, userId: "outsider" })).toBeNull();
   status = "cancelled";
   expect(await activateSession(input)).toBeNull();
   expect(updatedStatus).toBe("");

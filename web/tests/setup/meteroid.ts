@@ -16,7 +16,7 @@ export const meteroidHandlers = [
   http.get("https://meteroid.test/api/v1/customers/:id/credit-grants", ({ params }) => HttpResponse.json({ data: grants.get(String(params.id)) ?? [] })),
   http.post("https://meteroid.test/api/v1/customers/:id/credit-grants", async ({ params, request }) => {
     const customer = String(params.id);
-    const body = await request.json() as Record<string, unknown>;
+    const body = await request.clone().json() as Record<string, unknown>;
     const key = request.headers.get("idempotency-key");
     grantRequests.push({ customer, key, body });
     if (key && keys.has(key)) {
@@ -32,7 +32,7 @@ export const meteroidHandlers = [
     return HttpResponse.json(grant);
   }),
   http.post("https://meteroid.test/api/v1/events/ingest", async ({ request }) => {
-    const body = await request.json() as { events: Record<string, unknown>[] };
+    const body = await request.clone().json() as { events: Record<string, unknown>[] };
     usageEvents.push(...body.events);
     return HttpResponse.json({});
   }),
