@@ -99,21 +99,27 @@ test("unlinkOrgFromMeteroid rethrows non-400 archive errors without retry", asyn
 });
 
 
-test("grantTrialMinutes grants 30 promotional minutes for 30 days from creation with identical retry bodies", async () => {
+test.each([undefined, new Date("2026-11-11T00:00:00Z")])("grantTrialMinutes grants 30 promotional minutes for 30 days from startsAt=%j (default: creation) with identical retry bodies", async (startsAt) => {
   const trialOrg = { id: org.id, createdAt: new Date("2026-02-01T12:34:56Z") };
-  await grantTrialMinutes(trialOrg, "customer-onboarding");
-  await grantTrialMinutes(trialOrg, "customer-onboarding");
+  const start = startsAt ?? trialOrg.createdAt;
+  if (startsAt) {
+    await grantTrialMinutes(trialOrg, "customer-onboarding", startsAt);
+    await grantTrialMinutes(trialOrg, "customer-onboarding", startsAt);
+  } else {
+    await grantTrialMinutes(trialOrg, "customer-onboarding");
+    await grantTrialMinutes(trialOrg, "customer-onboarding");
+  }
   expect(service.requests).toHaveLength(2);
   for (const request of service.requests) {
     expect(request).toMatchObject({ method: "POST", path: "/customers/customer-onboarding/credit-grants", key: `trial-${org.id}`, body: {
-      type: "PROMOTIONAL", credit_unit: "MINS", amount: 30, reason: "Free trial", expires_at: new Date(trialOrg.createdAt.getTime() + 30 * 86_400_000).toISOString(),
+      type: "PROMOTIONAL", credit_unit: "MINS", amount: 30, reason: "Free trial", expires_at: new Date(start.getTime() + 30 * 86_400_000).toISOString(),
     } });
     const expiry = new Date((request.body as { expires_at: string }).expires_at).getTime();
-    expect(expiry).toBe(trialOrg.createdAt.getTime() + 30 * 86_400_000);
+    expect(expiry).toBe(start.getTime() + 30 * 86_400_000);
   }
   expect(service.requests[0].body).toEqual(service.requests[1].body);
   expect(service.grants).toHaveLength(1);
-  await grantTrialMinutes({ ...trialOrg, id: "another-org" }, "customer-onboarding");
+  await grantTrialMinutes({ ...trialOrg, id: "another-org" }, "customer-onboarding", startsAt);
   expect(service.grants).toHaveLength(2);
 });
 
