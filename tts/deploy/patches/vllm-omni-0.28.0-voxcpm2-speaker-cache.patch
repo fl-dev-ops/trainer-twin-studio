@@ -1,0 +1,35 @@
+--- a/vllm_omni/model_executor/models/voxcpm2/voxcpm2_talker.py	2026-11-11 01:47:56
++++ b/vllm_omni/model_executor/models/voxcpm2/voxcpm2_talker.py	2026-11-11 01:47:56
+@@ -3139,6 +3139,10 @@
+                     voice_name, model_type="voxcpm2", created_at=_created_at
+                 )
+                 cached = self._speaker_cache.get(_cache_key)
++                # Only reuse features built for the same transcript; otherwise the
++                # conditioning (and the serving-side prefill length) would differ.
++                if cached is not None and (cached.get("prompt_text") or None) != (prompt_text or None):
++                    cached = None
+                 if cached is not None:
+                     if "mode" in cached:
+                         state.prompt_cache = self._clone_prompt_cache(cached)
+@@ -3162,14 +3166,14 @@
+                     prompt_audio=prompt_audio,
+                     prompt_text=prompt_text,
+                 )
+-                if (
+-                    voice_name
+-                    and state.prompt_cache is not None
+-                    and state.prompt_cache.get("mode") == "reference"
+-                    and "ref_audio_feat" in state.prompt_cache
+-                ):
++                if voice_name and state.prompt_cache is not None:
++                    # Cache every conditioning mode (continuation included), so named
++                    # voices with a transcript skip re-encoding on later requests.
+                     _key = self._speaker_cache.make_cache_key(voice_name, model_type="voxcpm2", created_at=_created_at)
+-                    self._speaker_cache.put(_key, {"ref_audio_feat": state.prompt_cache["ref_audio_feat"].cpu()})
++                    self._speaker_cache.put(_key, {
++                        k: v.detach().cpu() if isinstance(v, torch.Tensor) else v
++                        for k, v in state.prompt_cache.items()
++                    })
+                     logger.debug("Speaker cache STORE for VoxCPM2 speaker '%s'", voice_name)
+             if state.prefill_embeds is None or state.prefill_masks is None:
+                 inputs = self._build_prefill_inputs(token_ids, dev, req_id)

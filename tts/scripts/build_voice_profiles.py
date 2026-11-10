@@ -62,10 +62,11 @@ def build(args) -> None:
         snapshot = snapshot_download(args.model, revision=args.revision)
         native = import_voxcpm2_core().from_pretrained(snapshot, load_denoiser=False, optimize=False)
         tts = native.tts_model.to(torch.device(args.device)).eval()
+        built, failures = 0, []
         with httpx.Client(base_url=args.app_base_url, timeout=30,
                           headers={"Authorization": f"Bearer {key}"}) as app_http:
             with httpx.Client(timeout=60) as audio_http:
-                for voice_id in dict.fromkeys(args.voice):
+                def build_one(voice_id):
                     response = app_http.get(f"/api/tts/voices/{voice_id}")
                     response.raise_for_status()
                     meta = response.json()
@@ -114,11 +115,24 @@ def build(args) -> None:
                     }
                     if transcript:
                         entry["prompt_text"] = transcript
+                    return name, entry
+
+                for voice_id in dict.fromkeys(args.voice):
+                    try:
+                        name, entry = build_one(voice_id)
+                    except Exception as exc:  # noqa: BLE001 - one bad voice must not block the rest
+                        failures.append((voice_id, type(exc).__name__))
+                        continue
                     manifest["voices"] = {k: v for k, v in manifest["voices"].items()
                                           if v.get("tts_voice_id") != voice_id}
                     manifest["voices"][name] = entry
+                    built += 1
         atomic_write(manifest_path, json.dumps(manifest, indent=2, ensure_ascii=False))
-        print(f"Built {len(args.voice)} versioned profile(s); restart backend and proxy to load")
+        print(f"Built {built} versioned profile(s); restart backend and proxy to load")
+        if failures:
+            # Error text can embed signed URLs: report voice IDs and error types only.
+            print("Failed voices: " + ", ".join(f"{v} ({e})" for v, e in failures), file=sys.stderr)
+            sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,10 @@
+# vLLM-Omni v0.28.0 + the VoxCPM2 speaker-cache patch (cache encoded voice features for
+# every conditioning mode, so runtime-registered voices with a transcript skip re-encoding).
+FROM vllm/vllm-omni:v0.28.0
+COPY deploy/patches/vllm-omni-0.28.0-voxcpm2-speaker-cache.patch /tmp/speaker-cache.patch
+RUN set -eux; \
+    command -v patch || (apt-get update && apt-get install -y --no-install-recommends patch && rm -rf /var/lib/apt/lists/*); \
+    site="$(python3 -c 'import os, vllm_omni; print(os.path.dirname(os.path.dirname(vllm_omni.__file__)))')"; \
+    python3 -c 'import importlib.metadata as m; assert m.version("vllm-omni") == "0.28.0", m.version("vllm-omni")'; \
+    patch -p1 -d "$site" --forward < /tmp/speaker-cache.patch; \
+    rm /tmp/speaker-cache.patch

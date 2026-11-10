@@ -2,7 +2,10 @@ services:
   # GPU model server — VoxCPM2 via vLLM-Omni, continuous batching.
   # Cold start ~60s (model load + torch.compile + CUDA-graph warmup).
   tts-backend:
-    image: vllm/vllm-omni:v0.28.0
+    image: trainertwin/tts-backend:0.28.0-speaker-cache
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.backend
     restart: unless-stopped
     command: >
       vllm serve openbmb/VoxCPM2 --omni
@@ -13,8 +16,10 @@ services:
       - ./deploy:/srv/tts/deploy:ro
       - ${TTS_PROFILE_SOURCE:-./voices}:/srv/tts/voices:ro
       - hf-cache:/root/.cache/huggingface   # weights survive restarts (~5 GB)
+      - speakers:/srv/tts/speakers          # runtime-registered voices survive restarts
     environment:
       - HF_TOKEN=${HF_TOKEN:-}              # only if the model needs auth
+      - SPEAKER_SAMPLES_DIR=/srv/tts/speakers
     deploy:
       resources:
         reservations:
@@ -51,3 +56,4 @@ services:
 
 volumes:
   hf-cache:
+  speakers:

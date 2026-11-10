@@ -265,3 +265,38 @@ async def test_transient_probe_failure_keeps_warm_server_ready(api, monkeypatch)
     failures["left"] = 2  # a confirmed (repeated) failure must fail closed
     await service._check_backend()
     assert not service.ready
+
+
+@pytest.mark.asyncio
+async def test_warmup_compiles_batch_shapes_once_then_validates_each_voice(api, monkeypatch):
+    client, state, calls, streams = api
+    for voice in ("voice1", "voice2", "voice3"):
+        service.profiles.entries[voice, "v1"] = f"profile-{voice}"
+    state["available"] = [f"profile-{v}" for v in ("voice1", "voice2", "voice3")]
+    monkeypatch.setattr(config, "TTS_WARMUP_CONCURRENCY", (1, 2, 4))
+    monkeypatch.setattr(service, "ready", False)
+    await service._warm_backend()
+    assert service.ready
+    assert len(calls) == (1 + 2 + 4) + 1 + 1  # all shapes for the first voice, one request per other voice
+    assert {c["voice"] for c in calls} == {"profile-voice1", "profile-voice2", "profile-voice3"}
+
+
+@pytest.mark.asyncio
+async def test_unprofiled_voice_is_served_inline_and_registered_in_background(api, monkeypatch):
+    client, state, calls, streams = api
+    ensured = []
+
+    class StubRuntime:
+        def select(self, voice_id, meta):
+            return None
+
+        def ensure(self, voice_id, meta):
+            ensured.append((voice_id, meta["version"]))
+
+    monkeypatch.setattr(service, "runtime", StubRuntime())
+    r = await client.post("/v1/audio/speech", json=body(stream=True))
+    assert r.status_code == 200 and calls[-1]["voice"] == "default" and "ref_audio" in calls[-1]
+    assert ensured == [("voice1", "v1")]
+    service.profiles.entries["voice1", "v1"] = "profile-voice1"
+    await client.post("/v1/audio/speech", json=body(stream=True))
+    assert ensured == [("voice1", "v1")]  # profiled voices are never uploaded
