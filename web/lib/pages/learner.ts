@@ -92,8 +92,8 @@ export async function loadSharedSession(code: string): Promise<SharedSessionView
       organization: { select: { name: true, logo: true } },
     },
   }) : null;
-  // Not a role-play invite: maybe a twin assignment or a twin share link. Checked here without creating
-  // anything; the user's assignment is created when the session starts (POST /api/sessions).
+  // Not a role-play invite: maybe a twin assignment or a twin share link (opening a share link adds an existing
+  // account to the org with the twin: specs/people.md rule 6).
   if (!assignment && org) {
     // Opening a common twin link is where an existing account joins (specs/people.md rule 6); starting the call
     // only uses that membership.

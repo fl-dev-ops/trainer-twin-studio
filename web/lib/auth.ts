@@ -20,7 +20,11 @@ export const auth = betterAuth({
   // Sign-in is Google or a one-time email code (specs/people.md rule 10): no passwords anywhere.
   emailAndPassword: { enabled: false },
   // …and none of the password routes Better Auth still mounts (specs/people.md rule 10).
-  disabledPaths: ["/sign-in/email", "/sign-up/email", "/change-password", "/request-password-reset", "/reset-password", "/verify-password"],
+  disabledPaths: [
+    "/sign-in/email", "/sign-up/email", "/change-password", "/request-password-reset", "/reset-password", "/verify-password",
+    // The email-code plugin's own password routes (it's used for sign-in codes only).
+    "/forget-password/email-otp", "/email-otp/request-password-reset", "/email-otp/reset-password",
+  ],
   socialProviders: process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
     ? {
         google: {

@@ -46,7 +46,7 @@ A new assignment returns `201`:
 
 `practiceUrl` is the learner's personal practice link. Send it through your own channel instead of, or alongside, the TrainerTwin email. It works only for the learner it was assigned to: they sign in with that email (Google or a code sent to it).
 
-The email, **New Role Play Assigned**, names the role play and its objective, says how many minutes of practice the learner has, and which email to sign in with.
+The email, **New role play: *name***, names the role play and its objective, says how many credits (minutes of practice) the learner has, and which email to sign in with. Someone new to your organization is told they were added, in the same email.
 
 Creating the same learner-scenario pair again is safe. While the assignment is pending or used, TrainerTwin returns it with `created: false` and does not send another email. A cancelled or expired assignment is reopened instead: it gets a new `practiceUrl`, the learner gets an email, and the response is `201` with `created: true`.
 

@@ -135,13 +135,15 @@ export async function twinAccessByCode(input: { orgId: string; user: Person; cod
   if (found.type === "assignment") return usable(found.assignment, input.user);
 
   if (found.link.status !== "active") throw new TwinAccessError("This twin link is no longer active", 403);
+  // A disabled member gets nothing through a link, even with an assignment left over (specs/people.md rule 8).
+  const member = await orgPerson(input.orgId, { userId: input.user.id });
+  if (member?.disabled) throw new TwinAccessError("Your access has been disabled. Contact your trainer.", 403);
   const existing = await db.twinAssignment.findUnique({
     where: { agentId_userId: { agentId: found.agentId, userId: input.user.id } },
     select: assignmentSelect,
   });
   if (existing) return usable(existing, input.user);
-  const member = await orgPerson(input.orgId, { userId: input.user.id });
-  if (member && member.role !== LEARNER && !member.disabled) return { assignmentId: null, agentId: found.agentId };
+  if (member && member.role !== LEARNER) return { assignmentId: null, agentId: found.agentId };
   if (!input.join) return { assignmentId: null, agentId: found.agentId };
   await addPeopleToOrg({ orgId: input.orgId, emails: [input.user.email], role: LEARNER, byUserId: found.link.createdByUserId }).catch((error: unknown) => {
     throw new TwinAccessError(error instanceof Error ? error.message : "Could not join", 403);
