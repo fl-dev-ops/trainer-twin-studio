@@ -49,6 +49,8 @@ export default defineAgent({
       modelOptions: {
         providerOptions: {
           gateway: { only: [SPEAKING_ROUTE] },
+          // Priority queue on Vertex. Cuts the slow tail; about 2x token price. Overflow is billed as standard.
+          vertex: { sharedRequestType: "priority" },
           google: { thinkingConfig },
         },
       },

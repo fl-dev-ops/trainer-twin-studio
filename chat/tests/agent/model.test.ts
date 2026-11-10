@@ -31,6 +31,7 @@ test("every reply runs on Gemini on Vertex; the decision model is Qwen on Cerebr
     const result = await step(model ? { model } : {});
     assert.equal(result.model, "google/gemini-3.8-flash");
     assert.deepEqual(result.modelOptions.providerOptions.gateway, { only: ["vertex"] });
+    assert.deepEqual(result.modelOptions.providerOptions.vertex, { sharedRequestType: "priority" });
   }
   assert.equal(SPEAKING_MODEL, "google/gemini-3.8-flash");
   assert.equal(SPEAKING_ROUTE, "vertex");
