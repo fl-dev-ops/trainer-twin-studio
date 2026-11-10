@@ -13,6 +13,15 @@ const BACKUP_ROUTE = SPEAKING_ROUTE;
 const HEDGE_AFTER_MS = Number(process.env.GEMINI_HEDGE_AFTER_MS ?? 0);
 
 function speakingModel() {
+  // A non-Google speaking model (models.ts) runs with reasoning off (EXP_SPEAKING_REASONING), like Gemini's thinkingLevel "low" in voice.
+  // eve passes only providerOptions, so the reasoning setting goes in through a middleware.
+  if (!SPEAKING_MODEL.startsWith("google/")) {
+    const reasoning = (process.env.EXP_SPEAKING_REASONING?.trim() || "none") as "none" | "minimal" | "low" | "medium" | "high";
+    return wrapLanguageModel({
+      model: gateway(SPEAKING_MODEL),
+      middleware: { specificationVersion: "v4", transformParams: async ({ params }) => ({ ...params, reasoning }) },
+    });
+  }
   if (!(HEDGE_AFTER_MS > 0)) return SPEAKING_MODEL;
   return wrapLanguageModel({
     model: gateway(SPEAKING_MODEL),
