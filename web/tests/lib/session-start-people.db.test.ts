@@ -31,4 +31,16 @@ describe.skipIf(!localMinutesDb)("session start and org membership (local databa
       .rejects.toMatchObject({ name: "TwinAccessError", status: 403 });
     expect(await db.member.count({ where: { organizationId: f.org.id, userId: outsider().id } })).toBe(0);
   });
+
+  test("activateSession through a common code refuses a non-member and creates no member, assignment, grant or session", async () => {
+    await fundOrg({ orgId: f.org.id, minutes: 60 });
+    const grant = await db.minuteLedger.create({ data: { orgId: f.org.id, email: outsider().email, type: "grant", seconds: 1800 } });
+    const link = await db.twinShareLink.create({ data: { orgId: f.org.id, agentId: f.twin.id, code: `${f.org.id}-common`, minutesPerUser: 30, createdByUserId: f.trainer.id } });
+    await expect(activateSession({ orgId: f.org.id, userId: outsider().id, userEmail: outsider().email, shareCode: link.code, mode: "voice" }))
+      .rejects.toMatchObject({ name: "TwinAccessError", status: 403, message: expect.stringContaining("not a member") });
+    expect(await db.member.count({ where: { organizationId: f.org.id, userId: outsider().id } })).toBe(0);
+    expect(await db.twinAssignment.count({ where: { orgId: f.org.id } })).toBe(0);
+    expect(await db.minuteLedger.findMany({ where: { orgId: f.org.id } })).toEqual([grant]);
+    expect(await db.interviewSession.count({ where: { orgId: f.org.id } })).toBe(0);
+  });
 });

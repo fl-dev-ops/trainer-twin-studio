@@ -28,11 +28,24 @@ describe.skipIf(!localMinutesDb)("people sign in with email codes, never passwor
     await f.clean();
   });
 
-  test("POST /api/auth/sign-in/email refuses passwords with 400 EMAIL_PASSWORD_DISABLED", async () => {
-    const response = await post("sign-in/email", { email: f.trainer.email, password: "not-a-way-in" });
-    expect(response.status).toBe(400);
-    expect(await response.json()).toMatchObject({ code: "EMAIL_PASSWORD_DISABLED" });
+  test.each([
+    ["sign-in/email", { password: "not-a-way-in" }],
+    ["sign-up/email", { name: "Password user", password: "not-a-way-in" }],
+    ["change-password", { currentPassword: "not-a-way-in", newPassword: "still-not-a-way-in" }],
+    ["request-password-reset", { redirectTo: `https://dash.${BASE_DOMAIN}/reset-password` }],
+    ["reset-password", { token: "not-a-reset-token", newPassword: "not-a-way-in" }],
+    ["verify-password", { password: "not-a-way-in" }],
+    ["forget-password/email-otp", {}],
+    ["email-otp/request-password-reset", {}],
+    ["email-otp/reset-password", { otp: "123456", password: "not-a-way-in" }],
+  ] as const)("POST /api/auth/%s is not mounted and returns 404", async (path, body) => {
+    const user = await db.user.findUniqueOrThrow({ where: { id: f.trainer.id } });
+    const response = await post(path, { email: f.trainer.email, ...body });
+    expect(response.status).toBe(404);
+    expect(await db.user.findUniqueOrThrow({ where: { id: f.trainer.id } })).toEqual(user);
     expect(await db.session.count({ where: { userId: f.trainer.id } })).toBe(0);
+    expect(await db.account.count({ where: { userId: f.trainer.id, providerId: "credential" } })).toBe(0);
+    expect(await db.verification.count({ where: { identifier: { contains: f.trainer.email } } })).toBe(0);
     expect(send).not.toHaveBeenCalled();
   });
 

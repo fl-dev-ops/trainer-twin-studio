@@ -125,11 +125,25 @@ describe.skipIf(!localMinutesDb)("twin access and twin assign (local database)",
     const link = await createTwinShareLink({ orgId: f.org.id, agentId: f.twin.id, minutesPerUser: 30, createdByUserId: f.trainer.id });
     expect(await twinAccessByCode({ orgId: f.org.id, user: f.trainer, code: link.code, join: true })).toEqual({ assignmentId: null, agentId: f.twin.id });
     await db.member.update({ where: { id: `${f.learner.id}-member` }, data: { disabledAt: new Date() } });
-    await rejects(twinAccessByCode({ orgId: f.org.id, user: f.learner, code: link.code, join: true }), 403, /Disabled/);
+    await rejects(twinAccessByCode({ orgId: f.org.id, user: f.learner, code: link.code, join: true }), 403, "Your access has been disabled. Contact your trainer.");
     await db.twinShareLink.update({ where: { id: link.id }, data: { status: "disabled" } });
     await rejects(twinAccessByCode({ orgId: f.org.id, user: stranger(), code: link.code, join: true }), 403, "no longer active");
     expect(await db.twinAssignment.count({ where: { orgId: f.org.id } })).toBe(0);
     expect(await orgPerson(f.org.id, { userId: stranger().id })).toBeNull();
+  });
+
+  test.each([false, true])("a disabled member's leftover active assignment cannot open a common twin link (join=%s)", async (join) => {
+    await fundOrg({ orgId: f.org.id, minutes: 100 });
+    await assign([f.learner.email]);
+    const assignment = await db.twinAssignment.findFirstOrThrow({ where: { agentId: f.twin.id, userId: f.learner.id } });
+    expect(assignment.status).toBe("active");
+    const link = await createTwinShareLink({ orgId: f.org.id, agentId: f.twin.id, minutesPerUser: 30, createdByUserId: f.trainer.id });
+    await db.member.update({ where: { id: `${f.learner.id}-member` }, data: { disabledAt: new Date() } });
+    await expect(twinAccessByCode({ orgId: f.org.id, user: f.learner, code: link.code, join })).rejects.toMatchObject({
+      name: "TwinAccessError", status: 403, message: "Your access has been disabled. Contact your trainer.",
+    });
+    expect(await db.twinAssignment.findUniqueOrThrow({ where: { id: assignment.id } })).toEqual(assignment);
+    expect(await orgPerson(f.org.id, { userId: f.learner.id })).toMatchObject({ disabled: true });
   });
 
   test("a direct start needs the account's own assignment on that twin", async () => {
