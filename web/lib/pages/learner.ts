@@ -95,13 +95,15 @@ export async function loadSharedSession(code: string): Promise<SharedSessionView
   // Not a role-play invite: maybe a twin assignment or a twin share link. Checked here without creating
   // anything; the user's assignment is created when the session starts (POST /api/sessions).
   if (!assignment && org) {
-    const twin = await twinAccessByCode({ orgId: org.id, user, code, join: false }).catch((error: unknown) => {
+    // Opening a common twin link is where an existing account joins (specs/people.md rule 6); starting the call
+    // only uses that membership.
+    const twin = await twinAccessByCode({ orgId: org.id, user, code, join: true }).catch((error: unknown) => {
       if (error instanceof TwinAccessError) return error;
       throw error;
     });
     if (twin instanceof TwinAccessError) return { kind: "twinUnavailable", message: twin.message, email: user.email };
     if (twin) {
-      // Someone joining through a common link gets their starting minutes when the call starts.
+      // Someone who just joined through a common link got their starting credits on the way in.
       const left = twin.assignmentId ? await minutesLeft() : null;
       if (left !== null && left < MIN_START_MINUTES) return { kind: "outOfMinutes", email: user.email, minutesLeft: Math.max(0, left) };
       return { kind: "session", props: { ...(await twinSessionView(org.id, twin.agentId, code, user.name)), minutesLeft: left } };

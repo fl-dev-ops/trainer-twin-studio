@@ -123,9 +123,10 @@ export async function findTwinCode(code: string) {
 }
 
 /**
- * Twin access for a session start through a code (personal assignment or common link). Opening a link reuses the
- * user's assignment on that twin; with `join` set, someone new is added to the org as a learner (with their starting
- * credits) and given the twin. Admin and team need no assignment. Returns null when the code is not a twin code.
+ * Twin access through a code (personal assignment or common link). A link reuses the user's assignment on that twin;
+ * with `join` set (only when the link page opens: lib/pages/learner.ts), an existing account not yet in the org is
+ * added as a learner (with starting credits) and given the twin. A call start passes join=false and never adds anyone.
+ * Admin and team need no assignment. Returns null when the code is not a twin code.
  */
 export async function twinAccessByCode(input: { orgId: string; user: Person; code: string; join: boolean }) {
   const found = await findTwinCode(input.code);

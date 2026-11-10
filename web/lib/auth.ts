@@ -19,6 +19,8 @@ export const auth = betterAuth({
   session: { cookieCache: { enabled: true, maxAge: 5 * 60 } },
   // Sign-in is Google or a one-time email code (specs/people.md rule 10): no passwords anywhere.
   emailAndPassword: { enabled: false },
+  // …and none of the password routes Better Auth still mounts (specs/people.md rule 10).
+  disabledPaths: ["/sign-in/email", "/sign-up/email", "/change-password", "/request-password-reset", "/reset-password", "/verify-password"],
   socialProviders: process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
     ? {
         google: {

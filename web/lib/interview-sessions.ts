@@ -244,8 +244,9 @@ export async function activateSession(input: {
     : null;
 
   if (input.shareCode && !roleplayInvite) {
-    // Not a role-play invite: a twin assignment code or a twin share link (joining creates the user's assignment).
-    const access = await twinAccessByCode({ orgId: input.orgId, user: person, code: input.shareCode, join: true });
+    // Not a role-play invite: a twin assignment code or a twin share link. Joining through a link happened when the
+    // page opened (lib/pages/learner.ts); a call start never adds anyone (specs/people.md rule 6).
+    const access = await twinAccessByCode({ orgId: input.orgId, user: person, code: input.shareCode, join: false });
     if (!access) return null;
     twin = { assignmentId: access.assignmentId };
     agentId = access.agentId;
