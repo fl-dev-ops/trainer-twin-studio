@@ -111,7 +111,7 @@ test.each([undefined, new Date("2026-11-11T00:00:00Z")])("grantTrialMinutes gran
   }
   expect(service.requests).toHaveLength(2);
   for (const request of service.requests) {
-    expect(request).toMatchObject({ method: "POST", path: "/customers/customer-onboarding/credit-grants", key: `trial-${org.id}`, body: {
+    expect(request).toMatchObject({ method: "POST", path: "/customers/customer-onboarding/credit-grants", key: `trial-${org.id}-customer-onboarding`, body: {
       type: "PROMOTIONAL", credit_unit: "MINS", amount: 30, reason: "Free trial", expires_at: new Date(start.getTime() + 30 * 86_400_000).toISOString(),
     } });
     const expiry = new Date((request.body as { expires_at: string }).expires_at).getTime();

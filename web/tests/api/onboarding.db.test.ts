@@ -56,7 +56,7 @@ describe.skipIf(!localMinutesDb)("onboarding route: setup and rollback", () => {
     const org = await db.organization.findUniqueOrThrow({ where: { slug }, include: { members: true, billing: true } });
     expect(org.members).toEqual([expect.objectContaining({ userId: f.trainer.id, role: "admin" })]);
     expect(org.billing).toMatchObject({ meteroidCustomerId: "customer-onboarding", balanceMinutes: 0 });
-    expect(service.grants).toEqual([{ key: `trial-${org.id}`, body: { amount: 30, type: "PROMOTIONAL", reason: "Free trial", credit_unit: "MINS", expires_at: new Date(org.createdAt.getTime() + 30 * 86_400_000).toISOString() } }]);
+    expect(service.grants).toEqual([{ key: `trial-${org.id}-customer-onboarding`, body: { amount: 30, type: "PROMOTIONAL", reason: "Free trial", credit_unit: "MINS", expires_at: new Date(org.createdAt.getTime() + 30 * 86_400_000).toISOString() } }]);
     expect((await invite()).acceptedAt).not.toBeNull();
     expect(createChroma).toHaveBeenCalledTimes(1);
     expect(createChroma).toHaveBeenCalledWith(org.id);
