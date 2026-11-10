@@ -865,7 +865,7 @@ model UsageEvent {
   userId         String?
   sessionId      String?
   source         String // voice_agent | chat | copilot | report | synthesis | spec | rerank | evaluate | runtime
-  provider       String // e.g. vercel | Deepgram | Sarvam | livekit
+  provider       String // e.g. vercel | Deepgram | voxcpm2 | livekit
   model          String
   metric         String // input_tokens | output_tokens | cache_read_tokens | ... | stt_seconds | tts_characters | cost_usd
   quantity       Float

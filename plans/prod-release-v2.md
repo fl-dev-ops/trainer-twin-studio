@@ -109,7 +109,7 @@ Among them: the twin/role-play split, roles, twin access and calibration, disabl
 
 **Known test failures (all present before v2)**
 - web: 4 runtime E2E suites, "S3 keys are rooted by immutable organization ID", and a leak between test files ("admin and team are let in").
-- agent: the session test needs `SARVAM_API_KEY`.
+- agent: `test_build_agent_session_configuration` needs a running event loop under Python 3.14. Sarvam is no longer a dependency.
 
 ## 4. Environment changes
 

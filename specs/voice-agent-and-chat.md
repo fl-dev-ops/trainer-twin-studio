@@ -135,14 +135,13 @@ Client role play tracks guard level in the prompt (1–5), speaks a goodbye and 
 
 ### 7. Configuration and deployment
 
-`validate_environment` exits with code 1 if any of these is blank: `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `AGENT_NAME`, `WEB_URL`, `LLM_BASE_URL`, `DEEPGRAM_API_KEY`, `TTS_PROVIDER`, `SARVAM_API_KEY`, `OPENROUTER_API_KEY`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`. It also requires either `AWS_S3_BUCKET` or `S3_BUCKET`. This is unconditional even when a chosen provider does not use every key (`agent/src/agent.py`).
+`validate_environment` exits with code 1 if any of these is blank: `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `AGENT_NAME`, `WEB_URL`, `LLM_BASE_URL`, `DEEPGRAM_API_KEY`, `OPENROUTER_API_KEY`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`. It also requires either `AWS_S3_BUCKET` or `S3_BUCKET`. Speech is VoxCPM2 only; `TTS_PROVIDER` and `SARVAM_*` are not read (`agent/src/agent.py`; `agent/src/tts/__init__.py`).
 
 | Additional configuration | Behavior / source |
 | --- | --- |
 | `COPILOT_SERVICE_SECRET` | Needed for chat Basic auth, completion webhook and usage; not included in the startup required list (`agent.py`; `recording/webhook.py`; `usage.py`). |
 | `LLM_MODEL` | Defaults to `trainertwin-runtime`; `trainertwin-runtime` and `trainertwin-brain` are backend default-model markers (`session.py`; `chat/agent/channels/openai-compat.ts`). |
-| `TTS_PROVIDER=sarvam` | Default in code. Sarvam `en-IN`, model `SARVAM_TTS_MODEL` or `bulbul:v3`, speaker `SARVAM_SPEAKER` or `rohan`; ignores session voice ID (`agent/src/tts/__init__.py`). |
-| Other `TTS_PROVIDER` values | All take the VoxCPM2 branch, not an unknown-provider error (`agent/src/tts/__init__.py`). |
+| Speech | VoxCPM2 only. `build_tts` does not branch on `TTS_PROVIDER` (`agent/src/tts/__init__.py`). |
 | VoxCPM2 endpoint | `VOXCPM2_ENDPOINT`, then `TTS_SERVICE_URL`, then `{WEB_URL}/api/tts/speech`; append `/v1/audio/speech` unless already a supported speech path. Optional Bearer `TTS_API_KEY` or `TTS_SERVICE_KEY` (`tts/voxcpm2.py` `build_voxcpm2_tts`). |
 | VoxCPM2 voice | Session voice, then `AGENT_VOICE_ID_OVERRIDE`, `AGENT_DEFAULT_VOICE_ID`, `VOXCPM_VOICE`; fallback `AGENT_FALLBACK_VOICE_ID` or `charlotte-sample`. A 404 response containing “unknown voice” retries with fallback for the rest of that session. Streams PCM; default 48 kHz, mono (`tts/voxcpm2.py`). |
 | Sentence flush | `TTS_IDLE_FLUSH_MS`, default 200; non-positive disables the idle sentence flush wrapper (`tts/__init__.py`; `tts/sentence_flush.py`). |
@@ -197,13 +196,13 @@ Deployment has two worker targets: the LiveKit Cloud agent and the Docker servic
 | --- | --- |
 | [Sessions](sessions.md) | Web supplies authorized session metadata and runtime token; receives commands, transcripts, completion and recording references. |
 | [Twins](twins.md) / [Role plays](roleplays.md) | Supply pinned agent/persona/skill configuration; chat selects mode and formats it (`brain.ts`; `roleplay.ts`). |
-| [Personas and voice](personas-and-voice.md) | Supply persona brief, recorded style, ready voice IDs. Sarvam uses its configured speaker instead (`session-activation.ts`; `tts/__init__.py`). |
+| [Personas and voice](personas-and-voice.md) | Supply persona brief, recorded style, and the ready voice ID the worker speaks with (`session-activation.ts`; `tts/voxcpm2.py`). |
 | LiveKit Cloud | Jobs/rooms, media, turn inference, noise cancellation, composite recording (`agent/src/session.py`, `agent.py`; `web/lib/livekit.ts`). |
-| Deepgram / Sarvam / VoxCPM2 | Audio → text; generated speech text → audio (`agent/src/session.py`; `agent/src/tts/*`). |
+| Deepgram / VoxCPM2 | Deepgram Flux turns audio into text. VoxCPM2 turns the reply into speech (`agent/src/session.py`; `agent/src/tts/*`). |
 | AI Gateway / Vertex / Cerebras | Speaking model and fast twin query decision (`chat/agent/agent.ts`; `lib/models.ts`, `twin-query.ts`). |
 | Studio / Chroma / S3 | Scoped evidence searches and document reads; composite recording storage. Chat accesses studio, not the DB directly (`lib/studio.ts`; web studio route; `web/lib/livekit.ts`). See [Knowledge](knowledge.md). |
 | OpenRouter | Python screen-vision requests (`agent/src/screen_feedback/vision.py`). |
-| Usage / Langfuse | Python STT/TTS/conversation usage and chat LLM usage/traces. Missing Python service secret disables its reporting (`agent/src/usage.py`; `chat/agent/instrumentation/*`). See [Platform](platform.md). |
+| Usage / Langfuse | Python STT/TTS/conversation usage and chat LLM usage/traces. Missing Python service secret disables its reporting (`agent/src/usage.py`; `chat/agent/instrumentation/*`). Voice traces are LiveKit agents 1.8: turn text is span attributes (`gen_ai.input.messages`, `gen_ai.output.messages`, `gen_ai.system_instructions`), not the old `gen_ai.*.message` events. Neither Langfuse project has a saved dashboard, widget, evaluator, or score config that queries the old events. See [Platform](platform.md). |
 
 ## Edge cases and limits
 
@@ -225,7 +224,7 @@ Deployment has two worker targets: the LiveKit Cloud agent and the Docker servic
 | That plan defers client role play to a future branch. | `ROLEPLAY` with a string skill already runs the client prompt and `end_call` (`lib/roleplay.ts`; `tools/end_call.ts`). |
 | `plans/twin-content-inventory.md` describes live skills, old coaching-shaped skills and no calibration; `plans/twin-roleplay-db-split.md` initially notes latest-only example items. | Context uses pinned skill lists/versions, twin-creator skills advise on one topic, calibrations have their own overlay, and Chroma stores versioned items with retained-version fallback (`web/lib/session-context.ts`; `chat/agent/lib/brain.ts`; `web/lib/main-collection.ts`). |
 | `plans/twin-skill-ingest.md` proposes moving items to a `twin` collection. | Runtime search still uses `MainCollectionService.COLLECTION_NAME="main"` (`web/lib/main-collection.ts`). |
-| `agent/.env.example` calls recordings optional, labels VoxCPM2 default and omits `LLM_BASE_URL`/service secret. | Startup requires S3 credentials/bucket and `LLM_BASE_URL`; code's TTS default is Sarvam; completion requires the unvalidated-at-start service secret (`agent/src/agent.py`; `tts/__init__.py`; `recording/webhook.py`). |
+| `agent/.env.example` calls recordings optional and omits `LLM_BASE_URL`/service secret. | Startup requires S3 credentials/bucket and `LLM_BASE_URL`. Speech is VoxCPM2 only. Completion requires the service secret, which startup does not check (`agent/src/agent.py`; `tts/__init__.py`; `recording/webhook.py`). |
 | `chat/README.md` describes Bearer-plus-org auth and Python room RPC; bridge comments still describe a request model override. | Bearer is not validated at the completion route; speaker is source-locked; active workspace execution uses studio commands/browser polling with Python `tools=[]` (`openai-compat.ts`; `agent.ts`; `workspace-tools.ts`; `web/lib/livekit-workspaces.tsx`; `agent/src/agent.py`). |
 | `plans/twin-wiring-and-reliability.md` originally scopes canonical final transcripts to twins. | Receiver also uses agent transcript readiness for new role plays through `usesAgentTranscript` (`web/app/api/sessions/webhook/route.ts`; `web/lib/session-after.ts`). |
 
@@ -240,7 +239,7 @@ Deployment has two worker targets: the LiveKit Cloud agent and the Docker servic
 
 | Layer | Existing coverage |
 | --- | --- |
-| Python `agent/tests` | `test_agent_env.py`: required env, inactivity gate, latency logs, completion transcript. `test_minutes_limit.py`: deadline parsing, clamping, goodbye threshold and kind. `test_session.py`: session options and Sarvam speaker. `test_recording.py`, `test_webhook.py`: recording key and webhook secret/delivery. `test_voxcpm2_tts.py`, `test_sentence_flush.py`: speech adapter/fallback and idle flush. `test_screen_feedback_runtime.py`, `test_tools.py`, `test_usage.py`: observer, older tool helpers and usage. |
+| Python `agent/tests` | `test_agent_env.py`: required env, inactivity gate, latency logs, completion transcript. `test_minutes_limit.py`: deadline parsing, clamping, goodbye threshold and kind. `test_session.py`: VoxCPM2 builder. `test_recording.py`, `test_webhook.py`: recording key and webhook secret/delivery. `test_voxcpm2_tts.py`, `test_sentence_flush.py`: speech adapter/fallback and idle flush. `test_screen_feedback_runtime.py`, `test_tools.py`, `test_usage.py`: observer, older tool helpers and usage. |
 | Chat unit / mocked integration | `chat/tests/agent/lib/session-mode.test.ts`: mode precedence, prompt isolation, calibration events, byte-identical interview golden fixture. `twin.test.ts`: twin classification, skill names, single-skill advisor and decline boundary; `session-mode.test.ts` also checks inline prompt composition. `playbook.test.ts`, `roleplay.test.ts`, `agent-tools.test.ts`: legacy/client prompts and workspace switches. `chat/tests/agent/openai-compat.test.ts`, `model.test.ts`: bridge output and model configuration. `instructions.test.ts`, `instrumentation.test.ts`, `usage.test.ts`: instruction/tracing/usage behavior. |
 | Interview brain units | `chat/tests/agent/lib/{session-plan,plan-turn-block,mcq-state,resume-candidates,question-bridge,project-knowledge,style-cache}.test.ts`. Additional colocated tests exist under `chat/agent/`; `chat/package.json`'s `test` script only targets `tests/`. |
 | Web boundary unit / API | `web/tests/lib/livekit.test.ts`, `minutes-livekit.test.ts`: dispatch configuration and deadline inputs. `scenario-item-versions.test.ts`, `scenario-step-index.test.ts`: version/filter rules. `web/tests/api/session-webhook.test.ts`: authenticated completion and transcript behavior. |

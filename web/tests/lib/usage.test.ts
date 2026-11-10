@@ -51,7 +51,7 @@ const snapshot = (seq: number, stt: number, chars: number) => ({
   kind: "snapshot" as const, source: "voice_agent" as const, sessionId: "s1", streamId: "job1", seq,
   totals: [
     { provider: "Deepgram", model: "flux-general-en", metric: "stt_seconds" as const, value: stt },
-    { provider: "Sarvam", model: "bulbul:v3", metric: "tts_characters" as const, value: chars },
+    { provider: "voxcpm2", model: "voxcpm2", metric: "tts_characters" as const, value: chars },
   ],
 });
 
