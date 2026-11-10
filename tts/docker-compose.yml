@@ -3,12 +3,15 @@ services:
   # Cold start ~60s (model load + torch.compile + CUDA-graph warmup).
   tts-backend:
     image: vllm/vllm-omni:v0.28.0
+    restart: unless-stopped
     command: >
       vllm serve openbmb/VoxCPM2 --omni
       --host 0.0.0.0 --port 8001
       --deploy-config /srv/tts/deploy/voxcpm2.yaml
+      --revision ${VOXCPM_MODEL_REVISION:-7936080b41163874f38610f46f438e2c0757f9fd}
     volumes:
       - ./deploy:/srv/tts/deploy:ro
+      - ${TTS_PROFILE_SOURCE:-./voices}:/srv/tts/voices:ro
       - hf-cache:/root/.cache/huggingface   # weights survive restarts (~5 GB)
     environment:
       - HF_TOKEN=${HF_TOKEN:-}              # only if the model needs auth
@@ -28,7 +31,8 @@ services:
 
   # Voice resolution + auth proxy — the OpenAI-compatible endpoint clients use.
   tts-proxy:
-    image: devopsfl/tts-voxcpm2:0.2.2
+    image: devopsfl/tts-voxcpm2:0.3.0
+    restart: unless-stopped
     build: .  # local development; production pulls the image above
     ports:
       - "8000:8000"
@@ -36,10 +40,14 @@ services:
       - APP_BASE_URL=${APP_BASE_URL}
       - APP_API_KEY=${APP_API_KEY}
       - TTS_BACKEND_URL=http://tts-backend:8001
-      - TTS_API_KEY=${TTS_API_KEY:-}
+      - TTS_API_KEY=${TTS_API_KEY:?Set a strong TTS_API_KEY for the public proxy}
+      - TTS_CUSTOM_VOICE_DIR=/srv/tts/voices
+      - VOXCPM_MODEL_REVISION=${VOXCPM_MODEL_REVISION:-7936080b41163874f38610f46f438e2c0757f9fd}
+    volumes:
+      - ${TTS_PROFILE_SOURCE:-./voices}:/srv/tts/voices:ro
     depends_on:
       tts-backend:
-        condition: service_started
+        condition: service_healthy
 
 volumes:
   hf-cache:

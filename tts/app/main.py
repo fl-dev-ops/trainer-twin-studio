@@ -6,6 +6,7 @@ import re
 import struct
 from contextlib import asynccontextmanager, suppress
 
+import anyio
 import httpx
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import JSONResponse, Response, StreamingResponse
@@ -17,7 +18,11 @@ from .chunking import chunk_text
 from .profiles import VoiceProfiles
 from .voices import AppUnreachable, VoiceNotFound, VoiceStore, client
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+# vLLM's server drops idle keep-alives after 5 s; expiring ours first avoids reusing a
+# connection the server is closing (RemoteProtocolError -> spurious 502/unready).
+BACKEND_LIMITS = httpx.Limits(max_connections=64, max_keepalive_connections=16, keepalive_expiry=2.0)
 store: VoiceStore | None = None
 backend: httpx.AsyncClient | None = None
 profiles = VoiceProfiles("", config.VOXCPM_MODEL, config.VOXCPM_MODEL_REVISION)
@@ -67,12 +72,19 @@ def _chunk_payload(req: SpeechRequest, meta: dict, chunk: str, stream: bool) -> 
     return payload
 
 
+async def _close_audio(upstream):
+    with anyio.CancelScope(shield=True):
+        await upstream.aclose()
+
+
 async def _open_audio(payload: dict):
     upstream = None
     try:
         upstream = await backend.send(backend.build_request("POST", "/v1/audio/speech", json=payload), stream=True)
         if upstream.status_code != 200:
             raise HTTPException(status_code=502, detail="TTS backend rejected synthesis")
+        if upstream.headers.get("content-type", "").split(";")[0].lower() not in ("audio/pcm", "application/octet-stream"):
+            raise HTTPException(status_code=502, detail="TTS backend returned invalid audio")
         iterator = upstream.aiter_bytes()
         first = await anext(iterator, b"")
         if not first:
@@ -80,7 +92,7 @@ async def _open_audio(payload: dict):
         return upstream, iterator, first
     except BaseException as cause:
         if upstream is not None:
-            await upstream.aclose()
+            await _close_audio(upstream)
         if isinstance(cause, httpx.TimeoutException):
             raise HTTPException(status_code=504, detail="TTS backend timed out") from cause
         if isinstance(cause, httpx.HTTPError):
@@ -118,7 +130,7 @@ async def _warm_backend() -> None:
         except VoiceNotFound:
             continue  # Deleted application voices must not be resurrected from model profiles.
         for concurrency in config.TTS_WARMUP_CONCURRENCY:
-            async def warm_one(index):
+            async def warm_one(index, voice_id=voice_id, meta=meta):
                 req = SpeechRequest(voice=voice_id, input=warm_texts[index % 2], stream=True)
                 upstream, iterator, first = await _open_audio(build_payload(req, meta))
                 try:
@@ -128,7 +140,7 @@ async def _warm_backend() -> None:
                     if size % 2:
                         raise RuntimeError("Warmup returned malformed PCM")
                 finally:
-                    await upstream.aclose()
+                    await _close_audio(upstream)
             results = await asyncio.gather(*(warm_one(i) for i in range(concurrency)), return_exceptions=True)
             if any(isinstance(result, BaseException) for result in results):
                 raise RuntimeError("Backend warmup failed")
@@ -137,14 +149,26 @@ async def _warm_backend() -> None:
     logger.info("TTS profiles and batch sizes warmed; backend ready")
 
 
-async def _monitor_backend() -> None:
+_CHECK_ERRORS = (httpx.HTTPError, ValueError, RuntimeError, KeyError, AppUnreachable)
+
+
+async def _check_backend() -> None:
     global ready, backend_epoch
-    while True:
+    try:
+        await _warm_backend()
+    except _CHECK_ERRORS:
         try:
+            # One immediate retry: a single transient probe failure must not drop a warm server.
+            await asyncio.sleep(0.5)
             await _warm_backend()
-        except Exception as cause:
+        except _CHECK_ERRORS as cause:
             ready, backend_epoch = False, None
             logger.warning("TTS not ready: %s", type(cause).__name__)
+
+
+async def _monitor_backend() -> None:
+    while True:
+        await _check_backend()
         await asyncio.sleep(5)
 
 
@@ -154,7 +178,7 @@ async def lifespan(app: FastAPI):
     ready, backend_epoch = False, None
     profiles = VoiceProfiles(config.TTS_CUSTOM_VOICE_DIR, config.VOXCPM_MODEL, config.VOXCPM_MODEL_REVISION)
     app_http = client()
-    backend = httpx.AsyncClient(base_url=config.TTS_BACKEND_URL,
+    backend = httpx.AsyncClient(base_url=config.TTS_BACKEND_URL, limits=BACKEND_LIMITS,
                                timeout=httpx.Timeout(config.TTS_BACKEND_TIMEOUT_SECONDS, connect=10, pool=30))
     store = VoiceStore(app_http)
     monitor = asyncio.create_task(_monitor_backend())
@@ -204,15 +228,21 @@ async def speech(req: SpeechRequest, authorization: str | None = Header(None)):
         async def pcm_stream():
             current = upstream
             try:
+                size = len(first)
                 yield first
                 async for piece in iterator:
+                    size += len(piece)
                     yield piece
                 for chunk in chunks[1:]:
-                    await current.aclose()
+                    await _close_audio(current)
                     current, pieces, initial = await _open_audio(_chunk_payload(req, meta, chunk, True))
+                    size += len(initial)
                     yield initial
                     async for piece in pieces:
+                        size += len(piece)
                         yield piece
+                if size % 2:
+                    raise RuntimeError("Malformed PCM stream")
             except asyncio.CancelledError:
                 raise
             except Exception as cause:
@@ -220,11 +250,11 @@ async def speech(req: SpeechRequest, authorization: str | None = Header(None)):
                 # A failed partial stream must terminate abnormally, never look like a completed clip.
                 raise RuntimeError("TTS stream interrupted") from cause
             finally:
-                await current.aclose()
+                await _close_audio(current)
 
         return StreamingResponse(pcm_stream(), media_type="audio/pcm",
                                  headers={**headers, "X-Accel-Buffering": "no"},
-                                 background=BackgroundTask(upstream.aclose))
+                                 background=BackgroundTask(_close_audio, upstream))
     pcm = bytearray()
     for chunk in chunks:
         upstream, pieces, first = await _open_audio(_chunk_payload(req, meta, chunk, False))
@@ -237,7 +267,7 @@ async def speech(req: SpeechRequest, authorization: str | None = Header(None)):
         except httpx.HTTPError as cause:
             raise HTTPException(status_code=502, detail="TTS backend unavailable") from cause
         finally:
-            await upstream.aclose()
+            await _close_audio(upstream)
     if len(pcm) % 2:
         raise HTTPException(status_code=502, detail="TTS backend returned malformed PCM")
     if req.response_format == "wav":

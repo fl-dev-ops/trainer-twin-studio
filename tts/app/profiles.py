@@ -23,6 +23,8 @@ class VoiceProfiles:
         if manifest.stat().st_size > 1024 * 1024:
             raise ValueError("Voice profile manifest exceeds 1 MiB")
         data = json.loads(manifest.read_text())
+        if not isinstance(data, dict):
+            raise ValueError("Voice profile manifest must be an object")
         if (data.get("schema_version") != 1 or data.get("model_type") != "voxcpm2"
                 or data.get("model") != model or data.get("model_revision") != revision):
             raise ValueError("Voice profiles do not match the configured model/revision")
@@ -30,11 +32,15 @@ class VoiceProfiles:
         if not isinstance(voices, dict):
             raise ValueError("Voice profile manifest must contain a voices object")
         for name, entry in voices.items():
+            if not isinstance(entry, dict):
+                raise ValueError("Invalid voice profile entry")
             voice_id, version = entry.get("tts_voice_id"), entry.get("tts_voice_version")
             if not isinstance(voice_id, str) or not voice_id or not isinstance(version, str) or not version:
                 raise ValueError("Voice profiles require a voice ID and version")
             if name != profile_name(voice_id, version, revision) or entry.get("name") != name:
                 raise ValueError("Invalid versioned voice profile name")
+            if not isinstance(entry.get("file"), str):
+                raise ValueError("Missing voice profile file")
             path = (root / entry["file"]).resolve()
             if not path.is_relative_to(root) or path.suffix != ".safetensors" or not path.is_file():
                 raise ValueError("Voice profile file is missing or outside the profile directory")

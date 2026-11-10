@@ -1,3 +1,6 @@
 .env
 __pycache__/
-scripts/
+scripts/*
+!scripts/build_voice_profiles.py
+!scripts/benchmark_tts.py
+voices/
