@@ -2,8 +2,6 @@
 
 import os
 
-import os as _os
-
 
 def _int(name: str, default: int) -> int:
     return int(os.environ.get(name, default))
@@ -19,10 +17,14 @@ APP_BASE_URL = os.environ["APP_BASE_URL"].rstrip("/")     # e.g. http://localhos
 APP_API_KEY = os.environ["APP_API_KEY"]                    # shared secret, sent as Bearer
 
 # vLLM-Omni backend serving VoxCPM2 (`vllm serve openbmb/VoxCPM2 --omni`).
-TTS_BACKEND_URL = _os.environ.get("TTS_BACKEND_URL", "http://localhost:8001").rstrip("/")
+TTS_BACKEND_URL = os.environ.get("TTS_BACKEND_URL", "http://localhost:8001").rstrip("/")
+TTS_CUSTOM_VOICE_DIR = os.environ.get("TTS_CUSTOM_VOICE_DIR", "")
+TTS_BACKEND_TIMEOUT_SECONDS = _float("TTS_BACKEND_TIMEOUT_SECONDS", 90.0)
+TTS_WARMUP_CONCURRENCY = (1, 2, 4, 8, 10)
 
 VOXCPM_MODEL_ID = os.environ.get("VOXCPM_MODEL_ID", "voxcpm2")   # advertised to clients
 VOXCPM_MODEL = os.environ.get("VOXCPM_MODEL", "openbmb/VoxCPM2")  # name the backend knows
+VOXCPM_MODEL_REVISION = os.environ.get("VOXCPM_MODEL_REVISION", "7936080b41163874f38610f46f438e2c0757f9fd")
 
 # VoxCPM2 emits 48 kHz mono s16le PCM when streaming
 SAMPLE_RATE = _int("TTS_SAMPLE_RATE", 48000)

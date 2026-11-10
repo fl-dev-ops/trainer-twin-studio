@@ -1,17 +1,5 @@
-"""Voice reference resolution.
-
-Voice identity lives in the Next.js app (Prisma), not in storage names —
-so two users naming a voice the same thing can never collide. This service
-only knows opaque voice IDs and asks the app to resolve them:
-
-    GET {APP_BASE_URL}/api/tts/voices/{voiceId}      Bearer APP_API_KEY
-    <- {"id","name","version","audioUrl","transcript"}
-
-`audioUrl` is a short-lived presigned S3 URL, passed straight through to
-vLLM-Omni as `ref_audio` (it accepts HTTP URLs and caches them itself).
-New or updated voices are picked up on the next request — no restarts.
-"""
-
+"""Resolve versioned voice references through the authenticated app API."""
+import asyncio
 import logging
 import time
 from typing import Any
@@ -40,68 +28,74 @@ def client() -> httpx.AsyncClient:
 
 
 class VoiceStore:
-    """Resolve voice IDs to (presigned URL, transcript) via the app server.
-
-    Caches resolved voice metadata in-memory for `cache_ttl` seconds (default 5m).
-    This serves two latency goals:
-      1. Drops the 200–600ms Next.js HTTP/DB hop to 0ms on warm turns.
-      2. Keeps the `ref_audio` URL string stable across turns so vLLM's internal
-         audio decoding cache hits instead of re-downloading from S3.
-    """
-
     def __init__(self, http: httpx.AsyncClient, cache_ttl: float | None = None):
         self.http = http
-        self.cache_ttl = cache_ttl if cache_ttl is not None else getattr(config, "VOICE_CACHE_TTL_SECONDS", 300.0)
+        self.cache_ttl = cache_ttl if cache_ttl is not None else config.VOICE_CACHE_TTL_SECONDS
         self._cache: dict[str, tuple[float, dict[str, Any]]] = {}
+        self._pending: dict[str, asyncio.Task] = {}
 
     async def resolve(self, voice_id: str) -> dict:
-        """Return {"audioUrl": ..., "transcript": ...|None} for this voice."""
-        now = time.monotonic()
         cached = self._cache.get(voice_id)
-        if cached is not None:
-            expires_at, meta = cached
-            if expires_at > now:
-                logger.debug("voice cache hit voice_id=%s (expires in %.1fs)", voice_id, expires_at - now)
-                return meta
-            logger.debug("voice cache expired voice_id=%s", voice_id)
+        if cached and cached[0] > time.monotonic():
+            return cached[1]
+        task = self._pending.get(voice_id)
+        if task is None:
+            task = asyncio.create_task(self._fetch(voice_id))
+            self._pending[voice_id] = task
 
+            def finished(done):
+                self._pending.pop(voice_id, None)
+                if not done.cancelled():
+                    done.exception()  # Observe failures even if every waiting caller disconnected.
+
+            task.add_done_callback(finished)
+        return await asyncio.shield(task)
+
+    async def _fetch(self, voice_id: str) -> dict:
         try:
             response = await self.http.get(f"/api/tts/voices/{voice_id}")
         except httpx.HTTPError as cause:
-            if cached is not None:
-                logger.warning("app server unreachable, using stale voice cache for %s: %s", voice_id, cause)
-                return cached[1]
-            raise AppUnreachable(f"app server unreachable: {cause}") from cause
-
+            raise AppUnreachable("Voice service unavailable") from cause
         if response.status_code == 404:
-            self._cache.pop(voice_id, None)
-            raise VoiceNotFound(f"unknown voice: {voice_id}")
+            self.invalidate(voice_id)
+            raise VoiceNotFound("Unknown voice")
         if response.status_code != 200:
-            if cached is not None:
-                logger.warning("app server returned %d, using stale voice cache for %s", response.status_code, voice_id)
-                return cached[1]
-            raise AppUnreachable(f"app server returned {response.status_code}")
-
-        meta = response.json()
-        if not meta.get("audioUrl"):
-            raise VoiceNotFound(f"voice {voice_id} has no reference audio")
-
-        result = {"audioUrl": meta["audioUrl"], "transcript": meta.get("transcript") or None}
+            self.invalidate(voice_id)
+            raise AppUnreachable("Voice service rejected the request")
+        try:
+            meta = response.json()
+            if not isinstance(meta, dict) or not isinstance(meta.get("audioUrl"), str):
+                raise ValueError("Missing reference URL")
+            if httpx.URL(meta["audioUrl"]).scheme not in ("http", "https"):
+                raise ValueError("Invalid reference URL")
+            if meta.get("version") is not None and not isinstance(meta["version"], str):
+                raise ValueError("Invalid voice version")
+            if meta.get("transcript") is not None and not isinstance(meta["transcript"], str):
+                raise ValueError("Invalid transcript")
+        except (ValueError, httpx.InvalidURL) as cause:
+            raise AppUnreachable("Invalid voice metadata") from cause
+        result = {"audioUrl": meta["audioUrl"], "transcript": meta.get("transcript") or None,
+                  "version": meta.get("version")}
         if self.cache_ttl > 0:
-            self._cache[voice_id] = (now + self.cache_ttl, result)
+            self._cache[voice_id] = (time.monotonic() + self.cache_ttl, result)
         return result
 
     async def list_ids(self) -> list[dict]:
         try:
             response = await self.http.get("/api/tts/voices")
             response.raise_for_status()
-        except httpx.HTTPError as cause:
-            raise AppUnreachable(f"app server unreachable: {cause}") from cause
-        return response.json().get("voices", [])
+            return response.json().get("voices", [])
+        except (httpx.HTTPError, ValueError) as cause:
+            raise AppUnreachable("Voice service unavailable") from cause
 
     def invalidate(self, voice_id: str | None = None) -> None:
-        """Invalidate a specific voice ID or all cached voices."""
         if voice_id:
             self._cache.pop(voice_id, None)
         else:
             self._cache.clear()
+
+    async def close(self) -> None:
+        tasks = list(self._pending.values())
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
