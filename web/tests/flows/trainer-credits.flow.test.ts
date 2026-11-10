@@ -1,13 +1,10 @@
 import { fundOrg } from "../setup/meteroid";
 import "./flow-env";
-import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
-import { hashPassword } from "better-auth/crypto";
-import * as nextHeaders from "next/headers";
-import { auth } from "@/lib/auth";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inviteToRoleplay } from "@/lib/invite/roleplay";
 import { creditsLeftFor } from "@/lib/minutes";
 import { minutesRouter } from "@/lib/minutes-trpc";
-import { activateInterviewRuntime } from "@/lib/session-activation";
+import { startSessionNow } from "@/lib/session-activation";
 import { twinRouter } from "@/lib/twin/trpc";
 import { db, localMinutesDb, minutesFixture } from "../lib/minutes-test-db";
 import { agentWebhook, outsideServices, practiceCode } from "./harness";
@@ -23,22 +20,14 @@ describe.skipIf(!localMinutesDb)("flow: trainer gives learners credits → learn
   const second = `second-${f.learner.email}`;
   const twinEmail = `twin-${f.learner.email}`;
   const rows = () => db.minuteLedger.findMany({ where: { orgId: f.org.id }, orderBy: { id: "asc" } });
-  let headers: ReturnType<typeof spyOn<typeof nextHeaders, "headers">>;
   let code = "";
 
   beforeAll(async () => {
     outside.start();
     await f.create();
-    const password = "flow-credits-password";
-    await db.account.create({ data: { id: `${f.trainer.id}-credential`, accountId: f.trainer.id, providerId: "credential", userId: f.trainer.id, password: await hashPassword(password) } });
-    // A real Better Auth session: invitations, hooks and emails are not mocked. Only Next's request context is supplied.
-    const signedIn = await auth.api.signInEmail({ body: { email: f.trainer.email, password }, returnHeaders: true });
-    const cookie = signedIn.headers.getSetCookie().map((value) => value.split(";")[0]).join("; ");
-    expect(cookie).not.toBe("");
-    headers = spyOn(nextHeaders, "headers").mockResolvedValue(new Headers({ cookie }));
+    // Learner invites now write invitations directly; no Better Auth request headers are needed.
   });
   afterAll(async () => {
-    headers?.mockRestore();
     await f.clean();
     outside.stop();
   });
@@ -50,7 +39,7 @@ describe.skipIf(!localMinutesDb)("flow: trainer gives learners credits → learn
   });
 
   test("2. invite two new learners with 45 each, creating invitations and sending real captured emails", async () => {
-    expect(await api.invite({ emails: [first, second], minutes: 45 })).toEqual({ invited: 2, failed: [] });
+    expect(await api.invite({ emails: [first, second], minutes: 45 })).toMatchObject({ invited: 2, failed: [] });
     expect(await db.invitation.findMany({ where: { organizationId: f.org.id }, select: { email: true, role: true, status: true } })).toEqual(expect.arrayContaining([
       { email: first, role: "user", status: "pending" }, { email: second, role: "user", status: "pending" },
     ]));
@@ -119,7 +108,8 @@ describe.skipIf(!localMinutesDb)("flow: trainer gives learners credits → learn
       expect(row).toMatchObject({ givenMinutes: expected.get(row.email), usedMinutes: 0, leftMinutes: expected.get(row.email) });
       expect(left.get(row.email)).toEqual({ left: row.leftMinutes, given: row.givenMinutes });
     }
-    const call = await activateInterviewRuntime({ orgId: f.org.id, userId: f.learner.id, userEmail: f.learner.email, shareCode: code, mode: "voice" });
+    const call = await startSessionNow({ orgId: f.org.id, userId: f.learner.id, userEmail: f.learner.email, shareCode: code, mode: "voice" });
+    if (!call.ok) throw new Error(call.error);
     expect(call?.session.secondsLeft).toBe(2400);
     expect(outside.livekit).toContain("CreateDispatch");
     expect(outside.chatSessions).toContain(call!.session.id);

@@ -44,7 +44,8 @@ describe.skipIf(!localMinutesDb)("v1 assignment email minutes (local database)",
       { email: to, seconds: 1800, actorUserId: f.trainer.id },
     ]);
     expect(assignmentEmail).toHaveBeenCalledTimes(1);
-    expect(assignmentEmail).toHaveBeenCalledWith(expect.objectContaining({ to, minutes: 30 }));
+    const assignment = await db.rolePlayAssignment.findFirstOrThrow({ where: { orgId: f.org.id, recipientEmail: to } });
+    expect(assignmentEmail).toHaveBeenCalledWith(expect.objectContaining({ to, minutes: 30, idempotencyKey: `assignment:${assignment.id}:${assignment.shareCode}` }));
   });
 
   test.each([
@@ -81,7 +82,8 @@ describe.skipIf(!localMinutesDb)("v1 assignment email minutes (local database)",
       { seconds: 1800, actorUserId: f.trainer.id, note: "Starting minutes" },
     ]);
     expect(assignmentEmail).toHaveBeenCalledTimes(1);
-    expect(assignmentEmail).toHaveBeenCalledWith(expect.objectContaining({ to, minutes: 30 }));
+    const assignment = await db.rolePlayAssignment.findFirstOrThrow({ where: { orgId: f.org.id, recipientEmail: to } });
+    expect(assignmentEmail).toHaveBeenCalledWith(expect.objectContaining({ to, minutes: 30, idempotencyKey: `assignment:${assignment.id}:${assignment.shareCode}` }));
   });
 
   test("PATCH with short org balance returns 409, preserving the entire assignment and ledger without email", async () => {

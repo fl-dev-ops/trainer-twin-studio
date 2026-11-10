@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createPaymentLinkPurchase } from "@/lib/credit-purchases";
 import { learnerBalance } from "@/lib/minutes";
 import { inviteToRoleplay } from "@/lib/invite/roleplay";
-import { activateInterviewRuntime } from "@/lib/session-activation";
+import { startSessionNow } from "@/lib/session-activation";
 import { db, localMinutesDb, minutesFixture } from "../lib/minutes-test-db";
 import { agentWebhook, outsideServices, practiceCode, razorpayWebhook } from "./harness";
 
@@ -60,8 +60,9 @@ describe.skipIf(!localMinutesDb)("flow: buy credits → assign → practise → 
   });
 
   test("3. the learner starts the call with 10 minutes on the clock; a reload rejoins the same call", async () => {
-    const start = () => activateInterviewRuntime({ orgId: f.org.id, userId: f.learner.id, userEmail: f.learner.email, shareCode: code, mode: "voice" });
+    const start = () => startSessionNow({ orgId: f.org.id, userId: f.learner.id, userEmail: f.learner.email, shareCode: code, mode: "voice" });
     const first = await start();
+    if (!first.ok) throw new Error(first.error);
     expect(first?.session.status).toBe("active");
     expect(first?.session.secondsLeft).toBe(600);
     expect(outside.livekit).toContain("CreateDispatch");
@@ -69,6 +70,7 @@ describe.skipIf(!localMinutesDb)("flow: buy credits → assign → practise → 
     firstSession = first!.session.id;
 
     const again = await start();
+    if (!again.ok) throw new Error(again.error);
     expect(again?.session.id).toBe(firstSession);
   });
 
@@ -83,7 +85,8 @@ describe.skipIf(!localMinutesDb)("flow: buy credits → assign → practise → 
   });
 
   test("5. the same link starts a new call, with the 7 minutes left", async () => {
-    const second = await activateInterviewRuntime({ orgId: f.org.id, userId: f.learner.id, userEmail: f.learner.email, shareCode: code, mode: "voice" });
+    const second = await startSessionNow({ orgId: f.org.id, userId: f.learner.id, userEmail: f.learner.email, shareCode: code, mode: "voice" });
+    if (!second.ok) throw new Error(second.error);
     expect(second?.session.id).not.toBe(firstSession);
     expect(second?.session.secondsLeft).toBeGreaterThan(400);
     expect(second?.session.secondsLeft).toBeLessThanOrEqual(420);

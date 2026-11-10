@@ -6,11 +6,12 @@ const sends: string[] = [];
 const refreshes: unknown[][] = [];
 const sleeps: string[] = [];
 mock.module("workflow", () => ({ sleep: async (duration: string) => { sleeps.push(duration); } }));
-mock.module("@/workflows/org-credits-steps", () => ({
+mock.module("@/workflows/steps/org-credits", () => ({
   sendUsage: async (orgId: string) => { sends.push(orgId); return sentAt; },
   refresh: async (...args: unknown[]) => { refreshes.push(args); return refreshes.length >= countedAfter; },
 }));
-const { reportOrgUsage, syncOrgCredits } = await import("@/workflows/org-credits");
+const { reportOrgUsage } = await import("@/workflows/report-org-usage");
+const { syncOrgCredits } = await import("@/workflows/sync-org-credits");
 beforeEach(() => { sends.length = refreshes.length = sleeps.length = 0; countedAfter = 3; sentAt = "2026-01-01T00:00:00.000Z"; });
 
 test("reportOrgUsage sends once and polls every 3s until counted", async () => {

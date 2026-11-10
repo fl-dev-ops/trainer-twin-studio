@@ -6,6 +6,7 @@ export const grants = new Map<string, Record<string, unknown>[]>();
 export const grantRequests: { customer: string; key: string | null; body: Record<string, unknown> }[] = [];
 export const usageEvents: Record<string, unknown>[] = [];
 const keys = new Map<string, Record<string, unknown>>();
+const keyBodies = new Map<string, string>();
 export const meteroidHandlers = [
   http.get("https://meteroid.test/api/v1/customers/:id/wallets/check", ({ params, request }) => {
     if (request.headers.get("authorization") !== "Bearer test-meteroid-key") return new HttpResponse(null, { status: 401 });
@@ -18,13 +19,16 @@ export const meteroidHandlers = [
     const body = await request.json() as Record<string, unknown>;
     const key = request.headers.get("idempotency-key");
     grantRequests.push({ customer, key, body });
-    if (key && keys.has(key)) return HttpResponse.json(keys.get(key)!);
+    if (key && keys.has(key)) {
+      if (keyBodies.get(key) !== JSON.stringify(body)) return HttpResponse.json({ error: "Idempotency key reused with different body" }, { status: 409 });
+      return HttpResponse.json(keys.get(key)!);
+    }
     const grant = { id: `grant_${grantRequests.length}`, status: "ACTIVE", created_at: new Date().toISOString(), ...body };
     const wallet = wallets.get(customer);
     if (!wallet) return new HttpResponse(null, { status: 404 });
     wallet.balance += Number(body.amount);
     grants.set(customer, [...(grants.get(customer) ?? []), grant]);
-    if (key) keys.set(key, grant);
+    if (key) { keys.set(key, grant); keyBodies.set(key, JSON.stringify(body)); }
     return HttpResponse.json(grant);
   }),
   http.post("https://meteroid.test/api/v1/events/ingest", async ({ request }) => {

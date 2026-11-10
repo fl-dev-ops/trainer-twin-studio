@@ -54,7 +54,7 @@ export function minutesFixture() {
 }
 export type MinutesFixture = ReturnType<typeof minutesFixture>;
 
-const meteroidServer = setupServer(...meteroidHandlers);
+export const meteroidServer = setupServer(...meteroidHandlers);
 const unexpectedMeteroid: string[] = [];
 meteroidServer.events.on("request:unhandled", ({ request }) => { if (request.url.includes("meteroid")) unexpectedMeteroid.push(request.url); });
 beforeAll(() => meteroidServer.listen({ onUnhandledRequest: "bypass" }));

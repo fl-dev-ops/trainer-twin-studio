@@ -26,9 +26,9 @@ describe.skipIf(!localMinutesDb)("learner pages with minutes (local database)", 
   });
   afterEach(async () => { headers?.mockRestore(); identity?.mockRestore(); await f.clean(); });
   const balance = async (seconds: number) => {
-    await fundOrg({ orgId: f.org.id, minutes: 2, note: "test" });
-    await grantMinutes({ orgId: f.org.id, email: f.learner.email, minutes: 2 });
-    const session = await f.session({ allowedSeconds: 120, endedAt: new Date(new Date("2026-01-01T00:00:00Z").getTime() + (120 - seconds) * 1000) });
+    await fundOrg({ orgId: f.org.id, minutes: 10, note: "test" });
+    await grantMinutes({ orgId: f.org.id, email: f.learner.email, minutes: 10 });
+    const session = await f.session({ allowedSeconds: 600, endedAt: new Date(new Date("2026-01-01T00:00:00Z").getTime() + (600 - seconds) * 1000) });
     await recordSessionUsage(session.id);
   };
 
@@ -38,15 +38,15 @@ describe.skipIf(!localMinutesDb)("learner pages with minutes (local database)", 
     { status: "used", pastStatus: "abandoned" },
     { status: "used", pastStatus: "failed" },
   ])("loadSharedSession opens a past-date $status link after a $pastStatus session", async ({ status, pastStatus }) => {
-    await balance(120);
+    await balance(600);
     const assignment = await db.rolePlayAssignment.update({ where: { shareCode: code }, data: { status, expiresAt: new Date(0) } });
     await f.session({ assignmentId: assignment.id, status: pastStatus, startedAt: new Date(0), endedAt: new Date(0) });
-    expect(await loadSharedSession(code)).toMatchObject({ kind: "session", props: { sessionCode: code, minutesLeft: 2 } });
+    expect(await loadSharedSession(code)).toMatchObject({ kind: "session", props: { sessionCode: code, minutesLeft: 10 } });
     expect(await db.rolePlayAssignment.findUniqueOrThrow({ where: { id: assignment.id } })).toMatchObject({ status, expiresAt: new Date(0) });
   });
 
   test.each(["cancelled", "expired"])("loadSharedSession rejects %s status despite available minutes", async (status) => {
-    await balance(120);
+    await balance(600);
     await db.rolePlayAssignment.update({ where: { shareCode: code }, data: { status } });
     expect(await loadSharedSession(code)).toEqual({ kind: "invalid" });
   });
@@ -66,7 +66,7 @@ describe.skipIf(!localMinutesDb)("learner pages with minutes (local database)", 
     await balance(0);
     const assignment = await db.rolePlayAssignment.update({ where: { shareCode: code }, data: { status: "used", expiresAt: new Date(0) } });
     await f.session({ assignmentId: assignment.id, startedAt: new Date(0), endedAt: new Date(0) });
-    expect(await loadSharedSession(code)).toEqual({ kind: "outOfMinutes", email: f.learner.email });
+    expect(await loadSharedSession(code)).toEqual({ kind: "outOfMinutes", email: f.learner.email, minutesLeft: 0 });
   });
 
   test("loadOrgHome lists pending and used role plays regardless of practice history or expiry date", async () => {
@@ -103,12 +103,12 @@ describe.skipIf(!localMinutesDb)("learner pages with minutes (local database)", 
     expect((await db.rolePlayAssignment.findUniqueOrThrow({ where: { id: assignment.id } })).status).toBe("pending");
   });
 
-  test.each([0, 59])("shared session shows outOfMinutes with %s seconds left", async (seconds) => {
+  test.each([0, 59, 60, 119, 120, 180, 299])("shared session shows outOfMinutes with %s seconds left", async (seconds) => {
     await balance(seconds);
-    expect(await loadSharedSession(code)).toEqual({ kind: "outOfMinutes", email: f.learner.email });
+    expect(await loadSharedSession(code)).toEqual({ kind: "outOfMinutes", email: f.learner.email, minutesLeft: Math.max(0, Math.floor(seconds / 60)) });
   });
 
-  test.each([60, 119, 120])("shared session passes floored minutesLeft with %s seconds left", async (seconds) => {
+  test.each([300, 359, 600])("shared session passes floored minutesLeft with %s seconds left", async (seconds) => {
     await balance(seconds);
     expect(await loadSharedSession(code)).toMatchObject({ kind: "session", props: { minutesLeft: Math.floor(seconds / 60) } });
   });
@@ -126,7 +126,7 @@ describe.skipIf(!localMinutesDb)("learner pages with minutes (local database)", 
     await db.twinAssignment.create({ data: { orgId: f.org.id, agentId: f.twin.id, recipientEmail: f.learner.email, minutesLimit: 999, shareCode: `${code}-twin` } });
     expect(await loadTwinLink("twin")).toMatchObject({ kind: "flow", props: { access: { ok: false, reason: "used" } } });
     await balance(119);
-    expect(await loadTwinLink("twin")).toMatchObject({ kind: "flow", props: { access: { ok: true, preview: false, minutesLeft: 1, minutesTotal: 2 } } });
+    expect(await loadTwinLink("twin")).toMatchObject({ kind: "flow", props: { access: { ok: true, preview: false, minutesLeft: 1, minutesTotal: 10 } } });
   });
 
   test("Users page shares the same floored learner balance across modules", async () => {
@@ -145,6 +145,15 @@ describe.skipIf(!localMinutesDb)("learner pages with minutes (local database)", 
     expect(await db.member.count({ where: { organizationId: f.org.id, userId: f.learner.id } })).toBe(2);
     const rows = await listUsers(f.org.id);
     expect(rows.find((row) => row.email === f.learner.email)).toMatchObject({ minutesLeft: null });
+  });
+
+  test.each([299, 300])("assigned twin shared link enforces the five-minute boundary (%s seconds)", async (seconds) => {
+    const shareCode = `${code}-twin`;
+    await db.twinAssignment.create({ data: { orgId: f.org.id, agentId: f.twin.id, recipientEmail: f.learner.email, minutesLimit: 30, shareCode } });
+    await balance(seconds);
+    expect(await loadSharedSession(shareCode)).toMatchObject(seconds < 300
+      ? { kind: "outOfMinutes", minutesLeft: 4, email: f.learner.email }
+      : { kind: "session", props: { minutesLeft: 5 } });
   });
 
   test("a new common-link visitor can reach the session before starting minutes are granted", async () => {

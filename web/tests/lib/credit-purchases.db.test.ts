@@ -22,12 +22,16 @@ describe.skipIf(!localMinutesDb)("Meteroid credit purchases (local database)", (
     const before = Date.now();
     expect(await paid(purchase.razorpayId!)).toEqual({ credits: 100, duplicate: false });
     const row = await db.creditPurchase.findUniqueOrThrow({ where: { id: purchase.id } });
-    expect(row).toMatchObject({ status: "paid", paymentId: `pay_${f.org.id}`, paidAt: expect.any(Date) });
+    expect(row.paidAt).toBeInstanceOf(Date);
+    expect(row).toMatchObject({ status: "paid", paymentId: `pay_${f.org.id}` });
     const request = grantRequests.at(-1)!;
     expect(request).toMatchObject({ customer: `customer_${f.org.id}`, key: `razorpay:pay_${f.org.id}`, body: { type: "PAID", credit_unit: "MINS", amount: 100, reference: `pay_${f.org.id}`, reason: `Paid ₹800 · Razorpay ${purchase.razorpayId}` } });
-    expect(new Date(String(request.body.expires_at)).getTime()).toBeGreaterThanOrEqual(before + 365 * 86_400_000);
+    expect(new Date(String(request.body.expires_at)).getTime()).toBe(row.paidAt!.getTime() + 365 * 86_400_000);
+    expect(row.paidAt!.getTime()).toBeGreaterThanOrEqual(before);
     expect(new Date(String(request.body.expires_at)).getTime()).toBeLessThanOrEqual(Date.now() + 365 * 86_400_000);
+    await new Promise((resolve) => setTimeout(resolve, 5));
     expect(await paid(purchase.razorpayId!)).toEqual({ credits: 100, duplicate: true });
+    expect(grantRequests.at(-1)).toEqual(request);
     expect(await db.creditPurchase.findUniqueOrThrow({ where: { id: purchase.id } })).toEqual(row);
     expect(history()).toHaveLength(1);
     expect(wallets.get(`customer_${f.org.id}`)?.balance).toBe(100);

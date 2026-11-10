@@ -5,7 +5,7 @@ import * as livekit from "@/lib/livekit";
 import { ensureDeployment } from "@/lib/deployments";
 import { activateSession, finalizeInterviewSession } from "@/lib/interview-sessions";
 import { grantMinutes, learnerBalance } from "@/lib/minutes";
-import { activateInterviewRuntime } from "@/lib/session-activation";
+import { startSessionNow } from "@/lib/session-activation";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
 describe.skipIf(!localMinutesDb)("repeat role-play activation (local database)", () => {
@@ -120,7 +120,7 @@ describe.skipIf(!localMinutesDb)("repeat role-play activation (local database)",
     const usedAt = new Date("2026-01-01T00:00:00Z");
     await db.rolePlayAssignment.update({ where: { id: assignment.id }, data: { status: "used", usedAt } });
     connect.mockRejectedValue(new Error("test LiveKit start failure"));
-    await expect(activateInterviewRuntime(input())).rejects.toThrow("test LiveKit start failure");
+    await expect(startSessionNow(input())).rejects.toThrow("test LiveKit start failure");
     expect(await row()).toMatchObject({ status: expected });
     expect((await row()).usedAt === null).toBe(expected === "pending");
     const failed = await db.interviewSession.findFirstOrThrow({ where: { orgId: f.org.id, assignmentId: assignment.id }, orderBy: { createdAt: "desc" } });

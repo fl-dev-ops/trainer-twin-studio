@@ -1,5 +1,5 @@
 import { minuteGrants } from "@/lib/meteroid";
-import { fundOrg, availableOrgSeconds } from "../setup/meteroid";
+import { fundOrg, availableOrgSeconds, grantRequests } from "../setup/meteroid";
 import "./flow-env";
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { createPaymentLinkPurchase, linkInvoicePurchase } from "@/lib/credit-purchases";
@@ -167,10 +167,19 @@ describe.skipIf(!localMinutesDb)("flow: untrusted, irrelevant and repeated webho
     expect(await db.minuteLedger.count({ where: { orgId: f.org.id } })).toBe(0);
   });
 
-  test("3. three concurrent paid deliveries produce exactly one top-up", async () => {
+  test("3. concurrent and later paid deliveries reuse the identical grant body and add credits once", async () => {
     const responses = await Promise.all(Array.from({ length: 3 }, () => paid(linkId, paymentId)));
     for (const response of responses) expect(response).toMatchObject({ status: 200, body: { ok: true } });
     expect(responses.filter((response) => (response.body.result as { duplicate: boolean }).duplicate === false)).toHaveLength(1);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect((await paid(linkId, paymentId)).body).toMatchObject({ ok: true, result: { duplicate: true } });
+    const requests = grantRequests.filter((request) => request.key === `razorpay:${paymentId}`);
+    expect(requests).toHaveLength(4);
+    const purchase = await db.creditPurchase.findUniqueOrThrow({ where: { razorpayId: linkId } });
+    for (const request of requests) {
+      expect(request).toEqual(requests[0]);
+      expect(request.body.expires_at).toBe(new Date(purchase.paidAt!.getTime() + 365 * 86_400_000).toISOString());
+    }
     expect(await balance()).toBe(100);
     expect(await db.minuteLedger.count({ where: { orgId: f.org.id, type: "topup" } })).toBe(0);
   });

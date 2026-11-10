@@ -47,3 +47,10 @@ test("sendRolePlayAssignmentEmail forwards the workflow idempotency key", async 
   expect(requests).toHaveLength(1);
   expect(requests[0].key).toBe("step-roleplay");
 });
+
+test("sendInvitationEmail forwards the public API invitation idempotency key", async () => {
+  expect(await email.sendInvitationEmail({ to: "a@example.com", organizationName: "Org", inviteUrl: "https://example.com/join", idempotencyKey: "invitation:1:123" })).toMatchObject({ success: true });
+  expect(requests).toHaveLength(1);
+  expect(requests[0].key).toBe("invitation:1:123");
+  expect(requests[0].body).not.toHaveProperty("idempotencyKey");
+});

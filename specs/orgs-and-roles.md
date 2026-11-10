@@ -50,6 +50,12 @@ Lifecycles:
 
 ## How it works
 
+### Onboard an org and provision its services
+
+After validating the founder invitation, POST `/api/onboarding` consumes it and creates the org/admin in a transaction. It then awaits `runOnboarding(orgId)`: `onboard-org` creates the Chroma database, links a Meteroid customer/Credits subscription and grants a free trial of 30 minutes expiring 30 days after the org's creation. Without `METEROID_API_KEY`, billing/trial setup is skipped; the org is unbilled. Workflow startup failure runs those same parts directly. Only then does the route switch the active org and start an optional connector. Connector-start failure redirects to knowledge with a warning, rather than rolling back. (`web/app/api/onboarding/route.ts`, `web/lib/workflow-runs.ts`, `web/workflows/onboard-org.ts`, `web/workflows/steps/onboarding.ts`.)
+
+On setup failure, the route logs the error, attempts to delete Chroma, looks up OrgBilling and unlinks its Meteroid customer when present, deletes the org (cascading billing/membership), and resets the founder invitation's `acceptedAt`. Cleanup failures are caught; Meteroid unlink failure is logged. This is compensating cleanup, not an atomic transaction across services. See [Credits](credits.md) for linking, trial keys and unlink retries. (`web/lib/org-billing-setup.ts`.)
+
 ### Resolve the working org on every studio request
 
 1. `currentMembership(headers)` gets the Better Auth session. No session returns `null`. A session without membership returns `{ session, member: null }`. Source: `web/lib/org.ts` `currentMembership`.
@@ -232,6 +238,8 @@ Runtime-token session commands/lifecycle, internal shared-secret endpoints, paym
 
 ## Open questions
 
+- Chroma Cloud's current database quota (10, reported during live onboarding) blocks creation of another org until capacity is freed or increased. The onboarding route rolls back failed setup; mocks do not verify the live quota. (`web/lib/chroma-tenant.ts`, `web/app/api/onboarding/route.ts`.)
+
 1. Should “users only practise” forbid the protected overview/knowledge/voice loaders and legacy mutations, or is this intended compatibility? The plan's no-studio table disagrees with these guards. Pointers: `plans/twin-roleplay-db-split.md` §13; `web/lib/pages/router.ts`; `web/app/api/knowledge/[[...kb]]/route.ts`; `web/app/api/tts/voices/route.ts`.
 2. Must disabling block all portal reads/uploads and organization-plugin calls immediately, including cached-session and multi-org users? Central enabled filtering exists only for studio-style selection; portal identity and several direct membership checks omit it. Pointers: `web/lib/org.ts` `enabledMemberships`; `web/lib/session-user.ts`; `web/lib/upload-access.ts`; `web/lib/auth.ts` organization hooks; `web/app/api/sessions/[id]/audio/route.ts`.
 3. Should used role-play access be cancelled and creator API keys revoked on disable, or intentionally retained behind activation checks/key validity? Pointers: `web/lib/members.ts` `setMemberDisabled`; `web/lib/pages/learner.ts` `loadSharedSession`; `web/lib/external-api.ts` `requireExternalApi`.
@@ -253,3 +261,5 @@ Runtime-token session commands/lifecycle, internal shared-secret endpoints, paym
 | Python / chat | None dedicated to org membership selection/role management. Runtime behavior belongs to [Voice agent and chat](voice-agent-and-chat.md). |
 
 Most important missing checks: real two-tab fetch pin and cache isolation; invalidated-pin fallback after disable; API/Better Auth actions with cached disabled identities; used role-play/keys after disable; closure failure and retry; concurrent first membership/admin creation; branding's partial save and server/client validation difference. Sources for these boundaries are listed in *How it works* and *Edge cases and limits*. Only the four passing focused unit suites and two failing authorization suites above were run for this documentation change.
+
+Onboarding coverage: `web/tests/api/onboarding.db.test.ts` exercises the real transaction/direct fallback and MSW Meteroid: org/admin/billing/trial success, Chroma failure/reset, failure after billing with unlink, and Chroma failure with an already-created billing row. `web/tests/lib/onboard-org.test.ts` checks step order/failure and skipping trial without a customer; `onboarding-steps.test.ts` checks missing-key skip and stable creation-time forwarding. Chroma and auth request context are mocked, not live.
