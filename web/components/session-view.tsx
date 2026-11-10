@@ -61,7 +61,9 @@ import type { Entry } from "@/lib/session-transcript";
 import { cn } from "@/lib/utils";
 
 type Coverage = Record<string, string>;
-type EndReason = "completed" | "manual" | "disconnected";
+type EndReason = "completed" | "manual" | "disconnected" | "time_up";
+/** A call that ends this close to its time limit ran out of minutes (the agent ends it there), not lost its connection. */
+const TIME_UP_MARGIN_MS = 30_000;
 type WhiteboardAcknowledgement = { accepted: boolean; message?: string };
 
 const SURFACE_STATE_PUBLISH_INTERVAL_MS = 5_000;
@@ -203,6 +205,8 @@ export function SessionView({
   const releasedRef = useRef(false);
   const endingRef = useRef(false);
   const pendingEndReasonRef = useRef<EndReason>("disconnected");
+  /** When the call's minutes run out (ms since epoch), from the start's secondsLeft; null when not metered. */
+  const deadlineRef = useRef<number | null>(null);
   const entriesRef = useRef<Entry[]>([]);
   const coverageRef = useRef<Coverage>({});
   const finalizedRef = useRef(false);
@@ -304,6 +308,7 @@ export function SessionView({
       if (!launchResponse.ok || !launch.session?.id || !launch.session?.runtimeToken) {
         throw new Error(launch.error ?? "Could not create session");
       }
+      deadlineRef.current = typeof launch.session.secondsLeft === "number" ? Date.now() + launch.session.secondsLeft * 1000 : null;
       const livekitUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL;
       if (!launch.participantToken || !livekitUrl) {
         throw new Error("Voice session credentials were not returned");
@@ -317,7 +322,8 @@ export function SessionView({
         runtimeToken: launch.session.runtimeToken,
       });
     } catch (e) {
-      startedRef.current = false;
+      // startedRef stays set: the get-ready countdown calls this every second, and a refused start must not be
+      // re-sent on each tick. "Try again" (handleRetry) clears it.
       setError(e instanceof Error ? e.message : "Failed to start session");
       if (!autoStart) setLaunched(false);
     }
@@ -503,12 +509,15 @@ export function SessionView({
   );
 
   const handleDisconnect = useCallback(
-    async (reason: EndReason) => {
+    async (ended: EndReason) => {
       if (endingRef.current) return;
       endingRef.current = true;
+      // Ended at its time limit (the agent cuts the call there): the minutes ran out, the practice is complete.
+      const timeUp = ended !== "manual" && deadlineRef.current !== null && Date.now() >= deadlineRef.current - TIME_UP_MARGIN_MS;
+      const reason: EndReason = timeUp ? "time_up" : ended;
       pendingEndReasonRef.current = reason;
       try {
-        await finalizeSession(reason === "completed" ? "completed" : "abandoned");
+        await finalizeSession(reason === "completed" || reason === "time_up" ? "completed" : "abandoned");
       } catch (saveError) {
         console.error("Could not save session", saveError);
         setSaveFailed(true);
@@ -973,13 +982,22 @@ export function SessionView({
         <main className="grid min-h-0 flex-1 place-items-center overflow-y-auto p-6">
         <Card size="lg" raised className="w-full max-w-md text-center">
           {sessionCode && completedSessionId && endReason !== "disconnected" ? (
-            <SessionFeedback scenarioName={scenarioName} sessionId={completedSessionId} />
+            <>
+              {endReason === "time_up" ? (
+                <p className="m-0 px-6 pt-6 text-sm text-muted-foreground">Time&apos;s up: this call used the last of your practice minutes. Ask your trainer for more to practise again.</p>
+              ) : null}
+              <SessionFeedback scenarioName={scenarioName} sessionId={completedSessionId} />
+            </>
           ) : (
             <>
               <CardHeader>
-                <CardTitle>{endReason === "completed" ? "Session complete" : "Session ended"}</CardTitle>
+                <CardTitle>{endReason === "completed" ? "Session complete" : endReason === "time_up" ? "Time's up" : "Session ended"}</CardTitle>
                 <CardDescription>
-                  {sessionCode
+                  {endReason === "time_up"
+                    ? sessionCode
+                      ? "This call used the last of your practice minutes; it has been saved. Ask your trainer for more to practise again."
+                      : "This call used the last of your organization's credits; it has been saved. Contact TrainerTwin to add more."
+                    : sessionCode
                     ? endReason === "disconnected"
                       ? "The connection closed unexpectedly. Any captured session data has been saved. You may close this tab."
                       : "Your responses have been saved. You may close this tab."

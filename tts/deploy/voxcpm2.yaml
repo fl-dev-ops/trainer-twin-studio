@@ -3,6 +3,7 @@
 # ~13 GiB peak); the only change is the concurrency cap.
 async_chunk: false
 dtype: bfloat16
+custom_voice_dir: /srv/tts/voices
 
 stages:
   - stage_id: 0

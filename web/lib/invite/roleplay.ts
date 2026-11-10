@@ -4,14 +4,10 @@ import { contextUploadFromAgentData } from "@/lib/context-upload";
 import { db } from "@/lib/db";
 import { ensureDeployment } from "@/lib/deployments";
 import { giveStartingMinutes, learnerMinutes } from "@/lib/minutes";
-import { sendRolePlayAssignmentEmail } from "@/lib/email";
+import { queueInviteEmails } from "@/lib/schedule-invite-emails";
+import type { InviteEmail } from "@/workflows/invite-emails";
 
-/**
- * Invites learners to a role play by email (the role play's Assign page and the copilot): a new or reopened
- * assignment gets a fresh personal link and an email; a pending one is re-sent only on request. People may belong
- * to several orgs.
- */
-export async function inviteToRoleplay(input: {
+export type RoleplayAssignInput = {
   org: { id: string; slug: string };
   by: { id: string; name: string };
   agent: { id: string; name: string; data: unknown };
@@ -19,7 +15,15 @@ export async function inviteToRoleplay(input: {
   resendPending?: boolean;
   /** Credits each new person starts with (default DEFAULT_LEARNER_MINUTES); people who already have credits keep theirs. */
   startingMinutes?: number;
-}) {
+};
+
+/**
+ * Assigns a role play by email (the role play's Assign page and the copilot): new people get their starting minutes
+ * (refused with MinutesError when the org balance is short); a new or reopened assignment gets a fresh personal link;
+ * a pending one is re-sent only on request. Returns what happened and the emails to send. The assign-roleplay
+ * workflow's first step (workflows/assign-roleplay.ts). People may belong to several orgs.
+ */
+export async function assignRoleplayLearners(input: RoleplayAssignInput) {
   const emails = [...new Set(input.emails.map((email) => email.trim().toLowerCase()))];
   // New people get their starting credits (all or nothing: refused when the org balance is short).
   await giveStartingMinutes({ orgId: input.org.id, emails, minutes: input.startingMinutes, actorUserId: input.by.id });
@@ -69,18 +73,23 @@ export async function inviteToRoleplay(input: {
   const upload = contextUploadFromAgentData(input.agent.data);
   const requiredArtifact = upload.required && upload.prompt ? { label: upload.label, prompt: upload.prompt } : null;
   const balances = await learnerMinutes(input.org.id, assignmentEmails.map(({ to }) => to));
-  const deliveries = await Promise.all(
-    assignmentEmails.map(({ to, practiceUrl: url }) =>
-      sendRolePlayAssignmentEmail({
-        to,
-        rolePlayName: input.agent.name,
-        rolePlayObjective: objective,
-        practiceUrl: url,
-        trainerName: input.by.name,
-        requiredArtifact,
-        minutes: Math.floor(Math.max(0, balances.get(to)?.balanceSeconds ?? 0) / 60),
-      }),
-    ),
-  );
-  return { ...stats, emailFailures: deliveries.filter(({ success }) => !success).length };
+  const inviteEmails: InviteEmail[] = assignmentEmails.map(({ to, practiceUrl: url }) => ({
+    kind: "roleplay" as const,
+    args: {
+      to,
+      rolePlayName: input.agent.name,
+      rolePlayObjective: objective,
+      practiceUrl: url,
+      trainerName: input.by.name,
+      requiredArtifact,
+      minutes: Math.floor(Math.max(0, balances.get(to)?.balanceSeconds ?? 0) / 60),
+    },
+  }));
+  return { stats, emails: inviteEmails };
+}
+
+/** Both parts here, without the workflow (the copilot, and when the workflow can't start): assign, then email. */
+export async function inviteToRoleplay(input: RoleplayAssignInput) {
+  const { stats, emails } = await assignRoleplayLearners(input);
+  return { ...stats, ...(await queueInviteEmails(input.org.id, emails)) };
 }

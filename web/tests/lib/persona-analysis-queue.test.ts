@@ -16,7 +16,7 @@ import {
   ACTIVE_ANALYSIS_TTL_MS,
   personaAnalysisAttempts,
   personaSourceIsComplete,
-} from "../../../lib/persona-analysis-queue";
+} from "../../lib/persona-analysis-queue";
 
 // Stub the heavy analyzer before the queue module (which imports it) is loaded.
 const analyzed: string[] = [];
@@ -44,7 +44,7 @@ const {
   drainPersonaAnalysisQueue,
   enqueuePersonaAnalysis,
   recoverStaleAnalyzing,
-} = await import("../../../lib/persona-analysis-queue");
+} = await import("../../lib/persona-analysis-queue");
 
 describe("persona analysis queue helpers", () => {
   it("personaAnalysisAttempts extraction", () => {

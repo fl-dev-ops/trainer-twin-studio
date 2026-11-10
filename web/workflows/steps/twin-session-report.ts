@@ -9,7 +9,7 @@ import {
 } from "@/lib/twin/session-report";
 
 /**
- * Steps of the twin-session-report workflow. Each is checkpointed: a retry of saving reuses the stored
+ * Steps of the twin-session-report workflow (../twin-session-report.ts). Each is checkpointed: a retry of saving reuses the stored
  * model result instead of calling the model again.
  */
 

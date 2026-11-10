@@ -14,9 +14,9 @@ import type { AppRouter } from "@/lib/app-router";
 export type OrgCredits = inferRouterOutputs<AppRouter>["minutes"]["org"];
 
 /**
- * The Credits page: what the organization has left to give its learners, then two tabs: what each learner was
- * assigned (given, used, left; searchable) and every top-up to the account. 1 credit = 1 minute of practice, used by
- * learners' calls with twins and role plays.
+ * The Credits page: what the organization has left, then two tabs: what each learner was assigned (given, used, left;
+ * searchable) and the credits added to the account, with their expiry. 1 credit = 1 minute of practice, used by
+ * learners' calls with twins and role plays, and by the team's own voice calls.
  */
 export function CreditsPage({ credits }: { credits: OrgCredits }) {
   const [query, setQuery] = useState("");
@@ -36,14 +36,14 @@ export function CreditsPage({ credits }: { credits: OrgCredits }) {
         <p className="m-0 mt-2 text-sm text-muted-foreground">
           {low
             ? `Not enough to give a new learner their ${credits.defaultMinutes} min. Contact TrainerTwin to top up.`
-            : `Left to give your learners. Each new learner gets ${credits.defaultMinutes} min; give more on their page (up to ${credits.maxMinutes} min each).`}
+            : `Left to give your learners and for your team's calls. Each new learner gets ${credits.defaultMinutes} min; give more on their page (up to ${credits.maxMinutes} min each).`}
         </p>
       </section>
 
       <Tabs defaultValue="assigned" className="mt-10 gap-4">
         <TabsList>
           <TabsTrigger value="assigned">Assigned</TabsTrigger>
-          <TabsTrigger value="topups">Top-up history</TabsTrigger>
+          <TabsTrigger value="added">Credits added</TabsTrigger>
         </TabsList>
         <TabsContent value="assigned" className="flex flex-col gap-4">
           <div className="w-72 max-w-full">
@@ -54,8 +54,8 @@ export function CreditsPage({ credits }: { credits: OrgCredits }) {
             empty={q ? `No learner matches “${query.trim()}”.` : "No learner has credits yet. They get theirs when you invite or assign them."}
           />
         </TabsContent>
-        <TabsContent value="topups">
-          <CreditsHistoryTable rows={credits.topups} empty="No credits added yet. Contact TrainerTwin to top up your account." />
+        <TabsContent value="added">
+          <CreditsHistoryTable rows={credits.grants} empty="No credits added yet. Contact TrainerTwin to top up your account." />
         </TabsContent>
       </Tabs>
     </PageContainer>

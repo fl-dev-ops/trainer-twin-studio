@@ -210,18 +210,18 @@ model Voice {
 // Reference files for the AI avatar model: an image and a video (whichever the model needs).
 // Owned by one persona; files under {basePrefix}/{org}/avatars/{id}/ (or global/avatars for presets).
 model Avatar {
-  id           String        @id @default(cuid())
-  orgId        String?
-  name         String
+  id                 String        @id @default(cuid())
+  orgId              String?
+  name               String
   // The photo shown everywhere; for a trainer's own capture, the professional headshot generated from the original.
-  s3ImageKey   String?
+  s3ImageKey         String?
   // The photo as taken (Twin's brain capture), kept for regenerating the headshot.
   s3OriginalImageKey String?
-  s3VideoKey   String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  organization Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  persona      Persona?
+  s3VideoKey         String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  organization       Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  persona            Persona?
 
   @@index([orgId])
 }
@@ -329,38 +329,38 @@ model PersonaSource {
 
 // Interview practice run by a signed-in user of an organization.
 model InterviewSession {
-  id               String    @id @default(cuid())
-  orgId            String
-  userId           String
-  agentId          String
-  shareCode        String    @unique
-  runtimeTokenHash String?   @unique
-  personaSlug      String
-  personaVersion   Int
-  agentSlug        String
-  agentVersion     Int
-  status           String    @default("assigned") // assigned | activating | active | closing | completed | abandoned | revoked | failed
-  contextId        String?
-  contextName      String?
-  transcript       Json?
-  evidence         Json?
-  s3AudioKey       String?
-  report           Json?
-  reportStatus     String?   @default("none") // none | generating | completed | failed
+  id                  String    @id @default(cuid())
+  orgId               String
+  userId              String
+  agentId             String
+  shareCode           String    @unique
+  runtimeTokenHash    String?   @unique
+  personaSlug         String
+  personaVersion      Int
+  agentSlug           String
+  agentVersion        Int
+  status              String    @default("assigned") // assigned | activating | active | closing | completed | abandoned | revoked | failed
+  contextId           String?
+  contextName         String?
+  transcript          Json?
+  evidence            Json?
+  s3AudioKey          String?
+  report              Json?
+  reportStatus        String?   @default("none") // none | generating | completed | failed
   // Twin sessions: the Vercel Workflow run that generates the report (dedupe and status checks).
   reportWorkflowRunId String?
-  feedbackRating   Int?
-  feedbackNote     String?
-  attempt          Int       @default(1)
-  compiledSnapshot Json?
-  runtimeState     Json?
-  warmOpening      Json?
-  runtimeRevision  Int       @default(0)
-  lastCompletion   Json?
-  createdAt        DateTime  @default(now())
-  startedAt        DateTime?
-  endedAt          DateTime?
-  deletedAt        DateTime?
+  feedbackRating      Int?
+  feedbackNote        String?
+  attempt             Int       @default(1)
+  compiledSnapshot    Json?
+  runtimeState        Json?
+  warmOpening         Json?
+  runtimeRevision     Int       @default(0)
+  lastCompletion      Json?
+  createdAt           DateTime  @default(now())
+  startedAt           DateTime?
+  endedAt             DateTime?
+  deletedAt           DateTime?
 
   organization      Organization               @relation(fields: [orgId], references: [id], onDelete: Cascade)
   user              User                       @relation(fields: [userId], references: [id], onDelete: Restrict)
@@ -383,9 +383,12 @@ model InterviewSession {
   // are the sum of these sessions' startedAt..endedAt.
   twinAssignmentId String?
   twinAssignment   TwinAssignment?     @relation(fields: [twinAssignmentId], references: [id], onDelete: SetNull)
-  // Learner sessions: the learner's minutes balance (seconds) when the call started; the call is cut there and its
-  // usage is capped at it. Null: not metered (admin and team trying an agent, calibrations).
+  // Metered calls: the seconds the call may run (the learner's minutes, or for chargesOrg the org's credits) when it
+  // started; the call is cut there and its usage is capped at it. Null: not metered.
   allowedSeconds   Int?
+  // An admin or team voice call in an org billed by Meteroid: its seconds come off the org's credits (MinuteLedger
+  // org_usage), not a learner's minutes.
+  chargesOrg       Boolean             @default(false)
   twinCalibration  TwinCalibration?
   turnEvidence     TwinTurnEvidence[]
 
@@ -529,6 +532,8 @@ model Organization {
   avatars            Avatar[]
   copilotSessions    CopilotSession[]
   minuteLedger       MinuteLedger[]
+  creditPurchases    CreditPurchase[]
+  billing            OrgBilling?
 
   @@unique([slug])
   @@map("organization")
@@ -860,7 +865,7 @@ model UsageEvent {
   userId         String?
   sessionId      String?
   source         String // voice_agent | chat | copilot | report | synthesis | spec | rerank | evaluate | runtime
-  provider       String // e.g. vercel | Deepgram | Sarvam | livekit
+  provider       String // e.g. vercel | Deepgram | voxcpm2 | livekit
   model          String
   metric         String // input_tokens | output_tokens | cache_read_tokens | ... | stt_seconds | tts_characters | cost_usd
   quantity       Float
@@ -911,20 +916,20 @@ model TwinShareLink {
 
 /// One user's access to one twin agent, with a minutes budget. No expiry for now.
 model TwinAssignment {
-  id               String   @id @default(cuid())
+  id               String    @id @default(cuid())
   orgId            String
   agentId          String
   recipientEmail   String // lower case (CHECK); one assignment per user per twin
   userId           String?
   minutesLimit     Int // > 0 (CHECK)
-  shareCode        String   @unique // personal invite link
+  shareCode        String    @unique // personal invite link
   shareLinkId      String?
   assignedByUserId String?
-  status           String   @default("active") // active | revoked
+  status           String    @default("active") // active | revoked
   // Last moment a call can start (end of the chosen day, in the assigner's time zone); null = no end date.
   accessUntil      DateTime?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   organization Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
   agent        Agent              @relation(fields: [agentId], references: [id], onDelete: Cascade)
@@ -959,7 +964,7 @@ model TwinTurnEvidence {
 
 /// One calibration call: 1:1 with its session.
 model TwinCalibration {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   sessionId       String    @unique
   createdByUserId String
   createdAt       DateTime  @default(now())
@@ -1028,24 +1033,31 @@ model SkillSource {
 // ---- Practice minutes (migration minute_ledger) ----
 
 /// Prepaid practice minutes, in seconds: one row per movement, never edited (lib/minutes.ts is the only writer).
-/// TrainerTwin tops up an org (topup); the org gives learners minutes from it (grant) and can take unused ones back
-/// (reclaim); learner calls use them (usage, one row per session). Org balance = topups - grants - reclaims (reclaims
-/// are negative); a learner's = their grants + reclaims + usage. Learners are keyed by email, so people who have not
-/// joined yet can hold minutes.
+/// The org's credits live in Meteroid (OrgBilling); the org gives learners minutes from them (grant), learner calls use
+/// those (usage, one row per session), and admin/team voice calls use the org's credits directly (org_usage). grant and
+/// org_usage rows are sent to Meteroid as usage. A learner's balance = their grants + reclaims + usage. topup, refund
+/// and reclaim rows are history from before Meteroid. Learners are keyed by email, so people who have not joined yet
+/// can hold minutes.
 model MinuteLedger {
-  id          String   @id @default(cuid())
-  orgId       String
-  /// The learner, lower case; null for an org top-up.
-  email       String?
-  userId      String?
-  type        String // topup | grant | reclaim | usage (CHECK)
-  /// Signed: topup and grant > 0, reclaim < 0, usage <= 0 (CHECK).
-  seconds     Int
-  /// Usage rows: the session it paid for (one usage row per session).
-  sessionId   String?  @unique
-  actorUserId String?
-  note        String?
-  createdAt   DateTime @default(now())
+  id             String    @id @default(cuid())
+  orgId          String
+  /// The learner (or, for org_usage, the admin or team member who called), lower case; null for the org's own rows
+  /// (top-ups and refunds, from before Meteroid).
+  email          String?
+  userId         String?
+  type           String // topup | refund | grant | reclaim | usage | org_usage (CHECK)
+  /// grant and org_usage rows spend the org's credits in Meteroid: when Meteroid accepted the usage event for it
+  /// (event id = this row's id). Null: not sent yet.
+  meteroidSentAt DateTime?
+  /// Signed: topup and grant > 0, refund and reclaim < 0, usage and org_usage <= 0 (CHECK).
+  seconds        Int
+  /// usage and org_usage rows: the session it paid for (one row per session).
+  sessionId      String?   @unique
+  /// A paid top-up: its Razorpay payment (pay_…); a refund: its Razorpay refund (rfnd_…). One row each.
+  externalId     String?   @unique
+  actorUserId    String?
+  note           String?
+  createdAt      DateTime  @default(now())
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
@@ -1053,3 +1065,43 @@ model MinuteLedger {
   @@index([orgId, type])
 }
 
+/// Credits an org buys from TrainerTwin through Razorpay: a payment link (INR or USD) or a GST invoice made in the
+/// Razorpay Dashboard. Paying it adds `credits` to the org (a topup row); a refund takes back the refunded share.
+model CreditPurchase {
+  id             String    @id @default(cuid())
+  orgId          String
+  credits        Int
+  /// In the currency's smallest unit (paise, cents).
+  amount         Int
+  currency       String // INR | USD (CHECK)
+  kind           String // payment_link | invoice (CHECK)
+  /// plink_… or inv_…; null only while the payment link is being created.
+  razorpayId     String?   @unique
+  /// The payment that paid it (pay_…).
+  paymentId      String?   @unique
+  status         String    @default("created") // created | paid | partially_refunded | refunded (CHECK)
+  refundedAmount Int       @default(0)
+  url            String?
+  note           String?
+  createdAt      DateTime  @default(now())
+  paidAt         DateTime?
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+}
+
+/// An org billed by Meteroid (lib/org-credits.ts): its Meteroid customer, and the last balance read from it. The org's
+/// credits live in Meteroid; this copy serves pages and call starts when Meteroid is slow or down.
+model OrgBilling {
+  orgId              String    @id
+  meteroidCustomerId String    @unique
+  /// Meteroid's balance in minutes as of balanceAsOf (usage it hasn't counted yet is not taken off).
+  balanceMinutes     Int       @default(0)
+  balanceAsOf        DateTime?
+  /// The org's credit grants: [{ id, minutes, reason, expiresAt, status }], newest first.
+  grants             Json      @default("[]")
+  syncedAt           DateTime?
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+}

@@ -4,6 +4,7 @@ import { type CopilotStudioDeps, runCopilotStudio } from "@/lib/copilot-studio";
 type Row = Record<string, unknown>;
 let agents: Row[] = [];
 const invited: { kind: string; emails: string[] }[] = [];
+let delivery = { emailFailures: 0 } as { emailFailures: number; emailsQueued?: number; emailProgress?: string };
 const s3 = new Map<string, string>();
 
 const matches = (agent: Row, where: Row) => Object.entries(where).every(([key, value]) => {
@@ -40,11 +41,11 @@ const deps = {
   listTwinAssignments: async () => [],
   assignTwinAndInvite: async (input: { emails: string[] }) => {
     invited.push({ kind: "twin", emails: input.emails });
-    return { stats: { added: input.emails.length } };
+    return { stats: { added: input.emails.length }, ...delivery };
   },
   inviteToRoleplay: async (input: { emails: string[] }) => {
     invited.push({ kind: "roleplay", emails: input.emails });
-    return { added: input.emails.length };
+    return { added: input.emails.length, ...delivery };
   },
   updateTwin: async () => ({ version: 2, changed: true }),
   updateRoleplay: async () => ({ changed: true }),
@@ -55,6 +56,7 @@ const run = (input: Parameters<typeof runCopilotStudio>[1]) => runCopilotStudio(
 const actor = { org: { id: "org1", slug: "olga" }, user: { id: "u1", name: "Olga" } };
 
 beforeEach(() => {
+  delivery = { emailFailures: 0 };
   invited.length = 0;
   s3.clear();
   agents = [
@@ -114,4 +116,19 @@ test("each module reads only its own kind", async () => {
   expect(roleplays.items.map((i) => i.slug)).toEqual(["olga-sara"]);
   await expect(run({ action: "get", slug: "olga-sara", kind: "twin" })).rejects.toThrow(/is a role play, not a twin/);
   await expect(run({ action: "get", slug: "olga-objection-handling", kind: "roleplay" })).rejects.toThrow(/is a twin, not a role play/);
+});
+
+test.each(["twin", "roleplay"] as const)("inviteLearners %s describes queued emails without claiming failures", async (kind) => {
+  agents[1].kind = kind === "twin" ? "TWIN" : "ROLEPLAY";
+  delivery = { emailFailures: 0, emailsQueued: 2, emailProgress: "signed-token" };
+  const result = await run({ action: "inviteLearners", slug: "olga-objection-handling", kind, emails: ["new@x.com", "other@x.com"] });
+  expect(result).toMatchObject({ emails: "2 being sent; each is retried automatically, and the studio shows any that still fail", refused: [] });
+  for (const field of ["emailFailures", "emailsQueued", "emailProgress"]) expect(result).not.toHaveProperty(field);
+});
+test.each(["twin", "roleplay"] as const)("inviteLearners %s reports inline failures without queue metadata", async (kind) => {
+  agents[1].kind = kind === "twin" ? "TWIN" : "ROLEPLAY";
+  delivery = { emailFailures: 1, emailsQueued: 0 };
+  const result = await run({ action: "inviteLearners", slug: "olga-objection-handling", kind, emails: ["new@x.com"] });
+  expect(result).toMatchObject({ emailFailures: 1, refused: [] });
+  for (const field of ["emails", "emailsQueued", "emailProgress"]) expect(result).not.toHaveProperty(field);
 });

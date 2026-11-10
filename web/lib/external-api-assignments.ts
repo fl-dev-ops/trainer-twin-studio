@@ -1,7 +1,7 @@
+import { deliverInviteEmail } from "@/lib/schedule-invite-emails";
 import { BASE_DOMAIN } from "@/lib/base-domain";
 import { contextUploadFromAgentData } from "@/lib/context-upload";
 import { db } from "@/lib/db";
-import { sendRolePlayAssignmentEmail } from "@/lib/email";
 import { learnerBalance } from "@/lib/minutes";
 import { LEARNER_ROLE, STUDIO_ROLES } from "@/lib/org";
 
@@ -28,6 +28,8 @@ export function findKeyTrainer(orgId: string, actorUserId: string | null) {
 /** The assignment email; delivery failure never undoes the assignment (the caller reports `emailSent`). */
 export async function emailAssignment(input: {
   orgId: string;
+  /** One email per assignment link: a background retry (workflows/invite-emails.ts) can't send it twice. */
+  idempotencyKey: string;
   to: string;
   userName?: string | null;
   scenario: { name: string; data: unknown };
@@ -37,7 +39,8 @@ export async function emailAssignment(input: {
   const data = input.scenario.data as { objective?: unknown } | null;
   const upload = contextUploadFromAgentData(input.scenario.data);
   const { balanceSeconds } = await learnerBalance(input.orgId, input.to);
-  const delivery = await sendRolePlayAssignmentEmail({
+  // Sent now (the response says whether it went); a failure keeps being retried in the background.
+  const delivery = await deliverInviteEmail({ kind: "roleplay", idempotencyKey: input.idempotencyKey, args: {
     to: input.to,
     userName: input.userName ?? undefined,
     rolePlayName: input.scenario.name,
@@ -46,8 +49,8 @@ export async function emailAssignment(input: {
     trainerName: input.trainerName,
     requiredArtifact: upload.required && upload.prompt ? { label: upload.label, prompt: upload.prompt } : null,
     minutes: Math.floor(Math.max(0, balanceSeconds) / 60),
-  });
-  return delivery.success;
+  } });
+  return delivery.sent;
 }
 
 /** The documented `Assignment` object (POST and PATCH responses). */

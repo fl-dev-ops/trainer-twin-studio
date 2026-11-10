@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { claimSpanInPage } from "../../../lib/pdf-claim-anchors";
+import { claimSpanInPage } from "../../lib/pdf-claim-anchors";
 
 /**
  * The layer and the markdown converter render the same resume text differently, so a claim is only

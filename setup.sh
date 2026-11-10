@@ -34,7 +34,7 @@ fi
 
 # Combined bundle: SSL_CERT_FILE *replaces* the system roots, so Python/Node
 # clients pointed at it must see portless CA + all public roots (LiveKit,
-# Sarvam, AWS would otherwise fail TLS).
+# AWS would otherwise fail TLS).
 SYSTEM_ROOTS="/etc/ssl/certs/ca-certificates.crt"
 [ "$(uname)" = "Darwin" ] && SYSTEM_ROOTS="/etc/ssl/cert.pem"
 CA_BUNDLE="${HOME}/.portless/ca-bundle.pem"

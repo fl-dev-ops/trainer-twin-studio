@@ -1,5 +1,6 @@
 "use client";
 
+import { MIN_START_MINUTES } from "@/lib/minutes-config";
 import { useState, type ReactNode, type CSSProperties } from "react";
 import { Check, ChevronDown, Flag, Lock, LogIn, LogOut, Star } from "lucide-react";
 import { toast } from "sonner";
@@ -223,7 +224,7 @@ export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string;
           <div className="flex items-center gap-3 rounded-full border border-(--card-border) bg-card p-1.5 shadow-elevation-2">
             <Button size="xl" variant="brand"
               
-              disabled={minutesLeft !== null && minutesLeft <= 0}
+              disabled={minutesLeft !== null && minutesLeft < MIN_START_MINUTES}
               onClick={() => (access?.ok ? setStep("call") : setSigningIn(true))}
             >
               <PhoneIcon data-icon="inline-start" className="size-[18px]" />
@@ -306,7 +307,7 @@ function Summary({ twin, trainer, result, minutesLeft, preview, onReport, onAgai
             <p className="m-0 text-xs text-muted-foreground">{preview ? "used: not counted" : "with this twin"}</p>
           </div>
         </div>
-        <Button variant="brand" size="xl" className="mt-6 w-full" onClick={onAgain} disabled={minutesLeft !== null && minutesLeft <= 0}>
+        <Button variant="brand" size="xl" className="mt-6 w-full" onClick={onAgain} disabled={minutesLeft !== null && minutesLeft < MIN_START_MINUTES}>
           <PhoneIcon data-icon="inline-start" className="size-[18px]" />
           Start another
         </Button>

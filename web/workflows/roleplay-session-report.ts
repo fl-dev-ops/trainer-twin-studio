@@ -1,5 +1,9 @@
+// Workflow: role-play session report.
+// After a role play that asks for one ends, waits for the final transcript, scores it against the role play's goals
+// and rubric, and saves it. Started by lib/schedule-report.ts; steps in ./steps/roleplay-session-report.ts.
+
 import { sleep } from "workflow";
-import { failRoleplayReport, generateRoleplayReport, readRoleplaySession, storeRoleplayReport } from "./roleplay-session-report-steps";
+import { failRoleplayReport, generateRoleplayReport, readRoleplaySession, storeRoleplayReport } from "./steps/roleplay-session-report";
 
 /** How long to wait for the voice agent's full transcript before using the one the browser saved. */
 const TRANSCRIPT_CHECKS = 12;

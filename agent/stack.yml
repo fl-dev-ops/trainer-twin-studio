@@ -10,13 +10,10 @@ services:
       AGENT_NAME: ${AGENT_NAME:-intervoo-agent}
       DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY}
       WEB_URL: ${WEB_URL:-https://dash.trainertwin.com}
-      TTS_PROVIDER: ${TTS_PROVIDER:-voxcpm2}
       TTS_SERVICE_URL: ${TTS_SERVICE_URL:-https://tts.trainertwin.com}
       TTS_API_KEY: ${TTS_API_KEY:-}
-      SARVAM_API_KEY: ${SARVAM_API_KEY:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       SCREEN_VISION_MODEL: ${SCREEN_VISION_MODEL:-openai/gpt-5.5}
-      SARVAM_SPEAKER: ${SARVAM_SPEAKER:-rohan}
       AGENT_VOICE_ID_OVERRIDE: ${AGENT_VOICE_ID_OVERRIDE:-ethan-sample}
       COPILOT_SERVICE_SECRET: ${COPILOT_SERVICE_SECRET:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://chat.trainertwin.com/v1}

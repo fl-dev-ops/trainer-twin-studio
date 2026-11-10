@@ -9,3 +9,9 @@ package-lock.json
 /lib/generated/prisma
 .vercel
 /.swc
+!.env.test
+/.next-e2e/
+/e2e/.auth/
+/e2e/.state/
+/e2e/.report/
+/e2e/.results/

@@ -29,7 +29,9 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "**/*.mts"
+    "**/*.mts",
+    ".next-e2e/types/**/*.ts",
+    ".next-e2e/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "**/*.test.ts", "**/*.test.tsx", "scripts/**", "experiments/**"]
+  "exclude": ["node_modules", "**/*.test.ts", "**/*.test.tsx", "tests/flows/**", "scripts/**", "experiments/**"]
 }

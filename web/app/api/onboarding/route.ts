@@ -11,6 +11,8 @@ import {
   notionAuthorizationUrl,
 } from "@/lib/notion-oauth";
 import { getOrCreateOrgKnowledgeBase } from "@/lib/org-knowledge";
+import { unlinkOrgFromMeteroid } from "@/lib/org-billing-setup";
+import { runOnboarding } from "@/lib/workflow-runs";
 import { validateOrgSlug } from "@/lib/slugs";
 import { startYouTubeOAuth } from "@/lib/youtube-oauth";
 
@@ -126,7 +128,8 @@ export async function POST(request: Request) {
       }),
     ]);
     createdOrgId = org.id;
-    await ChromaTenantService.createOrgDatabase(org.id);
+    // The onboard-org workflow (workflows/onboard-org.ts): its Chroma database and Meteroid customer.
+    await runOnboarding(org.id);
     // A founder may already belong to other orgs: the studio opens in the new one (sets the session cookie).
     await auth.api.setActiveOrganization({ headers: await headers(), body: { organizationId: org.id } });
     const dashboard = familyOrigin((await headers()).get("host"), "dash");
@@ -152,9 +155,12 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ redirect, slug: org.slug });
-  } catch {
+  } catch (error) {
+    console.error("Onboarding failed:", error);
     if (createdOrgId) {
       await ChromaTenantService.deleteOrgDatabase(createdOrgId).catch(() => {});
+      const billing = await db.orgBilling.findUnique({ where: { orgId: createdOrgId }, select: { meteroidCustomerId: true } }).catch(() => null);
+      if (billing) await unlinkOrgFromMeteroid(billing.meteroidCustomerId).catch((undoError: unknown) => console.error("Could not undo the Meteroid customer:", undoError));
       await db.organization
         .delete({ where: { id: createdOrgId } })
         .catch(() => {});

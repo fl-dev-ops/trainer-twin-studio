@@ -6,6 +6,8 @@ import "./env"; // Fail fast at build/dev startup if required env keys are missi
 import path from "path";
 
 const nextConfig: NextConfig = {
+  // The browser tests' dev server (e2e/) builds into its own folder, so it runs next to the normal one.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   // Allow dev assets (HMR etc.) on the portless subdomains
   allowedDevOrigins: ["trainertwin.localhost", "*.trainertwin.localhost"],
   experimental: {

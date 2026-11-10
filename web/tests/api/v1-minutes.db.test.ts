@@ -1,10 +1,11 @@
+import { fundOrg } from "../setup/meteroid";
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import * as externalApi from "@/lib/external-api";
 import * as email from "@/lib/email";
 import { POST as inviteUser } from "@/app/api/v1/users/route";
 import { POST as assignRoleplay } from "@/app/api/v1/assignments/route";
 import { learnerInviteUrl } from "@/lib/invite/links";
-import { learnerBalance, topUpOrg } from "@/lib/minutes";
+import { learnerBalance } from "@/lib/minutes";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "../lib/minutes-test-db";
 
 describe.skipIf(!localMinutesDb)("v1 minutes entrypoints (local database)", () => {
@@ -20,7 +21,7 @@ describe.skipIf(!localMinutesDb)("v1 minutes entrypoints (local database)", () =
   });
   afterEach(async () => { api?.mockRestore(); invitationEmail?.mockRestore(); assignmentEmail?.mockRestore(); await f.clean(); });
   const request = (body: unknown) => new Request("https://example.com/api/v1/test", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  const fund = (amount: number) => topUpOrg({ orgId: f.org.id, minutes: amount, note: "test" });
+  const fund = (amount: number) => fundOrg({ orgId: f.org.id, minutes: amount, note: "test" });
 
   test("POST /users returns 409 without an invitation or mail when starting minutes are short", async () => {
     await fund(29);

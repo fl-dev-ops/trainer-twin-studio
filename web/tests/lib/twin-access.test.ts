@@ -30,7 +30,9 @@ mock.module("@/lib/db", () => ({
   },
 }));
 // Minutes are the learner's own (lib/minutes.ts, tested on a real database); twin access only gives the starting ones.
+const realMinutes = await import("@/lib/minutes");
 mock.module("@/lib/minutes", () => ({
+  ...realMinutes,
   DEFAULT_LEARNER_MINUTES: 30,
   giveStartingMinutes: async ({ emails }: { emails: string[] }) => (started.push(emails), { given: emails }),
   learnerMinutes: async () => new Map(),

@@ -58,7 +58,7 @@ def _session_usage(stt: float, chars: int, tts: float):
     return SimpleNamespace(
         model_usage=[
             STTModelUsage(provider="Deepgram", model="flux-general-en", audio_duration=stt),
-            TTSModelUsage(provider="Sarvam", model="bulbul:v3", characters_count=chars, audio_duration=tts),
+            TTSModelUsage(provider="voxcpm2", model="voxcpm2", characters_count=chars, audio_duration=tts),
             LLMModelUsage(provider="chat.trainertwin.com", model="trainertwin-runtime", input_tokens=999),
         ]
     )
@@ -78,8 +78,8 @@ async def test_posts_cumulative_snapshot_without_llm_tokens(monkeypatch):
     assert post["json"]["sessionId"] == "s1" and post["json"]["streamId"] == "job1"
     assert _totals(post) == {
         ("Deepgram", "flux-general-en", "stt_seconds"): 6.5,
-        ("Sarvam", "bulbul:v3", "tts_characters"): 120,
-        ("Sarvam", "bulbul:v3", "tts_seconds"): 4.0,
+        ("voxcpm2", "voxcpm2", "tts_characters"): 120,
+        ("voxcpm2", "voxcpm2", "tts_seconds"): 4.0,
     }
 
 

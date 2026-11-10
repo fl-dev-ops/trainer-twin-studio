@@ -28,7 +28,7 @@ load_dotenv(override=True)
 
 # Trust the local portless CA for https://*.localhost if present. Use the
 # combined bundle (system roots + portless CA) — a CA-only file would break
-# TLS to LiveKit/Sarvam/AWS. setup.sh builds the bundle.
+# TLS to LiveKit/AWS. setup.sh builds the bundle.
 _ca_bundle = os.path.expanduser("~/.portless/ca-bundle.pem")
 _ca_only = os.path.expanduser("~/.portless/ca.pem")
 _default_ca = _ca_bundle if os.path.exists(_ca_bundle) else _ca_only
@@ -54,8 +54,6 @@ REQUIRED_ENV_VARS = (
     "WEB_URL",
     "LLM_BASE_URL",
     "DEEPGRAM_API_KEY",
-    "TTS_PROVIDER",
-    "SARVAM_API_KEY",
     "OPENROUTER_API_KEY",
     "AWS_REGION",
     "AWS_ACCESS_KEY_ID",

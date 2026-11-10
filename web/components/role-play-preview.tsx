@@ -1,5 +1,6 @@
 "use client";
 
+import { followEmailProgress } from "@/lib/follow-email-progress";
 import Link from "next/link";
 import { useState } from "react";
 import { ArrowLeft, Pencil, Play, Send, Trash2, X } from "lucide-react";
@@ -263,6 +264,8 @@ export function RolePlayPreview({
         resent?: number;
         skipped?: number;
         emailFailures?: number;
+        emailsQueued?: number;
+        emailProgress?: string;
         error?: string;
       } | null;
       if (!response.ok || !result || result.error) {
@@ -282,6 +285,7 @@ export function RolePlayPreview({
       } else {
         toast.success(parts.join(" · "));
       }
+      if (result.emailProgress) void followEmailProgress(result.emailProgress, result.emailsQueued ?? 0);
       refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Practice links could not be sent");

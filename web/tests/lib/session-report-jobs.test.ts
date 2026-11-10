@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isSessionReportEligible } from "../../../lib/session-report-jobs";
+import { isSessionReportEligible } from "../../lib/session-report-jobs";
 
 test("only completed sessions with an available report slot are eligible", () => {
   assert.equal(isSessionReportEligible("completed", "none"), true);

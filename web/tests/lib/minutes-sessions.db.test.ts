@@ -1,9 +1,10 @@
+import { fundOrg, availableOrgSeconds } from "../setup/meteroid";
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import * as nextServer from "next/server";
 import * as livekit from "@/lib/livekit";
-import { activateInterviewRuntime } from "@/lib/session-activation";
-import { activateSession, finalizeInterviewSession } from "@/lib/interview-sessions";
-import { grantMinutes, learnerBalance, orgBalanceSeconds, recordSessionUsage, sessionUsageSeconds, topUpOrg } from "@/lib/minutes";
+import { startSessionNow } from "@/lib/session-activation";
+import { activateSession, finalizeInterviewSession, ORG_OUT_OF_CREDITS } from "@/lib/interview-sessions";
+import { OUT_OF_MINUTES, grantMinutes, learnerBalance, recordSessionUsage, sessionUsageSeconds } from "@/lib/minutes";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
 describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
@@ -15,7 +16,8 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
     await f.create();
     secret = process.env.COPILOT_SERVICE_SECRET;
     process.env.COPILOT_SERVICE_SECRET = "minutes-test-secret";
-    fetchMock = spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+    const networkFetch = globalThis.fetch;
+    fetchMock = spyOn(globalThis, "fetch").mockImplementation((url, init) => String(url).includes("meteroid.test") ? networkFetch(url, init) : Promise.resolve(new Response(null, { status: 204 })));
   });
   afterEach(async () => {
     fetchMock?.mockRestore();
@@ -24,8 +26,9 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
     await f.clean();
   });
   const fund = async (amount = 10) => {
-    await topUpOrg({ orgId: f.org.id, minutes: amount, note: "test" });
+    await fundOrg({ orgId: f.org.id, minutes: amount, note: "test" });
     await grantMinutes({ orgId: f.org.id, email: f.learner.email, minutes: amount });
+    fetchMock.mockClear();
   };
   const activate = (extra: Partial<Parameters<typeof activateSession>[0]> = {}) => activateSession({
     orgId: f.org.id, userId: f.learner.id, userEmail: f.learner.email, agentSlug: f.roleplay.slug, mode: "voice", ...extra,
@@ -58,7 +61,7 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
     await Promise.all(Array.from({ length: 12 }, () => recordSessionUsage(session.id)));
     expect(await db.minuteLedger.findMany({ where: { sessionId: session.id }, select: { seconds: true } })).toEqual([{ seconds: -45 }]);
     expect((await learnerBalance(f.org.id, f.learner.email)).usedSeconds).toBe(45);
-    expect(await orgBalanceSeconds(f.org.id)).toBe(0); // usage doesn't debit the org again
+    expect(await availableOrgSeconds(f.org.id)).toBe(0); // usage doesn't debit the org again
   });
 
   test.each(["failed", "revoked"])("%s calls cost zero both before and after recording", async (status) => {
@@ -96,6 +99,27 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
     expect(await db.interviewSession.count({ where: { orgId: f.org.id } })).toBe(0);
   });
 
+  test.each([0, 180, 299, 300])("learner start boundary at %s seconds is checked before runtime creation", async (seconds) => {
+    await fund(5);
+    if (seconds < 300) await f.session({ allowedSeconds: 300, startedAt: new Date(0), endedAt: new Date((300 - seconds) * 1000) });
+    if (seconds === 300) {
+      expect(await activate()).toMatchObject({ secondsLeft: 300 });
+    } else {
+      const before = await db.interviewSession.count({ where: { orgId: f.org.id } });
+      await expect(activate()).rejects.toMatchObject({ name: "MinutesError", status: 403, message: seconds === 0 ? OUT_OF_MINUTES : `You need at least 5 minutes to start a call; you have ${Math.floor(seconds / 60)}. Ask your trainer for more.` });
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(await db.interviewSession.count({ where: { orgId: f.org.id } })).toBe(before);
+    }
+  });
+
+  test.each(["admin", "team"])("billed %s refuses 299 seconds before creating a session", async (role) => {
+    await db.member.update({ where: { id: `${f.trainer.id}-member` }, data: { role } });
+    await fundOrg({ orgId: f.org.id, minutes: 299 / 60 });
+    await expect(activate({ userId: f.trainer.id, userEmail: f.trainer.email })).rejects.toMatchObject({ name: "MinutesError", status: 403, message: "Your organization needs at least 5 credits to start a call; it has 4. Contact TrainerTwin to add more." });
+    expect(fetchMock.mock.calls.every(([url]) => String(url).includes("meteroid.test"))).toBe(true);
+    expect(await db.interviewSession.count({ where: { orgId: f.org.id } })).toBe(0);
+  });
+
   test("learners start voice calls with their balance as allowance and secondsLeft", async () => {
     await fund();
     const result = await activate();
@@ -111,6 +135,27 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
     expect(await db.interviewSession.findUniqueOrThrow({ where: { id: result!.id } })).toMatchObject({ allowedSeconds: null });
     await finalizeInterviewSession({ sessionId: result!.id, requestedStatus: "completed" });
     expect(await db.minuteLedger.count({ where: { orgId: f.org.id } })).toBe(0);
+  });
+
+  test.each(["admin", "team"])("billed %s voice calls use org credits directly; zero credits refuses before runtime", async (role) => {
+    await db.member.update({ where: { id: `${f.trainer.id}-member` }, data: { role } });
+    await fundOrg({ orgId: f.org.id, minutes: 0 });
+    await expect(activate({ userId: f.trainer.id, userEmail: f.trainer.email })).rejects.toMatchObject({ name: "MinutesError", status: 403, message: ORG_OUT_OF_CREDITS });
+    expect(await db.interviewSession.count({ where: { orgId: f.org.id } })).toBe(0);
+    await fundOrg({ orgId: f.org.id, minutes: 5 });
+    const result = await activate({ userId: f.trainer.id, userEmail: f.trainer.email });
+    expect(result).toMatchObject({ secondsLeft: 300 });
+    expect(await db.interviewSession.findUniqueOrThrow({ where: { id: result!.id } })).toMatchObject({ allowedSeconds: 300, chargesOrg: true });
+    await db.interviewSession.update({ where: { id: result!.id }, data: { startedAt: new Date(Date.now() - 90_000) } });
+    await finalizeInterviewSession({ sessionId: result!.id, requestedStatus: "completed" });
+    expect(await db.minuteLedger.findUniqueOrThrow({ where: { sessionId: result!.id } })).toMatchObject({ type: "org_usage", email: f.trainer.email, seconds: expect.any(Number) });
+  });
+
+  test("billed studio chat remains unmetered even with zero org credits", async () => {
+    await fundOrg({ orgId: f.org.id, minutes: 0 });
+    const result = await activate({ userId: f.trainer.id, userEmail: f.trainer.email, mode: "chat" });
+    expect(result).toMatchObject({ secondsLeft: null });
+    expect(await db.interviewSession.findUniqueOrThrow({ where: { id: result!.id } })).toMatchObject({ allowedSeconds: null, chargesOrg: false });
   });
 
   test("metered chat sessions are refused without consuming credit", async () => {
@@ -150,7 +195,7 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
     const connect = spyOn(livekit, "activateLiveKitSession").mockResolvedValue({ room: "test-room", token: "participant", dispatchId: "dispatch", videoEgressId: null, videoS3Key: null });
     try {
       const before = Math.floor(Date.now() / 1000);
-      await activateInterviewRuntime({ orgId: f.org.id, userId: f.learner.id, userEmail: f.learner.email, agentSlug: agent.slug, mode: "voice" });
+      await startSessionNow({ orgId: f.org.id, userId: f.learner.id, userEmail: f.learner.email, agentSlug: agent.slug, mode: "voice" });
       const call = connect.mock.calls[0][0];
       expect(call.agentKind).toBe(kind);
       expect(call.endsAt).toBeGreaterThanOrEqual(before + 600);
@@ -158,15 +203,14 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
     } finally { connect.mockRestore(); after.mockRestore(); }
   });
 
-  // Known regression: the idempotent activation branch omits secondsLeft, removing the LiveKit deadline on retry.
   test("resuming an active metered call returns its remaining seconds for deadline enforcement", async () => {
     await fund();
     const first = await activate({ idempotencyKey: "retry" });
-    await db.interviewSession.update({ where: { id: first!.id }, data: { startedAt: new Date(Date.now() - 60_000) } });
+    await db.interviewSession.update({ where: { id: first!.id }, data: { startedAt: new Date(Date.now() - 420_000) } });
     const resumed = await activate({ idempotencyKey: "retry" });
     expect(resumed?.id).toBe(first!.id);
-    expect(resumed?.secondsLeft).toBeGreaterThanOrEqual(535);
-    expect(resumed?.secondsLeft).toBeLessThanOrEqual(540);
+    expect(resumed?.secondsLeft).toBeGreaterThanOrEqual(175);
+    expect(resumed?.secondsLeft).toBeLessThanOrEqual(180);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

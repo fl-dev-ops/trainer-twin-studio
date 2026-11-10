@@ -6,7 +6,7 @@ test("S3 keys are rooted by immutable organization ID", async () => {
   // already have happened via another test's import (bun caches modules per
   // process). So assert the org-rooting contract relative to the base prefix
   // instead of a hard-coded prefix value.
-  const { kbPrefix, personaSourcePrefix, recordingKey, voicePrefix } = await import("../../../lib/s3");
+  const { kbPrefix, personaSourcePrefix, recordingKey, voicePrefix } = await import("../../lib/s3");
   const base = kbPrefix("org-id", "kb-id", "doc-id").split("/org-id/")[0];
 
   assert.equal(kbPrefix("org-id", "kb-id", "doc-id"), `${base}/org-id/knowledge/kb-id/doc-id`);

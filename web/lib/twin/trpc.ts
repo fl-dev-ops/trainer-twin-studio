@@ -8,7 +8,7 @@ import { assignablePeople } from "@/lib/learners";
 import { LEARNER_ROLE } from "@/lib/org";
 import { learnerMinutes, MAX_LEARNER_MINUTES, MinutesError } from "@/lib/minutes";
 import { studioProcedure, t } from "@/lib/trpc";
-import { assignTwinAndInvite } from "@/lib/invite/twin";
+import { runTwinAssign } from "@/lib/workflow-runs";
 import {
   accessUntilSchema,
   findTwinAgent,
@@ -378,7 +378,7 @@ const assignmentsRouter = t.router({
     }))
     .mutation(({ ctx, input }) => twinCall(async () => {
       const agent = await findTwinAgent(ctx.user.orgId, input.slug);
-      return assignTwinAndInvite({
+      return runTwinAssign({
         org: { id: ctx.user.orgId, slug: ctx.user.orgSlug },
         by: { id: ctx.user.id, name: ctx.user.name },
         agent,

@@ -16,7 +16,12 @@ mock.module("@/lib/interview-sessions", () => ({
   activateSession: async () => null,
   finalizeInterviewSession: async () => null,
 }));
-mock.module("@/lib/org", () => ({ getTrainerOrg: async () => trainerOrg, getSessionOrg: async () => ({ id: "demo" }) }));
+const realOrg = await import("@/lib/org");
+mock.module("@/lib/org", () => ({
+  ...realOrg,
+  getTrainerOrg: async () => trainerOrg,
+  getSessionOrg: async () => ({ id: "demo" }),
+}));
 mock.module("@/lib/db", () => ({
   db: {
     member: { findFirst: async () => role ? { role } : null },

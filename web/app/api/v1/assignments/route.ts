@@ -97,7 +97,7 @@ export async function POST(request: Request) {
     ? await db.rolePlayAssignment.update({ where: { id: existing.id }, data: { ...fields, memberId: null, usedAt: null }, select })
     : await db.rolePlayAssignment.create({ data: { ...fields, orgId: api.org.id, deploymentId: deployment.id, recipientEmail }, select });
   const url = practiceUrl(api.org.slug, assignment.shareCode);
-  const emailSent = await emailAssignment({ orgId: api.org.id, to: recipientEmail, userName: learner?.name, scenario: agent, practiceUrl: url, trainerName: trainer.user.name });
+  const emailSent = await emailAssignment({ orgId: api.org.id, idempotencyKey: `assignment:${assignment.id}:${assignment.shareCode}`, to: recipientEmail, userName: learner?.name, scenario: agent, practiceUrl: url, trainerName: trainer.user.name });
   return Response.json({
     assignment: assignmentView(assignment, recipientEmail, learner?.id ?? null, agent.slug),
     created: true,

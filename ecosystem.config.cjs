@@ -5,6 +5,13 @@
 // Start pm2 from your own terminal (`pm2 kill` first if a daemon is already up) so the apps get your shell's env,
 // e.g. NODE_EXTRA_CA_CERTS for portless.
 
+const { existsSync } = require("node:fs");
+const { homedir } = require("node:os");
+
+// Meteroid (dev tenant) webhooks reach this machine through your own Cloudflare tunnel; started only when you set
+// one up (README: "Billing (Meteroid) locally").
+const webhookTunnel = `${homedir()}/.cloudflared/trainertwin-dev-webhooks.yml`;
+
 const app = (name, cwd, script, args) => ({
   name,
   cwd: `${__dirname}/${cwd}`,
@@ -26,5 +33,8 @@ module.exports = {
     app("copilot", "copilot", "bun", "run dev -- --port 2001 --no-ui"),
     app("chat", "chat", "bun", "run dev -- --port 2000 --no-ui"),
     app("agent", "agent", "uv", "run src/agent.py dev"),
+    ...(existsSync(webhookTunnel)
+      ? [{ ...app("dev-webhooks", ".", "cloudflared", `tunnel --no-autoupdate --config ${webhookTunnel} run`), autorestart: true }]
+      : []),
   ],
 };

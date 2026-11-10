@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { deploymentAllowsMode, deploymentAllowsOrigin, deploymentPublicKey } from "../../../lib/deployments";
+import { deploymentAllowsMode, deploymentAllowsOrigin, deploymentPublicKey } from "../../lib/deployments";
 
 test("deployment keys and mode policy", () => {
   assert.match(deploymentPublicKey(), /^tt_pub_/);

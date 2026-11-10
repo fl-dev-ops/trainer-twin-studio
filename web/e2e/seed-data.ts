@@ -1,0 +1,8 @@
+import { readFileSync } from "node:fs";
+
+type Person = { id: string; name: string; email: string };
+/** What e2e/seed.ts made this run (written before the specs start). */
+export function seed(): { org: { slug: string; name: string }; roleplay: { slug: string }; twin: { slug: string }; admin: Person; learner: Person; broke: Person; more: Person[]; codes: { learner: string; broke: string }; purchase: { id: string; razorpayId: string; paymentId: string; refundId: string } } {
+  return JSON.parse(readFileSync("e2e/.state/seed.json", "utf8"));
+}
+export const as = (who: "admin" | "learner" | "broke") => ({ storageState: `e2e/.auth/${who}.json` });

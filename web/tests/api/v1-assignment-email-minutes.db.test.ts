@@ -1,9 +1,10 @@
+import { fundOrg, availableOrgSeconds } from "../setup/meteroid";
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import * as email from "@/lib/email";
 import * as externalApi from "@/lib/external-api";
 import { POST } from "@/app/api/v1/assignments/route";
 import { PATCH } from "@/app/api/v1/assignments/[id]/route";
-import { grantMinutes, learnerBalance, orgBalanceSeconds, topUpOrg } from "@/lib/minutes";
+import { grantMinutes, learnerBalance } from "@/lib/minutes";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "../lib/minutes-test-db";
 
 describe.skipIf(!localMinutesDb)("v1 assignment email minutes (local database)", () => {
@@ -20,7 +21,7 @@ describe.skipIf(!localMinutesDb)("v1 assignment email minutes (local database)",
   const request = (method: string, body: unknown) => new Request("https://example.com/api/v1/assignments", {
     method, headers: { "content-type": "application/json" }, body: JSON.stringify(body),
   });
-  const fund = (minutes: number) => topUpOrg({ orgId: f.org.id, minutes, note: "test" });
+  const fund = (minutes: number) => fundOrg({ orgId: f.org.id, minutes, note: "test" });
   const ledger = () => db.minuteLedger.findMany({ where: { orgId: f.org.id }, orderBy: { id: "asc" } });
   const post = (body = { email: f.learner.email, scenario: f.roleplay.slug }) => POST(request("POST", body));
   const patch = (id: string, body: unknown) => PATCH(request("PATCH", body), { params: Promise.resolve({ id }) });
@@ -43,7 +44,8 @@ describe.skipIf(!localMinutesDb)("v1 assignment email minutes (local database)",
       { email: to, seconds: 1800, actorUserId: f.trainer.id },
     ]);
     expect(assignmentEmail).toHaveBeenCalledTimes(1);
-    expect(assignmentEmail).toHaveBeenCalledWith(expect.objectContaining({ to, minutes: 30 }));
+    const assignment = await db.rolePlayAssignment.findFirstOrThrow({ where: { orgId: f.org.id, recipientEmail: to } });
+    expect(assignmentEmail).toHaveBeenCalledWith(expect.objectContaining({ to, minutes: 30, idempotencyKey: `assignment:${assignment.id}:${assignment.shareCode}` }));
   });
 
   test.each([
@@ -75,12 +77,13 @@ describe.skipIf(!localMinutesDb)("v1 assignment email minutes (local database)",
     expect(updated.recipientEmail).toBe(to);
     expect(updated.shareCode).not.toBe(original.shareCode);
     expect((await learnerBalance(f.org.id, to)).balanceSeconds).toBe(1800);
-    expect(await orgBalanceSeconds(f.org.id)).toBe(0);
+    expect(await availableOrgSeconds(f.org.id)).toBe(0);
     expect(await db.minuteLedger.findMany({ where: { orgId: f.org.id, email: to, type: "grant" } })).toMatchObject([
       { seconds: 1800, actorUserId: f.trainer.id, note: "Starting minutes" },
     ]);
     expect(assignmentEmail).toHaveBeenCalledTimes(1);
-    expect(assignmentEmail).toHaveBeenCalledWith(expect.objectContaining({ to, minutes: 30 }));
+    const assignment = await db.rolePlayAssignment.findFirstOrThrow({ where: { orgId: f.org.id, recipientEmail: to } });
+    expect(assignmentEmail).toHaveBeenCalledWith(expect.objectContaining({ to, minutes: 30, idempotencyKey: `assignment:${assignment.id}:${assignment.shareCode}` }));
   });
 
   test("PATCH with short org balance returns 409, preserving the entire assignment and ledger without email", async () => {
@@ -94,7 +97,7 @@ describe.skipIf(!localMinutesDb)("v1 assignment email minutes (local database)",
     expect(await db.rolePlayAssignment.findMany({ where: { orgId: f.org.id } })).toEqual([original]);
     expect(await ledger()).toEqual(before);
     expect((await learnerBalance(f.org.id, to)).balanceSeconds).toBe(0);
-    expect(await orgBalanceSeconds(f.org.id)).toBe(29 * 60);
+    expect(await availableOrgSeconds(f.org.id)).toBe(29 * 60);
     expect(assignmentEmail).not.toHaveBeenCalled();
   });
 

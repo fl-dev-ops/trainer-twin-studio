@@ -1,7 +1,8 @@
+import { fundOrg } from "../setup/meteroid";
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import * as email from "@/lib/email";
 import { auth } from "@/lib/auth";
-import { grantMinutes, learnerBalance, topUpOrg } from "@/lib/minutes";
+import { grantMinutes, learnerBalance } from "@/lib/minutes";
 import { inviteToRoleplay } from "@/lib/invite/roleplay";
 import { assignTwinAndInvite } from "@/lib/invite/twin";
 import { createTwinShareLink, twinAccessByCode } from "@/lib/twin-access";
@@ -17,7 +18,7 @@ describe.skipIf(!localMinutesDb)("starting minutes entrypoints (local database)"
     twinEmail = spyOn(email, "sendTwinAssignmentEmail").mockResolvedValue({ success: true });
   });
   afterEach(async () => { roleplayEmail?.mockRestore(); twinEmail?.mockRestore(); await f.clean(); });
-  const fund = (amount = 60) => topUpOrg({ orgId: f.org.id, minutes: amount, note: "test" });
+  const fund = (amount = 60) => fundOrg({ orgId: f.org.id, minutes: amount, note: "test" });
   const invite = (emails = [f.learner.email]) => inviteToRoleplay({ org: f.org, by: f.trainer, agent: f.roleplay, emails });
   const assign = (emails = [f.learner.email]) => assignTwinAndInvite({ org: f.org, by: f.trainer, agent: f.twin, emails });
 

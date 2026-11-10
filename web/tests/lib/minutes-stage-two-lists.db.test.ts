@@ -1,8 +1,9 @@
+import { fundOrg } from "../setup/meteroid";
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ensureDeployment } from "@/lib/deployments";
 import { listUsers } from "@/lib/learners";
-import { creditsLeftFor, grantMinutes, recordSessionUsage, topUpOrg } from "@/lib/minutes";
+import { creditsLeftFor, grantMinutes, recordSessionUsage } from "@/lib/minutes";
 import { LOW_LEARNER_MINUTES } from "@/lib/minutes-config";
 import { roleplayRouter } from "@/lib/roleplay/trpc";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
@@ -17,7 +18,7 @@ describe.skipIf(!localMinutesDb)("credits stage two learner lists (local databas
   afterEach(async () => { await f.clean(); });
   const caller = () => roleplayRouter.createCaller({ user: { ...f.trainer, orgId: f.org.id, orgSlug: f.org.slug, role: "admin" } });
   const give = async (minutes: number) => {
-    await topUpOrg({ orgId: f.org.id, minutes, note: "stage two test" });
+    await fundOrg({ orgId: f.org.id, minutes, note: "stage two test" });
     await grantMinutes({ orgId: f.org.id, email: f.learner.email, minutes });
   };
   const invite = async (emails: string[]) => {

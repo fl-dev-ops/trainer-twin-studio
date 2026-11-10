@@ -86,10 +86,10 @@ curl "https://dash.trainertwin.com/api/v1/sessions?assignmentId=assignment_123" 
 ## Credits during practice
 
 - Credits are counted by the second while the learner is in a call.
-- The learner sees the minutes they have left before they start.
-- When they run out, the call ends with a goodbye from the role play, and the learner can't start another one until they get more.
+- The learner sees the minutes they have left before they start. A call needs at least **5 minutes** to start.
+- When they run out, the call ends with a goodbye from the role play and a "Time's up" message, and the learner can't start another one until they get more.
 - A learner has one call at a time in your organization: starting a new one ends any other that is still open.
-- Admins and team members practise without using credits.
+- Admins' and team members' voice calls use your organization's credits directly (also at least 5 to start).
 
 Giving a learner more credits, choosing how many a new learner starts with, and seeing who is running low are done in the dashboard (**Users** and **Credits**). The API doesn't change credits, except for the 30 a new learner gets.
 

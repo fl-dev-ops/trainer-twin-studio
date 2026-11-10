@@ -3,7 +3,7 @@ import { MAX_ASSIGNMENT_RECIPIENTS } from "@/lib/assignments";
 import { db } from "@/lib/db";
 import { getTrainerOrg } from "@/lib/org";
 import { MAX_LEARNER_MINUTES, MinutesError } from "@/lib/minutes";
-import { inviteToRoleplay } from "@/lib/invite/roleplay";
+import { runRoleplayAssign } from "@/lib/workflow-runs";
 
 const bodySchema = z.object({
   emails: z
@@ -66,7 +66,8 @@ export async function PUT(
   if (!agent) return Response.json({ error: "Published role play not found" }, { status: 404 });
 
   try {
-    return Response.json(await inviteToRoleplay({
+    // The assign-roleplay workflow (workflows/assign-roleplay.ts): starting credits, links, then the emails.
+    return Response.json(await runRoleplayAssign({
       org: { id: trainer.id, slug: trainer.slug },
       by: { id: trainer.user.id, name: trainer.user.name },
       agent,

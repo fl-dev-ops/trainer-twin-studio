@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { orgDatabaseName, parseChromaUrl } from "../../../lib/chroma-tenant";
-import { LearnerMemoryService } from "../../../lib/learner-memory";
+import { orgDatabaseName, parseChromaUrl } from "../../lib/chroma-tenant";
+import { LearnerMemoryService } from "../../lib/learner-memory";
 
 test("organization databases use immutable IDs", () => {
   assert.equal(orgDatabaseName("8f5c-id"), "org_8f5c-id");

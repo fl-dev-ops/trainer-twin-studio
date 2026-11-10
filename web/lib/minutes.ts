@@ -1,11 +1,14 @@
 import { db } from "@/lib/db";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { DEFAULT_LEARNER_MINUTES, MAX_LEARNER_MINUTES } from "@/lib/minutes-config";
+import { orgCredits } from "@/lib/org-credits";
+import { scheduleOrgUsage } from "@/lib/schedule-org-credits";
 
 /**
- * Prepaid practice minutes (MinuteLedger). TrainerTwin tops an org up; the org gives its learners minutes from that
- * balance; learner calls (twin and role play alike) use them, by the second. Admin and team are never charged. This
- * module is the only writer of the ledger: every balance below is a sum over it, plus calls still running.
+ * Prepaid practice minutes (MinuteLedger). The org's credits live in Meteroid (lib/org-credits.ts); the org gives its
+ * learners minutes from them; learner calls (twin and role play alike) use those, by the second. Admin and team voice
+ * calls use the org's credits directly (orgs billed by Meteroid; otherwise they're free). This module is the only
+ * writer of the ledger: learners' balances are sums over it, plus calls still running.
  */
 
 export { DEFAULT_LEARNER_MINUTES, MAX_LEARNER_MINUTES };
@@ -22,14 +25,6 @@ export const OUT_OF_MINUTES = "You've used all your practice minutes. Ask your t
 type Tx = Prisma.TransactionClient | typeof db;
 const lower = (email: string) => email.trim().toLowerCase();
 const minutes = (seconds: number) => Math.floor(seconds / 60);
-
-/** The org's unallocated balance: top-ups minus what it has given out (take-backs come back). */
-export async function orgBalanceSeconds(orgId: string, tx: Tx = db): Promise<number> {
-  const [row] = await tx.$queryRaw<{ seconds: number }[]>`
-    SELECT coalesce(sum(CASE WHEN "type" = 'topup' THEN "seconds" ELSE -"seconds" END), 0)::int AS seconds
-    FROM "MinuteLedger" WHERE "orgId" = ${orgId} AND "type" IN ('topup', 'grant', 'reclaim')`;
-  return row?.seconds ?? 0;
-}
 
 export type LearnerMinutes = { email: string; grantedSeconds: number; usedSeconds: number; balanceSeconds: number };
 
@@ -55,7 +50,7 @@ export async function learnerMinutes(orgId: string, emails?: string[], tx: Tx = 
       SELECT lower(u."email") AS email, coalesce(sum(greatest(0, least(s."allowedSeconds",
         floor(extract(epoch FROM (coalesce(s."endedAt", now() AT TIME ZONE 'UTC') - s."startedAt")))))), 0)::int AS seconds
       FROM "InterviewSession" s JOIN "user" u ON u."id" = s."userId"
-      WHERE s."orgId" = ${orgId} AND s."allowedSeconds" IS NOT NULL AND s."startedAt" IS NOT NULL
+      WHERE s."orgId" = ${orgId} AND s."allowedSeconds" IS NOT NULL AND s."startedAt" IS NOT NULL AND NOT s."chargesOrg"
         AND s."status" NOT IN ('failed', 'revoked')
         AND NOT EXISTS (SELECT 1 FROM "MinuteLedger" m WHERE m."sessionId" = s."id") ${userFilter}
       GROUP BY lower(u."email")`,
@@ -94,7 +89,7 @@ export async function creditsLeftFor(orgId: string, emails: string[]): Promise<M
   }));
 }
 
-/** Grants, take-backs and top-ups of one org run one at a time, so two admins can't spend the same minutes. */
+/** Grants of one org run one at a time, so two admins can't spend the same credits. */
 async function locked<T>(orgId: string, work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
   return db.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`minutes:${orgId}`}))`;
@@ -105,15 +100,6 @@ async function locked<T>(orgId: string, work: (tx: Prisma.TransactionClient) => 
 function wholeMinutes(value: number) {
   if (!Number.isInteger(value) || value < 1) throw new MinutesError("Give a whole number of minutes, 1 or more", 400);
   return value;
-}
-
-/** TrainerTwin adds minutes to an org's balance (the top-up script now; payments later). */
-export async function topUpOrg(input: { orgId: string; minutes: number; note: string; actorUserId?: string | null }) {
-  const amount = wholeMinutes(input.minutes);
-  return locked(input.orgId, async (tx) => {
-    await tx.minuteLedger.create({ data: { orgId: input.orgId, type: "topup", seconds: amount * 60, note: input.note, actorUserId: input.actorUserId ?? null } });
-    return { orgBalanceMinutes: minutes(await orgBalanceSeconds(input.orgId, tx)) };
-  });
 }
 
 /**
@@ -134,7 +120,7 @@ export async function grantMinutes(input: {
   const email = lower(input.email);
   return locked(input.orgId, async (tx) => {
     const learner = await learnerBalance(input.orgId, email, tx);
-    const orgBalance = await orgBalanceSeconds(input.orgId, tx);
+    const orgBalance = (await orgCredits(input.orgId, { fresh: true, tx })).seconds;
     if (input.onlyIfNew) {
       const given = await tx.minuteLedger.count({ where: { orgId: input.orgId, email, type: "grant" } });
       if (given > 0) return { grantedMinutes: 0, balanceMinutes: minutes(learner.balanceSeconds), orgBalanceMinutes: minutes(orgBalance) };
@@ -150,6 +136,9 @@ export async function grantMinutes(input: {
       data: { orgId: input.orgId, email, userId: input.userId ?? null, type: "grant", seconds: amount * 60, actorUserId: input.actorUserId ?? null, note: input.note ?? null },
     });
     return { grantedMinutes: amount, balanceMinutes: minutes(learner.balanceSeconds + amount * 60), orgBalanceMinutes: minutes(orgBalance - amount * 60) };
+  }).then(async (result) => {
+    if (result.grantedMinutes) await scheduleOrgUsage(input.orgId);
+    return result;
   });
 }
 
@@ -169,7 +158,7 @@ export async function giveStartingMinutes(input: { orgId: string; emails: string
     const known = new Set(had.map((row) => row.email));
     const given = emails.filter((email) => !known.has(email));
     const need = given.length * amount * 60;
-    const orgBalance = await orgBalanceSeconds(input.orgId, tx);
+    const orgBalance = need ? (await orgCredits(input.orgId, { fresh: true, tx })).seconds : 0;
     if (need > orgBalance) {
       throw new MinutesError(
         `Not enough credits in your organization's balance: ${given.length} new ${given.length === 1 ? "person needs" : "people need"} ${minutes(need)} min, ${minutes(orgBalance)} min left. Ask TrainerTwin to top it up.`,
@@ -182,6 +171,9 @@ export async function giveStartingMinutes(input: { orgId: string; emails: string
       });
     }
     return { given };
+  }).then(async (result) => {
+    if (result.given.length) await scheduleOrgUsage(input.orgId);
+    return result;
   });
 }
 
@@ -202,7 +194,7 @@ export async function grantMinutesToMany(input: { orgId: string; emails: string[
       if (amount * 60 > room) skipped.push({ email, reason: `can get at most ${minutes(Math.max(0, room))} more (${MAX_LEARNER_MINUTES} min in total)` });
       else given.push(email);
     }
-    const orgBalance = await orgBalanceSeconds(input.orgId, tx);
+    const orgBalance = given.length ? (await orgCredits(input.orgId, { fresh: true, tx })).seconds : 0;
     if (given.length * amount * 60 > orgBalance) {
       throw new MinutesError(
         `Not enough credits in your organization's balance: ${given.length} × ${amount} min = ${given.length * amount} min, ${minutes(orgBalance)} min left. Ask TrainerTwin to top it up.`,
@@ -215,25 +207,9 @@ export async function grantMinutesToMany(input: { orgId: string; emails: string[
       });
     }
     return { given, skipped, orgBalanceMinutes: minutes(orgBalance - given.length * amount * 60) };
-  });
-}
-
-/**
- * Takes unused minutes back from a learner into the org's balance (never more than they have left). Not exposed in
- * the studio (credits are only ever added there); kept for support corrections.
- */
-export async function reclaimMinutes(input: { orgId: string; email: string; minutes: number; actorUserId?: string | null; note?: string | null }) {
-  const amount = wholeMinutes(input.minutes);
-  const email = lower(input.email);
-  return locked(input.orgId, async (tx) => {
-    const learner = await learnerBalance(input.orgId, email, tx);
-    if (amount * 60 > learner.balanceSeconds) {
-      throw new MinutesError(`${email} has ${minutes(Math.max(0, learner.balanceSeconds))} unused minutes; take back at most that.`, 400);
-    }
-    await tx.minuteLedger.create({
-      data: { orgId: input.orgId, email, type: "reclaim", seconds: -amount * 60, actorUserId: input.actorUserId ?? null, note: input.note ?? null },
-    });
-    return { reclaimedMinutes: amount, balanceMinutes: minutes(learner.balanceSeconds - amount * 60), orgBalanceMinutes: minutes(await orgBalanceSeconds(input.orgId, tx)) };
+  }).then(async (result) => {
+    if (result.given.length) await scheduleOrgUsage(input.orgId);
+    return result;
   });
 }
 
@@ -243,31 +219,36 @@ export function sessionUsageSeconds(row: { allowedSeconds: number | null; starte
   return Math.max(0, Math.min(row.allowedSeconds, Math.floor((row.endedAt.getTime() - row.startedAt.getTime()) / 1000)));
 }
 
-/** Writes a closed metered call's usage row. Safe to call more than once (one usage row per session). */
+/**
+ * Writes a closed metered call's usage row: a learner's minutes (usage), or the org's credits for an admin/team call
+ * (org_usage, then sent to Meteroid). Safe to call more than once (one row per session).
+ */
 export async function recordSessionUsage(sessionId: string) {
   const row = await db.interviewSession.findUnique({
     where: { id: sessionId },
-    select: { id: true, orgId: true, userId: true, allowedSeconds: true, startedAt: true, endedAt: true, status: true, user: { select: { email: true } } },
+    select: { id: true, orgId: true, userId: true, allowedSeconds: true, chargesOrg: true, startedAt: true, endedAt: true, status: true, user: { select: { email: true } } },
   });
   if (!row || row.allowedSeconds == null || !row.endedAt) return;
   const seconds = sessionUsageSeconds(row);
-  await db.minuteLedger.create({
-    data: { orgId: row.orgId, email: lower(row.user.email), userId: row.userId, type: "usage", seconds: -seconds, sessionId: row.id },
-  }).catch((error: unknown) => {
+  const written = await db.minuteLedger.create({
+    data: { orgId: row.orgId, email: lower(row.user.email), userId: row.userId, type: row.chargesOrg ? "org_usage" : "usage", seconds: -seconds, sessionId: row.id },
+  }).then(() => true, (error: unknown) => {
     if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) throw error;
+    return false;
   });
+  if (written && row.chargesOrg && seconds > 0) await scheduleOrgUsage(row.orgId);
 }
 
-/** One credit added: to the org (a top-up) or to a learner (a grant), with who added it. */
+/** Minutes added to a learner (a grant), with who did it. */
 export type CreditEntry = { id: string; minutes: number; note: string | null; at: string; by: string | null };
 
 /**
- * Credits added, newest first: the org's top-ups (no email), or what one learner was given. Each addition is its own
- * row and balances are sums, so this is the full record; nothing is ever changed in place.
+ * What one learner was given, newest first. Each addition is its own row and balances are sums, so this is the full
+ * record; nothing is ever changed in place.
  */
-export async function creditsAdded(orgId: string, email?: string, take = 200): Promise<CreditEntry[]> {
+export async function creditsAdded(orgId: string, email: string, take = 200): Promise<CreditEntry[]> {
   const rows = await db.minuteLedger.findMany({
-    where: { orgId, ...(email ? { email: lower(email), type: "grant" } : { type: "topup" }) },
+    where: { orgId, email: lower(email), type: "grant" },
     orderBy: { createdAt: "desc" },
     take,
     select: { id: true, seconds: true, note: true, createdAt: true, actorUserId: true },
@@ -282,10 +263,4 @@ export async function creditsAdded(orgId: string, email?: string, take = 200): P
     at: row.createdAt.toISOString(),
     by: row.actorUserId ? nameOf.get(row.actorUserId) ?? null : null,
   }));
-}
-
-/** Total credits ever added to the org (its top-ups). */
-export async function orgCreditsAddedSeconds(orgId: string): Promise<number> {
-  const total = await db.minuteLedger.aggregate({ where: { orgId, type: "topup" }, _sum: { seconds: true } });
-  return total._sum.seconds ?? 0;
 }

@@ -5,11 +5,10 @@ import { beforeSettings } from "@/lib/context-upload";
 import { db } from "@/lib/db";
 import { isStudioRole } from "@/lib/org";
 import { updateRoleplay } from "@/lib/roleplay/manage";
-import { inviteToRoleplay } from "@/lib/invite/roleplay";
 import { roleplayBuilderFrom } from "@/lib/roleplay/skill";
 import { getObjectText } from "@/lib/s3";
 import { ROLEPLAY_SOURCE, ScenarioIngestError, TWIN_SKILL_SOURCE } from "@/lib/scenario-ingest";
-import { assignTwinAndInvite } from "@/lib/invite/twin";
+import { runRoleplayAssign, runTwinAssign } from "@/lib/workflow-runs";
 import { accessUntilSchema, listTwinAssignments } from "@/lib/twin-access";
 import { updateTwin } from "@/lib/twin/manage";
 import { TWIN_SOURCE } from "@/lib/twins";
@@ -63,7 +62,19 @@ export type CopilotStudioInput = z.infer<typeof copilotStudioInput>;
 export type Actor = { org: { id: string; slug: string }; user: { id: string; name: string } };
 
 /** What runCopilotStudio talks to; tests pass fakes instead of stubbing modules. */
-const defaultDeps = { db, getObjectText, assignTwinAndInvite, listTwinAssignments, inviteToRoleplay, updateTwin, updateRoleplay, resolveUpload };
+/**
+ * What the copilot says about the invite emails: queued in the send-invite-emails workflow (their outcome isn't known
+ * yet, so no failure count), or, when they were sent right away, how many failed.
+ */
+function emailsStatus<T extends { emailFailures: number; emailsQueued?: number; emailProgress?: string }>(result: T) {
+  const { emailFailures, emailsQueued, emailProgress, ...stats } = result;
+  return emailProgress
+    ? { ...stats, emails: `${emailsQueued} being sent; each is retried automatically, and the studio shows any that still fail` }
+    : { ...stats, emailFailures };
+}
+
+// Assigning goes through the assign-twin / assign-roleplay workflows (lib/workflow-runs.ts), as on the Assign pages.
+const defaultDeps = { db, getObjectText, assignTwinAndInvite: runTwinAssign, listTwinAssignments, inviteToRoleplay: runRoleplayAssign, updateTwin, updateRoleplay, resolveUpload };
 export type CopilotStudioDeps = typeof defaultDeps;
 
 const asRecord = (value: unknown) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
@@ -225,9 +236,9 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
           org: actor.org, by: actor.user, agent: { id: agent.id, name: agent.name },
           emails: learners, accessUntil: input.accessUntil,
         });
-        return { ...result, refused };
+        return { ...emailsStatus(result), refused };
       }
-      return { ...(await d.inviteToRoleplay({ org: actor.org, by: actor.user, agent, emails: learners })), refused };
+      return { ...emailsStatus(await d.inviteToRoleplay({ org: actor.org, by: actor.user, agent, emails: learners })), refused };
     }
 
     case "archive": {

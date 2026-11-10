@@ -1,15 +1,15 @@
+import { fundOrg, availableOrgSeconds } from "../setup/meteroid";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   giveStartingMinutes, grantMinutes, grantMinutesToMany, learnerBalance,
-  orgBalanceSeconds, recordSessionUsage, topUpOrg,
-} from "@/lib/minutes";
+  recordSessionUsage } from "@/lib/minutes";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
 describe.skipIf(!localMinutesDb)("credits stage two ledger (local database)", () => {
   let f: MinutesFixture;
   beforeEach(async () => { f = minutesFixture(); await f.create(); });
   afterEach(async () => { await f.clean(); });
-  const fund = (minutes: number) => topUpOrg({ orgId: f.org.id, minutes, note: "stage two test" });
+  const fund = (minutes: number) => fundOrg({ orgId: f.org.id, minutes, note: "stage two test" });
   const rows = () => db.minuteLedger.findMany({ where: { orgId: f.org.id }, orderBy: { id: "asc" } });
 
   test("giveStartingMinutes grants the chosen amount once per normalized email, even with no balance left", async () => {
@@ -42,7 +42,7 @@ describe.skipIf(!localMinutesDb)("credits stage two ledger (local database)", ()
     expect(await giveStartingMinutes({ orgId: f.org.id, emails, minutes: 45 })).toEqual({ given: emails.slice(1) });
     expect((await learnerBalance(f.org.id, f.learner.email)).grantedSeconds).toBe(600);
     expect((await learnerBalance(f.org.id, other)).grantedSeconds).toBe(2700);
-    expect(await orgBalanceSeconds(f.org.id)).toBe(0);
+    expect(await availableOrgSeconds(f.org.id)).toBe(0);
   });
 
   test("giveStartingMinutes permits the exact 360-minute boundary", async () => {
@@ -70,7 +70,7 @@ describe.skipIf(!localMinutesDb)("credits stage two ledger (local database)", ()
     ]));
     expect((await learnerBalance(f.org.id, f.learner.email)).grantedSeconds).toBe(350 * 60);
     expect((await learnerBalance(f.org.id, other)).grantedSeconds).toBe(360 * 60);
-    expect(await orgBalanceSeconds(f.org.id)).toBe(270 * 60);
+    expect(await availableOrgSeconds(f.org.id)).toBe(270 * 60);
   });
 
   test("grantMinutesToMany short balance writes no rows, including for otherwise eligible learners", async () => {
@@ -80,7 +80,7 @@ describe.skipIf(!localMinutesDb)("credits stage two ledger (local database)", ()
     await expect(grantMinutesToMany({ orgId: f.org.id, emails: [f.learner.email, `other-${f.learner.email}`, `third-${f.learner.email}`], minutes: 10 }))
       .rejects.toMatchObject({ name: "MinutesError", status: 409 });
     expect(await rows()).toEqual(before);
-    expect(await orgBalanceSeconds(f.org.id)).toBe(19 * 60);
+    expect(await availableOrgSeconds(f.org.id)).toBe(19 * 60);
   });
 
   test("grantMinutesToMany deduplicates trimmed, case-mixed emails and charges once", async () => {
@@ -120,7 +120,7 @@ describe.skipIf(!localMinutesDb)("credits stage two ledger (local database)", ()
     const grants = (await rows()).filter((row) => row.type === "grant");
     const batchWon = results[0].status === "fulfilled";
     expect(grants.map((row) => row.email).sort()).toEqual((batchWon ? batchEmails : [singleEmail]).sort());
-    expect(await orgBalanceSeconds(f.org.id)).toBe((batchWon ? 0 : 15) * 60);
+    expect(await availableOrgSeconds(f.org.id)).toBe((batchWon ? 0 : 15) * 60);
     expect(grants.reduce((sum, row) => sum + row.seconds, 0)).toBe((batchWon ? 40 : 25) * 60);
   });
 });

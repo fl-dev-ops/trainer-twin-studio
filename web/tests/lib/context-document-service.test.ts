@@ -5,7 +5,7 @@ import {
   inspectImage,
   prepareContextDocument,
   searchDocumentChunks,
-} from "../../../lib/context-document-service";
+} from "../../lib/context-document-service";
 
 describe("session context document preparation", () => {
   it("chunks markdown by heading and retrieves the relevant section", () => {
