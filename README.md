@@ -76,6 +76,44 @@ uv sync
 uv run python src/agent.py dev
 ```
 
+## Billing (Meteroid) locally
+
+Org credits live in Meteroid (`web/lib/org-credits.ts`). Locally the app talks to Meteroid's **Development** tenant
+(https://meteroid.foreverlearning.in, tenant "Development"); never to Production.
+
+```bash
+# web/.env (see web/.env.example)
+METEROID_API_URL=https://meteroid-rest.foreverlearning.in/api/v1
+METEROID_API_KEY=pv_dev_...        # Meteroid › Development › Developers › API keys
+METEROID_WEBHOOK_SECRET=whsec_...  # from your webhook endpoint below
+
+cd web
+bun scripts/meteroid-setup.ts                      # once per tenant (done for Development): MINS, voice_minutes, plan "Credits"
+bun scripts/meteroid-link-org.ts --org <slug>      # bill a local org through Meteroid (alias = slug)
+```
+
+Webhooks (grants added in Meteroid show up in the app within seconds; without them the Credits page still re-reads
+Meteroid every minute). Meteroid can't reach localhost, so each developer runs their own Cloudflare tunnel for the
+webhook path only:
+
+```bash
+cloudflared tunnel create trainertwin-dev-webhooks-<you>
+cloudflared tunnel route dns trainertwin-dev-webhooks-<you> dev-webhooks-<you>.foreverlearning.in
+# ~/.cloudflared/trainertwin-dev-webhooks.yml:
+#   tunnel: <tunnel id>
+#   credentials-file: ~/.cloudflared/<tunnel id>.json
+#   ingress:
+#     - hostname: dev-webhooks-<you>.foreverlearning.in
+#       path: ^/api/meteroid/webhook$
+#       service: http://localhost:3000
+#     - service: http_status:404
+pm2 start ecosystem.config.cjs --only dev-webhooks  # ecosystem starts it whenever that file exists
+```
+
+Then in Meteroid › Development › Settings › Webhooks add `https://dev-webhooks-<you>.foreverlearning.in/api/meteroid/webhook`
+(events: wallet.funded, wallet.debited, wallet.depleted, wallet.recovered, credit_grant.expired) and put its signing
+secret in `METEROID_WEBHOOK_SECRET`.
+
 ## Versioning model
 
 - Persona/Agent each carry a `version` int; a changed save snapshots the old data

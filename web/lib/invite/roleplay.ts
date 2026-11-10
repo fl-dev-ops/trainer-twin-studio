@@ -4,7 +4,7 @@ import { contextUploadFromAgentData } from "@/lib/context-upload";
 import { db } from "@/lib/db";
 import { ensureDeployment } from "@/lib/deployments";
 import { giveStartingMinutes, learnerMinutes } from "@/lib/minutes";
-import { sendRolePlayAssignmentEmail } from "@/lib/email";
+import { queueAssignmentEmails } from "@/lib/schedule-assignment-emails";
 
 /**
  * Invites learners to a role play by email (the role play's Assign page and the copilot): a new or reopened
@@ -69,18 +69,18 @@ export async function inviteToRoleplay(input: {
   const upload = contextUploadFromAgentData(input.agent.data);
   const requiredArtifact = upload.required && upload.prompt ? { label: upload.label, prompt: upload.prompt } : null;
   const balances = await learnerMinutes(input.org.id, assignmentEmails.map(({ to }) => to));
-  const deliveries = await Promise.all(
-    assignmentEmails.map(({ to, practiceUrl: url }) =>
-      sendRolePlayAssignmentEmail({
-        to,
-        rolePlayName: input.agent.name,
-        rolePlayObjective: objective,
-        practiceUrl: url,
-        trainerName: input.by.name,
-        requiredArtifact,
-        minutes: Math.floor(Math.max(0, balances.get(to)?.balanceSeconds ?? 0) / 60),
-      }),
-    ),
-  );
-  return { ...stats, emailFailures: deliveries.filter(({ success }) => !success).length };
+  // The emails go out in a workflow, each retried on its own; the assign screen follows `emailProgress`.
+  const delivery = await queueAssignmentEmails(input.org.id, assignmentEmails.map(({ to, practiceUrl: url }) => ({
+    kind: "roleplay" as const,
+    args: {
+      to,
+      rolePlayName: input.agent.name,
+      rolePlayObjective: objective,
+      practiceUrl: url,
+      trainerName: input.by.name,
+      requiredArtifact,
+      minutes: Math.floor(Math.max(0, balances.get(to)?.balanceSeconds ?? 0) / 60),
+    },
+  })));
+  return { ...stats, ...delivery };
 }

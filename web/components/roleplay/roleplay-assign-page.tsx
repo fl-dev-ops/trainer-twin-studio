@@ -1,5 +1,6 @@
 "use client";
 
+import { followEmailProgress } from "@/lib/follow-email-progress";
 import Link from "next/link";
 import { useState } from "react";
 import { ArrowLeft, UserPlus } from "lucide-react";
@@ -38,7 +39,8 @@ export function RoleplayAssignPage({ roleplay, learners }: { roleplay: Detail; l
       if (!res.ok) throw new Error(body.error ?? "Could not assign");
       const parts = [body.added ? `${body.added} invited` : "", body.resent ? `${body.resent} re-sent` : "", body.skipped ? `${body.skipped} already invited` : ""].filter(Boolean);
       toast.success(parts.join(" · ") || "Done");
-      if (body.emailFailures) toast.warning(`${body.emailFailures} invite email(s) could not be sent.`);
+      if (body.emailProgress) void followEmailProgress(body.emailProgress, body.emailsQueued);
+      else if (body.emailFailures) toast.warning(`${body.emailFailures} invite email(s) could not be sent.`);
       refresh();
       return true;
     } catch (error) {

@@ -1,5 +1,6 @@
 "use client";
 
+import { followEmailProgress } from "@/lib/follow-email-progress";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -118,9 +119,10 @@ export function TwinEditPage({
       // Say what actually happened: assigned (and emailed), or already had access.
       const done = result.added + result.reactivated;
       const people = (n: number) => `${n} ${n === 1 ? "learner" : "learners"}`;
-      if (done) toast.success(`${people(done)} assigned and sent their link`);
+      if (done) toast.success(`${people(done)} assigned`);
       if (result.skipped) toast.info(`${people(result.skipped)} already had this twin`);
-      if (result.emailFailures) toast.warning(`${result.emailFailures} invite email(s) could not be sent.`);
+      if (result.emailProgress) void followEmailProgress(result.emailProgress, result.emailsQueued);
+      else if (result.emailFailures) toast.warning(`${result.emailFailures} invite email(s) could not be sent.`);
       refresh();
       return true;
     } catch (error) {

@@ -1,10 +1,10 @@
-import { sendTwinAssignmentEmail } from "@/lib/email";
 import { giveStartingMinutes, learnerMinutes } from "@/lib/minutes";
+import { queueAssignmentEmails } from "@/lib/schedule-assignment-emails";
 import { assignTwin, twinSharePath, twinShareUrl } from "@/lib/twin-access";
 
 /**
  * Gives new people their starting minutes (all or nothing: refused when the org balance is short), then assignTwin,
- * then emails each new or reactivated learner their link with the minutes they have.
+ * then emails each new or reactivated learner their link with the minutes they have (a workflow: `emailProgress`).
  */
 export async function assignTwinAndInvite(input: {
   org: { id: string; slug: string };
@@ -27,12 +27,15 @@ export async function assignTwinAndInvite(input: {
   // The readable twin link: the personal /s/<code> link would work too, but the assignment is already bound to
   // the invited email, so matching it by sign-in (lib/pages/learner.ts) is all the learner needs.
   const sharePath = await twinSharePath(input.org.id, input.org.slug, input.agent.id);
-  const deliveries = await Promise.all(invites.map(({ to }) => sendTwinAssignmentEmail({
-    to,
-    twinName: input.agent.name,
-    minutes: Math.floor((balances.get(to)?.balanceSeconds ?? 0) / 60),
-    practiceUrl: twinShareUrl(input.org.slug, sharePath),
-    trainerName: input.by.name,
+  const emails = await queueAssignmentEmails(input.org.id, invites.map(({ to }) => ({
+    kind: "twin" as const,
+    args: {
+      to,
+      twinName: input.agent.name,
+      minutes: Math.floor((balances.get(to)?.balanceSeconds ?? 0) / 60),
+      practiceUrl: twinShareUrl(input.org.slug, sharePath),
+      trainerName: input.by.name,
+    },
   })));
-  return { ...stats, emailFailures: deliveries.filter(({ success }) => !success).length };
+  return { ...stats, ...emails };
 }

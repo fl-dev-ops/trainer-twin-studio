@@ -14,6 +14,8 @@ export type SendEmailOptions = {
   html: string;
   text?: string;
   from?: string;
+  /** Resend sends one email per key (24 h): a retried workflow step can't send it twice. */
+  idempotencyKey?: string;
 };
 
 /**
@@ -26,6 +28,7 @@ export async function sendEmail({
   html,
   text,
   from = DEFAULT_FROM_EMAIL,
+  idempotencyKey,
 }: SendEmailOptions) {
   if (!resend) {
     console.warn(
@@ -43,7 +46,7 @@ export async function sendEmail({
       subject,
       html,
       text,
-    });
+    }, idempotencyKey ? { idempotencyKey } : undefined);
 
     if (result.error) {
       console.error("[Email Error]:", result.error);
@@ -321,6 +324,7 @@ export async function sendRolePlayAssignmentEmail({
   trainerName = "Your trainer",
   requiredArtifact,
   minutes,
+  idempotencyKey,
 }: {
   to: string;
   userName?: string;
@@ -331,6 +335,7 @@ export async function sendRolePlayAssignmentEmail({
   requiredArtifact?: { label: string; prompt: string } | null;
   /** Practice minutes the learner has; left out of the email when unknown. */
   minutes?: number;
+  idempotencyKey?: string;
 }) {
   const subject = `New Role Play Assigned: ${rolePlayName}`;
   const minutesHtml = minutes === undefined ? "" : ` You have <strong>${minutes} minutes</strong> of practice, and can do this role play as many times as you like while they last.`;
@@ -375,6 +380,7 @@ export async function sendRolePlayAssignmentEmail({
     subject,
     html,
     text: `${trainerName} has assigned you the "${rolePlayName}" role play on TrainerTwin.${minutes === undefined ? "" : ` You have ${minutes} minutes of practice, and can do this role play as many times as you like while they last.`}${requiredArtifact?.prompt ? ` What to bring: ${requiredArtifact.prompt}.` : ""} Sign in with ${to} and start here: ${practiceUrl}`,
+    idempotencyKey,
   });
 }
 
@@ -388,12 +394,14 @@ export async function sendTwinAssignmentEmail({
   minutes,
   practiceUrl,
   trainerName = "Your trainer",
+  idempotencyKey,
 }: {
   to: string;
   twinName: string;
   minutes: number;
   practiceUrl: string;
   trainerName?: string;
+  idempotencyKey?: string;
 }) {
   const subject = `You can now talk to ${twinName}`;
   const html = renderEmailLayout({
@@ -422,6 +430,7 @@ export async function sendTwinAssignmentEmail({
     subject,
     html,
     text: `${trainerName} gave you access to ${twinName} on TrainerTwin. You have ${minutes} minutes of practice. Start here: ${practiceUrl}`,
+    idempotencyKey,
   });
 }
 

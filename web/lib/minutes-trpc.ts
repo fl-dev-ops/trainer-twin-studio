@@ -112,6 +112,20 @@ export const minutesRouter = t.router({
     };
   }),
 
+  /**
+   * A fingerprint of the org's credits: Meteroid's last balance and grants, and the last movement in the ledger. The
+   * studio polls it (cheap: no Meteroid call) and reloads credit numbers when it changes, so a grant made in Meteroid
+   * (webhook → workflow → OrgBilling) or a call that ended shows up within seconds.
+   */
+  version: studioProcedure.query(async ({ ctx }) => {
+    const [billing, last] = await Promise.all([
+      db.orgBilling.findUnique({ where: { orgId: ctx.user.orgId }, select: { balanceMinutes: true, grants: true } }),
+      db.minuteLedger.findFirst({ where: { orgId: ctx.user.orgId }, orderBy: { createdAt: "desc" }, select: { id: true } }),
+    ]);
+    const grants = (billing?.grants ?? []) as { id: string; status: string | null }[];
+    return [billing?.balanceMinutes ?? "-", grants.map((grant) => `${grant.id}:${grant.status}`).join(","), last?.id ?? "-"].join("|");
+  }),
+
   /** One learner's credits: left, given, used, and every credit added to them. */
   learner: studioProcedure.input(z.object({ email: emailInput })).query(async ({ ctx, input }) => {
     const [own, credits, added] = await Promise.all([
