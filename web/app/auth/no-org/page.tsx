@@ -23,8 +23,8 @@ export default async function NoOrgPage() {
         {session ? (
           <>
             <p className="text-muted-foreground text-sm">
-              Signed in as <span className="text-foreground font-medium">{session.user.email}</span>. If your trainer invited a
-              different account, sign out and use that one.
+              Signed in as <span className="text-foreground font-medium">{session.user.email}</span>. If your trainer added a
+              different email, sign out and use that one.
             </p>
             <SwitchAccountButton returnTo="/sign-in" label="Sign out" />
           </>

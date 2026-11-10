@@ -1,6 +1,7 @@
 // Workflow: assign a role play.
-// From a role play's Assign page: new people get their starting credits, each gets a personal practice link, and
-// their emails go out through send-invite-emails (the page follows them). Run by lib/workflow-runs.ts runRoleplayAssign.
+// From a role play's Assign page and the copilot: the people are added to the org as learners (new ones with their
+// starting credits), each gets a personal practice link, and one email each goes out through send-emails (the page
+// follows them). Run by lib/workflow-runs.ts runRoleplayAssign.
 
 import type { RoleplayAssignInput } from "@/lib/invite/roleplay";
 import { assignRoleplay, sendEmails } from "./steps/learners";

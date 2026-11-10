@@ -146,12 +146,19 @@ export async function closeLiveKitSession(input: {
   room: string | null;
   dispatchId?: string | null;
   videoEgressId?: string | null;
-}) {
+}, options: { strict?: boolean } = {}) {
   if (!input.room) return;
   const { rooms, dispatches, egress } = clients();
-  if (input.videoEgressId) await egress.stopEgress(input.videoEgressId).catch(() => {});
-  if (input.dispatchId) await dispatches.deleteDispatch(input.dispatchId, input.room).catch(() => {});
-  await rooms.deleteRoom(input.room).catch(() => {});
+  // Already stopped / gone is done. Other errors: ignored by default; `strict` throws them so a workflow step retries.
+  const done = (error: unknown) => {
+    const status = (error as { status?: number; code?: string } | null)?.status;
+    const code = (error as { code?: string } | null)?.code;
+    if (!options.strict || status === 404 || code === "not_found" || code === "failed_precondition") return;
+    throw error;
+  };
+  if (input.videoEgressId) await egress.stopEgress(input.videoEgressId).catch(done);
+  if (input.dispatchId) await dispatches.deleteDispatch(input.dispatchId, input.room).catch(done);
+  await rooms.deleteRoom(input.room).catch(done);
 }
 
 /**

@@ -5,7 +5,8 @@ process.env.COPILOT_SERVICE_SECRET = "s3cret";
 let kind = "TWIN";
 let lookups = 0;
 let closed: { id: string; status: string; data: Record<string, unknown> }[] = [];
-let processed: string[] = [];
+let finalized: Record<string, unknown>[] = [];
+const start = mock(async () => ({ runId: "end-run" }));
 
 mock.module("@/lib/db", () => ({
   db: {
@@ -20,9 +21,13 @@ mock.module("@/lib/session-lifecycle", () => ({
     return { finalStatus: status, id };
   },
 }));
-mock.module("@/lib/session-processing", () => ({
-  processEndedSession: async (id: string) => { processed.push(id); return true; },
+mock.module("@/lib/interview-sessions", () => ({
+  finalizeInterviewSession: async (input: Record<string, unknown>) => {
+    finalized.push(input);
+    return { finalStatus: "completed", id: input.sessionId };
+  },
 }));
+mock.module("workflow/api", () => ({ start }));
 
 const { POST } = await import("@/app/api/sessions/webhook/route");
 
@@ -43,7 +48,7 @@ const agentPayload = {
   transcript: [{ role: "user", text: "How do I follow up?" }, { role: "trainer", text: "Same evening." }],
 };
 
-beforeEach(() => { kind = "TWIN"; lookups = 0; closed = []; processed = []; });
+beforeEach(() => { kind = "TWIN"; lookups = 0; closed = []; finalized = []; start.mockClear(); });
 
 test("missing or wrong secret is refused before anything is read or changed", async () => {
   expect((await call(agentPayload)).status).toBe(401);
@@ -64,7 +69,8 @@ test("twin: the agent's transcript replaces the browser's and is marked final", 
   expect(closed[0].data.replaceTranscript).toBe(true);
   expect(closed[0].data.transcript).toEqual(agentPayload.transcript);
   expect(closed[0].data.evidence).toEqual({ videoS3Key: "org/recordings/s1/video.mp4", transcriptFinal: true });
-  expect(processed).toEqual(["s1"]);
+  expect(closed[0]).toMatchObject({ id: "s1", status: "completed" });
+  expect(start).not.toHaveBeenCalled(); // closeInterviewSession owns the end workflow; the route never starts reports.
 });
 
 test("role play: first transcript still wins and no twin marker is added", async () => {
@@ -72,4 +78,14 @@ test("role play: first transcript still wins and no twin marker is added", async
   await call(agentPayload, "Bearer s3cret");
   expect(closed[0].data.replaceTranscript).toBe(false);
   expect(closed[0].data.evidence).toEqual({ videoS3Key: "org/recordings/s1/video.mp4" });
+  expect(start).not.toHaveBeenCalled();
+});
+
+test("a later final transcript is saved without re-ending or starting a report in the route", async () => {
+  const { status: _status, ...payload } = agentPayload;
+  expect((await call(payload, "Bearer s3cret")).status).toBe(200);
+  expect(closed).toEqual([]);
+  expect(finalized).toHaveLength(1);
+  expect(finalized[0]).toMatchObject({ sessionId: "s1", transcript: payload.transcript, replaceTranscript: true, evidence: { transcriptFinal: true } });
+  expect(start).not.toHaveBeenCalled();
 });

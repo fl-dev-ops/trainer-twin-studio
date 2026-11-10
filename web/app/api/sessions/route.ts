@@ -1,3 +1,4 @@
+import { orgPerson } from "@/lib/org-people";
 import { NextResponse } from "next/server";
 import { authorizeRuntimeSession, type SessionEndStatus } from "@/lib/interview-sessions";
 import { closeInterviewSession } from "@/lib/session-lifecycle";
@@ -6,10 +7,8 @@ import { runSessionStart } from "@/lib/run-session-start";
 import { warmChatOpening } from "@/lib/session-warm";
 import { getTrainerOrg } from "@/lib/org";
 import { resolveSessionUser } from "@/lib/session-user";
-import { db } from "@/lib/db";
 import { isStudioRole } from "@/lib/org";
 import { listSessions } from "@/lib/specs";
-import { processEndedSession } from "@/lib/session-processing";
 
 export async function GET() {
   const trainer = await getTrainerOrg();
@@ -26,10 +25,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "shareCode, agentSlug, or deploymentKey is required" }, { status: 400 });
   }
   if (!body.shareCode) {
-    const member = await db.member.findFirst({
-      where: { organizationId: org.id, userId: user.id },
-      select: { role: true },
-    });
+    const member = await orgPerson(org.id, { userId: user.id });
     if (!member) return NextResponse.json({ error: "Invalid session URL" }, { status: 403 });
     // Starting an agent by slug skips assignments and minutes: studio members (admin, team) trying it only.
     if (!body.deploymentKey && !isStudioRole(member.role)) return NextResponse.json({ error: "Invalid session URL" }, { status: 403 });
@@ -70,11 +66,7 @@ export async function PATCH(req: Request) {
   const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
   const session = await authorizeRuntimeSession(String(body.id), token);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const finalized = await closeInterviewSession(session.id, body.status as SessionEndStatus);
-  if (finalized?.finalStatus === "completed" || finalized?.finalStatus === "abandoned") {
-    await processEndedSession(finalized.id, finalized.finalStatus).catch((error) => {
-      console.warn("Could not initiate session report generation:", error);
-    });
-  }
+  // The rest (room, credits, report) runs in the session's end workflow (lib/session-lifecycle.ts).
+  await closeInterviewSession(session.id, body.status as SessionEndStatus);
   return NextResponse.json({ ok: true });
 }

@@ -1,3 +1,4 @@
+import { orgPerson } from "@/lib/org-people";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { resolveSessionUser } from "@/lib/session-user";
@@ -15,10 +16,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   });
   if (!session?.s3AudioKey) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (session.userId !== user.id) {
-    const trainer = await db.member.findFirst({
-      where: { organizationId: org.id, userId: user.id },
-      select: { role: true },
-    });
+    const trainer = await orgPerson(org.id, { userId: user.id });
     if (!isStudioRole(trainer?.role)) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }

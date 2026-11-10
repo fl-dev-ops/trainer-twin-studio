@@ -27,20 +27,20 @@ test("followEmailProgress buffers split NDJSON lines, skips blanks and updates o
   await followEmailProgress("run.signature/+", 2);
   expect(fetchSpy).toHaveBeenCalledWith("/api/runs/run.signature%2F%2B");
   expect(loading.mock.calls).toEqual([
-    ["Sending 2 invite emails…"],
-    ["Sending invite emails… 1 of 2", { id: "invite-toast" }],
-    ["Sending invite emails… 2 of 2", { id: "invite-toast" }],
+    ["Sending 2 emails…"],
+    ["Sending emails… 1 of 2", { id: "invite-toast" }],
+    ["Sending emails… 2 of 2", { id: "invite-toast" }],
   ]);
   expect(success).toHaveBeenCalledTimes(1);
-  expect(success).toHaveBeenCalledWith("2 invite emails sent", { id: "invite-toast" });
+  expect(success).toHaveBeenCalledWith("2 emails sent", { id: "invite-toast" });
   expect(dismiss).not.toHaveBeenCalled(); expect(warning).not.toHaveBeenCalled(); expect(info).not.toHaveBeenCalled();
 });
 
 test("followEmailProgress uses singular email on a successful one-person batch", async () => {
   stream('{"to":"a@example.com","status":"sent"}\n{"status":"done","sent":1,"failed":[]}\n');
   await followEmailProgress("token", 1);
-  expect(loading.mock.calls[0]).toEqual(["Sending 1 invite email…"]);
-  expect(success).toHaveBeenCalledWith("1 invite email sent", { id: "invite-toast" });
+  expect(loading.mock.calls[0]).toEqual(["Sending 1 email…"]);
+  expect(success).toHaveBeenCalledWith("1 email sent", { id: "invite-toast" });
 });
 
 test.each([0, 1])("followEmailProgress reports failed addresses with %i sent in a fresh 15-second warning", async (sent) => {
@@ -49,7 +49,7 @@ test.each([0, 1])("followEmailProgress reports failed addresses with %i sent in 
   expect(dismiss).toHaveBeenCalledTimes(1);
   expect(dismiss).toHaveBeenCalledWith("invite-toast");
   expect(warning).toHaveBeenCalledTimes(1);
-  expect(warning).toHaveBeenCalledWith(`${sent ? "1 invite email sent. " : ""}Couldn't send the invite email to a@example.com, b@example.com.`, { duration: 15_000 });
+  expect(warning).toHaveBeenCalledWith(`${sent ? "1 email sent. " : ""}Couldn't send the email to a@example.com, b@example.com.`, { duration: 15_000 });
   expect(dismiss.mock.invocationCallOrder[0]).toBeLessThan(warning.mock.invocationCallOrder[0]);
   expect(success).not.toHaveBeenCalled(); expect(info).not.toHaveBeenCalled();
 });
@@ -62,6 +62,6 @@ test.each(["fetch", "http", "missing-body", "stream", "invalid-json"])("followEm
   else stream("not json\n");
   await followEmailProgress("token", 2);
   expect(info).toHaveBeenCalledTimes(1);
-  expect(info).toHaveBeenCalledWith("The invite emails are going out in the background.", { id: "invite-toast" });
+  expect(info).toHaveBeenCalledWith("The emails are going out in the background.", { id: "invite-toast" });
   expect(success).not.toHaveBeenCalled(); expect(warning).not.toHaveBeenCalled();
 });

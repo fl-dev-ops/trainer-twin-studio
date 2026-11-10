@@ -22,8 +22,7 @@ export async function POST(req: Request) {
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "Missing file" }, { status: 400 });
   }
-  const shareCode = form.get("shareCode");
-  const who = await uploader(typeof shareCode === "string" ? shareCode : null);
+  const who = await uploader();
   if (!who) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   try {

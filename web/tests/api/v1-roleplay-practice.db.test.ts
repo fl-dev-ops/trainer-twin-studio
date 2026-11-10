@@ -12,14 +12,18 @@ describe.skipIf(!localMinutesDb)("v1 role-play practice (local database)", () =>
   let other: MinutesFixture;
   let api: ReturnType<typeof spyOn<typeof externalApi, "requireExternalApi">>;
   let assignment: { id: string };
-  let unpractised: { id: string };
+  let unpractised: { id: string; deploymentId: string };
   let foreign: { id: string };
   const request = (path: string) => new Request(`https://example.com/api/v1/${path}`);
   const params = (id: string) => ({ params: Promise.resolve({ id }) });
   const assign = async (fixture: MinutesFixture, suffix: string) => {
-    const deployment = await ensureDeployment(fixture.org.id, fixture.roleplay.id);
+    const agentId = suffix === "unpractised" ? (await db.agent.create({ data: {
+      orgId: fixture.org.id, personaId: (await db.persona.findFirstOrThrow({ where: { orgId: fixture.org.id } })).id,
+      slug: `${fixture.org.slug}-unpractised`, name: "Unpractised scenario", kind: "ROLEPLAY", data: {},
+    } })).id : fixture.roleplay.id;
+    const deployment = await ensureDeployment(fixture.org.id, agentId);
     return db.rolePlayAssignment.create({ data: {
-      orgId: fixture.org.id, deploymentId: deployment.id, recipientEmail: fixture.learner.email,
+      orgId: fixture.org.id, deploymentId: deployment.id, memberId: `${fixture.learner.id}-member`,
       assignedByUserId: fixture.trainer.id, shareCode: `${fixture.org.id}-${suffix}`, expiresAt: new Date(0),
     } });
   };
@@ -54,7 +58,7 @@ describe.skipIf(!localMinutesDb)("v1 role-play practice (local database)", () =>
   test("GET /sessions?assignmentId returns every practice of only that assignment and paginates the filtered count", async () => {
     const first = await f.session({ assignmentId: assignment.id });
     const second = await f.session({ assignmentId: assignment.id, status: "abandoned" });
-    await f.session({ assignmentId: unpractised.id });
+    await f.session({ agentId: (await db.deployment.findUniqueOrThrow({ where: { id: unpractised.deploymentId } })).agentId, assignmentId: unpractised.id });
     await f.session();
     await other.session({ assignmentId: foreign.id });
     const response = await listSessions(request(`sessions?assignmentId=${assignment.id}`));
@@ -87,8 +91,8 @@ describe.skipIf(!localMinutesDb)("v1 role-play practice (local database)", () =>
     await f.session({ assignmentId: assignment.id, status: "abandoned", startedAt: latest });
     await f.session({ assignmentId: assignment.id, status: "failed", startedAt: new Date("2026-03-01T00:00:00Z") });
     await f.session({ assignmentId: assignment.id, status: "activating", startedAt: null, endedAt: null });
-    await f.session({ assignmentId: unpractised.id, status: "failed" });
-    await f.session({ assignmentId: unpractised.id, status: "assigned", startedAt: null, endedAt: null });
+    await f.session({ agentId: (await db.deployment.findUniqueOrThrow({ where: { id: unpractised.deploymentId } })).agentId, assignmentId: unpractised.id, status: "failed" });
+    await f.session({ agentId: (await db.deployment.findUniqueOrThrow({ where: { id: unpractised.deploymentId } })).agentId, assignmentId: unpractised.id, status: "assigned", startedAt: null, endedAt: null });
     await f.session(); // A practice of the same role play, but not of this assignment.
     await other.session({ assignmentId: foreign.id });
     const expected = [

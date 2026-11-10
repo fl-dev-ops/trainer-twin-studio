@@ -4,15 +4,16 @@ import * as email from "@/lib/email";
 import * as externalApi from "@/lib/external-api";
 import { POST } from "@/app/api/v1/assignments/route";
 import { PATCH } from "@/app/api/v1/assignments/[id]/route";
+import { addPeopleToOrg } from "@/lib/org-people";
 import { grantMinutes, learnerBalance } from "@/lib/minutes";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "../lib/minutes-test-db";
 
 describe.skipIf(!localMinutesDb)("v1 assignment email minutes (local database)", () => {
   let f: MinutesFixture;
   let api: ReturnType<typeof spyOn<typeof externalApi, "requireExternalApi">>;
-  let assignmentEmail: ReturnType<typeof spyOn<typeof email, "sendRolePlayAssignmentEmail">>;
+  let assignmentEmail: ReturnType<typeof spyOn<typeof email, "sendPersonEmail">>;
   beforeEach(async () => {
-    assignmentEmail = spyOn(email, "sendRolePlayAssignmentEmail").mockResolvedValue({ success: true });
+    assignmentEmail = spyOn(email, "sendPersonEmail").mockResolvedValue({ success: true });
     f = minutesFixture();
     await f.create();
     api = spyOn(externalApi, "requireExternalApi").mockResolvedValue({ org: f.org, actorUserId: f.trainer.id, keyId: "test-key" });
@@ -44,8 +45,8 @@ describe.skipIf(!localMinutesDb)("v1 assignment email minutes (local database)",
       { email: to, seconds: 1800, actorUserId: f.trainer.id },
     ]);
     expect(assignmentEmail).toHaveBeenCalledTimes(1);
-    const assignment = await db.rolePlayAssignment.findFirstOrThrow({ where: { orgId: f.org.id, recipientEmail: to } });
-    expect(assignmentEmail).toHaveBeenCalledWith(expect.objectContaining({ to, minutes: 30, idempotencyKey: `assignment:${assignment.id}:${assignment.shareCode}` }));
+    const assignment = await db.rolePlayAssignment.findFirstOrThrow({ where: { orgId: f.org.id, member: { user: { email: to } } } });
+    expect(assignmentEmail).toHaveBeenCalledWith(expect.objectContaining({ to, credits: { added: 30, balance: 30 }, idempotencyKey: `assignment:${assignment.id}:${assignment.shareCode}` }));
   });
 
   test.each([
@@ -62,7 +63,7 @@ describe.skipIf(!localMinutesDb)("v1 assignment email minutes (local database)",
     expect(response.status).toBe(201);
     expect(await response.json()).toMatchObject({ emailSent: true });
     expect(assignmentEmail).toHaveBeenCalledTimes(1);
-    expect(assignmentEmail).toHaveBeenCalledWith(expect.objectContaining({ to: f.learner.email, minutes: expectedMinutes }));
+    expect(assignmentEmail).toHaveBeenCalledWith(expect.objectContaining({ to: f.learner.email, credits: { added: undefined, balance: expectedMinutes } }));
     expect(await ledger()).toEqual(before);
   });
 
@@ -74,7 +75,7 @@ describe.skipIf(!localMinutesDb)("v1 assignment email minutes (local database)",
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ changed: true, emailSent: true, assignment: { id: original.id, email: to } });
     const updated = await db.rolePlayAssignment.findFirstOrThrow({ where: { orgId: f.org.id, id: original.id } });
-    expect(updated.recipientEmail).toBe(to);
+    expect(await db.member.findUniqueOrThrow({ where: { id: updated.memberId }, include: { user: true } })).toMatchObject({ user: { email: to } });
     expect(updated.shareCode).not.toBe(original.shareCode);
     expect((await learnerBalance(f.org.id, to)).balanceSeconds).toBe(1800);
     expect(await availableOrgSeconds(f.org.id)).toBe(0);
@@ -82,8 +83,8 @@ describe.skipIf(!localMinutesDb)("v1 assignment email minutes (local database)",
       { seconds: 1800, actorUserId: f.trainer.id, note: "Starting minutes" },
     ]);
     expect(assignmentEmail).toHaveBeenCalledTimes(1);
-    const assignment = await db.rolePlayAssignment.findFirstOrThrow({ where: { orgId: f.org.id, recipientEmail: to } });
-    expect(assignmentEmail).toHaveBeenCalledWith(expect.objectContaining({ to, minutes: 30, idempotencyKey: `assignment:${assignment.id}:${assignment.shareCode}` }));
+    const assignment = await db.rolePlayAssignment.findFirstOrThrow({ where: { orgId: f.org.id, member: { user: { email: to } } } });
+    expect(assignmentEmail).toHaveBeenCalledWith(expect.objectContaining({ to, credits: { added: 30, balance: 30 }, idempotencyKey: `assignment:${assignment.id}:${assignment.shareCode}` }));
   });
 
   test("PATCH with short org balance returns 409, preserving the entire assignment and ledger without email", async () => {
@@ -117,14 +118,14 @@ describe.skipIf(!localMinutesDb)("v1 assignment email minutes (local database)",
     expect(updated.deployment.agentId).toBe(scenario.id);
     expect(await ledger()).toEqual(before);
     expect(assignmentEmail).toHaveBeenCalledTimes(1);
-    expect(assignmentEmail).toHaveBeenCalledWith(expect.objectContaining({ to: f.learner.email, rolePlayName: scenario.name, minutes: 28 }));
+    expect(assignmentEmail).toHaveBeenCalledWith(expect.objectContaining({ to: f.learner.email, roleplay: expect.objectContaining({ name: scenario.name }), credits: { added: undefined, balance: 28 } }));
   });
 
   test("PATCH to someone with credits preserves all ledger rows and emails their actual balance", async () => {
     await fund(75);
     const original = await createAssignment();
     const to = `existing-${f.learner.email}`;
-    await grantMinutes({ orgId: f.org.id, email: to, minutes: 30 });
+    await addPeopleToOrg({ orgId: f.org.id, emails: [to], role: "user", byUserId: f.trainer.id });
     await grantMinutes({ orgId: f.org.id, email: to, minutes: 15 });
     const before = await ledger();
     const response = await patch(original.id, { email: to });
@@ -133,6 +134,6 @@ describe.skipIf(!localMinutesDb)("v1 assignment email minutes (local database)",
     expect(await ledger()).toEqual(before);
     expect((await learnerBalance(f.org.id, to)).balanceSeconds).toBe(2700);
     expect(assignmentEmail).toHaveBeenCalledTimes(1);
-    expect(assignmentEmail).toHaveBeenCalledWith(expect.objectContaining({ to, minutes: 45 }));
+    expect(assignmentEmail).toHaveBeenCalledWith(expect.objectContaining({ to, credits: { added: undefined, balance: 45 } }));
   });
 });

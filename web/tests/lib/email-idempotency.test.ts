@@ -36,21 +36,28 @@ test("sendEmail without a key keeps legacy sends working without an idempotency 
   expect(requests[0].key).toBeNull();
 });
 
-test("sendTwinAssignmentEmail forwards the workflow idempotency key", async () => {
-  expect(await email.sendTwinAssignmentEmail({ to: "a@example.com", twinName: "Twin", minutes: 30, practiceUrl: "https://example.com/t/twin", idempotencyKey: "step-twin" })).toMatchObject({ success: true });
+test.each([
+  { parts: { twin: { name: "Twin", url: "https://example.com/t/twin" } }, key: "twin:code", subject: "You can now talk to Twin" },
+  { parts: { roleplay: { name: "Practice", url: "https://example.com/s/code" } }, key: "roleplay:code", subject: "New role play: Practice" },
+  { parts: { added: { role: "user" as const, signInUrl: "https://example.com/" } }, key: "added:m1", subject: "You've been added to Org on TrainerTwin" },
+  { parts: { credits: { added: 10, balance: 40 } }, key: "credits:org:a@example.com:123", subject: "10 credits added to your TrainerTwin account" },
+])("sendPersonEmail forwards $key as a header, never in the payload", async ({ parts, key, subject }) => {
+  expect(await email.sendPersonEmail({ to: "a@example.com", orgName: "Org", ...parts, idempotencyKey: key })).toMatchObject({ success: true });
   expect(requests).toHaveLength(1);
-  expect(requests[0].key).toBe("step-twin");
-});
-
-test("sendRolePlayAssignmentEmail forwards the workflow idempotency key", async () => {
-  expect(await email.sendRolePlayAssignmentEmail({ to: "a@example.com", rolePlayName: "Practice", practiceUrl: "https://example.com/s/code", idempotencyKey: "step-roleplay" })).toMatchObject({ success: true });
-  expect(requests).toHaveLength(1);
-  expect(requests[0].key).toBe("step-roleplay");
-});
-
-test("sendInvitationEmail forwards the public API invitation idempotency key", async () => {
-  expect(await email.sendInvitationEmail({ to: "a@example.com", organizationName: "Org", inviteUrl: "https://example.com/join", idempotencyKey: "invitation:1:123" })).toMatchObject({ success: true });
-  expect(requests).toHaveLength(1);
-  expect(requests[0].key).toBe("invitation:1:123");
+  expect(requests[0].key).toBe(key);
+  expect(requests[0].body).toMatchObject({ to: "a@example.com", subject });
   expect(requests[0].body).not.toHaveProperty("idempotencyKey");
+});
+
+test("sendOrgCreditsEmail forwards the grant's key", async () => {
+  expect(await email.sendOrgCreditsEmail({ to: "admin@example.com", orgName: "Org", added: 10, balance: 20, creditsUrl: "https://example.com/credits", idempotencyKey: "org-credits:g1" })).toMatchObject({ success: true });
+  expect(requests).toHaveLength(1);
+  expect(requests[0].key).toBe("org-credits:g1");
+});
+
+test("sendOtpEmail sends the 6-digit code with its 10-minute expiry", async () => {
+  expect(await email.sendOtpEmail({ to: "a@example.com", otp: "123456" })).toMatchObject({ success: true });
+  expect(requests).toHaveLength(1);
+  expect(requests[0].body).toMatchObject({ to: "a@example.com", subject: "Your TrainerTwin Sign In code: 123456" });
+  expect(String(requests[0].body.html)).toContain("expires in 10 minutes");
 });

@@ -7,16 +7,15 @@ import {
   creditsAdded,
   type CreditEntry,
   DEFAULT_LEARNER_MINUTES,
-  grantMinutes,
-  grantMinutesToMany,
+  learnerBalance,
   learnerMinutes,
   MAX_LEARNER_MINUTES,
   MinutesError,
 } from "@/lib/minutes";
-import { STUDIO_ROLES, studioEmails } from "@/lib/org";
+import { LEARNER, orgPeople } from "@/lib/org-people";
 import { hasUnsentUsage, orgCredits, orgGrants, refreshOrgCredits } from "@/lib/org-credits";
 import { scheduleOrgUsage } from "@/lib/schedule-org-credits";
-import { runOrgInvite } from "@/lib/workflow-runs";
+import { runAddOrgPeople, runGiveCredits } from "@/lib/workflow-runs";
 import { studioProcedure, t } from "@/lib/trpc";
 
 /**
@@ -38,12 +37,6 @@ async function minutesCall<T>(fn: () => Promise<T>): Promise<T> {
     }
     throw error;
   }
-}
-
-/** Credits are for learners: admin and team calls use the org's credits directly, so giving them credits would waste them. */
-async function assertLearner(orgId: string, email: string) {
-  const studio = await db.member.findFirst({ where: { organizationId: orgId, role: { in: [...STUDIO_ROLES] }, user: { email: { equals: email, mode: "insensitive" } } }, select: { id: true } });
-  if (studio) throw new MinutesError(`${email} is on the studio team; admin and team calls use the organization's credits directly.`, 400);
 }
 
 const toMinutes = (seconds: number) => Math.floor(seconds / 60);
@@ -78,22 +71,18 @@ export const minutesRouter = t.router({
     const [credits, synced, perLearner] = await Promise.all([orgCredits(orgId), orgGrants(orgId), learnerMinutes(orgId)]);
     const grants = synced?.grants ?? [];
     const emails = [...perLearner.keys()];
-    const [staff, users] = emails.length
-      ? await Promise.all([
-        studioEmails(orgId, emails),
-        db.user.findMany({ where: { email: { in: emails, mode: "insensitive" } }, select: { id: true, name: true, email: true, image: true } }),
-      ])
-      : [new Set<string>(), []];
-    const userByEmail = new Map(users.map((user) => [user.email.toLowerCase(), user]));
+    // The org's learners (lib/org-people.ts) who hold credits; admin and team don't.
+    const people = emails.length ? await orgPeople(orgId, { roles: [LEARNER], emails, includeDisabled: true }) : [];
+    const personByEmail = new Map(people.map((person) => [person.email, person]));
     const learners = [...perLearner.values()]
-      .filter((row) => !staff.has(row.email))
+      .filter((row) => personByEmail.has(row.email))
       .map((row) => {
-        const user = userByEmail.get(row.email);
+        const person = personByEmail.get(row.email)!;
         return {
           email: row.email,
-          userId: user?.id ?? null,
-          name: user?.name ?? null,
-          image: user?.image ?? null,
+          userId: person.userId,
+          name: person.name,
+          image: person.image,
           givenMinutes: toMinutes(row.grantedSeconds),
           usedMinutes: Math.round(row.usedSeconds / 6) / 10,
           leftMinutes: toMinutes(Math.max(0, row.balanceSeconds)),
@@ -148,30 +137,28 @@ export const minutesRouter = t.router({
    */
   addMany: studioProcedure
     .input(z.object({ emails: z.array(emailInput).min(1).max(100), minutes: amount, note }))
-    .mutation(({ ctx, input }) => minutesCall(async () => {
-      const staff = await studioEmails(ctx.user.orgId, input.emails);
-      const result = await grantMinutesToMany({
-        orgId: ctx.user.orgId,
-        emails: input.emails.filter((email) => !staff.has(email)),
-        minutes: input.minutes,
-        actorUserId: ctx.user.id,
-        note: input.note || "Added by trainer",
-      });
-      return { ...result, skipped: [...[...staff].map((email) => ({ email, reason: "is on the studio team (their calls use the organization's credits)" })), ...result.skipped] };
-    })),
+    .mutation(({ ctx, input }) => minutesCall(() =>
+      // The give-credits workflow (workflows/give-credits.ts): credits, then a "credits added" email each.
+      runGiveCredits({ org: { id: ctx.user.orgId, slug: ctx.user.orgSlug }, by: { id: ctx.user.id, name: ctx.user.name }, emails: input.emails, minutes: input.minutes, note: input.note }),
+    )),
 
-  /** Invites learners to the org (Settings > Users) with their starting credits (lib/invite/org.ts). */
-  invite: studioProcedure
-    .input(z.object({ emails: z.array(emailInput).min(1).max(MAX_INVITES), minutes: amount.default(DEFAULT_LEARNER_MINUTES) }))
+  /**
+   * Adds people to the org (Settings › Team and Users; specs/people.md): members right away, learners with their
+   * starting credits, one email each (lib/invite/org.ts).
+   */
+  addPeople: studioProcedure
+    .input(z.object({ emails: z.array(emailInput).min(1).max(MAX_INVITES), role: z.enum(["team", "user"]), minutes: amount.optional() }))
     .mutation(({ ctx, input }) => minutesCall(async () => {
       const org = await db.organization.findUniqueOrThrow({ where: { id: ctx.user.orgId }, select: { id: true, slug: true, name: true } });
-      // The invite-org-learners workflow (workflows/invite-org-learners.ts): starting credits, invitations, emails.
-      return runOrgInvite({ org, by: { id: ctx.user.id, name: ctx.user.name }, emails: input.emails, minutes: input.minutes });
+      // The add-org-people workflow (workflows/add-org-people.ts): members, starting credits, emails.
+      return runAddOrgPeople({ org, by: { id: ctx.user.id, name: ctx.user.name }, emails: input.emails, role: input.role, minutes: input.minutes });
     })),
 
-  /** Adds credits to a learner, on top of what they have, from the org's balance. */
+  /** Adds credits to one learner, on top of what they have, from the org's balance, and emails them. */
   add: studioProcedure.input(z.object({ email: emailInput, minutes: amount, note })).mutation(({ ctx, input }) => minutesCall(async () => {
-    await assertLearner(ctx.user.orgId, input.email);
-    return grantMinutes({ orgId: ctx.user.orgId, email: input.email, minutes: input.minutes, actorUserId: ctx.user.id, note: input.note || "Added by trainer" });
+    const result = await runGiveCredits({ org: { id: ctx.user.orgId, slug: ctx.user.orgSlug }, by: { id: ctx.user.id, name: ctx.user.name }, emails: [input.email], minutes: input.minutes, note: input.note });
+    if (result.skipped.length) throw new MinutesError(`${result.skipped[0].email} ${result.skipped[0].reason}.`, 400);
+    const own = await learnerBalance(ctx.user.orgId, input.email);
+    return { grantedMinutes: input.minutes, balanceMinutes: Math.floor(own.balanceSeconds / 60), orgBalanceMinutes: result.orgBalanceMinutes ?? 0 };
   })),
 });

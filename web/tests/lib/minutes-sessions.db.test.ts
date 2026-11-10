@@ -190,7 +190,7 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
   test.each(["ROLEPLAY", "TWIN"])("runtime activation forwards the %s learner deadline and agent kind to LiveKit", async (kind) => {
     await fund();
     const agent = kind === "TWIN" ? f.twin : f.roleplay;
-    if (kind === "TWIN") await db.twinAssignment.create({ data: { orgId: f.org.id, agentId: agent.id, recipientEmail: f.learner.email, minutesLimit: 30, shareCode: `${f.org.id}-twin` } });
+    if (kind === "TWIN") await db.twinAssignment.create({ data: { orgId: f.org.id, agentId: agent.id, userId: f.learner.id, minutesLimit: 30, shareCode: `${f.org.id}-twin` } });
     const after = spyOn(nextServer, "after").mockImplementation(() => {});
     const connect = spyOn(livekit, "activateLiveKitSession").mockResolvedValue({ room: "test-room", token: "participant", dispatchId: "dispatch", videoEgressId: null, videoS3Key: null });
     try {

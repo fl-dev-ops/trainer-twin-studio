@@ -1,8 +1,6 @@
-import { headers } from "next/headers";
 import type { ComponentProps } from "react";
 import type { OrgHome } from "@/components/org/org-home";
 import { db } from "@/lib/db";
-import { acceptLearnerInvite } from "@/lib/invite/accept";
 import { learnerBalance } from "@/lib/minutes";
 import { parseHideRoleplay } from "@/lib/org";
 import { isStudioMember, trainerProfile, twinAccessFor, twinProfile } from "@/lib/pages/learner";
@@ -11,8 +9,8 @@ import { isAllSkillsTwin, twinSharePath } from "@/lib/twin-access";
 
 /**
  * The org's home page (<org>.<base>/): public, so anyone can see what the org is and whose twins it has; signed in
- * (Google), a learner's pending invite is accepted and they see their minutes, the main twins with their access, and
- * the role plays assigned to them. Studio members (admin, team) see it as a preview.
+ * (Google or an email code), a learner sees their minutes, the main twins with their access, and the role plays
+ * assigned to them. Studio members (admin, team) see it as a preview.
  */
 
 export type OrgHomeView = { kind: "notFound" } | { kind: "home"; props: ComponentProps<typeof OrgHome> };
@@ -27,7 +25,6 @@ export async function loadOrgHome(): Promise<OrgHomeView> {
     : null;
   if (!org) return { kind: "notFound" };
 
-  if (user) await acceptLearnerInvite({ orgId: org.id, user, headers: await headers() });
   const studio = user ? await isStudioMember(org.id, user.id) : false;
 
   // The main twins: each trainer's all-skills twin on their own persona (opened at /t/<username>). Their skill twins
@@ -63,7 +60,7 @@ export async function loadOrgHome(): Promise<OrgHomeView> {
         where: {
           orgId: org.id,
           status: { in: ["pending", "used"] },
-          OR: [{ member: { userId: user.id } }, { memberId: null, recipientEmail: user.email.toLowerCase() }],
+          member: { userId: user.id },
         },
         orderBy: { assignedAt: "desc" },
         select: { shareCode: true, expiresAt: true, deployment: { select: { agent: { select: { name: true, data: true } } } } },

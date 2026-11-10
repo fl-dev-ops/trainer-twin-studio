@@ -1,3 +1,4 @@
+import { orgPeople, orgPerson } from "@/lib/org-people";
 import { APIError } from "better-auth/api";
 import { db } from "@/lib/db";
 import { closeInterviewSession } from "@/lib/session-lifecycle";
@@ -16,7 +17,7 @@ export class MemberError extends Error {
 
 /** One admin per org: nobody is invited, added or promoted as a second admin (the admin keeps the role). */
 export async function assertNoSecondAdmin(role: string, organizationId: string) {
-  if (role.split(",").includes(ADMIN_ROLE) && (await db.member.count({ where: { organizationId, role: ADMIN_ROLE } })) > 0) {
+  if (role.split(",").includes(ADMIN_ROLE) && (await orgPeople(organizationId, { roles: ["admin"], includeDisabled: true })).length > 0) {
     throw new APIError("FORBIDDEN", { message: ONE_ADMIN_MESSAGE });
   }
 }
@@ -32,8 +33,8 @@ export async function isDisabledUser(userId: string) {
 
 /** Refuses a session in an org where this person's membership is disabled. */
 export async function assertNotDisabledIn(userId: string, orgId: string) {
-  const member = await db.member.findFirst({ where: { userId, organizationId: orgId }, select: { disabledAt: true } });
-  if (member?.disabledAt) throw new MemberError(DISABLED_MESSAGE, 403);
+  const member = await orgPerson(orgId, { userId });
+  if (member?.disabled) throw new MemberError(DISABLED_MESSAGE, 403);
 }
 
 /**
@@ -43,11 +44,9 @@ export async function assertNotDisabledIn(userId: string, orgId: string) {
  * (revoked access is re-granted by assigning again). The admin and yourself cannot be disabled.
  */
 export async function setMemberDisabled(input: { orgId: string; memberId: string; actorUserId: string; disabled: boolean }) {
-  const member = await db.member.findFirst({
-    where: { id: input.memberId, organizationId: input.orgId },
-    select: { id: true, userId: true, role: true, disabledAt: true, user: { select: { email: true } } },
-  });
-  if (!member) throw new MemberError("Member not found", 404);
+  const person = await orgPerson(input.orgId, { memberId: input.memberId });
+  if (!person) throw new MemberError("Member not found", 404);
+  const member = { id: person.memberId, userId: person.userId, role: person.role, disabledAt: person.disabledAt };
   if (!input.disabled) {
     await db.member.update({ where: { id: member.id }, data: { disabledAt: null } });
     return;
@@ -56,17 +55,16 @@ export async function setMemberDisabled(input: { orgId: string; memberId: string
   if (member.userId === input.actorUserId) throw new MemberError("You cannot disable yourself");
   if (member.disabledAt) return;
 
-  const email = member.user.email.toLowerCase();
   const elsewhere = await db.member.count({ where: { userId: member.userId, disabledAt: null, id: { not: member.id } } });
   await db.$transaction([
     db.member.update({ where: { id: member.id }, data: { disabledAt: new Date() } }),
     ...(elsewhere ? [] : [db.session.deleteMany({ where: { userId: member.userId } })]),
     db.twinAssignment.updateMany({
-      where: { orgId: input.orgId, status: "active", OR: [{ userId: member.userId }, { recipientEmail: email }] },
+      where: { orgId: input.orgId, status: "active", userId: member.userId },
       data: { status: "revoked" },
     }),
     db.rolePlayAssignment.updateMany({
-      where: { orgId: input.orgId, status: "pending", OR: [{ memberId: member.id }, { recipientEmail: email }] },
+      where: { orgId: input.orgId, status: "pending", memberId: member.id },
       data: { status: "cancelled" },
     }),
     db.interviewSession.updateMany({
@@ -80,4 +78,17 @@ export async function setMemberDisabled(input: { orgId: string; memberId: string
     select: { id: true },
   });
   for (const session of open) await closeInterviewSession(session.id, "abandoned");
+}
+
+/**
+ * A member who moved to admin or team keeps no learner assignments (specs/people.md rule 7): their twin and role-play
+ * assignments in that org are removed (sessions keep their history; the session's link to the assignment is cleared).
+ */
+export async function dropLearnerAssignments(orgId: string, memberId: string) {
+  const person = await orgPerson(orgId, { memberId });
+  if (!person) return;
+  await db.$transaction([
+    db.twinAssignment.deleteMany({ where: { orgId, userId: person.userId } }),
+    db.rolePlayAssignment.deleteMany({ where: { orgId, memberId } }),
+  ]);
 }

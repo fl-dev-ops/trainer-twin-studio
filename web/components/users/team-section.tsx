@@ -10,11 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from "@/components/ui/item";
-import { CopyButton } from "@/components/users/copy-button";
 import { InviteUser } from "@/components/users/invite-user";
-import type { AwaitingUser } from "@/lib/invite/awaiting";
-import { orgInviteUrl } from "@/lib/invite/links";
-import { authClient } from "@/lib/auth-client";
 import { DEFAULT_LEARNER_MINUTES } from "@/lib/minutes-config";
 import { useRefresh } from "@/lib/use-refresh";
 import { SearchInput } from "@/components/search-input";
@@ -28,7 +24,6 @@ export type TeamMember = {
   createdAt: string;
   disabledAt: string | null;
 };
-export type TeamInvitation = { id: string; email: string; role: string; expiresAt: string };
 
 const ROLE_LABEL: Record<string, string> = { admin: "Admin", team: "Team", user: "User" };
 const day = (iso: string) => new Date(iso).toLocaleDateString();
@@ -42,31 +37,24 @@ function Initial({ name, email }: { name?: string | null; email: string }) {
 }
 
 /**
- * Org members and pending invites, split into the studio team (admin, team) and users (learners). Users also lists
- * people given a twin or role play by email who haven't opened their link yet (`awaiting`).
- * One admin per org (fixed); members are disabled, never removed. Roles are shown, not edited here.
+ * The org's people (lib/org-people.ts), split into the studio team (admin, team) and users (learners). Someone added is
+ * a member right away and just signs in (specs/people.md). One admin per org (fixed); members are disabled, never
+ * removed. Roles are shown, not edited here.
  */
 export function TeamSection(props: {
-  organizationId: string;
-  /** For invite links: a learner's opens the org's home page (lib/invite/links.ts). */
-  organizationSlug: string;
   currentUserId: string;
   members: TeamMember[];
-  invitations: TeamInvitation[];
-  awaiting: AwaitingUser[];
 }) {
   const refresh = useRefresh();
   const [busy, setBusy] = useState<string | null>(null);
   const [query, setQuery] = useState<Record<string, string>>({});
   const [inviting, setInviting] = useState<"team" | "user" | null>(null);
 
-  async function run(key: string, action: () => Promise<{ error?: { message?: string } | null } | Response>, done: string) {
+  async function run(key: string, action: () => Promise<Response>, done: string) {
     setBusy(key);
     const result = await action();
     setBusy(null);
-    const error = result instanceof Response
-      ? (result.ok ? null : ((await result.json().catch(() => null)) as { error?: string } | null)?.error ?? "Something went wrong")
-      : result.error ? (result.error.message ?? "Something went wrong") : null;
+    const error = result.ok ? null : ((await result.json().catch(() => null)) as { error?: string } | null)?.error ?? "Something went wrong";
     if (error) {
       toast.error(error);
       return;
@@ -83,10 +71,6 @@ export function TeamSection(props: {
       disabled ? `${member.name} disabled` : `${member.name} enabled`,
     );
   };
-  const resend = (invitation: TeamInvitation) =>
-    run(invitation.id, () => authClient.organization.inviteMember({ email: invitation.email, role: invitation.role as "team" | "user", organizationId: props.organizationId, resend: true }), "Invitation sent again");
-  const cancel = (invitation: TeamInvitation) =>
-    run(invitation.id, () => authClient.organization.cancelInvitation({ invitationId: invitation.id }), "Invitation cancelled");
 
   function memberItems(members: TeamMember[]) {
     return members.map((member) => {
@@ -129,49 +113,9 @@ export function TeamSection(props: {
     });
   }
 
-  /** Assigned by email from a twin or role play; they join when they open their personal link and sign in. */
-  function awaitingItems(people: AwaitingUser[]) {
-    return people.map((person) => (
-      <Item key={person.email} role="listitem" size="row">
-        <Initial email={person.email} />
-        <ItemContent>
-          <ItemTitle className="text-body">{person.email.split("@")[0]}</ItemTitle>
-          <ItemDescription className="line-clamp-none flex flex-wrap items-center gap-1.5">
-            <span>{person.email}</span>· <Badge variant="warning">Invite sent</Badge>
-            <span className="text-xs">Assigned: {person.assigned.join(", ")}</span>
-          </ItemDescription>
-        </ItemContent>
-        <ItemActions>
-          <Badge variant="secondary">{ROLE_LABEL.user}</Badge>
-        </ItemActions>
-      </Item>
-    ));
-  }
-
-  function invitationItems(invitations: TeamInvitation[]) {
-    return invitations.map((invitation) => (
-      <Item key={invitation.id} role="listitem" size="row">
-        <Initial email={invitation.email} />
-        <ItemContent>
-          <ItemTitle className="text-body">{invitation.email.split("@")[0]}</ItemTitle>
-          <ItemDescription className="line-clamp-none flex flex-wrap items-center gap-1.5">
-            <span>{invitation.email}</span>· <Badge variant="warning">Invite sent</Badge>
-            <span className="text-xs">expires {day(invitation.expiresAt)}</span>
-          </ItemDescription>
-        </ItemContent>
-        <ItemActions>
-          <Badge variant="secondary">{ROLE_LABEL[invitation.role] ?? invitation.role}</Badge>
-          <CopyButton value={orgInviteUrl(invitation, props.organizationSlug)} label="Copy link" />
-          <Button variant="outline" size="sm" disabled={busy === invitation.id} onClick={() => resend(invitation)}>Resend</Button>
-          <Button variant="ghost" size="sm" disabled={busy === invitation.id} onClick={() => cancel(invitation)}>Cancel</Button>
-        </ItemActions>
-      </Item>
-    ));
-  }
-
   const groups = [
-    { title: "Team", role: "team", studio: true, invite: "Invite team member", hint: "Team members run the studio: twins, role plays, sessions and settings." },
-    { title: "Users", role: "user", studio: false, invite: "Invite user", hint: `Users practise with the twins and role plays you give them. Each new user gets ${DEFAULT_LEARNER_MINUTES} credits (1 credit = 1 min of practice) from your organization's credits.` },
+    { title: "Team", role: "team", studio: true, invite: "Add team members", hint: "Team members run the studio: twins, role plays, sessions and settings." },
+    { title: "Users", role: "user", studio: false, invite: "Add users", hint: `Users practise with the twins and role plays you give them. Each new user gets ${DEFAULT_LEARNER_MINUTES} credits (1 credit = 1 min of practice) from your organization's credits.` },
   ] as const;
   const matches = (needle: string, ...fields: string[]) => fields.some((field) => field.toLowerCase().includes(needle));
 
@@ -179,12 +123,8 @@ export function TeamSection(props: {
     <div className="grid gap-6">
       {groups.map((group) => {
         const all = props.members.filter((member) => (member.role !== "user") === group.studio);
-        const pending = props.invitations.filter((invitation) => (invitation.role !== "user") === group.studio);
-        const assigned = group.studio ? [] : props.awaiting;
         const needle = (query[group.role] ?? "").trim().toLowerCase();
         const members = all.filter((member) => matches(needle, member.name, member.email));
-        const invitations = pending.filter((invitation) => matches(needle, invitation.email));
-        const waiting = assigned.filter((person) => matches(needle, person.email));
         return (
           <Card key={group.title}>
             <CardHeader>
@@ -195,20 +135,20 @@ export function TeamSection(props: {
                 <Dialog open={inviting === group.role} onOpenChange={(open) => setInviting(open ? group.role : null)}>
                   <DialogTrigger render={<Button size="sm" />}>
                     <Plus />
-                    Invite
+                    Add
                   </DialogTrigger>
                   <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                       <DialogTitle>{group.invite}</DialogTitle>
-                      <DialogDescription>{group.hint} Add one or more emails, separated by commas; each person gets a sign-up link.</DialogDescription>
+                      <DialogDescription>{group.hint} Add one or more emails, separated by commas. They&apos;re in right away and get an email; they sign in with Google or an email code.</DialogDescription>
                     </DialogHeader>
-                    <InviteUser organizationId={props.organizationId} role={group.role} onDone={() => setInviting(null)} />
+                    <InviteUser role={group.role} onDone={() => setInviting(null)} />
                   </DialogContent>
                 </Dialog>
               </CardAction>
             </CardHeader>
             <CardContent className="grid gap-3">
-              {all.length || pending.length || assigned.length ? (
+              {all.length ? (
                 <SearchInput
                   aria-label={`Search ${group.title.toLowerCase()}`}
                   placeholder="Search by name or email"
@@ -216,11 +156,9 @@ export function TeamSection(props: {
                   onChange={(event) => setQuery((current) => ({ ...current, [group.role]: event.target.value }))}
                 />
               ) : null}
-              {members.length || invitations.length || waiting.length ? (
+              {members.length ? (
                 <ItemGroup divided>
                   {memberItems(members)}
-                  {invitationItems(invitations)}
-                  {awaitingItems(waiting)}
                 </ItemGroup>
               ) : (
                 <p className="text-sm text-muted-foreground">{needle ? "No one matches that search." : "No one yet."}</p>

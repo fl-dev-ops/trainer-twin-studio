@@ -540,18 +540,20 @@ model Organization {
 }
 
 model Member {
-  id             String               @id
-  organizationId String
-  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  userId         String
-  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String               @id
+  organizationId  String
+  organization    Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   // admin | team | user (CHECK member_role_check). admin and team run the studio; user only practises.
-  role           String               @default("user")
-  createdAt      DateTime
+  role            String               @default("user")
+  createdAt       DateTime
   // Set when a studio member disables this person (never deleted). Disabled people cannot sign in.
-  disabledAt     DateTime?
-  assignments    RolePlayAssignment[]
+  disabledAt      DateTime?
+  assignments     RolePlayAssignment[]
+  twinAssignments TwinAssignment[]
 
+  @@unique([organizationId, userId])
   @@index([organizationId])
   @@index([userId])
   @@map("member")
@@ -583,8 +585,8 @@ model RolePlayAssignment {
   id               String    @id @default(cuid())
   orgId            String
   deploymentId     String
-  memberId         String?
-  recipientEmail   String
+  /// The member it is for (specs/people.md); never an email alone.
+  memberId         String
   assignedByUserId String
   shareCode        String    @unique
   mode             String    @default("voice") // voice | chat
@@ -595,11 +597,10 @@ model RolePlayAssignment {
 
   organization Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
   deployment   Deployment         @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
-  member       Member?            @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  member       Member             @relation(fields: [memberId], references: [id], onDelete: Cascade)
   sessions     InterviewSession[]
 
   @@unique([deploymentId, memberId])
-  @@index([deploymentId, recipientEmail])
   @@index([orgId, memberId])
   @@index([shareCode, status])
 }
@@ -919,8 +920,8 @@ model TwinAssignment {
   id               String    @id @default(cuid())
   orgId            String
   agentId          String
-  recipientEmail   String // lower case (CHECK); one assignment per user per twin
-  userId           String?
+  /// The member it is for (specs/people.md): an account that is a member of this org (foreign key to member).
+  userId           String
   minutesLimit     Int // > 0 (CHECK)
   shareCode        String    @unique // personal invite link
   shareLinkId      String?
@@ -933,11 +934,12 @@ model TwinAssignment {
 
   organization Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
   agent        Agent              @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  user         User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  member       Member             @relation(fields: [orgId, userId], references: [organizationId, userId], onDelete: Cascade, map: "TwinAssignment_orgId_userId_fkey")
   shareLink    TwinShareLink?     @relation(fields: [shareLinkId], references: [id], onDelete: SetNull)
   sessions     InterviewSession[]
 
-  @@unique([agentId, recipientEmail])
+  @@unique([agentId, userId])
   @@index([orgId, status])
   @@index([userId])
 }
@@ -1101,6 +1103,8 @@ model OrgBilling {
   balanceAsOf        DateTime?
   /// The org's credit grants: [{ id, minutes, reason, expiresAt, status }], newest first.
   grants             Json      @default("[]")
+  /// Grants the org's admin was already emailed about ("credits added"; specs/people.md rule 11), so each is told once.
+  announcedGrantIds  String[]  @default([])
   syncedAt           DateTime?
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)

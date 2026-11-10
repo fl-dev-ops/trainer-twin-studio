@@ -53,7 +53,7 @@ export function LearnerCreditsTable({ rows, empty }: { rows: LearnerCreditsRow[]
                   ) : (
                     <span className="truncate font-medium">{row.email}</span>
                   )}
-                  <span className="truncate text-xs text-muted-foreground">{row.userId ? row.email : "Invite pending"}</span>
+                  <span className="truncate text-xs text-muted-foreground">{row.email}</span>
                 </span>
               </span>
               <span className="tabular-nums">{min(row.givenMinutes)}</span>

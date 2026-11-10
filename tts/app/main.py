@@ -16,6 +16,7 @@ from starlette.background import BackgroundTask
 from . import config
 from .chunking import chunk_text
 from .profiles import VoiceProfiles
+from .runtime_voices import RuntimeVoices
 from .voices import AppUnreachable, VoiceNotFound, VoiceStore, client
 
 logging.basicConfig(level=logging.INFO)
@@ -26,6 +27,7 @@ BACKEND_LIMITS = httpx.Limits(max_connections=64, max_keepalive_connections=16, 
 store: VoiceStore | None = None
 backend: httpx.AsyncClient | None = None
 profiles = VoiceProfiles("", config.VOXCPM_MODEL, config.VOXCPM_MODEL_REVISION)
+runtime: RuntimeVoices | None = None
 ready = False
 backend_epoch: str | None = None
 
@@ -47,14 +49,18 @@ class SpeechRequest(BaseModel):
 
 
 def build_payload(req: SpeechRequest, meta: dict) -> dict:
+    # Fastest first: startup profile, then a runtime-registered voice, then inline cloning.
     name = profiles.select(req.voice, meta)
+    registered = None if name or runtime is None else runtime.select(req.voice, meta)
     payload = {
         "model": config.VOXCPM_MODEL, "input": req.input,
-        "voice": name or "default", "response_format": "pcm" if req.stream else req.response_format,
+        "voice": name or registered or "default", "response_format": "pcm" if req.stream else req.response_format,
         "stream": req.stream,
     }
     if name is None:
-        payload["ref_audio"] = meta["audioUrl"]
+        if registered is None:
+            payload["ref_audio"] = meta["audioUrl"]
+        # Named runtime voices still need the transcript: VoxCPM2 does not apply the stored one.
         if meta.get("transcript"):
             payload["ref_text"] = meta["transcript"]
     if req.stream:
@@ -104,9 +110,6 @@ async def _warm_backend() -> None:
     global ready, backend_epoch
     health = await backend.get("/health", timeout=5)
     health.raise_for_status()
-    if not profiles.entries:
-        ready = True
-        return
     metrics = await backend.get("/metrics", timeout=5)
     metrics.raise_for_status()
     epoch = re.search(r"^process_start_time_seconds\s+(\S+)", metrics.text, re.MULTILINE)
@@ -115,6 +118,12 @@ async def _warm_backend() -> None:
     if ready and backend_epoch == epoch[1]:
         return
     ready = False
+    if runtime is not None:
+        await runtime.sync()
+    if not profiles.entries:
+        backend_epoch = epoch[1]
+        ready = True
+        return
     response = await backend.get("/v1/audio/voices", timeout=10)
     response.raise_for_status()
     available = set(response.json()["voices"])
@@ -124,12 +133,15 @@ async def _warm_backend() -> None:
         "Ready for the next question.",
         "Please describe the approach you would use and explain the trade-offs you considered.",
     )
+    shapes_warmed = False
     for voice_id in dict.fromkeys(key[0] for key in profiles.entries):
         try:
             meta = await store.resolve(voice_id)
         except VoiceNotFound:
             continue  # Deleted application voices must not be resurrected from model profiles.
-        for concurrency in config.TTS_WARMUP_CONCURRENCY:
+        # Batch-shape compilation is voice-independent: warm every size once, then
+        # validate each remaining voice with a single request.
+        for concurrency in (1,) if shapes_warmed else config.TTS_WARMUP_CONCURRENCY:
             async def warm_one(index, voice_id=voice_id, meta=meta):
                 req = SpeechRequest(voice=voice_id, input=warm_texts[index % 2], stream=True)
                 upstream, iterator, first = await _open_audio(build_payload(req, meta))
@@ -144,6 +156,7 @@ async def _warm_backend() -> None:
             results = await asyncio.gather(*(warm_one(i) for i in range(concurrency)), return_exceptions=True)
             if any(isinstance(result, BaseException) for result in results):
                 raise RuntimeError("Backend warmup failed")
+        shapes_warmed = True
     backend_epoch = epoch[1]
     ready = True
     logger.info("TTS profiles and batch sizes warmed; backend ready")
@@ -174,13 +187,15 @@ async def _monitor_backend() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global store, backend, profiles, ready, backend_epoch
+    global store, backend, profiles, runtime, ready, backend_epoch
     ready, backend_epoch = False, None
     profiles = VoiceProfiles(config.TTS_CUSTOM_VOICE_DIR, config.VOXCPM_MODEL, config.VOXCPM_MODEL_REVISION)
     app_http = client()
     backend = httpx.AsyncClient(base_url=config.TTS_BACKEND_URL, limits=BACKEND_LIMITS,
                                timeout=httpx.Timeout(config.TTS_BACKEND_TIMEOUT_SECONDS, connect=10, pool=30))
     store = VoiceStore(app_http)
+    audio_http = httpx.AsyncClient(timeout=60)
+    runtime = RuntimeVoices(backend, audio_http)
     monitor = asyncio.create_task(_monitor_backend())
     try:
         yield
@@ -190,6 +205,8 @@ async def lifespan(app: FastAPI):
         with suppress(asyncio.CancelledError):
             await monitor
         await store.close()
+        await runtime.close()
+        await audio_http.aclose()
         await app_http.aclose()
         await backend.aclose()
 
@@ -218,6 +235,8 @@ async def speech(req: SpeechRequest, authorization: str | None = Header(None)):
         raise HTTPException(status_code=404, detail="unknown voice") from cause
     except AppUnreachable as cause:
         raise HTTPException(status_code=502, detail="voice service unavailable") from cause
+    if runtime is not None and profiles.select(req.voice, meta) is None:
+        runtime.ensure(req.voice, meta)  # background; this request is served inline
     chunks = chunk_text(req.input, target_seconds=config.TTS_CHUNK_TARGET_SECONDS,
                         max_seconds=config.TTS_CHUNK_MAX_SECONDS, words_per_second=config.TTS_WORDS_PER_SECOND)
     headers = {"X-Sample-Rate": str(config.SAMPLE_RATE), "Cache-Control": "no-store"}

@@ -1,3 +1,4 @@
+import { orgPerson } from "@/lib/org-people";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -20,8 +21,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   });
   if (!doc?.s3Key || !doc.orgId) return new Response("Not found", { status: 404 });
   if (doc.ownerUserId !== session.user.id) {
-    const member = await db.member.findFirst({ where: { organizationId: doc.orgId, userId: session.user.id, disabledAt: null }, select: { role: true } });
-    if (!member || !isStudioRole(member.role)) return new Response("Not found", { status: 404 });
+    const member = await orgPerson(doc.orgId, { userId: session.user.id });
+    if (!member || member.disabled || !isStudioRole(member.role)) return new Response("Not found", { status: 404 });
   }
   return Response.redirect(await presignedGetUrl(doc.s3Key, 300), 302);
 }

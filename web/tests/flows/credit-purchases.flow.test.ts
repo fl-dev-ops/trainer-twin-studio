@@ -215,7 +215,7 @@ describe.skipIf(!localMinutesDb)("flow: partner assignment API funded by purchas
     expect((await learnerBalance(f.org.id, f.learner.email)).balanceSeconds).toBe(1800);
     expect(await balance()).toBe(70);
     expect(outside.emails).toHaveLength(1);
-    expect(outside.emails[0].text).toContain("30 minutes");
+    expect(outside.emails[0].text).toContain("30 credits");
   });
 
   test("2. full refund is logged; the API can still assign within the remaining balance", async () => {

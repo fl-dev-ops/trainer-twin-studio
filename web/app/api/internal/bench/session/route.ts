@@ -1,3 +1,4 @@
+import { orgPeople } from "@/lib/org-people";
 import { timingSafeEqual } from "node:crypto";
 import { db } from "@/lib/db";
 import { activateSession } from "@/lib/interview-sessions";
@@ -27,10 +28,8 @@ export async function POST(request: Request) {
     return Response.json({ error: "file and agentSlug are required" }, { status: 400 });
   }
 
-  const member = await db.member.findFirst({
-    where: { organizationId: orgId },
-    select: { userId: true, user: { select: { name: true } } },
-  });
+  const [person] = await orgPeople(orgId);
+  const member = person ? { userId: person.userId, user: { name: person.name } } : null;
   if (!member) return Response.json({ error: "Organization has no learner member" }, { status: 404 });
 
   try {

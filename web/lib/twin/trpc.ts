@@ -6,6 +6,7 @@ import type { Prisma } from "@/lib/generated/prisma/client";
 import { beforeSettings } from "@/lib/context-upload";
 import { assignablePeople } from "@/lib/learners";
 import { LEARNER_ROLE } from "@/lib/org";
+import { LEARNER, orgPeople, orgPerson } from "@/lib/org-people";
 import { learnerMinutes, MAX_LEARNER_MINUTES, MinutesError } from "@/lib/minutes";
 import { studioProcedure, t } from "@/lib/trpc";
 import { runTwinAssign } from "@/lib/workflow-runs";
@@ -109,20 +110,18 @@ function sessionItem(row: SessionRow) {
  * older sessions shows fewer, upgrade to a grouped query if twins get that busy.
  */
 export function learnerActivity(
-  assignments: { recipientEmail: string; minutesGiven: number; minutesUsed: number; accessUntil: Date | null; user: { id: string; name: string | null; image: string | null } | null }[],
+  assignments: { email: string; minutesGiven: number; minutesUsed: number; accessUntil: Date | null; user: { id: string; name: string | null; image: string | null } }[],
   sessions: SessionRow[],
 ) {
   return assignments
     .map((row) => {
-      const mine = sessions.filter((session) => session.user.email.toLowerCase() === row.recipientEmail);
+      const mine = sessions.filter((session) => session.user.id === row.user.id);
       const rated = mine.map((session) => session.feedbackRating).filter((r): r is number => r !== null);
       return {
-        email: row.recipientEmail,
-        /** Only set for accepted invites; rows with sessions always have a user. */
-        userId: row.user?.id ?? null,
-        name: row.user?.name || row.recipientEmail,
-        image: row.user?.image ?? null,
-        pending: !row.user,
+        email: row.email,
+        userId: row.user.id,
+        name: row.user.name || row.email,
+        image: row.user.image,
         /** The learner's minutes (given / used), shared with every twin and role play they have. */
         minutes: row.minutesGiven,
         used: row.minutesUsed,
@@ -184,8 +183,8 @@ const whoAsks = (data: Record<string, unknown>) => text(asRecord(data.scenario).
 
 /** A twin is the org admin's own AI: their avatar stands in when no AI avatar is configured. */
 async function orgAdmin(orgId: string) {
-  const admin = await db.member.findFirst({ where: { organizationId: orgId, role: "admin" }, select: { user: { select: { name: true, email: true, image: true } } } });
-  return admin?.user ?? null;
+  const [admin] = await orgPeople(orgId, { roles: ["admin"], includeDisabled: true });
+  return admin ? { name: admin.name, email: admin.email, image: admin.image } : null;
 }
 
 /** The twin's face: its persona's avatar photo (Avatar row), served through the same-site avatar route. */
@@ -206,7 +205,7 @@ const agentsRouter = t.router({
       db.twinAssignment.findMany({
         where: { orgId, status: "active" },
         orderBy: { createdAt: "asc" },
-        select: { agentId: true, recipientEmail: true, user: { select: { name: true, image: true } } },
+        select: { agentId: true, user: { select: { name: true, email: true, image: true } } },
       }),
       db.interviewSession.findMany({
         where: learnerSessions(orgId),
@@ -229,7 +228,7 @@ const agentsRouter = t.router({
         face: { person: admin, avatarUrl: aiAvatarUrl(agent.persona) },
         learners: assignments
           .filter((row) => row.agentId === agent.id)
-          .map((row) => ({ name: row.user?.name || row.recipientEmail, email: row.recipientEmail, image: row.user?.image ?? null })),
+          .map((row) => ({ name: row.user.name || row.user.email, email: row.user.email.toLowerCase(), image: row.user.image })),
       };
     });
     return { twins: cards.filter((card) => card.allSkills), skills: cards.filter((card) => !card.allSkills) };
@@ -347,16 +346,11 @@ const assignmentsRouter = t.router({
   list: studioProcedure.input(slugInput).query(({ ctx, input }) => twinCall(async () => {
     const found = await findTwinAgent(ctx.user.orgId, input.slug);
     const [assigned, assignable] = await Promise.all([listTwinAssignments(ctx.user.orgId, found.id), assignablePeople(ctx.user.orgId)]);
-    const byEmail = new Map(assigned.map((row) => [row.recipientEmail, row]));
-    // The org's learners and people invited as users who haven't joined yet, plus everyone assigned by email.
-    const people = new Map(assignable.map((person) => [person.email, person]));
-    for (const row of assigned) {
-      // Assigned by email but not a member yet: they haven't accepted (opened their link and signed in).
-      if (!people.has(row.recipientEmail)) people.set(row.recipientEmail, { email: row.recipientEmail, name: row.user?.name || row.recipientEmail, image: row.user?.image ?? null, pending: true });
-    }
-    return [...people.values()]
+    const byUser = new Map(assigned.map((row) => [row.user.id, row]));
+    // The org's learners (assignments always belong to one of them).
+    return assignable
       .map((person) => {
-        const row = byEmail.get(person.email);
+        const row = byUser.get(person.userId);
         return {
           ...person,
           assigned: row?.status === "active",
@@ -475,26 +469,29 @@ async function sessionReportState(orgId: string, id: string) {
 const laterEnd = (a: Date | null, b: Date | null) => (a && b ? (a > b ? a : b) : null);
 
 const usersRouter = t.router({
-  /** Everyone with twin access: how many twins, and their minutes (given and used, shared by twins and role plays). */
+  /** The org's learners with twin access: how many twins, and their minutes (given and used, shared by twins and role plays). */
   list: studioProcedure.query(async ({ ctx }) => {
-    const rows = await db.twinAssignment.findMany({
-      where: { orgId: ctx.user.orgId, status: "active" },
-      select: { id: true, recipientEmail: true, accessUntil: true, user: { select: { name: true, image: true } } },
-    });
-    const minutes = await learnerMinutes(ctx.user.orgId, rows.map((row) => row.recipientEmail));
+    const [learners, rows] = await Promise.all([
+      orgPeople(ctx.user.orgId, { roles: [LEARNER] }),
+      db.twinAssignment.findMany({ where: { orgId: ctx.user.orgId, status: "active" }, select: { userId: true, accessUntil: true } }),
+    ]);
+    const minutes = await learnerMinutes(ctx.user.orgId, learners.map((person) => person.email));
     // until: when this person's access ends; the latest of their twins, null when any twin has no end date.
     const people = new Map<string, { email: string; name: string; image: string | null; agents: number; minutes: number; used: number; until: Date | null }>();
+    const learnerById = new Map(learners.map((person) => [person.userId, person]));
     for (const row of rows) {
-      const known = people.get(row.recipientEmail);
-      const own = minutes.get(row.recipientEmail);
+      const learner = learnerById.get(row.userId);
+      if (!learner) continue; // disabled
+      const known = people.get(row.userId);
+      const own = minutes.get(learner.email);
       const person = known
         ?? {
-          email: row.recipientEmail, name: row.user?.name || row.recipientEmail, image: row.user?.image ?? null, agents: 0,
+          email: learner.email, name: learner.name, image: learner.image, agents: 0,
           minutes: Math.floor((own?.grantedSeconds ?? 0) / 60), used: Math.round((own?.usedSeconds ?? 0) / 60), until: row.accessUntil,
         };
       if (known) person.until = laterEnd(person.until, row.accessUntil);
       person.agents += 1;
-      people.set(row.recipientEmail, person);
+      people.set(row.userId, person);
     }
     return [...people.values()]
       .map((person) => ({ ...person, until: person.until?.toISOString() ?? null }))
@@ -503,16 +500,9 @@ const usersRouter = t.router({
 
   /** One learner across all twins: who they are and their twin sessions, newest first (the /users/<id> page). */
   get: studioProcedure.input(z.object({ id: z.string().min(1).max(100) })).query(async ({ ctx, input }) => {
-    const found = await db.user.findUnique({ where: { id: input.id }, select: { id: true, name: true, email: true, image: true } });
-    // In this org: a member, or someone given a twin or role play by email who hasn't joined yet.
-    const email = found?.email.toLowerCase() ?? "";
-    const belongs = found && (
-      await db.member.count({ where: { organizationId: ctx.user.orgId, userId: found.id } })
-      || await db.twinAssignment.count({ where: { orgId: ctx.user.orgId, recipientEmail: email } })
-      || await db.rolePlayAssignment.count({ where: { orgId: ctx.user.orgId, recipientEmail: email } })
-    );
-    if (!found || !belongs) throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
-    const user = found;
+    const person = await orgPerson(ctx.user.orgId, { userId: input.id });
+    if (!person) throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+    const user = { id: person.userId, name: person.name, email: person.email, image: person.image };
     const rows = await db.interviewSession.findMany({
       where: { ...learnerSessions(ctx.user.orgId), userId: user.id },
       orderBy: { createdAt: "desc" },

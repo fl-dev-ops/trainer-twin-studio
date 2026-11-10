@@ -76,6 +76,15 @@ uv sync
 uv run python src/agent.py dev
 ```
 
+## Sign-in locally
+
+Only existing accounts can sign in (Google or email OTP). Add people from the org's Settings; to provision a new
+founder account and onboarding link, run `bun scripts/founder-invite.ts <email>` from `web/`.
+
+Without `RESEND_API_KEY`, `bun run dev` prints the requested OTP in the server terminal as `[Dev sign-in] Code for …`.
+Enter that code on the sign-in page. It still expires after 10 minutes and allows 3 attempts. This fallback is
+**development-only**; production requires Resend. Treat terminal logs as sensitive and keep dev servers private.
+
 ## Billing (Meteroid) locally
 
 Org credits live in Meteroid (`web/lib/org-credits.ts`). Locally the app talks to Meteroid's **Development** tenant

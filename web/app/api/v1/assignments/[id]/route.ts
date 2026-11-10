@@ -2,8 +2,9 @@ import { z } from "zod";
 import { assignmentExpiresAt, newAssignmentShareCode } from "@/lib/assignments";
 import { db } from "@/lib/db";
 import { ensureDeployment } from "@/lib/deployments";
-import { findOrgLearner, isApiError, requireExternalApi } from "@/lib/external-api";
-import { giveStartingMinutes, MinutesError } from "@/lib/minutes";
+import { isApiError, requireExternalApi } from "@/lib/external-api";
+import { MinutesError } from "@/lib/minutes";
+import { PeopleError } from "@/lib/org-people";
 import {
   assignmentDetails,
   assignmentDetailSelect,
@@ -11,6 +12,7 @@ import {
   emailAssignment,
   findKeyTrainer,
   findScenario,
+  learnerFor,
   practiceUrl,
 } from "@/lib/external-api-assignments";
 
@@ -39,45 +41,46 @@ export async function PATCH(request: Request, { params }: Params) {
   const { id } = await params;
   const current = await db.rolePlayAssignment.findFirst({
     where: { id, orgId: api.org.id },
-    select: { recipientEmail: true, deploymentId: true, assignedAt: true, shareCode: true, deployment: { select: { agent: { select: { id: true, slug: true, name: true, data: true } } } } },
+    select: { memberId: true, deploymentId: true, assignedAt: true, shareCode: true, member: { select: { userId: true, user: { select: { email: true } } } }, deployment: { select: { agent: { select: { id: true, slug: true, name: true, data: true } } } } },
   });
   if (!current) return Response.json({ error: "Assignment not found" }, { status: 404 });
 
-  const [user, target, trainer] = await Promise.all([
-    parsed.data.userId ? findOrgLearner(api.org.id, { id: parsed.data.userId }) : null,
+  const [target, trainer] = await Promise.all([
     parsed.data.scenario ? findScenario(api.org.id, parsed.data.scenario) : current.deployment.agent,
     findKeyTrainer(api.org.id, api.actorUserId),
   ]);
-  if (parsed.data.userId && !user) return Response.json({ error: "User not found" }, { status: 404 });
   if (!target) return Response.json({ error: "Scenario not found" }, { status: 404 });
   if (!trainer) return Response.json({ error: "API key creator is no longer an organization trainer" }, { status: 403 });
-  const recipientEmail = parsed.data.email ?? user?.email.toLowerCase() ?? current.recipientEmail;
-  const learner = user ?? await findOrgLearner(api.org.id, { email: recipientEmail });
+  // The learner: unchanged, an existing one by userId, or by email (added to the org first when new).
+  let learner;
+  try {
+    learner = await learnerFor(
+      api.org.id,
+      parsed.data.email || parsed.data.userId ? { email: parsed.data.email, userId: parsed.data.userId } : { userId: current.member.userId },
+      trainer.userId,
+    );
+  } catch (error) {
+    if (error instanceof PeopleError || error instanceof MinutesError) return Response.json({ error: error.message }, { status: 409 });
+    throw error;
+  }
+  if (!learner) return Response.json({ error: "User not found" }, { status: 404 });
   const deployment = await ensureDeployment(api.org.id, target.id);
-  if (recipientEmail === current.recipientEmail && deployment.id === current.deploymentId) {
+  if (learner.memberId === current.memberId && deployment.id === current.deploymentId) {
     return Response.json({
-      assignment: assignmentView({ id, assignedAt: current.assignedAt }, recipientEmail, learner?.id ?? null, target.slug),
+      assignment: assignmentView({ id, assignedAt: current.assignedAt }, learner.email, learner.userId, target.slug),
       practiceUrl: practiceUrl(api.org.slug, current.shareCode),
       changed: false,
     });
   }
   // One assignment per learner and scenario: moving onto a pair that already exists would make a second one.
-  const clash = await db.rolePlayAssignment.findFirst({ where: { deploymentId: deployment.id, recipientEmail, id: { not: id } }, select: { id: true } });
+  const clash = await db.rolePlayAssignment.findFirst({ where: { deploymentId: deployment.id, memberId: learner.memberId, id: { not: id } }, select: { id: true } });
   if (clash) return Response.json({ error: "That learner already has this scenario assigned" }, { status: 409 });
-  // Moved to someone new to the org's credits: they get their starting credits first, as POST does.
-  try {
-    await giveStartingMinutes({ orgId: api.org.id, emails: [recipientEmail], actorUserId: trainer.userId });
-  } catch (error) {
-    if (error instanceof MinutesError) return Response.json({ error: error.message }, { status: 409 });
-    throw error;
-  }
 
   // The old link stops working: the assignment gets a fresh code, recipient and expiry.
   const assignment = await db.rolePlayAssignment.update({
     where: { id },
     data: {
-      memberId: null,
-      recipientEmail,
+      memberId: learner.memberId,
       deploymentId: deployment.id,
       assignedByUserId: trainer.userId,
       assignedAt: new Date(),
@@ -89,9 +92,9 @@ export async function PATCH(request: Request, { params }: Params) {
     select: { id: true, assignedAt: true, shareCode: true },
   });
   const url = practiceUrl(api.org.slug, assignment.shareCode);
-  const emailSent = await emailAssignment({ orgId: api.org.id, idempotencyKey: `assignment:${assignment.id}:${assignment.shareCode}`, to: recipientEmail, userName: learner?.name, scenario: target, practiceUrl: url, trainerName: trainer.user.name });
+  const emailSent = await emailAssignment({ org: api.org, idempotencyKey: `assignment:${assignment.id}:${assignment.shareCode}`, person: learner, scenario: target, practiceUrl: url, trainerName: trainer.name });
   return Response.json({
-    assignment: assignmentView(assignment, recipientEmail, learner?.id ?? null, target.slug),
+    assignment: assignmentView(assignment, learner.email, learner.userId, target.slug),
     practiceUrl: url,
     changed: true,
     emailSent,

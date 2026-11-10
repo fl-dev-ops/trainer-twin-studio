@@ -1,3 +1,4 @@
+import { orgPerson } from "@/lib/org-people";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { resolveSessionUser } from "@/lib/session-user";
@@ -36,10 +37,7 @@ export async function GET(
     try {
       const { org, user } = await resolveSessionUser();
       if (org && user) {
-        const member = await db.member.findFirst({
-          where: { organizationId: org.id, userId: user.id },
-          select: { role: true },
-        });
+        const member = await orgPerson(org.id, { userId: user.id });
         const trainer = isStudioRole(member?.role);
         session = await db.interviewSession.findFirst({
           where: { id, orgId: org.id, deletedAt: null, ...(trainer ? {} : { userId: user.id }) },

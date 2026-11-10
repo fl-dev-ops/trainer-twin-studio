@@ -4,6 +4,7 @@ import { useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronRight, ExternalLink, Lock, LogIn, LogOut, Sparkles } from "lucide-react";
+import { EmailCodeSignInLink } from "@/components/auth/email-code-sign-in-link";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { PhoneIcon } from "@/components/calibration/call-icons";
 import { TwinPortrait } from "@/components/calibration/parts";
@@ -159,8 +160,9 @@ export function OrgHome({ org, viewer, twins, trainer, roleplays }: {
         {!viewer ? (
           <article className={cn(CARD, "flex flex-col gap-3 p-5")}>
             <h2 className={TITLE}>Sign in to start</h2>
-            <p className={BODY}>Use the Google account you were invited with. You&apos;ll see what you can practise, and your minutes.</p>
+            <p className={BODY}>Use the email you were added with: Google, or a code we email you. You&apos;ll see what you can practise, and your minutes.</p>
             <GoogleSignInButton callbackURL={typeof window === "undefined" ? "/" : `${window.location.origin}/`} className="h-10 w-full" />
+            <EmailCodeSignInLink />
           </article>
         ) : blocked && main?.access ? (
           <article className={cn(CARD, "flex items-start gap-4 p-5")}>
@@ -262,9 +264,10 @@ export function OrgHome({ org, viewer, twins, trainer, roleplays }: {
           <DialogHeader className="items-center text-center">
             {main ? <TwinPortrait name={main.trainer.name} photoUrl={main.trainer.photoUrl} className="mb-2 size-16 rounded-2xl text-2xl" /> : null}
             <DialogTitle>Sign in to continue with {coach}</DialogTitle>
-            <DialogDescription>Use the Google account you were invited with. Your minutes and sessions stay yours.</DialogDescription>
+            <DialogDescription>Use the email you were added with: Google, or a code we email you. Your minutes and sessions stay yours.</DialogDescription>
           </DialogHeader>
           <GoogleSignInButton callbackURL={typeof window === "undefined" ? "/" : `${window.location.origin}/`} className="h-10 w-full" />
+            <EmailCodeSignInLink />
         </DialogContent>
       </Dialog>
     </div>

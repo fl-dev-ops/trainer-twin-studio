@@ -5,13 +5,12 @@
  */
 import "./use-test-db";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { hashPassword } from "better-auth/crypto";
+import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ensureDeployment } from "@/lib/deployments";
 import { recordSessionUsage } from "@/lib/minutes";
 import { ROLEPLAY_SOURCE } from "@/lib/scenario-ingest";
 
-export const PASSWORD = "e2e-password";
 const ORG = { id: "e2e-org", slug: "e2e", name: "E2E Academy" };
 const person = (key: string, name: string) => ({ id: `e2e-${key}`, name, email: `e2e-${key}@example.com` });
 const admin = person("admin", "Ada Admin");
@@ -32,10 +31,8 @@ await db.organization.deleteMany({ where: { id: ORG.id } });
 await db.user.deleteMany({ where: { id: { in: everyone.map((p) => p.id) } } });
 
 await db.organization.create({ data: { ...ORG, createdAt: new Date() } });
-const hash = await hashPassword(PASSWORD);
 for (const p of everyone) {
   await db.user.create({ data: { ...p, emailVerified: true } });
-  await db.account.create({ data: { id: `${p.id}-credential`, accountId: p.id, providerId: "credential", userId: p.id, password: hash } });
   await db.member.create({ data: { id: `${p.id}-member`, organizationId: ORG.id, userId: p.id, role: p === admin ? "admin" : "user", createdAt: new Date() } });
 }
 await db.orgBilling.create({ data: {
@@ -56,11 +53,11 @@ const twin = await db.agent.create({
   data: { id: "e2e-twin", orgId: ORG.id, personaId: persona.id, kind: "TWIN", slug: "e2e-coach", name: "E2E Coach", data: {} },
 });
 const deployment = await ensureDeployment(ORG.id, roleplay.id);
-for (const p of [learner, broke]) await db.rolePlayAssignment.create({ data: { orgId: ORG.id, deploymentId: deployment.id, recipientEmail: p.email, assignedByUserId: admin.id, shareCode: `${p.id}-practice`, expiresAt: new Date("2099-01-01") } });
+for (const p of [learner, broke]) await db.rolePlayAssignment.create({ data: { orgId: ORG.id, deploymentId: deployment.id, memberId: `${p.id}-member`, assignedByUserId: admin.id, shareCode: `${p.id}-practice`, expiresAt: new Date("2099-01-01") } });
 await db.minuteLedger.createMany({ data: [learner, broke, ...more].map((p) => ({ orgId: ORG.id, email: p.email, type: "grant", seconds: (p === learner ? 30 : p === broke ? 1 : 10) * 60, actorUserId: admin.id })) });
 
 // The broke learner's one minute, spent on a call that ended.
-const brokeAssignment = await db.rolePlayAssignment.findFirstOrThrow({ where: { orgId: ORG.id, recipientEmail: broke.email } });
+const brokeAssignment = await db.rolePlayAssignment.findFirstOrThrow({ where: { orgId: ORG.id, memberId: `${broke.id}-member` } });
 const spent = await db.interviewSession.create({
   data: {
     orgId: ORG.id, userId: broke.id, agentId: roleplay.id, assignmentId: brokeAssignment.id, shareCode: "e2e-broke-session",
@@ -70,11 +67,15 @@ const spent = await db.interviewSession.create({
 });
 await recordSessionUsage(spent.id);
 
-const codes = Object.fromEntries((await db.rolePlayAssignment.findMany({ where: { orgId: ORG.id }, select: { recipientEmail: true, shareCode: true } }))
-  .map((row) => [row.recipientEmail, row.shareCode]));
+const codes = Object.fromEntries((await db.rolePlayAssignment.findMany({ where: { orgId: ORG.id }, select: { member: { select: { user: { select: { email: true } } } }, shareCode: true } }))
+  .map((row) => [row.member.user.email, row.shareCode]));
+// Sign-in codes for the people the tests sign in as (server-only API; the setup signs in with them over HTTP, the way
+// a person does). Sign-in is Google or an email code: there are no passwords.
+const otps = Object.fromEntries(await Promise.all([admin, learner, broke].map(async (p) =>
+  [p.id, await auth.api.createVerificationOTP({ body: { email: p.email, type: "sign-in" } })] as const)));
 mkdirSync(new URL("./.state", import.meta.url), { recursive: true });
 writeFileSync(new URL("./.state/seed.json", import.meta.url), JSON.stringify({
-  org: ORG, password: PASSWORD, admin, learner, broke, more,
+  org: ORG, otps, admin, learner, broke, more,
   roleplay: { slug: roleplay.slug }, twin: { slug: twin.slug },
   purchase: { id: purchase.id, razorpayId: purchase.razorpayId, paymentId: `pay_e2e_${purchase.id}`, refundId: `rfnd_e2e_${purchase.id}` },
   codes: { learner: codes[learner.email], broke: codes[broke.email] },

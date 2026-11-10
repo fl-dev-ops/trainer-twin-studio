@@ -4,6 +4,7 @@ import { beforeSettings } from "@/lib/context-upload";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { assignablePeople } from "@/lib/learners";
+import { orgPeople } from "@/lib/org-people";
 import { creditsLeftFor } from "@/lib/minutes";
 import { listPersonas } from "@/lib/personas";
 import { isSessionReport } from "@/lib/session-report";
@@ -105,16 +106,19 @@ const anyRoleplaySessions = (orgId: string): Prisma.InterviewSessionWhereInput =
   orgId, deletedAt: null, startedAt: { not: null }, agent: anyRoleplayOf(orgId),
 });
 
-/** People invited to a role play (RolePlayAssignment) and their status. */
+/** The org's members given a role play (RolePlayAssignment), with who they are and the assignment's status. */
 async function invitesFor(orgId: string, agentIds: string[]) {
-  return db.rolePlayAssignment.findMany({
+  const rows = await db.rolePlayAssignment.findMany({
     where: { orgId, deployment: { agentId: { in: agentIds } } },
     orderBy: { assignedAt: "desc" },
-    select: {
-      id: true, recipientEmail: true, status: true, assignedAt: true, expiresAt: true,
-      deployment: { select: { agentId: true } },
-      member: { select: { user: { select: { name: true, image: true } } } },
-    },
+    select: { id: true, memberId: true, status: true, assignedAt: true, expiresAt: true, deployment: { select: { agentId: true } } },
+  });
+  // The org's learners only (specs/people.md rule 7: admin and team hold no learner assignments).
+  const people = new Map((await orgPeople(orgId, { roles: ["user"], memberIds: [...new Set(rows.map((row) => row.memberId))], includeDisabled: true }))
+    .map((person) => [person.memberId, person]));
+  return rows.flatMap((row) => {
+    const person = people.get(row.memberId);
+    return person ? [{ ...row, agentId: row.deployment.agentId, name: person.name, email: person.email, image: person.image }] : [];
   });
 }
 
@@ -149,8 +153,8 @@ const scenariosRouter = t.router({
         sessions: sessionsOf.get(agent.id) ?? 0,
         updatedAt: agent.updatedAt.toISOString(),
         learners: invites
-          .filter((row) => row.deployment.agentId === agent.id)
-          .map((row) => ({ name: row.member?.user.name || row.recipientEmail, email: row.recipientEmail, image: row.member?.user.image ?? null })),
+          .filter((row) => row.agentId === agent.id)
+          .map((row) => ({ name: row.name, email: row.email, image: row.image })),
       };
     });
   }),
@@ -183,9 +187,9 @@ const scenariosRouter = t.router({
       },
       members: invites.map((row) => ({
         id: row.id,
-        name: row.member?.user.name || row.recipientEmail,
-        email: row.recipientEmail,
-        image: row.member?.user.image ?? null,
+        name: row.name,
+        email: row.email,
+        image: row.image,
         status: row.status,
         assignedAt: row.assignedAt.toISOString(),
       })),
@@ -302,28 +306,35 @@ const usersRouter = t.router({
   /** The org's learners (role user), for the assign dialog. */
   orgLearners: studioProcedure.query(({ ctx }) => assignablePeople(ctx.user.orgId)),
 
-  /** Everyone practising on the org's role plays: invited or with sessions, how many role plays, how many sessions. */
+  /** The org's people practising its role plays (given one, or with sessions): how many role plays, how many sessions. */
   list: studioProcedure.query(async ({ ctx }) => {
     const orgId = ctx.user.orgId;
     const agents = await db.agent.findMany({ where: anyRoleplayOf(orgId), select: { id: true } });
-    const [invites, sessions] = await Promise.all([
+    const [members, invites, sessions] = await Promise.all([
+      orgPeople(orgId, { includeDisabled: true }),
       invitesFor(orgId, agents.map((agent) => agent.id)),
-      db.interviewSession.findMany({ where: anyRoleplaySessions(orgId), select: { agentId: true, user: { select: { name: true, email: true, image: true } } } }),
+      db.interviewSession.findMany({ where: anyRoleplaySessions(orgId), select: { agentId: true, userId: true } }),
     ]);
+    const byUser = new Map(members.map((member) => [member.userId, member]));
+    const byMember = new Map(members.map((member) => [member.memberId, member]));
     const people = new Map<string, { name: string; email: string; image: string | null; roleplays: Set<string>; sessions: number }>();
-    const person = (email: string, name: string, image: string | null) => {
-      const key = email.toLowerCase();
-      const found = people.get(key) ?? { name, email: key, image, roleplays: new Set<string>(), sessions: 0 };
-      people.set(key, found);
+    const person = (member: (typeof members)[number]) => {
+      const found = people.get(member.userId) ?? { name: member.name, email: member.email, image: member.image, roleplays: new Set<string>(), sessions: 0 };
+      people.set(member.userId, found);
       return found;
     };
-    for (const row of invites) person(row.recipientEmail, row.member?.user.name || row.recipientEmail, row.member?.user.image ?? null).roleplays.add(row.deployment.agentId);
+    for (const row of invites) {
+      const member = byMember.get(row.memberId);
+      if (member) person(member).roleplays.add(row.agentId);
+    }
     for (const row of sessions) {
-      const found = person(row.user.email, row.user.name || row.user.email, row.user.image);
+      const member = byUser.get(row.userId);
+      if (!member) continue;
+      const found = person(member);
       found.roleplays.add(row.agentId);
       found.sessions += 1;
     }
-    const credits = await creditsLeftFor(orgId, [...people.keys()]);
+    const credits = await creditsLeftFor(orgId, [...people.values()].map((row) => row.email));
     return [...people.values()]
       // creditsLeft: their practice minutes left (shared with twins); null for admin and team.
       .map(({ roleplays, ...rest }) => ({ ...rest, roleplays: roleplays.size, creditsLeft: credits.get(rest.email)?.left ?? null }))

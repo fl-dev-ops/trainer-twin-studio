@@ -39,7 +39,7 @@ export function minutesFixture() {
       await db.agent.deleteMany({ where: { orgId: id } });
       await db.persona.deleteMany({ where: { orgId: id } });
       await db.organization.deleteMany({ where: { id } });
-      await db.user.deleteMany({ where: { id: { in: [learner.id, trainer.id] } } });
+      await db.user.deleteMany({ where: { email: { contains: id, mode: "insensitive" } } });
     },
     session(fields: Partial<Prisma.InterviewSessionUncheckedCreateInput> = {}) {
       return db.interviewSession.create({ data: {

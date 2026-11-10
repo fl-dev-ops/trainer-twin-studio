@@ -1,120 +1,98 @@
 import { fundOrg } from "../setup/meteroid";
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
-import * as nextHeaders from "next/headers";
-import { auth } from "@/lib/auth";
+import * as email from "@/lib/email";
 import { minutesRouter } from "@/lib/minutes-trpc";
 import { learnerBalance } from "@/lib/minutes";
+import { orgPerson } from "@/lib/org-people";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
-
-// Exercise the configured Better Auth hook, not a copy of its grant-once logic.
-function beforeCreateInvitation(input: { invitation: { role: string; email: string; inviterId: string }; organization: { id: string } }) {
-  const plugin = auth.options.plugins.find((plugin) => plugin.id === "organization");
-  const hook = (plugin as unknown as { options: { organizationHooks: {
-    beforeCreateInvitation: (input: { invitation: { role: string; email: string; inviterId: string }; organization: { id: string } }) => Promise<void>;
-  } } }).options.organizationHooks.beforeCreateInvitation;
-  return hook(input);
-}
 
 describe.skipIf(!localMinutesDb)("credits stage two tRPC (local database)", () => {
   let f: MinutesFixture;
-  let headers: ReturnType<typeof spyOn<typeof nextHeaders, "headers">>;
-  const requestHeaders = new Headers({ "x-credits-test": "stage-two" });
-  beforeEach(async () => {
-    f = minutesFixture(); await f.create();
-    headers = spyOn(nextHeaders, "headers").mockResolvedValue(requestHeaders);
-  });
-  afterEach(async () => {
-    headers?.mockRestore();
-    await db.invitation.deleteMany({ where: { organizationId: f.org.id } });
-    await f.clean();
-  });
+  let send: ReturnType<typeof spyOn<typeof email, "sendPersonEmail">>;
+  beforeEach(async () => { f = minutesFixture(); await f.create(); send = spyOn(email, "sendPersonEmail").mockResolvedValue({ success: true }); });
+  afterEach(async () => { send?.mockRestore(); await f.clean(); });
   const caller = (role = "admin") => minutesRouter.createCaller({ user: { ...f.trainer, orgId: f.org.id, orgSlug: f.org.slug, role } });
   const fund = (minutes: number) => fundOrg({ orgId: f.org.id, minutes, note: "stage two test" });
   const rows = () => db.minuteLedger.findMany({ where: { orgId: f.org.id }, orderBy: { id: "asc" } });
+  const add = (emails: string[], minutes?: number) => caller().addPeople({ emails, minutes, role: "user" });
 
   test.each(["admin", "team"])("addMany skips %s studio emails case-insensitively with a reason, giving only learners", async (role) => {
     await db.member.update({ where: { id: `${f.trainer.id}-member` }, data: { role } });
     await db.user.update({ where: { id: f.trainer.id }, data: { email: f.trainer.email.toUpperCase() } });
     await fund(50);
-    expect(await caller(role).addMany({ emails: [f.trainer.email, f.learner.email.toUpperCase(), f.learner.email], minutes: 20, note: "  Practice  " })).toEqual({
+    expect(await caller(role).addMany({ emails: [f.trainer.email, f.learner.email.toUpperCase(), f.learner.email], minutes: 20, note: "  Practice  " })).toMatchObject({
       given: [f.learner.email], skipped: [{ email: f.trainer.email, reason: expect.stringContaining("studio team") }], orgBalanceMinutes: 30,
     });
     expect((await rows()).filter((row) => row.type === "grant")).toEqual([
       expect.objectContaining({ email: f.learner.email, seconds: 1200, actorUserId: f.trainer.id, note: "Practice" }),
     ]);
+    expect(send).toHaveBeenCalledTimes(1);
   });
 
   test("addMany maps short balance to CONFLICT without writing any grants", async () => {
-    await fund(39);
-    const before = await rows();
-    await expect(caller().addMany({ emails: [f.learner.email, `other-${f.learner.email}`], minutes: 20 })).rejects.toMatchObject({ code: "CONFLICT" });
-    expect(await rows()).toEqual(before);
+    await fund(69);
+    const other = `other-${f.learner.email}`;
+    await add([other]); // Both requested recipients must be members; 39 credits remain.
+    const before = await rows(); send.mockClear();
+    await expect(caller().addMany({ emails: [f.learner.email, other], minutes: 20 })).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(await rows()).toEqual(before); expect(send).not.toHaveBeenCalled();
   });
 
   test.each([0, -1, 1.5, 361])("addMany validates amount %d before writing", async (minutes) => {
     await expect(caller().addMany({ emails: [f.learner.email], minutes })).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    expect(await rows()).toEqual([]);
+    expect(await rows()).toEqual([]); expect(send).not.toHaveBeenCalled();
   });
 
-  test("invite grants chosen credits before creating role user invitations; real auth hook does not grant twice", async () => {
-    const other = `other-${f.learner.email}`;
+  test("addPeople gives chosen credits and creates user members immediately, one combined email each", async () => {
+    const people = [`added-${f.learner.email}`, `other-${f.learner.email}`];
     await fund(90);
-    expect(await caller().invite({ emails: [`invited-${f.learner.email}`.toUpperCase(), other], minutes: 45 })).toMatchObject({ invited: 2, failed: [] });
-    for (const email of [`invited-${f.learner.email}`, other]) {
-      expect((await learnerBalance(f.org.id, email)).grantedSeconds).toBe(2700);
+    expect(await add(people.map((e) => e.toUpperCase()), 45)).toMatchObject({ added: 2, already: 0 });
+    for (const e of people) {
+      expect(await orgPerson(f.org.id, { email: e })).toMatchObject({ role: "user" });
+      expect((await learnerBalance(f.org.id, e)).grantedSeconds).toBe(2700);
     }
-    expect(await db.invitation.findMany({ where: { organizationId: f.org.id }, select: { email: true, role: true } })).toEqual(expect.arrayContaining([
-      { email: `invited-${f.learner.email}`, role: "user" }, { email: other, role: "user" },
-    ]));
-    expect((await rows()).filter((row) => row.type === "grant")).toHaveLength(2);
-    expect((await rows()).filter((row) => row.type === "grant").every((row) => row.actorUserId === f.trainer.id)).toBe(true);
-    // The balance is now zero: a default 30-minute second grant would have made the hook fail.
-    await beforeCreateInvitation({ invitation: { role: "user", email: `invited-${f.learner.email}`.toUpperCase(), inviterId: f.trainer.id }, organization: { id: f.org.id } });
-    expect((await learnerBalance(f.org.id, `invited-${f.learner.email}`)).grantedSeconds).toBe(2700);
+    expect(await db.invitation.count({ where: { organizationId: f.org.id } })).toBe(0);
+    expect((await rows()).filter((r) => r.type === "grant")).toHaveLength(2);
+    expect((await rows()).every((r) => r.actorUserId === f.trainer.id)).toBe(true);
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(await add(people, 60)).toMatchObject({ added: 0, already: 2 });
+    expect(send).toHaveBeenCalledTimes(2);
   });
 
-  test("invite defaults to 30 and keeps an existing person's chosen grant on repeat", async () => {
+  test("addPeople defaults to 30 and keeps the chosen grant on repeat", async () => {
     await fund(30);
-    expect(await caller().invite({ emails: [`invited-${f.learner.email}`] })).toMatchObject({ invited: 1, failed: [] });
+    expect(await add([`added-${f.learner.email}`])).toMatchObject({ added: 1 });
     const before = await rows();
-    expect(await caller().invite({ emails: [`invited-${f.learner.email}`], minutes: 60 })).toMatchObject({ invited: 1, failed: [] });
+    expect(await add([`added-${f.learner.email}`], 60)).toMatchObject({ added: 0, already: 1 });
     expect(await rows()).toEqual(before);
-    expect((await learnerBalance(f.org.id, `invited-${f.learner.email}`)).grantedSeconds).toBe(1800);
+    expect((await learnerBalance(f.org.id, `added-${f.learner.email}`)).grantedSeconds).toBe(1800);
   });
 
-  test.each(["admin", "team"])("invite refuses %s studio emails before granting anyone or creating invitations", async (role) => {
+  test.each(["admin", "team"])("addPeople refuses %s studio emails before adding anyone", async (role) => {
     await db.member.update({ where: { id: `${f.trainer.id}-member` }, data: { role } });
     await db.user.update({ where: { id: f.trainer.id }, data: { email: f.trainer.email.toUpperCase() } });
-    await fund(100);
-    const before = await rows();
-    await expect(caller().invite({ emails: [`invited-${f.learner.email}`, f.trainer.email], minutes: 45 })).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringContaining("studio team") });
-    expect(await rows()).toEqual(before);
-    expect(await db.invitation.count({ where: { organizationId: f.org.id } })).toBe(0);
-    expect(headers).not.toHaveBeenCalled();
+    await fund(100); const before = await rows();
+    await expect(add([`added-${f.learner.email}`, f.trainer.email], 45)).rejects.toMatchObject({ code: "CONFLICT", message: expect.stringContaining("studio team") });
+    expect(await rows()).toEqual(before); expect(send).not.toHaveBeenCalled();
+    expect(await orgPerson(f.org.id, { email: `added-${f.learner.email}` })).toBeNull();
   });
 
-  test("invite short balance writes nothing and creates no invitations", async () => {
-    await fund(89);
-    const before = await rows();
-    await expect(caller().invite({ emails: [`invited-${f.learner.email}`, `other-${f.learner.email}`], minutes: 45 })).rejects.toMatchObject({ code: "CONFLICT" });
-    expect(await rows()).toEqual(before);
+  test("addPeople short balance adds nobody and sends nothing", async () => {
+    await fund(89); const before = await rows();
+    await expect(add([`added-${f.learner.email}`, `other-${f.learner.email}`], 45)).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(await rows()).toEqual(before); expect(send).not.toHaveBeenCalled();
     expect(await db.invitation.count({ where: { organizationId: f.org.id } })).toBe(0);
-    expect(headers).not.toHaveBeenCalled();
   });
 
-  test("invite reports a per-email creation failure and continues with the remaining emails", async () => {
-    const failedEmail = f.learner.email; // Already a member: invitation creation is refused.
-    const invitedEmail = `invited-${f.learner.email}`;
+  test("addPeople includes an existing member as already instead of failing its email", async () => {
     await fund(90);
-    expect(await caller().invite({ emails: [failedEmail, invitedEmail], minutes: 45 })).toMatchObject({
-      invited: 1, failed: [{ email: failedEmail, message: "User is already an organization member" }],
-    });
-    expect(await db.invitation.count({ where: { organizationId: f.org.id } })).toBe(1);
-    for (const email of [failedEmail, invitedEmail]) expect((await learnerBalance(f.org.id, email)).grantedSeconds).toBe(2700);
+    expect(await add([f.learner.email, `added-${f.learner.email}`], 45)).toMatchObject({ added: 1, already: 1 });
+    expect(send).toHaveBeenCalledTimes(1);
+    for (const e of [f.learner.email, `added-${f.learner.email}`]) expect((await learnerBalance(f.org.id, e)).grantedSeconds).toBe(2700);
   });
 
-  test.each([0, -1, 1.5, 361])("invite validates amount %d before grants or invitations", async (minutes) => {
-    await expect(caller().invite({ emails: [`invited-${f.learner.email}`], minutes })).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    expect(await rows()).toEqual([]);
+  test.each([0, -1, 1.5, 361])("addPeople validates amount %d before writing or sending", async (minutes) => {
+    await expect(add([`added-${f.learner.email}`], minutes)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(await rows()).toEqual([]); expect(send).not.toHaveBeenCalled();
   });
 });

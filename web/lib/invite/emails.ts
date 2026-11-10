@@ -1,5 +1,6 @@
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const MAX_INVITES = 50;
+export const isValidInviteEmail = (email: string) => EMAIL_RE.test(email);
 
 /** Splits a pasted list (commas, semicolons, spaces or new lines), lower-cases, de-duplicates, and separates invalid entries. */
 export function parseInviteEmails(raw: string): { emails: string[]; invalid: string[] } {

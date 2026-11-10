@@ -2,7 +2,8 @@ import { z } from "zod";
 import { assignmentExpiresAt, newAssignmentShareCode } from "@/lib/assignments";
 import { db } from "@/lib/db";
 import { ensureDeployment } from "@/lib/deployments";
-import { giveStartingMinutes, MinutesError } from "@/lib/minutes";
+import { MinutesError } from "@/lib/minutes";
+import { PeopleError } from "@/lib/org-people";
 import { findOrgLearner, isApiError, paginationFromUrl, requireExternalApi } from "@/lib/external-api";
 import {
   assignmentDetails,
@@ -11,6 +12,7 @@ import {
   emailAssignment,
   findKeyTrainer,
   findScenario,
+  learnerFor,
   practiceUrl,
 } from "@/lib/external-api-assignments";
 
@@ -29,12 +31,12 @@ export async function GET(request: Request) {
   const scenario = url.searchParams.get("scenario") || undefined;
   const page = paginationFromUrl(url);
   if (page instanceof Response) return page;
-  // A userId outside the org (or unknown) matches nothing.
-  const learner = userId ? await findOrgLearner(api.org.id, { id: userId }) : null;
-  const recipientEmail = requestedEmail ?? learner?.email.toLowerCase() ?? (userId ? "" : undefined);
+  // A learner outside the org (or unknown) matches nothing.
+  const learner = requestedEmail ? await findOrgLearner(api.org.id, { email: requestedEmail })
+    : userId ? await findOrgLearner(api.org.id, { id: userId }) : null;
   const where = {
     orgId: api.org.id,
-    ...(recipientEmail !== undefined ? { recipientEmail } : {}),
+    ...(requestedEmail || userId ? { memberId: learner?.memberId ?? "" } : {}),
     ...(scenario ? { deployment: { agent: { slug: scenario } } } : {}),
   };
   const [rows, total] = await Promise.all([
@@ -50,41 +52,34 @@ export async function POST(request: Request) {
   const parsed = createSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "email or userId and a valid scenario slug are required" }, { status: 400 });
 
-  const [user, agent, trainer] = await Promise.all([
-    parsed.data.userId ? findOrgLearner(api.org.id, { id: parsed.data.userId }) : null,
-    findScenario(api.org.id, parsed.data.scenario),
-    findKeyTrainer(api.org.id, api.actorUserId),
-  ]);
-  if (parsed.data.userId && !user) return Response.json({ error: "User not found" }, { status: 404 });
+  const [agent, trainer] = await Promise.all([findScenario(api.org.id, parsed.data.scenario), findKeyTrainer(api.org.id, api.actorUserId)]);
   if (!agent) return Response.json({ error: "Scenario not found" }, { status: 404 });
   if (!trainer) return Response.json({ error: "API key creator is no longer an organization trainer" }, { status: 403 });
 
-  const recipientEmail = parsed.data.email ?? user!.email.toLowerCase();
-  // With an email only, the learner is the org learner with that email, if they have joined.
-  const learner = user ?? await findOrgLearner(api.org.id, { email: recipientEmail });
+  // The learner: an existing one by userId, or by email (added to the org first when new, with starting credits).
+  let learner;
+  try {
+    learner = await learnerFor(api.org.id, { email: parsed.data.email, userId: parsed.data.userId }, trainer.userId);
+  } catch (error) {
+    if (error instanceof PeopleError || error instanceof MinutesError) return Response.json({ error: error.message }, { status: 409 });
+    throw error;
+  }
+  if (!learner) return Response.json({ error: "User not found" }, { status: 404 });
   const deployment = await ensureDeployment(api.org.id, agent.id);
-  const existing = await db.rolePlayAssignment.findFirst({
-    // ponytail: dashboard/API requests are serialized; add a DB unique index if concurrent assignment creation appears.
-    where: { deploymentId: deployment.id, recipientEmail },
+  const existing = await db.rolePlayAssignment.findUnique({
+    where: { deploymentId_memberId: { deploymentId: deployment.id, memberId: learner.memberId } },
     select: { id: true, assignedAt: true, shareCode: true, status: true },
   });
   // Idempotent: a live assignment (pending or used) is returned as it is, with no second email.
   if (existing && (existing.status === "pending" || existing.status === "used")) {
     return Response.json({
-      assignment: assignmentView(existing, recipientEmail, learner?.id ?? null, agent.slug),
+      assignment: assignmentView(existing, learner.email, learner.userId, agent.slug),
       practiceUrl: practiceUrl(api.org.slug, existing.shareCode),
       created: false,
     });
   }
 
-  // New, or a cancelled / expired one reopened with a fresh link (as the dashboard's Assign does). Someone new to the
-  // org's minutes gets their starting minutes from its balance first.
-  try {
-    await giveStartingMinutes({ orgId: api.org.id, emails: [recipientEmail], actorUserId: trainer.userId });
-  } catch (error) {
-    if (error instanceof MinutesError) return Response.json({ error: error.message }, { status: 409 });
-    throw error;
-  }
+  // New, or a cancelled / expired one reopened with a fresh link (as the dashboard's Assign does).
   const fields = {
     assignedByUserId: trainer.userId,
     shareCode: newAssignmentShareCode(),
@@ -94,12 +89,12 @@ export async function POST(request: Request) {
   };
   const select = { id: true, assignedAt: true, shareCode: true } as const;
   const assignment = existing
-    ? await db.rolePlayAssignment.update({ where: { id: existing.id }, data: { ...fields, memberId: null, usedAt: null }, select })
-    : await db.rolePlayAssignment.create({ data: { ...fields, orgId: api.org.id, deploymentId: deployment.id, recipientEmail }, select });
+    ? await db.rolePlayAssignment.update({ where: { id: existing.id }, data: { ...fields, usedAt: null }, select })
+    : await db.rolePlayAssignment.create({ data: { ...fields, orgId: api.org.id, deploymentId: deployment.id, memberId: learner.memberId }, select });
   const url = practiceUrl(api.org.slug, assignment.shareCode);
-  const emailSent = await emailAssignment({ orgId: api.org.id, idempotencyKey: `assignment:${assignment.id}:${assignment.shareCode}`, to: recipientEmail, userName: learner?.name, scenario: agent, practiceUrl: url, trainerName: trainer.user.name });
+  const emailSent = await emailAssignment({ org: api.org, idempotencyKey: `assignment:${assignment.id}:${assignment.shareCode}`, person: learner, scenario: agent, practiceUrl: url, trainerName: trainer.name });
   return Response.json({
-    assignment: assignmentView(assignment, recipientEmail, learner?.id ?? null, agent.slug),
+    assignment: assignmentView(assignment, learner.email, learner.userId, agent.slug),
     created: true,
     practiceUrl: url,
     emailSent,

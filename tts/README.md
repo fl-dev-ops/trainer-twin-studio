@@ -125,9 +125,31 @@ so keys stay server-side.
 docker compose up -d
 ```
 
-### Versioned voice profiles
+### New and changed voices: no restart needed
 
-Generate profiles **before starting the backend**, using the pinned vLLM-Omni model
+The proxy picks the fastest available path per request:
+
+1. **Precomputed profile** (below), loaded at backend start: fastest.
+2. **Runtime-registered voice**: the first time a voice version without a profile is
+   used, that request is served inline while the proxy uploads the reference to the
+   model server (`POST /v1/audio/voices`) in the background. Later requests name the
+   voice, and the model server reuses its cached encoded features. Uploads persist in
+   `SPEAKER_SAMPLES_DIR` (a volume in Compose) and are re-discovered after restarts.
+   Superseded versions of a voice are deleted; failed uploads retry after 5 minutes.
+3. **Inline cloning**: always correct; used for a voice's first request and as the
+   fallback whenever registration is unavailable.
+
+Caching features for voices **with a transcript** needs
+`deploy/patches/vllm-omni-0.28.0-voxcpm2-speaker-cache.patch` (upstream v0.28.0 only
+caches transcript-less voices). `deploy/Dockerfile.backend` applies it; the patch also
+refuses to reuse cached features built for a different transcript. Measured on an A30
+(first audio, loopback): inline 344 ms, runtime-registered 216 ms (150 ms without a
+transcript), precomputed 114 ms.
+
+### Versioned voice profiles (warm start)
+
+Optional: precomputed profiles make known voices fastest from the first request after a
+deploy. Generate them **before starting the backend**, using the pinned vLLM-Omni model
 environment (the thin proxy deliberately does not install GPU libraries):
 
 ```bash
@@ -144,7 +166,8 @@ voice and model versions, bounds reference downloads, and atomically publishes t
 manifest. It serializes concurrent builds and never forwards the app credential to
 an audio host. Profiles contain sensitive voice features/transcripts: keep `voices/`
 private and out of git. Mount the same generated directory into both containers.
-Restart backend and proxy after publishing updated profiles; missing/mismatched
+New profiles load at the next deploy/restart (never required); until then the voice uses
+its runtime registration. Missing/mismatched
 live voice versions fall back to inline cloning, never to a different trainer voice.
 
 The backend model revision is pinned in Compose. A mismatched profile manifest fails

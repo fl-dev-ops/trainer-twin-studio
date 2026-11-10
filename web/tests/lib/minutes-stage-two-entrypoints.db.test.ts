@@ -9,17 +9,15 @@ import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minut
 
 describe.skipIf(!localMinutesDb)("credits stage two assignment entrypoints (local database)", () => {
   let f: MinutesFixture;
-  let roleplayEmail: ReturnType<typeof spyOn<typeof email, "sendRolePlayAssignmentEmail">>;
-  let twinEmail: ReturnType<typeof spyOn<typeof email, "sendTwinAssignmentEmail">>;
+  let personEmail: ReturnType<typeof spyOn<typeof email, "sendPersonEmail">>;
   let trainerOrg: ReturnType<typeof spyOn<typeof org, "getTrainerOrg">>;
   beforeEach(async () => {
     f = minutesFixture(); await f.create();
-    roleplayEmail = spyOn(email, "sendRolePlayAssignmentEmail").mockResolvedValue({ success: true });
-    twinEmail = spyOn(email, "sendTwinAssignmentEmail").mockResolvedValue({ success: true });
+    personEmail = spyOn(email, "sendPersonEmail").mockResolvedValue({ success: true });
     trainerOrg = spyOn(org, "getTrainerOrg").mockResolvedValue({ ...f.org, accentColor: null, role: "admin", user: f.trainer });
   });
   afterEach(async () => {
-    roleplayEmail?.mockRestore(); twinEmail?.mockRestore(); trainerOrg?.mockRestore();
+    personEmail?.mockRestore(); trainerOrg?.mockRestore();
     await f.clean();
   });
   const fund = (minutes: number) => fundOrg({ orgId: f.org.id, minutes, note: "stage two test" });
@@ -38,8 +36,8 @@ describe.skipIf(!localMinutesDb)("credits stage two assignment entrypoints (loca
     expect((await learnerBalance(f.org.id, fresh)).grantedSeconds).toBe(2700);
     expect(await db.minuteLedger.findUnique({ where: { id: existing.id } })).toEqual(existing);
     expect(await availableOrgSeconds(f.org.id)).toBe(0);
-    expect(twinEmail).toHaveBeenCalledWith(expect.objectContaining({ to: fresh, minutes: 45 }));
-    expect(twinEmail).toHaveBeenCalledWith(expect.objectContaining({ to: f.learner.email, minutes: 20 }));
+    expect(personEmail).toHaveBeenCalledWith(expect.objectContaining({ to: fresh, credits: { added: 45, balance: 45 } }));
+    expect(personEmail).toHaveBeenCalledWith(expect.objectContaining({ to: f.learner.email, credits: { balance: 20 } }));
     expect(await caller().assignments.assign({ slug: f.twin.slug, emails: [fresh], startingMinutes: 60 })).toMatchObject({ skipped: 1 });
     expect(await db.minuteLedger.count({ where: { orgId: f.org.id, type: "grant" } })).toBe(2);
   });
@@ -56,10 +54,10 @@ describe.skipIf(!localMinutesDb)("credits stage two assignment entrypoints (loca
     expect((await learnerBalance(f.org.id, fresh)).grantedSeconds).toBe(2700);
     expect(await db.minuteLedger.findUnique({ where: { id: existing.id } })).toEqual(existing);
     expect(await availableOrgSeconds(f.org.id)).toBe(0);
-    expect(roleplayEmail).toHaveBeenCalledTimes(2);
+    expect(personEmail).toHaveBeenCalledTimes(2);
     expect((await put([fresh], 60)).status).toBe(200);
     expect(await db.minuteLedger.count({ where: { orgId: f.org.id, type: "grant" } })).toBe(2);
-    expect(roleplayEmail).toHaveBeenCalledTimes(2);
+    expect(personEmail).toHaveBeenCalledTimes(2);
   });
 
   test.each([0, -1, 1.5, 361])("role-play PUT rejects startingMinutes %d before grants, assignments or email", async (minutes) => {
@@ -67,14 +65,14 @@ describe.skipIf(!localMinutesDb)("credits stage two assignment entrypoints (loca
     expect(response.status).toBe(400);
     expect(await db.minuteLedger.count({ where: { orgId: f.org.id } })).toBe(0);
     expect(await db.rolePlayAssignment.count({ where: { orgId: f.org.id } })).toBe(0);
-    expect(roleplayEmail).not.toHaveBeenCalled();
+    expect(personEmail).not.toHaveBeenCalled();
   });
 
   test("twin assignments.assign rejects startingMinutes over 360 before writes", async () => {
     await expect(caller().assignments.assign({ slug: f.twin.slug, emails: [f.learner.email], startingMinutes: 361 })).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(await db.minuteLedger.count({ where: { orgId: f.org.id } })).toBe(0);
     expect(await db.twinAssignment.count({ where: { orgId: f.org.id } })).toBe(0);
-    expect(twinEmail).not.toHaveBeenCalled();
+    expect(personEmail).not.toHaveBeenCalled();
   });
 
   test("custom startingMinutes short balance refuses both entrypoints before assignments or mail", async () => {
@@ -85,7 +83,6 @@ describe.skipIf(!localMinutesDb)("credits stage two assignment entrypoints (loca
     expect(await db.minuteLedger.count({ where: { orgId: f.org.id, type: "grant" } })).toBe(0);
     expect(await db.twinAssignment.count({ where: { orgId: f.org.id } })).toBe(0);
     expect(await db.rolePlayAssignment.count({ where: { orgId: f.org.id } })).toBe(0);
-    expect(roleplayEmail).not.toHaveBeenCalled();
-    expect(twinEmail).not.toHaveBeenCalled();
+    expect(personEmail).not.toHaveBeenCalled();
   });
 });

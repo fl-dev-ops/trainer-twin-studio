@@ -36,7 +36,7 @@ const studioOnly: Record<string, (c: Caller) => Promise<unknown>> = {
   agentSpec: (c) => c.agentSpec({ slug: "x", isNew: false }),
   calibrationAgent: (c) => c.calibrationAgent({ slug: "x" }),
   fidelity: (c) => c.fidelity(),
-  learners: (c) => c.learners(),
+  users: (c) => c.users(),
   personas: (c) => c.personas(),
   persona: (c) => c.persona({ slug: "x", spec: false }),
   personaEdit: (c) => c.personaEdit({ slug: "x" }),

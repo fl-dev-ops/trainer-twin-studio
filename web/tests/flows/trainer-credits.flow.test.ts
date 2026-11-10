@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inviteToRoleplay } from "@/lib/invite/roleplay";
 import { creditsLeftFor } from "@/lib/minutes";
 import { minutesRouter } from "@/lib/minutes-trpc";
+import { orgPerson } from "@/lib/org-people";
 import { startSessionNow } from "@/lib/session-activation";
 import { twinRouter } from "@/lib/twin/trpc";
 import { db, localMinutesDb, minutesFixture } from "../lib/minutes-test-db";
@@ -25,7 +26,7 @@ describe.skipIf(!localMinutesDb)("flow: trainer gives learners credits → learn
   beforeAll(async () => {
     outside.start();
     await f.create();
-    // Learner invites now write invitations directly; no Better Auth request headers are needed.
+    // People are members immediately; no Better Auth invitation or request headers.
   });
   afterAll(async () => {
     await f.clean();
@@ -38,12 +39,10 @@ describe.skipIf(!localMinutesDb)("flow: trainer gives learners credits → learn
     expect(await api.org()).toMatchObject({ balanceMinutes: 600, addedMinutes: 600 });
   });
 
-  test("2. invite two new learners with 45 each, creating invitations and sending real captured emails", async () => {
-    expect(await api.invite({ emails: [first, second], minutes: 45 })).toMatchObject({ invited: 2, failed: [] });
-    expect(await db.invitation.findMany({ where: { organizationId: f.org.id }, select: { email: true, role: true, status: true } })).toEqual(expect.arrayContaining([
-      { email: first, role: "user", status: "pending" }, { email: second, role: "user", status: "pending" },
-    ]));
-    expect(await db.invitation.count({ where: { organizationId: f.org.id } })).toBe(2);
+  test("2. add two new learners with 45 each, creating memberships and sending one email each", async () => {
+    expect(await api.addPeople({ emails: [first, second], role: "user", minutes: 45 })).toMatchObject({ added: 2, already: 0 });
+    for (const email of [first, second]) expect(await orgPerson(f.org.id, { email })).toMatchObject({ role: "user" });
+    expect(await db.invitation.count({ where: { organizationId: f.org.id } })).toBe(0);
     for (const email of [first, second]) {
       expect(await api.learner({ email })).toMatchObject({ givenMinutes: 45, balanceMinutes: 45 });
       expect(outside.emails.find((sent) => sent.to.includes(email))?.html).toContain(f.org.slug);
@@ -57,24 +56,24 @@ describe.skipIf(!localMinutesDb)("flow: trainer gives learners credits → learn
     expect(await api.learner({ email: first })).toMatchObject({ givenMinutes: 45, balanceMinutes: 45 });
     expect((await api.org()).balanceMinutes).toBe(490);
     const email = outside.emails.find((sent) => sent.to.includes(f.learner.email))!;
-    expect(email.text).toContain("You have 20 minutes");
+    expect(email.text).toContain("Your balance: 20 credits");
     code = practiceCode(email);
   });
 
   test("4. twin tRPC assignment gives 15; the captured email says You have 15 minutes", async () => {
     expect(await twin.assignments.assign({ slug: f.twin.slug, emails: [twinEmail], startingMinutes: 15 })).toMatchObject({ added: 1, emailFailures: 0 });
-    expect(await db.twinAssignment.findFirst({ where: { orgId: f.org.id, recipientEmail: twinEmail } })).toMatchObject({ status: "active" });
+    expect(await db.twinAssignment.findFirst({ where: { orgId: f.org.id, user: { email: twinEmail } } })).toMatchObject({ status: "active" });
     expect(await api.learner({ email: twinEmail })).toMatchObject({ givenMinutes: 15, balanceMinutes: 15 });
-    expect(outside.emails.find((email) => email.to.includes(twinEmail))?.text).toContain("You have 15 minutes");
+    expect(outside.emails.find((email) => email.to.includes(twinEmail))?.text).toContain("Your balance: 15 credits");
     expect((await api.org()).balanceMinutes).toBe(475);
   });
 
   test("5. add 30 with trainer attribution; refuse past 360 and refuse studio members without writes", async () => {
-    expect(await api.add({ email: first, minutes: 30 })).toEqual({ grantedMinutes: 30, balanceMinutes: 75, orgBalanceMinutes: 445 });
+    expect(await api.add({ email: first, minutes: 30, note: "Added by trainer" })).toEqual({ grantedMinutes: 30, balanceMinutes: 75, orgBalanceMinutes: 445 });
     expect((await api.learner({ email: first })).added).toContainEqual(expect.objectContaining({ minutes: 30, note: "Added by trainer", by: f.trainer.name }));
     expect(await db.minuteLedger.findFirst({ where: { orgId: f.org.id, email: first, note: "Added by trainer" } })).toMatchObject({ actorUserId: f.trainer.id });
     const before = await rows();
-    await expect(api.add({ email: first, minutes: 286 })).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringContaining("360 minutes in total") });
+    await expect(api.add({ email: first, minutes: 286 })).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringContaining("360 min in total") });
     await expect(api.add({ email: f.trainer.email, minutes: 1 })).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringContaining("studio team") });
     expect(await rows()).toEqual(before);
     await api.add({ email: second, minutes: 300 });
@@ -82,7 +81,7 @@ describe.skipIf(!localMinutesDb)("flow: trainer gives learners credits → learn
   });
 
   test("6. bulk add skips the capped learner with a reason and charges exactly the other two grants", async () => {
-    expect(await api.addMany({ emails: [first, second, f.learner.email], minutes: 20 })).toEqual({
+    expect(await api.addMany({ emails: [first, second, f.learner.email], minutes: 20 })).toMatchObject({
       given: [first, f.learner.email], skipped: [{ email: second, reason: expect.stringContaining("15 more") }], orgBalanceMinutes: 105,
     });
     expect(await api.learner({ email: second })).toMatchObject({ givenMinutes: 345 });

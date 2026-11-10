@@ -1,3 +1,4 @@
+import { studioPeopleEmails } from "@/lib/org-people";
 import { db } from "@/lib/db";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { DEFAULT_LEARNER_MINUTES, MAX_LEARNER_MINUTES } from "@/lib/minutes-config";
@@ -80,9 +81,9 @@ export async function creditsLeftFor(orgId: string, emails: string[]): Promise<M
   const wanted = [...new Set(emails.map(lower))];
   const [minutes, studio] = await Promise.all([
     learnerMinutes(orgId, wanted),
-    db.member.findMany({ where: { organizationId: orgId, role: { in: ["admin", "team"] } }, select: { user: { select: { email: true } } } }),
+    studioPeopleEmails(orgId),
   ]);
-  const staff = new Set(studio.map((row) => row.user.email.toLowerCase()));
+  const staff = studio;
   return new Map(wanted.map((email) => {
     const own = minutes.get(email);
     return [email, staff.has(email) ? null : { left: Math.floor(Math.max(0, own?.balanceSeconds ?? 0) / 60), given: Math.floor((own?.grantedSeconds ?? 0) / 60) }];

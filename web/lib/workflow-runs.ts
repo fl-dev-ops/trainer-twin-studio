@@ -1,18 +1,21 @@
 import { start } from "workflow/api";
-import { InviteError, inviteLearners, type OrgInviteInput } from "@/lib/invite/org";
+import { giveLearnerCreditsAndEmail, type GiveCreditsInput } from "@/lib/invite/credits";
+import { addOrgPeopleAndEmail, type AddPeopleInput } from "@/lib/invite/org";
 import { inviteToRoleplay, type RoleplayAssignInput } from "@/lib/invite/roleplay";
 import { assignTwinAndInvite, type TwinAssignInput } from "@/lib/invite/twin";
 import { ChromaTenantService } from "@/lib/chroma-tenant";
 import { db } from "@/lib/db";
 import { MinutesError } from "@/lib/minutes";
+import { PeopleError } from "@/lib/org-people";
 import { grantTrialMinutes, linkOrgToMeteroid } from "@/lib/org-billing-setup";
 import { assignRoleplayToLearners } from "@/workflows/assign-roleplay";
 import { assignTwinToLearners } from "@/workflows/assign-twin";
-import { inviteOrgLearners } from "@/workflows/invite-org-learners";
+import { addPeopleToOrgFlow } from "@/workflows/add-org-people";
+import { giveCreditsToLearners } from "@/workflows/give-credits";
 import { onboardOrg } from "@/workflows/onboard-org";
 
 /**
- * Runs the workflows a person waits on (web/workflows/*): assigning twins and role plays, inviting learners,
+ * Runs the workflows a person waits on (web/workflows/*): adding people, assigning twins and role plays, giving credits,
  * onboarding an org (and, in lib/run-session-start.ts, starting a call). Each waits for its result. When a workflow
  * can't start, the same parts run right here, so nothing a person does is blocked by the workflow runtime.
  */
@@ -44,7 +47,7 @@ function orThrow<T extends { ok: boolean }>(result: T | { ok: false; status: num
 
 const direct = <A extends unknown[], R>(run: (...args: A) => Promise<R>) =>
   (...args: A) => run(...args).then((value) => ({ ok: true as const, ...value }), (error: unknown) => {
-    if (error instanceof MinutesError || error instanceof InviteError) return { ok: false as const, status: error.status, error: error.message };
+    if (error instanceof MinutesError || error instanceof PeopleError) return { ok: false as const, status: error.status, error: error.message };
     throw error;
   });
 
@@ -58,9 +61,14 @@ export async function runRoleplayAssign(input: RoleplayAssignInput) {
   return orThrow(await runAndWait("assign-roleplay", assignRoleplayToLearners, [input], direct(inviteToRoleplay)));
 }
 
-/** Settings › Users learner invites (workflows/invite-org-learners.ts). Throws MinutesError when refused. */
-export async function runOrgInvite(input: OrgInviteInput) {
-  return orThrow(await runAndWait("invite-org-learners", inviteOrgLearners, [input], direct(inviteLearners)));
+/** Settings › Team and Users (workflows/add-org-people.ts). Throws MinutesError when refused. */
+export async function runAddOrgPeople(input: AddPeopleInput) {
+  return orThrow(await runAndWait("add-org-people", addPeopleToOrgFlow, [input], direct(addOrgPeopleAndEmail)));
+}
+
+/** Users page "Add credits" (workflows/give-credits.ts). Throws MinutesError when refused. */
+export async function runGiveCredits(input: GiveCreditsInput) {
+  return orThrow(await runAndWait("give-credits", giveCreditsToLearners, [input], direct(giveLearnerCreditsAndEmail)));
 }
 
 /** Founder onboarding (workflows/onboard-org.ts): the org's Chroma database, Meteroid customer and trial credits. */

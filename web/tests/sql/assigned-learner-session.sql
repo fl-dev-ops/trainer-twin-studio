@@ -8,7 +8,8 @@ INSERT INTO "user" (id, name, email, "createdAt", "updatedAt") VALUES
   ('test-outsider', 'Outsider', 'outsider@example.com', NOW(), NOW()),
   ('test-trainer', 'Trainer', 'trainer@example.com', NOW(), NOW());
 INSERT INTO "member" (id, "organizationId", "userId", role, "createdAt")
-  VALUES ('test-member', 'test-org', 'test-trainer', 'admin', NOW());
+  VALUES ('test-member', 'test-org', 'test-trainer', 'admin', NOW()),
+         ('test-learner-member', 'test-org', 'test-learner', 'user', NOW());
 INSERT INTO "Persona" (id, "orgId", slug, name, data, "updatedAt")
   VALUES ('test-persona', 'test-org', 'test-persona', 'Persona', '{}', NOW());
 INSERT INTO "Agent" (id, "orgId", slug, name, "personaId", kind, data, "updatedAt") VALUES
@@ -16,8 +17,8 @@ INSERT INTO "Agent" (id, "orgId", slug, name, "personaId", kind, data, "updatedA
   ('test-other-agent', 'test-org', 'test-other-agent', 'Other agent', 'test-persona', 'ROLEPLAY', '{}', NOW());
 INSERT INTO "Deployment" (id, "orgId", "agentId", "publicKey", "updatedAt")
   VALUES ('test-deployment', 'test-org', 'test-agent', 'test-public-key', NOW());
-INSERT INTO "RolePlayAssignment" (id, "orgId", "deploymentId", "recipientEmail", "assignedByUserId", "shareCode", "expiresAt")
-  VALUES ('test-assignment', 'test-org', 'test-deployment', 'LEARNER@example.com', 'test-trainer', 'test-share', NOW() + INTERVAL '1 day');
+INSERT INTO "RolePlayAssignment" (id, "orgId", "deploymentId", "memberId", "assignedByUserId", "shareCode", "expiresAt")
+  VALUES ('test-assignment', 'test-org', 'test-deployment', 'test-learner-member', 'test-trainer', 'test-share', NOW() + INTERVAL '1 day');
 
 INSERT INTO "InterviewSession" (id, "orgId", "userId", "agentId", "deploymentId", "assignmentId", "shareCode", "personaSlug", "personaVersion", "agentSlug", "agentVersion")
   VALUES ('test-assigned', 'test-org', 'test-learner', 'test-agent', 'test-deployment', 'test-assignment', 'test-session-1', 'test-persona', 1, 'test-agent', 1);
@@ -47,8 +48,8 @@ BEGIN
   END;
   BEGIN
     INSERT INTO "InterviewSession" (id, "orgId", "userId", "agentId", "shareCode", "personaSlug", "personaVersion", "agentSlug", "agentVersion")
-      VALUES ('test-no-assignment', 'test-org', 'test-learner', 'test-agent', 'test-session-3', 'test-persona', 1, 'test-agent', 1);
-    RAISE EXCEPTION 'Unassigned learner was accepted';
+      VALUES ('test-no-assignment', 'test-org', 'test-outsider', 'test-agent', 'test-session-3', 'test-persona', 1, 'test-agent', 1);
+    RAISE EXCEPTION 'Non-member without an assignment was accepted';
   EXCEPTION WHEN SQLSTATE 'P0001' THEN
     IF SQLERRM <> 'Session user must belong to the same organization' THEN RAISE; END IF;
   END;

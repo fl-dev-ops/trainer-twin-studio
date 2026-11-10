@@ -7,6 +7,7 @@ import { assignmentMatchesUser } from "@/lib/assignments";
 import { signInUrl } from "@/lib/base-domain";
 import { db } from "@/lib/db";
 import { isStudioRole } from "@/lib/org";
+import { orgPerson } from "@/lib/org-people";
 import { agentPhotoUrls } from "@/lib/persona-media";
 import { presignedGetUrl } from "@/lib/s3";
 import { resolveSessionUser } from "@/lib/session-user";
@@ -71,7 +72,7 @@ export async function loadSharedSession(code: string): Promise<SharedSessionView
   // A learner's minutes left in this org (null for admin and team, who practise without using minutes).
   const minutesLeft = async (): Promise<number | null> => {
     if (!org) return null;
-    const member = await db.member.findFirst({ where: { organizationId: org.id, userId: user.id }, select: { role: true } });
+    const member = await orgPerson(org.id, { userId: user.id });
     if (isStudioRole(member?.role)) return null;
     return Math.floor(Math.max(0, (await learnerBalance(org.id, user.email)).balanceSeconds) / 60);
   };
@@ -82,7 +83,6 @@ export async function loadSharedSession(code: string): Promise<SharedSessionView
       id: true,
       orgId: true,
       status: true,
-      recipientEmail: true,
       member: { select: { userId: true } },
       deployment: {
         select: {
@@ -92,16 +92,18 @@ export async function loadSharedSession(code: string): Promise<SharedSessionView
       organization: { select: { name: true, logo: true } },
     },
   }) : null;
-  // Not a role-play invite: maybe a twin assignment or a twin share link. Checked here without creating
-  // anything; the user's assignment is created when the session starts (POST /api/sessions).
+  // Not a role-play invite: maybe a twin assignment or a twin share link (opening a share link adds an existing
+  // account to the org with the twin: specs/people.md rule 6).
   if (!assignment && org) {
-    const twin = await twinAccessByCode({ orgId: org.id, user, code, join: false }).catch((error: unknown) => {
+    // Opening a common twin link is where an existing account joins (specs/people.md rule 6); starting the call
+    // only uses that membership.
+    const twin = await twinAccessByCode({ orgId: org.id, user, code, join: true }).catch((error: unknown) => {
       if (error instanceof TwinAccessError) return error;
       throw error;
     });
     if (twin instanceof TwinAccessError) return { kind: "twinUnavailable", message: twin.message, email: user.email };
     if (twin) {
-      // Someone joining through a common link gets their starting minutes when the call starts.
+      // Someone who just joined through a common link got their starting credits on the way in.
       const left = twin.assignmentId ? await minutesLeft() : null;
       if (left !== null && left < MIN_START_MINUTES) return { kind: "outOfMinutes", email: user.email, minutesLeft: Math.max(0, left) };
       return { kind: "session", props: { ...(await twinSessionView(org.id, twin.agentId, code, user.name)), minutesLeft: left } };
@@ -194,15 +196,15 @@ export async function twinAccessFor(org: { id: string }, user: { id: string; nam
   } catch (error) {
     if (!(error instanceof TwinAccessError)) throw error;
     // In the learner's words: why they can't talk (messages from usable() in lib/twin-access.ts).
-    const reason = /removed|ended/.test(error.message) ? "ended" : "unassigned";
+    const reason = /removed|ended/.test(error.message) ? "ended" : (await orgPerson(org.id, { userId: user.id })) ? "unassigned" : "notMember";
     return { ok: false, name: user.name || user.email, email: user.email, reason };
   }
 }
 
 /** Whether this user is on the org's studio team (admin, team). */
 export async function isStudioMember(orgId: string, userId: string) {
-  const membership = await db.member.findFirst({ where: { organizationId: orgId, userId }, select: { role: true } });
-  return isStudioRole(membership?.role);
+  const membership = await orgPerson(orgId, { userId });
+  return isStudioRole(membership?.role) && !membership?.disabled;
 }
 
 /**

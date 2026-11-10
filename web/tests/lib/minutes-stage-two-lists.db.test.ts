@@ -1,6 +1,7 @@
 import { fundOrg } from "../setup/meteroid";
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { orgPerson } from "@/lib/org-people";
 import { ensureDeployment } from "@/lib/deployments";
 import { listUsers } from "@/lib/learners";
 import { creditsLeftFor, grantMinutes, recordSessionUsage } from "@/lib/minutes";
@@ -23,8 +24,15 @@ describe.skipIf(!localMinutesDb)("credits stage two learner lists (local databas
   };
   const invite = async (emails: string[]) => {
     const deployment = await ensureDeployment(f.org.id, f.roleplay.id);
-    await db.rolePlayAssignment.createMany({ data: emails.map((recipientEmail) => ({
-      orgId: f.org.id, deploymentId: deployment.id, recipientEmail, assignedByUserId: f.trainer.id,
+    const people = await Promise.all(emails.map(async (email) => {
+      const existing = await orgPerson(f.org.id, { email });
+      if (existing) return existing;
+      const user = await db.user.create({ data: { id: randomUUID(), name: email.split("@")[0], email: email.toLowerCase(), emailVerified: false } });
+      const member = await db.member.create({ data: { id: randomUUID(), userId: user.id, organizationId: f.org.id, role: "user", createdAt: new Date() } });
+      return { memberId: member.id };
+    }));
+    await db.rolePlayAssignment.createMany({ data: people.map((person) => ({
+      orgId: f.org.id, deploymentId: deployment.id, memberId: person.memberId, assignedByUserId: f.trainer.id,
       shareCode: randomUUID(), expiresAt: new Date(Date.now() + 3600_000),
     })) });
   };
@@ -53,18 +61,19 @@ describe.skipIf(!localMinutesDb)("credits stage two learner lists (local databas
     expect(roleplayUsers[0]).toMatchObject({ creditsLeft: 43, sessions: 1 });
   });
 
-  test.each(["admin", "team"])("creditsLeftFor / listUsers / roleplay users.list return null for %s, even with a grant", async (role) => {
+  test.each(["admin", "team"])("creditsLeftFor / listUsers hide studio %s even with a learner grant; role-play sessions retain unmetered history without an assignment", async (role) => {
     await give(45);
-    await invite([f.learner.email.toUpperCase()]);
+    await f.session();
     if (role === "admin") await db.member.update({ where: { id: `${f.trainer.id}-member` }, data: { role: "team" } });
     await db.member.update({ where: { id: `${f.learner.id}-member` }, data: { role } });
     await db.user.update({ where: { id: f.learner.id }, data: { email: f.learner.email.toUpperCase() } });
     expect(await creditsLeftFor(f.org.id, [f.learner.email.toUpperCase()])).toEqual(new Map([[f.learner.email, null]]));
-    expect((await listUsers(f.org.id)).find((row) => row.email === f.learner.email)).toMatchObject({ minutesLeft: null, minutesGiven: null });
-    expect((await caller().users.list()).find((row) => row.email === f.learner.email)).toMatchObject({ creditsLeft: null });
+    expect((await listUsers(f.org.id)).find((row) => row.email === f.learner.email)).toBeUndefined();
+    expect((await caller().users.list()).find((row) => row.email === f.learner.email)).toMatchObject({ creditsLeft: null, sessions: 1 });
+    expect(await db.rolePlayAssignment.count({ where: { orgId: f.org.id } })).toBe(0);
   });
 
-  test("list credits are zero, not null, for uncredited assignment-only learners", async () => {
+  test("list credits are zero, not null, for uncredited member learners", async () => {
     const unknown = `unknown-${f.learner.email}`;
     await invite([unknown]);
     expect((await listUsers(f.org.id)).find((row) => row.email === unknown)).toMatchObject({ minutesLeft: 0, minutesGiven: 0 });

@@ -5,8 +5,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
-  Eye,
-  EyeOff,
   Loader2,
 } from "lucide-react";
 import { OnboardingProgress } from "@/components/auth/onboarding-stepper";
@@ -71,6 +69,7 @@ function YouTubeLogo({ className = "size-4" }: { className?: string }) {
 export function FounderForm({
   token,
   email,
+  name = "",
   connectors,
   initialStep = 1,
   initialConnections = { notion: false, youtube: false },
@@ -79,7 +78,9 @@ export function FounderForm({
   oauthNotice,
 }: {
   token: string;
+  /** The signed-in founder's email and name (they sign in before setting up: Google or an email code). */
   email: string;
+  name?: string;
   connectors: { notion: boolean; youtube: boolean };
   initialStep?: 1 | 2 | 3;
   initialConnections?: { notion: boolean; youtube: boolean };
@@ -95,12 +96,8 @@ export function FounderForm({
   const [error, setError] = useState<string | null>(null);
 
   // Form Fields
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [firstName, setFirstName] = useState(name.split(" ")[0] ?? "");
+  const [lastName, setLastName] = useState(name.split(" ").slice(1).join(" "));
 
   const initialCompany = inferCompanyFromEmail(email);
   const [orgName, setOrgName] = useState(defaultOrgName || initialCompany.name);
@@ -176,14 +173,6 @@ export function FounderForm({
       setError("Please enter your last name");
       return;
     }
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters long");
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      return;
-    }
     setStep(2);
   }
 
@@ -215,13 +204,10 @@ export function FounderForm({
     if (!accountCreated) {
       setStage("account");
       try {
-        const signUp = await authClient.signUp.email({
-          name: `${firstName} ${lastName}`.trim(),
-          email,
-          password,
-        });
-        if (signUp.error) {
-          throw new Error(signUp.error.message ?? "Sign up failed");
+        // Already signed in (Google or an email code): just their name.
+        const named = await authClient.updateUser({ name: `${firstName} ${lastName}`.trim() });
+        if (named.error) {
+          throw new Error(named.error.message ?? "Could not save your name");
         }
         setAccountCreated(true);
 
@@ -364,76 +350,6 @@ export function FounderForm({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">
-                    Password
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      minLength={8}
-                      autoComplete="new-password"
-                      placeholder="••••••••"
-                      className="w-full h-10 pl-3.5 pr-10 rounded-lg border border-border bg-card text-sm text-foreground shadow-2xs focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground"
-                    />
-                    <button
-                      type="button"
-                      tabIndex={-1}
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground transition-colors"
-                      aria-label={
-                        showPassword ? "Hide password" : "Show password"
-                      }
-                    >
-                      {showPassword ? (
-                        <EyeOff className="size-4" />
-                      ) : (
-                        <Eye className="size-4" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">
-                    Confirm password
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showConfirmPassword ? "text" : "password"}
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      minLength={8}
-                      autoComplete="new-password"
-                      placeholder="••••••••"
-                      className="w-full h-10 pl-3.5 pr-10 rounded-lg border border-border bg-card text-sm text-foreground shadow-2xs focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground"
-                    />
-                    <button
-                      type="button"
-                      tabIndex={-1}
-                      onClick={() =>
-                        setShowConfirmPassword(!showConfirmPassword)
-                      }
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground transition-colors"
-                      aria-label={
-                        showConfirmPassword ? "Hide password" : "Show password"
-                      }
-                    >
-                      {showConfirmPassword ? (
-                        <EyeOff className="size-4" />
-                      ) : (
-                        <Eye className="size-4" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Must be at least 8 characters.
-              </p>
             </div>
 
             {error && (

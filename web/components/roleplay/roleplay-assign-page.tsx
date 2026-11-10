@@ -15,7 +15,7 @@ import { PageContainer } from "@/components/page-container";
 
 type Detail = RoleplayOutputs["scenarios"]["get"];
 
-const STATUS: Record<string, string> = { pending: "Invited", used: "Practised", expired: "Expired", cancelled: "Cancelled" };
+const STATUS: Record<string, string> = { pending: "Assigned", used: "Practised", expired: "Expired", cancelled: "Cancelled" };
 
 /**
  * Assign a role play: its members and their invite status, and Assign, which opens the shared assign dialog
@@ -24,7 +24,7 @@ const STATUS: Record<string, string> = { pending: "Invited", used: "Practised", 
 export function RoleplayAssignPage({ roleplay, learners }: { roleplay: Detail; learners: AssignPerson[] }) {
   const refresh = useRefresh();
   const [open, setOpen] = useState(false);
-  // Invited and not expired, or already practised: not offered again. Expired or cancelled invites can be re-sent.
+  // Assigned and not expired, or already practised: not offered again. Expired or cancelled ones can be re-sent.
   const active = new Set(roleplay.members.filter((m) => m.status === "pending" || m.status === "used").map((m) => m.email.toLowerCase()));
   const assignable = learners.filter((person) => !active.has(person.email.toLowerCase()));
 
@@ -37,10 +37,10 @@ export function RoleplayAssignPage({ roleplay, learners }: { roleplay: Detail; l
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error ?? "Could not assign");
-      const parts = [body.added ? `${body.added} invited` : "", body.resent ? `${body.resent} re-sent` : "", body.skipped ? `${body.skipped} already invited` : ""].filter(Boolean);
+      const parts = [body.added ? `${body.added} assigned` : "", body.resent ? `${body.resent} re-sent` : "", body.skipped ? `${body.skipped} already assigned` : ""].filter(Boolean);
       toast.success(parts.join(" · ") || "Done");
       if (body.emailProgress) void followEmailProgress(body.emailProgress, body.emailsQueued);
-      else if (body.emailFailures) toast.warning(`${body.emailFailures} invite email(s) could not be sent.`);
+      else if (body.emailFailures) toast.warning(`${body.emailFailures} email(s) could not be sent.`);
       refresh();
       return true;
     } catch (error) {

@@ -5,7 +5,6 @@ import { closeInterviewSession } from "@/lib/session-lifecycle";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { resolveSessionUser } from "@/lib/session-user";
 import { LearnerMemoryService } from "@/lib/learner-memory";
-import { processEndedSession } from "@/lib/session-processing";
 
 /**
  * Finalizes a session: persists the transcript and evidence coverage captured
@@ -77,14 +76,7 @@ export async function POST(request: Request) {
     console.warn("Learner collection hook notice:", err);
   }
 
-  // Completed sessions, and abandoned twin learner calls where the learner spoke, get their report.
-  if (finalized.finalStatus === "completed" || finalized.finalStatus === "abandoned") {
-    try {
-      await processEndedSession(String(body.sessionId), finalized.finalStatus);
-    } catch (err) {
-      console.warn("Could not initiate session report generation:", err);
-    }
-  }
-
+  // The report (completed sessions, abandoned twin learner calls where the learner spoke) runs in the session's end
+  // workflow, started by closeInterviewSession.
   return NextResponse.json({ ok: true });
 }

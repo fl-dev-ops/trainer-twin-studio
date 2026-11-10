@@ -5,7 +5,7 @@
  *   API_BASE=http://localhost:3999/api/v1 ORG=careerwithvasanth bun scripts/api-contract-check.ts
  *
  * Needs the server's database (DATABASE_URL): it makes a throwaway API key and learner in ORG and removes them, and
- * every invitation and assignment it creates, at the end. Run the server without RESEND_API_KEY so no email goes out.
+ * every person and assignment it creates, at the end. Run the server without RESEND_API_KEY so no email goes out.
  * Never point it at production.
  */
 import assert from "node:assert/strict";
@@ -120,10 +120,11 @@ try {
   await call("detail", "GET", "/users/{userId}", `/users/${learner.id}`, 200);
   await call("rename", "PATCH", "/users/{userId}", `/users/${learner.id}`, 200, { name: "Contract Learner 2" });
   await call("rename, empty", "PATCH", "/users/{userId}", `/users/${learner.id}`, 400, { name: "" });
-  await call("invite", "POST", "/users", "/users", 201, { email: inviteEmail });
-  await call("re-invite refreshes", "POST", "/users", "/users", 200, { email: inviteEmail });
-  await call("invite a member", "POST", "/users", "/users", 409, { email: learnerEmail });
-  await call("invite, bad email", "POST", "/users", "/users", 400, { email: "nope" });
+  // Adding someone makes them a learner of the org right away (specs/people.md); adding them again changes nothing.
+  await call("add", "POST", "/users", "/users", 201, { email: inviteEmail });
+  await call("add again", "POST", "/users", "/users", 200, { email: inviteEmail });
+  await call("add an existing learner", "POST", "/users", "/users", 200, { email: learnerEmail });
+  await call("add, bad email", "POST", "/users", "/users", 400, { email: "nope" });
   if (outsider) await call("other org's user", "GET", "/users/{userId}", `/users/${outsider.userId}`, 404);
 
   // Assignments
@@ -153,13 +154,12 @@ try {
   await call("removed", "GET", "/users/{userId}", `/users/${learner.id}`, 404);
 } finally {
   await db.apikey.deleteMany({ where: { id: created.id } });
-  await db.rolePlayAssignment.deleteMany({ where: { orgId: org.id, recipientEmail: { in: [learnerEmail, inviteEmail] } } });
-  await db.invitation.deleteMany({ where: { organizationId: org.id, email: { in: [learnerEmail, inviteEmail] } } });
+  await db.rolePlayAssignment.deleteMany({ where: { orgId: org.id, member: { user: { email: { in: [learnerEmail, inviteEmail] } } } } });
   // Their starting minutes go back: the check leaves the org's balance as it found it.
   await db.minuteLedger.deleteMany({ where: { orgId: org.id, email: { in: [learnerEmail, inviteEmail] } } });
   await db.session.deleteMany({ where: { userId: learner.id } });
-  await db.member.deleteMany({ where: { userId: learner.id } });
-  await db.user.deleteMany({ where: { id: learner.id } });
+  await db.member.deleteMany({ where: { organizationId: org.id, user: { email: { in: [learnerEmail, inviteEmail] } } } });
+  await db.user.deleteMany({ where: { email: { in: [learnerEmail, inviteEmail] } } });
 }
 
 for (const result of results) {

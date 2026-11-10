@@ -22,7 +22,6 @@ const assignment = await db.rolePlayAssignment.create({
     orgId: agent.orgId,
     deploymentId: deployment.id,
     memberId: members[0].id,
-    recipientEmail: members[0].user.email,
     assignedByUserId: members[0].userId,
     shareCode: newAssignmentShareCode(),
     expiresAt: assignmentExpiresAt(),

@@ -13,8 +13,8 @@ import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import { SearchInput } from "@/components/search-input";
 
-/** `pending`: invited, hasn't accepted yet (not a member of the org). */
-export type AssignPerson = { email: string; name: string; image: string | null; pending?: boolean };
+/** One of the org's learners (lib/org-people.ts). */
+export type AssignPerson = { email: string; name: string; image: string | null };
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -144,7 +144,7 @@ export function AssignDialog({ variant, open, onOpenChange, title, assignedCount
         <ul className="m-0 min-h-24 flex-1 list-none overflow-y-auto rounded-lg border border-input p-0">
           {shown.length === 0 ? (
             <li className="p-6 text-center text-sm text-muted-foreground">
-              {q ? "No one matches that search." : "Everyone in your organization is assigned. Invite someone by email below."}
+              {q ? "No one matches that search." : "Everyone in your organization is assigned. Add someone by email below."}
             </li>
           ) : null}
           {shown.map((person, i) => {
@@ -156,15 +156,10 @@ export function AssignDialog({ variant, open, onOpenChange, title, assignedCount
                   <UserAvatar user={person} size="md" />
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate text-sm font-medium">{person.name}</span>
-                    {person.pending ? (
-                      <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                        {person.name !== person.email ? <span className="truncate">{person.email}</span> : null}
-                        <PendingBadge />
-                      </span>
-                    ) : person.name !== person.email ? (
+                    {person.name !== person.email ? (
                       <span className="truncate text-xs text-muted-foreground">{person.email}</span>
                     ) : (
-                      <span className="text-xs text-muted-foreground">New · gets an invite</span>
+                      <span className="text-xs text-muted-foreground">New · added to your organization</span>
                     )}
                   </span>
                   {on ? <Check className="size-4 shrink-0 text-(--brand)" aria-hidden /> : null}
@@ -179,7 +174,7 @@ export function AssignDialog({ variant, open, onOpenChange, title, assignedCount
             type="text"
             inputMode="email"
             autoComplete="off"
-            placeholder="Invite by email"
+            placeholder="Add by email"
             value={invite}
             onChange={(e) => setInvite(e.target.value)}
             onKeyDown={(e) => {
@@ -188,7 +183,7 @@ export function AssignDialog({ variant, open, onOpenChange, title, assignedCount
                 addInvites();
               }
             }}
-            aria-label="Invite by email"
+            aria-label="Add by email"
             aria-invalid={invite.trim() !== "" && !inviteValid}
           />
           <Button variant="outline" disabled={!inviteValid} onClick={addInvites}>Add</Button>
@@ -202,14 +197,5 @@ export function AssignDialog({ variant, open, onOpenChange, title, assignedCount
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-/** Invited but not joined yet (hasn't accepted the invite / opened their link). */
-export function PendingBadge() {
-  return (
-    <span className="shrink-0 rounded-full bg-caution-subtle px-2 py-0.5 text-overline font-medium text-caution">
-      Invite pending
-    </span>
   );
 }

@@ -1,9 +1,9 @@
 import { resolveUpload, UploadError } from "@/lib/uploads";
+import { studioPeopleEmails } from "@/lib/org-people";
 import { z } from "zod";
 import { toolSettings } from "@/lib/agent-tools";
 import { beforeSettings } from "@/lib/context-upload";
 import { db } from "@/lib/db";
-import { isStudioRole } from "@/lib/org";
 import { updateRoleplay } from "@/lib/roleplay/manage";
 import { roleplayBuilderFrom } from "@/lib/roleplay/skill";
 import { getObjectText } from "@/lib/s3";
@@ -96,14 +96,6 @@ async function findAgent(d: CopilotStudioDeps, orgId: string, agentSlug: string,
   return agent;
 }
 
-/** Emails of the org's studio members (admin / team): the copilot invites learners only. */
-async function studioMemberEmails(d: CopilotStudioDeps, orgId: string, list: string[]) {
-  const members = await d.db.member.findMany({
-    where: { organizationId: orgId, user: { email: { in: list } } },
-    select: { role: true, user: { select: { email: true } } },
-  });
-  return new Set(members.filter((member) => isStudioRole(member.role)).map((member) => member.user.email.toLowerCase()));
-}
 
 export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, d: CopilotStudioDeps = defaultDeps) {
   const orgId = actor.org.id;
@@ -153,18 +145,18 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
         const learners = await d.listTwinAssignments(orgId, agent.id);
         return {
           ...base,
-          learners: learners.map((row) => ({ email: row.recipientEmail, status: row.status, minutesGiven: row.minutesGiven, minutesUsed: row.minutesUsed })),
+          learners: learners.map((row) => ({ email: row.email, status: row.status, minutesGiven: row.minutesGiven, minutesUsed: row.minutesUsed })),
         };
       }
       const invites = await d.db.rolePlayAssignment.findMany({
         where: { orgId, deployment: { agentId: agent.id } },
-        select: { recipientEmail: true, status: true },
+        select: { status: true, member: { select: { user: { select: { email: true } } } } },
       });
       return {
         ...base,
         tools: toolSettings(agent.data),
         builder: kind === "roleplay-builder" ? roleplayBuilderFrom(agent.data) : null,
-        learners: invites.map((row) => ({ email: row.recipientEmail, status: row.status })),
+        learners: invites.map((row) => ({ email: row.member.user.email.toLowerCase(), status: row.status })),
       };
     }
 
@@ -227,7 +219,7 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
 
     case "inviteLearners": {
       const agent = await findAgent(d, orgId, input.slug, { archived: false });
-      const staff = await studioMemberEmails(d, orgId, input.emails);
+      const staff = await studioPeopleEmails(orgId, input.emails);
       const learners = input.emails.filter((email) => !staff.has(email));
       const refused = input.emails.filter((email) => staff.has(email));
       if (!learners.length) return { invited: 0, refused, reason: "Studio members (admin / team) are not invited as learners." };

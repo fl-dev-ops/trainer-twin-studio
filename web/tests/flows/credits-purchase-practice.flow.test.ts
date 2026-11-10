@@ -53,9 +53,9 @@ describe.skipIf(!localMinutesDb)("flow: buy credits → assign → practise → 
     expect(outside.emails).toHaveLength(1);
     const [email] = outside.emails;
     expect(email.to).toEqual([f.learner.email]);
-    expect(email.subject).toBe(`New Role Play Assigned: ${f.roleplay.name}`);
-    expect(email.text).toContain("You have 10 minutes of practice");
-    expect(email.text).toContain(`Sign in with ${f.learner.email}`);
+    expect(email.subject).toBe(`New role play: ${f.roleplay.name}`);
+    expect(email.text).toContain("Your balance: 10 credits");
+    expect(email.text).toContain(`Sign in with Google or an email code, using ${f.learner.email}`);
     code = practiceCode(email);
   });
 

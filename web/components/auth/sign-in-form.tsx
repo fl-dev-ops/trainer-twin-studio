@@ -18,28 +18,45 @@ import { Spinner } from "@/components/ui/spinner";
 import { authClient } from "@/lib/auth-client";
 import { safeFamilyRedirect } from "@/lib/base-domain";
 
+/**
+ * Sign-in (specs/people.md rule 10): Google, or a 6-digit code emailed to you. No passwords or self-sign-up.
+ * Accounts are created by operators or when someone is added to an org.
+ */
 export function SignInForm({
   redirectTo,
   googleEnabled,
+  error: initialError,
 }: {
   redirectTo?: string;
   googleEnabled: boolean;
+  /** Why the last Google sign-in was refused (the page reads it from ?error=). */
+  error?: string;
 }) {
   const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError ?? null);
   const [busy, setBusy] = useState(false);
+  const [email, setEmail] = useState("");
+  const [codeSent, setCodeSent] = useState(false);
+  const [code, setCode] = useState("");
+
+  async function sendCode() {
+    setBusy(true);
+    setError(null);
+    const { error } = await authClient.emailOtp.sendVerificationOtp({ email: email.trim(), type: "sign-in" });
+    setBusy(false);
+    if (error) return setError(error.message ?? "Could not send the code");
+    setCodeSent(true);
+    setCode("");
+  }
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!codeSent) return sendCode();
     setBusy(true);
     setError(null);
-    const form = new FormData(event.currentTarget);
-    const { error } = await authClient.signIn.email({
-      email: String(form.get("email") ?? "").trim(),
-      password: String(form.get("password") ?? ""),
-    });
+    const { error } = await authClient.signIn.emailOtp({ email: email.trim(), otp: code.trim() });
     if (error) {
-      setError(error.message ?? "Sign in failed");
+      setError(codeError(error));
       setBusy(false);
       return;
     }
@@ -77,17 +94,7 @@ export function SignInForm({
               Welcome to TrainerTwin
             </h1>
             <FieldDescription>
-              Don&apos;t have an account?{" "}
-              <Link
-                href={
-                  redirectTo
-                    ? `/sign-up?redirect=${encodeURIComponent(redirectTo)}`
-                    : "/sign-up"
-                }
-                className="text-foreground underline underline-offset-4"
-              >
-                Sign up
-              </Link>
+              Sign in with Google, or with a code we email you.
             </FieldDescription>
           </div>
 
@@ -100,7 +107,7 @@ export function SignInForm({
             </>
           ) : null}
 
-          <Field data-invalid={Boolean(error)}>
+          <Field data-invalid={Boolean(error) && !codeSent}>
             <FieldLabel htmlFor="email">Email</FieldLabel>
             <Input
               id="email"
@@ -108,20 +115,39 @@ export function SignInForm({
               type="email"
               placeholder="m@example.com"
               autoComplete="email"
+              value={email}
+              onChange={(event) => {
+                setEmail(event.target.value);
+                setCodeSent(false);
+              }}
               required
             />
           </Field>
 
-          <Field data-invalid={Boolean(error)}>
-            <FieldLabel htmlFor="password">Password</FieldLabel>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-            />
-          </Field>
+          {codeSent ? (
+            <Field data-invalid={Boolean(error)}>
+              <FieldLabel htmlFor="code">Code</FieldLabel>
+              <Input
+                id="code"
+                name="code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                placeholder="6-digit code"
+                value={code}
+                onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
+                autoFocus
+                required
+              />
+              <FieldDescription>
+                If {email.trim()} has a TrainerTwin account, we&apos;ve sent it a code. It works for 10 minutes.{" "}
+                <button type="button" className="text-foreground underline underline-offset-4" disabled={busy} onClick={() => void sendCode()}>
+                  Send a new code
+                </button>
+              </FieldDescription>
+            </Field>
+          ) : null}
 
           {error ? (
             <p role="alert" className="text-destructive text-sm font-medium">
@@ -132,7 +158,7 @@ export function SignInForm({
           <Field>
             <Button type="submit" disabled={busy} className="w-full">
               {busy ? <Spinner data-icon="inline-start" /> : null}
-              {busy ? "Signing in…" : "Sign in"}
+              {busy ? (codeSent ? "Signing in…" : "Sending…") : codeSent ? "Sign in" : "Email me a code"}
             </Button>
           </Field>
         </FieldGroup>
@@ -152,4 +178,12 @@ export function SignInForm({
       </FieldDescription>
     </div>
   );
+}
+
+/** A refused code, in the person's words. An unknown email gets no code (no self sign-up), so a wrong code says both. */
+function codeError(error: { code?: string; message?: string }) {
+  if (error.code === "OTP_EXPIRED") return "That code has expired. Send a new code.";
+  if (error.code === "TOO_MANY_ATTEMPTS") return "Too many tries with that code. Send a new code.";
+  if (error.code === "INVALID_OTP" || !error.message) return "That code didn't work. Check the code, and that this is the email your trainer added.";
+  return error.message; // e.g. a disabled member: "Your access has been disabled. Contact your trainer."
 }

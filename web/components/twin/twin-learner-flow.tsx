@@ -4,6 +4,7 @@ import { MIN_START_MINUTES } from "@/lib/minutes-config";
 import { useState, type ReactNode, type CSSProperties } from "react";
 import { Check, ChevronDown, Flag, Lock, LogIn, LogOut, Star } from "lucide-react";
 import { toast } from "sonner";
+import { EmailCodeSignInLink } from "@/components/auth/email-code-sign-in-link";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { CalibrationCall, type CallResult } from "@/components/calibration/calibration-call";
 import { CallEndedIcon, PhoneIcon } from "@/components/calibration/call-icons";
@@ -33,7 +34,7 @@ export type LearnerAccess =
   | { ok: true; preview: false; name: string; email: string; code: string; minutesLeft: number; minutesTotal: number }
   /** A studio member (admin, team): the learner page as learners see it; calls use no minutes and aren't counted. */
   | { ok: true; preview: true; name: string; email: string }
-  | { ok: false; name: string; email: string; reason: "unassigned" | "ended" | "used" }
+  | { ok: false; name: string; email: string; reason: "notMember" | "unassigned" | "ended" | "used" }
   | null;
 
 export type Trainer = { name: string; title: string | null; bio: string | null; photoUrl: string | null };
@@ -50,10 +51,11 @@ export const firstName = (name: string) => name.split(/[\s@]/)[0] || name;
 const ISSUES = ["Wrong or made-up answer", "Didn't understand me", "Audio or connection", "Too slow", "Something else"];
 
 /** Why someone can't talk, said plainly (title, what to do). */
-export function noAccessCopy(reason: "unassigned" | "ended" | "used", trainer: string) {
+export function noAccessCopy(reason: "notMember" | "unassigned" | "ended" | "used", trainer: string) {
   if (reason === "used") return { title: "You've used all your minutes", body: `Ask ${trainer} for more time to keep practising.` };
   if (reason === "ended") return { title: "Your access has ended", body: `Ask ${trainer} if you'd like to keep practising.` };
-  return { title: "You don't have access yet", body: `Ask ${trainer} to add you, or switch to the account ${trainer} invited.` };
+  if (reason === "unassigned") return { title: "This twin isn't yours yet", body: `Ask ${trainer} to give you this twin.` };
+  return { title: "You're not in this organization yet", body: `Ask ${trainer} to add you, or switch to the account ${trainer} added.` };
 }
 
 /**
@@ -240,9 +242,10 @@ export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string;
           <DialogHeader className="items-center text-center">
             <TwinPortrait name={trainer.name} photoUrl={trainer.photoUrl} className="mb-2 size-16 rounded-2xl text-2xl" />
             <DialogTitle>Sign in to talk to {coach}&apos;s twin</DialogTitle>
-            <DialogDescription>Use the Google account {coach} invited. Your minutes and sessions stay yours.</DialogDescription>
+            <DialogDescription>Use the email {coach} added: Google, or a code we email you. Your minutes and sessions stay yours.</DialogDescription>
           </DialogHeader>
           <GoogleSignInButton callbackURL={`${typeof window === "undefined" ? "" : window.location.origin}${path}`} className="h-10 w-full" />
+          <EmailCodeSignInLink returnTo={`${typeof window === "undefined" ? "" : window.location.origin}${path}`} />
         </DialogContent>
       </Dialog>
       {report}

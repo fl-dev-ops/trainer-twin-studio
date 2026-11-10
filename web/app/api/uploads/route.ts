@@ -24,7 +24,7 @@ export async function POST(request: Request) {
   const input = parsed.data;
   const who = input.purpose === "copilot"
     ? await getTrainerOrg().then((org) => (org ? { org, user: org.user } : null))
-    : await uploader(input.shareCode);
+    : await uploader();
   if (!who) return Response.json({ error: "Forbidden" }, { status: 403 });
   try {
     const started = await startUpload({ orgId: who.org.id, userId: who.user.id, name: input.name, mimeType: input.mimeType, size: input.size, purpose: input.purpose });

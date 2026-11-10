@@ -1,0 +1,59 @@
+# Source of truth for the Dokploy Traefik route (Settings -> Traefik File System ->
+# dynamic/tts-trainertwin.yml on the Dokploy server). Apply with:
+#   dokploy settings update-traefik-file --path /etc/dokploy/traefik/dynamic/tts-trainertwin.yml \
+#     --traefikConfig "$(cat tts/deploy/traefik/tts-trainertwin.yml)"
+
+# tts.trainertwin.com -> JarvisLabs A30 TTS, failing over to the AWS TTS while it exists.
+# Remove the fallback (and the tts-aws service/transport) once AWS is decommissioned.
+http:
+  routers:
+    tts-trainertwin-web:
+      rule: Host(`tts.trainertwin.com`)
+      entryPoints:
+        - web
+      middlewares:
+        - redirect-to-https
+      service: tts-trainertwin
+    tts-trainertwin-secure:
+      rule: Host(`tts.trainertwin.com`)
+      entryPoints:
+        - websecure
+      service: tts-trainertwin
+      tls:
+        certResolver: letsencrypt
+  services:
+    tts-trainertwin:
+      failover:
+        service: tts-jl
+        fallback: tts-aws
+        healthCheck: {}
+    tts-jl:
+      loadBalancer:
+        passHostHeader: false
+        serversTransport: tts-jl-transport
+        servers:
+          - url: https://26ea215701282.notebooksn.jarvislabs.net
+        # /healthz is 503 until the backend is up and every batch size is warmed.
+        healthCheck:
+          path: /healthz
+          interval: 10s
+          # A falsely failed probe must not keep JL out of rotation for a full interval.
+          unhealthyInterval: 2s
+          timeout: 5s
+    tts-aws:
+      loadBalancer:
+        passHostHeader: true
+        serversTransport: tts-aws-transport
+        servers:
+          - url: https://15.252.93.87
+        healthCheck:
+          path: /healthz
+          hostname: tts.trainertwin.com
+          interval: 10s
+          timeout: 5s
+  serversTransports:
+    # HTTP/1.1 to the JarvisLabs gateway: sporadic health-probe failures were seen over HTTP/2.
+    tts-jl-transport:
+      disableHTTP2: true
+    tts-aws-transport:
+      serverName: tts.trainertwin.com

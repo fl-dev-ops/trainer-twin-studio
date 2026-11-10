@@ -27,7 +27,7 @@ describe.skipIf(!localMinutesDb)("repeat role-play activation (local database)",
     after = spyOn(nextServer, "after").mockImplementation(() => {});
     const deployment = await ensureDeployment(f.org.id, f.roleplay.id);
     assignment = await db.rolePlayAssignment.create({ data: {
-      orgId: f.org.id, deploymentId: deployment.id, recipientEmail: f.learner.email,
+      orgId: f.org.id, deploymentId: deployment.id, memberId: `${f.learner.id}-member`,
       assignedByUserId: f.trainer.id, shareCode: `${f.org.id}-repeat`, expiresAt: new Date(0),
     } });
     await fundOrg({ orgId: f.org.id, minutes: 10, note: "test" });
@@ -86,16 +86,10 @@ describe.skipIf(!localMinutesDb)("repeat role-play activation (local database)",
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  test("wrong email and wrong org cannot start a role-play link", async () => {
-    expect(await activateSession({ ...input(), userEmail: f.trainer.email })).toBeNull();
-    expect(await activateSession({ ...input(), orgId: `${f.org.id}-missing` })).toBeNull();
-    expect(await sessions()).toHaveLength(0);
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  test("a member-bound assignment rejects another user even with the recipient email", async () => {
-    await db.rolePlayAssignment.update({ where: { id: assignment.id }, data: { memberId: `${f.learner.id}-member` } });
+  test("another account (even with the learner's email) and another org cannot start a role-play link", async () => {
     expect(await activateSession({ ...input(), userId: f.trainer.id })).toBeNull();
+    expect(await activateSession({ ...input(), userId: f.trainer.id, userEmail: f.learner.email })).toBeNull();
+    expect(await activateSession({ ...input(), orgId: `${f.org.id}-missing` })).toBeNull();
     expect(await sessions()).toHaveLength(0);
     expect(fetchMock).not.toHaveBeenCalled();
   });

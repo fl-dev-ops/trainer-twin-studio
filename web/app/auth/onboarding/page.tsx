@@ -1,5 +1,7 @@
 import { headers } from "next/headers";
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { signInUrl } from "@/lib/base-domain";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { FounderForm } from "@/components/auth/founder-form";
@@ -30,6 +32,8 @@ export default async function OnboardingPage({
       })
     : null;
   const newOrg = Boolean(invite && !invite.acceptedAt);
+  // Founders sign in first (Google or an email code: there are no passwords), then come back here to set up.
+  if (newOrg && !session) redirect(signInUrl((await headers()).get("host") ?? "", `/onboarding?t=${encodeURIComponent(token!)}`));
 
   // 2. Otherwise an admin continues setting up their organization (connectors): the one they're working in.
   let userOrg: { id: string; name: string; slug: string } | null = null;
@@ -71,7 +75,8 @@ export default async function OnboardingPage({
         {canOnboard ? (
           <FounderForm
             token={token ?? ""}
-            email={invite?.email ?? session?.user.email ?? ""}
+            email={session?.user.email ?? invite?.email ?? ""}
+            name={session?.user.name ?? ""}
             connectors={{
               notion: Boolean(process.env.NOTION_OAUTH_CLIENT_ID),
               youtube: Boolean(process.env.YOUTUBE_OAUTH_CLIENT_ID),
