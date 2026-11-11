@@ -157,7 +157,8 @@ async function kindOf(invoice: MeteroidInvoice, billing: OrgBilling): Promise<Bi
       const sub = await getSubscription(invoice.subscriptionId);
       if (sub.planName !== TRIAL_PLAN && LIVE_SUBSCRIPTION.includes(sub.status)) {
         await db.orgBilling.updateMany({ where: { orgId: billing.orgId, paidSubscriptionId: null }, data: { paidSubscriptionId: sub.id } });
-        paidSub = true;
+        // Two new subscriptions at once: only the one that became the org's paid subscription is its upgrade.
+        paidSub = (await db.orgBilling.findUniqueOrThrow({ where: { orgId: billing.orgId }, select: { paidSubscriptionId: true } })).paidSubscriptionId === sub.id;
       }
     }
     if (paidSub) return billing.plan === "trial" ? "upgrade" : "renewal";
