@@ -82,5 +82,5 @@ test("connectVoice closes LiveKit and invalidates a failed session even if closi
   close.mockRejectedValue(new Error("room cleanup unavailable"));
   await expect(connectVoice(input, session)).rejects.toBe(error);
   expect(close).toHaveBeenCalledWith({ room: "old-room", dispatchId: "old-dispatch", videoEgressId: null });
-  expect(failed).toHaveBeenCalledWith({ where: { id: "session", status: { notIn: ["completed", "abandoned"] } }, data: { status: "failed", endedAt: expect.any(Date), runtimeTokenHash: null } });
+  expect(failed).toHaveBeenCalledWith({ where: { id: "session", status: { in: ["activating", "active"] } }, data: { status: "failed", endedAt: expect.any(Date), runtimeTokenHash: null } });
 });

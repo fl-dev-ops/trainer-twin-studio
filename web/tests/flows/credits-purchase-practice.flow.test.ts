@@ -81,7 +81,9 @@ describe.skipIf(!localMinutesDb)("flow: buy credits → assign → practise → 
     const learner = await learnerBalance(f.org.id, f.learner.email);
     expect(Math.round(learner.usedSeconds / 60)).toBe(3);
     expect(Math.floor(learner.balanceSeconds / 60)).toBe(7);
-    expect((await db.rolePlayAssignment.findFirstOrThrow({ where: { orgId: f.org.id } })).status).toBe("used");
+    const assignment = await db.rolePlayAssignment.findFirstOrThrow({ where: { orgId: f.org.id } });
+    expect(assignment).toMatchObject({ status: "pending", usedAt: null });
+    expect(await db.interviewSession.count({ where: { assignmentId: assignment.id, startedAt: { not: null }, status: { not: "failed" } } })).toBe(1);
   });
 
   test("5. the same link starts a new call, with the 7 minutes left", async () => {

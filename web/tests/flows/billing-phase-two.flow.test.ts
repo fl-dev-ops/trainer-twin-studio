@@ -14,6 +14,7 @@ import * as billingMeteroid from "@/lib/billing/meteroid";
 import { ensurePaymentLink } from "@/lib/billing/razorpay";
 import { grantMinutes, giveStartingMinutes as startingMinutesInTx, grantMinutesToMany, learnerBalance } from "@/lib/minutes";
 import { activateSession } from "@/lib/interview-sessions";
+import { ensureDeployment } from "@/lib/deployments";
 import { POST } from "@/app/api/meteroid/webhook/route";
 
 const realS3 = await import("@/lib/s3");
@@ -414,7 +415,13 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
   });
   test("rule 16: paused admin/team/learner starts refused with role-specific messages; running call resumes", async () => {
     await plan("paid"); await grantMinutes({ orgId: f.org.id, email: f.learner.email, minutes: 10 });
-    const activate = (userId = f.learner.id, userEmail = f.learner.email, key?: string) => activateSession({ orgId: f.org.id, userId, userEmail, agentSlug: f.roleplay.slug, mode: "voice", idempotencyKey: key });
+    const persona = await db.persona.findFirstOrThrow({ where: { orgId: f.org.id } });
+    const next = await db.agent.create({ data: { orgId: f.org.id, personaId: persona.id, slug: `${f.roleplay.slug}-next`, name: "Next role play", kind: "ROLEPLAY", data: {} } });
+    for (const [agentId, suffix] of [[f.roleplay.id, "live"], [next.id, "next"]] as const) {
+      const deployment = await ensureDeployment(f.org.id, agentId);
+      await db.rolePlayAssignment.create({ data: { orgId: f.org.id, deploymentId: deployment.id, memberId: `${f.learner.id}-member`, assignedByUserId: f.trainer.id, shareCode: `${f.org.id}-${suffix}`, expiresAt: new Date(0) } });
+    }
+    const activate = (userId = f.learner.id, userEmail = f.learner.email, key?: string) => activateSession({ orgId: f.org.id, userId, userEmail, ...(userId === f.learner.id ? { shareCode: `${f.org.id}-${key ? "live" : "next"}` } : { agentSlug: f.roleplay.slug }), mode: "voice" });
     const live = await activate(f.learner.id, f.learner.email, "live-call");
     await db.orgBilling.update({ where: { orgId: f.org.id }, data: { pausedAt: new Date() } });
     const before = (await learnerBalance(f.org.id, f.learner.email)).grantedSeconds;

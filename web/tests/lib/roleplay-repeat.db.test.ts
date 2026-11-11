@@ -2,6 +2,8 @@ import { fundOrg } from "../setup/meteroid";
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import * as nextServer from "next/server";
 import * as livekit from "@/lib/livekit";
+import * as end from "@/lib/session-end";
+import * as database from "@/lib/db";
 import { ensureDeployment } from "@/lib/deployments";
 import { activateSession, finalizeInterviewSession } from "@/lib/interview-sessions";
 import { grantMinutes, learnerBalance } from "@/lib/minutes";
@@ -16,6 +18,7 @@ describe.skipIf(!localMinutesDb)("repeat role-play activation (local database)",
   let close: ReturnType<typeof spyOn<typeof livekit, "closeLiveKitSession">>;
   let after: ReturnType<typeof spyOn<typeof nextServer, "after">>;
   let secret: string | undefined;
+  const spies: { mockRestore(): void }[] = [];
   beforeEach(async () => {
     f = minutesFixture(); await f.create();
     secret = process.env.COPILOT_SERVICE_SECRET;
@@ -35,6 +38,7 @@ describe.skipIf(!localMinutesDb)("repeat role-play activation (local database)",
     fetchMock.mockClear();
   });
   afterEach(async () => {
+    for (const spy of spies.splice(0).reverse()) spy.mockRestore();
     fetchMock?.mockRestore(); connect?.mockRestore(); close?.mockRestore(); after?.mockRestore();
     if (secret === undefined) delete process.env.COPILOT_SERVICE_SECRET;
     else process.env.COPILOT_SERVICE_SECRET = secret;
@@ -57,7 +61,7 @@ describe.skipIf(!localMinutesDb)("repeat role-play activation (local database)",
     expect(practices).toHaveLength(2);
     expect(new Set(practices.map((session) => session.activationKey)).size).toBe(2);
     for (const session of practices) expect(session.activationKey).toMatch(new RegExp(`^assignment:${assignment.id}:.+`));
-    expect((await row()).status).toBe("used");
+    expect(await row()).toMatchObject({ status: "pending", usedAt: null });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -65,7 +69,7 @@ describe.skipIf(!localMinutesDb)("repeat role-play activation (local database)",
     const first = await activateSession(input());
     const previous = await db.interviewSession.update({ where: { id: first!.id }, data: { status, startedAt: new Date(Date.now() - 90_000) } });
     const resumed = await activateSession(input());
-    expect(resumed).toMatchObject({ id: first!.id, status });
+    expect(resumed).toMatchObject({ id: first!.id, status, resumed: true });
     expect(resumed?.secondsLeft).toBeGreaterThanOrEqual(505);
     expect(resumed?.secondsLeft).toBeLessThanOrEqual(510);
     expect(await sessions()).toMatchObject([{ id: first!.id, activationKey: previous.activationKey }]);
@@ -75,23 +79,85 @@ describe.skipIf(!localMinutesDb)("repeat role-play activation (local database)",
   test.each(["pending", "used"])("a %s assignment with expiresAt in the past starts without becoming expired", async (status) => {
     await db.rolePlayAssignment.update({ where: { id: assignment.id }, data: { status } });
     expect(await activateSession(input())).toMatchObject({ status: "active" });
-    expect(await row()).toMatchObject({ status: "used", expiresAt: new Date(0) });
+    expect(await row()).toMatchObject({ status, expiresAt: new Date(0), usedAt: null });
   });
 
   test.each(["cancelled", "expired"])("a %s assignment status still blocks even with minutes", async (status) => {
     await db.rolePlayAssignment.update({ where: { id: assignment.id }, data: { status } });
-    expect(await activateSession(input())).toBeNull();
+    await expect(activateSession(input())).rejects.toMatchObject({ code: "roleplay_access_removed", status: 403, message: "Your access to this role play was removed. Ask your trainer." });
     expect(await sessions()).toHaveLength(0);
     expect((await row()).status).toBe(status);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   test("another account (even with the learner's email) and another org cannot start a role-play link", async () => {
-    expect(await activateSession({ ...input(), userId: f.trainer.id })).toBeNull();
-    expect(await activateSession({ ...input(), userId: f.trainer.id, userEmail: f.learner.email })).toBeNull();
+    await expect(activateSession({ ...input(), userId: f.trainer.id })).rejects.toMatchObject({ code: "roleplay_not_assigned", status: 403 });
+    await expect(activateSession({ ...input(), userId: f.trainer.id, userEmail: f.learner.email })).rejects.toMatchObject({ code: "roleplay_not_assigned", status: 403 });
     await expect(activateSession({ ...input(), orgId: `${f.org.id}-missing` })).rejects.toMatchObject({ code: "no_org", status: 403 });
     expect(await sessions()).toHaveLength(0);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test("resume keeps the original call, deadline and usage and never runs its end workflow", async () => {
+    const ending = spyOn(end, "startSessionEnd").mockResolvedValue(undefined); spies.push(ending);
+    const first = await activateSession(input());
+    const before = await db.interviewSession.findUniqueOrThrow({ where: { id: first!.id } });
+    const resumed = await activateSession(input());
+    expect(resumed).toMatchObject({ id: before.id, resumed: true });
+    expect(await db.interviewSession.findUniqueOrThrow({ where: { id: before.id } })).toEqual(before);
+    expect(await sessions()).toHaveLength(1);
+    expect(await db.minuteLedger.count({ where: { sessionId: before.id } })).toBe(0);
+    expect(ending).not.toHaveBeenCalled();
+  });
+
+  test("resume of a just-ended call creates a new call without resurrecting or rotating the old token", async () => {
+    const first = await activateSession(input());
+    const lock = database.withLock;
+    let ended = false;
+    const read = spyOn(database, "withLock").mockImplementation(async (keys, work, options) => {
+      if (!ended) {
+        expect(keys).toEqual([`minutes:${f.org.id}`]);
+        ended = true;
+        await finalizeInterviewSession({ sessionId: first!.id, requestedStatus: "completed" });
+      }
+      return lock(keys, work, options);
+    }); spies.push(read);
+    const next = await activateSession(input());
+    expect(ended).toBe(true); expect(next!.id).not.toBe(first!.id);
+    expect(await db.interviewSession.findUniqueOrThrow({ where: { id: first!.id } })).toMatchObject({ status: "completed", runtimeTokenHash: null, endedAt: expect.any(Date) });
+    expect(await sessions()).toHaveLength(2);
+    expect(await db.minuteLedger.count({ where: { sessionId: first!.id } })).toBe(1);
+  });
+
+  test("a resumed LiveKit join failure leaves the original call live and never closes its room", async () => {
+    const first = await startSessionNow(input());
+    if (!first.ok) throw new Error("Expected an open call");
+    const before = await db.interviewSession.findUniqueOrThrow({ where: { id: first.session.id } });
+    close.mockClear(); connect.mockRejectedValue(new Error("second tab join failed"));
+    await expect(startSessionNow(input())).rejects.toThrow("second tab join failed");
+    expect(await db.interviewSession.findUniqueOrThrow({ where: { id: before.id } })).toEqual(before);
+    expect(close).not.toHaveBeenCalled();
+    expect(await db.minuteLedger.count({ where: { sessionId: before.id } })).toBe(0);
+    expect(await row()).toMatchObject({ status: "pending", usedAt: null });
+  });
+
+  test.each([
+    { change: "cancelled link", code: "roleplay_access_removed", status: 403 },
+    { change: "archived role play", code: "not_found", status: 404 },
+  ])("Start must re-check $change inside the lock and refuse $code", async ({ change, code, status }) => {
+    const lock = database.withLock; let changed = false;
+    spies.push(spyOn(database, "withLock").mockImplementation(async (keys, work, options) => {
+      if (!changed) {
+        expect(keys).toEqual([`minutes:${f.org.id}`]); changed = true;
+        if (change === "cancelled link") await db.rolePlayAssignment.update({ where: { id: assignment.id }, data: { status: "cancelled" } });
+        else await db.agent.update({ where: { id: f.roleplay.id }, data: { archivedAt: new Date() } });
+      }
+      return lock(keys, work, options);
+    }));
+    const outcome: unknown = await activateSession(input()).catch((error: unknown) => error);
+    expect(changed).toBe(true);
+    expect(outcome).toMatchObject({ code, status });
+    expect(await sessions()).toHaveLength(0);
   });
 
   test("a used link with exhausted minutes cannot start again", async () => {
@@ -103,9 +169,9 @@ describe.skipIf(!localMinutesDb)("repeat role-play activation (local database)",
   });
 
   test.each([
-    { prior: "none", status: "failed", started: false, expected: "pending" },
-    { prior: "failed start", status: "failed", started: true, expected: "pending" },
-    { prior: "never started", status: "abandoned", started: false, expected: "pending" },
+    { prior: "none", status: "failed", started: false, expected: "used" },
+    { prior: "failed start", status: "failed", started: true, expected: "used" },
+    { prior: "never started", status: "abandoned", started: false, expected: "used" },
     { prior: "completed practice", status: "completed", started: true, expected: "used" },
     { prior: "abandoned practice", status: "abandoned", started: true, expected: "used" },
   ])("LiveKit failure after $prior leaves assignment $expected and charges no failed-call minutes", async ({ prior, status, started, expected }) => {
@@ -116,7 +182,7 @@ describe.skipIf(!localMinutesDb)("repeat role-play activation (local database)",
     connect.mockRejectedValue(new Error("test LiveKit start failure"));
     await expect(startSessionNow(input())).rejects.toThrow("test LiveKit start failure");
     expect(await row()).toMatchObject({ status: expected });
-    expect((await row()).usedAt === null).toBe(expected === "pending");
+    expect((await row()).usedAt).toEqual(usedAt);
     const failed = await db.interviewSession.findFirstOrThrow({ where: { orgId: f.org.id, assignmentId: assignment.id }, orderBy: { createdAt: "desc" } });
     expect(failed).toMatchObject({ status: "failed", runtimeTokenHash: null });
     expect(failed.endedAt).not.toBeNull();

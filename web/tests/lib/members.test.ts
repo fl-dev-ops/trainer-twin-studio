@@ -59,7 +59,7 @@ test("disabling signs out, revokes only active access, ends running calls, and k
   expect(calls.map(([name]) => name)).toEqual(["member.update", "session.deleteMany", "twinAssignment.updateMany", "rolePlayAssignment.updateMany", "interviewSession.updateMany"]);
   expect(calls[1][1]).toEqual({ where: { userId: "u-learner" } });
   expect(calls[2][1]).toMatchObject({ where: { orgId: "org", status: "active", userId: "u-learner" }, data: { status: "revoked" } });
-  expect(calls[3][1]).toMatchObject({ where: { orgId: "org", status: "pending", memberId: "m-learner" }, data: { status: "cancelled" } });
+  expect(calls[3][1]).toMatchObject({ where: { orgId: "org", status: { in: ["pending", "used"] }, memberId: "m-learner" }, data: { status: "cancelled" } });
   expect(calls[4][1]).toMatchObject({ where: { userId: "u-learner", status: "assigned" }, data: { status: "revoked", runtimeTokenHash: null } });
   expect(closed).toEqual([["live-1", "abandoned"]]);
 });

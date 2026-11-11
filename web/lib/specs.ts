@@ -350,23 +350,25 @@ export async function saveSpec(type: SpecType, slug: string, text: string, orgId
 
   if (existing.orgId !== orgId) throw new Error("Not found");
   if (type === "agents") assertSpecBuilt(existing as { kind?: AgentKind; data: unknown });
-  if (stableJson(existing.data) === stableJson(data)) {
-    return { created: false, versionBumped: false, version: existing.version };
-  }
 
-  const nextVersion = existing.version + 1;
-  // One save at a time per agent (specs/practice.md rule 20).
-  await withLock([`agent:${slug}`], async (tx) => {
+  // One save at a time per spec (specs/practice.md rule 20): its current row is read again under the lock.
+  return withLock([`agent:${slug}`], async (tx) => {
+    const current: SpecRow | null = type === "personas"
+      ? await tx.persona.findUnique({ where: { orgId_slug: { orgId, slug } } })
+      : await tx.agent.findUnique({ where: { slug } });
+    if (!current || current.orgId !== orgId) throw new Error("Not found");
+    if (stableJson(current.data) === stableJson(data)) return { created: false, versionBumped: false, version: current.version };
+    const nextVersion = current.version + 1;
     await tx.specVersion.create({
-      data: { entityType: type, entitySlug: slug, version: existing.version, data: existing.data as Prisma.InputJsonValue, orgId },
+      data: { entityType: type, entitySlug: slug, version: current.version, data: current.data as Prisma.InputJsonValue, orgId },
     });
     if (type === "personas") {
       await tx.persona.update({ where: { orgId_slug: { orgId, slug } }, data: { name, version: nextVersion, data } });
     } else {
       await tx.agent.update({ where: { slug }, data: { name, version: nextVersion, data: data as Prisma.InputJsonValue } });
     }
+    return { created: false, versionBumped: true, version: nextVersion };
   });
-  return { created: false, versionBumped: true, version: nextVersion };
 }
 
 export async function deleteSpec(type: SpecType, slug: string, orgId: string) {

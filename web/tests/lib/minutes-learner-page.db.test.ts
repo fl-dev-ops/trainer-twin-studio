@@ -50,7 +50,7 @@ describe.skipIf(!localMinutesDb)("learner pages with minutes (local database)", 
   test.each(["cancelled", "expired"])("loadSharedSession rejects %s status despite available minutes", async (status) => {
     await balance(600);
     await db.rolePlayAssignment.update({ where: { shareCode: code }, data: { status } });
-    expect(await loadSharedSession(code)).toEqual({ kind: "invalid" });
+    expect(await loadSharedSession(code)).toEqual({ kind: "twinUnavailable", email: f.learner.email, message: "Your access to this role play was removed. Ask your trainer." });
   });
 
   test("loadSharedSession asks the wrong account to switch on a used, past-date link", async () => {

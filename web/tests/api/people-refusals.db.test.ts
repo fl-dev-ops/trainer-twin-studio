@@ -248,12 +248,12 @@ describe.skipIf(!localMinutesDb)("Module 1 refusal contract and access flows", (
     await refusal(await requireExternalApi(new Request("https://dash.test", { headers: { "x-api-key": "owned-key" } }), "users", "read") as Response, 403, "api_key_owner_gone", "This API key's owner is no longer on the team. Create a new key.");
     expect(await rows()).toEqual(before);
   });
-  test("BUG refuses not_found with the exact shared message in a page-loader tRPC (actual NOT_FOUND)", async () => {
+  test("refuses not_found with the exact shared message in a page-loader tRPC", async () => {
     const before = await rows();
     await trpcRefusal(await trpc("calibrationAgent", { slug: "missing" }), 404, "not_found", "NOT_FOUND", "Not found.");
     expect(await rows()).toEqual(before);
   });
-  test("BUG refuses not_found with the shared code/message on session detail (actual Session not found)", async () => {
+  test("refuses not_found with the shared code/message on session detail", async () => {
     spies.push(spyOn(sessionUser, "resolveSessionUser").mockResolvedValue({ org: { ...f.org, accentColor: null }, user: f.learner, signInUrl: "/auth/sign-in" }));
     const before = await rows();
     await refusal(await sessionDetail(new Request("https://dash.test"), { params: Promise.resolve({ id: "missing" }) }), 404, "not_found", "Not found.");

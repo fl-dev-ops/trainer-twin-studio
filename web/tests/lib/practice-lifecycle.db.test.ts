@@ -36,7 +36,7 @@ describe.skipIf(!localMinutesDb)("Module 2 atomic start/end/assignment scenarios
     await f.clean();
   });
   const grant = (seconds = 600) => db.minuteLedger.create({ data: { orgId: f.org.id, email: f.learner.email, type: "grant", seconds } });
-  const start = (studio = false) => activateSession({ orgId: f.org.id, userId: studio ? f.trainer.id : f.learner.id, agentSlug: f.twin.slug, mode: "voice" });
+  const start = (studio = false) => activateSession({ orgId: f.org.id, userId: studio ? f.trainer.id : f.learner.id, ...(studio ? { agentSlug: f.twin.slug } : { shareCode: assignment.shareCode }), mode: "voice" });
   const live = () => db.interviewSession.count({ where: { orgId: f.org.id, status: { in: ["active", "activating"] } } });
   const oldCall = (extra: Parameters<MinutesFixture["session"]>[0] = {}) => f.session({ agentId: f.twin.id, agentSlug: f.twin.slug, twinAssignmentId: assignment.id, status: "active", startedAt: new Date(Date.now() - 90_000), endedAt: null, runtimeTokenHash: randomUUID(), ...extra });
   const assign = (emails = [f.learner.email]) => assignTwinLearners({ org: f.org, by: f.trainer, agent: f.twin, emails });
@@ -89,7 +89,7 @@ describe.skipIf(!localMinutesDb)("Module 2 atomic start/end/assignment scenarios
     expect(await live()).toBe(1);
   });
 
-  test("BUG twin Start must never resume even with the same idempotency key (actual reuses the live call)", async () => {
+  test("twin Start never resumes even with the same idempotency key", async () => {
     await grant();
     const input = { orgId: f.org.id, userId: f.learner.id, shareCode: assignment.shareCode, idempotencyKey: "same-tab", mode: "voice" as const };
     const first = await activateSession(input);
@@ -107,7 +107,7 @@ describe.skipIf(!localMinutesDb)("Module 2 atomic start/end/assignment scenarios
     await fundOrg({ orgId: f.org.id, minutes: 10 });
     const first = await start(true);
     expect(first?.secondsLeft).toBe(600); expect(await orgCredits(f.org.id)).toMatchObject({ seconds: 0 });
-    await expect(start()).rejects.toMatchObject({ code: "org_credits_out", status: 403 });
+    await expect(activateSession({ orgId: f.org.id, userId: f.learner.id, agentSlug: f.twin.slug })).rejects.toMatchObject({ code: "org_credits_out", status: 403 });
     expect(await live()).toBe(1); expect(ending).not.toHaveBeenCalled();
   });
 
@@ -160,7 +160,7 @@ describe.skipIf(!localMinutesDb)("Module 2 atomic start/end/assignment scenarios
     expect(await db.minuteLedger.count({ where: { sessionId: call.id } })).toBe(0);
   });
 
-  test.each(["failed", "revoked"])("BUG ending an already %s call must keep the first end and cost zero (actual completed and charged)", async (status) => {
+  test.each(["failed", "revoked"])("ending an already %s call keeps the first end and costs zero", async (status) => {
     const call = await oldCall({ status, endedAt: new Date() });
     await finalizeInterviewSession({ sessionId: call.id, requestedStatus: "completed" });
     expect(await db.minuteLedger.count({ where: { sessionId: call.id } })).toBe(0);

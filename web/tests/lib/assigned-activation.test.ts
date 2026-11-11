@@ -6,7 +6,13 @@ let existing: { id: string; status: string; userId: string; agentSlug: string; m
 let updatedStatus = "";
 
 mock.module("@/lib/db", () => ({
-  withLock: async () => { throw new Error("Unexpected locked write in read-only fixture"); },
+  withLock: async (keys: string[], work: (tx: { interviewSession: { updateMany: (args: unknown) => Promise<{ count: number }> } }) => Promise<unknown>) => {
+    expect(keys).toEqual(["minutes:org"]);
+    return work({ interviewSession: { updateMany: async (args) => {
+      expect(args).toMatchObject({ where: { id: "session", status: { in: ["activating", "active"] } }, data: { runtimeTokenHash: expect.any(String) } });
+      return { count: 1 };
+    } } });
+  },
   isUniqueViolation: (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "P2002", db: {
   rolePlayAssignment: {
     findFirst: async () => ({
@@ -38,7 +44,7 @@ test.each(["activating", "active"])("used assignments with a past expiry resume 
   process.env.COPILOT_SERVICE_SECRET = "test-only-secret";
   try {
     const resumed = await activateSession(input);
-    expect(resumed).toMatchObject({ id: "session", status: sessionStatus });
+    expect(resumed).toMatchObject({ id: "session", status: sessionStatus, resumed: true });
     expect(resumed?.secondsLeft).toBeGreaterThanOrEqual(89);
     expect(resumed?.secondsLeft).toBeLessThanOrEqual(90);
     expect(resumed?.runtimeToken).toBeTruthy();
@@ -51,13 +57,13 @@ test.each(["activating", "active"])("used assignments with a past expiry resume 
 
 test("inactive deployments, expired/cancelled statuses and mismatched assignments still cannot activate", async () => {
   deploymentStatus = "disabled";
-  expect(await activateSession(input)).toBeNull();
+  await expect(activateSession(input)).rejects.toMatchObject({ code: "not_found", status: 404 });
   deploymentStatus = "active";
   status = "expired";
-  expect(await activateSession(input)).toBeNull();
+  await expect(activateSession(input)).rejects.toMatchObject({ code: "roleplay_access_removed", status: 403 });
   status = "pending";
   await expect(activateSession({ ...input, userId: "outsider" })).rejects.toMatchObject({ code: "no_org", status: 403 });
   status = "cancelled";
-  expect(await activateSession(input)).toBeNull();
+  await expect(activateSession(input)).rejects.toMatchObject({ code: "roleplay_access_removed", status: 403 });
   expect(updatedStatus).toBe("");
 });

@@ -2,7 +2,7 @@ import { BEFORE_UPLOAD_REFUSED } from "@/lib/context-upload";
 import { db } from "@/lib/db";
 import { activateSession } from "@/lib/interview-sessions";
 import { activateLiveKitSession, closeLiveKitSession } from "@/lib/livekit";
-import { AppError } from "@/lib/errors";
+import { AppError, refusals } from "@/lib/errors";
 import { MinutesError } from "@/lib/minutes";
 import type { DeliveryMode } from "@/lib/deployments";
 
@@ -50,7 +50,8 @@ export function startRefusal(error: unknown): Refusal | null {
 export async function openSession(input: StartSessionInput): Promise<Refusal | { ok: true; session: OpenedSession }> {
   try {
     const session = await activateSession(input);
-    return session ? { ok: true, session } : { ok: false, status: 403, error: "Invalid or already used session URL" };
+    // Null: a code that isn't a link of this org (or a used one-off start): answered like an unknown one.
+    return session ? { ok: true, session } : (startRefusal(refusals.notFound()) as Refusal);
   } catch (error) {
     const refusal = startRefusal(error);
     if (refusal) return refusal;

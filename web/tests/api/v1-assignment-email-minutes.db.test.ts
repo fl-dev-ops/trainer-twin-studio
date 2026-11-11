@@ -74,8 +74,11 @@ describe.skipIf(!localMinutesDb)("v1 assignment email minutes (local database)",
     const to = `new-${f.learner.email}`;
     const response = await patch(original.id, { email: to });
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ changed: true, emailSent: true, assignment: { id: original.id, email: to } });
-    const updated = await db.rolePlayAssignment.findFirstOrThrow({ where: { orgId: f.org.id, id: original.id } });
+    const body = await response.json();
+    expect(body).toMatchObject({ changed: true, emailSent: true, assignment: { email: to } });
+    expect(body.assignment.id).not.toBe(original.id);
+    expect(await db.rolePlayAssignment.findUniqueOrThrow({ where: { id: original.id } })).toMatchObject({ status: "cancelled", memberId: original.memberId, shareCode: original.shareCode });
+    const updated = await db.rolePlayAssignment.findFirstOrThrow({ where: { orgId: f.org.id, id: body.assignment.id } });
     expect(await db.member.findUniqueOrThrow({ where: { id: updated.memberId }, include: { user: true } })).toMatchObject({ user: { email: to } });
     expect(updated.shareCode).not.toBe(original.shareCode);
     expect((await learnerBalance(f.org.id, to)).balanceSeconds).toBe(1800);
@@ -114,8 +117,11 @@ describe.skipIf(!localMinutesDb)("v1 assignment email minutes (local database)",
     const before = await ledger();
     const response = await patch(original.id, { scenario: scenario.slug });
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ changed: true, emailSent: true, assignment: { email: f.learner.email, scenario: scenario.slug } });
-    const updated = await db.rolePlayAssignment.findFirstOrThrow({ where: { orgId: f.org.id, id: original.id }, include: { deployment: true } });
+    const body = await response.json();
+    expect(body).toMatchObject({ changed: true, emailSent: true, assignment: { email: f.learner.email, scenario: scenario.slug } });
+    expect(body.assignment.id).not.toBe(original.id);
+    expect(await db.rolePlayAssignment.findUniqueOrThrow({ where: { id: original.id } })).toMatchObject({ status: "cancelled", deploymentId: original.deploymentId });
+    const updated = await db.rolePlayAssignment.findFirstOrThrow({ where: { orgId: f.org.id, id: body.assignment.id }, include: { deployment: true } });
     expect(updated.deployment.agentId).toBe(scenario.id);
     expect(await ledger()).toEqual(before);
     expect(assignmentEmail).toHaveBeenCalledTimes(1);

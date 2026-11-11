@@ -2,6 +2,7 @@ import { fundOrg, availableOrgSeconds } from "../setup/meteroid";
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import * as nextServer from "next/server";
 import * as livekit from "@/lib/livekit";
+import { ensureDeployment } from "@/lib/deployments";
 import { startSessionNow } from "@/lib/session-activation";
 import { activateSession, finalizeInterviewSession } from "@/lib/interview-sessions";
 import { OUT_OF_MINUTES, grantMinutes, learnerBalance, recordSessionUsage, sessionUsageSeconds } from "@/lib/minutes";
@@ -14,6 +15,8 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
   beforeEach(async () => {
     f = minutesFixture();
     await f.create();
+    const deployment = await ensureDeployment(f.org.id, f.roleplay.id);
+    await db.rolePlayAssignment.create({ data: { orgId: f.org.id, deploymentId: deployment.id, memberId: `${f.learner.id}-member`, shareCode: `${f.org.id}-roleplay`, assignedByUserId: f.trainer.id, expiresAt: new Date(0) } });
     secret = process.env.COPILOT_SERVICE_SECRET;
     process.env.COPILOT_SERVICE_SECRET = "minutes-test-secret";
     const networkFetch = globalThis.fetch;
@@ -31,7 +34,8 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
     fetchMock.mockClear();
   };
   const activate = (extra: Partial<Parameters<typeof activateSession>[0]> = {}) => activateSession({
-    orgId: f.org.id, userId: f.learner.id, userEmail: f.learner.email, agentSlug: f.roleplay.slug, mode: "voice", ...extra,
+    orgId: f.org.id, userId: f.learner.id, userEmail: f.learner.email,
+    ...(extra.userId === f.trainer.id ? { agentSlug: f.roleplay.slug } : { shareCode: `${f.org.id}-roleplay` }), mode: "voice", ...extra,
   });
 
   test("usage floors fractional seconds, caps at allowance, and clamps negative durations", () => {
@@ -160,7 +164,7 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
 
   test("metered chat sessions are refused without consuming credit", async () => {
     await fund();
-    await expect(activate({ mode: "chat" })).rejects.toMatchObject({ name: "MinutesError", status: 400 });
+    await expect(activate({ mode: "chat" })).rejects.toMatchObject({ code: "mode_not_allowed", status: 400 });
     expect(fetchMock).not.toHaveBeenCalled();
     expect((await learnerBalance(f.org.id, f.learner.email)).balanceSeconds).toBe(600);
   });
@@ -195,7 +199,7 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
     const connect = spyOn(livekit, "activateLiveKitSession").mockResolvedValue({ room: "test-room", token: "participant", dispatchId: "dispatch", videoEgressId: null, videoS3Key: null });
     try {
       const before = Math.floor(Date.now() / 1000);
-      await startSessionNow({ orgId: f.org.id, userId: f.learner.id, userEmail: f.learner.email, agentSlug: agent.slug, mode: "voice" });
+      await startSessionNow({ orgId: f.org.id, userId: f.learner.id, userEmail: f.learner.email, shareCode: `${f.org.id}-${kind === "TWIN" ? "twin" : "roleplay"}`, mode: "voice" });
       const call = connect.mock.calls[0][0];
       expect(call.agentKind).toBe(kind);
       expect(call.endsAt).toBeGreaterThanOrEqual(before + 600);

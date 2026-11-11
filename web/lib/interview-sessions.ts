@@ -2,13 +2,13 @@ import { createHash, createHmac, randomBytes } from "node:crypto";
 import { db, withLock } from "@/lib/db";
 import { refusals } from "@/lib/errors";
 import { practicePerson, practiceRefusals, startAllowance } from "@/lib/practice";
-import { roleplayAccessByCode } from "@/lib/roleplay-access";
+import { roleplayAccessByCode, roleplayRefusals } from "@/lib/roleplay-access";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { ensureDeployment, type DeliveryMode } from "@/lib/deployments";
 import { initRuntimeState } from "@/lib/runtime/runtime";
 import { getAgentConfigForAgent } from "@/lib/specs";
 import { isStudioRole } from "@/lib/org";
-import { twinAccessByAgent, twinAccessByCode } from "@/lib/twin-access";
+import { twinAccessByAgent, twinAccessByCode, twinRefusals, withinAccess } from "@/lib/twin-access";
 import { pinTwinSkills, TWIN_SOURCE } from "@/lib/twins";
 import { beforeSettings, usesBeforeSettings } from "@/lib/context-upload";
 import { minutesLock, writeSessionUsage } from "@/lib/minutes";
@@ -202,7 +202,7 @@ export async function createAssignedSession(input: {
  * (an enabled member), what they start (role-play link, twin code, twin by slug or deployment), its mode, the live
  * agent and its documents. Then one transaction under the org's credits lock re-checks the person, ends their other
  * live calls (charged), checks the allowance and creates the call; a refusal there rolls everything back, so nothing
- * is ended. After it commits: the replaced calls' end work, then the chat brain. Null: an invalid or used link.
+ * is ended. After it commits: the replaced calls' end work, then the chat brain. Refused not_found for an invalid or used link.
  */
 export async function activateSession(input: {
   orgId: string;
@@ -238,7 +238,7 @@ export async function activateSession(input: {
     // Not a role-play invite: a twin assignment code or a twin share link. Joining through a link happened when the
     // page opened (lib/pages/learner.ts); a call start never adds anyone (specs/practice.md rule 3).
     const access = await twinAccessByCode({ orgId: input.orgId, user, code: input.shareCode, join: false });
-    if (!access) return null;
+    if (!access) throw refusals.notFound(); // not a link of this org
     twin = { assignmentId: access.assignmentId };
     agentId = access.agentId;
     deploymentId = (await ensureDeployment(input.orgId, agentId)).id;
@@ -299,7 +299,7 @@ export async function activateSession(input: {
   if (existing?.status === "failed") {
     await db.interviewSession.delete({ where: { id: existing.id } });
   } else if (existing) {
-    return null;
+    throw refusals.notFound(); // a one-off start already used
   }
 
   const snapshot = await sessionSnapshot(input.orgId, agentId, input.contextId, requestedDocs);
@@ -323,6 +323,18 @@ export async function activateSession(input: {
 
   const { session, replaced, usageOrgIds, calibrationId } = await withLock([minutesLock(input.orgId)], async (tx) => {
     const current = await practicePerson(input.orgId, input.userId, tx); // disabled or moved since the checks above
+    // The link and the agent may have changed since the checks above too: cancelled, revoked, archived.
+    if (assignmentId) {
+      const link = await tx.rolePlayAssignment.findUnique({ where: { id: assignmentId }, select: { status: true, deployment: { select: { agent: { select: { archivedAt: true } } } } } });
+      if (!link || !["pending", "used"].includes(link.status)) throw roleplayRefusals.accessRemoved();
+      if (link.deployment.agent.archivedAt) throw refusals.notFound();
+    }
+    if (twin?.assignmentId) {
+      const link = await tx.twinAssignment.findUnique({ where: { id: twin.assignmentId }, select: { status: true, accessUntil: true } });
+      if (!link || link.status !== "active") throw twinRefusals.revoked();
+      if (!withinAccess(link.accessUntil)) throw twinRefusals.ended();
+    }
+    if (!(await tx.agent.findFirst({ where: { id: agentId, archivedAt: null }, select: { id: true } }))) throw refusals.notFound();
     // One live call per person (rule 5): their others end now, charged, before the balance is counted.
     const live = await tx.interviewSession.findMany({
       where: { orgId: input.orgId, userId: input.userId, status: { in: ["activating", "active"] } },

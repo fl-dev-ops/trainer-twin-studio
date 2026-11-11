@@ -110,7 +110,7 @@ describe.skipIf(!localMinutesDb)("flow: people first at every entry point", () =
     await invariant();
   });
 
-  test("REST PATCH to a new email: add member, replace account and link, email new person once", async () => {
+  test("REST PATCH to a new email: add member, cancel old link and create a new one, email new person once", async () => {
     const first = await (await assigned({ email: f.learner.email, scenario: f.roleplay.slug })).json();
     const to = email("moved");
     const response = await moveAssignment(request("PATCH", { email: to }), { params: Promise.resolve({ id: first.assignment.id }) });
@@ -118,7 +118,9 @@ describe.skipIf(!localMinutesDb)("flow: people first at every entry point", () =
     const body = await response.json(); expect(body).toMatchObject({ changed: true, emailSent: true, assignment: { email: to } });
     expect(body.practiceUrl).not.toBe(first.practiceUrl);
     const person = (await orgPerson(f.org.id, { email: to }))!;
-    expect(await db.rolePlayAssignment.findUniqueOrThrow({ where: { id: first.assignment.id } })).toMatchObject({ memberId: person.memberId });
+    expect(body.assignment.id).not.toBe(first.assignment.id);
+    expect(await db.rolePlayAssignment.findUniqueOrThrow({ where: { id: first.assignment.id } })).toMatchObject({ status: "cancelled", memberId: `${f.learner.id}-member` });
+    expect(await db.rolePlayAssignment.findUniqueOrThrow({ where: { id: body.assignment.id } })).toMatchObject({ memberId: person.memberId, status: "pending" });
     expect(outside.emails.map((e) => e.to)).toEqual([[f.learner.email], [to]]);
     await invariant();
   });

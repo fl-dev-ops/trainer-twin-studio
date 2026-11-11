@@ -74,6 +74,6 @@ describe.skipIf(!localMinutesDb)("Module 2 runtime and request refusals (real da
     expect(await db.interviewSession.findUniqueOrThrow({ where: { id: call.id } })).toMatchObject({ status: "active" });
   });
   test("refuses invalid_input on Start missing its agent/link", async () => {
-    await refuses(await start(new Request("https://test/api/sessions", { method: "POST", body: "{}" })), "invalid_input", 400, "shareCode, agentSlug, or deploymentKey is required");
+    await refuses(await start(new Request("https://test/api/sessions", { method: "POST", body: "{}" })), "invalid_input", 400, "shareCode or agentSlug is required");
   });
 });

@@ -84,7 +84,8 @@ export async function loadSharedSession(code: string): Promise<SharedSessionView
     throw error;
   };
   // A role-play link: the check Start runs, in its order (specs/practice.md rule 17).
-  const roleplay = await roleplayAccessByCode({ orgId: org.id, userId: user.id, code }).catch(refusal);
+  // The page always starts a voice call: a role play that can't be one is refused here too.
+  const roleplay = await roleplayAccessByCode({ orgId: org.id, userId: user.id, code, mode: "voice" }).catch(refusal);
   if (roleplay instanceof AppError) {
     if (roleplay.code === "roleplay_not_assigned") return { kind: "switchAccount", email: user.email, returnTo: signInUrl(host, `/s/${encodeURIComponent(code)}`) };
     if (roleplay.code === "not_found") return { kind: "invalid" };

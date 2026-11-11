@@ -34,7 +34,7 @@ test("cron authorization fails closed on Vercel without a secret, allows local d
   process.env.CRON_SECRET = "primary";
   expect(cronAuthorized(request({ "x-internal-secret": "fallback" }))).toBe(false);
 });
-test("BUG cron with wrong non-ASCII token must refuse, not throw (actual different UTF-8 byte lengths reach timingSafeEqual)", () => {
+test("cron with wrong non-ASCII token must refuse, not throw", () => {
   process.env.CRON_SECRET = "ab";
   expect(cronAuthorized(request({ authorization: "Bearer éé" }))).toBe(false);
 });

@@ -55,7 +55,7 @@ describe.skipIf(!localMinutesDb)("Module 1 real PostgreSQL people-lock races", (
       expect(await db.minuteLedger.count({ where: { sessionId: call.id, type: "usage" } })).toBe(1);
     } finally { end.mockRestore(); }
   });
-  test("BUG concurrent disables must dispatch call end once (actual twice outside the people lock)", async () => {
+  test("concurrent disables dispatch the call end once", async () => {
     const call = await f.session({ status: "active", endedAt: null, startedAt: new Date(Date.now() - 60_000) });
     const end = spyOn(sessionEnd, "startSessionEnd").mockResolvedValue(undefined);
     try {
