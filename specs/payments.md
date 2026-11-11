@@ -1,6 +1,6 @@
 # Payments
 
-> This is the retained **phase 1 Razorpay** purchase module, switched off unless RAZORPAY_ENABLED=true. When enabled, staff sell prepaid org credits at an agreed price; paid links/Dashboard invoices create PAID Meteroid grants, refunds only log, and reconciliation recovers missed payments. **Phase 2 uses Meteroid plan/pack invoices and staff-recorded payments**, described in [Billing rules](billing.md) and [Billing code](billing-code.md), not this Razorpay path. See [Credits](credits.md) for spending (`web/lib/razorpay.ts` `razorpayEnabled`; `web/lib/credit-purchases.ts`).
+> This is the retained **phase 1 Razorpay** purchase module, enabled by RAZORPAY_ENABLED=true. Staff sell prepaid org credits at an agreed price; paid links/Dashboard invoices create PAID Meteroid grants, refunds only log, and reconciliation recovers missed payments. **Phase 3 invoice payments** use the same switch and webhook, but settle Meteroid Paid/pack/other invoices rather than `CreditPurchase` records; see [Billing code](billing-code.md#razorpay-collecting-invoice-payments) and [Billing rules](billing.md) rules 27–35. Phase 1 purchases still work unchanged through their existing handlers. See [Credits](credits.md) for spending (`web/lib/razorpay.ts` `razorpayEnabled`; `web/lib/credit-purchases.ts`; `web/app/api/razorpay/webhook/route.ts:37–47`).
 
 ## Who uses it
 
@@ -28,11 +28,11 @@ No payment/refund appends `MinuteLedger` org movements. Bought credits live in M
 
 ## How it works
 
-### Phase 1 stays off
+### Shared Razorpay switch
 
-`razorpayEnabled()` is true only when trimmed RAZORPAY_ENABLED equals literal `true`; unset/false stays off. While off, POST `/api/razorpay/webhook` returns 404 before reading/signature-checking the body, and the shared Razorpay API wrapper throws `RazorpayDisabledError` before an external request. Purchase/link/reconcile code remains for tests and later use. Direct internal `purchasePaid` has no switch of its own; disabling the provider is not a deletion of that helper (`web/lib/razorpay.ts` `razorpayEnabled`, `call`; `web/app/api/razorpay/webhook/route.ts` POST; `web/lib/credit-purchases.ts` `purchasePaid`).
+`razorpayEnabled()` is true only when trimmed RAZORPAY_ENABLED equals literal `true`; unset/false stays off. While off, POST `/api/razorpay/webhook` returns 404 before reading/signature-checking the body, and the shared Razorpay API wrapper throws `RazorpayDisabledError` before an external request. Phase 3 turns the same switch on for invoice collection; retained phase 1 link/invoice/reconcile scripts also work when on. Direct internal `purchasePaid` has no switch of its own; disabling the provider is not a deletion of that helper (`web/lib/razorpay.ts` `razorpayEnabled`, `call`; `web/app/api/razorpay/webhook/route.ts` POST; `web/lib/credit-purchases.ts` `purchasePaid`).
 
-Phase 2 Billing does not create Razorpay links or call this purchase helper. It asks Meteroid to issue Paid/pack invoices; staff mark payments in Meteroid, and Meteroid grants paid top-up credits. Online collection in phase 3 is not implemented by those functions. The flows below describe retained phase 1 behaviour **when enabled**, not active phase 2 purchases (`web/lib/billing/billing.ts` `requestUpgrade`, `buyPacks`, `invoicePaid`; [Billing code](billing-code.md)).
+Phase 3 Billing asks Meteroid to issue Paid/pack invoices and creates their Razorpay payment links through `web/lib/billing/razorpay.ts` `ensurePaymentLink`. Its invoice handler validates money, records the payment and marks Meteroid paid; it never calls phase 1's `purchasePaid`. Meteroid grants top-up credits, while staff can still mark bank transfers. These invoice flows/data/fees and their failure gaps belong to [Billing code](billing-code.md#razorpay-collecting-invoice-payments), not this purchase spec (`web/lib/billing/billing.ts` `requestUpgrade`, `buyPacks`; `web/lib/billing/razorpay.ts` `razorpayInvoicePaid`). The flows below describe retained phase 1 behaviour **when enabled**.
 
 ### Create or link
 
@@ -59,7 +59,7 @@ GST invoices are created in Razorpay Dashboard, not by this API. Linking fetches
 
 ### Webhooks and refunds
 
-POST `/api/razorpay/webhook` verifies hex HMAC-SHA256 of the exact raw body using `RAZORPAY_WEBHOOK_SECRET`, comparing equal-length buffers in constant time. Missing/bad signature is 401. Events dispatched are `payment_link.paid`, `invoice.paid`, `refund.processed`; others/missing wrappers return ignored 200 (`web/app/api/razorpay/webhook/route.ts`; `web/lib/razorpay.ts` `verifyWebhookSignature`).
+POST `/api/razorpay/webhook` verifies hex HMAC-SHA256 of the exact raw body using `RAZORPAY_WEBHOOK_SECRET`, comparing equal-length buffers in constant time. Missing/bad signature is 401. For `payment_link.paid` with `notes.invoiceId`, dispatch goes to the phase 3 invoice handler instead. Otherwise `payment_link.paid` and `invoice.paid` go to phase 1 `purchasePaid`, and `refund.processed` goes to `purchaseRefunded`; others/missing wrappers return ignored 200. Phase 1 notes still use `purchaseId`/`orgId`/`credits`; invoice notes are separate (`web/app/api/razorpay/webhook/route.ts:37–49`; `web/lib/credit-purchases.ts:83`; `web/lib/razorpay.ts:168–174` `verifyWebhookSignature`).
 
 Refunds find the accepted payment's purchase. Unknown payments return null; known refunds log a warning to adjust Meteroid by hand and return `{ refundId, creditsTakenBack: 0 }`. No balance, ledger, refund total or purchase status changes, including on repeat delivery (`web/lib/credit-purchases.ts` `purchaseRefunded`).
 
@@ -82,19 +82,19 @@ The script defaults to one hour and refund-days 30; validates options; report mo
 2. Org, Razorpay ID and accepted payment ID enforce ownership/uniqueness. A valid Razorpay-ID match wins over conflicting purchase notes. Only the first payment may claim a purchase; its retries do not reset paidAt (`web/prisma/schema.prisma`; `web/lib/credit-purchases.ts`).
 3. Payment money checks happen before requiring billing or claiming. Same-payment concurrency is idempotent at Meteroid's key, not a ledger external ID (`web/lib/credit-purchases.ts` `purchasePaid`).
 4. Remote write scripts require `--production` and `rzp_live_` keys; local DBs reject live keys. Report-only reconciliation skips the guard. Meteroid linking has its own key guard; see [Credits](credits.md) (`web/scripts/razorpay-script-guard.ts`; `web/scripts/meteroid-link-org.ts`).
-5. No self-serve purchase/checkout, saved org price list or refund initiation exists in this Razorpay module. Phase 2 self-serve upgrade/packs and custom Paid price are separate, not new Razorpay behaviour (`web/lib/credit-purchases.ts`; `web/lib/razorpay.ts`; operator scripts above; [Billing code](billing-code.md)).
+5. No self-serve `CreditPurchase` checkout, saved org price list or refund initiation exists in this module. Self-serve upgrade/packs now redirect to Razorpay in phase 3, but use separate billing-invoice records, not this purchase helper (`web/lib/credit-purchases.ts`; `web/lib/razorpay.ts`; operator scripts above; [Billing code](billing-code.md)).
 6. Default phase 1 switch is off; webhook returns 404 and Razorpay API calls refuse unless RAZORPAY_ENABLED=true. Existing internal payment/grant helpers remain callable (`web/lib/razorpay.ts` `razorpayEnabled`, `call`; `web/app/api/razorpay/webhook/route.ts` POST).
 
 ## Entry points
 
-- Retained POST `/api/razorpay/webhook`: `web/app/api/razorpay/webhook/route.ts` POST; 404 while off. When enabled, the phase 1 events above use URL `https://dash.trainertwin.com/api/razorpay/webhook`. This is not phase 2's Meteroid webhook.
+- Shared POST `/api/razorpay/webhook`: `web/app/api/razorpay/webhook/route.ts` POST; 404 while off. URL `https://dash.trainertwin.com/api/razorpay/webhook` serves phase 1 events and phase 3 invoice-link payments. Meteroid's separate webhook still supplies invoice/credit events; see [Billing code](billing-code.md).
 - Operator scripts listed above; optional note and production flag. Reconciliation also accepts `--older-than`, `--refund-days` (ignored).
 - Internal service functions: `web/lib/credit-purchases.ts` `createPaymentLinkPurchase`, `linkInvoicePurchase`, `purchasePaid`, `purchaseRefunded`, `reconcilePurchases`.
 - Credits display: `web/lib/minutes-trpc.ts` `minutes.org`, `web/components/credits/credits-page.tsx`; shows Meteroid grants, not purchase lifecycle management.
 
 ## Talks to
 
-Razorpay REST uses Basic `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET`, POST `/payment_links`, GET `/payment_links/:id` and `/invoices/:id`. The wrapper still exports `fetchRefunds`, but reconciliation no longer calls it (`web/lib/razorpay.ts`; `web/lib/credit-purchases.ts`).
+Razorpay REST uses Basic `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET`, a 20-second request timeout, POST `/payment_links`, GET `/payment_links/:id` and `/invoices/:id` for phase 1. The same wrapper also supplies phase 3's reference lookup, cancellation, payment/fee and settlement calls; those are documented in [Billing code — Razorpay calls](billing-code.md#razorpay-calls) (`web/lib/razorpay.ts:39–51,83–151`). The wrapper still exports `fetchRefunds`, but reconciliation no longer calls it (`web/lib/razorpay.ts`; `web/lib/credit-purchases.ts`).
 
 Meteroid uses Bearer API key, PAID MINS grants with stable idempotency keys, and asynchronous org sync. Meteroid 2.2.1 retains expired credits until a usage recount and emits no expiry webhook; the app conservatively subtracts lapsed grants and sends zero-minute recount events. See [Credits](credits.md) (`web/lib/meteroid.ts`; `web/lib/schedule-org-credits.ts`).
 
@@ -114,6 +114,7 @@ Legacy refund status/total fields remain but are not updated by current refund h
 
 ## Tests today
 
+- Latest run in this phase 3 spec refresh: six billing/Razorpay unit files, **169 pass, 5 fail**. All new phase 3 unit tests passed; five retained phase 1 request assertions omit the new AbortSignal (`web/tests/lib/razorpay.test.ts:71,86`). Full command and earlier snapshot result: [Billing code — Tests today](billing-code.md#tests-today). No phase 1 DB/flow/browser suite was run for this edit.
 - The phase 1 suites exercise retained behaviour with Razorpay enabled; their presence is not evidence it is enabled in deployment. `web/tests/lib/razorpay.test.ts` and `web/tests/flows/razorpay-switch.flow.test.ts` cover the off switch / 404 webhook.
 - Unit: `web/tests/lib/credit-purchases.test.ts`, `razorpay.test.ts`, `razorpay-script-guard.test.ts` cover money, signatures, requests and script guards.
 - DB: `web/tests/lib/credit-purchases.db.test.ts`, `org-credits-purchase-retry.db.test.ts` cover Meteroid grant body/key, one-year expiry, unbilled refusal, unclaim/retry, money mismatch, invoices, logged refunds and same-payment concurrency.
