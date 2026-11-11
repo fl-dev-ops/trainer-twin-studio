@@ -49,13 +49,6 @@ async function handlePATCH(request: Request, { params }: Params) {
   const sameLearner = (!parsed.data.email && !parsed.data.userId)
     || parsed.data.userId === current.member.userId
     || parsed.data.email?.trim().toLowerCase() === current.member.user.email.toLowerCase();
-  if (sameLearner && deployment.id === current.deploymentId) {
-    return Response.json({
-      assignment: assignmentView({ id, assignedAt: current.assignedAt }, current.member.user.email, current.member.userId, target.slug),
-      practiceUrl: practiceUrl(api.org.slug, current.shareCode),
-      changed: false,
-    });
-  }
   // A link no longer open can't be moved; a retry of a move that already happened answers the learner's open link
   // for that role play unchanged (specs/api.md rule 4).
   if (!["pending", "used"].includes(current.status)) {
@@ -72,6 +65,13 @@ async function handlePATCH(request: Request, { params }: Params) {
     return Response.json({
       assignment: assignmentView({ id: open.id, assignedAt: open.assignedAt }, open.member.user.email, open.member.userId, target.slug),
       practiceUrl: practiceUrl(api.org.slug, open.shareCode),
+      changed: false,
+    });
+  }
+  if (sameLearner && deployment.id === current.deploymentId) {
+    return Response.json({
+      assignment: assignmentView({ id, assignedAt: current.assignedAt }, current.member.user.email, current.member.userId, target.slug),
+      practiceUrl: practiceUrl(api.org.slug, current.shareCode),
       changed: false,
     });
   }

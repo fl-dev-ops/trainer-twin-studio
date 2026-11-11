@@ -16,7 +16,7 @@ mock.module("@/lib/db", () => ({
       // The routes must query learners by the database role.
       findMany: async ({ where }: { where: { role: { in: string[] } } }) =>
         where.role.in.includes("user") ? [{ id: "m1", role: "user", disabledAt: null, createdAt: new Date(0), user: { ...learner, image: null } }] : [{ id: "trainer-member", role: "team", disabledAt: null, createdAt: new Date(0), user: { id: "t1", name: "Trainer", email: "trainer@acme.com", image: null } }],
-      count: async () => 1,
+      count: async () => 0,
       findFirst: async ({ where }: { where: { userId: string } }) =>
         where.userId === "u1" ? { id: "m1", role: "user", disabledAt: null, createdAt: new Date(0), user: { ...learner, image: null } } : null,
     },

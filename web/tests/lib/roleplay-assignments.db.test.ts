@@ -135,6 +135,27 @@ describe.skipIf(!localMinutesDb)("Module 4 atomic role-play assignment services 
     for (const [id, practiceCount] of [[original.id, 1], [moved.assignment.id, 0]] as const) {
       expect(await (await GET(new Request("https://test"), params(id))).json()).toMatchObject({ assignment: { id, practiceCount } });
     }
+    const beforeRetry = await snapshot();
+    const retry = await patch(original.id, change); expect(retry.status).toBe(200);
+    expect(await retry.json()).toEqual({ assignment: moved.assignment, practiceUrl: moved.practiceUrl, changed: false });
+    expect(await snapshot()).toEqual(beforeRetry); expect(email).toHaveBeenCalledTimes(1);
+  });
+
+  test.each(["cancelled", "expired"])("refuses roleplay_access_removed for a %s move source with no open target", async (status) => {
+    const original = await link(status); const before = await snapshot();
+    const response = await patch(original.id, { userId: f.trainer.id });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ code: "roleplay_access_removed", error: "Your access to this role play was removed. Ask your trainer." });
+    expect(await snapshot()).toEqual(before); expect(email).not.toHaveBeenCalled();
+  });
+
+  test.each(["cancelled", "expired"])("closed %s assignment cannot return itself as an unchanged open link", async (status) => {
+    const original = await link(status); const before = await snapshot();
+    const response = await patch(original.id, { userId: f.learner.id });
+    expect(await snapshot()).toEqual(before); expect(email).not.toHaveBeenCalled();
+    // Expected 403 roleplay_access_removed; HEAD returns 200 with the closed source at app/api/v1/assignments/[id]/route.ts:52.
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ code: "roleplay_access_removed" });
   });
 
   test("refuses assignment_exists when REST PATCH targets a learner with an open link; the old link stays open", async () => {

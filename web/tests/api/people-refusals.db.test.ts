@@ -196,9 +196,7 @@ describe.skipIf(!localMinutesDb)("Module 1 refusal contract and access flows", (
     if (kind === "disabled") await db.member.update({ where: { id: `${f.trainer.id}-member` }, data: { disabledAt: new Date() } });
     const before = await rows();
     spies.push(spyOn(auth.api, "verifyApiKey").mockResolvedValue({ valid: true, key: { id: "key", referenceId: f.org.id, metadata: kind === "missing" ? null : { createdByUserId: kind === "learner" ? f.learner.id : f.trainer.id } } } as never));
-    const response = await requireExternalApi(new Request("https://dash.test", { headers: { "x-api-key": "key" } }), "users", "read");
-    expect(response).toBeInstanceOf(Response);
-    await refusal(response as Response, 403, "api_key_owner_gone", "This API key's owner is no longer on the team. Create a new key.");
+    await expect(requireExternalApi(new Request("https://dash.test", { headers: { "x-api-key": "key" } }), "users", "read")).rejects.toMatchObject({ status: 403, code: "api_key_owner_gone", message: "This API key's owner is no longer on the team. Create a new key." });
     expect(await rows()).toEqual(before);
   });
   const apiRequest = (email: string) => new Request("https://dash.test/api/v1/users", { method: "POST", headers: { "x-api-key": "key" }, body: JSON.stringify({ email }) });
@@ -245,7 +243,7 @@ describe.skipIf(!localMinutesDb)("Module 1 refusal contract and access flows", (
     await changeMemberRole({ orgId: f.org.id, email: f.learner.email, role: "team" });
     spies.push(spyOn(auth.api, "verifyApiKey").mockResolvedValue({ valid: true, key: { id: "owned-key", referenceId: f.org.id, metadata: { createdByUserId: f.learner.id } } } as never));
     await db.member.delete({ where: { id: `${f.learner.id}-member` } }); const before = await rows();
-    await refusal(await requireExternalApi(new Request("https://dash.test", { headers: { "x-api-key": "owned-key" } }), "users", "read") as Response, 403, "api_key_owner_gone", "This API key's owner is no longer on the team. Create a new key.");
+    await expect(requireExternalApi(new Request("https://dash.test", { headers: { "x-api-key": "owned-key" } }), "users", "read")).rejects.toMatchObject({ status: 403, code: "api_key_owner_gone", message: "This API key's owner is no longer on the team. Create a new key." });
     expect(await rows()).toEqual(before);
   });
   test("refuses not_found with the exact shared message in a page-loader tRPC", async () => {

@@ -12,11 +12,10 @@ const db = {
 mock.module("@/lib/db", () => ({ db, withLock: async (keys: string[], work: (tx: typeof db) => Promise<unknown>) => {
   expect(keys).toEqual(["people:org1"]); return work(db);
 } }));
+const externalApi = await import("@/lib/external-api");
 mock.module("@/lib/external-api", () => ({
-  requireExternalApi: async () => ({ org: { id: "org1", slug: "acme" }, trainer: { userId: "trainer", name: "Trainer" } }),
-  isApiError: (value: unknown) => value instanceof Response,
-  findOrgLearner: async () => null,
-  paginationFromUrl: () => ({ limit: 20, offset: 0 }),
+  ...externalApi,
+  requireExternalApi: async () => ({ org: { id: "org1", slug: "acme" }, trainer: { userId: "trainer", name: "Trainer" }, actorUserId: "trainer", keyId: "key" }),
 }));
 const { POST } = await import("@/app/api/v1/assignments/route");
 

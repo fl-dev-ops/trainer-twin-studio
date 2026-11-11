@@ -15,9 +15,9 @@ export async function updateTwin(orgId: string, slug: string, patch: { name?: st
   const found = await findTwinAgent(orgId, slug);
   // One save at a time per twin (practice rule 20): read and write under its lock.
   return withLock([`agent:${found.slug}`], async (tx) => {
-  const current = await tx.agent.findUniqueOrThrow({ where: { id: found.id }, select: { version: true, data: true } });
+  const current = await tx.agent.findUniqueOrThrow({ where: { id: found.id }, select: { name: true, version: true, data: true } });
   const previous = asRecord(current.data);
-  const name = patch.name ?? found.name;
+  const name = patch.name ?? current.name;
   // Before settings: read by the session screen (lib/context-upload), enforced by session start and the attach
   // route. An older `twinSettings` key is left as is; `before` wins.
   const data = {
@@ -26,7 +26,7 @@ export async function updateTwin(orgId: string, slug: string, patch: { name?: st
     objective: patch.description ?? previous.objective,
     before: { ...beforeSettings(current.data), ...patch.settings },
   };
-  if (stableJson(data) === stableJson(current.data) && name === found.name) return { version: current.version, changed: false };
+  if (stableJson(data) === stableJson(current.data) && name === current.name) return { version: current.version, changed: false };
   await tx.specVersion.create({ data: { entityType: "agents", entitySlug: found.slug, version: current.version, data: json(current.data), orgId } });
   await tx.agent.update({ where: { id: found.id }, data: { name, version: current.version + 1, data: json(data) } });
   return { version: current.version + 1, changed: true };

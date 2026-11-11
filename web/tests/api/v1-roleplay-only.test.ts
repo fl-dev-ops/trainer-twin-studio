@@ -63,7 +63,7 @@ test("GET /scenarios lists and counts role plays only", async () => {
 test("GET /scenarios/:slug answers 404 for a twin, like an unknown scenario", async () => {
   const twin = await getScenario(call("/scenarios/acme-twin"), { params: Promise.resolve({ slug: "acme-twin" }) });
   expect(twin.status).toBe(404);
-  expect(await twin.json()).toEqual({ error: "Scenario not found" });
+  expect(await twin.json()).toEqual({ code: "not_found", error: "Not found." });
   expect(seen["agent.findFirst"]).toEqual([{ orgId: "org1", slug: "acme-twin", kind: "ROLEPLAY", archivedAt: null }]);
 });
 
