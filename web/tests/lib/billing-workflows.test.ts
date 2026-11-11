@@ -6,18 +6,30 @@ const calls: string[] = [];
 const waits: (Date | string)[] = [];
 let paidAfter = 0; // checks that see "not paid yet" before the payment shows (Meteroid's API lags invoice.paid)
 let overdueAction = "paused";
-let failOverdue = false, failPaid = false;
+let failOverdue = false, failPaid = false, failPayLink = false;
+const linkAndEmail: string[] = [];
 mock.module("workflow", () => ({ sleep: async (at: Date | string) => { waits.push(at); } }));
 mock.module("@/workflows/steps/billing", () => ({
   readInvoice: async (id: string) => { calls.push(`read:${id}`); return row; },
-  emailInvoice: async (id: string) => { calls.push(`email:${id}`); return true; },
+  payLink: async (id: string) => { linkAndEmail.push(`link:${id}`); if (failPayLink) throw new Error("Razorpay unavailable"); return "https://rzp.io/test"; },
+  emailInvoice: async (id: string) => { linkAndEmail.push(`email:${id}`); calls.push(`email:${id}`); return true; },
   remind: async (id: string) => { calls.push(`remind:${id}`); return true; },
   handleOverdue: async (id: string) => { calls.push(`overdue:${id}`); if (failOverdue) throw new Error("cancellation incomplete"); return overdueAction; },
   handlePaid: async (id: string) => { calls.push(`paid:${id}`); if (failPaid) throw new Error("receipt email unavailable"); return calls.filter((c) => c.startsWith("paid:")).length > paidAfter ? paidKind : null; },
 }));
 const { invoiceIssued } = await import("@/workflows/invoice-issued");
 const { invoicePaid } = await import("@/workflows/invoice-paid");
-beforeEach(() => { calls.length = waits.length = 0; row = { kind: "renewal", status: "unpaid", dueDate: "2099-01-03" }; paidKind = "upgrade"; paidAfter = 0; overdueAction = "paused"; failOverdue = failPaid = false; });
+beforeEach(() => { calls.length = waits.length = linkAndEmail.length = 0; row = { kind: "renewal", status: "unpaid", dueDate: "2099-01-03" }; paidKind = "upgrade"; paidAfter = 0; overdueAction = "paused"; failOverdue = failPaid = failPayLink = false; });
+
+test.each([false, true])("rules 27–28: payment link step precedes email; failure %s never blocks bank-transfer email", async (fails) => {
+  row.kind = "pack"; failPayLink = fails;
+  expect(await invoiceIssued("inv")).toEqual({ status: "emailed" });
+  expect(linkAndEmail).toEqual(["link:inv", "email:inv"]);
+});
+test("rule 27: already paid invoice emails without creating a payment link", async () => {
+  row.kind = "other"; row.status = "paid";
+  await invoiceIssued("inv"); expect(linkAndEmail).toEqual(["email:inv"]);
+});
 
 test("rules 13–15: renewal emails at once, waits for UTC reminder then overdue", async () => {
   expect(await invoiceIssued("inv")).toEqual({ status: "paused" });

@@ -3,7 +3,7 @@ import { addressLine2, billingDetailsInput, countries, countryName, exportMentio
 import { CURRENCY, PACK_CENTS, PACK_CREDITS, PACK_VALID_DAYS, PAID_MONTHLY_CENTS, formatMoney, packPrice, totalWithTax } from "@/lib/billing/pricing";
 import { billingEmail } from "@/lib/email";
 
-const details = { legalName: "Example Ltd", country: "IN", line1: "10 Street", city: "Chennai", postalCode: "600001", state: "33", taxId: "33AAGCF6592D1ZN", emails: ["billing@example.com"] };
+const details = { legalName: "Example Ltd", country: "IN", line1: "10 Street", city: "Chennai", postalCode: "600001", state: "33", taxId: "33AAGCF6592D1ZN", emails: ["billing@example.com"], phone: "+919876543210" };
 const lut = process.env.GST_LUT_REFERENCE;
 afterEach(() => { if (lut === undefined) delete process.env.GST_LUT_REFERENCE; else process.env.GST_LUT_REFERENCE = lut; });
 
@@ -70,7 +70,7 @@ describe("billing rules 7–9: details and tax", () => {
     expect(exportMention()).toBe("Supply meant for export under LUT (LUT-2026) without payment of IGST");
   });
   test("rule 8: Meteroid patch includes all billing fields and state with code on line2", () => {
-    expect(meteroidCustomerPatch({ ...details, line2: "Floor 2" })).toEqual({ name: details.legalName, billing_address: { line1: details.line1, line2: "Floor 2, Tamil Nadu (33)", city: details.city, zip_code: details.postalCode, state: "Tamil Nadu", country: "IN" }, vat_number: details.taxId, billing_email: details.emails[0], invoicing_emails: details.emails, custom_taxes: [{ tax_code: "CGST", name: "CGST", rate: "0.0900" }, { tax_code: "SGST", name: "SGST", rate: "0.0900" }], is_tax_exempt: false, exemption_reason: null });
+    expect(meteroidCustomerPatch({ ...details, line2: "Floor 2" })).toEqual({ name: details.legalName, billing_address: { line1: details.line1, line2: "Floor 2, Tamil Nadu (33)", city: details.city, zip_code: details.postalCode, state: "Tamil Nadu", country: "IN" }, vat_number: details.taxId, phone: details.phone, billing_email: details.emails[0], invoicing_emails: details.emails, custom_taxes: [{ tax_code: "CGST", name: "CGST", rate: "0.0900" }, { tax_code: "SGST", name: "SGST", rate: "0.0900" }], is_tax_exempt: false, exemption_reason: null });
     expect(addressLine2(details)).toBe("Tamil Nadu (33)");
     expect(addressLine2({ country: "US" })).toBeNull();
     expect(addressLine2({ country: "US", line2: "Suite 1" })).toBe("Suite 1");

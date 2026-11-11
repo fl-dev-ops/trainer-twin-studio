@@ -13,6 +13,7 @@ import { activateSession } from "@/lib/interview-sessions";
 import { POST } from "@/app/api/meteroid/webhook/route";
 
 const originalGrpcUrl = process.env.METEROID_GRPC_URL;
+const originalRazorpayEnabled = process.env.RAZORPAY_ENABLED;
 const starts: { name: string; id: string }[] = [];
 let runSteps = true;
 let failStart = false;
@@ -27,7 +28,7 @@ mock.module("workflow/api", () => ({ start: async (fn: Function, [id]: [string])
 const syncs: string[] = [];
 mock.module("@/lib/schedule-org-credits", () => ({ scheduleOrgSync: async (id: string) => { syncs.push(id); }, scheduleOrgUsage: async () => {} }));
 
-const details = { legalName: "Billing Ltd", country: "IN", line1: "10 Street", city: "Chennai", postalCode: "600001", state: "33", emails: ["accounts@example.com", "finance@example.com"] };
+const details = { legalName: "Billing Ltd", country: "IN", line1: "10 Street", city: "Chennai", postalCode: "600001", state: "33", emails: ["accounts@example.com", "finance@example.com"], phone: "+919876543210" };
 type Raw = Record<string, unknown>;
 type Sent = { from: string; to: string[]; subject: string; text: string; reply_to: string; attachments?: { filename: string; content: string }[] };
 
@@ -80,7 +81,7 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
     return POST(new Request("http://dash.test/api/meteroid/webhook", { method: "POST", body, headers: { "webhook-id": id, "webhook-timestamp": timestamp, "webhook-signature": options.bad ? "v1,wrong" : `v1,${signature}` } }));
   }
   beforeEach(async () => {
-    setSystemTime(new Date("2026-11-01T12:00:00Z")); process.env.METEROID_GRPC_URL = "https://meteroid-grpc.test";
+    setSystemTime(new Date("2026-11-01T12:00:00Z")); process.env.METEROID_GRPC_URL = "https://meteroid-grpc.test"; process.env.RAZORPAY_ENABLED = "false";
     starts.length = requests.length = syncs.length = 0; invoices.clear(); sent.clear(); topups.clear(); runSteps = true; failStart = grpcPaidRace = false;
     outside.start(); f = minutesFixture(); await f.create(); await fundOrg({ orgId: f.org.id, minutes: 100 });
     outside.use(
@@ -118,7 +119,10 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
     outside.stop(); expect(outside.unexpected).toEqual([]); outside.reset(); outside.resetHandlers();
   });
 
-  afterAll(() => { if (originalGrpcUrl === undefined) delete process.env.METEROID_GRPC_URL; else process.env.METEROID_GRPC_URL = originalGrpcUrl; });
+  afterAll(() => {
+    if (originalGrpcUrl === undefined) delete process.env.METEROID_GRPC_URL; else process.env.METEROID_GRPC_URL = originalGrpcUrl;
+    if (originalRazorpayEnabled === undefined) delete process.env.RAZORPAY_ENABLED; else process.env.RAZORPAY_ENABLED = originalRazorpayEnabled;
+  });
 
   test("rules 1–3: billed org starts Trial, never expires or receives plan credits; rule 26 cached overview survives Meteroid down", async () => {
     expect(await billing()).toMatchObject({ plan: "trial", paidSubscriptionId: null, pausedAt: null });
@@ -143,8 +147,8 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
   });
   test("rules 10, 13, 21, 24: repeated upgrade/webhook creates one subscription, kind upgrade and one workflow/email", async () => {
     await saveBillingDetails(f.org.id, details);
-    expect(await requestUpgrade(f.org.id)).toEqual({ subscriptionId: subscription(), created: true });
-    expect(await requestUpgrade(f.org.id)).toEqual({ subscriptionId: subscription(), created: false });
+    expect(await requestUpgrade(f.org.id)).toEqual({ subscriptionId: subscription(), created: true, payUrl: null });
+    expect(await requestUpgrade(f.org.id)).toEqual({ subscriptionId: subscription(), created: false, payUrl: null });
     await webhook("invoice.finalized", { invoice_id: upgrade() }); await webhook("invoice.finalized", { invoice_id: upgrade() });
     expect(requests.filter((r) => r.path === "/subscriptions")).toHaveLength(1);
     expect(requests.find((r) => r.path === "/subscriptions")!.key).toBe(`paid-subscription-${f.org.id}-${new Date().toISOString().slice(0, 10)}-0`);
@@ -264,8 +268,8 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
       add(`next-${upgrade()}`, { subscription_id: next });
       return HttpResponse.json({ id: next, status: "ACTIVE" });
     }));
-    expect(await requestUpgrade(f.org.id)).toEqual({ subscriptionId: next, created: true });
-    expect(await requestUpgrade(f.org.id)).toEqual({ subscriptionId: next, created: false });
+    expect(await requestUpgrade(f.org.id)).toEqual({ subscriptionId: next, created: true, payUrl: null });
+    expect(await requestUpgrade(f.org.id)).toEqual({ subscriptionId: next, created: false, payUrl: null });
     expect(requests.filter((r) => r.path === "/subscriptions").map((r) => r.key)).toEqual([
       `paid-subscription-${f.org.id}-2026-11-01-0`, `paid-subscription-${f.org.id}-2026-11-01-1`,
     ]);

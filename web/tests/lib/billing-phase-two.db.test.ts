@@ -15,7 +15,7 @@ import { GET as cronCheck, POST as cronPost } from "@/app/api/internal/billing/c
 import { db, localMinutesDb, minutesFixture, meteroidServer, type MinutesFixture } from "./minutes-test-db";
 import { fundOrg } from "../setup/meteroid";
 
-const details = { legalName: "DB Billing Ltd", country: "US", line1: "10 Street", city: "Boston", postalCode: "02110", emails: ["billing@example.com"] };
+const details = { legalName: "DB Billing Ltd", country: "US", line1: "10 Street", city: "Boston", postalCode: "02110", emails: ["billing@example.com"], phone: "+19876543210" };
 
 describe.skipIf(!localMinutesDb)("billing phase 2 constraints and studio API (local database)", () => {
   let f: MinutesFixture;
@@ -193,7 +193,7 @@ describe.skipIf(!localMinutesDb)("billing phase 2 constraints and studio API (lo
     const { checkBilling } = await import("../../scripts/check-billing");
     const checksHold = async () => {
       const results = await checkBilling();
-      expect(results).toHaveLength(6);
+      expect(results).toHaveLength(8);
       expect(results.filter((result) => result.broken !== 0)).toEqual([]);
     };
     const sub = `paid-${f.org.id}`, issuedEmailAt = new Date("2026-01-01"), paidEmailAt = new Date("2026-01-02");

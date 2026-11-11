@@ -71,6 +71,7 @@ describe("Razorpay REST requests (stubbed fetch only)", () => {
     expect(fetchStub).toHaveBeenCalledWith("https://api.razorpay.com/v1/payment_links", {
       method: "POST",
       headers: { authorization: `Basic ${Buffer.from("rzp_test_credits:test-key-secret").toString("base64")}`, "content-type": "application/json" },
+      signal: expect.any(AbortSignal),
       body: JSON.stringify({
         amount: input.amount, currency: input.currency, accept_partial: false, description: input.description,
         reference_id: input.referenceId, notes: input.notes,
@@ -84,7 +85,7 @@ describe("Razorpay REST requests (stubbed fetch only)", () => {
     globalThis.fetch = fetchStub;
     expect(await fetchInvoice(invoice.id)).toEqual(invoice);
     expect(fetchStub).toHaveBeenCalledWith("https://api.razorpay.com/v1/invoices/inv%2Ftest%3F", {
-      method: "GET", headers: { authorization: `Basic ${Buffer.from("rzp_test_credits:test-key-secret").toString("base64")}` }, body: undefined,
+      method: "GET", headers: { authorization: `Basic ${Buffer.from("rzp_test_credits:test-key-secret").toString("base64")}` }, body: undefined, signal: expect.any(AbortSignal),
     });
   });
   test("surfaces Razorpay's error description and status", async () => {
