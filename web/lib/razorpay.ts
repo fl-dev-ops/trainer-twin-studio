@@ -8,21 +8,6 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 const API = "https://api.razorpay.com/v1";
 
-/**
- * Phase 1 switch: Razorpay is OFF unless RAZORPAY_ENABLED=true. Org credits come from Meteroid (lib/org-credits.ts);
- * phase 3 brings payments back through Meteroid invoices and turns this on. While off, the webhook answers 404 and
- * every Razorpay API call (the purchase scripts) refuses. The code stays, with its tests (which switch it on).
- */
-export const razorpayEnabled = () => process.env.RAZORPAY_ENABLED?.trim() === "true";
-// Phase 3 turns it on for invoices (specs/billing.md rules 27–35); phase 1's credit purchase scripts work again with it.
-
-export class RazorpayDisabledError extends Error {
-  constructor() {
-    super("Razorpay is switched off (phase 1: org credits come from Meteroid). Set RAZORPAY_ENABLED=true to use it.");
-    this.name = "RazorpayDisabledError";
-  }
-}
-
 function env(name: "RAZORPAY_KEY_ID" | "RAZORPAY_KEY_SECRET" | "RAZORPAY_WEBHOOK_SECRET") {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`${name} is not set`);
@@ -37,7 +22,6 @@ export class RazorpayError extends Error {
 }
 
 async function call<T>(path: string, init?: { method: "POST"; body?: unknown }): Promise<T> {
-  if (!razorpayEnabled()) throw new RazorpayDisabledError();
   const auth = Buffer.from(`${env("RAZORPAY_KEY_ID")}:${env("RAZORPAY_KEY_SECRET")}`).toString("base64");
   const response = await fetch(`${API}${path}`, {
     method: init?.method ?? "GET",

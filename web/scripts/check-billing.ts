@@ -44,9 +44,9 @@ export const BILLING_CHECKS = [
                  or not exists (select 1 from "BillingPayment" p where p.id = i."razorpayPaymentId" and p.status = 'applied'))`,
   },
   {
-    rule: "with Razorpay on, every unpaid invoice older than an hour whose org has a phone has a payment link",
+    rule: "every unpaid invoice older than an hour whose org has a phone has a payment link",
     sql: `select count(*)::int as n from "BillingInvoice" i join "OrgBilling" b on b."orgId" = i."orgId"
-            where ${process.env.RAZORPAY_ENABLED?.trim() === "true" ? "true" : "false"} and i.status = 'unpaid' and i."paymentLinkId" is null
+            where i.status = 'unpaid' and i."paymentLinkId" is null
               and i."createdAt" < (now() at time zone 'utc') - interval '1 hour' and coalesce(b."billingDetails"->>'phone', '') <> ''`,
   },
   {

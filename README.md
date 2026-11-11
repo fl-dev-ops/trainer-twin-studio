@@ -107,7 +107,7 @@ bun scripts/check-billing.ts                       # the billing rules that must
 
 Billing (plans, invoices, minute packs, pausing; `specs/billing.md`) lives in Settings › Billing. Invoices come from
 Meteroid, which also holds the company's details (Settings › Invoicing entity); the app draws the invoice and receipt
-PDFs and emails them from `billing@trainertwin.com`. Customers pay with Pay now (Razorpay, `RAZORPAY_ENABLED=true`);
+PDFs and emails them from `billing@trainertwin.com`. Customers pay with Pay now (Razorpay: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`);
 a payment made outside Razorpay is marked paid by staff in Meteroid. Optional env: `GST_LUT_REFERENCE` (on export
 invoices), `METEROID_GRPC_URL` (default `https://meteroid-api.foreverlearning.in`).
 

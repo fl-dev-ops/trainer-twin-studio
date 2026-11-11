@@ -9,7 +9,6 @@ import {
   fetchPayment,
   fetchPaymentLink,
   paymentLinkByReference,
-  razorpayEnabled,
   RazorpayError,
 } from "@/lib/razorpay";
 
@@ -17,7 +16,8 @@ import {
  * Paying invoices online (specs/billing.md rules 27–33): one Razorpay payment link per unpaid invoice; a payment on
  * it marks the Meteroid invoice paid once (the invoice-paid workflow then does the rest, as for any paid invoice); a
  * second payment is recorded as a duplicate for staff to refund; links close when their invoice is voided or paid
- * another way. Everything is a no-op while Razorpay is switched off (RAZORPAY_ENABLED).
+ * another way. Razorpay is always on: without its keys (RAZORPAY_KEY_ID / _SECRET) making a link fails, the invoice
+ * email goes without Pay now, and the daily check tries again.
  */
 
 type Row = Pick<BillingInvoice, "id" | "orgId" | "number" | "status" | "totalCents" | "currency" | "paymentLinkId" | "paymentLinkUrl">;
@@ -27,11 +27,10 @@ const callbackUrl = (number: string) => `${studioUrl()}settings?tab=billing&paid
 
 /**
  * The invoice's payment link (rule 27), made once: the link's reference is the invoice id, so a retry that finds
- * Razorpay already has it reuses that one. Null when Razorpay is off, the invoice isn't unpaid, or the org has no
- * phone (Razorpay needs one for card payments in USD).
+ * Razorpay already has it reuses that one. Null when the invoice isn't unpaid or the org has no phone (Razorpay needs
+ * one for card payments in USD).
  */
 export async function ensurePaymentLink(invoiceId: string): Promise<string | null> {
-  if (!razorpayEnabled()) return null;
   const row = await db.billingInvoice.findUniqueOrThrow({ where: { id: invoiceId }, include: { billing: { select: { billingDetails: true } } } });
   if (row.paymentLinkUrl) return row.paymentLinkUrl;
   if (row.status !== "unpaid" || row.totalCents <= 0) return null;
@@ -69,7 +68,7 @@ export async function ensurePaymentLink(invoiceId: string): Promise<string | nul
 
 /** Rule 32: the invoice was voided or paid another way, so its link can't be paid any more. Best effort. */
 export async function closePaymentLink(row: Pick<BillingInvoice, "id" | "number" | "paymentLinkId" | "razorpayPaymentId">) {
-  if (!razorpayEnabled() || !row.paymentLinkId || row.razorpayPaymentId) return;
+  if (!row.paymentLinkId || row.razorpayPaymentId) return;
   try {
     await cancelPaymentLink(row.paymentLinkId);
   } catch (error) {
@@ -165,7 +164,7 @@ export async function razorpayInvoicePaid(input: { linkId: string; paymentId: st
 
 /** Rule 33: an unpaid invoice whose link Razorpay says was paid (a lost webhook), settled the same way. */
 export async function reconcilePaymentLink(row: Pick<BillingInvoice, "paymentLinkId">) {
-  if (!razorpayEnabled() || !row.paymentLinkId) return null;
+  if (!row.paymentLinkId) return null;
   const link = await fetchPaymentLink(row.paymentLinkId);
   const payment = link.status === "paid" ? link.payments?.find((p) => p.status === "captured") ?? link.payments?.[0] : undefined;
   if (!payment) return null;
