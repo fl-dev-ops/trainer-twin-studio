@@ -98,8 +98,20 @@ METEROID_WEBHOOK_SECRET=whsec_...  # from your webhook endpoint below
 
 cd web
 bun scripts/meteroid-setup.ts                      # once per tenant (done for Development): MINS, voice_minutes, plan "Credits"
+bun scripts/meteroid-billing-setup.ts --webhook-url https://dev-webhooks-<you>.foreverlearning.in/api/meteroid/webhook
+                                                   # once per tenant: minute packs, our invoicing entity (if empty), webhook events
 bun scripts/meteroid-link-org.ts --org <slug>      # bill a local org through Meteroid (alias = slug)
+METEROID_API_KEY=<dev key> bun scripts/billing-live-check.ts   # billing phase 2 end to end against a real tenant (test DB)
+bun scripts/check-billing.ts                       # the billing rules that must hold (specs/billing.md, Checks)
 ```
+
+Billing (plans, invoices, minute packs, pausing; `specs/billing.md`) lives in Settings › Billing. Every org is on
+Trial; staff move an org to its own plan by creating its subscription in Meteroid. Invoices come from Meteroid, which
+also holds the company's details and the LUT ARN (Settings › Invoicing entity; the ARN in its legal footer); the app
+draws the invoice and receipt PDFs (kept in S3 as first sent) and emails them from `billing@trainertwin.com`.
+Customers pay with Pay now (Razorpay: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`); a payment
+made outside Razorpay is marked paid by staff in Meteroid. Optional env: `METEROID_GRPC_URL` (default
+`https://meteroid-api.foreverlearning.in`).
 
 Webhooks (grants added in Meteroid show up in the app within seconds; without them the Credits page still re-reads
 Meteroid every minute). Meteroid can't reach localhost, so each developer runs their own Cloudflare tunnel for the
@@ -120,7 +132,9 @@ pm2 start ecosystem.config.cjs --only dev-webhooks  # ecosystem starts it whenev
 ```
 
 Then in Meteroid › Development › Settings › Webhooks add `https://dev-webhooks-<you>.foreverlearning.in/api/meteroid/webhook`
-(events: wallet.funded, wallet.debited, wallet.depleted, wallet.recovered, credit_grant.expired) and put its signing
+(events: wallet.funded, wallet.debited, wallet.depleted, wallet.recovered, credit_grant.expired, invoice.finalized,
+invoice.paid, invoice.voided, subscription.cancelled, subscription.ended; `meteroid-billing-setup.ts` adds the billing
+ones) and put its signing
 secret in `METEROID_WEBHOOK_SECRET`.
 
 ## Versioning model

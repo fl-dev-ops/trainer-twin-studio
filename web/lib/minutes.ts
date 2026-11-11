@@ -1,6 +1,7 @@
 import { studioPeopleEmails } from "@/lib/org-people";
 import { db } from "@/lib/db";
 import { Prisma } from "@/lib/generated/prisma/client";
+import { pausedReason } from "@/lib/billing/paused";
 import { DEFAULT_LEARNER_MINUTES, MAX_LEARNER_MINUTES } from "@/lib/minutes-config";
 import { orgCredits } from "@/lib/org-credits";
 import { scheduleOrgUsage } from "@/lib/schedule-org-credits";
@@ -98,6 +99,12 @@ async function locked<T>(orgId: string, work: (tx: Prisma.TransactionClient) => 
   });
 }
 
+/** A paused org gives no credits (specs/billing.md rule 16). */
+async function refuseWhenPaused(orgId: string, tx: Prisma.TransactionClient) {
+  const reason = await pausedReason(orgId, "studio", tx);
+  if (reason) throw new MinutesError(reason, 403);
+}
+
 function wholeMinutes(value: number) {
   if (!Number.isInteger(value) || value < 1) throw new MinutesError("Give a whole number of minutes, 1 or more", 400);
   return value;
@@ -126,6 +133,7 @@ export async function grantMinutes(input: {
       const given = await tx.minuteLedger.count({ where: { orgId: input.orgId, email, type: "grant" } });
       if (given > 0) return { grantedMinutes: 0, balanceMinutes: minutes(learner.balanceSeconds), orgBalanceMinutes: minutes(orgBalance) };
     }
+    await refuseWhenPaused(input.orgId, tx);
     if (orgBalance < amount * 60) {
       throw new MinutesError(`Not enough credits in your organization's balance: ${minutes(orgBalance)} min left. Ask TrainerTwin to top it up.`, 409);
     }
@@ -158,6 +166,7 @@ export async function giveStartingMinutes(input: { orgId: string; emails: string
     const had = await tx.minuteLedger.findMany({ where: { orgId: input.orgId, type: "grant", email: { in: emails } }, select: { email: true }, distinct: ["email"] });
     const known = new Set(had.map((row) => row.email));
     const given = emails.filter((email) => !known.has(email));
+    if (given.length) await refuseWhenPaused(input.orgId, tx);
     const need = given.length * amount * 60;
     const orgBalance = need ? (await orgCredits(input.orgId, { fresh: true, tx })).seconds : 0;
     if (need > orgBalance) {
@@ -195,6 +204,7 @@ export async function grantMinutesToMany(input: { orgId: string; emails: string[
       if (amount * 60 > room) skipped.push({ email, reason: `can get at most ${minutes(Math.max(0, room))} more (${MAX_LEARNER_MINUTES} min in total)` });
       else given.push(email);
     }
+    if (given.length) await refuseWhenPaused(input.orgId, tx);
     const orgBalance = given.length ? (await orgCredits(input.orgId, { fresh: true, tx })).seconds : 0;
     if (given.length * amount * 60 > orgBalance) {
       throw new MinutesError(

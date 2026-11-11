@@ -1106,6 +1106,92 @@ model OrgBilling {
   /// Grants the org's admin was already emailed about ("credits added"; specs/people.md rule 11), so each is told once.
   announcedGrantIds  String[]  @default([])
   syncedAt           DateTime?
+  /// specs/billing.md: trial | paid (CHECK). Trial is the Credits subscription only; paid adds the org's paid
+  /// subscription, which staff create in Meteroid on the org's own plan.
+  plan               String    @default("trial")
+  /// The org's paid Meteroid subscription (any plan but Credits): set when its first invoice arrives, cleared when it's cancelled.
+  paidSubscriptionId String?   @unique
+  /// Set while a Paid renewal is overdue unpaid: no calls, no credits given (specs/billing.md rule 16).
+  pausedAt           DateTime?
+  /// Legal name, address, tax number and billing emails (lib/billing/details.ts), as also saved in Meteroid.
+  billingDetails     Json?
 
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  organization Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  invoices     BillingInvoice[]
+}
+
+/// The app's copy of a Meteroid invoice above $0 (specs/billing.md): what Settings › Billing lists, what the billing
+/// workflows act on, and which emails went out for it (so each goes out once).
+model BillingInvoice {
+  /// Meteroid's invoice id (inv_…).
+  id             String    @id
+  orgId          String
+  number         String
+  kind           String // upgrade | renewal | pack | other (CHECK)
+  status         String    @default("unpaid") // unpaid | paid | void (CHECK)
+  /// Tax included, in cents.
+  totalCents     Int
+  taxCents       Int       @default(0)
+  currency       String
+  subscriptionId String?
+  /// Credits a pack adds when paid (0 for other kinds).
+  credits        Int       @default(0)
+  issuedAt       DateTime
+  dueDate        DateTime  @db.Date
+  periodStart    DateTime? @db.Date
+  periodEnd      DateTime? @db.Date
+  paidAt         DateTime?
+  /// Payment references staff entered in Meteroid (bank transfer ids), for the receipt.
+  paymentRefs    String[]  @default([])
+  /// Its Razorpay payment link (specs/billing.md rule 27): one per invoice, cancelled when it's voided or paid otherwise.
+  paymentLinkId  String?   @unique
+  paymentLinkUrl String?
+  /// The Razorpay payment that settled it (rule 29): set once, so a second payment is a duplicate, never a second mark.
+  razorpayPaymentId String? @unique
+  /// The invoice and receipt PDFs as first sent (S3 keys, rule 22): kept, so an issued document never changes.
+  invoicePdfKey  String?
+  receiptPdfKey  String?
+  /// When each workflow claimed the invoice (one run per invoice and event) and each email went out.
+  issuedRunAt    DateTime?
+  paidRunAt      DateTime?
+  issuedEmailAt  DateTime?
+  reminderAt     DateTime?
+  overdueAt      DateTime?
+  /// The "plan paused" or "upgrade cancelled" email (one per invoice: an invoice is either a renewal or an upgrade).
+  overdueEmailAt DateTime?
+  paidEmailAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  billing  OrgBilling       @relation(fields: [orgId], references: [orgId], onDelete: Cascade)
+  payments BillingPayment[]
+
+  @@index([orgId, issuedAt])
+  @@index([status, dueDate])
+}
+
+/// A Razorpay payment for an invoice (specs/billing.md rules 29, 31, 34): what settled it, or a duplicate to refund,
+/// with Razorpay's fee for the accountant's report. Money in the payment's currency (cents); INR amounts in paise.
+model BillingPayment {
+  /// Razorpay's payment id (pay_…).
+  id            String    @id
+  invoiceId     String
+  orgId         String
+  paymentLinkId String
+  status        String // applied | duplicate (CHECK)
+  amount        Int
+  currency      String
+  /// What it came to in INR, Razorpay's fee and the GST on that fee (paise): read from Razorpay once it's captured.
+  amountInr     Int?
+  feeInr        Int?
+  taxInr        Int?
+  method        String?
+  international Boolean?
+  paidAt        DateTime
+  createdAt     DateTime  @default(now())
+
+  invoice BillingInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, paidAt])
+  @@index([paidAt])
 }

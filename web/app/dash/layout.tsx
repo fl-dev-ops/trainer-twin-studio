@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { AppShell, ShellFallback } from "@/components/app-shell";
+import { BillingBanner } from "@/components/billing/billing-banner";
 import { ClientOnly } from "@/components/client-only";
 import { OrgAccentProvider } from "@/components/org-accent-provider";
 import { OrgPin } from "@/components/org-pin";
@@ -21,7 +22,10 @@ export default async function DashLayout({ children }: { children: ReactNode }) 
       {/* First, so this tab's requests carry its org before any page below loads data. */}
       <OrgPin orgId={org?.id ?? null} />
       <AppShell hideRoleplay={org?.hideRoleplay ?? false} orgs={orgs} orgId={org?.id ?? null}>
-        <ClientOnly fallback={<ShellFallback />}>{children}</ClientOnly>
+        <ClientOnly fallback={<ShellFallback />}>
+          <BillingBanner />
+          {children}
+        </ClientOnly>
       </AppShell>
     </OrgAccentProvider>
   );

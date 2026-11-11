@@ -16,6 +16,8 @@ export type SendEmailOptions = {
   from?: string;
   /** Resend sends one email per key (24 h): a retried workflow step can't send it twice. */
   idempotencyKey?: string;
+  /** Files sent with the email (billing: invoice and receipt PDFs). */
+  attachments?: { filename: string; content: Buffer }[];
 };
 
 /**
@@ -29,6 +31,7 @@ export async function sendEmail({
   text,
   from = DEFAULT_FROM_EMAIL,
   idempotencyKey,
+  attachments,
 }: SendEmailOptions) {
   if (!resend) {
     console.warn(
@@ -46,6 +49,7 @@ export async function sendEmail({
       subject,
       html,
       text,
+      ...(attachments?.length ? { attachments } : {}),
     }, idempotencyKey ? { idempotencyKey } : undefined);
 
     if (result.error) {
@@ -372,6 +376,82 @@ export function orgCreditsEmail(args: OrgCreditsEmailArgs) {
 
 export function sendOrgCreditsEmail(args: OrgCreditsEmailArgs) {
   return sendEmail({ to: args.to, ...orgCreditsEmail(args), idempotencyKey: args.idempotencyKey });
+}
+
+/** Billing emails come from here (specs/billing.md rule 21); replies go to support like every email. */
+export const BILLING_FROM_EMAIL = process.env.BILLING_FROM_EMAIL || "TrainerTwin Billing <billing@trainertwin.com>";
+
+/**
+ * The billing emails (specs/billing.md rule 21), to the org's billing emails: an invoice issued, due tomorrow, the
+ * plan paused, an upgrade cancelled, and a payment received. Amounts and dates arrive formatted ("$300.00",
+ * "13 Dec 2026").
+ */
+export type BillingEmailArgs = {
+  event: "issued" | "reminder" | "paused" | "upgrade_cancelled" | "paid";
+  orgName: string;
+  invoiceNumber: string;
+  amount: string;
+  dueDate: string;
+  /** What the invoice is for: "TrainerTwin Paid plan, 3 Dec – 2 Jan", "Minute pack: 100 credits". */
+  description: string;
+  billingUrl: string;
+  /** Razorpay's payment page for the invoice: a Pay now button (specs/billing.md rule 28). */
+  payUrl?: string | null;
+  /** Paid emails: what the payment did ("Your organization is now on the Paid plan."). */
+  outcome?: string | null;
+};
+
+export function billingEmail(args: BillingEmailArgs) {
+  const org = escapeHtml(args.orgName);
+  const invoice = escapeHtml(args.invoiceNumber);
+  // Razorpay's page takes the payment (card, or bank transfer where Razorpay offers it); without a link, reply to pay.
+  const pay = args.payUrl
+    ? `<div style="text-align: center; margin: 28px 0;"><a href="${escapeHtml(args.payUrl)}" class="btn" target="_blank">Pay ${escapeHtml(args.amount)} now</a></div>`
+    : `<p>To pay invoice <strong>${invoice}</strong>, reply to this email and we'll send you a payment link.</p>`;
+  const payText = args.payUrl ? `Pay online: ${args.payUrl}` : `To pay invoice ${args.invoiceNumber}, reply to this email and we'll send you a payment link.`;
+  const content = {
+    issued: {
+      subject: `Your TrainerTwin invoice ${args.invoiceNumber}: ${args.amount} due ${args.dueDate}`,
+      lines: [`Here is invoice <strong>${invoice}</strong> for <strong>${org}</strong>: ${escapeHtml(args.description)}, <strong>${escapeHtml(args.amount)}</strong> (tax included), due <strong>${escapeHtml(args.dueDate)}</strong>. The invoice is attached.`, pay],
+      text: `Invoice ${args.invoiceNumber} for ${args.orgName}: ${args.description}, ${args.amount} (tax included), due ${args.dueDate}. The invoice is attached. ${payText}`,
+    },
+    reminder: {
+      subject: `Reminder: invoice ${args.invoiceNumber} (${args.amount}) is due tomorrow`,
+      lines: [`Invoice <strong>${invoice}</strong> for <strong>${org}</strong> (${escapeHtml(args.amount)}) is due <strong>${escapeHtml(args.dueDate)}</strong>. If it isn't paid by then, your TrainerTwin plan is paused: no new calls can start until it's paid.`, pay, `<p>Already paid? Thank you: reply to this email and we'll match it up.</p>`],
+      text: `Invoice ${args.invoiceNumber} for ${args.orgName} (${args.amount}) is due ${args.dueDate}. If it isn't paid by then, your plan is paused: no new calls can start until it's paid. ${payText} Already paid? Reply to this email.`,
+    },
+    paused: {
+      subject: `Your TrainerTwin plan is paused: invoice ${args.invoiceNumber} is overdue`,
+      lines: [`Invoice <strong>${invoice}</strong> for <strong>${org}</strong> (${escapeHtml(args.amount)}) was due <strong>${escapeHtml(args.dueDate)}</strong> and isn't paid yet, so your plan is paused: no new calls can start and no credits can be given. Nothing is lost: everything comes back as soon as your overdue invoices are paid.`, pay, `<p>Already paid? Reply to this email and we'll sort it out right away.</p>`],
+      text: `Invoice ${args.invoiceNumber} for ${args.orgName} (${args.amount}) was due ${args.dueDate} and isn't paid, so your plan is paused: no new calls, no credits given. Everything comes back when your overdue invoices are paid. ${payText} Already paid? Reply to this email.`,
+    },
+    upgrade_cancelled: {
+      subject: `Your upgrade to the TrainerTwin Paid plan was cancelled`,
+      lines: [`Invoice <strong>${invoice}</strong> (${escapeHtml(args.amount)}) for upgrading <strong>${org}</strong> to the Paid plan wasn't paid by <strong>${escapeHtml(args.dueDate)}</strong>, so we cancelled it. You're still on the Trial plan, and you can upgrade again any time from Settings › Billing.`],
+      text: `Invoice ${args.invoiceNumber} (${args.amount}) for upgrading ${args.orgName} to the Paid plan wasn't paid by ${args.dueDate}, so we cancelled it. You're still on the Trial plan; you can upgrade again any time.`,
+    },
+    paid: {
+      subject: `Payment received for invoice ${args.invoiceNumber}: thank you`,
+      lines: [`We received <strong>${escapeHtml(args.amount)}</strong> for invoice <strong>${invoice}</strong> (${escapeHtml(args.description)}). ${args.outcome ? escapeHtml(args.outcome) : ""}`, `<p>Your receipt and the invoice are attached.</p>`],
+      text: `We received ${args.amount} for invoice ${args.invoiceNumber} (${args.description}). ${args.outcome ?? ""} Your receipt and the invoice are attached.`,
+    },
+  }[args.event];
+  const html = renderEmailLayout({
+    title: escapeHtml(content.subject),
+    previewText: escapeHtml(content.subject),
+    contentHtml: `
+      <h1>${escapeHtml(content.subject)}</h1>
+      ${content.lines.map((line) => (line.startsWith("<p>") ? line : `<p>${line}</p>`)).join("\n")}
+      <div style="text-align: center; margin: 28px 0;">
+        <a href="${escapeHtml(args.billingUrl)}" class="btn" target="_blank">See billing</a>
+      </div>
+    `,
+  });
+  return { subject: content.subject, html, text: `${content.text} ${args.billingUrl}` };
+}
+
+export function sendBillingEmail(input: { to: string[]; args: BillingEmailArgs; attachments?: { filename: string; content: Buffer }[]; idempotencyKey: string }) {
+  return sendEmail({ to: input.to, from: BILLING_FROM_EMAIL, ...billingEmail(input.args), attachments: input.attachments, idempotencyKey: input.idempotencyKey });
 }
 
 /** A user's "Report an issue", for the team (lib/issue-alerts.ts): who, where, what they wrote, and where to look. */

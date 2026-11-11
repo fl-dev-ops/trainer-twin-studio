@@ -1,15 +1,14 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { createHmac } from "node:crypto";
-import { createPaymentLink, fetchInvoice, razorpayEnabled, RazorpayError, verifyWebhookSignature } from "@/lib/razorpay";
+import { createPaymentLink, fetchInvoice, fetchPaymentLink, fetchRefunds, RazorpayError, verifyWebhookSignature } from "@/lib/razorpay";
 
-const keys = ["RAZORPAY_ENABLED", "RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET"] as const;
+const keys = ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET"] as const;
 let originalEnv: (string | undefined)[];
 let originalFetch: typeof fetch;
 
 beforeEach(() => {
   originalEnv = keys.map((key) => process.env[key]);
   originalFetch = globalThis.fetch;
-  process.env.RAZORPAY_ENABLED = "true";
   process.env.RAZORPAY_KEY_ID = "rzp_test_credits";
   process.env.RAZORPAY_KEY_SECRET = "test-key-secret";
   process.env.RAZORPAY_WEBHOOK_SECRET = "test-webhook-secret";
@@ -20,17 +19,6 @@ afterEach(() => {
   keys.forEach((key, index) => {
     if (originalEnv[index] === undefined) delete process.env[key];
     else process.env[key] = originalEnv[index];
-  });
-});
-
-describe("razorpayEnabled", () => {
-  test.each([
-    [undefined, false], ["", false], ["false", false], [" false ", false], ["TRUE", false], ["1", false],
-    ["true-extra", false], ["true", true], [" \ttrue\n", true],
-  ] as const)("RAZORPAY_ENABLED=%j enables Razorpay only for trimmed lowercase true", (value, enabled) => {
-    if (value === undefined) delete process.env.RAZORPAY_ENABLED;
-    else process.env.RAZORPAY_ENABLED = value;
-    expect(razorpayEnabled()).toBe(enabled);
   });
 });
 
@@ -71,6 +59,7 @@ describe("Razorpay REST requests (stubbed fetch only)", () => {
     expect(fetchStub).toHaveBeenCalledWith("https://api.razorpay.com/v1/payment_links", {
       method: "POST",
       headers: { authorization: `Basic ${Buffer.from("rzp_test_credits:test-key-secret").toString("base64")}`, "content-type": "application/json" },
+      signal: expect.any(AbortSignal),
       body: JSON.stringify({
         amount: input.amount, currency: input.currency, accept_partial: false, description: input.description,
         reference_id: input.referenceId, notes: input.notes,
@@ -84,7 +73,7 @@ describe("Razorpay REST requests (stubbed fetch only)", () => {
     globalThis.fetch = fetchStub;
     expect(await fetchInvoice(invoice.id)).toEqual(invoice);
     expect(fetchStub).toHaveBeenCalledWith("https://api.razorpay.com/v1/invoices/inv%2Ftest%3F", {
-      method: "GET", headers: { authorization: `Basic ${Buffer.from("rzp_test_credits:test-key-secret").toString("base64")}` }, body: undefined,
+      method: "GET", headers: { authorization: `Basic ${Buffer.from("rzp_test_credits:test-key-secret").toString("base64")}` }, body: undefined, signal: expect.any(AbortSignal),
     });
   });
   test("surfaces Razorpay's error description and status", async () => {
@@ -99,6 +88,9 @@ describe("Razorpay REST requests (stubbed fetch only)", () => {
   test.each(["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"] as const)("refuses missing %s without fetching", async (key) => {
     delete process.env[key];
     await expect(createPaymentLink(input)).rejects.toThrow(`${key} is not set`);
+    await expect(fetchInvoice("inv-test")).rejects.toThrow(`${key} is not set`);
+    await expect(fetchPaymentLink("plink-test")).rejects.toThrow(`${key} is not set`);
+    await expect(fetchRefunds("pay-test")).rejects.toThrow(`${key} is not set`);
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 });

@@ -14,6 +14,7 @@ import { beforeSettings, usesBeforeSettings } from "@/lib/context-upload";
 import { learnerBalance, MinutesError, OUT_OF_MINUTES, recordSessionUsage } from "@/lib/minutes";
 import { MIN_START_MINUTES } from "@/lib/minutes-config";
 import { orgCredits } from "@/lib/org-credits";
+import { pausedReason } from "@/lib/billing/paused";
 import { BEFORE_UPLOAD_REFUSED, uploadAllowed } from "@/lib/context-upload";
 
 const shareCode = () => randomBytes(18).toString("base64url");
@@ -328,6 +329,12 @@ export async function activateSession(input: {
       });
     }
     return null;
+  }
+
+  // A paused org starts no voice calls (specs/billing.md rule 16); a running one (resumed above) keeps going.
+  if (mode === "voice") {
+    const paused = await pausedReason(input.orgId, metered ? "learner" : "studio");
+    if (paused) throw new MinutesError(paused, 403);
   }
 
   // A learner has one live call per org: a new one ends the others (each pays for the time it ran), then the

@@ -1,25 +1,12 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 /**
- * The few Razorpay calls credit purchases need (lib/credit-purchases.ts), over its REST API with the key pair:
- * payment links, invoices, and the webhook signature. Test keys (rzp_test_…) locally, live keys in production.
+ * The Razorpay calls the app needs, over its REST API with the key pair: payment links for invoices (billing phase 3,
+ * lib/billing/razorpay.ts) and for phase 1 credit purchases (lib/credit-purchases.ts), payments and their fees,
+ * settlements, and the webhook signature. Test keys (rzp_test_…) locally, live keys in production.
  */
 
 const API = "https://api.razorpay.com/v1";
-
-/**
- * Phase 1 switch: Razorpay is OFF unless RAZORPAY_ENABLED=true. Org credits come from Meteroid (lib/org-credits.ts);
- * phase 3 brings payments back through Meteroid invoices and turns this on. While off, the webhook answers 404 and
- * every Razorpay API call (the purchase scripts) refuses. The code stays, with its tests (which switch it on).
- */
-export const razorpayEnabled = () => process.env.RAZORPAY_ENABLED?.trim() === "true";
-
-export class RazorpayDisabledError extends Error {
-  constructor() {
-    super("Razorpay is switched off (phase 1: org credits come from Meteroid). Set RAZORPAY_ENABLED=true to use it.");
-    this.name = "RazorpayDisabledError";
-  }
-}
 
 function env(name: "RAZORPAY_KEY_ID" | "RAZORPAY_KEY_SECRET" | "RAZORPAY_WEBHOOK_SECRET") {
   const value = process.env[name]?.trim();
@@ -34,13 +21,13 @@ export class RazorpayError extends Error {
   }
 }
 
-async function call<T>(path: string, init?: { method: "POST"; body: unknown }): Promise<T> {
-  if (!razorpayEnabled()) throw new RazorpayDisabledError();
+async function call<T>(path: string, init?: { method: "POST"; body?: unknown }): Promise<T> {
   const auth = Buffer.from(`${env("RAZORPAY_KEY_ID")}:${env("RAZORPAY_KEY_SECRET")}`).toString("base64");
   const response = await fetch(`${API}${path}`, {
     method: init?.method ?? "GET",
-    headers: { authorization: `Basic ${auth}`, ...(init ? { "content-type": "application/json" } : {}) },
-    body: init ? JSON.stringify(init.body) : undefined,
+    headers: { authorization: `Basic ${auth}`, ...(init?.body !== undefined ? { "content-type": "application/json" } : {}) },
+    body: init?.body !== undefined ? JSON.stringify(init.body) : undefined,
+    signal: AbortSignal.timeout(20_000),
   });
   const body = await response.json().catch(() => null) as { error?: { description?: string } } | null;
   if (!response.ok) throw new RazorpayError(`Razorpay ${path}: ${body?.error?.description ?? response.statusText}`, response.status);
@@ -70,6 +57,74 @@ export function createPaymentLink(input: {
       ...(input.customer ? { customer: input.customer, notify: { email: Boolean(input.customer.email), sms: Boolean(input.customer.contact) } } : {}),
     },
   });
+}
+
+/**
+ * A payment link for an invoice (billing phase 3): no partial payments, no expiry, Razorpay sends nothing (our emails
+ * do), and after paying the payer comes back to `callbackUrl`. `referenceId` is unique in the account: a second
+ * create with it fails, so a retry looks the first one up (`paymentLinkByReference`).
+ */
+export function createInvoicePaymentLink(input: {
+  amount: number;
+  currency: string;
+  description: string;
+  referenceId: string;
+  notes: Record<string, string>;
+  customer: { name: string; email: string; contact: string };
+  callbackUrl: string;
+}) {
+  return call<RazorpayPaymentLink>("/payment_links", {
+    method: "POST",
+    body: {
+      amount: input.amount,
+      currency: input.currency,
+      accept_partial: false,
+      description: input.description,
+      reference_id: input.referenceId,
+      notes: input.notes,
+      customer: input.customer,
+      notify: { email: false, sms: false },
+      reminder_enable: false,
+      callback_url: input.callbackUrl,
+      callback_method: "get",
+    },
+  });
+}
+
+/** The account's payment link with this reference id, if any. */
+export async function paymentLinkByReference(referenceId: string) {
+  const page = await call<{ payment_links?: RazorpayPaymentLink[] }>(`/payment_links?reference_id=${encodeURIComponent(referenceId)}`);
+  return page.payment_links?.find((link) => (link as { reference_id?: string }).reference_id === referenceId) ?? null;
+}
+
+/** Cancels an unpaid link (its invoice was voided or paid another way). Razorpay refuses a paid or cancelled one. */
+export function cancelPaymentLink(id: string) {
+  return call<RazorpayPaymentLink>(`/payment_links/${encodeURIComponent(id)}/cancel`, { method: "POST" });
+}
+
+export type RazorpayPayment = {
+  id: string;
+  amount: number;
+  currency: string;
+  status: string;
+  method: string | null;
+  international: boolean;
+  /** In INR paise: what the payment came to, Razorpay's fee and the GST on it (once captured). */
+  base_amount?: number | null;
+  fee?: number | null;
+  tax?: number | null;
+  created_at: number;
+};
+
+export function fetchPayment(id: string) {
+  return call<RazorpayPayment>(`/payments/${encodeURIComponent(id)}`);
+}
+
+export type RazorpayReconItem = { entity_id: string; type: string; settlement_id: string | null; settled_at: number | null; settled: boolean };
+
+/** One page of a month's settlement reconciliation: which settlement paid out each payment. */
+export async function settlementRecon(year: number, month: number, skip = 0, count = 1000) {
+  return (await call<{ items?: RazorpayReconItem[] }>(`/settlements/recon/combined?year=${year}&month=${month}&skip=${skip}&count=${count}`)).items ?? [];
 }
 
 export type RazorpayLinkPayment = { payment_id: string; amount: number; status: string };
