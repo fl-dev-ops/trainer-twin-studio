@@ -81,6 +81,8 @@ type CallProps = {
   learner?: LearnerCall;
   /** The twin lets people attach a file during the call (Configure: "Enable upload"): an image up to 5 MB or a PDF up to 10 MB. */
   attach?: boolean;
+  /** Why Start would be refused right now (the practice check, specs/practice.md rule 1): shown instead of Start. */
+  blocked?: string | null;
 };
 
 export type CallResult = { sessionId: string | null; seconds: number; turns: CalibrationTurn[]; files: AttachedFiles };
@@ -116,7 +118,7 @@ export function CalibrationCall(props: CallProps) {
   );
 }
 
-function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = null, learner, attach }: CallProps & { room: Room }) {
+function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = null, learner, attach, blocked }: CallProps & { room: Room }) {
   // Studio calls open on the pre-join, so a refresh or Back never starts a call; a learner's started from a click already.
   const [phase, setPhase] = useState<Phase>(learner ? "connecting" : "ready");
   const router = useRouter();
@@ -568,7 +570,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
         )}
 
         {phase === "ready" ? (
-          <ReadyToCall twinName={twinName} photoUrl={photoUrl} onStart={() => void start()} />
+          <ReadyToCall twinName={twinName} photoUrl={photoUrl} blocked={blocked} onStart={() => void start()} />
         ) : phase === "leaving" ? (
           <p role="status" className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
             <LoaderCircle className="size-4 animate-spin" aria-hidden />
@@ -842,7 +844,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
  * The pre-join: the twin's portrait and the microphone, nothing else. Start asks for the mic (so the browser's prompt
  * comes from this click) and then starts the call; a blocked mic says how to fix it.
  */
-function ReadyToCall({ twinName, photoUrl, onStart }: { twinName: string; photoUrl: string | null; onStart: () => void }) {
+function ReadyToCall({ twinName, photoUrl, blocked, onStart }: { twinName: string; photoUrl: string | null; blocked?: string | null; onStart: () => void }) {
   const [mic, setMic] = useState<PermissionState | null>(null);
   const [problem, setProblem] = useState("");
   const [asking, setAsking] = useState(false);
@@ -874,7 +876,9 @@ function ReadyToCall({ twinName, photoUrl, onStart }: { twinName: string; photoU
     }
   }
 
-  const status = problem
+  const status = blocked
+    ? blocked
+    : problem
     ? problem
     : mic === "granted"
       ? "Microphone ready"
@@ -886,12 +890,12 @@ function ReadyToCall({ twinName, photoUrl, onStart }: { twinName: string; photoU
       <TwinPortrait name={twinName} photoUrl={photoUrl} className={cn("size-[min(320px,34dvh)] rounded-stage text-8xl", SOFT_SHADOW)} />
       <div className="flex max-w-sm flex-col items-center gap-2 text-center">
         <p className="m-0 text-sm text-muted-foreground">Talk to {twinName} like a learner would, and rate each answer.</p>
-        <p role="status" className={cn("m-0 flex items-center gap-1.5 text-body-s", problem || mic === "denied" ? "text-destructive" : "text-muted-foreground")}>
+        <p role="status" className={cn("m-0 flex items-center gap-1.5 text-body-s", blocked || problem || mic === "denied" ? "text-destructive" : "text-muted-foreground")}>
           <Mic className="size-4 shrink-0" aria-hidden />
           {status}
         </p>
       </div>
-      <Button variant="brand" size="lg" onClick={() => void begin()} disabled={asking}>
+      <Button variant="brand" size="lg" onClick={() => void begin()} disabled={asking || Boolean(blocked)}>
         {asking ? "Starting…" : "Start calibration"}
       </Button>
     </div>

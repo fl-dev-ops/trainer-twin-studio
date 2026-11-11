@@ -8,6 +8,7 @@ import { assignablePeople } from "@/lib/learners";
 import { LEARNER_ROLE } from "@/lib/org";
 import { LEARNER, orgPeople, orgPerson } from "@/lib/org-people";
 import { AppError, refusals } from "@/lib/errors";
+import { practicePerson, startAllowance } from "@/lib/practice";
 import { learnerMinutes, MAX_LEARNER_MINUTES } from "@/lib/minutes";
 import { studioProcedure, t } from "@/lib/trpc";
 import { runTwinAssign } from "@/lib/workflow-runs";
@@ -522,10 +523,18 @@ const calibrationsRouter = t.router({
       db.agent.findUniqueOrThrow({ where: { id: found.id }, select: { persona: personaFace } }),
       orgAdmin(ctx.user.orgId),
     ]);
+    // The practice check Start runs (specs/practice.md rules 1, 12): the calibrate page shows its refusal instead of Start.
+    const blocked = await practicePerson(ctx.user.orgId, ctx.user.id)
+      .then((person) => startAllowance(ctx.user.orgId, person))
+      .then(() => null, (error: unknown) => {
+        if (error instanceof AppError) return error.message;
+        throw error;
+      });
     return {
       name: found.name,
       face: { person: admin, avatarUrl: aiAvatarUrl(persona.persona) },
       calibrations: rows.map((row) => omitRatings(row)),
+      blocked,
     };
   })),
 
