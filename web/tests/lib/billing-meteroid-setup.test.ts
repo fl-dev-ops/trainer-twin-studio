@@ -15,6 +15,7 @@ test("billing setup never overwrites an invoicing entity already filled in Meter
   expect(result.stdout).toContain(`ok: invoicing entity filled in (${seller.name}, GSTIN ${seller.gstin}); edit it in Meteroid`);
   expect(result.stderr).toContain("/GetInvoicingEntity");
   expect(result.stderr).not.toContain("/UpdateInvoicingEntity");
+  expect(result.stderr).not.toContain("/plans");
 });
 
 test("billing setup fills an invoicing entity whose GSTIN is missing", async () => {

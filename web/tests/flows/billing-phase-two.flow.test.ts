@@ -1,5 +1,5 @@
 import "./flow-env";
-import { afterAll, afterEach, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
+import { afterAll, afterEach, beforeEach, describe, expect, mock, setSystemTime, spyOn, test } from "bun:test";
 import { createHmac, randomUUID } from "node:crypto";
 import { http, HttpResponse } from "msw";
 import { PDFDocument } from "pdf-lib";
@@ -7,12 +7,31 @@ import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "../lib/
 import { fundOrg, grantRequests } from "../setup/meteroid";
 import { outsideServices } from "./harness";
 import { seller, sellerReply } from "../setup/billing-meteroid-fixture";
-import { billingOverview, buyPacks, checkAllBilling, invoiceIssuedEmail, invoiceOverdue, invoicePaid, invoiceReminder, paidSubscriptionEnded, recordInvoice, requestUpgrade, saveBillingDetails, startInvoiceWorkflows, syncInvoice, syncOrgInvoices } from "@/lib/billing/billing";
+import { billingOverview, buyPacks, checkAllBilling, invoiceIssuedEmail, invoiceOverdue, invoicePaid, invoiceReminder, paidSubscriptionEnded, recordInvoice, invoicePdf, invoicePdfFor, receiptPdfFor, saveBillingDetails, startInvoiceWorkflows, syncInvoice, syncOrgInvoices } from "@/lib/billing/billing";
 import { toInvoice } from "@/lib/billing/meteroid";
+import * as billingMeteroid from "@/lib/billing/meteroid";
 import { ensurePaymentLink } from "@/lib/billing/razorpay";
 import { grantMinutes, giveStartingMinutes, grantMinutesToMany, learnerBalance } from "@/lib/minutes";
 import { activateSession } from "@/lib/interview-sessions";
 import { POST } from "@/app/api/meteroid/webhook/route";
+
+const realS3 = await import("@/lib/s3");
+const keptObjects = new Map<string, Buffer>();
+const puts: { key: string; contentType: string }[] = [];
+const gets: string[] = [];
+mock.module("@/lib/s3", () => ({
+  ...realS3,
+  s3Configured: true,
+  putObject: async (key: string, body: Uint8Array, contentType: string) => {
+    puts.push({ key, contentType }); keptObjects.set(key, Buffer.from(body));
+  },
+  getObjectBytes: async (key: string) => {
+    gets.push(key);
+    const bytes = keptObjects.get(key);
+    if (!bytes) throw new Error(`Missing kept PDF: ${key}`);
+    return new Uint8Array(bytes);
+  },
+}));
 
 const originalGrpcUrl = process.env.METEROID_GRPC_URL;
 const razorpayKeys = ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"] as const;
@@ -88,18 +107,12 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
     setSystemTime(new Date("2026-11-01T12:00:00Z")); process.env.METEROID_GRPC_URL = "https://meteroid-grpc.test";
     // These lifecycle tests deliberately exercise missing-key failures, never real Razorpay requests.
     for (const key of razorpayKeys) delete process.env[key];
-    starts.length = requests.length = syncs.length = 0; invoices.clear(); sent.clear(); topups.clear(); runSteps = true; failStart = grpcPaidRace = false;
+    starts.length = requests.length = syncs.length = 0; invoices.clear(); sent.clear(); topups.clear(); keptObjects.clear(); puts.length = gets.length = 0; runSteps = true; failStart = grpcPaidRace = false;
     outside.start(); f = minutesFixture(); await f.create(); await fundOrg({ orgId: f.org.id, minutes: 100 });
     outside.use(
       http.post("https://meteroid-grpc.test/meteroid.api.invoicingentities.v1.InvoicingEntitiesService/GetInvoicingEntity", () => new HttpResponse(sellerReply())),
       http.patch("https://meteroid.test/api/v1/customers/:id", async ({ request, params }) => { requests.push({ method: "PATCH", path: `/customers/${params.id}`, key: request.headers.get("idempotency-key"), body: await request.json() as Raw }); return HttpResponse.json({ id: params.id }); }),
-      http.get("https://meteroid.test/api/v1/plans", () => HttpResponse.json({ data: [{ id: "paid-plan", name: "Paid", status: "ACTIVE" }] })),
-      http.get("https://meteroid.test/api/v1/plans/paid-plan", () => HttpResponse.json({ id: "paid-plan", price_components: [{ id: "price", name: "Monthly" }] })),
-      http.post("https://meteroid.test/api/v1/subscriptions", async ({ request }) => {
-        requests.push({ method: "POST", path: "/subscriptions", key: request.headers.get("idempotency-key"), body: await request.json() as Raw });
-        add(upgrade()); return HttpResponse.json({ id: subscription(), status: "ACTIVE" });
-      }),
-      http.get("https://meteroid.test/api/v1/subscriptions/:id", ({ params }) => HttpResponse.json({ id: params.id, status: "ACTIVE", plan_name: "Paid", customer_id: customer() })),
+      http.get("https://meteroid.test/api/v1/subscriptions/:id", ({ params }) => HttpResponse.json({ id: params.id, status: "ACTIVE", plan_name: "Olga – $300/month", customer_id: customer() })),
       http.post("https://meteroid.test/api/v1/subscriptions/:id/cancel", async ({ params, request }) => { requests.push({ method: "POST", path: `/subscriptions/${params.id}/cancel`, key: null, body: await request.json() as Raw }); return HttpResponse.json({ status: "CANCELLED" }); }),
       http.get("https://meteroid.test/api/v1/invoices", ({ request }) => HttpResponse.json({ data: [...invoices.values()].filter((i) => i.customer_id === new URL(request.url).searchParams.get("customer_id")) })),
       http.get("https://meteroid.test/api/v1/invoices/:id", ({ params }) => invoices.has(String(params.id)) ? HttpResponse.json(invoices.get(String(params.id))!) : HttpResponse.json({ error: "not found" }, { status: 404 })),
@@ -134,12 +147,11 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
   test("rules 1–3: billed org starts Trial, never expires or receives plan credits; rule 26 cached overview survives Meteroid down", async () => {
     expect(await billing()).toMatchObject({ plan: "trial", paidSubscriptionId: null, pausedAt: null });
     outside.use(http.all("https://meteroid.test/*", () => new HttpResponse(null, { status: 503 })));
-    expect(await billingOverview(f.org.id)).toMatchObject({ billed: true, plan: "trial", monthlyCents: 30000, invoices: [] });
+    expect(await billingOverview(f.org.id)).toMatchObject({ billed: true, plan: "trial", planCents: null, invoices: [] });
     expect(await billingOverview("not-billed")).toEqual({ billed: false });
     expect(await db.minuteLedger.count({ where: { orgId: f.org.id } })).toBe(0);
   });
   test("rules 6, 8, 26: saving validates, patches first; Meteroid down changes nothing", async () => {
-    await expect(requestUpgrade(f.org.id)).rejects.toMatchObject({ status: 400 });
     await expect(buyPacks(f.org.id, 1, randomUUID())).rejects.toMatchObject({ status: 400 });
     await expect(saveBillingDetails(f.org.id, { ...details, state: undefined })).rejects.toMatchObject({ status: 400, message: "state: Choose the state" });
     await expect(saveBillingDetails(f.org.id, { ...details, hacker: 1 })).rejects.toMatchObject({ status: 400 });
@@ -152,13 +164,14 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
     await expect(saveBillingDetails(f.org.id, { ...details, legalName: "Changed" })).rejects.toMatchObject({ status: 502, message: expect.stringContaining("try again") });
     expect((await billing()).billingDetails).toEqual(details);
   });
-  test("rules 10, 13, 21, 24: repeated upgrade/webhook creates one subscription, kind upgrade and one workflow/email", async () => {
+  test.each(["webhook", "daily"] as const)("rules 10, 13, 21, 24–25: staff subscription adopted via %s; retries send one workflow/email", async (via) => {
     await saveBillingDetails(f.org.id, details);
-    expect(await requestUpgrade(f.org.id)).toEqual({ subscriptionId: subscription(), created: true, payUrl: null });
-    expect(await requestUpgrade(f.org.id)).toEqual({ subscriptionId: subscription(), created: false, payUrl: null });
-    await webhook("invoice.finalized", { invoice_id: upgrade() }); await webhook("invoice.finalized", { invoice_id: upgrade() });
-    expect(requests.filter((r) => r.path === "/subscriptions")).toHaveLength(1);
-    expect(requests.find((r) => r.path === "/subscriptions")!.key).toBe(`paid-subscription-${f.org.id}-${new Date().toISOString().slice(0, 10)}-0`);
+    add(upgrade());
+    for (let retry = 0; retry < 2; retry++) {
+      if (via === "webhook") expect((await webhook("invoice.finalized", { invoice_id: upgrade() })).status).toBe(200);
+      else expect(await syncOrgInvoices(f.org.id)).toEqual({ invoices: 1, repaired: 0 });
+    }
+    expect(requests.filter((r) => r.path === "/subscriptions")).toEqual([]);
     expect(await billing()).toMatchObject({ plan: "trial", paidSubscriptionId: subscription(), pausedAt: null });
     expect(await row(upgrade())).toMatchObject({ kind: "upgrade", status: "unpaid", currency: "USD", issuedRunAt: expect.any(Date), issuedEmailAt: expect.any(Date) });
     expect(starts).toEqual([{ name: "invoiceIssued", id: upgrade() }]);
@@ -169,21 +182,20 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
     expect(email.text).not.toMatch(/bank|SWIFT|IFSC|How to pay|Pay online:|Pay .* now/i);
     expect(await db.minuteLedger.count({ where: { orgId: f.org.id } })).toBe(0);
   });
-  test("rules 11, 21, 22: upgrade paid activates Paid, sends receipt and invoice exactly once; paid org cannot upgrade", async () => {
-    await plan("trial"); await requestUpgrade(f.org.id); paid(upgrade());
+  test("rules 11, 21, 22: upgrade paid activates Paid, sends receipt and invoice exactly once", async () => {
+    await plan("trial"); add(upgrade()); await syncInvoice(upgrade()); paid(upgrade());
     await webhook("invoice.paid", { invoice_id: upgrade() }); await webhook("invoice.paid", { invoice_id: upgrade() });
     expect(await billing()).toMatchObject({ plan: "paid", paidSubscriptionId: subscription() });
     await expectAppPdfs(sent.get(`billing-paid-${upgrade()}`), [`RCPT-INV-${upgrade()}.pdf`, `INV-${upgrade()}.pdf`]);
     expect(sent.get(`billing-paid-${upgrade()}`)?.text).toContain("now on the Paid plan");
     expect(starts.filter((s) => s.name === "invoicePaid")).toHaveLength(1);
-    await expect(requestUpgrade(f.org.id)).rejects.toMatchObject({ status: 409 });
     const invoicesForOrg = await db.billingInvoice.findMany({ where: { orgId: f.org.id } });
     // The spec's Checks after this lifecycle: paid subscription, positive linked rows and completed email marks.
     expect(invoicesForOrg.every((i) => i.totalCents > 0 && i.orgId === f.org.id && i.issuedEmailAt && (i.status !== "paid" || i.paidEmailAt))).toBe(true);
     expect(await db.minuteLedger.count({ where: { orgId: f.org.id } })).toBe(0);
   });
-  test("rule 12: overdue upgrade voids by gRPC, cancels Paid sub and remains Trial, upgrade can be requested again", async () => {
-    await plan("trial"); await requestUpgrade(f.org.id);
+  test("rule 12: overdue upgrade voids by gRPC, cancels Paid sub and remains Trial, staff can subscribe again", async () => {
+    await plan("trial"); add(upgrade()); await syncInvoice(upgrade());
     expect(await invoiceOverdue(upgrade(), new Date("2026-11-03T23:59:59Z"))).toEqual({ action: "none", status: "unpaid" });
     expect(await invoiceOverdue(upgrade(), new Date("2026-11-04"))).toEqual({ action: "upgrade_cancelled" });
     expect(await billing()).toMatchObject({ plan: "trial", paidSubscriptionId: null, pausedAt: null });
@@ -193,17 +205,19 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
     await invoiceOverdue(upgrade(), new Date("2026-11-05"));
     expect([...sent.keys()].filter((k) => k.startsWith("billing-upgrade_cancelled"))).toHaveLength(1);
     expect(sent.get(`billing-upgrade_cancelled-${upgrade()}`)?.attachments).toBeUndefined();
-    await requestUpgrade(f.org.id);
-    expect(requests.filter((r) => r.path === "/subscriptions").at(-1)!.key).toEndWith("-1");
+    const next = `next-${subscription()}`;
+    add(`next-${upgrade()}`, { subscription_id: next });
+    await webhook("invoice.finalized", { invoice_id: `next-${upgrade()}` });
+    expect((await billing()).paidSubscriptionId).toBe(next);
   });
   test.each([
     ["cancel", "step"], ["cancel", "daily"], ["email", "step"], ["email", "daily"],
   ] as const)("rule 12: overdue upgrade resumes after %s failure via %s, even when Meteroid shows VOID", async (failure, retry) => {
-    await plan("trial"); await requestUpgrade(f.org.id);
+    await plan("trial"); add(upgrade()); await syncInvoice(upgrade());
     const now = new Date("2026-11-04");
     let cancelAttempts = 0, emailAttempts = 0, status = "ACTIVE";
     outside.use(
-      http.get("https://meteroid.test/api/v1/subscriptions/:id", ({ params }) => HttpResponse.json({ id: params.id, status, plan_name: "Paid", customer_id: customer() })),
+      http.get("https://meteroid.test/api/v1/subscriptions/:id", ({ params }) => HttpResponse.json({ id: params.id, status, plan_name: "Olga – $300/month", customer_id: customer() })),
       http.post("https://meteroid.test/api/v1/subscriptions/:id/cancel", () => {
         cancelAttempts++;
         if (failure === "cancel" && cancelAttempts === 1) return HttpResponse.json({ error: "cancel unavailable" }, { status: 500 });
@@ -247,10 +261,14 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
     expect(sent.get(`billing-paid-${id}`)?.text).toContain("plan is active");
     expect(sent.has(`billing-paused-${id}`)).toBe(false);
   });
-  test.each(["ACTIVE", "PENDING_ACTIVATION", "PENDING_CHARGE", "CANCELLED"])("kindOf adopts only a live Paid subscription (%s)", async (status) => {
+  test.each([
+    ["ACTIVE", "webhook"], ["PENDING_ACTIVATION", "webhook"], ["PENDING_CHARGE", "webhook"], ["CANCELLED", "webhook"],
+    ["ACTIVE", "daily"], ["PENDING_ACTIVATION", "daily"], ["PENDING_CHARGE", "daily"], ["CANCELLED", "daily"],
+  ] as const)("kindOf adopts only a live custom non-Credits subscription (%s via %s)", async (status, via) => {
     await plan("trial"); const id = `adopt-${f.org.id}`; add(id);
-    outside.use(http.get("https://meteroid.test/api/v1/subscriptions/:id", ({ params }) => HttpResponse.json({ id: params.id, status, plan_name: "Paid", customer_id: customer() })));
-    await syncInvoice(id);
+    outside.use(http.get("https://meteroid.test/api/v1/subscriptions/:id", ({ params }) => HttpResponse.json({ id: params.id, status, plan_name: "Olga – $300/month", customer_id: customer() })));
+    if (via === "webhook") await webhook("invoice.finalized", { invoice_id: id });
+    else await syncOrgInvoices(f.org.id);
     const live = status !== "CANCELLED";
     expect((await row(id)).kind).toBe(live ? "upgrade" : "other");
     expect((await billing()).paidSubscriptionId).toBe(live ? subscription() : null);
@@ -258,39 +276,103 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
     expect((await billing()).plan).toBe(live ? "paid" : "trial");
   });
   test.each(["ACTIVE", "CANCELLED"])("rule 11: known upgrade paid after losing its subscription id adopts only %s if live", async (status) => {
-    await plan("trial"); await requestUpgrade(f.org.id);
+    await plan("trial"); add(upgrade()); await syncInvoice(upgrade());
     expect((await row(upgrade())).kind).toBe("upgrade");
     await webhook("subscription.cancelled", { subscription_id: subscription() });
-    outside.use(http.get("https://meteroid.test/api/v1/subscriptions/:id", ({ params }) => HttpResponse.json({ id: params.id, status, plan_name: "Paid", customer_id: customer() })));
+    outside.use(http.get("https://meteroid.test/api/v1/subscriptions/:id", ({ params }) => HttpResponse.json({ id: params.id, status, plan_name: "Olga – $300/month", customer_id: customer() })));
     paid(upgrade()); await invoicePaid(upgrade());
     expect(await billing()).toMatchObject({ plan: status === "ACTIVE" ? "paid" : "trial", paidSubscriptionId: status === "ACTIVE" ? subscription() : null, pausedAt: null });
     expect(sent.get(`billing-paid-${upgrade()}`)?.text).toContain(status === "ACTIVE" ? "now on the Paid plan" : "We'll be in touch about your plan");
   });
-  test("rule 10: staff cancelled pending upgrade gets a new subscription and same-day attempt key", async () => {
-    await plan("trial"); await requestUpgrade(f.org.id);
+  test("rule 10: staff cancels pending upgrade then creates a different subscription; webhook adopts it", async () => {
+    await plan("trial"); add(upgrade()); await syncInvoice(upgrade());
     await webhook("subscription.cancelled", { subscription_id: subscription() });
     expect(await billing()).toMatchObject({ plan: "trial", paidSubscriptionId: null });
     expect((await row(upgrade())).status).toBe("unpaid");
     const next = `next-${subscription()}`;
-    outside.use(http.post("https://meteroid.test/api/v1/subscriptions", async ({ request }) => {
-      requests.push({ method: "POST", path: "/subscriptions", key: request.headers.get("idempotency-key"), body: await request.json() as Raw });
-      add(`next-${upgrade()}`, { subscription_id: next });
-      return HttpResponse.json({ id: next, status: "ACTIVE" });
-    }));
-    expect(await requestUpgrade(f.org.id)).toEqual({ subscriptionId: next, created: true, payUrl: null });
-    expect(await requestUpgrade(f.org.id)).toEqual({ subscriptionId: next, created: false, payUrl: null });
-    expect(requests.filter((r) => r.path === "/subscriptions").map((r) => r.key)).toEqual([
-      `paid-subscription-${f.org.id}-2026-11-01-0`, `paid-subscription-${f.org.id}-2026-11-01-1`,
-    ]);
+    add(`next-${upgrade()}`, { subscription_id: next });
+    await webhook("invoice.finalized", { invoice_id: `next-${upgrade()}` });
+    await webhook("invoice.finalized", { invoice_id: `next-${upgrade()}` });
+    expect((await row(`next-${upgrade()}`)).kind).toBe("upgrade");
     expect((await billing()).paidSubscriptionId).toBe(next);
+    expect(requests.filter((r) => r.path === "/subscriptions")).toEqual([]);
+  });
+  test.each(["webhook", "daily"] as const)("rule 10: live Credits-plan invoice stays other via %s, even above $0", async (via) => {
+    await plan("trial"); const id = `credits-${f.org.id}`; add(id);
+    outside.use(http.get("https://meteroid.test/api/v1/subscriptions/:id", ({ params }) => HttpResponse.json({ id: params.id, status: "ACTIVE", plan_name: "Credits", customer_id: customer() })));
+    if (via === "webhook") await webhook("invoice.finalized", { invoice_id: id });
+    else await syncOrgInvoices(f.org.id);
+    expect((await row(id)).kind).toBe("other");
+    expect(await billing()).toMatchObject({ plan: "trial", paidSubscriptionId: null });
+    paid(id); await invoicePaid(id);
+    expect(await billing()).toMatchObject({ plan: "trial", paidSubscriptionId: null });
+    expect(await billingOverview(f.org.id)).toMatchObject({ planCents: null, upgradePending: false });
   });
   test("rule 12: payment wins a last-moment void race, never cancels subscription", async () => {
-    await plan("trial"); await requestUpgrade(f.org.id); grpcPaidRace = true;
+    await plan("trial"); add(upgrade()); await syncInvoice(upgrade()); grpcPaidRace = true;
     expect(await invoiceOverdue(upgrade(), new Date("2026-11-04"))).toEqual({ action: "none", status: "paid" });
     expect(requests.some((r) => r.path.endsWith("/cancel"))).toBe(false);
     expect((await billing()).paidSubscriptionId).toBe(subscription());
     expect(sent.has(`billing-upgrade_cancelled-${upgrade()}`)).toBe(false);
     await invoicePaid(upgrade()); expect((await billing()).plan).toBe("paid");
+  });
+  test("rule 22: invoice emails and downloads reuse first S3 PDF after Meteroid seller changes; key saved once", async () => {
+    await plan("paid"); const id = `kept-invoice-${f.org.id}`; add(id); await syncInvoice(id);
+    const first = sent.get(`billing-issued-${id}`)!.attachments![0].content;
+    const key = `${realS3.orgPrefix(f.org.id)}/billing/INV-${id}-${id}.pdf`;
+    expect((await row(id)).invoicePdfKey).toBe(key);
+    expect(puts).toEqual([{ key, contentType: "application/pdf" }]);
+    const sellerRead = spyOn(billingMeteroid, "sellerDetails").mockResolvedValue({ ...seller, name: "Changed seller after issue", lutArn: "NEW-ARN" });
+    try {
+      expect(await invoiceReminder(id, new Date("2026-11-02"))).toBe(true);
+      expect(sent.get(`billing-reminder-${id}`)!.attachments![0].content).toBe(first);
+      outside.use(http.get("https://meteroid.test/api/v1/invoices/:id", () => new HttpResponse(null, { status: 503 })));
+      expect((await invoicePdfFor(f.org.id, id)).toString("base64")).toBe(first);
+      expect(sellerRead).not.toHaveBeenCalled();
+      expect((await row(id)).invoicePdfKey).toBe(key);
+      expect(puts).toHaveLength(1); expect(gets).toEqual([key, key]);
+    } finally { sellerRead.mockRestore(); }
+  });
+  test("rule 22: concurrent first draws must not overwrite the first-sent invoice PDF", async () => {
+    await plan("paid"); runSteps = false;
+    const id = `concurrent-pdf-${f.org.id}`; add(id); await syncInvoice(id);
+    const snapshot = await row(id);
+    let releaseLater!: () => void;
+    const laterSeller = new Promise<void>((resolve) => { releaseLater = resolve; });
+    let reads = 0;
+    const sellerRead = spyOn(billingMeteroid, "sellerDetails").mockImplementation(async () => {
+      if (++reads === 1) return seller;
+      await laterSeller;
+      return { ...seller, name: "Seller edited during the second first draw" };
+    });
+    try {
+      // Both callers hold the same null-key snapshot, like two email events racing their first attachments.
+      const firstDraw = invoicePdf(snapshot);
+      const laterDraw = invoicePdf(snapshot);
+      const firstSent = await firstDraw;
+      expect((await row(id)).invoicePdfKey).not.toBeNull();
+      releaseLater(); await laterDraw;
+      const downloaded = await invoicePdfFor(f.org.id, id);
+      expect({
+        identical: downloaded.equals(firstSent),
+        puts: puts.length,
+      }).toEqual({ identical: true, puts: 1 });
+    } finally { releaseLater(); sellerRead.mockRestore(); }
+  });
+  test("rule 22: receipt is kept independently at RCPT key and downloaded unchanged after seller changes", async () => {
+    await plan("paid"); const id = `kept-receipt-${f.org.id}`; add(id); await syncInvoice(id); paid(id); await invoicePaid(id);
+    const first = sent.get(`billing-paid-${id}`)!.attachments![0].content;
+    const key = `${realS3.orgPrefix(f.org.id)}/billing/RCPT-INV-${id}-${id}.pdf`;
+    expect((await row(id)).receiptPdfKey).toBe(key);
+    expect(puts.filter((put) => put.key === key)).toEqual([{ key, contentType: "application/pdf" }]);
+    const sellerRead = spyOn(billingMeteroid, "sellerDetails").mockResolvedValue({ ...seller, name: "Changed seller after receipt" });
+    try {
+      outside.use(http.get("https://meteroid.test/api/v1/invoices/:id", () => new HttpResponse(null, { status: 503 })));
+      expect((await receiptPdfFor(f.org.id, id)).toString("base64")).toBe(first);
+      expect(sellerRead).not.toHaveBeenCalled();
+      expect((await row(id)).receiptPdfKey).toBe(key);
+      expect(puts).toHaveLength(2); expect(gets.at(-1)).toBe(key);
+    } finally { sellerRead.mockRestore(); }
   });
   test("rules 14–17: reminder once, overdue pause preserves credits, refuses grants and packs, payment unpauses", async () => {
     await plan("paid"); const id = `renewal-${f.org.id}`; add(id); await syncInvoice(id);
@@ -427,13 +509,10 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
     expect(await invoiceIssuedEmail(id)).toBe(true); expect(await invoiceIssuedEmail(id)).toBe(false);
     expect(keys).toEqual([`billing-issued-${id}`]); expect((await row(id)).issuedEmailAt).not.toBeNull();
   });
-  test("rule 26: upgrade/top-up Meteroid failures return 502 without local mutation", async () => {
-    await plan("trial"); const before = await billing();
-    outside.use(http.post("https://meteroid.test/api/v1/subscriptions", () => new HttpResponse(null, { status: 503 })));
-    await expect(requestUpgrade(f.org.id)).rejects.toMatchObject({ status: 502 }); expect(await billing()).toEqual(before);
-    await plan("paid"); const paidBefore = await billing();
+  test("rule 26: top-up Meteroid failure returns 502 without local mutation", async () => {
+    await plan("paid"); const before = await billing();
     outside.use(http.post("https://meteroid.test/api/v1/customers/:id/top-ups", () => HttpResponse.error()));
-    await expect(buyPacks(f.org.id, 1, randomUUID())).rejects.toMatchObject({ status: 502 }); expect(await billing()).toEqual(paidBefore);
+    await expect(buyPacks(f.org.id, 1, randomUUID())).rejects.toMatchObject({ status: 502 }); expect(await billing()).toEqual(before);
   });
   test("rule 21: missing billing emails fall back to the admin", async () => {
     await plan("paid", false); const id = `fallback-${f.org.id}`; add(id, { subscription_id: null, invoice_type: "ONE_OFF" }); await syncInvoice(id);
@@ -469,7 +548,7 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
     expect(await syncOrgInvoices(f.org.id, new Date("2026-11-04"))).toEqual({ invoices: 1, repaired: 1 });
     expect((await billing()).pausedAt).not.toBeNull(); expect((await row(id)).issuedEmailAt).not.toBeNull();
     const other = minutesFixture(); extra.push(other); await other.create(); await fundOrg({ orgId: other.org.id, minutes: 0 });
-    await db.orgBilling.update({ where: { orgId: other.org.id }, data: { billingDetails: details, paidSubscriptionId: `paid-${other.org.id}` } });
+    await db.orgBilling.update({ where: { orgId: other.org.id }, data: { billingDetails: details } });
     add(`paid-repair-${other.org.id}`, { customer_id: `customer_${other.org.id}`, subscription_id: `paid-${other.org.id}`, payment_status: "PAID", paid_at: "2026-11-03T12:00:00Z" });
     outside.use(http.get("https://meteroid.test/api/v1/invoices", ({ request }) => new URL(request.url).searchParams.get("customer_id") === customer() ? new HttpResponse(null, { status: 503 }) : HttpResponse.json({ data: [...invoices.values()].filter((i) => i.customer_id === new URL(request.url).searchParams.get("customer_id")) })));
     const results = await checkAllBilling(new Date("2026-11-04"));
@@ -487,7 +566,7 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
   });
   test("rule 18 / 25: daily check catches lost cancellation webhook and returns paused Paid org to Trial", async () => {
     await plan("paid"); await db.orgBilling.update({ where: { orgId: f.org.id }, data: { pausedAt: new Date() } });
-    outside.use(http.get("https://meteroid.test/api/v1/subscriptions/:id", ({ params }) => HttpResponse.json({ id: params.id, status: "CANCELLED", plan_name: "Paid", customer_id: customer() })));
+    outside.use(http.get("https://meteroid.test/api/v1/subscriptions/:id", ({ params }) => HttpResponse.json({ id: params.id, status: "CANCELLED", plan_name: "Olga – $300/month", customer_id: customer() })));
     const result = await syncOrgInvoices(f.org.id, new Date("2026-11-04"));
     expect(result.invoices).toBe(0); expect(result.repaired).toBeGreaterThanOrEqual(1);
     expect(await billing()).toMatchObject({ plan: "trial", paidSubscriptionId: null, pausedAt: null });

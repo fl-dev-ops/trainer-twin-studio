@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, spyOn, test } from "bun:test";
 import { setupServer } from "msw/node";
 import { http, HttpResponse } from "msw";
-import { createPackInvoice, createPaidSubscription, decodeProto, encodeProto, getInvoiceRaw, meteroidGrpc, sellerDetails, toInvoice } from "@/lib/billing/meteroid";
+import { createPackInvoice, defaultInvoicingEntity, decodeProto, encodeProto, getInvoiceRaw, lutArnOf, meteroidGrpc, sellerDetails, toInvoice } from "@/lib/billing/meteroid";
 import { grpcReply, seller, sellerReply } from "../setup/billing-meteroid-fixture";
 
 const grpc = process.env.METEROID_GRPC_URL;
@@ -109,20 +109,21 @@ test.each([404, 503])("raw invoice HTTP %s failure propagates instead of returni
   server.use(http.get("https://meteroid.test/api/v1/invoices/inv-1", () => new HttpResponse(null, { status })));
   await expect(getInvoiceRaw("inv-1")).rejects.toMatchObject({ name: "MeteroidError", status });
 });
-test.each([null, 12345])("rule 10: subscription starts today, manual collection, two-day terms, optional custom monthly price %s", async (monthlyCents) => {
-  server.use(
-    http.get("https://meteroid.test/api/v1/plans", () => HttpResponse.json({ data: [{ id: "old", name: "Paid", status: "ARCHIVED" }, { id: "paid", name: "Paid", status: "ACTIVE" }] })),
-    http.get("https://meteroid.test/api/v1/plans/paid", () => HttpResponse.json({ id: "paid", price_components: [{ id: "price", name: "Monthly" }] })),
-    http.post("https://meteroid.test/api/v1/subscriptions", async ({ request }) => {
-      expect(request.headers.get("idempotency-key")).toBe("paid-subscription-org-2026-11-01-2");
-      const body = await request.json() as Record<string, unknown>;
-      expect(body).toMatchObject({ customer_id_or_alias: "customer", plan_id: "paid", start_date: "2026-11-01", activation_condition: "ON_START", charge_automatically: false, net_terms: 2 });
-      if (monthlyCents) expect(body.price_components).toEqual({ overridden_components: [{ component_id: "price", name: "Monthly", price_entry: { type: "NEW", cadence: "MONTHLY", currency: "USD", pricing: { type: "RATE", rate: "123.45" } } }] });
-      else expect(body).not.toHaveProperty("price_components");
-      return HttpResponse.json({ subscription: { id: "sub", status: "PENDING_ACTIVATION" } });
-    }),
-  );
-  expect(await createPaidSubscription({ orgId: "org", customerId: "customer", today: "2026-11-01", attempt: 2, monthlyCents })).toEqual({ id: "sub", status: "PENDING_ACTIVATION" });
+test.each([
+  ["AD330000000000X", "AD330000000000X"],
+  ["  AD330000000000X  ", "AD330000000000X"],
+  ["LUT ARN: AD330000000000X", "AD330000000000X"],
+  ["Export of services under LUT. arn # AD330000000000X (2026–27)", "AD330000000000X"],
+  ["ARN-AD330000000000X", "AD330000000000X"],
+  ["ARN AD330000000000X", "AD330000000000X"],
+  ["", ""], ["   ", ""],
+] as const)("rule 9: lutArnOf(%j) is %j", (footer, expected) => {
+  expect(lutArnOf(footer)).toBe(expected);
+});
+test.each(["LUT ARN: AD330000000000X", ""])("rule 9: invoicing entity reads LUT ARN from legal footer protobuf field 11 (%j)", async (footer) => {
+  server.use(http.post("https://meteroid-grpc.test/meteroid.api.invoicingentities.v1.InvoicingEntitiesService/GetInvoicingEntity", () =>
+    new HttpResponse(sellerReply({ ...seller, lutArn: footer }))));
+  expect(await defaultInvoicingEntity()).toEqual({ id: "entity-default", ...seller, lutArn: footer ? "AD330000000000X" : "" });
 });
 test("rules 19–20: top-up requests an invoice, never marks paid or grants credits itself", async () => {
   server.use(http.post("https://meteroid.test/api/v1/customers/customer/top-ups", async ({ request }) => {

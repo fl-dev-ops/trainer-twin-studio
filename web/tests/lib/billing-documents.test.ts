@@ -1,6 +1,7 @@
 import { expect, setSystemTime, test } from "bun:test";
 import { decodePDFRawStream, PDFArray, PDFDocument, PDFRawStream } from "pdf-lib";
 import { billingDocument, money, receiptNumber, renderInvoice, renderReceipt, SAC } from "@/lib/billing/documents";
+import { EXPORT_DECLARATION } from "@/lib/billing/details";
 import type { RawInvoice } from "@/lib/billing/meteroid";
 import { seller } from "../setup/billing-meteroid-fixture";
 
@@ -28,8 +29,8 @@ async function pdfText(bytes: Buffer) {
   expect(pdf.getPageCount()).toBe(1);
   const contents = pdf.getPage(0).node.Contents() as PDFArray;
   const draws = Array.from({ length: contents.size() }, (_, i) => Buffer.from(decodePDFRawStream(contents.lookup(i, PDFRawStream)).decode()).toString()).join("\n");
-  // Helvetica's WinAnsi euro, en dash and middle dot are enough for these fixtures.
-  const text = draws.match(/<([0-9A-F]+)> Tj/g)?.map((draw) => Buffer.from(draw.slice(1, draw.indexOf(">")), "hex").toString("latin1").replace(/\x80/g, "€").replace(/\x96/g, "–")).join("\n") ?? "";
+  // Decode the WinAnsi punctuation used by these fixtures (including the Meteroid footer placeholder).
+  const text = draws.match(/<([0-9A-F]+)> Tj/g)?.map((draw) => Buffer.from(draw.slice(1, draw.indexOf(">")), "hex").toString("latin1").replace(/\x80/g, "€").replace(/\x96/g, "–").replace(/\x9b/g, "›")).join("\n") ?? "";
   return { pdf, text };
 }
 
@@ -57,21 +58,31 @@ test("rule 22: Karnataka invoice uses IGST 18%, the issued GSTIN and place of su
   expect(doc.buyer).toMatchObject({ lines: ["10 School Street", "Suite 1", "Bengaluru 560001", "Karnataka (29)", "India"], taxLabel: "GSTIN", taxId: "29ABCDE1234F1Z5" });
 });
 
-test("rule 22: export has no tax rows, carries the LUT mention, outside-India place of supply and Tax ID", async () => {
-  const exemption = "Supply meant for export under LUT (LUT-2026) without payment of IGST";
-  const doc = document({
+test.each([seller.lutArn, ""])("rule 22: export PDFs carry declaration and LUT ARN or staff placeholder (%j)", async (arn) => {
+  const exemption = [EXPORT_DECLARATION, `LUT ARN: ${arn || "(to be added in Meteroid › Invoicing entity › legal footer)"}`];
+  const doc = billingDocument({
+    ...raw,
     customer_details: { name: "Euro Coaching", email: "billing@euro.example", vat_number: "DE123456789", billing_address: { line1: "10 Street", line2: "Suite 2", city: "Berlin", zip_code: "10115", state: null, country: "DE" } },
     subtotal: 30000, tax_amount: 0,
-    tax_breakdown: [{ name: "Export", tax_rate: "0.0000", tax_amount: 0, exemption_type: "EXEMPT", exemption_reason: exemption }],
-  });
+    tax_breakdown: [{ name: "Export", tax_rate: "0.0000", tax_amount: 0, exemption_type: "EXEMPT", exemption_reason: "Old customer exemption wording" }],
+  }, "Fallback Org", { ...seller, lutArn: arn });
   expect(doc).toMatchObject({ taxes: [], exemption, placeOfSupply: "Outside India (export of services)", buyer: { taxLabel: "Tax ID", taxId: "DE123456789", lines: ["10 Street", "Suite 2", "Berlin 10115", "Germany"] } });
   for (const bytes of [await renderInvoice(doc), await renderReceipt(doc, paidAt)]) {
     const { text } = await pdfText(bytes);
     expect(text).toContain("Tax ID DE123456789");
     expect(text).toContain("Outside India (export of services)");
-    expect(text.replace(/\n/g, " ")).toContain(exemption);
+    for (const line of exemption) expect(text.replace(/\n/g, " ")).toContain(line);
+    expect(text).not.toContain("Old customer exemption wording");
     expect(text).not.toContain("IGST 18%");
   }
+});
+test("rule 9: export without a tax breakdown still carries the declaration and Meteroid seller ARN", () => {
+  expect(document({ customer_details: { ...customer, billing_address: { country: "US" } }, tax_breakdown: [] }).exemption)
+    .toEqual([EXPORT_DECLARATION, `LUT ARN: ${seller.lutArn}`]);
+});
+test("rule 22: other exempt invoices preserve Meteroid's exemption reason as a line", () => {
+  expect(document({ tax_breakdown: [{ name: "GST", tax_rate: "0", tax_amount: 0, exemption_type: "EXEMPT", exemption_reason: "Exempt by Meteroid" }] }).exemption)
+    .toEqual(["Exempt by Meteroid"]);
 });
 
 test("rule 22: Paid-plan detail has SAC and 11 Nov – 10 Dec 2026 (end date exclusive)", () => {

@@ -6,7 +6,7 @@ import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "../lib/
 import { fundOrg, availableOrgSeconds } from "../setup/meteroid";
 import { outsideServices, razorpayWebhook } from "./harness";
 import { sellerReply } from "../setup/billing-meteroid-fixture";
-import { billingOverview, buyPacks, invoiceIssuedEmail, invoiceOverdue, invoicePaid, invoiceVoided, requestUpgrade, saveBillingDetails, syncInvoice, syncOrgInvoices } from "@/lib/billing/billing";
+import { billingOverview, buyPacks, invoiceIssuedEmail, invoiceOverdue, invoicePaid, invoiceVoided, saveBillingDetails, syncInvoice, syncOrgInvoices } from "@/lib/billing/billing";
 import { closePaymentLink, ensurePaymentLink, reconcilePaymentLink } from "@/lib/billing/razorpay";
 import { billingRouter } from "@/lib/billing/trpc";
 import { createPaymentLinkPurchase, linkInvoicePurchase } from "@/lib/credit-purchases";
@@ -60,10 +60,7 @@ describe.skipIf(!localMinutesDb)("billing Razorpay phase 3 (real DB; MSW Meteroi
     outside.use(
       http.post("https://meteroid-grpc.test/meteroid.api.invoicingentities.v1.InvoicingEntitiesService/GetInvoicingEntity", () => new HttpResponse(sellerReply())),
       http.patch("https://meteroid.test/api/v1/customers/:id", async ({ request }) => { patches.push(await request.json() as Raw); return HttpResponse.json({}); }),
-      http.get("https://meteroid.test/api/v1/plans", () => HttpResponse.json({ data: [{ id: "paid-plan", name: "Paid", status: "ACTIVE" }] })),
-      http.get("https://meteroid.test/api/v1/plans/paid-plan", () => HttpResponse.json({ id: "paid-plan", price_components: [{ id: "price", name: "Monthly" }] })),
-      http.post("https://meteroid.test/api/v1/subscriptions", () => { add(id(), { subscription_id: sub() }); return HttpResponse.json({ id: sub(), status: "ACTIVE" }); }),
-      http.get("https://meteroid.test/api/v1/subscriptions/:id", ({ params }) => HttpResponse.json({ id: params.id, status: "ACTIVE", plan_name: "Paid", customer_id: `customer_${f.org.id}` })),
+      http.get("https://meteroid.test/api/v1/subscriptions/:id", ({ params }) => HttpResponse.json({ id: params.id, status: "ACTIVE", plan_name: "Olga – $300/month", customer_id: `customer_${f.org.id}` })),
       http.post("https://meteroid.test/api/v1/subscriptions/:id/cancel", () => HttpResponse.json({ status: "CANCELLED" })),
       http.post("https://meteroid.test/api/v1/customers/:id/top-ups", () => { add(id(), { invoice_type: "ONE_OFF", total: 2500, subtotal: 2500, line_items: [{ name: "Purchase credits", quantity: "100", unit_price: "0.25" }] }); return HttpResponse.json({ invoice_id: id() }); }),
       http.get("https://meteroid.test/api/v1/invoices", () => HttpResponse.json({ data: [...invoices.values()] })),
@@ -122,11 +119,11 @@ describe.skipIf(!localMinutesDb)("billing Razorpay phase 3 (real DB; MSW Meteroi
     for (const content of [email.text, email.html]) expect(content).not.toMatch(/Pay online:|Pay .* now/);
     expect(creates).toEqual([]);
   });
-  test.each(["upgrade", "buy"])("missing Razorpay keys: %s returns payUrl null and sends its invoice", async (operation) => {
+  test.each(["upgrade", "buy"])("missing Razorpay keys: %s has no payUrl and sends its invoice", async (operation) => {
     delete process.env.RAZORPAY_KEY_ID; delete process.env.RAZORPAY_KEY_SECRET;
     if (operation === "buy") await db.orgBilling.update({ where: { orgId: f.org.id }, data: { plan: "paid", paidSubscriptionId: sub() } });
-    const result = operation === "upgrade" ? await requestUpgrade(f.org.id) : await buyPacks(f.org.id, 1, randomUUID());
-    expect(result.payUrl).toBeNull(); expect((await row()).issuedEmailAt).not.toBeNull(); expect(creates).toEqual([]);
+    const payUrl = operation === "upgrade" ? (await prepare({ subscription_id: sub() })).paymentLinkUrl : (await buyPacks(f.org.id, 1, randomUUID())).payUrl;
+    expect(payUrl).toBeNull(); expect((await row()).issuedEmailAt).not.toBeNull(); expect(creates).toEqual([]);
     expect(await availableOrgSeconds(f.org.id)).toBe(0);
   });
   test("missing Razorpay keys: reconciliation throws and best-effort close logs its failure, rather than silently skipping", async () => {
@@ -137,19 +134,20 @@ describe.skipIf(!localMinutesDb)("billing Razorpay phase 3 (real DB; MSW Meteroi
     try { await closePaymentLink(invoice); expect(log).toHaveBeenCalledWith(expect.stringContaining("closing the payment link"), "RAZORPAY_KEY_ID is not set"); } finally { log.mockRestore(); }
     expect(cancels).toEqual([]);
   });
-  test("rules 7, 28: save normalized phone to Meteroid, upgrade and retry return same payUrl, overview and issued email include it", async () => {
+  test("rules 7, 28: save normalized phone; staff-created upgrade retries keep one payUrl in overview and email", async () => {
     await saveBillingDetails(f.org.id, { ...details, phone: "+1 987-654-3210" }); expect(patches[0].phone).toBe(details.phone);
-    const upgraded = await requestUpgrade(f.org.id); expect(upgraded).toMatchObject({ created: true, payUrl: `https://rzp.io/${id()}` });
-    expect(await requestUpgrade(f.org.id)).toMatchObject({ created: false, payUrl: upgraded.payUrl }); expect(creates).toHaveLength(1);
-    expect(await billingOverview(f.org.id)).toMatchObject({ upgradeInvoice: { payUrl: upgraded.payUrl }, invoices: [expect.objectContaining({ payUrl: upgraded.payUrl })] });
-    expect(outside.emails.find((email) => email.idempotencyKey === `billing-issued-${id()}`)?.text).toContain(`Pay online: ${upgraded.payUrl}`);
+    const upgraded = await prepare({ subscription_id: sub() });
+    expect(upgraded).toMatchObject({ kind: "upgrade", paymentLinkUrl: `https://rzp.io/${id()}` });
+    await syncInvoice(id(), f.org.id); expect(await ensurePaymentLink(id())).toBe(upgraded.paymentLinkUrl); expect(creates).toHaveLength(1);
+    expect(await billingOverview(f.org.id)).toMatchObject({ upgradeInvoice: { payUrl: upgraded.paymentLinkUrl }, invoices: [expect.objectContaining({ payUrl: upgraded.paymentLinkUrl })] });
+    expect(outside.emails.find((email) => email.idempotencyKey === `billing-issued-${id()}`)?.text).toContain(`Pay online: ${upgraded.paymentLinkUrl}`);
   });
   test("rule 28: buyPacks returns payUrl and grants no phase-1 credits", async () => {
     await db.orgBilling.update({ where: { orgId: f.org.id }, data: { plan: "paid", paidSubscriptionId: sub() } });
     expect(await buyPacks(f.org.id, 1, randomUUID())).toMatchObject({ invoiceId: id(), totalCents: 2500, payUrl: `https://rzp.io/${id()}` }); expect(await availableOrgSeconds(f.org.id)).toBe(0);
   });
   test("rules 20, 29, 34: webhook marks with payment id once, records applied fees and starts claimed paid workflow", async () => {
-    await requestUpgrade(f.org.id); const paymentId = `pay_${f.org.id}`;
+    await prepare({ subscription_id: sub() }); const paymentId = `pay_${f.org.id}`;
     expect(await pay(paymentId)).toMatchObject({ status: 200, body: { result: { status: "applied", invoiceId: id() } } });
     expect(marks).toEqual([{ 1: id(), 2: "300.00", 4: paymentId }]);
     expect(await db.billingPayment.findUniqueOrThrow({ where: { id: paymentId } })).toMatchObject({ invoiceId: id(), orgId: f.org.id, status: "applied", amount: 30000, currency: "USD", amountInr: 2500000, feeInr: 88500, taxInr: 13500, method: "card", international: true });
@@ -199,7 +197,7 @@ describe.skipIf(!localMinutesDb)("billing Razorpay phase 3 (real DB; MSW Meteroi
     expect(creates).toEqual([]); expect(marks).toEqual([]);
   });
   test.each(["void", "overdue upgrade", "bank transfer"])("rule 32: cancels link on %s", async (reason) => {
-    if (reason === "overdue upgrade") { await requestUpgrade(f.org.id); invoices.get(id())!.due_date = "2020-01-01"; await invoiceOverdue(id()); }
+    if (reason === "overdue upgrade") { await prepare({ subscription_id: sub() }); invoices.get(id())!.due_date = "2020-01-01"; await invoiceOverdue(id()); }
     else {
       await prepare();
       if (reason === "void") {

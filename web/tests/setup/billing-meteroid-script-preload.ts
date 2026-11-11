@@ -4,7 +4,6 @@ const webhookUrl = "https://dash.test/api/meteroid/webhook";
 const events = ["wallet.funded", "wallet.debited", "wallet.depleted", "wallet.recovered", "credit_grant.expired", "invoice.finalized", "invoice.paid", "invoice.voided", "subscription.cancelled", "subscription.ended"];
 const replies: Record<string, unknown> = {
   "/product_families": { data: [{ id: "family" }] },
-  "/plans?per_page=100": { data: [{ id: "paid", name: "Paid", status: "ACTIVE" }] },
   "/credit-units": { data: [{ id: "mins", code: "MINS", product_id: "packs" }] },
   "/credit-units/mins/prices": { data: [{ currency: "USD", unit_price: "0.25", archived_at: null }] },
   "/customers?per_page=1": { data: [{ invoicing_entity_id: "entity-default" }] },

@@ -15,6 +15,8 @@ import { GET as cronCheck, POST as cronPost } from "@/app/api/internal/billing/c
 import { db, localMinutesDb, minutesFixture, meteroidServer, type MinutesFixture } from "./minutes-test-db";
 import { fundOrg } from "../setup/meteroid";
 import { seller, sellerReply } from "../setup/billing-meteroid-fixture";
+import * as billingMeteroid from "@/lib/billing/meteroid";
+import { s3Configured } from "@/lib/s3";
 
 const details = { legalName: "DB Billing Ltd", country: "US", line1: "10 Street", city: "Boston", postalCode: "02110", emails: ["billing@example.com"], phone: "+19876543210" };
 
@@ -51,9 +53,9 @@ describe.skipIf(!localMinutesDb)("billing phase 2 constraints and studio API (lo
     await f.clean();
   });
 
-  test.each(["overview", "saveDetails", "upgrade", "buyPacks"] as const)("rule 5: learner FORBIDDEN on billing.%s", async (procedure) => {
+  test.each(["overview", "saveDetails", "buyPacks"] as const)("rule 5: learner FORBIDDEN on billing.%s", async (procedure) => {
     const api = caller("user");
-    const call = procedure === "overview" ? api.overview() : procedure === "saveDetails" ? api.saveDetails({ details }) : procedure === "upgrade" ? api.upgrade() : api.buyPacks({ packs: 1, requestId: randomUUID() });
+    const call = procedure === "overview" ? api.overview() : procedure === "saveDetails" ? api.saveDetails({ details }) : api.buyPacks({ packs: 1, requestId: randomUUID() });
     await expect(call).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect((await db.orgBilling.findUniqueOrThrow({ where: { orgId: f.org.id } })).billingDetails).toBeNull();
   });
@@ -68,6 +70,31 @@ describe.skipIf(!localMinutesDb)("billing phase 2 constraints and studio API (lo
     await expect(caller().saveDetails({ details: { ...details, hacker: 1 } })).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(patches).toBe(0);
     expect((await db.orgBilling.findUniqueOrThrow({ where: { orgId: f.org.id } })).billingDetails).toBeNull();
+  });
+  test("rule 10: the studio billing router has no self-serve upgrade procedure", () => {
+    expect(billingRouter._def.procedures).not.toHaveProperty("upgrade");
+  });
+  test("billingOverview planCents is the latest non-void plan invoice, not packs, other invoices or old subscriptions", async () => {
+    const current = `paid-${f.org.id}`;
+    await db.orgBilling.update({ where: { orgId: f.org.id }, data: { plan: "paid", paidSubscriptionId: current } });
+    for (const [suffix, kind, status, subscriptionId, totalCents, issuedOn] of [
+      ["upgrade", "upgrade", "paid", current, 12345, "2026-10-01"],
+      ["renewal", "renewal", "unpaid", current, 23456, "2026-11-01"],
+      ["void", "renewal", "void", current, 34567, "2026-11-02"],
+      ["other", "other", "unpaid", current, 45678, "2026-11-03"],
+      ["pack", "pack", "paid", null, 2500, "2026-11-04"],
+      ["old-sub", "renewal", "paid", "old-subscription", 56789, "2026-11-05"],
+    ] as const) await db.billingInvoice.create({ data: { ...invoiceData(), id: `${invoiceData().id}-${suffix}`, kind, status, subscriptionId, totalCents, issuedAt: new Date(issuedOn) } });
+    const overview = await billingOverview(f.org.id);
+    expect(overview).toMatchObject({ planCents: 23456 });
+    expect(overview).not.toHaveProperty("monthlyCents");
+    await db.billingInvoice.update({ where: { id: `${invoiceData().id}-renewal` }, data: { status: "void" } });
+    expect(await billingOverview(f.org.id)).toMatchObject({ planCents: 12345 });
+    await db.billingInvoice.update({ where: { id: `${invoiceData().id}-upgrade` }, data: { status: "unpaid" } });
+    await db.orgBilling.update({ where: { orgId: f.org.id }, data: { plan: "trial" } });
+    expect(await billingOverview(f.org.id)).toMatchObject({ planCents: 12345 }); // pending staff upgrade
+    await db.orgBilling.update({ where: { orgId: f.org.id }, data: { paidSubscriptionId: null } });
+    expect(await billingOverview(f.org.id)).toMatchObject({ planCents: null });
   });
   test("billingOverview renewsOn is latest non-void current period end, not latest issued invoice; Trial has none", async () => {
     const current = `paid-${f.org.id}`;
@@ -97,10 +124,11 @@ describe.skipIf(!localMinutesDb)("billing phase 2 constraints and studio API (lo
     expect(await billingOverview(f.org.id, new Date("2026-11-04"))).toMatchObject({ overdueInvoice: null, dueInvoice: null });
   });
   test("tRPC maps BillingError 400/404/409/502 to BAD_REQUEST/NOT_FOUND/CONFLICT/BAD_GATEWAY", async () => {
-    await expect(caller().upgrade()).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    await expect(caller("admin", "not-billed").upgrade()).rejects.toMatchObject({ code: "NOT_FOUND" });
-    await db.orgBilling.update({ where: { orgId: f.org.id }, data: { billingDetails: details, plan: "paid", paidSubscriptionId: `paid-${f.org.id}` } });
-    await expect(caller().upgrade()).rejects.toMatchObject({ code: "CONFLICT" });
+    const buy = (api = caller()) => api.buyPacks({ packs: 1, requestId: randomUUID() });
+    await expect(buy()).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(buy(caller("admin", "not-billed"))).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await db.orgBilling.update({ where: { orgId: f.org.id }, data: { billingDetails: details } });
+    await expect(buy()).rejects.toMatchObject({ code: "CONFLICT" });
     meteroidServer.use(http.patch("https://meteroid.test/api/v1/customers/:id", () => new HttpResponse(null, { status: 503 })));
     await expect(caller().saveDetails({ details })).rejects.toMatchObject({ code: "BAD_GATEWAY" });
   });
@@ -138,6 +166,23 @@ describe.skipIf(!localMinutesDb)("billing phase 2 constraints and studio API (lo
       expect(pdf.getTitle()).toBe(filename.startsWith("RCPT-") ? "Receipt RCPT-INV-DB-001" : "Invoice INV-DB-001");
     }
   });
+  test("rule 22: without S3, each download redraws from Meteroid and leaves both PDF keys null", async () => {
+    expect(s3Configured).toBe(false);
+    await db.billingInvoice.create({ data: { ...invoiceData(), status: "paid", paidAt: new Date("2026-11-02") } });
+    const sellerRead = spyOn(billingMeteroid, "sellerDetails").mockResolvedValue(seller);
+    try {
+      const invoice = await invoicePdfFor(f.org.id, invoiceData().id);
+      const receipt = await receiptPdfFor(f.org.id, invoiceData().id);
+      sellerRead.mockResolvedValue({ ...seller, name: "Seller changed in Meteroid" });
+      const nextInvoice = await invoicePdfFor(f.org.id, invoiceData().id);
+      const nextReceipt = await receiptPdfFor(f.org.id, invoiceData().id);
+      expect(nextInvoice.equals(invoice)).toBe(false); expect(nextReceipt.equals(receipt)).toBe(false);
+      expect((await PDFDocument.load(nextInvoice)).getAuthor()).toBe("Seller changed in Meteroid");
+      expect((await PDFDocument.load(nextReceipt)).getAuthor()).toBe("Seller changed in Meteroid");
+      expect(sellerRead).toHaveBeenCalledTimes(4);
+      expect(await db.billingInvoice.findUniqueOrThrow({ where: { id: invoiceData().id } })).toMatchObject({ invoicePdfKey: null, receiptPdfKey: null });
+    } finally { sellerRead.mockRestore(); }
+  });
   test.each([404, 503])("rule 22: Meteroid invoice JSON failure %s returns 502 for both PDFs, never PDF-not-ready", async (status) => {
     await db.billingInvoice.create({ data: { ...invoiceData(), status: "paid", paidAt: new Date("2026-11-02") } });
     meteroidServer.use(http.get("https://meteroid.test/api/v1/invoices/:id", () => new HttpResponse(null, { status })));
@@ -160,13 +205,12 @@ describe.skipIf(!localMinutesDb)("billing phase 2 constraints and studio API (lo
 
   // Prisma's lazy promise isn't a real Promise to bun's expect().rejects.
   const run = <T>(query: PromiseLike<T>) => Promise.resolve(query);
-  test("rules 1, 15: DB plan and pause constraints; default Trial, positive custom price", async () => {
-    expect(await db.orgBilling.findUniqueOrThrow({ where: { orgId: f.org.id } })).toMatchObject({ plan: "trial", paidSubscriptionId: null, paidMonthlyCents: null, pausedAt: null });
+  test("rules 1, 15: DB plan and pause constraints; default Trial, paused only on Paid", async () => {
+    expect(await db.orgBilling.findUniqueOrThrow({ where: { orgId: f.org.id } })).toMatchObject({ plan: "trial", paidSubscriptionId: null, pausedAt: null });
     await expect(run(db.orgBilling.update({ where: { orgId: f.org.id }, data: { plan: "enterprise" } }))).rejects.toThrow();
     await expect(run(db.orgBilling.update({ where: { orgId: f.org.id }, data: { pausedAt: new Date() } }))).rejects.toThrow();
-    await expect(run(db.orgBilling.update({ where: { orgId: f.org.id }, data: { paidMonthlyCents: 0 } }))).rejects.toThrow();
-    await db.orgBilling.update({ where: { orgId: f.org.id }, data: { plan: "paid", paidSubscriptionId: `paid-${f.org.id}`, pausedAt: new Date(), paidMonthlyCents: 12345 } });
-    expect(await billingOverview(f.org.id)).toMatchObject({ monthlyCents: 12345, pausedAt: expect.any(String) });
+    await db.orgBilling.update({ where: { orgId: f.org.id }, data: { plan: "paid", paidSubscriptionId: `paid-${f.org.id}`, pausedAt: new Date() } });
+    expect(await billingOverview(f.org.id)).toMatchObject({ planCents: null, pausedAt: expect.any(String) });
     await expect(run(db.orgBilling.update({ where: { orgId: f.org.id }, data: { plan: "trial" } }))).rejects.toThrow();
   });
   test.each([{ totalCents: 0 }, { totalCents: -1 }, { kind: "unknown" }, { status: "draft" }, { credits: -1 }, { orgId: "unbilled-org" }])("rule 23 / Checks: DB rejects invalid invoice %j", async (patch) => {

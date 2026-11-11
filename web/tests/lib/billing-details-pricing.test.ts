@@ -1,11 +1,9 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { addressLine2, billingDetailsInput, countries, countryName, exportMention, gstinChecksumOk, INDIAN_STATES, meteroidCustomerPatch, taxFor } from "@/lib/billing/details";
-import { CURRENCY, PACK_CENTS, PACK_CREDITS, PACK_VALID_DAYS, PAID_MONTHLY_CENTS, formatMoney, packPrice, totalWithTax } from "@/lib/billing/pricing";
+import { describe, expect, test } from "bun:test";
+import { addressLine2, billingDetailsInput, countries, countryName, EXPORT_DECLARATION, gstinChecksumOk, INDIAN_STATES, meteroidCustomerPatch, taxFor } from "@/lib/billing/details";
+import { CURRENCY, PACK_CENTS, PACK_CREDITS, PACK_VALID_DAYS, formatMoney, packPrice, totalWithTax } from "@/lib/billing/pricing";
 import { billingEmail } from "@/lib/email";
 
 const details = { legalName: "Example Ltd", country: "IN", line1: "10 Street", city: "Chennai", postalCode: "600001", state: "33", taxId: "33AAGCF6592D1ZN", emails: ["billing@example.com"], phone: "+919876543210" };
-const lut = process.env.GST_LUT_REFERENCE;
-afterEach(() => { if (lut === undefined) delete process.env.GST_LUT_REFERENCE; else process.env.GST_LUT_REFERENCE = lut; });
 
 function problem(patch: Record<string, unknown>, field: string, message?: string) {
   const parsed = billingDetailsInput.safeParse({ ...details, ...patch });
@@ -25,6 +23,7 @@ describe("billing rules 7–9: details and tax", () => {
     [{ emails: Array.from({ length: 6 }, (_, i) => `billing${i}@example.com`) }, "emails", "At most 5 billing emails"],
     [{ country: "EU" }, "country", "Choose a country"],
     [{ country: "ZZ" }, "country", "Choose a country"],
+    [{ phone: undefined }, "phone", "Add a phone number with its country code"],
   ] as const)("refuses %j at %s with its field problem", (patch, field, message) => problem(patch, field, message));
 
   test.each(["legalName", "line1", "city", "postalCode"])("requires %s", (field) => problem({ [field]: "  " }, field));
@@ -63,25 +62,23 @@ describe("billing rules 7–9: details and tax", () => {
     expect(taxFor({ country: "IN", state: "29" })).toEqual({ kind: "igst", lines: [{ code: "IGST", name: "IGST", bp: 1800 }] });
     expect(taxFor({ country: "US" })).toEqual({ kind: "export", lines: [] });
   });
-  test("export LUT wording with and without env reference", () => {
-    delete process.env.GST_LUT_REFERENCE;
-    expect(exportMention()).toBe("Supply meant for export under LUT without payment of IGST");
-    process.env.GST_LUT_REFERENCE = " LUT-2026 ";
-    expect(exportMention()).toBe("Supply meant for export under LUT (LUT-2026) without payment of IGST");
+  test("rule 9: Meteroid customer exemption reason is the export declaration, without an ARN", () => {
+    expect(EXPORT_DECLARATION).toBe("Export of services without payment of tax under LUT");
+    expect(meteroidCustomerPatch({ ...details, country: "US", state: undefined }).exemption_reason).toBe(EXPORT_DECLARATION);
   });
   test("rule 8: Meteroid patch includes all billing fields and state with code on line2", () => {
     expect(meteroidCustomerPatch({ ...details, line2: "Floor 2" })).toEqual({ name: details.legalName, billing_address: { line1: details.line1, line2: "Floor 2, Tamil Nadu (33)", city: details.city, zip_code: details.postalCode, state: "Tamil Nadu", country: "IN" }, vat_number: details.taxId, phone: details.phone, billing_email: details.emails[0], invoicing_emails: details.emails, custom_taxes: [{ tax_code: "CGST", name: "CGST", rate: "0.0900" }, { tax_code: "SGST", name: "SGST", rate: "0.0900" }], is_tax_exempt: false, exemption_reason: null });
     expect(addressLine2(details)).toBe("Tamil Nadu (33)");
     expect(addressLine2({ country: "US" })).toBeNull();
     expect(addressLine2({ country: "US", line2: "Suite 1" })).toBe("Suite 1");
-    expect(meteroidCustomerPatch({ ...details, country: "US", state: undefined, taxId: undefined })).toMatchObject({ vat_number: null, custom_taxes: [], is_tax_exempt: true, exemption_reason: exportMention(), billing_address: { state: null, line2: null } });
+    expect(meteroidCustomerPatch({ ...details, country: "US", state: undefined, taxId: undefined })).toMatchObject({ vat_number: null, custom_taxes: [], is_tax_exempt: true, exemption_reason: EXPORT_DECLARATION, billing_address: { state: null, line2: null } });
     expect(meteroidCustomerPatch({ ...details, state: "29", taxId: undefined }).custom_taxes).toEqual([{ tax_code: "IGST", name: "IGST", rate: "0.1800" }]);
   });
 });
 
 describe("billing rules 2 and 4: inclusive USD prices", () => {
-  test("plan price includes no credits; pack is 100/$25 valid for 365 days", () => {
-    expect([PAID_MONTHLY_CENTS, PACK_CENTS, PACK_CREDITS, PACK_VALID_DAYS, CURRENCY]).toEqual([30000, 2500, 100, 365, "USD"]);
+  test("pack is 100/$25 valid for 365 days, independent of the org's plan price", () => {
+    expect([PACK_CENTS, PACK_CREDITS, PACK_VALID_DAYS, CURRENCY]).toEqual([2500, 100, 365, "USD"]);
   });
   for (const address of [details, { country: "IN", state: "29" }, { country: "US" }]) {
     const tax = taxFor(address);
