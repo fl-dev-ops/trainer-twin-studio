@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { http, HttpResponse } from "msw";
+import { PDFDocument } from "pdf-lib";
 import * as nextHeaders from "next/headers";
 import * as org from "@/lib/org";
 import { billingRouter } from "@/lib/billing/trpc";
@@ -31,7 +32,15 @@ describe.skipIf(!localMinutesDb)("billing phase 2 constraints and studio API (lo
     f = minutesFixture(); await f.create(); await fundOrg({ orgId: f.org.id, minutes: 0 });
     headers = spyOn(nextHeaders, "headers").mockResolvedValue(new Headers());
     membership = spyOn(org, "currentMembership"); identity("admin");
-    meteroidServer.use(http.get("https://meteroid.test/api/v1/invoices/:id/download", () => new HttpResponse("%PDF-test")), http.get("https://meteroid.test/api/v1/invoices", () => HttpResponse.json({ data: [] })));
+    meteroidServer.use(
+      http.get("https://meteroid.test/api/v1/invoices/:id", ({ params }) => HttpResponse.json({
+        id: params.id, invoice_number: "INV-DB-001", invoice_date: "2026-11-01", due_date: "2026-11-03", currency: "USD", subtotal: 2500, tax_amount: 0, total: 2500,
+        customer_details: { name: "Invoice-time DB Ltd", email: "billing@example.com", billing_address: { line1: "10 Street", city: "Boston", zip_code: "02110", country: "US" } },
+        line_items: [{ name: "Purchase credits", quantity: "100", unit_price: "0.25" }],
+        transactions: [{ status: "SETTLED", payment_type: "PAYMENT", provider_transaction_id: "bank-ref", amount: 2500, processed_at: "2026-11-02T10:00:00Z" }],
+      })),
+      http.get("https://meteroid.test/api/v1/invoices", () => HttpResponse.json({ data: [] })),
+    );
   });
   afterEach(async () => {
     membership.mockRestore(); headers.mockRestore(); meteroidServer.resetHandlers();
@@ -112,20 +121,25 @@ describe.skipIf(!localMinutesDb)("billing phase 2 constraints and studio API (lo
     await expect(invoicePdfFor("other-org", invoiceData().id)).rejects.toMatchObject({ status: 404 });
     await expect(receiptPdfFor("other-org", invoiceData().id)).rejects.toMatchObject({ status: 404 });
     identity("team"); expect((await download(receiptDownload)).status).toBe(409);
+    expect((await download(invoiceDownload)).status).toBe(200); // App-rendered invoice needs no Meteroid PDF-ready state.
     await db.billingInvoice.update({ where: { id: invoiceData().id }, data: { status: "paid", paidAt: new Date("2026-11-02"), paymentRefs: ["bank-ref"] } });
     for (const [route, filename] of [[invoiceDownload, "INV-DB-001.pdf"], [receiptDownload, "RCPT-INV-DB-001.pdf"]] as const) {
       const response = await download(route);
       expect(response.status).toBe(200); expect(response.headers.get("content-type")).toBe("application/pdf");
       expect(response.headers.get("content-disposition")).toContain(filename); expect(response.headers.get("cache-control")).toBe("private, no-store");
-      expect(Buffer.from(await response.arrayBuffer()).subarray(0, 5).toString()).toBe("%PDF-");
+      const bytes = Buffer.from(await response.arrayBuffer());
+      expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
+      const pdf = await PDFDocument.load(bytes, { updateMetadata: false });
+      expect(pdf.getProducer()).toBe("TrainerTwin");
+      expect(pdf.getTitle()).toBe(filename.startsWith("RCPT-") ? "Receipt RCPT-INV-DB-001" : "Invoice INV-DB-001");
     }
   });
-  test("PDF not ready 409 and Meteroid failure 502; receipts remain local while Meteroid down", async () => {
-    await db.billingInvoice.create({ data: { ...invoiceData(), status: "paid", paidAt: new Date() } });
-    meteroidServer.use(http.get("https://meteroid.test/api/v1/invoices/:id/download", () => new HttpResponse(null, { status: 404 })));
-    expect((await download(invoiceDownload)).status).toBe(409);
-    meteroidServer.use(http.get("https://meteroid.test/api/v1/invoices/:id/download", () => new HttpResponse(null, { status: 503 })));
-    expect((await download(invoiceDownload)).status).toBe(502); expect((await download(receiptDownload)).status).toBe(200);
+  test.each([404, 503])("rule 22: Meteroid invoice JSON failure %s returns 502 for both PDFs, never PDF-not-ready", async (status) => {
+    await db.billingInvoice.create({ data: { ...invoiceData(), status: "paid", paidAt: new Date("2026-11-02") } });
+    meteroidServer.use(http.get("https://meteroid.test/api/v1/invoices/:id", () => new HttpResponse(null, { status })));
+    for (const route of [invoiceDownload, receiptDownload]) expect((await download(route)).status).toBe(502);
+    await expect(invoicePdfFor(f.org.id, invoiceData().id)).rejects.toMatchObject({ name: "BillingError", status: 502 });
+    await expect(receiptPdfFor(f.org.id, invoiceData().id)).rejects.toMatchObject({ name: "BillingError", status: 502 });
   });
 
   test("rule 25: cron GET/POST require secret; local fail-open, production fail-closed", async () => {

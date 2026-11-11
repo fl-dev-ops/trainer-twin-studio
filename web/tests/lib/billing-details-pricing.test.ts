@@ -1,8 +1,6 @@
-import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
-import { decodePDFRawStream, PDFArray, PDFDocument, PDFRawStream } from "pdf-lib";
+import { afterEach, describe, expect, test } from "bun:test";
 import { addressLine2, billingDetailsInput, countries, countryName, exportMention, gstinChecksumOk, INDIAN_STATES, meteroidCustomerPatch, taxFor } from "@/lib/billing/details";
 import { CURRENCY, PACK_CENTS, PACK_CREDITS, PACK_VALID_DAYS, PAID_MONTHLY_CENTS, formatMoney, packPrice, totalWithTax } from "@/lib/billing/pricing";
-import { receiptNumber, renderReceipt, SELLER } from "@/lib/billing/receipt";
 import { billingEmail } from "@/lib/email";
 
 const details = { legalName: "Example Ltd", country: "IN", line1: "10 Street", city: "Chennai", postalCode: "600001", state: "33", taxId: "33AAGCF6592D1ZN", emails: ["billing@example.com"] };
@@ -106,46 +104,12 @@ describe("billing rules 2 and 4: inclusive USD prices", () => {
   test.each([0, 11, 1.5, -1, NaN, Infinity])("rejects invalid packs %s", (packs) => expect(() => packPrice(packs, [])).toThrow("Buy 1 to 10 packs"));
 });
 
-test.each(["Example Ltd", "தமிழ் பெயர் 中文 😀"])("rule 22: receipt for %s is a valid PDF with seller metadata", async (name) => {
-  const bytes = await renderReceipt({ invoiceNumber: "INV-001", issuedAt: new Date("2026-11-01"), paidAt: new Date("2026-11-02"), totalCents: 30000, taxCents: 4576, currency: "USD", references: ["bank-001"], description: "TrainerTwin Paid plan", customer: { ...details, legalName: name }, customerName: name });
-  expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
-  const pdf = await PDFDocument.load(bytes);
-  expect(pdf.getPageCount()).toBe(1); expect(pdf.getTitle()).toBe("Receipt RCPT-INV-001"); expect(pdf.getAuthor()).toBe(SELLER.name);
-  const contents = pdf.getPage(0).node.Contents() as PDFArray;
-  const text = Array.from({ length: contents.size() }, (_, i) => Buffer.from(decodePDFRawStream(contents.lookup(i, PDFRawStream)).decode()).toString())
-    .join("\n").match(/<([0-9A-F]+)> Tj/g)?.map((draw) => Buffer.from(draw.slice(1, draw.indexOf(">")), "hex").toString("latin1")).join("\n") ?? "";
-  for (const value of ["Payment receipt", "RCPT-INV-001", SELLER.name, SELLER.line1, SELLER.gstin, "10 Street", "Tamil Nadu (33)", details.taxId, "INV-001 of 1 November 2026", "Paid on 2 November 2026", "$300.00", "$45.76", "bank-001", "Balance due", "$0.00", "998314"]) expect(text).toContain(value);
-  expect(receiptNumber("INV-001")).toBe("RCPT-INV-001"); expect(SELLER.sac).toBe("998314");
-});
-
 test("formatMoney uses invoice currency and Indian grouping for INR, while default remains USD", () => {
   expect(formatMoney(2500000, "INR")).toBe("₹25,000.00");
   expect(formatMoney(123456789, "INR")).toBe("₹12,34,567.89");
   expect(formatMoney(0, "INR")).toBe("₹0.00");
   expect(formatMoney(30000, "EUR")).toBe("€300.00");
   expect(formatMoney(30000)).toBe("$300.00");
-});
-
-test("rule 22: same receipt input yields identical bytes across different render dates", async () => {
-  const input = { invoiceNumber: "INV-STABLE", issuedAt: new Date("2026-11-01"), paidAt: new Date("2026-11-02"), totalCents: 30000, taxCents: 4576, currency: "USD", references: ["bank-001"], description: "TrainerTwin Paid plan", customer: details, customerName: details.legalName };
-  try {
-    setSystemTime(new Date("2026-11-03")); const first = await renderReceipt(input);
-    setSystemTime(new Date("2026-12-03")); const second = await renderReceipt(input);
-    expect(second.equals(first)).toBe(true);
-    const pdf = await PDFDocument.load(first, { updateMetadata: false });
-    expect(pdf.getCreationDate()).toEqual(input.paidAt); expect(pdf.getModificationDate()).toEqual(input.paidAt);
-  } finally { setSystemTime(); }
-});
-
-test("rule 22: receipt keeps EUR currency symbols for amounts and zero balance", async () => {
-  const bytes = await renderReceipt({ invoiceNumber: "INV-EUR", issuedAt: new Date("2026-11-01"), paidAt: new Date("2026-11-02"), totalCents: 30000, taxCents: 4576, currency: "EUR", references: [], description: "Paid plan", customer: null, customerName: "Euro Ltd" });
-  const pdf = await PDFDocument.load(bytes);
-  const contents = pdf.getPage(0).node.Contents() as PDFArray;
-  const draws = Array.from({ length: contents.size() }, (_, i) => Buffer.from(decodePDFRawStream(contents.lookup(i, PDFRawStream)).decode()).toString()).join("\n");
-  // Helvetica encodes the euro sign at WinAnsi 0x80.
-  const text = draws.match(/<([0-9A-F]+)> Tj/g)?.map((draw) => Buffer.from(draw.slice(1, draw.indexOf(">")), "hex").toString("latin1").replace(/\x80/g, "€")).join("\n") ?? "";
-  for (const amount of ["€300.00", "€45.76", "€0.00"]) expect(text.split("\n")).toContain(amount);
-  expect(text).not.toContain("$300.00");
 });
 
 test.each(["issued", "reminder", "paused", "upgrade_cancelled", "paid"] as const)("rule 21: %s email escapes billing text and links to billing", (event) => {

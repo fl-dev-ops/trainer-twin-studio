@@ -2,6 +2,7 @@ import "./flow-env";
 import { afterAll, afterEach, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
 import { createHmac, randomUUID } from "node:crypto";
 import { http, HttpResponse } from "msw";
+import { PDFDocument } from "pdf-lib";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "../lib/minutes-test-db";
 import { fundOrg, grantRequests } from "../setup/meteroid";
 import { outsideServices } from "./harness";
@@ -30,6 +31,17 @@ const details = { legalName: "Billing Ltd", country: "IN", line1: "10 Street", c
 type Raw = Record<string, unknown>;
 type Sent = { from: string; to: string[]; subject: string; text: string; reply_to: string; attachments?: { filename: string; content: string }[] };
 
+async function expectAppPdfs(email: Sent | undefined, filenames: string[]) {
+  expect(email?.attachments?.map((a) => a.filename)).toEqual(filenames);
+  for (const attachment of email!.attachments!) {
+    const bytes = Buffer.from(attachment.content, "base64");
+    expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
+    const pdf = await PDFDocument.load(bytes, { updateMetadata: false });
+    expect(pdf.getProducer()).toBe("TrainerTwin");
+    expect(pdf.getTitle()).toBe(`${attachment.filename.startsWith("RCPT-") ? "Receipt" : "Invoice"} ${attachment.filename.slice(0, -4)}`);
+  }
+}
+
 describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meteroid/Resend)", () => {
   let f: MinutesFixture;
   const extra: MinutesFixture[] = [];
@@ -45,10 +57,16 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
   const customer = () => `customer_${f.org.id}`;
   const upgrade = () => `upgrade-${f.org.id}`;
   function raw(id: string, patch: Raw = {}): Raw {
-    return { id, invoice_number: `INV-${id}`, status: "FINALIZED", payment_status: "UNPAID", invoice_type: "RECURRING", customer_id: customer(), subscription_id: subscription(), total: 30000, tax_amount: 4576, currency: "USD", finalized_at: "2026-11-01T12:00:00Z", due_date: "2026-11-03", invoice_date: "2026-11-01", paid_at: null, line_items: [{ name: "Paid plan", quantity: "1", start_date: "2026-11-01", end_date: "2026-12-01" }], transactions: [], ...patch };
+    return {
+      id, invoice_number: `INV-${id}`, status: "FINALIZED", payment_status: "UNPAID", invoice_type: "RECURRING", customer_id: customer(), subscription_id: subscription(),
+      subtotal: 25424, total: 30000, tax_amount: 4576, currency: "USD", finalized_at: "2026-11-01T12:00:00Z", due_date: "2026-11-03", invoice_date: "2026-11-01", paid_at: null,
+      customer_details: { name: details.legalName, email: details.emails[0], billing_address: { line1: details.line1, line2: "Tamil Nadu (33)", city: details.city, zip_code: details.postalCode, state: "Tamil Nadu", country: "IN" } },
+      tax_breakdown: [{ name: "CGST", tax_rate: "0.0900", tax_amount: 2288 }, { name: "SGST", tax_rate: "0.0900", tax_amount: 2288 }],
+      line_items: [{ name: "Paid plan", quantity: "1", unit_price: "254.24", start_date: "2026-11-01", end_date: "2026-12-01" }], transactions: [], ...patch,
+    };
   }
   function add(id: string, patch: Raw = {}) { const value = raw(id, patch); invoices.set(id, value); return value; }
-  function paid(id: string) { Object.assign(invoices.get(id)!, { payment_status: "PAID", paid_at: "2026-11-03T23:59:59Z", transactions: [{ provider_transaction_id: "bank-001", status: "SETTLED", payment_type: "PAYMENT" }] }); }
+  function paid(id: string) { Object.assign(invoices.get(id)!, { payment_status: "PAID", paid_at: "2026-11-03T23:59:59Z", transactions: [{ provider_transaction_id: "bank-001", status: "SETTLED", payment_type: "PAYMENT", amount: invoices.get(id)!.total, processed_at: "2026-11-03T23:59:59Z" }] }); }
   async function plan(plan: "trial" | "paid", withDetails = true) {
     await db.orgBilling.update({ where: { orgId: f.org.id }, data: { plan, paidSubscriptionId: plan === "paid" ? subscription() : null, ...(withDetails ? { billingDetails: details } : {}) } });
   }
@@ -77,7 +95,6 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
       http.post("https://meteroid.test/api/v1/subscriptions/:id/cancel", async ({ params, request }) => { requests.push({ method: "POST", path: `/subscriptions/${params.id}/cancel`, key: null, body: await request.json() as Raw }); return HttpResponse.json({ status: "CANCELLED" }); }),
       http.get("https://meteroid.test/api/v1/invoices", ({ request }) => HttpResponse.json({ data: [...invoices.values()].filter((i) => i.customer_id === new URL(request.url).searchParams.get("customer_id")) })),
       http.get("https://meteroid.test/api/v1/invoices/:id", ({ params }) => invoices.has(String(params.id)) ? HttpResponse.json(invoices.get(String(params.id))!) : HttpResponse.json({ error: "not found" }, { status: 404 })),
-      http.get("https://meteroid.test/api/v1/invoices/:id/download", () => new HttpResponse("%PDF-1.7\nfixture invoice\n", { headers: { "content-type": "application/pdf" } })),
       http.post("https://meteroid-grpc.test/:service/VoidInvoice", async ({ request }) => {
         const frame = Buffer.from(await request.arrayBuffer());
         const id = frame.subarray(7).toString();
@@ -90,7 +107,7 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
         const key = request.headers.get("idempotency-key")!;
         const body = await request.json() as Raw;
         requests.push({ method: "POST", path: "/top-ups", key, body });
-        if (!topups.has(key)) { const id = `pack-${f.org.id}`; topups.set(key, id); add(id, { subscription_id: null, invoice_type: "ONE_OFF", total: 2500, line_items: [{ name: "Purchase credits", quantity: String(body.amount) }] }); }
+        if (!topups.has(key)) { const id = `pack-${f.org.id}`; topups.set(key, id); add(id, { subscription_id: null, invoice_type: "ONE_OFF", subtotal: 2118, tax_amount: 382, total: 2500, tax_breakdown: [{ name: "CGST", tax_rate: "0.0900", tax_amount: 191 }, { name: "SGST", tax_rate: "0.0900", tax_amount: 191 }], line_items: [{ name: "Purchase credits", quantity: String(body.amount), unit_price: String(body.unit_price) }] }); }
         return HttpResponse.json({ invoice_id: topups.get(key) });
       }),
       http.post("https://api.resend.com/emails", async ({ request }) => { const key = request.headers.get("idempotency-key")!; const body = await request.json() as Sent; if (!sent.has(key)) sent.set(key, body); return HttpResponse.json({ id: `email-${key}` }); }),
@@ -136,14 +153,14 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
     expect(starts).toEqual([{ name: "invoiceIssued", id: upgrade() }]);
     const email = sent.get(`billing-issued-${upgrade()}`)!;
     expect(email).toMatchObject({ from: "TrainerTwin Billing <billing@trainertwin.com>", reply_to: "support@trainertwin.com", to: details.emails });
-    expect(email.attachments?.map((a) => a.filename)).toEqual([`INV-${upgrade()}.pdf`]);
+    await expectAppPdfs(email, [`INV-${upgrade()}.pdf`]);
     expect(await db.minuteLedger.count({ where: { orgId: f.org.id } })).toBe(0);
   });
   test("rules 11, 21, 22: upgrade paid activates Paid, sends receipt and invoice exactly once; paid org cannot upgrade", async () => {
     await plan("trial"); await requestUpgrade(f.org.id); paid(upgrade());
     await webhook("invoice.paid", { invoice_id: upgrade() }); await webhook("invoice.paid", { invoice_id: upgrade() });
     expect(await billing()).toMatchObject({ plan: "paid", paidSubscriptionId: subscription() });
-    expect(sent.get(`billing-paid-${upgrade()}`)?.attachments?.map((a) => a.filename)).toEqual([`RCPT-INV-${upgrade()}.pdf`, `INV-${upgrade()}.pdf`]);
+    await expectAppPdfs(sent.get(`billing-paid-${upgrade()}`), [`RCPT-INV-${upgrade()}.pdf`, `INV-${upgrade()}.pdf`]);
     expect(sent.get(`billing-paid-${upgrade()}`)?.text).toContain("now on the Paid plan");
     expect(starts.filter((s) => s.name === "invoicePaid")).toHaveLength(1);
     await expect(requestUpgrade(f.org.id)).rejects.toMatchObject({ status: 409 });
@@ -270,8 +287,8 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
     await invoiceOverdue(id, new Date("2026-11-04")); await invoiceOverdue(id, new Date("2026-11-04"));
     expect((await billing()).pausedAt).not.toBeNull();
     expect([...sent.keys()].filter((k) => k.startsWith("billing-paused"))).toHaveLength(1);
-    expect(sent.get(`billing-paused-${id}`)?.attachments?.map((a) => a.filename)).toEqual([`INV-${id}.pdf`]); // how to pay is on it
-    expect(sent.get(`billing-reminder-${id}`)?.attachments?.map((a) => a.filename)).toEqual([`INV-${id}.pdf`]);
+    await expectAppPdfs(sent.get(`billing-paused-${id}`), [`INV-${id}.pdf`]); // how to pay is on it
+    await expectAppPdfs(sent.get(`billing-reminder-${id}`), [`INV-${id}.pdf`]);
     expect((await billing()).balanceMinutes).toBe(100);
     for (const call of [() => grantMinutes({ orgId: f.org.id, email: f.learner.email, minutes: 5 }), () => giveStartingMinutes({ orgId: f.org.id, emails: [f.learner.email], minutes: 5 }), () => grantMinutesToMany({ orgId: f.org.id, emails: [f.learner.email], minutes: 5 })]) await expect(call()).rejects.toMatchObject({ name: "MinutesError", status: 403, message: expect.stringContaining("Settings › Billing") });
     await expect(buyPacks(f.org.id, 1, randomUUID())).rejects.toMatchObject({ status: 409, message: expect.stringContaining("pay the overdue invoice first") });
@@ -384,7 +401,7 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
     await syncInvoice(id); setSystemTime(new Date("2026-11-02"));
     expect(await invoiceReminder(id)).toBe(false); expect(sent.has(`billing-reminder-${id}`)).toBe(false);
     if (kind !== "paid renewal") { paid(id); await invoicePaid(id); await invoicePaid(id); }
-    expect(sent.get(`billing-paid-${id}`)?.attachments).toHaveLength(2);
+    await expectAppPdfs(sent.get(`billing-paid-${id}`), [`RCPT-INV-${id}.pdf`, `INV-${id}.pdf`]);
     expect((await billing()).balanceMinutes).toBe(100);
     expect(await db.minuteLedger.count({ where: { orgId: f.org.id } })).toBe(0);
   });
@@ -478,7 +495,7 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
     expect((await row(broken)).overdueEmailAt).toBeNull();
     expect((await row(repair)).overdueEmailAt).not.toBeNull();
     expect((await billing()).pausedAt).not.toBeNull();
-    expect(sent.get(`billing-paused-${repair}`)?.attachments?.map((a) => a.filename)).toEqual([`INV-${repair}.pdf`]);
+    await expectAppPdfs(sent.get(`billing-paused-${repair}`), [`INV-${repair}.pdf`]);
   });
   test("rules 6 / 17 / 25: old unpaid renewal cannot block payment unpause or daily unpause", async () => {
     await plan("paid"); const old = `old-overdue-${f.org.id}`, current = `current-paid-${f.org.id}`;

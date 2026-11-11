@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { setupServer } from "msw/node";
 import { http, HttpResponse } from "msw";
-import { createPackInvoice, createPaidSubscription, encodeProto, invoicePdf, meteroidGrpc, toInvoice } from "@/lib/billing/meteroid";
+import { createPackInvoice, createPaidSubscription, encodeProto, getInvoiceRaw, meteroidGrpc, toInvoice } from "@/lib/billing/meteroid";
 
 const grpc = process.env.METEROID_GRPC_URL;
 const server = setupServer();
@@ -47,15 +47,17 @@ test("gRPC accepts status from response trailers", async () => {
   server.use(http.post("https://meteroid-grpc.test/Service/Method", () => new HttpResponse("grpc-status: 0\r\n")));
   await meteroidGrpc("Service", "Method", []);
 });
-test.each([[404, ""], [200, "not a PDF"], [200, "%PDF-test"]] as const)("invoice PDF HTTP %s / %s returns null or PDF", async (status, body) => {
-  server.use(http.get("https://meteroid.test/api/v1/invoices/inv-1/download", ({ request }) => {
-    expect(request.headers.get("authorization")).toBe("Bearer test-meteroid-key"); return new HttpResponse(body, { status });
+test("raw invoice GET preserves document fields and authenticates without downloading a PDF", async () => {
+  const document = { ...raw, subtotal: 25424, customer_details: { name: "Invoice-time Ltd" }, tax_breakdown: [{ name: "IGST", tax_rate: "0.1800", tax_amount: 4576 }] };
+  server.use(http.get("https://meteroid.test/api/v1/invoices/inv-1", ({ request }) => {
+    expect(request.headers.get("authorization")).toBe("Bearer test-meteroid-key");
+    return HttpResponse.json(document);
   }));
-  expect(await invoicePdf("inv-1")).toEqual(body.startsWith("%PDF-") ? Buffer.from(body) : null);
+  expect(await getInvoiceRaw("inv-1")).toEqual(document);
 });
-test("PDF service failure is not hidden as not-ready", async () => {
-  server.use(http.get("https://meteroid.test/api/v1/invoices/inv-1/download", () => new HttpResponse(null, { status: 503 })));
-  await expect(invoicePdf("inv-1")).rejects.toMatchObject({ status: 503 });
+test.each([404, 503])("raw invoice HTTP %s failure propagates instead of returning not-ready", async (status) => {
+  server.use(http.get("https://meteroid.test/api/v1/invoices/inv-1", () => new HttpResponse(null, { status })));
+  await expect(getInvoiceRaw("inv-1")).rejects.toMatchObject({ name: "MeteroidError", status });
 });
 test.each([null, 12345])("rule 10: subscription starts today, manual collection, two-day terms, optional custom monthly price %s", async (monthlyCents) => {
   server.use(
