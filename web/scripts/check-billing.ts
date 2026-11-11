@@ -20,7 +20,7 @@ export const BILLING_CHECKS = [
     sql: `select count(*)::int as n from "OrgBilling" b where b.plan = 'trial' and b."paidSubscriptionId" is not null
             and not exists (select 1 from "BillingInvoice" i where i."orgId" = b."orgId" and i.kind = 'upgrade' and i.status = 'unpaid'
                             and i."subscriptionId" = b."paidSubscriptionId")
-            and b."orgId" not in (select "orgId" from "BillingInvoice" where "createdAt" > now() - interval '1 hour')`,
+            and b."orgId" not in (select "orgId" from "BillingInvoice" where "createdAt" > (now() at time zone 'utc') - interval '1 hour')`,
   },
   {
     rule: "every paused org is paid and has an overdue unpaid renewal",
@@ -38,9 +38,21 @@ export const BILLING_CHECKS = [
     sql: `select count(*)::int as n from "BillingInvoice" i where i."totalCents" <= 0 or not exists (select 1 from "OrgBilling" b where b."orgId" = i."orgId")`,
   },
   {
+    rule: "every invoice a Razorpay payment settled is paid and has that payment recorded as applied",
+    sql: `select count(*)::int as n from "BillingInvoice" i where i."razorpayPaymentId" is not null
+            and (i.status <> 'paid' and i."updatedAt" < (now() at time zone 'utc') - interval '1 hour'
+                 or not exists (select 1 from "BillingPayment" p where p.id = i."razorpayPaymentId" and p.status = 'applied'))`,
+  },
+  {
+    rule: "with Razorpay on, every unpaid invoice older than an hour whose org has a phone has a payment link",
+    sql: `select count(*)::int as n from "BillingInvoice" i join "OrgBilling" b on b."orgId" = i."orgId"
+            where ${process.env.RAZORPAY_ENABLED?.trim() === "true" ? "true" : "false"} and i.status = 'unpaid' and i."paymentLinkId" is null
+              and i."createdAt" < (now() at time zone 'utc') - interval '1 hour' and coalesce(b."billingDetails"->>'phone', '') <> ''`,
+  },
+  {
     rule: "every invoice older than an hour had its issued email, and every paid one its paid email",
-    sql: `select count(*)::int as n from "BillingInvoice" i where i."createdAt" < now() - interval '1 hour'
-            and ((i.status <> 'void' and i."issuedEmailAt" is null) or (i.status = 'paid' and i."paidEmailAt" is null and i."paidAt" < now() - interval '1 hour'))`,
+    sql: `select count(*)::int as n from "BillingInvoice" i where i."createdAt" < (now() at time zone 'utc') - interval '1 hour'
+            and ((i.status <> 'void' and i."issuedEmailAt" is null) or (i.status = 'paid' and i."paidEmailAt" is null and i."paidAt" < (now() at time zone 'utc') - interval '1 hour'))`,
   },
 ] as const;
 

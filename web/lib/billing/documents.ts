@@ -1,4 +1,4 @@
-import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
+import { PDFDocument, PDFString, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
 import { countryName, INDIAN_STATES } from "@/lib/billing/details";
 import type { RawInvoice } from "@/lib/billing/meteroid";
 
@@ -61,8 +61,14 @@ function describe(name: string, description: string | null | undefined, quantity
   return description ? `${name}: ${description}` : name;
 }
 
-/** The invoice as the PDFs show it, from Meteroid's invoice (GET /invoices/{id}). */
-export function billingDocument(raw: RawInvoice, orgName: string): BillingDocument {
+/** "Card", "UPI", "Netbanking" from Razorpay's method ("card", "upi", "netbanking"). */
+const METHOD: Record<string, string> = { card: "Card", upi: "UPI", netbanking: "Netbanking", wallet: "Wallet", emi: "EMI", bank_transfer: "Bank transfer" };
+
+/**
+ * The invoice as the PDFs show it, from Meteroid's invoice (GET /invoices/{id}). `methods`: how each Razorpay payment
+ * was made (payment id → Razorpay's method); anything else was a bank transfer marked by staff.
+ */
+export function billingDocument(raw: RawInvoice, orgName: string, methods: Record<string, string | null> = {}): BillingDocument {
   const currency = String(raw.currency ?? "USD");
   const customer = (raw.customer_details ?? {}) as { name?: string; email?: string | null; vat_number?: string | null; billing_address?: Record<string, string | null> | null };
   const address = customer.billing_address ?? {};
@@ -107,7 +113,11 @@ export function billingDocument(raw: RawInvoice, orgName: string): BillingDocume
     exemption: breakdown.find((tax) => tax.exemption_type)?.exemption_reason ?? null,
     payments: (raw.transactions ?? [])
       .filter((tx) => tx.status === "SETTLED" && tx.payment_type !== "REFUND")
-      .map((tx) => ({ method: "Bank transfer", reference: tx.provider_transaction_id ?? "", paidOn: String(tx.processed_at ?? "").slice(0, 10), cents: Number(tx.amount ?? 0) })),
+      .map((tx) => ({
+        method: tx.provider_transaction_id && tx.provider_transaction_id in methods
+          ? `${METHOD[methods[tx.provider_transaction_id] ?? ""] ?? "Online"} (Razorpay)`
+          : "Bank transfer",
+        reference: tx.provider_transaction_id ?? "", paidOn: String(tx.processed_at ?? "").slice(0, 10), cents: Number(tx.amount ?? 0) })),
   };
 }
 
@@ -149,6 +159,18 @@ class Sheet {
     const clean = safe(value);
     const at = options.align === "right" ? x - font.widthOfTextAtSize(clean, size) : x;
     this.page.drawText(clean, { x: at, y, size, font, color: options.color ?? INK });
+  }
+  width(value: string, size = 8.5) {
+    return this.fonts.regular.widthOfTextAtSize(safe(value), size);
+  }
+  /** A clickable area (the Pay online link). */
+  link(url: string, x: number, y: number, width: number, height: number) {
+    const context = this.page.doc.context;
+    const annotation = context.register(context.obj({
+      Type: "Annot", Subtype: "Link", Rect: [x, y, x + width, y + height], Border: [0, 0, 0],
+      A: { Type: "Action", S: "URI", URI: PDFString.of(url) },
+    }));
+    this.page.node.addAnnot(annotation);
   }
   rule(y: number, from = LEFT, to = RIGHT, thickness = 0.6, color = RULE) {
     this.page.drawLine({ start: { x: from, y }, end: { x: to, y }, thickness, color });
@@ -260,8 +282,8 @@ async function finish(pdf: PDFDocument, title: string, at: Date) {
   return Buffer.from(await pdf.save());
 }
 
-/** The tax invoice. `paymentInstructions`: how to pay (phase 2: bank transfer), under the amount. */
-export async function renderInvoice(doc: BillingDocument, paymentInstructions?: string | null) {
+/** The tax invoice. Under the amount: `payUrl` (Razorpay's page, "Pay online") and `paymentInstructions` (bank transfer). */
+export async function renderInvoice(doc: BillingDocument, paymentInstructions?: string | null, payUrl?: string | null) {
   const { pdf, s, y: start } = await sheet("Invoice", doc, [
     ["Invoice number", doc.number],
     ["Date of issue", longDay(doc.issuedOn)],
@@ -272,8 +294,14 @@ export async function renderInvoice(doc: BillingDocument, paymentInstructions?: 
   const due = `${money(doc.totalCents, doc.currency)} due ${longDay(doc.dueOn)}`;
   s.text(due, LEFT, y, { bold: true, size: 14 });
   y -= 20;
+  if (payUrl) {
+    s.text("Pay online", LEFT, y, { bold: true, color: rgb(0.3, 0.33, 0.9) });
+    s.text(payUrl, LEFT + 62, y, { color: rgb(0.3, 0.33, 0.9) });
+    s.link(payUrl, LEFT, y - 3, 62 + s.width(payUrl), 13);
+    y -= 22;
+  }
   if (paymentInstructions) {
-    s.text("How to pay", LEFT, y, { bold: true });
+    s.text(payUrl ? "Or by bank transfer" : "How to pay", LEFT, y, { bold: true });
     for (const part of paymentInstructions.split(/\n/).flatMap((line) => s.wrap(line, RIGHT - LEFT))) s.text(part, LEFT, (y -= 12));
     s.text(`Please quote ${doc.number} with your payment.`, LEFT, (y -= 12));
     y -= 18;

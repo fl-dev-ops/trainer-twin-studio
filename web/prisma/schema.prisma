@@ -1144,6 +1144,11 @@ model BillingInvoice {
   paidAt         DateTime?
   /// Payment references staff entered in Meteroid (bank transfer ids), for the receipt.
   paymentRefs    String[]  @default([])
+  /// Its Razorpay payment link (specs/billing.md rule 27): one per invoice, cancelled when it's voided or paid otherwise.
+  paymentLinkId  String?   @unique
+  paymentLinkUrl String?
+  /// The Razorpay payment that settled it (rule 29): set once, so a second payment is a duplicate, never a second mark.
+  razorpayPaymentId String? @unique
   /// When each workflow claimed the invoice (one run per invoice and event) and each email went out.
   issuedRunAt    DateTime?
   paidRunAt      DateTime?
@@ -1156,8 +1161,35 @@ model BillingInvoice {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  billing OrgBilling @relation(fields: [orgId], references: [orgId], onDelete: Cascade)
+  billing  OrgBilling       @relation(fields: [orgId], references: [orgId], onDelete: Cascade)
+  payments BillingPayment[]
 
   @@index([orgId, issuedAt])
   @@index([status, dueDate])
+}
+
+/// A Razorpay payment for an invoice (specs/billing.md rules 29, 31, 34): what settled it, or a duplicate to refund,
+/// with Razorpay's fee for the accountant's report. Money in the payment's currency (cents); INR amounts in paise.
+model BillingPayment {
+  /// Razorpay's payment id (pay_…).
+  id            String    @id
+  invoiceId     String
+  orgId         String
+  paymentLinkId String
+  status        String // applied | duplicate (CHECK)
+  amount        Int
+  currency      String
+  /// What it came to in INR, Razorpay's fee and the GST on that fee (paise): read from Razorpay once it's captured.
+  amountInr     Int?
+  feeInr        Int?
+  taxInr        Int?
+  method        String?
+  international Boolean?
+  paidAt        DateTime
+  createdAt     DateTime  @default(now())
+
+  invoice BillingInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, paidAt])
+  @@index([paidAt])
 }

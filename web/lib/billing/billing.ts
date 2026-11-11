@@ -17,6 +17,7 @@ import {
 } from "@/lib/billing/meteroid";
 import { formatMoney, MAX_PACKS, PACK_CENTS, PACK_CREDITS, PACK_VALID_DAYS, packPrice, PAID_MONTHLY_CENTS } from "@/lib/billing/pricing";
 import { billingDocument, receiptNumber, renderInvoice, renderReceipt } from "@/lib/billing/documents";
+import { closePaymentLink, ensurePaymentLink, reconcilePaymentLink } from "@/lib/billing/razorpay";
 import { orgName } from "@/lib/invite/person-email";
 import { studioUrl } from "@/lib/invite/links";
 import { MeteroidError } from "@/lib/meteroid";
@@ -125,7 +126,18 @@ export async function requestUpgrade(orgId: string) {
   });
   // The first invoice: the webhook brings it too; reading it now shows it right away (one copy, one email: claims).
   if (result.created) await syncOrgInvoices(orgId).catch((error: unknown) => console.error(`[billing] ${orgId}: sync after upgrade:`, error));
-  return result;
+  // Rule 28: straight to the payment page when Razorpay is on.
+  const invoice = await db.billingInvoice.findFirst({ where: { orgId, kind: "upgrade", status: "unpaid", subscriptionId: result.subscriptionId }, select: { id: true } });
+  const payUrl = invoice ? await payLinkQuietly(invoice.id) : null;
+  return { ...result, payUrl };
+}
+
+/** The invoice's payment link for someone waiting on it; a Razorpay failure leaves them the email and bank transfer. */
+async function payLinkQuietly(invoiceId: string) {
+  return ensurePaymentLink(invoiceId).catch((error: unknown) => {
+    console.error(`[billing] payment link for ${invoiceId}:`, error instanceof Error ? error.message : error);
+    return null;
+  });
 }
 
 /** A pack's credits expire PACK_VALID_DAYS after its invoice day (end of that day, UTC): the same on a retry that day. */
@@ -155,7 +167,7 @@ export async function buyPacks(orgId: string, packs: number, requestId: string) 
     console.error(`[billing] ${orgId}: reading pack invoice ${invoiceId}:`, error);
     return null;
   });
-  return { invoiceId, number: row?.number ?? null, totalCents: row?.totalCents ?? null };
+  return { invoiceId, number: row?.number ?? null, totalCents: row?.totalCents ?? null, payUrl: row ? await payLinkQuietly(invoiceId) : null };
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -209,7 +221,12 @@ export async function recordInvoice(invoice: MeteroidInvoice, orgId: string): Pr
     paidAt: status === "paid" ? (invoice.paidAt ?? existing?.paidAt ?? new Date()) : null,
     paymentRefs: invoice.paymentRefs,
   };
-  if (existing) return db.billingInvoice.update({ where: { id: invoice.id }, data });
+  if (existing) {
+    const updated = await db.billingInvoice.update({ where: { id: invoice.id }, data });
+    // Voided in Meteroid without the webhook reaching us (seen by the daily check): close its payment link too.
+    if (existing.status === "unpaid" && updated.status === "void") await closePaymentLink(updated);
+    return updated;
+  }
   const billing = await db.orgBilling.findUniqueOrThrow({ where: { orgId } });
   const kind = await kindOf(invoice, billing);
   return db.billingInvoice.upsert({ where: { id: invoice.id }, create: { id: invoice.id, orgId, kind, ...data }, update: data });
@@ -315,6 +332,7 @@ export async function invoiceOverdue(invoiceId: string, now = new Date()) {
       if (!ENDED_SUBSCRIPTION.includes((await getSubscription(row.subscriptionId!)).status)) throw error;
     });
     await db.orgBilling.updateMany({ where: { orgId: row.orgId, plan: "trial", paidSubscriptionId: row.subscriptionId }, data: { paidSubscriptionId: null } });
+    await closePaymentLink(row);
     await emailOnce(row, "upgrade_cancelled");
     return { action: "upgrade_cancelled" as const };
   }
@@ -365,6 +383,7 @@ export async function invoicePaid(invoiceId: string, now = new Date()) {
   } else if (row.kind === "pack") {
     outcome = `${row.credits} credits are being added to your organization (you'll get a separate email when they arrive).`;
   }
+  await closePaymentLink(row); // paid by bank transfer: the link mustn't take a second payment (none if Razorpay paid it)
   await emailOnce(row, "paid", outcome);
   return { paid: true as const, kind: row.kind, outcome };
 }
@@ -372,6 +391,8 @@ export async function invoicePaid(invoiceId: string, now = new Date()) {
 /** Rule 24: Meteroid voided the invoice (staff, or an upgrade cancelled): no more reminders or pausing for it. */
 export async function invoiceVoided(invoiceId: string) {
   await db.billingInvoice.updateMany({ where: { id: invoiceId, status: "unpaid" }, data: { status: "void" } });
+  const row = await db.billingInvoice.findUnique({ where: { id: invoiceId } });
+  if (row) await closePaymentLink(row);
 }
 
 /** Rule 18: the org's Paid subscription was cancelled or ended in Meteroid: back to Trial, unpaused. */
@@ -404,12 +425,13 @@ const paymentInstructions = () => process.env.BILLING_PAYMENT_INSTRUCTIONS?.trim
 
 /** The invoice as the PDFs show it, from Meteroid (its numbers, lines, tax and the customer when it was issued). */
 async function documentOf(row: Pick<BillingInvoice, "id" | "orgId">) {
-  return billingDocument(await getInvoiceRaw(row.id), await orgName(row.orgId));
+  const payments = await db.billingPayment.findMany({ where: { invoiceId: row.id }, select: { id: true, method: true } });
+  return billingDocument(await getInvoiceRaw(row.id), await orgName(row.orgId), Object.fromEntries(payments.map((p) => [p.id, p.method])));
 }
 
 /** The tax invoice PDF (lib/billing/documents.ts). */
-export async function invoicePdf(row: Pick<BillingInvoice, "id" | "orgId">) {
-  return renderInvoice(await documentOf(row), paymentInstructions());
+export async function invoicePdf(row: Pick<BillingInvoice, "id" | "orgId" | "status" | "paymentLinkUrl">) {
+  return renderInvoice(await documentOf(row), paymentInstructions(), row.status === "unpaid" ? row.paymentLinkUrl : null);
 }
 
 /** The receipt PDF of a paid invoice. */
@@ -445,6 +467,7 @@ async function emailOnce(row: BillingInvoice, event: BillingEmailArgs["event"], 
       description: describeInvoice(row),
       billingUrl: `${studioUrl()}settings?tab=billing`,
       paymentInstructions: paymentInstructions(),
+      payUrl: row.status === "unpaid" ? row.paymentLinkUrl : null,
       outcome,
     },
   });
@@ -486,6 +509,16 @@ export async function syncOrgInvoices(orgId: string, now = new Date()) {
       else if (current.status !== "void" && dead(current.issuedRunAt) && !current.issuedEmailAt && (await invoiceIssuedEmail(current.id))) repaired++;
     } catch (error) {
       console.error(`[billing] ${orgId}: repairing ${row.number}:`, error instanceof Error ? error.message : error);
+    }
+  }
+  // Rule 33: unpaid invoices whose Razorpay payment a lost webhook never brought, and links not made yet.
+  for (const row of await db.billingInvoice.findMany({ where: { orgId, status: "unpaid" } })) {
+    try {
+      if (row.paymentLinkId) {
+        if ((await reconcilePaymentLink(row))?.status === "applied") repaired++;
+      } else if (await ensurePaymentLink(row.id)) repaired++;
+    } catch (error) {
+      console.error(`[billing] ${orgId}: Razorpay for ${row.number}:`, error instanceof Error ? error.message : error);
     }
   }
   // Overdue invoices no workflow finished: renewals not paused (or their email not sent), upgrades not cancelled.
@@ -543,6 +576,8 @@ export type BillingInvoiceView = {
   totalCents: number;
   currency: string;
   subscriptionId: string | null;
+  /** Razorpay's payment page while it's unpaid (rule 28). */
+  payUrl: string | null;
   issuedAt: string;
   dueDate: string;
   paidAt: string | null;
@@ -560,6 +595,7 @@ export async function billingOverview(orgId: string, now = new Date()) {
     totalCents: row.totalCents,
     currency: row.currency,
     subscriptionId: row.subscriptionId,
+    payUrl: row.status === "unpaid" ? row.paymentLinkUrl : null,
     issuedAt: row.issuedAt.toISOString(),
     dueDate: dateOnly(row.dueDate),
     paidAt: row.paidAt?.toISOString() ?? null,

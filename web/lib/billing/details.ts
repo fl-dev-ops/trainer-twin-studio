@@ -71,6 +71,9 @@ export const billingDetailsInput = z.object({
   taxId: z.string().trim().toUpperCase().max(50).optional().transform((value) => value || undefined),
   emails: z.array(z.string().trim().toLowerCase().email().max(320)).min(1, "Add at least one billing email").max(5, "At most 5 billing emails")
     .transform((emails) => [...new Set(emails)]),
+  /** With the country code; Razorpay needs it for card payments in USD (specs/billing.md rule 7). */
+  phone: z.string().transform((value) => value.replace(/[\s\-().]/g, ""))
+    .pipe(z.string().regex(/^\+[1-9]\d{7,14}$/, "Enter the phone number with its country code, like +91 98765 43210")),
 }).strict().superRefine((details, ctx) => {
   if (details.country === "IN") {
     if (!details.state || !INDIAN_STATES[details.state]) ctx.addIssue({ code: "custom", path: ["state"], message: "Choose the state" });
@@ -121,6 +124,7 @@ export function meteroidCustomerPatch(details: BillingDetails) {
       country: details.country,
     },
     vat_number: details.taxId ?? null,
+    phone: details.phone ?? null,
     billing_email: details.emails[0],
     invoicing_emails: details.emails,
     custom_taxes: tax.lines.map((line) => ({ tax_code: line.code, name: line.name, rate: (line.bp / 10_000).toFixed(4) })),

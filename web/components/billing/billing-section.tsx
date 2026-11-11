@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "next/navigation";
 import { Download, FileCheck2 } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -54,6 +55,55 @@ async function download(href: string, filename: string) {
 
 const message = (error: unknown) => (error instanceof Error ? error.message : "Something went wrong; please try again.");
 
+/** Razorpay's page for an invoice: in this tab, so the payer comes back here (Razorpay's callback). */
+function PayNow({ url, label = "Pay now" }: { url: string; label?: string }) {
+  return <Button variant="brand" size="sm" onClick={() => window.location.assign(url)}>{label}</Button>;
+}
+
+/**
+ * Back from Razorpay (`?paid=INV-…`): the payment reaches us by webhook within seconds, so the page checks again
+ * every 3 s for up to 2 minutes and says when it has arrived.
+ */
+function PaymentArriving({ invoices }: { invoices: Invoice[] }) {
+  const params = useSearchParams();
+  const number = params.get("paid");
+  const linkId = params.get("razorpay_payment_link_id");
+  const queryClient = useQueryClient();
+  const [gaveUp, setGaveUp] = useState(false);
+  const paid = invoices.find((invoice) => invoice.number === number)?.status === "paid";
+  // Ask Razorpay now rather than wait for its webhook (the server checks with Razorpay, not this URL).
+  useEffect(() => {
+    if (!linkId) return;
+    void api.billing.confirmPayment.mutate({ paymentLinkId: linkId })
+      .then(() => queryClient.invalidateQueries({ queryKey: QUERY }))
+      .catch(() => undefined);
+  }, [linkId, queryClient]);
+  useEffect(() => {
+    if (!number || paid) return;
+    const started = Date.now();
+    const timer = window.setInterval(() => {
+      if (Date.now() - started > 120_000) {
+        setGaveUp(true);
+        window.clearInterval(timer);
+      } else void queryClient.invalidateQueries({ queryKey: QUERY });
+    }, 3_000);
+    return () => window.clearInterval(timer);
+  }, [number, paid, queryClient]);
+  if (!number) return null;
+  return (
+    <Alert>
+      <AlertTitle>{paid ? "Payment received, thank you" : "Confirming your payment…"}</AlertTitle>
+      <AlertDescription>
+        {paid
+          ? `Invoice ${number} is paid. Your receipt is on its way by email and below.`
+          : gaveUp
+            ? `It's taking longer than usual. If you paid, invoice ${number} will show as paid shortly and you'll get a receipt by email.`
+            : `We're waiting for Razorpay to confirm invoice ${number}. This usually takes a few seconds.`}
+      </AlertDescription>
+    </Alert>
+  );
+}
+
 export function BillingSection() {
   const overview = useApi(QUERY, () => api.billing.overview.query());
   if (!overview.billed) {
@@ -65,6 +115,7 @@ export function BillingSection() {
   }
   return (
     <div className="mt-3 flex flex-col gap-6">
+      <PaymentArriving invoices={overview.invoices} />
       <PlanCard overview={overview} />
       <DetailsCard details={overview.details} />
       {overview.plan === "paid" ? <PacksCard overview={overview} /> : null}
@@ -80,7 +131,8 @@ function PlanCard({ overview }: { overview: Billed }) {
   async function upgrade() {
     setBusy(true);
     try {
-      await api.billing.upgrade.mutate();
+      const result = await api.billing.upgrade.mutate();
+      if (result.payUrl) return window.location.assign(result.payUrl);
       toast.success("Upgrade started: your invoice is on its way by email.");
       await queryClient.invalidateQueries({ queryKey: QUERY });
     } catch (error) {
@@ -108,7 +160,8 @@ function PlanCard({ overview }: { overview: Billed }) {
           <Alert variant="destructive">
             <AlertTitle>Your plan is paused</AlertTitle>
             <AlertDescription>
-              Invoice {overview.overdueInvoice.number} ({formatMoney(overview.overdueInvoice.totalCents, overview.overdueInvoice.currency)}) was due {day(overview.overdueInvoice.dueDate)}. No new calls can start and no credits can be given until your overdue invoices are paid. Pay by bank transfer using the details on the invoice, quoting its number. Already paid? Reply to the invoice email.
+              Invoice {overview.overdueInvoice.number} ({formatMoney(overview.overdueInvoice.totalCents, overview.overdueInvoice.currency)}) was due {day(overview.overdueInvoice.dueDate)}. No new calls can start and no credits can be given until your overdue invoices are paid. {overview.overdueInvoice.payUrl ? "" : "Pay by bank transfer using the details on the invoice, quoting its number. "}Already paid? Reply to the invoice email.
+              {overview.overdueInvoice.payUrl ? <div className="mt-3"><PayNow url={overview.overdueInvoice.payUrl} /></div> : null}
             </AlertDescription>
           </Alert>
         ) : null}
@@ -116,7 +169,8 @@ function PlanCard({ overview }: { overview: Billed }) {
           <Alert>
             <AlertTitle>Upgrade waiting for payment</AlertTitle>
             <AlertDescription>
-              Invoice {overview.upgradeInvoice.number} ({formatMoney(overview.upgradeInvoice.totalCents, overview.upgradeInvoice.currency)}) is due {day(overview.upgradeInvoice.dueDate)}. You move to the Paid plan as soon as it&apos;s paid; unpaid by then, the upgrade is cancelled and you stay on Trial. Pay by bank transfer using the details on the invoice, quoting its number.
+              Invoice {overview.upgradeInvoice.number} ({formatMoney(overview.upgradeInvoice.totalCents, overview.upgradeInvoice.currency)}) is due {day(overview.upgradeInvoice.dueDate)}. You move to the Paid plan as soon as it&apos;s paid; unpaid by then, the upgrade is cancelled and you stay on Trial.{overview.upgradeInvoice.payUrl ? "" : " Pay by bank transfer using the details on the invoice, quoting its number."}
+              {overview.upgradeInvoice.payUrl ? <div className="mt-3"><PayNow url={overview.upgradeInvoice.payUrl} /></div> : null}
             </AlertDescription>
           </Alert>
         ) : null}
@@ -143,12 +197,13 @@ function PlanCard({ overview }: { overview: Billed }) {
   );
 }
 
-const EMPTY: BillingDetails = { legalName: "", country: "IN", line1: "", line2: undefined, city: "", postalCode: "", state: undefined, taxId: undefined, emails: [] };
+const EMPTY: BillingDetails = { legalName: "", country: "IN", line1: "", line2: undefined, city: "", postalCode: "", state: undefined, taxId: undefined, emails: [], phone: "" };
 
 function DetailsCard({ details }: { details: BillingDetails | null }) {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(!details);
-  const [form, setForm] = useState<BillingDetails>(details ?? EMPTY);
+  // Details saved before the phone was asked for have none: the form asks for it.
+  const [form, setForm] = useState<BillingDetails>(details ? { ...details, phone: details.phone ?? "" } : EMPTY);
   const [emails, setEmails] = useState((details?.emails ?? []).join(", "));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ field: string; text: string } | null>(null);
@@ -189,6 +244,7 @@ function DetailsCard({ details }: { details: BillingDetails | null }) {
             {lines.map((line) => <p key={line} className="text-muted-foreground">{line}</p>)}
             {details.taxId ? <p className="text-muted-foreground">{details.country === "IN" ? "GSTIN" : "Tax number"}: {details.taxId}</p> : null}
             <p className="mt-2">Billing emails: {details.emails.join(", ")}</p>
+            {details.phone ? <p>Phone: {details.phone}</p> : <p className="text-destructive">Add a phone number to pay online.</p>}
           </div>
           <div><Button variant="outline" onClick={() => setEditing(true)}>Edit</Button></div>
         </CardContent>
@@ -256,13 +312,18 @@ function DetailsCard({ details }: { details: BillingDetails | null }) {
               <Input id="billing-emails" value={emails} onChange={(event) => setEmails(event.target.value)} placeholder="accounts@company.com, you@company.com" required />
               {invalid("emails") ? <FieldError>{error?.text}</FieldError> : <p className="text-xs text-muted-foreground">Up to 5, separated by commas. Invoices and receipts go here.</p>}
             </Field>
+            <Field data-invalid={invalid("phone")}>
+              <FieldLabel htmlFor="billing-phone">Phone</FieldLabel>
+              <Input id="billing-phone" type="tel" value={form.phone ?? ""} onChange={set("phone")} placeholder="+91 98765 43210" required />
+              {invalid("phone") ? <FieldError>{error?.text}</FieldError> : <p className="text-xs text-muted-foreground">With the country code. Needed to pay online by card.</p>}
+            </Field>
           </FieldGroup>
-          {error?.field === "form" || (error && !["legalName", "country", "line1", "city", "postalCode", "state", "taxId", "emails"].includes(error.field)) ? (
+          {error?.field === "form" || (error && !["legalName", "country", "line1", "city", "postalCode", "state", "taxId", "emails", "phone"].includes(error.field)) ? (
             <p role="alert" className="text-sm text-destructive">{error.text}</p>
           ) : null}
           <div className="flex gap-2">
             <Button type="submit" disabled={busy}>{busy ? "Saving…" : "Save billing details"}</Button>
-            {details ? <Button type="button" variant="outline" onClick={() => { setForm(details); setEmails(details.emails.join(", ")); setError(null); setEditing(false); }}>Cancel</Button> : null}
+            {details ? <Button type="button" variant="outline" onClick={() => { setForm({ ...details, phone: details.phone ?? "" }); setEmails(details.emails.join(", ")); setError(null); setEditing(false); }}>Cancel</Button> : null}
           </div>
         </form>
       </CardContent>
@@ -282,6 +343,7 @@ function PacksCard({ overview }: { overview: Billed }) {
     try {
       const result = await api.billing.buyPacks.mutate({ packs, requestId });
       setRequestId(crypto.randomUUID());
+      if (result.payUrl) return window.location.assign(result.payUrl);
       toast.success(`Invoice ${result.number ?? ""} is on its way by email. The credits are added once it's paid.`.replace("  ", " "));
       await queryClient.invalidateQueries({ queryKey: QUERY });
     } catch (error) {
@@ -316,7 +378,7 @@ function InvoicesCard({ invoices }: { invoices: Invoice[] }) {
     <Card>
       <CardHeader>
         <CardTitle>Invoices</CardTitle>
-        <CardDescription>Pay by bank transfer using the details on the invoice, quoting its number. Paid invoices have a receipt.</CardDescription>
+        <CardDescription>Pay online with Pay now, or by bank transfer using the details on the invoice (quote its number). Paid invoices have a receipt.</CardDescription>
       </CardHeader>
       <CardContent>
         {invoices.length ? (
@@ -345,6 +407,7 @@ function InvoicesCard({ invoices }: { invoices: Invoice[] }) {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
+                      {invoice.payUrl && (invoice.status === "unpaid" || invoice.status === "overdue") ? <PayNow url={invoice.payUrl} /> : null}
                       <Button size="sm" variant="ghost" onClick={() => download(`/api/billing/invoices/${invoice.id}/pdf`, `${invoice.number}.pdf`)} aria-label={`Download invoice ${invoice.number}`}>
                         <Download data-icon="inline-start" /> Invoice
                       </Button>

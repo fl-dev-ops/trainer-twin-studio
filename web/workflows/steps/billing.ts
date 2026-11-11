@@ -1,3 +1,4 @@
+import { ensurePaymentLink } from "@/lib/billing/razorpay";
 import {
   invoiceForWorkflow,
   invoiceIssuedEmail,
@@ -12,6 +13,12 @@ import {
 export async function readInvoice(invoiceId: string) {
   "use step";
   return invoiceForWorkflow(invoiceId);
+}
+
+/** The invoice's Razorpay payment link, made once (none while Razorpay is off or the org has no phone). */
+export async function payLink(invoiceId: string) {
+  "use step";
+  return ensurePaymentLink(invoiceId);
 }
 
 /** Emails the invoice with its PDF, once. */
