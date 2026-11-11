@@ -1,3 +1,4 @@
+import { practiceRefusals } from "@/lib/practice";
 import { NextResponse } from "next/server";
 import { errorResponse, refusals } from "@/lib/errors";
 import { db } from "@/lib/db";
@@ -21,7 +22,9 @@ export async function GET(
   if (token) {
     // The browser's own token for this call (practice rule 26).
     const authorized = await authorizeBrowserSession(id, token);
-    if (authorized) {
+    // A token that isn't this live call's is refused, not tried as a login (practice rule 26).
+    if (!authorized) return errorResponse(practiceRefusals.runtimeTokenInvalid());
+    {
       session = {
         id: authorized.id,
         status: authorized.status,

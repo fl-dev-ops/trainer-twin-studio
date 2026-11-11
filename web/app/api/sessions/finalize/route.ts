@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   // At most 1 MB (practice rule 22): refused from its declared size, then from what arrived.
   if (Number(request.headers.get("content-length") ?? 0) > MAX_BODY_BYTES) return errorResponse(tooBig());
   const text = await request.text();
-  if (text.length > MAX_BODY_BYTES) return errorResponse(tooBig());
+  if (Buffer.byteLength(text) > MAX_BODY_BYTES) return errorResponse(tooBig());
   const body = (() => {
     try {
       return JSON.parse(text);

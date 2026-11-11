@@ -4,7 +4,7 @@ import { open, connect } from "@/workflows/steps/start-session";
 import { startSession } from "@/workflows/start-session";
 
 const input = { orgId: "org", userId: "learner", mode: "voice" as const };
-const session = { id: "session", runtimeToken: "runtime" } as activation.OpenedSession;
+const session = { id: "session", runtimeToken: "browser", agentToken: "agent" } as activation.OpenedSession;
 let opening: ReturnType<typeof spyOn<typeof activation, "openSession">>;
 let connecting: ReturnType<typeof spyOn<typeof activation, "connectVoice">>;
 beforeEach(() => {
@@ -25,8 +25,8 @@ test("voice opens first, then connects exactly once", async () => {
   expect(connecting).toHaveBeenCalledTimes(1);
   expect(opening.mock.invocationCallOrder[0]).toBeLessThan(connecting.mock.invocationCallOrder[0]);
 });
-test("chat skips connect and returns the runtime token as conversationToken", async () => {
-  expect(await startSession({ ...input, mode: "chat" })).toEqual({ ok: true, session, conversationToken: "runtime" });
+test("chat skips connect and returns the agent token as conversationToken", async () => {
+  expect(await startSession({ ...input, mode: "chat" })).toEqual({ ok: true, session, conversationToken: "agent" });
   expect(connecting).not.toHaveBeenCalled();
 });
 test("a refusal is returned unchanged without connecting", async () => {

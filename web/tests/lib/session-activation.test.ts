@@ -19,7 +19,7 @@ const db = {
 mock.module("@/lib/db", () => ({ db, withLock: async () => { throw new Error("Unexpected locked write"); } }));
 
 const input = { orgId: "org", userId: "learner", mode: "voice" as const };
-const session = { id: "session", runtimeToken: "runtime", secondsLeft: 300 } as OpenedSession;
+const session = { id: "session", runtimeToken: "browser", agentToken: "agent", secondsLeft: 300 } as OpenedSession;
 let activate: ReturnType<typeof spyOn<typeof sessions, "activateSession">>;
 let connect: ReturnType<typeof spyOn<typeof livekit, "activateLiveKitSession">>;
 let close: ReturnType<typeof spyOn<typeof livekit, "closeLiveKitSession">>;
@@ -61,11 +61,11 @@ test("startSessionNow opens before connecting voice and returns credentials with
   expect(await startSessionNow(input)).toEqual({ ok: true, session, participantToken: "participant", room: "room" });
   expect(activate).toHaveBeenCalledWith(input);
   expect(activate.mock.invocationCallOrder[0]).toBeLessThan(connect.mock.invocationCallOrder[0]);
-  expect(connect).toHaveBeenCalledWith(expect.objectContaining({ sessionId: session.id, runtimeToken: session.runtimeToken, agentKind: "ROLEPLAY", endsAt: expect.any(Number) }));
+  expect(connect).toHaveBeenCalledWith(expect.objectContaining({ sessionId: session.id, runtimeToken: session.agentToken, agentKind: "ROLEPLAY", endsAt: expect.any(Number) }));
 });
 
 test("startSessionNow chat returns the conversation token without LiveKit", async () => {
-  expect(await startSessionNow({ ...input, mode: "chat" })).toEqual({ ok: true, session, conversationToken: "runtime" });
+  expect(await startSessionNow({ ...input, mode: "chat" })).toEqual({ ok: true, session, conversationToken: "agent" });
   expect(connect).not.toHaveBeenCalled();
 });
 

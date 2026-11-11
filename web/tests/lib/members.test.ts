@@ -20,7 +20,7 @@ const db = {
   session: { deleteMany: op("session.deleteMany") },
   twinAssignment: { updateMany: op("twinAssignment.updateMany"), deleteMany: op("twinAssignment.deleteMany") },
   rolePlayAssignment: { updateMany: op("rolePlayAssignment.updateMany"), deleteMany: op("rolePlayAssignment.deleteMany") },
-  interviewSession: { updateMany: op("interviewSession.updateMany"), findMany: async () => open.map((id) => ({ id })) },
+  interviewSession: { updateMany: op("interviewSession.updateMany"), findMany: async ({ where }: { where: { endWorkAt?: null } }) => where.endWorkAt === null ? [] : open.map((id) => ({ id })) },
 };
 mock.module("@/lib/db", () => ({ db, withLock: async (keys: string[], work: (tx: typeof db) => Promise<unknown>) => { locks.push(keys); return work(db); } }));
 mock.module("@/lib/session-lifecycle", () => ({ closeInterviewSession: async (id: string, status: string) => {

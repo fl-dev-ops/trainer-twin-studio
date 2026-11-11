@@ -14,6 +14,7 @@ mock.module("@/lib/session-user", () => ({
   resolveSessionUser: async () => ({ org: { id: "demo" }, user }),
 }));
 mock.module("@/lib/interview-sessions", () => ({
+  authorizeBrowserSession: async () => null,
   authorizeRuntimeSession: async () => null,
   activateSession: async () => null,
   finalizeInterviewSession: async () => null,

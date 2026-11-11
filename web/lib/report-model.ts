@@ -46,7 +46,7 @@ export async function callReportModel(input: {
       model: REPORT_MODEL,
       messages: [
         { role: "system", content: input.system },
-        { role: "user", content: input.user.length > MAX_PROMPT_CHARS ? `[…earlier part cut]\n${input.user.slice(-MAX_PROMPT_CHARS)}` : input.user },
+        { role: "user", content: input.user.length > MAX_PROMPT_CHARS ? `${CUT_MARK}${input.user.slice(-(MAX_PROMPT_CHARS - CUT_MARK.length))}` : input.user },
       ],
       response_format: { type: "json_schema", json_schema: { name: input.schemaName, strict: true, schema: input.schema } },
     }),
@@ -113,3 +113,4 @@ export async function failStaleReports() {
 
 /** The most of a transcript (characters) a report prompt carries; longer ones keep their end. */
 const MAX_PROMPT_CHARS = 120_000;
+const CUT_MARK = "[…earlier part cut]\n";

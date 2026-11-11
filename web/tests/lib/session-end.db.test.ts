@@ -107,7 +107,7 @@ describe.skipIf(!localMinutesDb)("session end workflows (local database)", () =>
 
   test.each([null, "none", "failed", "generating", "completed"])("claimReport respects reportStatus %s for ended sessions", async (reportStatus) => {
     const session = await f.session({ reportStatus });
-    const eligible = reportStatus === null || reportStatus === "none" || reportStatus === "failed";
+    const eligible = reportStatus === null || reportStatus === "none";
     expect(await claimReport(session.id, "end-run")).toBe(eligible);
     const row = await db.interviewSession.findUniqueOrThrow({ where: { id: session.id } });
     expect(row.reportStatus).toBe(eligible ? "generating" : reportStatus);

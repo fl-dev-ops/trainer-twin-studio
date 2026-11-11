@@ -1,3 +1,4 @@
+import { errorResponse, refusals } from "@/lib/errors";
 import { headers } from "next/headers";
 import { after, NextResponse } from "next/server";
 import { z } from "zod";
@@ -28,10 +29,7 @@ export async function POST(request: Request) {
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Please describe the issue (5–5000 characters)" },
-      { status: 422 },
-    );
+    return errorResponse(refusals.invalidInput(parsed.error.issues[0]?.path[0] === "url" ? parsed.error.issues[0].message : "Please describe the issue (5–5000 characters)"));
   }
 
   // Attribute the report to the reporter's organization: trainers belong via

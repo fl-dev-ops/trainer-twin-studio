@@ -61,3 +61,12 @@ test("sendOtpEmail sends the 6-digit code with its 10-minute expiry", async () =
   expect(requests[0].body).toMatchObject({ to: "a@example.com", subject: "Your TrainerTwin Sign In code: 123456" });
   expect(String(requests[0].body.html)).toContain("expires in 10 minutes");
 });
+
+test("email subjects remove CR/LF before reaching Resend", async () => {
+  expect(await email.sendEmail({ to: "a@example.com", subject: "  Hello\r\nInjected\nLine\rEnd  ", html: "<p>Safe</p>" })).toMatchObject({ success: true });
+  expect(requests[0].body.subject).toBe("Hello Injected Line End");
+});
+test("Resend rejection preserves the HTTP status for workflow retry classification", async () => {
+  server.use(http.post("https://api.resend.com/emails", () => HttpResponse.json({ name: "validation_error", message: "Invalid recipient", statusCode: 422 }, { status: 422 }), { once: true }));
+  expect(await email.sendEmail({ to: "bad", subject: "Invite", html: "<p>Hello</p>" })).toMatchObject({ success: false, error: "Invalid recipient", status: 422 });
+});

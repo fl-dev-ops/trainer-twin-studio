@@ -1,4 +1,5 @@
 import { expect, mock, test } from "bun:test";
+import { createHmac } from "node:crypto";
 
 let status = "used";
 let deploymentStatus = "active";
@@ -47,7 +48,9 @@ test.each(["activating", "active"])("used assignments with a past expiry resume 
     expect(resumed).toMatchObject({ id: "session", status: sessionStatus, resumed: true });
     expect(resumed?.secondsLeft).toBeGreaterThanOrEqual(89);
     expect(resumed?.secondsLeft).toBeLessThanOrEqual(90);
-    expect(resumed?.runtimeToken).toBeTruthy();
+    expect(resumed?.runtimeToken).toBe(createHmac("sha256", "test-only-secret").update("browser:session").digest("base64url"));
+    expect(resumed?.agentToken).toBe(createHmac("sha256", "test-only-secret").update("session:session").digest("base64url"));
+    expect(resumed?.agentToken).not.toBe(resumed?.runtimeToken);
   } finally {
     if (previousSecret === undefined) delete process.env.COPILOT_SERVICE_SECRET;
     else process.env.COPILOT_SERVICE_SECRET = previousSecret;

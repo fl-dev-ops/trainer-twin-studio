@@ -41,7 +41,7 @@ describe.skipIf(!localMinutesDb)("Module 1 real PostgreSQL people-lock races", (
     expect(await db.twinAssignment.count({ where: { orgId: f.org.id, userId: f.learner.id } })).toBe(0);
     expect(await db.rolePlayAssignment.count({ where: { memberId: `${f.learner.id}-member` } })).toBe(0);
   });
-  test("BUG repeat disable must retry a failed workflow dispatch after finalization (actual no retry of abandoned call)", async () => {
+  test("repeat disable retries an unstarted end workflow after finalization without double charging", async () => {
     const call = await f.session({ status: "active", endedAt: null, startedAt: new Date(Date.now() - 60_000) });
     const end = spyOn(sessionEnd, "startSessionEnd").mockRejectedValueOnce(new Error("LiveKit end workflow could not start")).mockResolvedValue(undefined);
     try {
@@ -57,7 +57,9 @@ describe.skipIf(!localMinutesDb)("Module 1 real PostgreSQL people-lock races", (
   });
   test("concurrent disables dispatch the call end once", async () => {
     const call = await f.session({ status: "active", endedAt: null, startedAt: new Date(Date.now() - 60_000) });
-    const end = spyOn(sessionEnd, "startSessionEnd").mockResolvedValue(undefined);
+    const end = spyOn(sessionEnd, "startSessionEnd").mockImplementation(async (id) => {
+      await db.interviewSession.update({ where: { id }, data: { endWorkAt: new Date() } });
+    });
     try {
       await Promise.all([disable(), disable()]);
       const ended = await db.interviewSession.findUniqueOrThrow({ where: { id: call.id } });

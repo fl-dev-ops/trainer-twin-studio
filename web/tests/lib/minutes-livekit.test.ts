@@ -34,7 +34,8 @@ test.each(["TWIN", "ROLEPLAY"])("room and dispatch metadata carry the absolute d
   await activateLiveKitSession({ ...input, endsAt: 1234567890, agentKind });
   const metadata = createRoom.mock.calls[0][0].metadata!;
   expect(JSON.parse(metadata)).toMatchObject({ ends_at: 1234567890, agent_kind: agentKind });
-  expect(createDispatch.mock.calls[0][2]?.metadata).toBe(metadata);
+  expect(JSON.parse(metadata)).not.toHaveProperty("runtimeToken");
+  expect(JSON.parse(createDispatch.mock.calls[0][2]!.metadata!)).toEqual({ ...JSON.parse(metadata), runtimeToken: input.runtimeToken });
   expect(fetchMock).not.toHaveBeenCalled();
 });
 
@@ -43,6 +44,7 @@ test("studio metadata has no deadline, but keeps the kind for the correct goodby
   const metadata = JSON.parse(createRoom.mock.calls[0][0].metadata!);
   expect(metadata).not.toHaveProperty("ends_at");
   expect(metadata.agent_kind).toBe("TWIN");
+  expect(metadata).not.toHaveProperty("runtimeToken");
 });
 
 test("an existing room's metadata is refreshed with its deadline", async () => {
@@ -51,4 +53,6 @@ test("an existing room's metadata is refreshed with its deadline", async () => {
   expect(createRoom).not.toHaveBeenCalled();
   expect(updateRoom.mock.calls[0][0]).toBe("session");
   expect(JSON.parse(updateRoom.mock.calls[0][1])).toMatchObject({ ends_at: 1234567890, agent_kind: "ROLEPLAY" });
+  expect(JSON.parse(updateRoom.mock.calls[0][1])).not.toHaveProperty("runtimeToken");
+  expect(JSON.parse(createDispatch.mock.calls[0][2]!.metadata!).runtimeToken).toBe(input.runtimeToken);
 });
