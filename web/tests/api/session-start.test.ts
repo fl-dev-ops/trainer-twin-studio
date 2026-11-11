@@ -44,6 +44,15 @@ test("POST voice returns credentials and schedules opening warmup after the resp
   await callbacks[0]();
   expect(warming).toHaveBeenCalledWith("session", "org");
 });
+test.each([true, false, "true", 1, null])("POST passes calibrate only for literal true and returns calibrationId (%j)", async (calibrate) => {
+  const calibrated = { ...session, calibrationId: "calibration" };
+  start.mockResolvedValue({ ok: true, session: calibrated, participantToken: "participant", room: "room" });
+  const response = await POST(request({ shareCode: "invite", calibrate }));
+  expect(response.status).toBe(200);
+  expect(start).toHaveBeenCalledWith(expect.objectContaining({ calibrate: calibrate === true }));
+  expect(await response.json()).toMatchObject({ session: { calibrationId: "calibration" } });
+});
+
 test("POST chat omits undefined voice credentials", async () => {
   start.mockResolvedValue({ ok: true, session, conversationToken: "runtime" });
   const response = await POST(request({ shareCode: "invite", mode: "chat" }));

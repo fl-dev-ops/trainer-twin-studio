@@ -5,6 +5,7 @@ import * as livekit from "@/lib/livekit";
 import * as twinSteps from "@/workflows/steps/twin-session-report";
 import * as roleplaySteps from "@/workflows/steps/roleplay-session-report";
 import * as sessionReports from "@/lib/generate-session-report";
+import * as jev from "@/lib/jev";
 import { closeInterviewSession } from "@/lib/session-lifecycle";
 import { claimReport, closeSessionRoom, reportFor } from "@/lib/session-close";
 import { chargeCall, takeReport } from "@/workflows/steps/session-end";
@@ -40,6 +41,7 @@ describe.skipIf(!localMinutesDb)("session end workflows (local database)", () =>
     roleplayGenerate = spyOn(roleplaySteps, "generateRoleplayReport").mockResolvedValue(roleplayReport);
     sessionGenerate = spyOn(sessionReports, "generateSessionReport").mockResolvedValue(null);
     spies.push(start, close, twinGenerate, roleplayGenerate, sessionGenerate,
+      spyOn(jev, "decide").mockResolvedValue({}),
       spyOn(workflow, "getWorkflowMetadata").mockImplementation(() => ({ workflowRunId: runId }) as never));
   });
   afterEach(async () => { for (const spy of spies.splice(0).reverse()) spy.mockRestore(); await f?.clean(); });
@@ -65,7 +67,8 @@ describe.skipIf(!localMinutesDb)("session end workflows (local database)", () =>
     if (calibration) await db.twinCalibration.create({ data: { sessionId: session.id, createdByUserId: f.trainer.id } });
     expect(await reportFor(session.id)).toBe(expected);
     const run = kind === "twin" ? endTwinSession : endRoleplaySession;
-    expect(await run(session.id)).toEqual(expected ? { status: "ended", report: "completed" } : { status: "ended" });
+    expect(await run(session.id)).toEqual(calibration ? { status: "ended", calibration: "scored" } : expected ? { status: "ended", report: "completed" } : { status: "ended" });
+    if (calibration) expect(await db.twinCalibration.findUniqueOrThrow({ where: { sessionId: session.id } })).toMatchObject({ turns: 1, offTurns: 0, scoredAt: expect.any(Date) });
     expect(close).toHaveBeenCalledWith({ room: "room-s1", dispatchId: "dispatch-s1", videoEgressId: "egress-s1" }, { strict: true });
     expect(twinGenerate).toHaveBeenCalledTimes(expected === "twin" ? 1 : 0);
     expect(roleplayGenerate).toHaveBeenCalledTimes(expected === "roleplay" ? 1 : 0);
@@ -77,7 +80,7 @@ describe.skipIf(!localMinutesDb)("session end workflows (local database)", () =>
     if (expected === "twin" || expected === "roleplay") expect(row.reportStatus).toBe("completed");
     await recordSessionUsage(session.id);
     expect(await db.minuteLedger.count({ where: { sessionId: session.id } })).toBe(calibration ? 0 : 1);
-    expect(await run(session.id)).toEqual({ status: "ended" }); // the same report cannot be claimed again
+    expect(await run(session.id)).toEqual(calibration ? { status: "ended", calibration: "scored" } : { status: "ended" }); // the same report cannot be claimed again
     expect(twinGenerate).toHaveBeenCalledTimes(expected === "twin" ? 1 : 0);
     expect(roleplayGenerate).toHaveBeenCalledTimes(expected === "roleplay" ? 1 : 0);
     expect(sessionGenerate).toHaveBeenCalledTimes(expected === "session" ? 1 : 0);

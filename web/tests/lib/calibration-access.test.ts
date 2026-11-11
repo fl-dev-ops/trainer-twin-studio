@@ -30,12 +30,16 @@ const codeOf = (promise: Promise<unknown>) => promise.then(() => "OK", (error: {
 const calls = {
   list: (c: ReturnType<typeof caller>) => c.calibrations.list({ slug: "acme-twin" }),
   get: (c: ReturnType<typeof caller>) => c.calibrations.get({ id: "cal" }),
-  start: (c: ReturnType<typeof caller>) => c.calibrations.start({ slug: "acme-twin", sessionId: "s1" }),
+  evidence: (c: ReturnType<typeof caller>) => c.calibrations.evidence({ sessionId: "s1" }),
   rate: (c: ReturnType<typeof caller>) => c.calibrations.rate({ calibrationId: "cal", turnIndex: 1, question: null, reply: "x", rating: "like" }),
 };
 
 test("API: learners (user role) are refused every calibration procedure", async () => {
   for (const [name, call] of Object.entries(calls)) expect([name, await codeOf(call(caller("user")))]).toEqual([name, "FORBIDDEN"]);
+});
+
+test("API: the separate calibration start and score mutations do not exist", () => {
+  expect(Object.keys(twinRouter._def.record.calibrations).sort()).toEqual(["evidence", "get", "list", "rate"]);
 });
 
 test("API: anonymous callers are refused", async () => {

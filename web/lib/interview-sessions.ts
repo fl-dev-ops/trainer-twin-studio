@@ -232,6 +232,8 @@ export async function activateSession(input: {
   const person = await practicePerson(input.orgId, input.userId); // every session path goes through here
   const mode = input.mode ?? "voice";
   const studio = isStudioRole(person.role);
+  // Calibrating is for admin and team (specs/practice.md rule 12), before anything about the twin is looked at.
+  if (input.calibrate && !studio) throw refusals.studioOnly();
   const user = { id: input.userId, email: person.email };
   const requestedDocs = Array.from(new Set([...(input.contextIds ?? []), ...(input.contextId ? [input.contextId] : [])]));
   let assignmentId: string | null = null;
@@ -306,8 +308,7 @@ export async function activateSession(input: {
       activationKey = `twin:${randomBytes(18).toString("base64url")}`; // twin calls never resume (rule 5)
     }
   }
-  // Calibrating: admin and team, a twin (rule 12).
-  if (input.calibrate && !studio) throw refusals.studioOnly();
+  // Calibrating a role play or another agent (rule 12).
   if (input.calibrate && !twin) throw refusals.notFound();
   // All twin sessions go through LiveKit (also enforced by a DB trigger); the agent cuts metered calls at the deadline.
   if (twin && mode !== "voice") throw practiceRefusals.voiceOnly();
