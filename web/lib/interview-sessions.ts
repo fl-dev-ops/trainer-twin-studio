@@ -400,21 +400,19 @@ export async function activateSession(input: {
   const token = runtimeToken(session.id);
   try {
     await initializeChatSession({ sessionId: session.id, orgId: input.orgId, mode });
-    await db.$transaction([
-      db.interviewSession.update({
-        where: { id: session.id },
+    // Only while it's still starting: a newer start (another tab) may have ended it meanwhile (rule 5).
+    const activated = await db.$transaction(async (tx) => {
+      const { count } = await tx.interviewSession.updateMany({
+        where: { id: session.id, status: "activating" },
         data: { status: "active", startedAt: new Date(), runtimeTokenHash: tokenHash(token) },
-      }),
-      ...(assignmentId
-        ? [db.rolePlayAssignment.update({
-            where: { id: assignmentId },
-            data: { status: "used", usedAt: new Date() },
-          })]
-        : []),
-    ]);
+      });
+      if (count && assignmentId) await tx.rolePlayAssignment.update({ where: { id: assignmentId }, data: { status: "used", usedAt: new Date() } });
+      return count === 1;
+    });
+    if (!activated) throw practiceRefusals.callReplaced();
   } catch (error) {
-    await db.interviewSession.update({
-      where: { id: session.id },
+    await db.interviewSession.updateMany({
+      where: { id: session.id, status: "activating" },
       data: { status: "failed", endedAt: new Date(), runtimeTokenHash: null },
     });
     throw error;

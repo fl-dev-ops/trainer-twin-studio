@@ -36,6 +36,8 @@
    the check again inside its transaction (rule 5).
 2. **Access.** A learner may practise a twin only with a usable assignment (`twin_not_assigned`,
    `twin_access_revoked`, `twin_access_ended`). Admin and team may practise any live twin of their org without one.
+   A personal link (`/s/` with an assignment code) belongs to its learner: anyone else, studio members included, is
+   refused (`twin_not_assigned`); studio members use the twin page or a common link.
    An archived twin can't be practised by anyone (`not_found`, on `/t/` and `/s/` alike). Revoked or ended access,
    like a paused org, stops the next start only: a call already live keeps going (disabling is the exception, rule 7).
 3. **Common links join only on the link page.** Opening an active common link while signed in adds an existing
@@ -54,6 +56,7 @@
    refused start ends nothing. Two starts at the same moment run one after the other. This holds for studio members
    too: a second preview of the same twin ends the first through the normal end (rule 8), never by quietly marking it
    abandoned. If setting up the new call then fails, it is `failed` and uncharged; the call it replaced stays ended.
+   A call that a newer start ended while it was still being set up never becomes live (`call_replaced`).
    Twin calls don't resume: every start is a new call (the agent's short LiveKit reconnect is not a resume).
 6. **Twin calls are voice only** (`voice_only`).
 7. **During the call** the voice agent ends it at the allowance (the deadline). Every 5 minutes the platform ends, as
@@ -100,6 +103,7 @@ Same columns as [People](people.md#refusals). **Where**: PG page loader (`/t/`, 
 | `credits_short` | 403 | You need at least 5 minutes to start a call; you have {n}. Ask your trainer for more. | Learner balance 1–4 minutes | PG, ST |
 | `org_credits_out` | 403 | Your organization has no credits left. Contact TrainerTwin to add more. | Studio on a billed org, org balance under 1 minute | PG, ST |
 | `org_credits_short` | 403 | Your organization needs at least 5 credits to start a call; it has {n}. Contact TrainerTwin to add more. | Studio on a billed org, 1–4 minutes | PG, ST |
+| `call_replaced` | 409 | This call was replaced by one you started elsewhere. | A newer start ended this call while it was being set up | ST |
 | `voice_only` | 400 | Twin calls are voice only. | A twin call in another mode | ST |
 | `recording_too_big` | 413 | A recording can be at most 200 MB. | Agent recording upload over 200 MB | RT |
 | `runtime_token_invalid` | 401 | This call is no longer available. | Runtime token missing, wrong, or its call has ended | RT |

@@ -28,6 +28,7 @@ export const practiceRefusals = {
   orgCreditsShort: (seconds: number) =>
     new PracticeError("org_credits_short", `Your organization needs at least ${MIN_START_MINUTES} credits to start a call; it has ${whole(seconds)}. Contact TrainerTwin to add more.`, 403),
   voiceOnly: () => new PracticeError("voice_only", "Twin calls are voice only.", 400),
+  callReplaced: () => new PracticeError("call_replaced", "This call was replaced by one you started elsewhere.", 409),
   runtimeTokenInvalid: () => new PracticeError("runtime_token_invalid", "This call is no longer available.", 401),
 };
 
