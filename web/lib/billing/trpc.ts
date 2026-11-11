@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { BillingError, billingOverview, buyPacks, requestUpgrade, saveBillingDetails } from "@/lib/billing/billing";
+import { BillingError, billingOverview, buyPacks, saveBillingDetails } from "@/lib/billing/billing";
 import { reconcilePaymentLink } from "@/lib/billing/razorpay";
 import { db } from "@/lib/db";
 import { MAX_PACKS } from "@/lib/billing/pricing";
@@ -8,7 +8,7 @@ import { studioProcedure, t } from "@/lib/trpc";
 
 /**
  * Settings › Billing over /api/trpc (`billing`, specs/billing.md): the org's plan, billing details and invoices;
- * saving details, upgrading to Paid and buying minute packs. Admin and team only (rule 5). PDFs download from
+ * saving details and buying minute packs (staff move an org to a paid plan in Meteroid). Admin and team only (rule 5). PDFs download from
  * /api/billing/invoices/[id]/{pdf,receipt}.
  */
 
@@ -31,8 +31,6 @@ export const billingRouter = t.router({
   saveDetails: studioProcedure
     .input(z.object({ details: z.record(z.string(), z.unknown()) }))
     .mutation(({ ctx, input }) => billingCall(() => saveBillingDetails(ctx.user.orgId, input.details))),
-
-  upgrade: studioProcedure.mutation(({ ctx }) => billingCall(() => requestUpgrade(ctx.user.orgId))),
 
   /**
    * Back from Razorpay's payment page (rule 28): asks Razorpay about the org's link now, so the payment shows without

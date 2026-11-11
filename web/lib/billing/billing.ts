@@ -5,24 +5,24 @@ import { billingDetailsInput, taxFor, meteroidCustomerPatch, type BillingDetails
 import {
   cancelSubscription,
   createPackInvoice,
-  createPaidSubscription,
   getInvoice,
   getSubscription,
   getInvoiceRaw,
   sellerDetails,
   listInvoices,
-  PAID_PLAN,
+  TRIAL_PLAN,
   patchCustomer,
   voidInvoice,
   type MeteroidInvoice,
 } from "@/lib/billing/meteroid";
-import { formatMoney, MAX_PACKS, PACK_CENTS, PACK_CREDITS, PACK_VALID_DAYS, packPrice, PAID_MONTHLY_CENTS } from "@/lib/billing/pricing";
+import { formatMoney, MAX_PACKS, PACK_CENTS, PACK_CREDITS, PACK_VALID_DAYS, packPrice } from "@/lib/billing/pricing";
 import { billingDocument, receiptNumber, renderInvoice, renderReceipt } from "@/lib/billing/documents";
 import { closePaymentLink, ensurePaymentLink, reconcilePaymentLink } from "@/lib/billing/razorpay";
 import { orgName } from "@/lib/invite/person-email";
 import { studioUrl } from "@/lib/invite/links";
 import { MeteroidError } from "@/lib/meteroid";
 import { orgOfCustomer } from "@/lib/org-credits";
+import { getObjectBytes, orgPrefix, putObject, s3Configured } from "@/lib/s3";
 import { ADMIN, orgPeople } from "@/lib/org-people";
 
 /**
@@ -71,7 +71,6 @@ async function billingOf(orgId: string, tx: Tx | typeof db = db) {
 }
 
 export const detailsOf = (billing: Pick<OrgBilling, "billingDetails">) => (billing.billingDetails as BillingDetails | null) ?? null;
-export const monthlyCentsOf = (billing: Pick<OrgBilling, "paidMonthlyCents">) => billing.paidMonthlyCents ?? PAID_MONTHLY_CENTS;
 
 // ---------------------------------------------------------------------------------------------------------------
 // Dates: an invoice is due on its due date, overdue from 00:00 UTC the next day; the reminder goes the day before.
@@ -102,36 +101,8 @@ export async function saveBillingDetails(orgId: string, input: unknown) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// Upgrade (rules 10–12) and minute packs (rules 4, 19)
-
-/**
- * Upgrades a Trial org: starts its Paid subscription in Meteroid, which issues the first invoice at once. The org
- * stays on Trial until it's paid. Asking again while it waits returns the same upgrade.
- */
-export async function requestUpgrade(orgId: string) {
-  const result = await locked(orgId, async (tx) => {
-    const billing = await billingOf(orgId, tx);
-    if (billing.plan === "paid") throw new BillingError("Your organization is already on the Paid plan.", 409);
-    if (!detailsOf(billing)) throw new BillingError("Add your billing details first: they go on the invoice.", 400);
-    if (billing.paidSubscriptionId) return { subscriptionId: billing.paidSubscriptionId, created: false };
-    // Upgrades asked for before (cancelled by us or staff): a new one gets a new key, a retry of this one the same.
-    const attempt = await tx.billingInvoice.count({ where: { orgId, kind: "upgrade" } });
-    const subscription = await viaMeteroid("starting the Paid plan", () => createPaidSubscription({
-      orgId, customerId: billing.meteroidCustomerId, monthlyCents: billing.paidMonthlyCents, today: dateOnly(new Date()), attempt,
-    }));
-    if (!LIVE_SUBSCRIPTION.includes(subscription.status)) {
-      throw new BillingError("This upgrade was cancelled in our billing system; please contact TrainerTwin.", 409);
-    }
-    await tx.orgBilling.update({ where: { orgId }, data: { paidSubscriptionId: subscription.id } });
-    return { subscriptionId: subscription.id, created: true };
-  });
-  // The first invoice: the webhook brings it too; reading it now shows it right away (one copy, one email: claims).
-  if (result.created) await syncOrgInvoices(orgId).catch((error: unknown) => console.error(`[billing] ${orgId}: sync after upgrade:`, error));
-  // Rule 28: straight to the payment page when Razorpay is on.
-  const invoice = await db.billingInvoice.findFirst({ where: { orgId, kind: "upgrade", status: "unpaid", subscriptionId: result.subscriptionId }, select: { id: true } });
-  const payUrl = invoice ? await payLinkQuietly(invoice.id) : null;
-  return { ...result, payUrl };
-}
+// Minute packs (rules 4, 19). Upgrading is done by staff in Meteroid (rule 10): they create the org's subscription on
+// the org's own plan, and its first invoice arrives here like any other.
 
 /** The invoice's payment link for someone waiting on it; a Razorpay failure leaves them the email and bank transfer. */
 async function payLinkQuietly(invoiceId: string) {
@@ -174,14 +145,17 @@ export async function buyPacks(orgId: string, packs: number, requestId: string) 
 // ---------------------------------------------------------------------------------------------------------------
 // The app's copy of Meteroid's invoices
 
-/** What an invoice is (rule "Invoice" kinds): kept once known; a Paid-plan invoice is the upgrade until the org pays it. */
+/**
+ * What an invoice is (rule "Invoice" kinds), kept once known. A subscription other than the Trial one (the Credits
+ * plan) is the org's paid plan, whatever its plan, name or price (staff create it in Meteroid, rule 10): its first
+ * invoice is the upgrade until the org pays it, later ones renewals.
+ */
 async function kindOf(invoice: MeteroidInvoice, billing: OrgBilling): Promise<BillingInvoice["kind"]> {
   if (invoice.subscriptionId) {
     let paidSub = invoice.subscriptionId === billing.paidSubscriptionId;
     if (!paidSub && billing.plan === "trial" && !billing.paidSubscriptionId) {
-      // The webhook can arrive before requestUpgrade stored the subscription: recognise it by its plan.
       const sub = await getSubscription(invoice.subscriptionId);
-      if (sub.planName === PAID_PLAN && LIVE_SUBSCRIPTION.includes(sub.status)) {
+      if (sub.planName !== TRIAL_PLAN && LIVE_SUBSCRIPTION.includes(sub.status)) {
         await db.orgBilling.updateMany({ where: { orgId: billing.orgId, paidSubscriptionId: null }, data: { paidSubscriptionId: sub.id } });
         paidSub = true;
       }
@@ -429,14 +403,36 @@ async function documentOf(row: Pick<BillingInvoice, "id" | "orgId">) {
   return billingDocument(raw, name, seller, Object.fromEntries(payments.map((p) => [p.id, p.method])));
 }
 
-/** The tax invoice PDF (lib/billing/documents.ts). */
-export async function invoicePdf(row: Pick<BillingInvoice, "id" | "orgId" | "status" | "paymentLinkUrl">) {
-  return renderInvoice(await documentOf(row), row.status === "unpaid" ? row.paymentLinkUrl : null, row.status === "unpaid");
+/**
+ * A document as first made, kept (rule 22): the first time it's needed it's drawn and saved to S3, and every later
+ * email or download sends that same copy, so an issued invoice never changes (not even if the company's details do).
+ * Without S3 (local development) it's drawn each time.
+ */
+async function keptPdf(row: Pick<BillingInvoice, "id" | "orgId" | "number">, field: "invoicePdfKey" | "receiptPdfKey", key: string | null, draw: () => Promise<Buffer>) {
+  if (!s3Configured) return draw();
+  if (key) return Buffer.from(await getObjectBytes(key));
+  // One first copy: the first to get here draws and saves it; anyone at the same moment waits and gets that copy.
+  return db.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`pdf:${field}:${row.id}`}))`;
+    const saved = (await tx.billingInvoice.findUniqueOrThrow({ where: { id: row.id }, select: { invoicePdfKey: true, receiptPdfKey: true } }))[field];
+    if (saved) return Buffer.from(await getObjectBytes(saved));
+    const pdf = await draw();
+    const newKey = `${orgPrefix(row.orgId)}/billing/${field === "invoicePdfKey" ? "" : "RCPT-"}${row.number}-${row.id}.pdf`;
+    await putObject(newKey, pdf, "application/pdf");
+    await tx.billingInvoice.update({ where: { id: row.id }, data: { [field]: newKey } });
+    return pdf;
+  }, { timeout: 60_000, maxWait: 60_000 });
 }
 
-/** The receipt PDF of a paid invoice. */
+/** The tax invoice PDF (lib/billing/documents.ts), kept as first sent. */
+export async function invoicePdf(row: Pick<BillingInvoice, "id" | "orgId" | "number" | "status" | "paymentLinkUrl" | "invoicePdfKey">) {
+  return keptPdf(row, "invoicePdfKey", row.invoicePdfKey, async () =>
+    renderInvoice(await documentOf(row), row.status === "unpaid" ? row.paymentLinkUrl : null, row.status === "unpaid"));
+}
+
+/** The receipt PDF of a paid invoice, kept as first sent. */
 export async function receiptPdf(row: BillingInvoice) {
-  return renderReceipt(await documentOf(row), row.paidAt ?? row.updatedAt);
+  return keptPdf(row, "receiptPdfKey", row.receiptPdfKey, async () => renderReceipt(await documentOf(row), row.paidAt ?? row.updatedAt));
 }
 
 /**
@@ -617,7 +613,8 @@ export async function billingOverview(orgId: string, now = new Date()) {
     pausedAt: billing.pausedAt?.toISOString() ?? null,
     overdueInvoice: overdue,
     dueInvoice: dueSoon,
-    monthlyCents: monthlyCentsOf(billing),
+    // The paid plan's price, as Meteroid last invoiced it (tax included); the plan itself lives in Meteroid.
+    planCents: billing.invoices.find((row) => row.subscriptionId === billing.paidSubscriptionId && row.status !== "void" && (row.kind === "upgrade" || row.kind === "renewal"))?.totalCents ?? null,
     renewsOn,
     details,
     tax: details ? taxFor(details).kind : null,

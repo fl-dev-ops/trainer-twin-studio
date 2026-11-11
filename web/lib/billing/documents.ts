@@ -1,5 +1,5 @@
 import { PDFDocument, PDFString, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
-import { countryName, INDIAN_STATES } from "@/lib/billing/details";
+import { countryName, EXPORT_DECLARATION, INDIAN_STATES } from "@/lib/billing/details";
 import type { RawInvoice, Seller } from "@/lib/billing/meteroid";
 
 /**
@@ -31,8 +31,8 @@ export type BillingDocument = {
   subtotalCents: number;
   taxes: { label: string; cents: number }[];
   totalCents: number;
-  /** The tax mention of an exempt invoice (exports under LUT). */
-  exemption: string | null;
+  /** The tax lines of an exempt invoice: for an export, the LUT declaration and its ARN (lib/billing/details.ts). */
+  exemption: string[] | null;
   payments: { method: string; reference: string; paidOn: string; cents: number }[];
 };
 
@@ -103,7 +103,9 @@ export function billingDocument(raw: RawInvoice, orgName: string, seller: Seller
     taxes: breakdown.filter((tax) => !tax.exemption_type && tax.tax_amount > 0)
       .map((tax) => ({ label: `${tax.name} ${Number((Number(tax.tax_rate) * 100).toFixed(2))}%`, cents: tax.tax_amount })),
     totalCents: Number(raw.total ?? 0),
-    exemption: breakdown.find((tax) => tax.exemption_type)?.exemption_reason ?? null,
+    exemption: country && country !== "IN"
+      ? [EXPORT_DECLARATION, `LUT ARN: ${seller.lutArn || "(to be added in Meteroid › Invoicing entity › legal footer)"}`]
+      : breakdown.some((tax) => tax.exemption_type) ? [breakdown.find((tax) => tax.exemption_type)?.exemption_reason ?? "Exempt from GST"] : null,
     payments: (raw.transactions ?? [])
       .filter((tx) => tx.status === "SETTLED" && tx.payment_type !== "REFUND")
       .map((tx) => ({
@@ -251,7 +253,7 @@ function linesAndTotals(s: Sheet, doc: BillingDocument, y: number, last: [string
   }
   if (doc.exemption) {
     y -= 6;
-    for (const part of s.wrap(doc.exemption, RIGHT - label)) {
+    for (const part of doc.exemption.flatMap((line) => s.wrap(line, RIGHT - label))) {
       s.text(part, label, y, { color: MUTED, size: 8 });
       y -= 11;
     }

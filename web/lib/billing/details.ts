@@ -72,7 +72,7 @@ export const billingDetailsInput = z.object({
   emails: z.array(z.string().trim().toLowerCase().email().max(320)).min(1, "Add at least one billing email").max(5, "At most 5 billing emails")
     .transform((emails) => [...new Set(emails)]),
   /** With the country code; Razorpay needs it for card payments in USD (specs/billing.md rule 7). */
-  phone: z.string().transform((value) => value.replace(/[\s\-().]/g, ""))
+  phone: z.string({ error: "Add a phone number with its country code" }).transform((value) => value.replace(/[\s\-().]/g, ""))
     .pipe(z.string().regex(/^\+[1-9]\d{7,14}$/, "Enter the phone number with its country code, like +91 98765 43210")),
 }).strict().superRefine((details, ctx) => {
   if (details.country === "IN") {
@@ -99,10 +99,11 @@ export function taxFor(details: Pick<BillingDetails, "country" | "state">): Tax 
   return { kind: "igst", lines: [{ code: "IGST", name: "IGST", bp: 1800 }] };
 }
 
-/** The export wording on invoices to customers outside India; with the LUT reference once there is one. */
-export function exportMention(lutReference = process.env.GST_LUT_REFERENCE?.trim()) {
-  return `Supply meant for export under LUT${lutReference ? ` (${lutReference})` : ""} without payment of IGST`;
-}
+/**
+ * The declaration on every export invoice, in our CA's words (11 Nov 2026); the invoice adds "LUT ARN: …" below it,
+ * from Meteroid's invoicing entity (lib/billing/meteroid.ts sellerDetails).
+ */
+export const EXPORT_DECLARATION = "Export of services without payment of tax under LUT";
 
 /** Meteroid prints no state: for India it goes on the address's second line, with its GST code. */
 export function addressLine2(details: Pick<BillingDetails, "country" | "state" | "line2">) {
@@ -129,6 +130,6 @@ export function meteroidCustomerPatch(details: BillingDetails) {
     invoicing_emails: details.emails,
     custom_taxes: tax.lines.map((line) => ({ tax_code: line.code, name: line.name, rate: (line.bp / 10_000).toFixed(4) })),
     is_tax_exempt: tax.kind === "export",
-    exemption_reason: tax.kind === "export" ? exportMention() : null,
+    exemption_reason: tax.kind === "export" ? EXPORT_DECLARATION : null,
   };
 }

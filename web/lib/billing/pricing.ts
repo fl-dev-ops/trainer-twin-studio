@@ -1,11 +1,10 @@
 import type { TaxLine } from "@/lib/billing/details";
 
 /**
- * Billing prices (specs/billing.md rules 2 and 4), tax included, in USD cents. Meteroid's top-ups (minute packs) are
+ * Minute pack prices (specs/billing.md rule 4), tax included, in USD cents. Plan prices live in Meteroid (each org's own plan). Meteroid's top-ups (minute packs) are
  * priced before tax, so a pack's price is turned into a net unit price that lands exactly on the gross total.
  */
 
-export const PAID_MONTHLY_CENTS = 30_000;
 export const PACK_CREDITS = 100;
 export const PACK_CENTS = 2_500;
 export const MAX_PACKS = 10;

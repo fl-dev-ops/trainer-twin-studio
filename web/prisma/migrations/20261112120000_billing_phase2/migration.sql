@@ -1,5 +1,5 @@
--- Billing phase 2 (specs/billing.md): each billed org's plan (trial | paid), its Paid subscription, custom price,
--- pause and billing details; and the app's copy of each Meteroid invoice above $0. Every existing billed org starts on
+-- Billing phase 2 (specs/billing.md): each billed org's plan (trial | paid), its paid subscription, pause and billing
+-- details; and the app's copy of each Meteroid invoice above $0. Every existing billed org starts on
 -- Trial (rule 1): nothing to backfill.
 
 BEGIN;
@@ -7,11 +7,9 @@ BEGIN;
 ALTER TABLE "OrgBilling"
   ADD COLUMN "plan" TEXT NOT NULL DEFAULT 'trial',
   ADD COLUMN "paidSubscriptionId" TEXT,
-  ADD COLUMN "paidMonthlyCents" INTEGER,
   ADD COLUMN "pausedAt" TIMESTAMP(3),
   ADD COLUMN "billingDetails" JSONB,
   ADD CONSTRAINT "OrgBilling_plan_check" CHECK ("plan" IN ('trial', 'paid')),
-  ADD CONSTRAINT "OrgBilling_paidMonthlyCents_check" CHECK ("paidMonthlyCents" IS NULL OR "paidMonthlyCents" > 0),
   -- Only a Paid org can be paused (rule 15).
   ADD CONSTRAINT "OrgBilling_paused_check" CHECK ("pausedAt" IS NULL OR "plan" = 'paid');
 CREATE UNIQUE INDEX "OrgBilling_paidSubscriptionId_key" ON "OrgBilling"("paidSubscriptionId");
@@ -40,6 +38,8 @@ CREATE TABLE "BillingInvoice" (
   "overdueAt" TIMESTAMP(3),
   "overdueEmailAt" TIMESTAMP(3),
   "paidEmailAt" TIMESTAMP(3),
+  "invoicePdfKey" TEXT,
+  "receiptPdfKey" TEXT,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" TIMESTAMP(3) NOT NULL,
   CONSTRAINT "BillingInvoice_pkey" PRIMARY KEY ("id"),

@@ -8,8 +8,8 @@ import { CURRENCY } from "@/lib/billing/pricing";
  * invoices paid in Meteroid in phase 2).
  */
 
-/** The Meteroid plan a Paid subscription is on (scripts/meteroid-billing-setup.ts creates it). */
-export const PAID_PLAN = "Paid";
+/** The plan of every org's Trial subscription (it meters credits; lib/org-billing-setup.ts). Any other subscription is the org's paid plan. */
+export const TRIAL_PLAN = "Credits";
 
 const grpcUrl = () => (process.env.METEROID_GRPC_URL?.trim() || "https://meteroid-api.foreverlearning.in").replace(/\/$/, "");
 
@@ -88,7 +88,14 @@ export async function meteroidGrpc(service: string, method: string, fields: Prot
   return reply.length >= 5 && reply[0] === 0 ? reply.subarray(5, 5 + reply.readUInt32BE(1)) : Buffer.alloc(0);
 }
 
-export type Seller = { name: string; line1: string; line2: string; city: string; zip: string; state: string; country: string; gstin: string; email: string };
+/**
+ * Us, as on every invoice. `lutArn`: the ARN of the year's LUT (export invoices print it), typed into the invoicing
+ * entity's legal footer in Meteroid ("AD330000000000X" or "LUT ARN: AD330000000000X"); "" until it's there.
+ */
+export type Seller = { name: string; line1: string; line2: string; city: string; zip: string; state: string; country: string; gstin: string; email: string; lutArn: string };
+
+/** The ARN in the legal footer: whatever follows "ARN", or the whole text. */
+export const lutArnOf = (footer: string) => (/ARN\s*[:#-]?\s*(\S+)/i.exec(footer)?.[1] ?? footer).trim();
 
 let sellerCache: { at: number; seller: Seller } | null = null;
 const SELLER_TTL_MS = 10 * 60_000;
@@ -108,13 +115,13 @@ export async function defaultInvoicingEntity(): Promise<Seller & { id: string }>
     const value = fields.get(field)?.[0];
     return Buffer.isBuffer(value) ? value.toString("utf8") : "";
   };
-  return { id: text(1), name: text(4), line1: text(14), line2: text(15), zip: text(16), state: text(17), city: text(18), gstin: text(19), country: text(20), email: text(41) };
+  return { id: text(1), name: text(4), line1: text(14), line2: text(15), zip: text(16), state: text(17), city: text(18), gstin: text(19), country: text(20), email: text(41), lutArn: lutArnOf(text(11)) };
 }
 
 export async function sellerDetails(): Promise<Seller> {
   if (sellerCache && Date.now() - sellerCache.at < SELLER_TTL_MS) return sellerCache.seller;
   const entity = await defaultInvoicingEntity();
-  const seller: Seller = { name: entity.name, line1: entity.line1, line2: entity.line2, zip: entity.zip, state: entity.state, city: entity.city, gstin: entity.gstin, country: entity.country, email: entity.email };
+  const seller: Seller = { name: entity.name, line1: entity.line1, line2: entity.line2, zip: entity.zip, state: entity.state, city: entity.city, gstin: entity.gstin, country: entity.country, email: entity.email, lutArn: entity.lutArn };
   if (!seller.name || !seller.gstin) throw new Error("Meteroid's invoicing entity has no legal name or GSTIN: fill it in (Meteroid › Settings › Invoicing entity)");
   sellerCache = { at: Date.now(), seller };
   return seller;
@@ -201,51 +208,6 @@ export async function listInvoices(customerId: string, perPage = 50) {
 /** Saves billing details on the customer (lib/billing/details.ts meteroidCustomerPatch). */
 export const patchCustomer = (customerId: string, patch: Record<string, unknown>) =>
   meteroid("PATCH", `/customers/${encodeURIComponent(customerId)}`, patch);
-
-type PlanDetails = { id: string; name: string; status: string; currency: string; price_components?: { id: string; name: string }[] };
-
-/** The Paid plan and its one price component. */
-export async function paidPlan(): Promise<{ id: string; componentId: string; componentName: string }> {
-  const plans = (await meteroid<{ data?: PlanDetails[] }>("GET", "/plans?per_page=100")).data ?? [];
-  const summary = plans.find((plan) => plan.name === PAID_PLAN && plan.status === "ACTIVE");
-  if (!summary) throw new Error(`Meteroid has no active "${PAID_PLAN}" plan: run scripts/meteroid-billing-setup.ts`);
-  const plan = await meteroid<PlanDetails>("GET", `/plans/${summary.id}`);
-  const component = plan.price_components?.[0];
-  if (!component) throw new Error(`Meteroid's "${PAID_PLAN}" plan has no price`);
-  return { id: plan.id, componentId: component.id, componentName: component.name };
-}
-
-/** Days an invoice of the Paid plan is due after it's issued (rule 10). */
-export const PAID_NET_TERMS = 2;
-
-/**
- * Starts the org's Paid subscription today; Meteroid issues its first invoice at once. `monthlyCents`: a custom
- * price. The key is the org, the day and `attempt` (upgrades cancelled before), so a retry returns the same
- * subscription and an upgrade after a cancelled one gets a new one.
- */
-export async function createPaidSubscription(input: { orgId: string; customerId: string; monthlyCents?: number | null; today: string; attempt: number }) {
-  const plan = await paidPlan();
-  const subscription = await meteroid<{ id?: string; status?: string; subscription?: { id: string; status?: string } }>("POST", "/subscriptions", {
-    customer_id_or_alias: input.customerId,
-    plan_id: plan.id,
-    start_date: input.today,
-    activation_condition: "ON_START",
-    charge_automatically: false,
-    net_terms: PAID_NET_TERMS,
-    ...(input.monthlyCents ? {
-      price_components: {
-        overridden_components: [{
-          component_id: plan.componentId,
-          name: plan.componentName,
-          price_entry: { type: "NEW", cadence: "MONTHLY", currency: CURRENCY, pricing: { type: "RATE", rate: (input.monthlyCents / 100).toFixed(2) } },
-        }],
-      },
-    } : {}),
-  }, `paid-subscription-${input.orgId}-${input.today}-${input.attempt}`);
-  const id = subscription.id ?? subscription.subscription?.id;
-  if (!id) throw new Error(`Meteroid created no subscription for ${input.customerId}`);
-  return { id, status: subscription.status ?? subscription.subscription?.status ?? "ACTIVE" };
-}
 
 export async function getSubscription(subscriptionId: string) {
   const sub = await meteroid<{ id: string; status: string; plan_name: string; customer_id: string }>("GET", `/subscriptions/${encodeURIComponent(subscriptionId)}`);

@@ -1,26 +1,30 @@
 /**
- * Sets up Meteroid for billing phase 2 (specs/billing.md), once per tenant (dev, sandbox, production); safe to run
- * again. Uses METEROID_API_KEY (the tenant) like the app. Production only with explicit go-ahead
- * (plans/billing-phase-2-release.md).
- *   - plan "Paid": $300 a month, tax included, due 2 days after each invoice, no credits;
+ * Sets up Meteroid for billing (specs/billing.md), once per tenant (dev, sandbox, production); safe to run again.
+ * Uses METEROID_API_KEY (the tenant) like the app. Production only with explicit go-ahead
+ * (plans/billing-phase-2-release.md). Plans aren't made here: staff create each org's plan and subscription in
+ * Meteroid (rule 10); every org starts on the Trial ("Credits") subscription.
  *   - MINS can be sold (product "Minute packs") at $0.25 (100 credits = $25: staff selling minutes in Meteroid's UI; the app sets its own net
  *     price per customer for tax-inclusive packs);
  *   - the invoicing entity (the seller on every invoice), when it isn't filled in yet: our address, GSTIN, SAC on the
- *     footer, 2-day terms, contact. Afterwards Meteroid is where the company's details are edited;
+ *     footer, 2-day payment terms, contact. Afterwards Meteroid is where the company's details are edited (and the
+ *     LUT ARN, in the legal footer);
  *   - the app's webhook endpoint also gets invoice.finalized / paid / voided and subscription.cancelled / ended.
  * Customer emails are switched off separately (all 11 kinds, every tenant; done 11 Nov 2026 in Meteroid's database).
  *
  *   bun scripts/meteroid-billing-setup.ts --webhook-url https://dash.trainertwin.com/api/meteroid/webhook [--dry-run]
  */
 import { meteroid } from "@/lib/meteroid";
-import { defaultInvoicingEntity, meteroidGrpc, PAID_NET_TERMS, PAID_PLAN } from "@/lib/billing/meteroid";
-import { PAID_MONTHLY_CENTS, PACK_CENTS, PACK_CREDITS } from "@/lib/billing/pricing";
+import { defaultInvoicingEntity, meteroidGrpc } from "@/lib/billing/meteroid";
+import { PACK_CENTS, PACK_CREDITS } from "@/lib/billing/pricing";
 import { SAC } from "@/lib/billing/documents";
 
 /**
  * The company as first set on a tenant's invoicing entity. Meteroid is the source afterwards: edit it there
  * (Settings › Invoicing entity); invoices and receipts read it from Meteroid (lib/billing/meteroid.ts sellerDetails).
  */
+/** Days an invoice is due after it's issued, as first set on the entity (packs; each plan or subscription sets its own). */
+const NET_TERMS = 2;
+
 const SELLER = {
   name: "Forever Learning Solutions Pvt Ltd",
   line1: "No. 52/2A1 School Street, Right side",
@@ -51,18 +55,8 @@ const step = async (what: string, run: () => Promise<unknown>) => {
   done.push(`done: ${what}`);
 };
 
-// 1. The Paid plan.
 const family = (await meteroid<Page<{ id: string }>>("GET", "/product_families")).data?.[0]?.id;
 if (!family) throw new Error("Meteroid has no product family; create one in its UI first");
-const plans = (await meteroid<Page<{ id: string; name: string; status: string }>>("GET", "/plans?per_page=100")).data ?? [];
-const paid = plans.find((plan) => plan.name === PAID_PLAN && plan.status === "ACTIVE");
-if (paid) done.push(`ok: plan "${PAID_PLAN}" exists (${paid.id})`);
-else await step(`create plan "${PAID_PLAN}" ($${PAID_MONTHLY_CENTS / 100}/month, tax included, net ${PAID_NET_TERMS} days)`, () => meteroid("POST", "/plans", {
-  name: PAID_PLAN, product_family_id: family, plan_type: "STANDARD", status: "ACTIVE", currency: "USD", tax_inclusive: true,
-  description: "TrainerTwin Paid plan: monthly, tax included, no credits (credits come from minute packs)",
-  billing: { net_terms: PAID_NET_TERMS },
-  components: [{ name: "TrainerTwin Paid plan", fee: { type: "RATE", rates: [{ term: "MONTHLY", price: (PAID_MONTHLY_CENTS / 100).toFixed(2) }] } }],
-}));
 
 // 2. The credit unit can be sold (a product its sales are booked under), at a USD price.
 const units = (await meteroid<Page<{ id: string; code: string; product_id: string | null }>>("GET", "/credit-units")).data ?? [];
@@ -91,12 +85,12 @@ else await step(`set ${CREDIT_UNIT} price to $${unitPrice}`, () => meteroid("PUT
 // Read first; a failed read stops here rather than risk writing over the company's details.
 const entity = await defaultInvoicingEntity();
 if (entity.gstin) done.push(`ok: invoicing entity filled in (${entity.name}, GSTIN ${entity.gstin}); edit it in Meteroid`);
-else await step(`invoicing entity ${entity.id}: address, GSTIN ${SELLER.gstin}, SAC footer, net ${PAID_NET_TERMS} days, contact ${SELLER.email}`, () =>
+else await step(`invoicing entity ${entity.id}: address, GSTIN ${SELLER.gstin}, SAC footer, net ${NET_TERMS} days, contact ${SELLER.email}`, () =>
   meteroidGrpc("meteroid.api.invoicingentities.v1.InvoicingEntitiesService", "UpdateInvoicingEntity", [
     [1, entity.id],
     [2, [
       [4, SELLER.name],
-      [9, PAID_NET_TERMS],
+      [9, NET_TERMS],
       [10, `SAC ${SAC} (online education and training services). Prices include GST where it applies.`],
       [14, SELLER.line1],
       [15, SELLER.line2],

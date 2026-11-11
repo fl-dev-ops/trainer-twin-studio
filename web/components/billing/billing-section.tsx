@@ -125,23 +125,8 @@ export function BillingSection() {
 }
 
 function PlanCard({ overview }: { overview: Billed }) {
-  const queryClient = useQueryClient();
-  const [busy, setBusy] = useState(false);
   const paused = Boolean(overview.pausedAt);
-  async function upgrade() {
-    setBusy(true);
-    try {
-      const result = await api.billing.upgrade.mutate();
-      if (result.payUrl) return window.location.assign(result.payUrl);
-      toast.success("Upgrade started: your invoice is on its way by email.");
-      await queryClient.invalidateQueries({ queryKey: QUERY });
-    } catch (error) {
-      toast.error(message(error));
-    } finally {
-      setBusy(false);
-    }
-  }
-  const price = `${formatUsd(overview.monthlyCents)} a month, tax included`;
+  const price = overview.planCents ? `${formatUsd(overview.planCents)} a month, tax included` : "Your paid plan";
   return (
     <Card>
       <CardHeader>
@@ -152,7 +137,7 @@ function PlanCard({ overview }: { overview: Billed }) {
         <CardDescription>
           {overview.plan === "paid"
             ? `${price}${overview.renewsOn ? `, renews ${day(overview.renewsOn)}` : ""}. Credits come from minute packs and grants.`
-            : "Free, with no expiry. Upgrade to the Paid plan to buy minute packs."}
+            : "Free, with no expiry. To move to a paid plan, and buy minute packs, contact TrainerTwin."}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -174,18 +159,8 @@ function PlanCard({ overview }: { overview: Billed }) {
             </AlertDescription>
           </Alert>
         ) : null}
-        {overview.plan === "trial" && !overview.upgradePending ? (
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm">
-              <span className="font-medium">Paid plan:</span> {price}. You get an invoice now and move to Paid once it&apos;s paid.
-            </p>
-            <Button variant="brand" onClick={upgrade} disabled={busy || !overview.details} title={overview.details ? undefined : "Add billing details first"}>
-              {busy ? "Starting…" : "Upgrade to Paid"}
-            </Button>
-          </div>
-        ) : null}
         {overview.plan === "trial" && !overview.details ? (
-          <p className="text-sm text-muted-foreground">Add your billing details below first: they go on the invoice.</p>
+          <p className="text-sm text-muted-foreground">Add your billing details below: they go on your invoices.</p>
         ) : null}
         {overview.plan === "paid" && !paused && overview.dueInvoice ? (
           <p className="text-sm text-muted-foreground">

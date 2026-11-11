@@ -43,7 +43,7 @@ async function newOrg(name: string) {
 
 const details = (country: string, state?: string, taxId?: string) => ({
   legalName: `ZZ Live ${country}${state ?? ""} Pvt Ltd`, country, line1: "1 Test Street", city: country === "IN" ? "Chennai" : "Dubai",
-  postalCode: "600001", state, taxId, emails: ["devops+billing-live@foreverlearning.in"],
+  postalCode: "600001", state, taxId, emails: ["devops+billing-live@foreverlearning.in"], phone: "+91 98765 43210",
 });
 
 async function payInMeteroid(invoiceId: string, reference: string) {
@@ -52,10 +52,34 @@ async function payInMeteroid(invoiceId: string, reference: string) {
   for (let i = 0; i < 20 && (await getInvoice(invoiceId)).paymentStatus !== "PAID"; i++) await new Promise((r) => setTimeout(r, 1_000));
 }
 
+/** The org's own plan, as staff make it in Meteroid (rule 10): CUSTOM, $300 a month, tax included, due in 2 days. */
+async function orgPlan() {
+  const family = (await meteroid<{ data: { id: string }[] }>("GET", "/product_families")).data[0].id;
+  return meteroid<{ id: string }>("POST", "/plans", {
+    name: `zz-live-${tag}-${Math.random().toString(36).slice(2, 6)}`, product_family_id: family, plan_type: "CUSTOM", status: "ACTIVE",
+    currency: "USD", tax_inclusive: true, billing: { net_terms: 2 },
+    components: [{ name: "TrainerTwin plan", fee: { type: "RATE", rates: [{ term: "MONTHLY", price: "300.00" }] } }],
+  });
+}
+
+/** Staff move an org to its plan in Meteroid: they create the subscription; the app finds its first invoice. */
+async function staffSubscribe(orgId: string, customerId: string) {
+  const plan = await orgPlan();
+  const sub = await meteroid<{ id?: string; subscription?: { id: string } }>("POST", "/subscriptions", {
+    customer_id_or_alias: customerId, plan_id: plan.id, start_date: new Date().toISOString().slice(0, 10), activation_condition: "ON_START", charge_automatically: false,
+  });
+  const subscriptionId = (sub.id ?? sub.subscription?.id)!;
+  for (let i = 0; i < 15; i++) {
+    await billing.syncOrgInvoices(orgId); // what Meteroid's invoice.finalized webhook does
+    if (await db.billingInvoice.findFirst({ where: { orgId, subscriptionId } })) break;
+    await new Promise((r) => setTimeout(r, 1_000));
+  }
+  return { subscriptionId };
+}
+
 try {
-  // 1. Tamil Nadu org: details → upgrade → not paid → cancelled → upgrade again → paid → packs → paid.
+  // 1. Tamil Nadu org: details → staff subscribe → not paid → cancelled → subscribed again → paid → packs → paid.
   const tn = await newOrg("tn");
-  await assert.rejects(billing.requestUpgrade(tn), /billing details first/);
   await assert.rejects(billing.saveBillingDetails(tn, details("IN", "29", "33AAGCF6592D1ZN")), /registered in Tamil Nadu/);
   await billing.saveBillingDetails(tn, details("IN", "33", "33AAGCF6592D1ZN"));
   const customer = await meteroid<{ custom_taxes: { tax_code: string }[]; billing_address: { line2: string } }>("GET", `/customers/${created[0].customerId}`);
@@ -66,8 +90,7 @@ try {
   await assert.rejects(billing.buyPacks(tn, 1, randomUUID()), /Paid plan/);
   ok("Trial org can't buy packs");
 
-  const first = await billing.requestUpgrade(tn);
-  assert.equal((await billing.requestUpgrade(tn)).subscriptionId, first.subscriptionId);
+  const first = await staffSubscribe(tn, created[0].customerId);
   let rows = await db.billingInvoice.findMany({ where: { orgId: tn } });
   assert.equal(rows.length, 1);
   assert.equal(rows[0].kind, "upgrade");
@@ -76,7 +99,7 @@ try {
   const dueDays = Math.round((rows[0].dueDate.getTime() - new Date(new Date().toISOString().slice(0, 10)).getTime()) / DAY);
   assert.equal(dueDays, 2);
   assert.equal((await db.orgBilling.findUniqueOrThrow({ where: { orgId: tn } })).plan, "trial");
-  ok(`upgrade: invoice ${rows[0].number} $300.00 incl. $45.76 GST, due in 2 days, org still Trial; asking again returns the same`);
+  ok(`staff subscribed the org to its own plan: invoice ${rows[0].number} $300.00 incl. $45.76 GST, due in 2 days, org still Trial`);
 
   assert.equal(await billing.invoiceIssuedEmail(rows[0].id), true);
   assert.equal(await billing.invoiceIssuedEmail(rows[0].id), false);
@@ -97,7 +120,7 @@ try {
   assert.equal(afterCancel.paidSubscriptionId, null);
   ok("upgrade unpaid past due: invoice voided, subscription cancelled, org on Trial");
 
-  const second = await billing.requestUpgrade(tn);
+  const second = await staffSubscribe(tn, created[0].customerId);
   assert.notEqual(second.subscriptionId, first.subscriptionId);
   rows = await db.billingInvoice.findMany({ where: { orgId: tn, status: "unpaid" } });
   assert.equal(rows.length, 1);
@@ -112,9 +135,8 @@ try {
   assert.ok(paidRow.paidEmailAt);
   const receipt = await billing.receiptPdfFor(tn, rows[0].id);
   assert.equal(receipt.subarray(0, 5).toString(), "%PDF-");
-  ok("upgrade again the same day: new subscription; paid → Paid plan, receipt rendered, paid email marked");
+  ok("subscribed again: paid → Paid plan, receipt rendered, paid email marked");
 
-  await assert.rejects(billing.requestUpgrade(tn), /already on the Paid plan/);
   const pack = await billing.buyPacks(tn, 2, randomUUID());
   const packRow = await db.billingInvoice.findUniqueOrThrow({ where: { id: pack.invoiceId } });
   assert.equal(packRow.kind, "pack");
@@ -139,8 +161,11 @@ try {
 
   // 2. Pause and unpause. A renewal can't be made to happen now, so a second real Paid subscription stands in for the
   //    org's current one: its first invoice is a real subscription invoice, read as the renewal of a Paid org.
-  const { createPaidSubscription } = await import("@/lib/billing/meteroid");
-  const stand = await createPaidSubscription({ orgId: tn, customerId: created[0].customerId, today: new Date().toISOString().slice(0, 10), attempt: 99 });
+  const plan = await orgPlan();
+  const standRaw = await meteroid<{ id?: string; subscription?: { id: string } }>("POST", "/subscriptions", {
+    customer_id_or_alias: created[0].customerId, plan_id: plan.id, start_date: new Date().toISOString().slice(0, 10), activation_condition: "ON_START", charge_automatically: false,
+  });
+  const stand = { id: (standRaw.id ?? standRaw.subscription?.id)! };
   await db.orgBilling.update({ where: { orgId: tn }, data: { paidSubscriptionId: stand.id } });
   let renewalId: string | undefined;
   for (let i = 0; i < 15 && !renewalId; i++) {

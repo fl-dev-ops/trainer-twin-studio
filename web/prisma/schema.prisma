@@ -1106,12 +1106,11 @@ model OrgBilling {
   /// Grants the org's admin was already emailed about ("credits added"; specs/people.md rule 11), so each is told once.
   announcedGrantIds  String[]  @default([])
   syncedAt           DateTime?
-  /// specs/billing.md: trial | paid (CHECK). Trial is the Credits subscription only; paid adds the Paid subscription.
+  /// specs/billing.md: trial | paid (CHECK). Trial is the Credits subscription only; paid adds the org's paid
+  /// subscription, which staff create in Meteroid on the org's own plan.
   plan               String    @default("trial")
-  /// The org's Meteroid subscription on the Paid plan: set when an upgrade is asked for, cleared when it's cancelled.
+  /// The org's paid Meteroid subscription (any plan but Credits): set when its first invoice arrives, cleared when it's cancelled.
   paidSubscriptionId String?   @unique
-  /// A custom Paid price (cents a month, tax included) set by staff (scripts/billing-price.ts); null: the plan's price.
-  paidMonthlyCents   Int?
   /// Set while a Paid renewal is overdue unpaid: no calls, no credits given (specs/billing.md rule 16).
   pausedAt           DateTime?
   /// Legal name, address, tax number and billing emails (lib/billing/details.ts), as also saved in Meteroid.
@@ -1149,6 +1148,9 @@ model BillingInvoice {
   paymentLinkUrl String?
   /// The Razorpay payment that settled it (rule 29): set once, so a second payment is a duplicate, never a second mark.
   razorpayPaymentId String? @unique
+  /// The invoice and receipt PDFs as first sent (S3 keys, rule 22): kept, so an issued document never changes.
+  invoicePdfKey  String?
+  receiptPdfKey  String?
   /// When each workflow claimed the invoice (one run per invoice and event) and each email went out.
   issuedRunAt    DateTime?
   paidRunAt      DateTime?
