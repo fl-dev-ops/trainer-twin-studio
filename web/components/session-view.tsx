@@ -489,16 +489,14 @@ export function SessionView({
       if (finalizedRef.current) return;
       finalizedRef.current = true;
       try {
+        // The browser's transcript only (evidence is the agent's and the server's: specs/practice.md rule 22).
+        const body = JSON.stringify({ sessionId: connection.sessionId, status, transcript: entriesRef.current });
         const response = await fetch("/api/sessions/finalize", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sessionId: connection.sessionId,
-            status,
-            transcript: entriesRef.current,
-            evidence: coverageRef.current,
-          }),
-          keepalive: true,
+          body,
+          // keepalive survives the page closing, but browsers refuse it over 64 KB: a long call's end is a normal request.
+          keepalive: body.length < 60_000,
         });
         if (!response.ok) throw new Error(`Session save failed (${response.status})`);
       } catch (saveError) {

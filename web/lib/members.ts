@@ -3,6 +3,7 @@ import { db, withLock } from "@/lib/db";
 import { refusals } from "@/lib/errors";
 import { ADMIN_ROLE, LEARNER_ROLE, TEAM_ROLE } from "@/lib/roles";
 import { closeInterviewSession } from "@/lib/session-lifecycle";
+import { startSessionEnd } from "@/lib/session-end";
 
 export { ADMIN_ROLE };
 
@@ -61,6 +62,12 @@ export async function setMemberDisabled(input: { orgId: string; memberId: string
     where: { orgId: input.orgId, userId: person.userId, status: { in: ["activating", "active"] } },
     select: { id: true },
   });
+  // Their calls that ended without their end work started (practice rule 24): started again now.
+  const unstarted = await db.interviewSession.findMany({
+    where: { orgId: input.orgId, userId: person.userId, status: { in: ["completed", "abandoned"] }, endWorkAt: null, endedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+    select: { id: true },
+  });
+  for (const session of unstarted) await startSessionEnd(session.id);
   const failed = (await Promise.allSettled(open.map((session) => closeInterviewSession(session.id, "abandoned")))).filter(
     (result): result is PromiseRejectedResult => result.status === "rejected",
   );

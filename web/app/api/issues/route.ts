@@ -11,7 +11,8 @@ const bodySchema = z
   .object({
     kind: z.enum(["bug", "feature", "other"]).default("bug"),
     message: z.string().trim().min(5).max(5000),
-    url: z.string().trim().max(2048).optional().nullable(),
+    // A web page link only (it becomes a link in the alert email: practice rule 28).
+    url: z.string().trim().max(2048).regex(/^https?:\/\//i, "A link must start with http:// or https://").optional().nullable(),
     // The browser's PostHog session replay, and the call the report is about (learner twin calls).
     replayUrl: z.string().trim().url().startsWith("https://").max(2048).optional().nullable(),
     sessionId: z.string().trim().max(100).optional().nullable(),

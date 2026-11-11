@@ -63,7 +63,7 @@ export async function openSession(input: StartSessionInput): Promise<Refusal | {
 export async function startSessionNow(input: StartSessionInput): Promise<SessionStart> {
   const opened = await openSession(input);
   if (!opened.ok) return opened;
-  if (input.mode === "chat") return { ...opened, conversationToken: opened.session.runtimeToken };
+  if (input.mode === "chat") return { ...opened, conversationToken: opened.session.agentToken };
   return { ...opened, ...(await connectVoice(input, opened.session)) };
 }
 
@@ -101,7 +101,7 @@ export async function connectVoice(input: StartSessionInput, session: OpenedSess
       sessionId: session.id,
       userId: input.userId,
       userName: input.userName,
-      runtimeToken: session.runtimeToken,
+      runtimeToken: session.agentToken,
       orgId: input.orgId,
       agentSlug: row.agentSlug,
       holdOpening: Boolean(agentData?.introVideo) || Boolean(input.holdOpening),

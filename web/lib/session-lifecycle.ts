@@ -1,6 +1,7 @@
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { finalizeInterviewSession, type SessionEndStatus } from "@/lib/interview-sessions";
 import { db } from "@/lib/db";
+import { failStaleReports } from "@/lib/report-model";
 import { startSessionEnd } from "@/lib/session-end";
 
 /**
@@ -44,6 +45,18 @@ export async function sweepStaleCalls() {
             coalesce("allowedSeconds" + ${DEADLINE_GRACE_SECONDS}, ${UNMETERED_LIMIT_SECONDS})) < now() AT TIME ZONE 'UTC')
     LIMIT 200`;
   let ended = 0;
+  // Calls that ended within the last day whose end work never started (rule 24).
+  const unstarted = await db.interviewSession.findMany({
+    where: {
+      status: { in: ["completed", "abandoned"] },
+      endWorkAt: null,
+      endedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000), lte: new Date(Date.now() - 60 * 1000) },
+    },
+    select: { id: true },
+    take: 200,
+  });
+  for (const { id } of unstarted) await startSessionEnd(id);
+  await failStaleReports();
   for (const { id } of stale) {
     try {
       if ((await closeInterviewSession(id, "abandoned"))?.endedNow) ended++;

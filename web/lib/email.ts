@@ -46,7 +46,8 @@ export async function sendEmail({
       to,
       ...(cc ? { cc } : {}),
       replyTo: DEFAULT_REPLY_TO,
-      subject,
+      // One line: names in subjects come from people (practice rule 28).
+      subject: subject.replace(/[\r\n]+/g, " ").trim(),
       html,
       text,
       ...(attachments?.length ? { attachments } : {}),
@@ -54,7 +55,7 @@ export async function sendEmail({
 
     if (result.error) {
       console.error("[Email Error]:", result.error);
-      return { success: false, error: result.error.message };
+      return { success: false, error: result.error.message, status: result.error.statusCode };
     }
 
     return { success: true, data: result.data };

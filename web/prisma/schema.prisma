@@ -360,6 +360,9 @@ model InterviewSession {
   createdAt           DateTime  @default(now())
   startedAt           DateTime?
   endedAt             DateTime?
+  /// When the end work (room, report, calibration score) was started; null after an end means it still must be
+  /// (the sweep retries: specs/practice.md rule 24).
+  endWorkAt           DateTime?
   deletedAt           DateTime?
 
   organization      Organization               @relation(fields: [orgId], references: [id], onDelete: Cascade)

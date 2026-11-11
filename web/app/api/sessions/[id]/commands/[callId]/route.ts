@@ -1,5 +1,7 @@
+import { errorResponse } from "@/lib/errors";
+import { practiceRefusals } from "@/lib/practice";
 import { NextResponse } from "next/server";
-import { authorizeRuntimeSession } from "@/lib/interview-sessions";
+import { authorizeBrowserSession } from "@/lib/interview-sessions";
 import { completeWorkspaceCommand } from "@/lib/workspace-commands";
 
 export async function POST(
@@ -8,8 +10,8 @@ export async function POST(
 ) {
   const { id, callId } = await params;
   const token = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
-  const session = await authorizeRuntimeSession(id, token);
-  if (!session || session.id !== id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const session = await authorizeBrowserSession(id, token);
+  if (!session || session.id !== id) return errorResponse(practiceRefusals.runtimeTokenInvalid());
   const body = await request.json().catch(() => null) as { result?: unknown; status?: unknown; uiState?: unknown } | null;
   const failed = body?.status === "failed";
   await completeWorkspaceCommand(id, callId, body?.result ?? { ok: !failed }, failed);

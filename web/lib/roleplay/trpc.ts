@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { beforeSettings } from "@/lib/context-upload";
 import { db, withLock } from "@/lib/db";
+import { reportStateOf, type ReportState } from "@/lib/report-model";
 import { refusals } from "@/lib/errors";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { assignablePeople } from "@/lib/learners";
@@ -64,16 +65,9 @@ async function findRoleplay(orgId: string, slug: string) {
 const roleplayReport = (value: unknown): RoleplayReport | null =>
   isSessionReport(value) && asRecord(value).kind === "roleplay" ? (value as RoleplayReport) : null;
 
-/** Where a session's report stands, for quiet polling (same states as twin). */
-export type RoleplayReportState = "ready" | "pending" | "unavailable";
-const JUST_ENDED_MS = 10 * 60_000;
-function reportState(row: { status: string; reportStatus: string | null; report: unknown; endedAt: Date | null }, now = Date.now()): RoleplayReportState {
-  if (roleplayReport(row.report)) return "ready";
-  if (row.reportStatus === "generating") return "pending";
-  const fresh = row.endedAt !== null && now - row.endedAt.getTime() < JUST_ENDED_MS;
-  if (row.status === "completed" && (!row.reportStatus || row.reportStatus === "none") && fresh) return "pending";
-  return "unavailable";
-}
+/** Where a session's report stands, for quiet polling (the same states as twin: lib/report-model.ts). */
+export type RoleplayReportState = ReportState;
+const reportState = (row: Parameters<typeof reportStateOf>[0], now = Date.now()) => reportStateOf(row, (report) => Boolean(roleplayReport(report)), now);
 
 const sessionSelect = {
   id: true, agentId: true, status: true, reportStatus: true, report: true, startedAt: true, endedAt: true, createdAt: true,

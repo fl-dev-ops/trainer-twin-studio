@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { db, withLock } from "@/lib/db";
 import { refusals } from "@/lib/errors";
 import { practicePerson, practiceRefusals, startAllowance } from "@/lib/practice";
@@ -67,6 +67,8 @@ export async function finalizeSessionRow(input: {
   replaceTranscript?: boolean;
 }, tx: Prisma.TransactionClient) {
   {
+    // One end at a time per call (specs/practice.md rule 23): lock the row before reading what gets merged.
+    await tx.$queryRaw`SELECT 1 FROM "InterviewSession" WHERE "id" = ${input.sessionId} FOR UPDATE`;
     const existing = await tx.interviewSession.findUnique({
       where: { id: input.sessionId },
       select: { status: true, endedAt: true, transcript: true, evidence: true, reportStatus: true, assignmentId: true },
@@ -290,7 +292,7 @@ export async function activateSession(input: {
       const secondsLeft = existing.allowedSeconds == null
         ? null
         : Math.max(0, existing.allowedSeconds - Math.floor((Date.now() - (existing.startedAt ?? existing.createdAt).getTime()) / 1000));
-      return { id: existing.id, agentSlug: existing.agentSlug, status: existing.status, mode: existing.mode as DeliveryMode, runtimeToken: token, secondsLeft, resumed: true };
+      return { id: existing.id, agentSlug: existing.agentSlug, status: existing.status, mode: existing.mode as DeliveryMode, runtimeToken: browserToken(existing.id), agentToken: token, secondsLeft, resumed: true };
     }
     // It ended meanwhile: a new call.
     activationKey = `${assignmentId ? `assignment:${assignmentId}` : "direct"}:${randomBytes(18).toString("base64url")}`;
@@ -413,9 +415,29 @@ export async function activateSession(input: {
   }
 
   // secondsLeft: the call must end after this many seconds (metered calls; null = not metered).
-  return { id: session.id, agentSlug: session.agentSlug, status: "active", mode, runtimeToken: token, secondsLeft: session.allowedSeconds, calibrationId };
+  // runtimeToken: the browser's own token (practice rule 26); agentToken goes only to the voice agent's dispatch.
+  return { id: session.id, agentSlug: session.agentSlug, status: "active", mode, runtimeToken: browserToken(session.id), agentToken: token, secondsLeft: session.allowedSeconds, calibrationId };
 }
 
+/** The browser's token for its own call's live features (commands, UI state, snapshot): never the agent's (rule 26). */
+const browserToken = (sessionId: string) => {
+  const secret = process.env.COPILOT_SERVICE_SECRET;
+  if (!secret) throw new Error("COPILOT_SERVICE_SECRET is not configured");
+  return createHmac("sha256", secret).update(`browser:${sessionId}`).digest("base64url");
+};
+
+/** The live call this browser token is for (activating or active), or null (specs/practice.md rule 26). */
+export async function authorizeBrowserSession(sessionId: string, token: string) {
+  const expected = Buffer.from(browserToken(sessionId));
+  const given = Buffer.from(token);
+  if (!token || given.length !== expected.length || !timingSafeEqual(given, expected)) return null;
+  return db.interviewSession.findFirst({
+    where: { id: sessionId, status: { in: ["activating", "active"] } },
+    select: { id: true, orgId: true, userId: true, status: true, evidence: true, runtimeState: true, runtimeRevision: true },
+  });
+}
+
+/** The agent's runtime token (its model calls): the live call it belongs to, or null. */
 export async function authorizeRuntimeSession(idOrToken: string, tokenParam?: string) {
   const token = tokenParam || idOrToken;
   if (!token) return null;

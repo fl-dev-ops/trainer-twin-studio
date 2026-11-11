@@ -139,10 +139,11 @@
     its end, and when its owner is disabled. Calls ended before this rule are left as they are.
 25. **A report** is generated at most once per call. One not finished 30 minutes after the call ended shows as
     unavailable and is marked failed by the sweep; a late run never overwrites it. Report prompts are capped in size.
-26. **Two tokens per call.** The agent's runtime token (model calls, status and recording from the agent) is given
-    only to the agent's dispatch, never to the browser or the room's metadata. The browser gets its own token for its
-    call's live features only (commands, UI state, the call's snapshot). Each works only while its call is live
-    (`runtime_token_invalid`).
+26. **Two tokens per call.** The agent's runtime token (its model calls) is given only to the agent's dispatch, never
+    to the browser or the room's metadata; the agent reports the call's end and recording through the webhook (its
+    service secret). The browser gets its own token for its call's live features only (commands, UI state, the
+    call's snapshot), valid while the call is activating or active; the agent's also while closing. Anything else is
+    `runtime_token_invalid`.
 27. **Recordings** are signed only for keys under the call's own org.
 28. **Emails**: a subject is one line (line breaks removed), a permanently refused email (a bad address, a changed
     body for the same key) isn't retried, and an issue report's link must be http(s).
@@ -188,6 +189,11 @@ Same columns as [People](people.md#refusals). **Where**: PG page loader (`/t/`, 
 | `runtime_token_invalid` | 401 | This call is no longer available. | Runtime token missing, wrong, or its call has ended | RT |
 
 ## Open questions
+
+- **What "End" means.** Today the page sends `abandoned` when a learner clicks End, and the voice agent's later
+  `COMPLETED` turns almost every ended call into `completed` (also drops, the sweep, disables and replaced calls), so
+  nearly every call gets a report. Proposed: End and time-up send `completed`, and the agent's webhook changes the
+  status only of a live call. Waiting for the owner's decision.
 
 - **Joining by opening a link.** Opening an active common link while signed in adds you to its org (People rule 6),
   so a link someone else sends you can add you too. The org that made the link pays the starting credits. Keep, or

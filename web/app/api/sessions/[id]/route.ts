@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { errorResponse, refusals } from "@/lib/errors";
 import { db } from "@/lib/db";
 import { resolveSessionUser, visibleSessions } from "@/lib/session-user";
-import { authorizeRuntimeSession } from "@/lib/interview-sessions";
+import { authorizeBrowserSession } from "@/lib/interview-sessions";
 
 /**
  * Returns snapshot of an interview session: coverage, phase, status.
@@ -19,8 +19,9 @@ export async function GET(
   const authHeader = request.headers.get("authorization") ?? "";
   const token = authHeader.replace(/^Bearer\s+/i, "").trim();
   if (token) {
-    const authorized = await authorizeRuntimeSession(token);
-    if (authorized && authorized.id === id) {
+    // The browser's own token for this call (practice rule 26).
+    const authorized = await authorizeBrowserSession(id, token);
+    if (authorized) {
       session = {
         id: authorized.id,
         status: authorized.status,

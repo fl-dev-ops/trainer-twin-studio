@@ -1,8 +1,6 @@
 import { errorResponse, refusals } from "@/lib/errors";
-import { practicePerson, practiceRefusals } from "@/lib/practice";
+import { practicePerson } from "@/lib/practice";
 import { NextResponse } from "next/server";
-import { authorizeRuntimeSession, type SessionEndStatus } from "@/lib/interview-sessions";
-import { closeInterviewSession } from "@/lib/session-lifecycle";
 import { after } from "next/server";
 import { runSessionStart } from "@/lib/run-session-start";
 import { warmChatOpening } from "@/lib/session-warm";
@@ -48,7 +46,10 @@ export async function POST(req: Request) {
       calibrate: body.calibrate === true,
     });
     if (!started.ok) return NextResponse.json({ error: started.error, ...(started.code ? { code: started.code } : {}) }, { status: started.status });
-    const activation = { session: started.session, participantToken: started.participantToken, room: started.room, conversationToken: started.conversationToken };
+    // The browser never gets the agent's token (practice rule 26).
+    const { agentToken: _agentToken, ...session } = started.session;
+    void _agentToken;
+    const activation = { session, participantToken: started.participantToken, room: started.room, conversationToken: started.conversationToken };
     // Prewarm the chat brain's opening (spec snapshot, surface command, opening style) while the person connects.
     after(() => warmChatOpening(activation.session.id, org.id).catch(() => {}));
     return NextResponse.json(activation);
@@ -56,18 +57,4 @@ export async function POST(req: Request) {
     console.error("Session activation failed", error);
     return NextResponse.json({ error: "Could not start the session. Please try again or contact support." }, { status: 500 });
   }
-}
-
-/** Agent-only lifecycle update authorized by the session-scoped runtime token. */
-export async function PATCH(req: Request) {
-  const body = await req.json().catch(() => null);
-  if (!body?.id || !["completed", "abandoned"].includes(body.status)) {
-    return NextResponse.json({ error: "id and status are required" }, { status: 400 });
-  }
-  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-  const session = await authorizeRuntimeSession(String(body.id), token);
-  if (!session) return errorResponse(practiceRefusals.runtimeTokenInvalid());
-  // The rest (room, credits, report) runs in the session's end workflow (lib/session-lifecycle.ts).
-  await closeInterviewSession(session.id, body.status as SessionEndStatus);
-  return NextResponse.json({ ok: true });
 }

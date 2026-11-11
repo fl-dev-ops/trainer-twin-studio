@@ -1,6 +1,5 @@
 import { db } from "@/lib/db";
-import type { Prisma } from "@/lib/generated/prisma/client";
-import { callReportModel, markReportFailed, ReportError } from "@/lib/report-model";
+import { callReportModel, markReportFailed, ReportError, saveReport } from "@/lib/report-model";
 import { MAX_GOALS, MAX_RUBRIC_CRITERIA } from "@/lib/roleplay/skill";
 import { skillBody } from "@/lib/scenario-ingest";
 import { reportKindOf } from "@/lib/session-after";
@@ -214,11 +213,6 @@ ${transcript}`;
   }
 }
 
-export async function saveRoleplayReport(sessionId: string, report: RoleplayReport) {
-  await db.interviewSession.update({
-    where: { id: sessionId },
-    data: { report: report as unknown as Prisma.InputJsonValue, reportStatus: "completed" },
-  });
-}
+export const saveRoleplayReport = (sessionId: string, runId: string, report: RoleplayReport) => saveReport(sessionId, runId, report);
 
 export const markRoleplayReportFailed = markReportFailed;

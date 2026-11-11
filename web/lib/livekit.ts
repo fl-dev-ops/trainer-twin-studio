@@ -83,16 +83,18 @@ export async function activateLiveKitSession(input: {
 }) {
   const { config, rooms, dispatches, egress } = clients();
   const room = input.sessionId;
-  const metadata = JSON.stringify({
+  const shared = {
     sessionId: input.sessionId,
     orgId: input.orgId,
     agentSlug: input.agentSlug,
-    runtimeToken: input.runtimeToken,
     hold_opening: Boolean(input.holdOpening),
     ...(input.voice ? { voice: input.voice } : {}),
     ...(input.endsAt ? { ends_at: input.endsAt } : {}),
     ...(input.agentKind ? { agent_kind: input.agentKind } : {}),
-  });
+  };
+  // Every participant can read the room's metadata: the agent's runtime token goes only in its dispatch (rule 26).
+  const metadata = JSON.stringify(shared);
+  const dispatchMetadata = JSON.stringify({ ...shared, runtimeToken: input.runtimeToken });
 
   if (!(await rooms.listRooms([room])).length) {
     await rooms.createRoom({ name: room, emptyTimeout: 10 * 60, departureTimeout: 30, metadata });
@@ -101,7 +103,7 @@ export async function activateLiveKitSession(input: {
   }
 
   const existingDispatch = (await dispatches.listDispatch(room)).find((item) => item.agentName === config.agentName);
-  const dispatch = existingDispatch ?? await dispatches.createDispatch(room, config.agentName, { metadata });
+  const dispatch = existingDispatch ?? await dispatches.createDispatch(room, config.agentName, { metadata: dispatchMetadata });
 
   const recording = recordingOutput(input.orgId, room);
   let videoEgressId: string | null = null;

@@ -1,4 +1,4 @@
-import { FatalError, RetryableError } from "workflow";
+import { FatalError, getWorkflowMetadata, RetryableError } from "workflow";
 import { ReportError } from "@/lib/report-model";
 import {
   buildRoleplayReport,
@@ -38,10 +38,10 @@ generateRoleplayReport.maxRetries = 3;
 
 export async function storeRoleplayReport(sessionId: string, report: RoleplayReport) {
   "use step";
-  await saveRoleplayReport(sessionId, report);
+  await saveRoleplayReport(sessionId, getWorkflowMetadata().workflowRunId, report);
 }
 
 export async function failRoleplayReport(sessionId: string) {
   "use step";
-  await markRoleplayReportFailed(sessionId);
+  await markRoleplayReportFailed(sessionId, getWorkflowMetadata().workflowRunId);
 }
