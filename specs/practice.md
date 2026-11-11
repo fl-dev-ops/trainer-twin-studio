@@ -101,21 +101,30 @@
 
 17. **A learner practises a role play only through their own link** (`/s/<code>` of a `RolePlayAssignment`). The link
     page and Start run the same check (rule 1) in the same order: signed in → enabled member (`no_org`,
-    `member_disabled`) → the link is theirs (`roleplay_not_assigned`; the page offers to switch account) → the link
-    is open, `pending` or `used` (`roleplay_access_removed` once cancelled or expired) → the role play is live, not
-    archived (`not_found`) → org not paused → credits (rule 4). Another org's or an unknown code is `not_found`.
-    Admin and team start a role play by name only (`studio_only` for learners); nothing else starts one.
-18. **Role-play calls resume.** Starting again on a link with a call still live returns that call (same deadline),
-    only when it is still live; a reload or a second tab joins it rather than ending it.
+    `member_disabled`) → the link is theirs (`roleplay_not_assigned`; the page shows its switch-account screen
+    instead) → the link is open, `pending` or `used` (`roleplay_access_removed` once cancelled or expired) → the role
+    play is live (`not_found`) → the mode is allowed (`mode_not_allowed`; learners only call by voice) → org not
+    paused → credits (rule 4). Another org's or an unknown code is `not_found`. Admin and team start a role play by
+    name only (`studio_only` for learners); nothing else starts one. Hiding role plays (`hideRoleplay`) only hides the
+    studio's navigation: links keep working.
+18. **Role-play calls resume.** Starting again on a link whose call is still live returns that call (same deadline),
+    decided inside Start's lock and only while it is still live (never bringing back an ended call); that call is
+    not ended as "another live call". A second tab joins it: the first tab, pushed out by the same person joining,
+    doesn't end it. Joining failing never fails the call it joined.
 19. **Assigning** a role play adds the people (People rules 6–9) and writes their assignments in the same locked
-    transaction, all or nothing (as rule 10). The dashboard, the copilot and the REST API share it: a disabled or
-    team person is refused (`person_disabled`, `person_is_studio`), and someone who already has the role play keeps
-    their link (`assignment_exists` 409 only for the API's explicit move of a link to them).
-20. **Saving a role play** (builder, settings, draft publish, spec upload) runs one at a time per role play: the
-    version only moves when the content changes, its files and examples belong to that version, and a save that
-    lost the race is refused cleanly (`not_found` if it was archived meanwhile), never a 500.
-21. **A role play's id is its org's.** Generating or importing one with a name that belongs to another org is
-    refused (`name_taken`) before any model is called.
+    transaction, all or nothing (as rule 10), from the dashboard, the copilot and the REST API alike: a disabled or
+    team person refuses the whole batch (`person_disabled`, `person_is_studio`). Someone who already has an open
+    link keeps it. The API's move of a link to another learner or role play cancels the old link and creates a new
+    one (`assignment_exists` when the target already has one). Practice is counted from calls; a link's status is
+    `pending` until cancelled (no `used` step), and disabling someone cancels their open links.
+20. **Saving a role play** (builder, settings, draft publish, spec upload) runs one at a time per role play
+    (`agent:<slug>` lock, held across its files and examples): the version only moves when the content changes, its
+    files and examples belong to that version, and settings saves never move the version or bring back an older
+    script (a settings save of an archived role play is `not_found`; publishing it again from the builder or the
+    copilot brings it back). Draft publish and spec upload refuse builder role plays
+    and twins (`invalid_input`); they are for older spec-built role plays only.
+21. **A role play's id is its org's.** Generating or importing one whose id belongs to another org is refused
+    (`name_taken`), and one that is a twin (`invalid_input`), before any model is called.
 
 ## Checks (must always hold)
 
@@ -150,7 +159,7 @@ Same columns as [People](people.md#refusals). **Where**: PG page loader (`/t/`, 
 | `recording_too_big` | 413 | A recording can be at most 200 MB. | Agent recording upload over 200 MB | RT |
 | `roleplay_not_assigned` | 403 | This role play isn't assigned to you. | A link of another account (studio members included) | PG, ST |
 | `roleplay_access_removed` | 403 | Your access to this role play was removed. Ask your trainer. | Link cancelled or expired | PG, ST |
-| `mode_not_allowed` | 400 | This role play can't be started as {mode}. | Mode outside the deployment's allowed modes | ST |
+| `mode_not_allowed` | 400 | This role play can't be started as {mode}. | Mode outside the deployment's allowed modes, or a learner not calling by voice | ST |
 | `assignment_exists` | 409 | That learner already has this role play. | REST API moving a link to someone who has one | R |
 | `name_taken` | 409 | That name is used by another organization. Pick another. | A role play's id belongs to another org | S |
 | `runtime_token_invalid` | 401 | This call is no longer available. | Runtime token missing, wrong, or its call has ended | RT |

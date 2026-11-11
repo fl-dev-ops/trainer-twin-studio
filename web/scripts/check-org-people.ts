@@ -45,7 +45,7 @@ export const PEOPLE_CHECKS = [
     sql: `select (select count(*) from "TwinAssignment" t join member m on m."organizationId" = t."orgId" and m."userId" = t."userId"
                   where m."disabledAt" is not null and t.status = 'active')
                + (select count(*) from "RolePlayAssignment" r join member m on m.id = r."memberId"
-                  where m."disabledAt" is not null and r.status = 'pending')
+                  where m."disabledAt" is not null and r.status in ('pending', 'used'))
                + (select count(*) from "InterviewSession" s join member m on m."organizationId" = s."orgId" and m."userId" = s."userId"
                   where m."disabledAt" is not null and s.status in ('assigned', 'activating', 'active'))
                as n`,

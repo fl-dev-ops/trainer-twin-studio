@@ -1,9 +1,12 @@
 import { BASE_DOMAIN } from "@/lib/base-domain";
 import { contextUploadFromAgentData } from "@/lib/context-upload";
-import { db } from "@/lib/db";
 import { orgName, personEmailFor } from "@/lib/invite/person-email";
 import { learnerBalance } from "@/lib/minutes";
-import { addPeopleToOrg, LEARNER, orgPeople, type AddedPerson } from "@/lib/org-people";
+import { addPeopleToOrg, LEARNER, orgPerson, peopleLock, peopleRefusals, type AddedPerson, type OrgPerson } from "@/lib/org-people";
+import { db, withLock } from "@/lib/db";
+import { AppError } from "@/lib/errors";
+import type { Prisma } from "@/lib/generated/prisma/client";
+import { giveRoleplay } from "@/lib/invite/roleplay";
 import { deliverEmail } from "@/lib/queue-emails";
 
 /** Shared by /api/v1/assignments and /api/v1/assignments/:id (docs/openapi.yaml, Assignments). */
@@ -19,13 +22,42 @@ export function findScenario(orgId: string, slug: string) {
 }
 
 /**
- * The learner an API call names (specs/people.md): by `userId`, an existing learner of the org; by email, added to the
- * org as a learner when new (with their starting credits). Refused (PeopleError, MinutesError) like the dashboard.
+ * The learner an API call names and their link to a role play, in one locked transaction (specs/practice.md rule 19):
+ * by email (added to the org as a learner when new, with starting credits) or an existing learner by userId (a
+ * disabled or team person is refused like the dashboard). An open link is kept (`created: false`). `moveFrom`: the
+ * API's move of a link (PATCH): that link is cancelled and a new one made, refused when the target already has an
+ * open one (`assignment_exists`). Null: no such learner.
  */
-export async function learnerFor(orgId: string, by: { userId?: string; email?: string }, trainerUserId: string): Promise<AddedPerson | null> {
-  if (by.email) return (await addPeopleToOrg({ orgId, emails: [by.email], role: LEARNER, byUserId: trainerUserId }))[0];
-  const [person] = await orgPeople(orgId, { roles: [LEARNER], userIds: [by.userId!] });
-  return person ? { ...person, added: false, startingCredits: 0 } : null;
+export async function assignScenario(input: {
+  orgId: string;
+  by: { userId?: string; email?: string };
+  deploymentId: string;
+  trainerUserId: string;
+  moveFrom?: string;
+}) {
+  let created = false;
+  const write = async (tx: Prisma.TransactionClient, person: OrgPerson) => {
+    const open = await tx.rolePlayAssignment.findFirst({ where: { deploymentId: input.deploymentId, memberId: person.memberId, status: { in: ["pending", "used"] } }, select: { id: true } });
+    if (open && input.moveFrom) throw new AppError("assignment_exists", "That learner already has this role play.", 409);
+    if (!open) created = (await giveRoleplay(tx, { orgId: input.orgId, deploymentId: input.deploymentId, people: [person], byUserId: input.trainerUserId })).links.length > 0;
+    if (input.moveFrom) await tx.rolePlayAssignment.update({ where: { id: input.moveFrom }, data: { status: "cancelled" } });
+  };
+  const person: AddedPerson | null = input.by.email
+    ? (await addPeopleToOrg({ orgId: input.orgId, emails: [input.by.email], role: LEARNER, byUserId: input.trainerUserId, then: (tx, [added]) => write(tx, added) }))[0]
+    : await withLock([peopleLock(input.orgId)], async (tx) => {
+        const found = await orgPerson(input.orgId, { userId: input.by.userId! }, tx);
+        if (!found) return null;
+        if (found.disabled) throw peopleRefusals.personDisabled([found.email]);
+        if (found.role !== LEARNER) throw peopleRefusals.personIsStudio([found.email]);
+        await write(tx, found);
+        return { ...found, added: false, startingCredits: 0 };
+      });
+  if (!person) return null;
+  const assignment = await db.rolePlayAssignment.findUniqueOrThrow({
+    where: { deploymentId_memberId: { deploymentId: input.deploymentId, memberId: person.memberId } },
+    select: { id: true, assignedAt: true, shareCode: true },
+  });
+  return { person, assignment, created };
 }
 
 /** The assignment email ("added" too when they joined just now); delivery failure never undoes it (`emailSent`). */

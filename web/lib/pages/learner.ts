@@ -1,9 +1,7 @@
-import { MIN_START_MINUTES } from "@/lib/minutes-config";
 import { headers } from "next/headers";
 import type { ComponentProps } from "react";
 import type { SessionView } from "@/components/session-view";
 import type { TwinLearnerFlow, LearnerAccess } from "@/components/twin/twin-learner-flow";
-import { assignmentMatchesUser } from "@/lib/assignments";
 import { signInUrl } from "@/lib/base-domain";
 import { db } from "@/lib/db";
 import { isStudioRole } from "@/lib/org";
@@ -15,6 +13,7 @@ import { listAgentContextRequired, listAgentContextUploads, listScenarioIntroVid
 import { learnerBalance } from "@/lib/minutes";
 import { AppError } from "@/lib/errors";
 import { practicePerson, startAllowance } from "@/lib/practice";
+import { roleplayAccessByCode } from "@/lib/roleplay-access";
 import { assertLiveTwin, resolveTwinPath, twinAccessByCode, twinAssignmentCode } from "@/lib/twin-access";
 import { beforeSettings } from "@/lib/context-upload";
 
@@ -79,53 +78,44 @@ export async function loadSharedSession(code: string): Promise<SharedSessionView
     return Math.floor(Math.max(0, (await learnerBalance(org.id, user.email)).balanceSeconds) / 60);
   };
 
-  const assignment = org ? await db.rolePlayAssignment.findUnique({
-    where: { shareCode: code },
+  if (!org) return { kind: "invalid" };
+  const refusal = (error: unknown) => {
+    if (error instanceof AppError) return error;
+    throw error;
+  };
+  // A role-play link: the check Start runs, in its order (specs/practice.md rule 17).
+  const roleplay = await roleplayAccessByCode({ orgId: org.id, userId: user.id, code }).catch(refusal);
+  if (roleplay instanceof AppError) {
+    if (roleplay.code === "roleplay_not_assigned") return { kind: "switchAccount", email: user.email, returnTo: signInUrl(host, `/s/${encodeURIComponent(code)}`) };
+    if (roleplay.code === "not_found") return { kind: "invalid" };
+    return { kind: "twinUnavailable", message: roleplay.message, email: user.email };
+  }
+  if (!roleplay) {
+    // Not a role-play link: maybe a twin assignment or a twin share link (opening a share link adds an existing
+    // account to the org with the twin: specs/people.md rule 6; starting the call only uses that membership).
+    const twin = await twinAccessByCode({ orgId: org.id, user, code, join: true }).catch(refusal);
+    if (twin instanceof AppError) return { kind: "twinUnavailable", message: twin.message, email: user.email };
+    if (!twin) return { kind: "invalid" };
+    // The practice check Start uses (specs/practice.md rule 1): the page shows its refusal instead of a Start.
+    const refused = await practicePerson(org.id, user.id).then((person) => startAllowance(org.id, person)).then(() => null, refusal);
+    // Someone who just joined through a common link got their starting credits on the way in.
+    const left = twin.assignmentId ? await minutesLeft() : null;
+    if (refused?.code === "credits_out" || refused?.code === "credits_short") return { kind: "outOfMinutes", email: user.email, minutesLeft: Math.max(0, left ?? 0) };
+    if (refused) return { kind: "twinUnavailable", message: refused.message, email: user.email };
+    return { kind: "session", props: { ...(await twinSessionView(org.id, twin.agentId, code, user.name)), minutesLeft: left } };
+  }
+  const refused = await startAllowance(org.id, roleplay.person).then(() => null, refusal);
+  const left = await minutesLeft();
+  if (refused?.code === "credits_out" || refused?.code === "credits_short") return { kind: "outOfMinutes", email: user.email, minutesLeft: Math.max(0, left ?? 0) };
+  if (refused) return { kind: "twinUnavailable", message: refused.message, email: user.email };
+
+  const assignment = await db.rolePlayAssignment.findUniqueOrThrow({
+    where: { id: roleplay.assignmentId },
     select: {
-      id: true,
-      orgId: true,
-      status: true,
-      member: { select: { userId: true } },
-      deployment: {
-        select: {
-          agent: { select: { slug: true, name: true, persona: { select: { slug: true } } } },
-        },
-      },
+      deployment: { select: { agent: { select: { slug: true, name: true, persona: { select: { slug: true } } } } } },
       organization: { select: { name: true, logo: true } },
     },
-  }) : null;
-  // Not a role-play invite: maybe a twin assignment or a twin share link (opening a share link adds an existing
-  // account to the org with the twin: specs/people.md rule 6).
-  if (!assignment && org) {
-    // Opening a common twin link is where an existing account joins (specs/people.md rule 6); starting the call
-    // only uses that membership.
-    const twin = await twinAccessByCode({ orgId: org.id, user, code, join: true }).catch((error: unknown) => {
-      if (error instanceof AppError) return error;
-      throw error;
-    });
-    if (twin instanceof AppError) return { kind: "twinUnavailable", message: twin.message, email: user.email };
-    if (twin) {
-      // The practice check Start uses (specs/practice.md rule 1): the page shows its refusal instead of a Start.
-      const refused = await practicePerson(org.id, user.id).then((person) => startAllowance(org.id, person)).then(() => null, (error: unknown) => {
-        if (error instanceof AppError) return error;
-        throw error;
-      });
-      // Someone who just joined through a common link got their starting credits on the way in.
-      const left = twin.assignmentId ? await minutesLeft() : null;
-      if (refused?.code === "credits_out" || refused?.code === "credits_short") return { kind: "outOfMinutes", email: user.email, minutesLeft: Math.max(0, left ?? 0) };
-      if (refused) return { kind: "twinUnavailable", message: refused.message, email: user.email };
-      return { kind: "session", props: { ...(await twinSessionView(org.id, twin.agentId, code, user.name)), minutesLeft: left } };
-    }
-  }
-  // Open while assigned, whether practised before or not, until cancelled: practice is limited only by minutes.
-  const open = assignment && assignment.orgId === org?.id && ["pending", "used"].includes(assignment.status);
-  if (open && !assignmentMatchesUser(assignment, user)) {
-    return { kind: "switchAccount", email: user.email, returnTo: signInUrl(host, `/s/${encodeURIComponent(code)}`) };
-  }
-  if (!open || !assignment || !org) return { kind: "invalid" };
-  const left = await minutesLeft();
-  if (left !== null && left < MIN_START_MINUTES) return { kind: "outOfMinutes", email: user.email, minutesLeft: Math.max(0, left) };
-
+  });
   const agent = assignment.deployment.agent;
   const [introVideos, agentPhotos, agentContextRequired, agentContextUploads] = await Promise.all([
     listScenarioIntroVideos(org.id, [agent.slug]),

@@ -72,7 +72,6 @@ export async function connectVoice(input: StartSessionInput, session: OpenedSess
     where: { id: session.id },
     select: {
       id: true,
-      assignmentId: true,
       agentSlug: true,
       agent: { select: { data: true, kind: true, persona: { select: { voiceId: true } } } },
       livekitRoom: true,
@@ -129,24 +128,17 @@ export async function connectVoice(input: StartSessionInput, session: OpenedSess
     });
     return { participantToken: livekit.token, room: livekit.room };
   } catch (error) {
+    // Joining a live call (a resume) failing never fails that call (specs/practice.md rule 18).
+    if ("resumed" in session && session.resumed) throw error;
     await closeLiveKitSession({
       room: row.livekitRoom,
       dispatchId: row.livekitDispatchId,
       videoEgressId: row.videoEgressId,
     }).catch(() => {});
-    const failed = await db.interviewSession.updateMany({
-      where: { id: session.id, status: { notIn: ["completed", "abandoned"] } },
+    await db.interviewSession.updateMany({
+      where: { id: session.id, status: { in: ["activating", "active"] } },
       data: { status: "failed", endedAt: new Date(), runtimeTokenHash: null },
     });
-    const practised = row.assignmentId
-      ? await db.interviewSession.count({ where: { assignmentId: row.assignmentId, id: { not: session.id }, startedAt: { not: null }, status: { not: "failed" } } })
-      : 0;
-    if (failed.count === 1 && row.assignmentId && !practised) {
-      await db.rolePlayAssignment.updateMany({
-        where: { id: row.assignmentId, status: "used" },
-        data: { status: "pending", usedAt: null },
-      });
-    }
     throw error;
   }
 }

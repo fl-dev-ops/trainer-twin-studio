@@ -48,7 +48,7 @@ export async function setMemberDisabled(input: { orgId: string; memberId: string
     await tx.member.update({ where: { id: person.memberId }, data: { disabledAt: new Date() } });
     if (!elsewhere) await tx.session.deleteMany({ where: { userId: person.userId } });
     await tx.twinAssignment.updateMany({ where: { orgId: input.orgId, status: "active", userId: person.userId }, data: { status: "revoked" } });
-    await tx.rolePlayAssignment.updateMany({ where: { orgId: input.orgId, status: "pending", memberId: person.memberId }, data: { status: "cancelled" } });
+    await tx.rolePlayAssignment.updateMany({ where: { orgId: input.orgId, status: { in: ["pending", "used"] }, memberId: person.memberId }, data: { status: "cancelled" } });
     await tx.interviewSession.updateMany({
       where: { orgId: input.orgId, userId: person.userId, status: "assigned" },
       data: { status: "revoked", runtimeTokenHash: null },

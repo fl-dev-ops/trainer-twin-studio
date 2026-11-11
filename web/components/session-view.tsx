@@ -20,6 +20,7 @@ import {
   Track,
   type RemoteParticipant,
   type TranscriptionSegment,
+  DisconnectReason,
 } from "livekit-client";
 import { Button } from "@/components/ui/button";
 import {
@@ -920,8 +921,11 @@ export function SessionView({
       } catch {}
     }
 
-    function handleRoomDisconnected() {
+    function handleRoomDisconnected(reason?: DisconnectReason) {
       if (endingRef.current) return;
+      // The same person joined this call from another tab (a resume): the call goes on there, so don't end it here
+      // (specs/practice.md rule 18).
+      if (reason === DisconnectReason.DUPLICATE_IDENTITY) return;
       void handleDisconnect("disconnected");
     }
 

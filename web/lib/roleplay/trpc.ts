@@ -1,7 +1,8 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { beforeSettings } from "@/lib/context-upload";
-import { db } from "@/lib/db";
+import { db, withLock } from "@/lib/db";
+import { refusals } from "@/lib/errors";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { assignablePeople } from "@/lib/learners";
 import { orgPeople } from "@/lib/org-people";
@@ -255,10 +256,16 @@ const builderRouter = t.router({
     .input(slugInput.extend({ before: beforeInput.optional(), tools: toolSettingsInput.optional() }))
     .mutation(async ({ ctx, input }) => {
       const agent = await findRoleplay(ctx.user.orgId, input.slug);
-      const data = (agent.data && typeof agent.data === "object" ? agent.data : {}) as Record<string, unknown>;
-      await db.agent.update({
-        where: { id: agent.id },
-        data: { data: { ...data, ...(input.before ? { before: input.before } : {}), ...(input.tools ? { tools: input.tools } : {}) } as Prisma.InputJsonValue },
+      // Under the role play's save lock, reading its data again (specs/practice.md rule 20): a builder save that just
+      // landed isn't undone, and the version doesn't move.
+      await withLock([`agent:${agent.slug}`], async (tx) => {
+        const current = await tx.agent.findFirst({ where: { id: agent.id, archivedAt: null }, select: { data: true } });
+        if (!current) throw refusals.notFound();
+        const data = (current.data && typeof current.data === "object" ? current.data : {}) as Record<string, unknown>;
+        await tx.agent.update({
+          where: { id: agent.id },
+          data: { data: { ...data, ...(input.before ? { before: input.before } : {}), ...(input.tools ? { tools: input.tools } : {}) } as Prisma.InputJsonValue },
+        });
       });
       return { ok: true };
     }),

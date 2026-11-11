@@ -1,8 +1,8 @@
 import { createHash, createHmac, randomBytes } from "node:crypto";
-import { assignmentMatchesUser } from "@/lib/assignments";
 import { db, withLock } from "@/lib/db";
 import { refusals } from "@/lib/errors";
 import { practicePerson, practiceRefusals, startAllowance } from "@/lib/practice";
+import { roleplayAccessByCode } from "@/lib/roleplay-access";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { ensureDeployment, type DeliveryMode } from "@/lib/deployments";
 import { initRuntimeState } from "@/lib/runtime/runtime";
@@ -11,7 +11,7 @@ import { isStudioRole } from "@/lib/org";
 import { twinAccessByAgent, twinAccessByCode } from "@/lib/twin-access";
 import { pinTwinSkills, TWIN_SOURCE } from "@/lib/twins";
 import { beforeSettings, usesBeforeSettings } from "@/lib/context-upload";
-import { MinutesError, minutesLock, writeSessionUsage } from "@/lib/minutes";
+import { minutesLock, writeSessionUsage } from "@/lib/minutes";
 import { scheduleOrgUsage } from "@/lib/schedule-org-credits";
 import { orgCredits } from "@/lib/org-credits";
 import { BEFORE_UPLOAD_REFUSED, uploadAllowed } from "@/lib/context-upload";
@@ -106,17 +106,6 @@ export async function finalizeSessionRow(input: {
       },
       select: { id: true, status: true, transcript: true, evidence: true, reportStatus: true, assignmentId: true },
     });
-
-    if (
-      existing.assignmentId
-      && input.requestedStatus
-      && (updated.status === "completed" || updated.status === "abandoned")
-    ) {
-      await tx.rolePlayAssignment.updateMany({
-        where: { id: existing.assignmentId, status: "pending" },
-        data: { status: "used", usedAt: existing.endedAt ?? new Date() },
-      });
-    }
 
     // The call's charge, in the transaction that ends it: one row per call, however many times it is finalized.
     const usage = endedNow ? await writeSessionUsage(tx, input.sessionId) : { report: null };
@@ -242,17 +231,10 @@ export async function activateSession(input: {
   // Twin sessions: the learner's assignment on that twin (null for admin/team trying it).
   let twin: { assignmentId: string | null } | null = null;
 
-  const roleplayInvite = input.shareCode
-    ? await db.rolePlayAssignment.findFirst({
-        where: { shareCode: input.shareCode, orgId: input.orgId },
-        include: {
-          member: { select: { userId: true } },
-          deployment: { include: { agent: { select: { id: true } } } },
-        },
-      })
-    : null;
+  // A role-play link: the shared check the link page runs too (specs/practice.md rule 17).
+  const roleplay = input.shareCode ? await roleplayAccessByCode({ orgId: input.orgId, userId: input.userId, code: input.shareCode, mode }) : null;
 
-  if (input.shareCode && !roleplayInvite) {
+  if (input.shareCode && !roleplay) {
     // Not a role-play invite: a twin assignment code or a twin share link. Joining through a link happened when the
     // page opened (lib/pages/learner.ts); a call start never adds anyone (specs/practice.md rule 3).
     const access = await twinAccessByCode({ orgId: input.orgId, user, code: input.shareCode, join: false });
@@ -262,26 +244,18 @@ export async function activateSession(input: {
     deploymentId = (await ensureDeployment(input.orgId, agentId)).id;
     // Twin calls never resume: every start is a new call (specs/practice.md rule 5).
     activationKey = `twin:${randomBytes(18).toString("base64url")}`;
-  } else if (input.shareCode) {
-    const found = roleplayInvite;
-    if (
-      !found
-      || !assignmentMatchesUser(found, { id: input.userId })
-      || !["pending", "used"].includes(found.status)
-      || found.deployment.status !== "active"
-    ) return null;
-    if (!found.deployment.allowedModes.split(",").includes(mode)) throw new Error(`Deployment does not allow ${mode} sessions`);
-    assignmentId = found.id;
-    deploymentId = found.deployment.id;
-    agentId = found.deployment.agent.id;
+  } else if (roleplay) {
+    assignmentId = roleplay.assignmentId;
+    deploymentId = roleplay.deploymentId;
+    agentId = roleplay.agentId;
     // A role play link starts a new call each time (practice is limited only by the learner's minutes); a call still
-    // live on it is resumed instead, so a dropped connection or a reload continues the same conversation.
+    // live on it is resumed instead (rule 18), so a dropped connection, a reload or a second tab continues it.
     const live = await db.interviewSession.findFirst({
-      where: { assignmentId: found.id, userId: input.userId, status: { in: ["activating", "active"] } },
+      where: { assignmentId: roleplay.assignmentId, userId: input.userId, status: { in: ["activating", "active"] } },
       orderBy: { createdAt: "desc" },
       select: { activationKey: true },
     });
-    activationKey = live?.activationKey ?? `assignment:${found.id}:${randomBytes(18).toString("base64url")}`;
+    activationKey = live?.activationKey ?? `assignment:${roleplay.assignmentId}:${randomBytes(18).toString("base64url")}`;
   } else {
     // By name: admin and team trying an agent (learners start from their link; specs/practice.md rule 1).
     if (!studio) throw refusals.studioOnly();
@@ -305,27 +279,26 @@ export async function activateSession(input: {
   if (input.calibrate && !twin) throw refusals.notFound();
   // All twin sessions go through LiveKit (also enforced by a DB trigger); the agent cuts metered calls at the deadline.
   if (twin && mode !== "voice") throw practiceRefusals.voiceOnly();
-  if (!studio && mode !== "voice") throw new MinutesError("Practice sessions are voice only", 400);
-
-  const existing = await db.interviewSession.findUnique({ where: { activationKey } });
+  let existing = await db.interviewSession.findUnique({ where: { activationKey } });
   if (existing && ["activating", "active"].includes(existing.status)) {
+    // Resume (rule 18): under the credits lock, and only while it is still live (an ended call never comes back).
     const token = runtimeToken(existing.id);
-    await db.interviewSession.update({ where: { id: existing.id }, data: { runtimeTokenHash: tokenHash(token) } });
-    // A resumed learner call keeps its deadline: what's left of the minutes it started with.
-    const secondsLeft = existing.allowedSeconds == null
-      ? null
-      : Math.max(0, existing.allowedSeconds - Math.floor((Date.now() - (existing.startedAt ?? existing.createdAt).getTime()) / 1000));
-    return { id: existing.id, agentSlug: existing.agentSlug, status: existing.status, mode: existing.mode as DeliveryMode, runtimeToken: token, secondsLeft };
+    const { count } = await withLock([minutesLock(input.orgId)], (tx) =>
+      tx.interviewSession.updateMany({ where: { id: existing!.id, status: { in: ["activating", "active"] } }, data: { runtimeTokenHash: tokenHash(token) } }));
+    if (count) {
+      // A resumed call keeps its deadline: what's left of the minutes it started with.
+      const secondsLeft = existing.allowedSeconds == null
+        ? null
+        : Math.max(0, existing.allowedSeconds - Math.floor((Date.now() - (existing.startedAt ?? existing.createdAt).getTime()) / 1000));
+      return { id: existing.id, agentSlug: existing.agentSlug, status: existing.status, mode: existing.mode as DeliveryMode, runtimeToken: token, secondsLeft, resumed: true };
+    }
+    // It ended meanwhile: a new call.
+    activationKey = `${assignmentId ? `assignment:${assignmentId}` : "direct"}:${randomBytes(18).toString("base64url")}`;
+    existing = null;
   }
   if (existing?.status === "failed") {
     await db.interviewSession.delete({ where: { id: existing.id } });
   } else if (existing) {
-    if (assignmentId && (existing.status === "completed" || existing.status === "abandoned")) {
-      await db.rolePlayAssignment.updateMany({
-        where: { id: assignmentId, status: "pending" },
-        data: { status: "used", usedAt: existing.endedAt ?? new Date() },
-      });
-    }
     return null;
   }
 
@@ -416,7 +389,6 @@ export async function activateSession(input: {
         where: { id: session.id, status: "activating" },
         data: { status: "active", startedAt: new Date(), runtimeTokenHash: tokenHash(token) },
       });
-      if (count && assignmentId) await tx.rolePlayAssignment.update({ where: { id: assignmentId }, data: { status: "used", usedAt: new Date() } });
       return count === 1;
     });
     if (!activated) throw practiceRefusals.callReplaced();

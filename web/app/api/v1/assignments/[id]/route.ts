@@ -1,17 +1,15 @@
 import { z } from "zod";
-import { assignmentExpiresAt, newAssignmentShareCode } from "@/lib/assignments";
 import { db } from "@/lib/db";
 import { ensureDeployment } from "@/lib/deployments";
 import { isApiError, requireExternalApi } from "@/lib/external-api";
-import { MinutesError } from "@/lib/minutes";
-import { AppError, errorResponse } from "@/lib/errors";
+import { AppError, errorResponse, refusals } from "@/lib/errors";
 import {
   assignmentDetails,
   assignmentDetailSelect,
   assignmentView,
   emailAssignment,
   findScenario,
-  learnerFor,
+  assignScenario,
   practiceUrl,
 } from "@/lib/external-api-assignments";
 
@@ -47,47 +45,33 @@ export async function PATCH(request: Request, { params }: Params) {
   const target = parsed.data.scenario ? await findScenario(api.org.id, parsed.data.scenario) : current.deployment.agent;
   const trainer = api.trainer;
   if (!target) return Response.json({ error: "Scenario not found" }, { status: 404 });
-  // The learner: unchanged, an existing one by userId, or by email (added to the org first when new).
-  let learner;
-  try {
-    learner = await learnerFor(
-      api.org.id,
-      parsed.data.email || parsed.data.userId ? { email: parsed.data.email, userId: parsed.data.userId } : { userId: current.member.userId },
-      trainer.userId,
-    );
-  } catch (error) {
-    if (error instanceof AppError) return errorResponse(error);
-    if (error instanceof MinutesError) return Response.json({ error: error.message }, { status: error.status });
-    throw error;
-  }
-  if (!learner) return Response.json({ error: "User not found" }, { status: 404 });
   const deployment = await ensureDeployment(api.org.id, target.id);
-  if (learner.memberId === current.memberId && deployment.id === current.deploymentId) {
+  const sameLearner = (!parsed.data.email && !parsed.data.userId)
+    || parsed.data.userId === current.member.userId
+    || parsed.data.email?.trim().toLowerCase() === current.member.user.email.toLowerCase();
+  if (sameLearner && deployment.id === current.deploymentId) {
     return Response.json({
-      assignment: assignmentView({ id, assignedAt: current.assignedAt }, learner.email, learner.userId, target.slug),
+      assignment: assignmentView({ id, assignedAt: current.assignedAt }, current.member.user.email, current.member.userId, target.slug),
       practiceUrl: practiceUrl(api.org.slug, current.shareCode),
       changed: false,
     });
   }
-  // One assignment per learner and scenario: moving onto a pair that already exists would make a second one.
-  const clash = await db.rolePlayAssignment.findFirst({ where: { deploymentId: deployment.id, memberId: learner.memberId, id: { not: id } }, select: { id: true } });
-  if (clash) return Response.json({ error: "That learner already has this scenario assigned" }, { status: 409 });
-
-  // The old link stops working: the assignment gets a fresh code, recipient and expiry.
-  const assignment = await db.rolePlayAssignment.update({
-    where: { id },
-    data: {
-      memberId: learner.memberId,
+  // A move (practice rule 19): the old link is cancelled (its calls stay with it) and a new one made for the target.
+  let result;
+  try {
+    result = await assignScenario({
+      orgId: api.org.id,
+      by: sameLearner ? { userId: current.member.userId } : { email: parsed.data.email, userId: parsed.data.userId },
       deploymentId: deployment.id,
-      assignedByUserId: trainer.userId,
-      assignedAt: new Date(),
-      shareCode: newAssignmentShareCode(),
-      status: "pending",
-      usedAt: null,
-      expiresAt: assignmentExpiresAt(),
-    },
-    select: { id: true, assignedAt: true, shareCode: true },
-  });
+      trainerUserId: trainer.userId,
+      moveFrom: id,
+    });
+  } catch (error) {
+    if (error instanceof AppError) return errorResponse(error);
+    throw error;
+  }
+  if (!result) return errorResponse(refusals.notFound());
+  const { person: learner, assignment } = result;
   const url = practiceUrl(api.org.slug, assignment.shareCode);
   const emailSent = await emailAssignment({ org: api.org, idempotencyKey: `assignment:${assignment.id}:${assignment.shareCode}`, person: learner, scenario: target, practiceUrl: url, trainerName: trainer.name });
   return Response.json({

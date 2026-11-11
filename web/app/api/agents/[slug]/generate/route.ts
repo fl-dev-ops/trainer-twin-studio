@@ -1,9 +1,10 @@
+import { AppError, errorResponse } from "@/lib/errors";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { studioOrRefusal } from "@/lib/org";
 import { readSpecDraft, saveSpecDraft, publishSpecDraft } from "@/lib/spec-drafts";
 import { generateSpecBundle } from "@/lib/spec-generation";
-import { findOrgOrGlobalPersona, validSlug } from "@/lib/specs";
+import { assertSpecBuilt, findOrgOrGlobalPersona, validSlug } from "@/lib/specs";
 import { interviewConfigSchema } from "@/lib/interview-config-schema";
 import { QuestionBank } from "@/lib/question-bank";
 
@@ -44,6 +45,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
   }
   if (publish && interviewConfig.type === "technical" && !interviewConfig.topic_slugs.length) {
     return Response.json({ error: "Select at least one generated question topic before publishing" }, { status: 400 });
+  }
+
+  // The id must be this org's (ids are global) and not a twin's, checked before any model is called (practice rule 21).
+  const owner = await db.agent.findUnique({ where: { slug: agentSlug }, select: { orgId: true, kind: true, data: true } });
+  if (owner && owner.orgId !== org.id) return errorResponse(new AppError("name_taken", "That name is used by another organization. Pick another.", 409));
+  if (owner) {
+    try {
+      assertSpecBuilt(owner);
+    } catch (error) {
+      return errorResponse(error);
+    }
   }
 
   // Role plays may use the org's persona or a global one.

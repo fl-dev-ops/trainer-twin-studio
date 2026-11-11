@@ -1,9 +1,7 @@
 import { z } from "zod";
-import { assignmentExpiresAt, newAssignmentShareCode } from "@/lib/assignments";
 import { db } from "@/lib/db";
 import { ensureDeployment } from "@/lib/deployments";
-import { MinutesError } from "@/lib/minutes";
-import { AppError, errorResponse } from "@/lib/errors";
+import { AppError, errorResponse, refusals } from "@/lib/errors";
 import { findOrgLearner, isApiError, paginationFromUrl, requireExternalApi } from "@/lib/external-api";
 import {
   assignmentDetails,
@@ -11,7 +9,7 @@ import {
   assignmentView,
   emailAssignment,
   findScenario,
-  learnerFor,
+  assignScenario,
   practiceUrl,
 } from "@/lib/external-api-assignments";
 
@@ -55,42 +53,25 @@ export async function POST(request: Request) {
   const trainer = api.trainer;
   if (!agent) return Response.json({ error: "Scenario not found" }, { status: 404 });
 
-  // The learner: an existing one by userId, or by email (added to the org first when new, with starting credits).
-  let learner;
+  // The learner (by email, added to the org when new) and their link, in one locked transaction (practice rule 19).
+  const deployment = await ensureDeployment(api.org.id, agent.id);
+  let result;
   try {
-    learner = await learnerFor(api.org.id, { email: parsed.data.email, userId: parsed.data.userId }, trainer.userId);
+    result = await assignScenario({ orgId: api.org.id, by: { email: parsed.data.email, userId: parsed.data.userId }, deploymentId: deployment.id, trainerUserId: trainer.userId });
   } catch (error) {
     if (error instanceof AppError) return errorResponse(error);
-    if (error instanceof MinutesError) return Response.json({ error: error.message }, { status: error.status });
     throw error;
   }
-  if (!learner) return Response.json({ error: "User not found" }, { status: 404 });
-  const deployment = await ensureDeployment(api.org.id, agent.id);
-  const existing = await db.rolePlayAssignment.findUnique({
-    where: { deploymentId_memberId: { deploymentId: deployment.id, memberId: learner.memberId } },
-    select: { id: true, assignedAt: true, shareCode: true, status: true },
-  });
-  // Idempotent: a live assignment (pending or used) is returned as it is, with no second email.
-  if (existing && (existing.status === "pending" || existing.status === "used")) {
+  if (!result) return errorResponse(refusals.notFound());
+  const { person: learner, assignment, created } = result;
+  // Idempotent: an open link is returned as it is, with no second email.
+  if (!created) {
     return Response.json({
-      assignment: assignmentView(existing, learner.email, learner.userId, agent.slug),
-      practiceUrl: practiceUrl(api.org.slug, existing.shareCode),
+      assignment: assignmentView(assignment, learner.email, learner.userId, agent.slug),
+      practiceUrl: practiceUrl(api.org.slug, assignment.shareCode),
       created: false,
     });
   }
-
-  // New, or a cancelled / expired one reopened with a fresh link (as the dashboard's Assign does).
-  const fields = {
-    assignedByUserId: trainer.userId,
-    shareCode: newAssignmentShareCode(),
-    status: "pending",
-    assignedAt: new Date(),
-    expiresAt: assignmentExpiresAt(),
-  };
-  const select = { id: true, assignedAt: true, shareCode: true } as const;
-  const assignment = existing
-    ? await db.rolePlayAssignment.update({ where: { id: existing.id }, data: { ...fields, usedAt: null }, select })
-    : await db.rolePlayAssignment.create({ data: { ...fields, orgId: api.org.id, deploymentId: deployment.id, memberId: learner.memberId }, select });
   const url = practiceUrl(api.org.slug, assignment.shareCode);
   const emailSent = await emailAssignment({ org: api.org, idempotencyKey: `assignment:${assignment.id}:${assignment.shareCode}`, person: learner, scenario: agent, practiceUrl: url, trainerName: trainer.name });
   return Response.json({
