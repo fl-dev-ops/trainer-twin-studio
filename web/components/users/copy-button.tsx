@@ -14,7 +14,7 @@ export function CopyButton({ value, label = "Copy" }: { value: string; label?: s
   }
 
   return (
-    <Button variant="outline" size="sm" onClick={copy}>
+    <Button type="button" variant="outline" size="sm" onClick={copy}>
       {copied ? <Check /> : <Copy />}
       {copied ? "Copied" : label}
     </Button>

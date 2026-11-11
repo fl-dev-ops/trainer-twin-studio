@@ -251,7 +251,8 @@ export async function recordSessionUsage(sessionId: string) {
 }
 
 /** Minutes added to a learner (a grant), with who did it. */
-export type CreditEntry = { id: string; minutes: number; note: string | null; at: string; by: string | null };
+/** `expiresAt`/`expired`: only the org's credits (Meteroid grants) expire; learners' credits have neither. */
+export type CreditEntry = { id: string; minutes: number; note: string | null; at: string; by: string | null; expiresAt?: string | null; expired?: boolean };
 
 /**
  * What one learner was given, newest first. Each addition is its own row and balances are sums, so this is the full

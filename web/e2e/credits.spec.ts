@@ -12,9 +12,8 @@ test("Usage: the org's remaining credits, Meteroid grants, and learners' balance
   await expect(page.getByText("Remaining credits")).toBeVisible();
   await expect(page.locator("main").getByText("249 min", { exact: true }).first()).toBeVisible();
 
-  const topup = page.getByRole("region", { name: "Credits added" }).locator("li").filter({ hasText: "Starting balance" });
+  const topup = page.getByRole("region", { name: "Credits added" }).locator("li").filter({ hasText: "From TrainerTwin" });
   await expect(topup).toContainText("+500 min");
-  await expect(topup).toContainText("TrainerTwin");
 
   await page.getByRole("tab", { name: "Details" }).click();
   const rows = page.getByRole("region", { name: "Learners" }).locator("ul li");

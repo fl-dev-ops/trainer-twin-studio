@@ -4,14 +4,10 @@ import Image from "next/image";
 import { useRef, useState } from "react";
 import { Building2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
+import { PageSection, SECTION_CARD, SectionRow } from "@/components/page-section";
+import { CopyButton } from "@/components/users/copy-button";
+import { ColorPicker, ColorPickerContent, ColorPickerPanel, ColorPickerTrigger } from "@/components/reui/color-picker";
+import { orgHomeUrl } from "@/lib/invite/links";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
 
@@ -45,41 +41,48 @@ export function ProfileForm({
   }
 
   return (
-    <Card className="mt-6">
-      <CardContent>
-        <form onSubmit={saveProfile} className="flex flex-col gap-5">
-          <FieldGroup>
-            <Field data-invalid={Boolean(error)}>
-              <FieldLabel htmlFor="name">Name</FieldLabel>
-              <Input
-                id="name"
-                name="name"
-                defaultValue={user.name}
-                autoComplete="name"
-                aria-invalid={Boolean(error)}
-                required
-              />
-              <FieldError>{error}</FieldError>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="email">Email</FieldLabel>
-              <Input id="email" value={user.email} autoComplete="email" readOnly />
-              <FieldDescription>Your email is managed by your account.</FieldDescription>
-            </Field>
-          </FieldGroup>
-          <div className="flex items-center gap-3">
-            <Button type="submit" disabled={saving}>
-              {saving ? "Saving…" : "Save changes"}
-            </Button>
-            <p className="text-muted-foreground text-sm" aria-live="polite">
-              {saved ? "Profile updated." : null}
-            </p>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+    <PageSection title="Profile" description="Your name, as your team and learners see it.">
+      <form onSubmit={saveProfile} className="flex flex-col gap-3">
+        <div className={SECTION_CARD}>
+          <SectionRow title={<label htmlFor="name">Name</label>}>
+            <Control error={error}>
+              <Input id="name" name="name" defaultValue={user.name} autoComplete="name" aria-invalid={Boolean(error)} required />
+            </Control>
+          </SectionRow>
+          <SectionRow title="Email">
+            <span className="text-sm text-muted-foreground">{user.email}</span>
+          </SectionRow>
+        </div>
+        <SaveRow saving={saving} saved={saved ? "Profile updated." : null} />
+      </form>
+    </PageSection>
   );
 }
+
+/** A form control on the right of a SectionRow, with its error under it. */
+function Control({ error, children }: { error?: string | null; children: React.ReactNode }) {
+  return (
+    <div className="flex w-full flex-col gap-1.5 sm:w-72">
+      {children}
+      {error ? <p role="alert" className="m-0 text-xs text-destructive">{error}</p> : null}
+    </div>
+  );
+}
+
+/** Under the form's card, on the page background: what happened, then Save on the right. */
+function SaveRow({ saving, saved, busyLabel }: { saving: boolean; saved: string | null; busyLabel?: string | null }) {
+  return (
+    <div className="flex items-center justify-end gap-3">
+      <p className="m-0 text-sm text-muted-foreground" aria-live="polite">{saved}</p>
+      <Button type="submit" disabled={saving || Boolean(busyLabel)}>
+        {saving ? "Saving…" : busyLabel ?? "Save changes"}
+      </Button>
+    </div>
+  );
+}
+
+/** Quick picks under the accent picker: TrainerTwin's default first, then a few strong brand-like hues. */
+const ACCENT_SWATCHES = ["#EC3013", "#F97316", "#EAB308", "#16A34A", "#0D9488", "#2563EB", "#7C3AED", "#DB2777", "#111827"];
 
 export function OrganizationForm({
   organization,
@@ -95,7 +98,6 @@ export function OrganizationForm({
 }) {
   const logoInput = useRef<HTMLInputElement>(null);
   const [logo, setLogo] = useState(organization.logo ?? null);
-  const [logoName, setLogoName] = useState<string | null>(null);
   const [readingLogo, setReadingLogo] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -106,6 +108,7 @@ export function OrganizationForm({
   // Matches the TrainerTwin logo brand color (globals.css --brand).
   const DEFAULT_ACCENT = "#EC3013";
   const [accent, setAccent] = useState(organization.accentColor ?? DEFAULT_ACCENT);
+  const signInPage = orgHomeUrl(organization.slug);
 
   async function saveOrganization(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -168,7 +171,6 @@ export function OrganizationForm({
       setLogoError("Choose an image smaller than 1 MB.");
       return;
     }
-    setLogoName(file.name);
     setReadingLogo(true);
     const reader = new FileReader();
     reader.onload = () => {
@@ -183,72 +185,47 @@ export function OrganizationForm({
   }
 
   return (
-    <Card className="mt-3">
-      <CardContent>
-        <form onSubmit={saveOrganization} className="flex flex-col gap-5">
-          <FieldGroup>
-            <Field data-invalid={Boolean(logoError)}>
-              <FieldLabel htmlFor="organization-logo">Logo</FieldLabel>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <span className="bg-muted grid size-14 shrink-0 place-items-center overflow-hidden rounded-xl border">
-                  {logo ? (
-                    <Image
-                      src={logo}
-                      alt=""
-                      width={56}
-                      height={56}
-                      className="size-full object-contain"
-                      unoptimized
-                    />
-                  ) : (
-                    <Building2 className="text-muted-foreground" aria-hidden="true" />
-                  )}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">
-                    {logoName ?? (logo ? "Current logo" : "No logo uploaded")}
-                  </p>
-                  <p className="text-muted-foreground text-sm">
-                    PNG, JPEG, or WebP · Maximum 1 MB
-                  </p>
-                </div>
-                <Input
-                  ref={logoInput}
-                  id="organization-logo"
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  className="sr-only"
-                  onChange={(event) => uploadLogo(event.target.files?.[0])}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={readingLogo}
-                  onClick={() => logoInput.current?.click()}
-                >
-                  <Upload data-icon="inline-start" />
-                  {readingLogo ? "Reading…" : logo ? "Replace logo" : "Upload logo"}
-                </Button>
-              </div>
-              <FieldError>{logoError}</FieldError>
-            </Field>
-            <Field data-invalid={Boolean(error)}>
-              <FieldLabel htmlFor="organization-name">Name</FieldLabel>
-              <Input
-                id="organization-name"
-                name="organizationName"
-                defaultValue={organization.name}
-                aria-invalid={Boolean(error)}
-                required
-              />
-              <FieldError>{error}</FieldError>
-            </Field>
-            <Field>
-              <FieldLabel>Workspace</FieldLabel>
-              <p className="text-sm font-medium">{organization.slug}</p>
-            </Field>
-            <Field data-invalid={Boolean(websiteError)}>
-              <FieldLabel htmlFor="organization-website">Company website</FieldLabel>
+    <PageSection title="Organization" description="Your logo, name, website and accent colour, shown across the workspace and to your learners.">
+      <form onSubmit={saveOrganization} className="flex flex-col gap-3">
+        <div className={SECTION_CARD}>
+          <SectionRow
+            title={<label htmlFor="organization-logo">Logo</label>}
+            detail={logoError ? <span role="alert" className="text-destructive">{logoError}</span> : null}
+          >
+            <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-lg border bg-muted">
+              {logo ? (
+                <Image src={logo} alt="" width={40} height={40} className="size-full object-contain" unoptimized />
+              ) : (
+                <Building2 className="size-5 text-muted-foreground" aria-hidden="true" />
+              )}
+            </span>
+            <Input
+              ref={logoInput}
+              id="organization-logo"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="sr-only"
+              onChange={(event) => uploadLogo(event.target.files?.[0])}
+            />
+            <Button type="button" variant="outline" size="sm" disabled={readingLogo} onClick={() => logoInput.current?.click()}>
+              <Upload data-icon="inline-start" />
+              {readingLogo ? "Reading…" : logo ? "Replace" : "Upload"}
+            </Button>
+          </SectionRow>
+          <SectionRow title={<label htmlFor="organization-name">Name</label>}>
+            <Control error={error}>
+              <Input id="organization-name" name="organizationName" defaultValue={organization.name} aria-invalid={Boolean(error)} required />
+            </Control>
+          </SectionRow>
+          {/* The org's slug makes this address (learners sign in there); it never changes, so links already sent keep working. */}
+          <SectionRow title="Workspace">
+            <a href={signInPage} target="_blank" rel="noopener noreferrer" className="text-sm text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
+              {signInPage.replace(/^https:\/\/|\/$/g, "")}
+            </a>
+            <CopyButton value={signInPage} />
+          </SectionRow>
+          <SectionRow title={<label htmlFor="organization-website">Company website</label>}>
+            <Control error={websiteError}>
               <Input
                 id="organization-website"
                 name="websiteUrl"
@@ -259,53 +236,20 @@ export function OrganizationForm({
                 autoComplete="url"
                 aria-invalid={Boolean(websiteError)}
               />
-              <FieldDescription>
-                Linked from your organization's home page, where learners sign in.
-              </FieldDescription>
-              <FieldError>{websiteError}</FieldError>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="accent-color">Accent color</FieldLabel>
-              <div className="flex items-center gap-3">
-                <input
-                  type="color"
-                  id="accent-color"
-                  value={accent}
-                  onChange={(e) => setAccent(e.target.value)}
-                  className="size-9 shrink-0 cursor-pointer rounded-md border bg-transparent p-0.5"
-                  aria-label="Pick accent color"
-                />
-                <Input
-                  value={accent}
-                  onChange={(e) => setAccent(e.target.value)}
-                  pattern="^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
-                  maxLength={7}
-                  className="w-28 font-mono"
-                  aria-label="Hex color value"
-                />
-                <button
-                  type="button"
-                  className="text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
-                  onClick={() => setAccent(DEFAULT_ACCENT)}
-                >
-                  Reset
-                </button>
-              </div>
-              <FieldDescription>
-                Applies to buttons and interactive highlights across the workspace.
-              </FieldDescription>
-            </Field>
-          </FieldGroup>
-          <div className="flex items-center gap-3">
-            <Button type="submit" disabled={saving || readingLogo}>
-              {saving ? "Saving…" : readingLogo ? "Reading image…" : "Save changes"}
-            </Button>
-            <p className="text-muted-foreground text-sm" aria-live="polite">
-              {saved ? "Organization updated." : null}
-            </p>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+            </Control>
+          </SectionRow>
+          <SectionRow title={<label htmlFor="accent-color">Accent color</label>}>
+            <ColorPicker value={accent} onValueChange={(value) => { if (value) setAccent(value); }} format="hex" swatches={ACCENT_SWATCHES}>
+              <ColorPickerTrigger id="accent-color" type="button" className="w-40 justify-start font-mono" />
+              <ColorPickerContent>
+                <ColorPickerPanel />
+              </ColorPickerContent>
+            </ColorPicker>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setAccent(DEFAULT_ACCENT)}>Reset</Button>
+          </SectionRow>
+        </div>
+        <SaveRow saving={saving} saved={saved ? "Organization updated." : null} busyLabel={readingLogo ? "Reading image…" : null} />
+      </form>
+    </PageSection>
   );
 }

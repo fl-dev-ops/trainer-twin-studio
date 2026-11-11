@@ -45,12 +45,20 @@ const toMinutes = (seconds: number) => Math.floor(seconds / 60);
 /** Meteroid's balance and grants are read again when the copy is older than this (page loads). */
 const STALE_MS = 60_000;
 
-const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+/**
+ * What a grant is, in words a customer understands: reasons are internal (staff free text, Razorpay ids), so they're not
+ * shown. Minute packs are Meteroid's PURCHASE grants (their reason is checked too, for copies cached without `source`).
+ */
+export function grantLabel(grant: Pick<CreditGrant, "reason" | "source">) {
+  if (grant.reason === "Free trial") return "Free trial";
+  if (grant.source === "PURCHASE" || grant.reason === "Credit purchased on a paid invoice") return "Minute pack";
+  if (grant.reason?.startsWith("Paid ") && grant.reason.includes("Razorpay")) return "Purchase"; // phase 1 (lib/credit-purchases.ts)
+  return "From TrainerTwin";
+}
 
-/** A Meteroid grant as a row of the Credits page's history: its reason, and when it expires (or expired). */
+/** A Meteroid grant as a row of the Usage page's "Credits added": what it is, and when it expires (or expired). */
 function grantEntry(grant: CreditGrant): CreditEntry {
-  const expiry = grant.expiresAt ? `${grant.status === "EXPIRED" ? "expired" : "expires"} ${day(grant.expiresAt)}` : null;
-  return { id: grant.id, minutes: grant.minutes, note: [grant.reason, expiry].filter(Boolean).join(" · ") || null, at: grant.createdAt ?? "", by: null };
+  return { id: grant.id, minutes: grant.minutes, note: grantLabel(grant), at: grant.createdAt ?? "", by: null, expiresAt: grant.expiresAt, expired: grant.status === "EXPIRED" };
 }
 
 /** The grant that expires next (still active), for the Usage page's balance card. */
@@ -58,7 +66,7 @@ function nextExpiry(grants: CreditGrant[], now = Date.now()) {
   const next = grants
     .filter((grant) => grant.status !== "EXPIRED" && grant.expiresAt && new Date(grant.expiresAt).getTime() > now)
     .sort((a, b) => a.expiresAt!.localeCompare(b.expiresAt!))[0];
-  return next ? { minutes: next.minutes, reason: next.reason, at: next.expiresAt! } : null;
+  return next ? { minutes: next.minutes, label: grantLabel(next), at: next.expiresAt! } : null;
 }
 
 // shortcut: the log shows the newest 500 movements of the range (totals use every row); page server-side if orgs outgrow it.

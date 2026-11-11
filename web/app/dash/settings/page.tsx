@@ -26,9 +26,8 @@ export default function SettingsPage() {
   const selectTab = (value: unknown) => window.history.replaceState(null, "", value === "account" ? "/settings" : `/settings?tab=${value}`);
 
   return (
-    <PageContainer>
+    <PageContainer className="max-w-3xl">
       <PageHeader
-        className="border-b pb-6"
         icon={SettingsIcon}
         title="Settings"
         description="Manage the details shown across your TrainerTwin workspace."
@@ -41,17 +40,17 @@ export default function SettingsPage() {
           <TabsTrigger value="branding">Branding</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="account">
+        <TabsContent value="account" className="pt-8">
           <ProfileForm user={user} />
         </TabsContent>
 
         {team ? (
-          <TabsContent value="team" className="pt-6">
+          <TabsContent value="team" className="pt-8">
             <TeamSection currentUserId={user.id} members={team.members} />
           </TabsContent>
         ) : null}
 
-        <TabsContent value="branding" className="pt-3">
+        <TabsContent value="branding" className="pt-8">
           <OrganizationForm organization={organization} />
         </TabsContent>
       </Tabs>

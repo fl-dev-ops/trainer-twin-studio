@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import { Download, FileCheck2, Minus, MoreHorizontal, Plus } from "lucide-react";
+import type { Country } from "react-phone-number-input";
 import { toast } from "sonner";
 import { BillingIcon } from "@/components/icons";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
+import { PhoneInput } from "@/components/reui/phone-input";
+import { PageSection, SECTION_CARD, SectionRow } from "@/components/page-section";
 import { SupportDialog } from "@/components/support-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -34,12 +37,10 @@ type Billed = Extract<Overview, { billed: true }>;
 type Invoice = Billed["invoices"][number];
 
 const QUERY = ["billing.overview"];
-const CARD = "rounded-tt-lg border border-(--card-border) bg-card shadow-card";
 const INVOICES_SHOWN = 5;
-/** Fixed columns (description, date, status, amount, actions), so rows line up with or without Pay now. */
-const INVOICE_GRID = "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 sm:grid-cols-[minmax(0,1fr)_96px_104px_80px_128px]";
+/** Fixed columns (what, date, status, amount, Pay, menu), so every row lines up whether it can be paid or not. */
+const INVOICE_GRID = "grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-4 sm:grid-cols-[minmax(0,1fr)_96px_88px_80px_64px_32px]";
 const day = (iso: string) => new Date(iso.length === 10 ? `${iso}T00:00:00Z` : iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
-const dayMonth = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 
 const STATUS: Record<Invoice["status"], { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   paid: { label: "Paid", variant: "secondary" },
@@ -70,31 +71,6 @@ const message = (error: unknown) => (error instanceof Error ? error.message : "S
 /** Razorpay's page for an invoice: in this tab, so the payer comes back here (Razorpay's callback). */
 function PayNow({ url, label = "Pay now" }: { url: string; label?: string }) {
   return <Button variant="brand" size="sm" onClick={() => window.location.assign(url)}>{label}</Button>;
-}
-
-function Section({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
-  return (
-    <section className="flex flex-col gap-3">
-      <div className="flex min-h-8 items-center justify-between gap-3">
-        <h2 className="m-0 text-base font-semibold">{title}</h2>
-        {action}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-/** A row of a section's card: the label and its detail on the left, an action or value on the right. */
-function Row({ title, detail, children }: { title: ReactNode; detail?: ReactNode; children?: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-3 border-t border-(--border) px-5 py-4 first:border-t-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium">{title}</div>
-        {detail ? <div className="mt-0.5 text-sm text-muted-foreground">{detail}</div> : null}
-      </div>
-      {children ? <div className="flex shrink-0 items-center gap-2">{children}</div> : null}
-    </div>
-  );
 }
 
 /**
@@ -156,7 +132,7 @@ export function BillingPage() {
             <DetailsSection details={overview.details} />
           </>
         ) : (
-          <div className={cn(CARD, "px-5 py-6 text-sm text-muted-foreground")}>Billing isn&apos;t set up for this organization yet. Contact TrainerTwin.</div>
+          <div className={cn(SECTION_CARD, "px-5 py-6 text-sm text-muted-foreground")}>Billing isn&apos;t set up for this organization yet. Contact TrainerTwin.</div>
         )}
       </div>
     </PageContainer>
@@ -170,9 +146,9 @@ function PlanSection({ overview }: { overview: Billed }) {
   const paid = overview.plan === "paid";
   const price = overview.planCents ? `${formatUsd(overview.planCents)} / month, tax included` : "Your paid plan";
   return (
-    <Section title="Plan">
-      <div className={CARD}>
-        <Row
+    <PageSection title="Plan">
+      <div className={SECTION_CARD}>
+        <SectionRow
           title={(
             <span className="flex items-center gap-2">
               {paid ? "Paid plan" : "Trial plan"}
@@ -183,7 +159,7 @@ function PlanSection({ overview }: { overview: Billed }) {
         >
           <Button variant="outline" size="sm" onClick={() => setSupport("")}>Support</Button>
           {paid ? null : <Button variant="brand" size="sm" onClick={() => setSupport("Upgrade to a paid plan")}>Request upgrade</Button>}
-        </Row>
+        </SectionRow>
         {paused && overview.overdueInvoice ? (
           <div className="border-t border-(--border) p-5">
             <Alert variant="destructive">
@@ -207,15 +183,15 @@ function PlanSection({ overview }: { overview: Billed }) {
           </div>
         ) : null}
         {paid && !paused && overview.dueInvoice ? (
-          <Row title={`Invoice ${overview.dueInvoice.number} is due ${day(overview.dueInvoice.dueDate)}`} detail="Unpaid by then, the plan is paused.">
+          <SectionRow title={`Invoice ${overview.dueInvoice.number} is due ${day(overview.dueInvoice.dueDate)}`} detail="Unpaid by then, the plan is paused.">
             <span className="text-sm tabular-nums">{formatMoney(overview.dueInvoice.totalCents, overview.dueInvoice.currency)}</span>
             {overview.dueInvoice.payUrl ? <PayNow url={overview.dueInvoice.payUrl} /> : null}
-          </Row>
+          </SectionRow>
         ) : null}
       </div>
       {/* Remounted per opening, so it starts from its subject. */}
       {support !== null ? <SupportDialog key={support} open onOpenChange={(open) => { if (!open) setSupport(null); }} subject={support} /> : null}
-    </Section>
+    </PageSection>
   );
 }
 
@@ -231,18 +207,18 @@ function AddOnsSection({ overview }: { overview: Billed }) {
         ? "Add your billing details first."
         : null;
   return (
-    <Section title="Add-ons">
-      <div className={CARD}>
-        <Row
+    <PageSection title="Add-ons">
+      <div className={SECTION_CARD}>
+        <SectionRow
           title="Minute packs"
           detail={blocked ?? `${overview.pack.credits} credits for ${formatUsd(overview.pack.cents)}, tax included. Added when the invoice is paid; they expire a year later.`}
         >
-          <Button variant="ghost" size="sm" render={<Link href="/usage" />}>See usage</Button>
+          <Button variant="ghost" size="sm" render={<Link href="/usage" />} nativeButton={false}>See usage</Button>
           <Button variant="brand" size="sm" disabled={Boolean(blocked)} onClick={() => setOpen(true)}>Buy credits</Button>
-        </Row>
+        </SectionRow>
       </div>
       <BuyPacksDialog overview={overview} open={open} onOpenChange={setOpen} />
-    </Section>
+    </PageSection>
   );
 }
 
@@ -302,30 +278,28 @@ function InvoicesSection({ invoices }: { invoices: Invoice[] }) {
   const [all, setAll] = useState(false);
   const shown = all ? invoices : invoices.slice(0, INVOICES_SHOWN);
   return (
-    <Section
+    <PageSection
       title="Invoices"
       action={invoices.length > INVOICES_SHOWN ? <Button variant="ghost" size="sm" onClick={() => setAll(!all)}>{all ? "Show fewer" : "View all"}</Button> : null}
     >
-      <div className={CARD}>
-        {shown.length ? shown.map((invoice) => (
-          <div key={invoice.id} className={cn(INVOICE_GRID, "border-t border-(--border) px-5 py-3 text-sm first:border-t-0")}>
-            <div className="min-w-0">
-              <p className="m-0 truncate font-medium">{invoice.description}</p>
-              <p className="m-0 truncate text-xs text-muted-foreground">{invoice.number}</p>
-            </div>
-            <span className="hidden text-muted-foreground tabular-nums sm:block">{day(invoice.issuedAt)}</span>
-            <span className="hidden sm:block">
-              <Badge variant={STATUS[invoice.status].variant}>{STATUS[invoice.status].label}</Badge>
-              {invoice.status === "unpaid" || invoice.status === "overdue" ? <span className="block text-xs text-muted-foreground">due {dayMonth(invoice.dueDate)}</span> : null}
-            </span>
-            <span className="hidden text-right tabular-nums sm:block">{formatMoney(invoice.totalCents, invoice.currency)}</span>
-            <span className="flex items-center justify-end gap-1">
-              {invoice.payUrl && (invoice.status === "unpaid" || invoice.status === "overdue") ? <PayNow url={invoice.payUrl} /> : null}
+      <div className={SECTION_CARD}>
+        {shown.length ? shown.map((invoice) => {
+          const payable = invoice.payUrl && (invoice.status === "unpaid" || invoice.status === "overdue") ? invoice.payUrl : null;
+          return (
+            <div key={invoice.id} className={cn(INVOICE_GRID, "border-t border-(--border) px-5 py-3 text-sm first:border-t-0")}>
+              <span className="truncate" title={invoice.number}>{invoice.description}</span>
+              <span className="hidden text-muted-foreground tabular-nums sm:block">{day(invoice.issuedAt)}</span>
+              <span className="hidden sm:block" title={invoice.status === "unpaid" || invoice.status === "overdue" ? `Due ${day(invoice.dueDate)}` : undefined}>
+                <Badge variant={STATUS[invoice.status].variant}>{STATUS[invoice.status].label}</Badge>
+              </span>
+              <span className="text-right tabular-nums">{formatMoney(invoice.totalCents, invoice.currency)}</span>
+              <span className="hidden justify-end sm:flex">{payable ? <PayNow url={payable} label="Pay" /> : null}</span>
               <DropdownMenu>
-                <DropdownMenuTrigger render={<Button variant="subtle" size="icon-sm" aria-label={`Downloads for ${invoice.number}`} />}>
+                <DropdownMenuTrigger render={<Button variant="subtle" size="icon-sm" aria-label={`More for ${invoice.number}`} />}>
                   <MoreHorizontal />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  {payable ? <DropdownMenuItem className="sm:hidden" onClick={() => window.location.assign(payable)}>Pay {formatMoney(invoice.totalCents, invoice.currency)}</DropdownMenuItem> : null}
                   <DropdownMenuItem onClick={() => void download(`/api/billing/invoices/${invoice.id}/pdf`, `${invoice.number}.pdf`)}>
                     <Download /> Download invoice
                   </DropdownMenuItem>
@@ -336,12 +310,12 @@ function InvoicesSection({ invoices }: { invoices: Invoice[] }) {
                   ) : null}
                 </DropdownMenuContent>
               </DropdownMenu>
-            </span>
-          </div>
-        )) : <p className="m-0 px-5 py-6 text-center text-sm text-muted-foreground">No invoices yet.</p>}
+            </div>
+          );
+        }) : <p className="m-0 px-5 py-6 text-center text-sm text-muted-foreground">No invoices yet.</p>}
       </div>
       <p className="m-0 text-xs text-muted-foreground">Invoices and receipts are emailed to your billing emails. Pay online with Pay now (card, or bank transfer where offered).</p>
-    </Section>
+    </PageSection>
   );
 }
 
@@ -352,20 +326,20 @@ function DetailsSection({ details }: { details: BillingDetails | null }) {
     ? [details.line1, details.line2, [details.postalCode, details.city].filter(Boolean).join(" "), details.country === "IN" && details.state ? `${INDIAN_STATES[details.state]} (${details.state})` : null, countryList.find((c) => c.code === details.country)?.name].filter(Boolean)
     : [];
   return (
-    <Section title="Billing information" action={<Button variant="ghost" size="sm" onClick={() => setEditing(true)}>{details ? "Edit" : "Add"}</Button>}>
-      <div className={CARD}>
+    <PageSection title="Billing information" action={<Button variant="ghost" size="sm" onClick={() => setEditing(true)}>{details ? "Edit" : "Add"}</Button>}>
+      <div className={SECTION_CARD}>
         {details ? (
           <>
-            <Row title="Billing emails" detail={details.emails.join(", ")} />
-            <Row title="Legal name" detail={details.legalName} />
-            <Row title="Billing address" detail={address.map((line) => <span key={line} className="block">{line}</span>)} />
-            {details.taxId ? <Row title={taxIdLabel(details.country)} detail={details.taxId} /> : null}
-            <Row title="Phone" detail={details.phone || <span className="text-destructive">Add a phone number to pay online.</span>} />
+            <SectionRow title="Billing emails" detail={details.emails.join(", ")} />
+            <SectionRow title="Legal name" detail={details.legalName} />
+            <SectionRow title="Billing address" detail={address.map((line) => <span key={line} className="block">{line}</span>)} />
+            {details.taxId ? <SectionRow title={taxIdLabel(details.country)} detail={details.taxId} /> : null}
+            <SectionRow title="Phone" detail={details.phone || <span className="text-destructive">Add a phone number to pay online.</span>} />
           </>
         ) : (
-          <Row title="No billing details yet" detail="They go on every invoice, and you need them to buy minute packs." >
+          <SectionRow title="No billing details yet" detail="They go on every invoice, and you need them to buy minute packs." >
             <Button variant="outline" size="sm" onClick={() => setEditing(true)}>Add billing details</Button>
-          </Row>
+          </SectionRow>
         )}
       </div>
       <Sheet open={editing} onOpenChange={setEditing}>
@@ -378,7 +352,7 @@ function DetailsSection({ details }: { details: BillingDetails | null }) {
           {editing ? <DetailsForm details={details} onDone={() => setEditing(false)} /> : null}
         </SheetContent>
       </Sheet>
-    </Section>
+    </PageSection>
   );
 }
 
@@ -471,7 +445,16 @@ function DetailsForm({ details, onDone }: { details: BillingDetails | null; onDo
         </Field>
         <Field data-invalid={invalid("phone")}>
           <FieldLabel htmlFor="billing-phone">Phone</FieldLabel>
-          <Input id="billing-phone" type="tel" value={form.phone ?? ""} onChange={set("phone")} placeholder="+91 98765 43210" required />
+          {/* E.164 (+ and digits), as Razorpay needs it; the country preselects from the billing address. */}
+          <PhoneInput
+            id="billing-phone"
+            value={form.phone ?? ""}
+            onChange={(value) => setForm({ ...form, phone: value ?? "" })}
+            defaultCountry={form.country as Country}
+            placeholder="Phone number"
+            aria-invalid={invalid("phone")}
+            required
+          />
           {invalid("phone") ? <FieldError>{error?.text}</FieldError> : <p className="text-xs text-muted-foreground">With the country code. Needed to pay online by card.</p>}
         </Field>
       </FieldGroup>

@@ -25,7 +25,7 @@ test("Payments: signed grant, duplicate delivery, partial refund and forged sign
   const showHistory = async () => {
     await page.reload();
   };
-  const topup = page.getByRole("region", { name: "Credits added" }).locator("li").filter({ hasText: `Paid ₹800 · Razorpay ${purchase.razorpayId}` });
+  const topup = page.getByRole("region", { name: "Credits added" }).locator("li").filter({ hasText: "Purchase" });
 
   const paid = await post("payment_link.paid", payment);
   expect(paid.status()).toBe(200);
@@ -63,5 +63,5 @@ test("Payments: signed grant, duplicate delivery, partial refund and forged sign
   await expect(remaining).toHaveText(`${before + 100} min`);
   await expect(page.getByRole("tabpanel").locator("li")).toHaveCount(2);
   await expect(topup).toHaveCount(1);
-  await expect(page.locator("main li").filter({ hasText: "Starting balance" })).toHaveCount(1);
+  await expect(page.locator("main li").filter({ hasText: "From TrainerTwin" })).toHaveCount(1);
 });

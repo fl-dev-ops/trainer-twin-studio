@@ -1,6 +1,6 @@
 import { fundOrg } from "../setup/meteroid";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { minutesRouter } from "@/lib/minutes-trpc";
+import { grantLabel, minutesRouter } from "@/lib/minutes-trpc";
 import { grantMinutes, recordSessionUsage } from "@/lib/minutes";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
@@ -21,6 +21,15 @@ describe.skipIf(!localMinutesDb)("minutes tRPC (local database)", () => {
       await expect(api.learner({ email: f.learner.email })).rejects.toMatchObject({ code });
       await expect(api.add({ email: f.learner.email, minutes: 1 })).rejects.toMatchObject({ code });
     }
+  });
+
+  test("grant labels: customers see what a grant is, never its internal reason", () => {
+    expect(grantLabel({ reason: "Free trial" })).toBe("Free trial");
+    expect(grantLabel({ reason: "Credit purchased on a paid invoice", source: "PURCHASE" })).toBe("Minute pack");
+    expect(grantLabel({ reason: "Credit purchased on a paid invoice" })).toBe("Minute pack"); // cached before `source` was kept
+    expect(grantLabel({ reason: "Paid ₹800 · Razorpay plink_1" })).toBe("Purchase");
+    expect(grantLabel({ reason: "Release check (webhook)", source: "MANUAL" })).toBe("From TrainerTwin");
+    expect(grantLabel({ reason: null })).toBe("From TrainerTwin");
   });
 
   test("has no take-back procedure", () => {
@@ -56,7 +65,7 @@ describe.skipIf(!localMinutesDb)("minutes tRPC (local database)", () => {
 
     expect(await api.org()).toEqual({
       balanceMinutes: 85, addedMinutes: 120, defaultMinutes: 30, maxMinutes: 360, nextExpiry: null,
-      billed: true, grants: expect.arrayContaining([expect.objectContaining({ minutes: 100, note: "test", by: null }), expect.objectContaining({ minutes: 20, note: "Second top-up", by: null })]),
+      billed: true, grants: expect.arrayContaining([expect.objectContaining({ minutes: 100, note: "From TrainerTwin", by: null }), expect.objectContaining({ minutes: 20, note: "From TrainerTwin", by: null })]),
       learners: [{ email: f.learner.email, userId: f.learner.id, name: f.learner.name, image: null, givenMinutes: 35, usedMinutes: 1.5, leftMinutes: 33 }],
     });
     expect(await api.learner({ email: ` ${f.learner.email.toUpperCase()} ` })).toEqual({

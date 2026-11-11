@@ -54,7 +54,7 @@ test.each([
   find(form(), (el) => el.props.id === "email")!.props.onChange({ target: { value: " learner@example.com " } });
   await find(form(), (el) => el.type === "form")!.props.onSubmit({ preventDefault() {} });
   expect(send).toHaveBeenCalledWith({ email: "learner@example.com", type: "sign-in" });
-  find(form(), (el) => el.props.id === "code")!.props.onChange({ target: { value: "123456" } });
+  find(form(), (el) => el.props.id === "code")!.props.onChange("123456"); // InputOTP hands over the code itself
   emailOtp.mockResolvedValueOnce({ error });
   await find(form(), (el) => el.type === "form")!.props.onSubmit({ preventDefault() {} });
   expect(emailOtp).toHaveBeenCalledWith({ email: "learner@example.com", otp: "123456" });

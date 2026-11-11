@@ -99,7 +99,7 @@ test("Settings add Users: chosen 40 starting credits appear on Usage", async ({ 
   const email = "e2e-settings-starting@example.com";
   const before = await remaining(page);
   await page.goto("/settings?tab=team");
-  const users = page.locator('[data-slot="card"]').filter({ has: page.locator('[data-slot="card-title"]').filter({ hasText: /^Users/ }) });
+  const users = page.getByRole("region", { name: "Users", exact: true });
   await users.getByRole("button", { name: "Add", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Add users", exact: true });
   await dialog.getByLabel("Email addresses").fill(email);

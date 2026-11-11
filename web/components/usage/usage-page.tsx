@@ -11,6 +11,7 @@ import { LearnerCreditsTable } from "@/components/credits/learner-credits-table"
 import { CreditsIcon } from "@/components/icons";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
+import { PageSection, SECTION_CARD } from "@/components/page-section";
 import { SearchInput } from "@/components/search-input";
 import { Button } from "@/components/ui/button";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -80,9 +81,9 @@ export function UsagePage({ credits, initialTab }: { credits: OrgCredits; initia
 
         <TabsContent value="overview" className="flex flex-col gap-10 pt-8">
           <BalanceCard credits={credits} />
-          <Section title="Credits added" description="Free trial credits, minute packs and grants from TrainerTwin, with when they expire.">
-            <CreditsHistoryTable rows={credits.grants} empty="No credits added yet." />
-          </Section>
+          <PageSection title="Credits added" description="Free trial credits, minute packs and grants from TrainerTwin, with when they expire.">
+            <CreditsHistoryTable rows={credits.grants} empty="No credits added yet." column="expires" />
+          </PageSection>
         </TabsContent>
 
         <TabsContent value="details" className="flex flex-col gap-10 pt-8">
@@ -94,22 +95,6 @@ export function UsagePage({ credits, initialTab }: { credits: OrgCredits; initia
   );
 }
 
-function Section({ title, description, action, children }: { title: string; description?: ReactNode; action?: ReactNode; children: ReactNode }) {
-  return (
-    <section aria-label={title} className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="m-0 text-base font-semibold">{title}</h2>
-          {description ? <p className="m-0 mt-1 text-sm text-muted-foreground">{description}</p> : null}
-        </div>
-        {action}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-const CARD = "rounded-tt-lg border border-(--card-border) bg-card shadow-card";
 
 function RangeToggle({ days, onChange }: { days: Days; onChange: (days: Days) => void }) {
   return (
@@ -127,7 +112,7 @@ function BalanceCard({ credits }: { credits: OrgCredits }) {
   const low = credits.balanceMinutes < credits.defaultMinutes;
   const share = credits.addedMinutes > 0 ? Math.min(100, (credits.balanceMinutes / credits.addedMinutes) * 100) : 0;
   return (
-    <section className={cn(CARD, "flex flex-col gap-4 p-6")}>
+    <section className={cn(SECTION_CARD, "flex flex-col gap-4 p-6")}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="m-0 text-sm text-muted-foreground">Remaining credits</p>
@@ -135,7 +120,7 @@ function BalanceCard({ credits }: { credits: OrgCredits }) {
             {credits.balanceMinutes.toLocaleString()} <span className="text-lg font-normal text-muted-foreground">min</span>
           </p>
         </div>
-        {credits.billed ? <Button variant="outline" render={<Link href="/billing" />}>Buy credits</Button> : null}
+        {credits.billed ? <Button variant="outline" render={<Link href="/billing" />} nativeButton={false}>Buy credits</Button> : null}
       </div>
       {credits.addedMinutes > 0 ? (
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -151,7 +136,7 @@ function BalanceCard({ credits }: { credits: OrgCredits }) {
           : low
             ? `Not enough to give a new learner their ${credits.defaultMinutes} min.`
             : `Each new learner gets ${credits.defaultMinutes} min; give more on their page (up to ${credits.maxMinutes} min each).`}
-        {credits.nextExpiry ? ` ${credits.nextExpiry.reason ?? "A grant"} of ${credits.nextExpiry.minutes.toLocaleString()} expires ${shortDay(credits.nextExpiry.at)}.` : ""}
+        {credits.nextExpiry ? ` ${credits.nextExpiry.minutes.toLocaleString()} min (${credits.nextExpiry.label}) expire ${shortDay(credits.nextExpiry.at)}.` : ""}
       </p>
     </section>
   );
@@ -160,8 +145,8 @@ function BalanceCard({ credits }: { credits: OrgCredits }) {
 function Details({ activity, range }: { activity: Activity; range: ReactNode }) {
   return (
     <>
-      <Section title="Twins and role plays" description="Minutes of calls on each, in the period." action={range}>
-        <div className={cn(CARD, "overflow-hidden")}>
+      <PageSection title="Twins and role plays" description="Minutes of calls on each, in the period." action={range}>
+        <div className={cn(SECTION_CARD, "overflow-hidden")}>
           {activity.agents.length ? (
             <Table>
               <TableHeader>
@@ -187,10 +172,10 @@ function Details({ activity, range }: { activity: Activity; range: ReactNode }) 
             </Table>
           ) : <Empty>No calls in this period.</Empty>}
         </div>
-      </Section>
+      </PageSection>
 
-      <Section title="Team" description="Your admins' and team's own calls, paid from the organization's credits.">
-        <div className={cn(CARD, "overflow-hidden")}>
+      <PageSection title="Team" description="Your admins' and team's own calls, paid from the organization's credits.">
+        <div className={cn(SECTION_CARD, "overflow-hidden")}>
           {activity.team.length ? (
             <Table>
               <TableHeader>
@@ -216,7 +201,7 @@ function Details({ activity, range }: { activity: Activity; range: ReactNode }) 
             </Table>
           ) : <Empty>No team calls in this period.</Empty>}
         </div>
-      </Section>
+      </PageSection>
 
       <ActivityLog activity={activity} />
     </>
@@ -259,7 +244,7 @@ function ActivityLog({ activity }: { activity: Activity }) {
   const entries = activity.log.filter((entry) => inFilter(entry, filter));
   const { rows, ...pager } = usePage(entries);
   return (
-    <Section
+    <PageSection
       title="Activity log"
       description={activity.logTotal > activity.log.length ? `The latest ${activity.log.length} of ${activity.logTotal} in this period.` : "Every credit given and every call in the period."}
       action={(
@@ -273,7 +258,7 @@ function ActivityLog({ activity }: { activity: Activity }) {
         </div>
       )}
     >
-      <div className={cn(CARD, "overflow-hidden")}>
+      <div className={cn(SECTION_CARD, "overflow-hidden")}>
         {rows.length ? (
           <ul className="m-0 list-none p-0">
             {rows.map((entry) => (
@@ -291,7 +276,7 @@ function ActivityLog({ activity }: { activity: Activity }) {
         ) : <Empty>Nothing in this period.</Empty>}
         <CreditsPager {...pager} />
       </div>
-    </Section>
+    </PageSection>
   );
 }
 
@@ -300,12 +285,12 @@ function LearnersSection({ credits }: { credits: OrgCredits }) {
   const q = query.trim().toLowerCase();
   const learners = q ? credits.learners.filter((row) => row.email.includes(q) || row.name?.toLowerCase().includes(q)) : credits.learners;
   return (
-    <Section
+    <PageSection
       title="Learners"
       description="What each learner was given, has used and has left, since they joined."
       action={<div className="w-64 max-w-full"><SearchInput placeholder="Search learners" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search learners" /></div>}
     >
       <LearnerCreditsTable rows={learners} empty={q ? `No learner matches “${query.trim()}”.` : "No learner has credits yet. They get theirs when you invite or assign them."} />
-    </Section>
+    </PageSection>
   );
 }
