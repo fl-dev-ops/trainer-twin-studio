@@ -1,3 +1,4 @@
+import { removableLink } from "@/lib/roleplay-access";
 import { z } from "zod";
 import { MAX_ASSIGNMENT_RECIPIENTS } from "@/lib/assignments";
 import { db } from "@/lib/db";
@@ -36,7 +37,7 @@ export async function DELETE(
       id: parsed.data.assignmentId,
       orgId: trainer.id,
       deployment: { agent: { slug } },
-      status: "pending",
+      ...removableLink,
     },
     select: { id: true },
   });

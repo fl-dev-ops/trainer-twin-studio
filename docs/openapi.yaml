@@ -616,7 +616,12 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
     RateLimited:
-      description: API key exceeded 120 requests per minute.
+      description: API key exceeded 120 requests per minute. Retry after the number of seconds in the Retry-After header.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds to wait before retrying.
       content:
         application/json:
           schema:
@@ -629,7 +634,17 @@ components:
       properties:
         error:
           type: string
-          example: Resource not found
+          description: What went wrong, in words you can show.
+          example: Not found.
+        code:
+          type: string
+          description: >-
+            A stable code for the refusal, the same wherever it happens: api_key_invalid (401), scope_missing (403),
+            api_key_owner_gone (403), rate_limited (429, with a Retry-After header in seconds), invalid_input (400),
+            invalid_email (400), not_found (404), person_disabled (409), person_is_studio (409),
+            assignment_exists (409), account_shared (409), roleplay_access_removed (403), minutes (credits: 400, 403
+            or 409), calls_not_ended (500), internal_error (500).
+          example: not_found
     Pagination:
       type: object
       additionalProperties: false

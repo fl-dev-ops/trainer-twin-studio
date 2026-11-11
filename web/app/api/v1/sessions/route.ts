@@ -1,6 +1,7 @@
+import { errorResponse, refusals } from "@/lib/errors";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { isApiError, paginationFromUrl, requireExternalApi } from "@/lib/external-api";
+import { paginationFromUrl, requireExternalApi, apiRoute } from "@/lib/external-api";
 
 const querySchema = z.object({
   status: z.enum(["assigned", "activating", "active", "completed", "abandoned", "failed", "revoked"]).optional(),
@@ -12,9 +13,8 @@ const querySchema = z.object({
 }).strict();
 
 /** Sessions are read-only in the public API: practice starts in the TrainerTwin app (no POST). */
-export async function GET(request: Request) {
+async function handleGET(request: Request) {
   const api = await requireExternalApi(request, "sessions", "read");
-  if (isApiError(api)) return api;
   const url = new URL(request.url);
   const parsed = querySchema.safeParse({
     status: url.searchParams.get("status") || undefined,
@@ -24,9 +24,8 @@ export async function GET(request: Request) {
     from: url.searchParams.get("from") || undefined,
     to: url.searchParams.get("to") || undefined,
   });
-  if (!parsed.success) return Response.json({ error: "Invalid session filters" }, { status: 400 });
+  if (!parsed.success) return errorResponse(refusals.invalidInput("Invalid session filters"));
   const page = paginationFromUrl(url);
-  if (page instanceof Response) return page;
   const startedAtRange = [
     parsed.data.from ? { gte: new Date(parsed.data.from) } : {},
     parsed.data.to ? { lte: new Date(parsed.data.to) } : {},
@@ -68,3 +67,5 @@ export async function GET(request: Request) {
   ]);
   return Response.json({ sessions, pagination: { ...page, total } });
 }
+
+export const GET = apiRoute(handleGET);

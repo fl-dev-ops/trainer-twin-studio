@@ -2,7 +2,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { ensureDeployment } from "@/lib/deployments";
 import { AppError, errorResponse, refusals } from "@/lib/errors";
-import { findOrgLearner, isApiError, paginationFromUrl, requireExternalApi } from "@/lib/external-api";
+import { findOrgLearner, paginationFromUrl, requireExternalApi, apiRoute } from "@/lib/external-api";
 import {
   assignmentDetails,
   assignmentDetailSelect,
@@ -19,15 +19,13 @@ const createSchema = z.object({
   scenario: z.string().regex(/^[a-z0-9][a-z0-9._-]*$/i),
 }).strict().refine((value) => value.email || value.userId, "email or userId is required");
 
-export async function GET(request: Request) {
+async function handleGET(request: Request) {
   const api = await requireExternalApi(request, "assignments", "read");
-  if (isApiError(api)) return api;
   const url = new URL(request.url);
   const userId = url.searchParams.get("userId") || undefined;
   const requestedEmail = url.searchParams.get("email")?.trim().toLowerCase() || undefined;
   const scenario = url.searchParams.get("scenario") || undefined;
   const page = paginationFromUrl(url);
-  if (page instanceof Response) return page;
   // A learner outside the org (or unknown) matches nothing.
   const learner = requestedEmail ? await findOrgLearner(api.org.id, { email: requestedEmail })
     : userId ? await findOrgLearner(api.org.id, { id: userId }) : null;
@@ -43,15 +41,14 @@ export async function GET(request: Request) {
   return Response.json({ assignments: await assignmentDetails(api.org.id, api.org.slug, rows), pagination: { ...page, total } });
 }
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   const api = await requireExternalApi(request, "assignments", "write");
-  if (isApiError(api)) return api;
   const parsed = createSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return Response.json({ error: "email or userId and a valid scenario slug are required" }, { status: 400 });
+  if (!parsed.success) return errorResponse(refusals.invalidInput("email or userId and a valid scenario slug are required"));
 
   const agent = await findScenario(api.org.id, parsed.data.scenario);
   const trainer = api.trainer;
-  if (!agent) return Response.json({ error: "Scenario not found" }, { status: 404 });
+  if (!agent) return errorResponse(refusals.notFound());
 
   // The learner (by email, added to the org when new) and their link, in one locked transaction (practice rule 19).
   const deployment = await ensureDeployment(api.org.id, agent.id);
@@ -81,3 +78,6 @@ export async function POST(request: Request) {
     emailSent,
   }, { status: 201 });
 }
+
+export const GET = apiRoute(handleGET);
+export const POST = apiRoute(handlePOST);

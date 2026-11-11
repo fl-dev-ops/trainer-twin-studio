@@ -1,13 +1,13 @@
+import { errorResponse, refusals } from "@/lib/errors";
 import { db } from "@/lib/db";
-import { isApiError, requireExternalApi } from "@/lib/external-api";
+import { requireExternalApi, apiRoute } from "@/lib/external-api";
 import { orgOwnKey, orgPrefix, presignedGetUrl } from "@/lib/s3";
 
 type Params = { params: Promise<{ id: string }> };
 
 /** Read-only in the public API (no DELETE): sessions are managed in the TrainerTwin app. */
-export async function GET(request: Request, { params }: Params) {
+async function handleGET(request: Request, { params }: Params) {
   const api = await requireExternalApi(request, "sessions", "read");
-  if (isApiError(api)) return api;
   const { id } = await params;
   const session = await db.interviewSession.findFirst({
     // The public API serves role plays only: a twin session answers like an unknown one.
@@ -32,7 +32,7 @@ export async function GET(request: Request, { params }: Params) {
       endedAt: true,
     },
   });
-  if (!session) return Response.json({ error: "Session not found" }, { status: 404 });
+  if (!session) return errorResponse(refusals.notFound());
   // Presigned download URL for the recording (1 hour); null when no audio exists.
   const audioKey = orgOwnKey(api.org.id, session.s3AudioKey);
   const audioUrl = audioKey ? await presignedGetUrl(audioKey, 3600).catch((error) => {
@@ -56,3 +56,5 @@ export async function GET(request: Request, { params }: Params) {
   delete internal.videoEgressId;
   return Response.json({ session: { ...session, audioUrl, videoUrl } });
 }
+
+export const GET = apiRoute(handleGET);

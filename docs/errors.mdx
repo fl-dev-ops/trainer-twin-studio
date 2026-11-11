@@ -3,11 +3,12 @@ title: "Errors"
 description: "Handle TrainerTwin API errors consistently."
 ---
 
-Errors use a standard JSON shape:
+Errors use a standard JSON shape: a message you can show, and a stable `code` to act on.
 
 ```json
 {
-  "error": "User not found"
+  "error": "Not found.",
+  "code": "not_found"
 }
 ```
 
@@ -16,15 +17,15 @@ Errors use a standard JSON shape:
 | Status | Meaning | Recommended action |
 | --- | --- | --- |
 | `400` | The request body or query is invalid | Correct the request before retrying |
-| `401` | The API key is missing, invalid, expired, or revoked | Replace or rotate the key |
-| `403` | The key creator is no longer an organization trainer | Generate a new key with a current owner or admin |
+| `401` | `api_key_invalid`: the API key is missing, invalid, expired, or revoked | Replace or rotate the key |
+| `403` | `scope_missing`: the key can't do this; `api_key_owner_gone`: the key's creator is no longer on the team | Use a key with the permission, or create a new key as a current admin or team member |
 | `404` | The resource does not exist in the key's organization | Verify the resource ID or scenario slug |
 | `409` | The requested state conflicts with existing data, or your organization's credits can't cover a new learner | Read the current resource, or top up credits, before retrying |
-| `429` | The key exceeded 120 requests per minute | Wait for the next rate-limit window |
+| `429` | `rate_limited`: the key exceeded 120 requests per minute | Wait the number of seconds in the `Retry-After` header |
 | `500` | TrainerTwin could not complete the request | Retry with exponential backoff |
 
 ## Retry safely
 
-Retry `429` and transient `5xx` responses. Do not automatically retry validation, authentication, authorization, or conflict responses.
+Retry `429` and `5xx` responses: repeating a request gives the same end state. Removing a user that is already removed returns `204` again, and repeating an assignment move returns the moved assignment unchanged. Do not automatically retry validation, authentication, authorization, or conflict responses.
 
 Assignment creation is idempotent for the same learner and scenario. While the assignment is pending or used, a repeated request returns it and does not send another email; a cancelled or expired one is reopened with a new link.

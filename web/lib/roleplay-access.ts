@@ -39,3 +39,6 @@ export async function roleplayAccessByCode(input: { orgId: string; userId: strin
   }
   return { person, assignmentId: link.id, deploymentId: link.deployment.id, agentId: link.deployment.agent.id, agentSlug: link.deployment.agent.slug };
 }
+
+/** A link that can be removed (dashboard and API alike): still pending and nobody has practised on it (rule 19). */
+export const removableLink = { status: "pending", sessions: { none: {} } } as const;

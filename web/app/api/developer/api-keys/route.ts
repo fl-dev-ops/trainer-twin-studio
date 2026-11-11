@@ -1,3 +1,4 @@
+import { AppError, errorResponse } from "@/lib/errors";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -25,12 +26,18 @@ export async function GET() {
   return Response.json({ keys });
 }
 
+const MAX_KEYS = 20;
+
 export async function POST(request: Request) {
   const trainer = await studioOrRefusal();
   if (trainer instanceof Response) return trainer;
   const parsed = createSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Enter a key name of up to 60 characters" }, { status: 400 });
 
+  // At most MAX_KEYS per org (specs/api.md rule 1): more keys would also mean more of the per-key rate limit.
+  if ((await db.apikey.count({ where: { referenceId: trainer.id } })) >= MAX_KEYS) {
+    return errorResponse(new AppError("too_many_keys", `An organization can have at most ${MAX_KEYS} API keys. Revoke one first.`, 409));
+  }
   const created = await auth.api.createApiKey({
     body: {
       name: parsed.data.name,
