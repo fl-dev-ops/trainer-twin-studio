@@ -45,10 +45,11 @@
 5. **Admin and team** see the Billing page (`/billing`) and do everything in it. Learners never see billing (403).
 6. **Billing details come first.** Buying packs is refused (400) until the org has billing details, and staff move an
    org to a paid plan only once they're saved (they go on its invoices).
-7. **Billing details rules** (any other field is refused too): legal name (1–200 characters); country (ISO code); street, city and postal code;
+7. **Billing details rules** (any other field is refused too): legal name (1–200 characters); country (ISO code); street and city; postal code
+   (required in India as the PIN code; optional elsewhere, since some countries, e.g. the UAE, have none);
    **state when the country is India** (one of India's GST states, with its code); for India an optional GSTIN (15
    characters, the GST format, its first two digits equal to the state's code), elsewhere an optional tax number (up
-   to 50 characters); 1 to 5 billing emails; a phone number with its country code (`+` then 8 to 15 digits: Razorpay
+   to 50 characters), shown on invoices as "TRN" for the UAE and "Tax ID" elsewhere; 1 to 5 billing emails; a phone number with its country code (`+` then 8 to 15 digits: Razorpay
    needs it for card payments in USD). Anything else is refused (400) with the field's problem.
 8. **Saving billing details** updates the Meteroid customer first (name, address, tax number, billing emails and tax),
    then the app's copy. When Meteroid can't be reached, nothing is saved and the person is told to try again (502);

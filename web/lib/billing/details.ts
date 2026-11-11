@@ -64,7 +64,8 @@ export const billingDetailsInput = z.object({
   line1: text(200),
   line2: z.string().trim().max(200).optional().transform((value) => value || undefined),
   city: text(100),
-  postalCode: text(20),
+  /** Required in India (PIN code); optional elsewhere, since some countries (e.g. the UAE) have none. */
+  postalCode: z.string().trim().max(20).optional().transform((value) => value || undefined),
   /** India only: the GST state code ("33"). */
   state: z.string().trim().optional().transform((value) => value || undefined),
   /** India: GSTIN (optional, for a registered business). Elsewhere: the local tax number (e.g. a UAE TRN), optional. */
@@ -77,6 +78,7 @@ export const billingDetailsInput = z.object({
 }).strict().superRefine((details, ctx) => {
   if (details.country === "IN") {
     if (!details.state || !INDIAN_STATES[details.state]) ctx.addIssue({ code: "custom", path: ["state"], message: "Choose the state" });
+    if (!details.postalCode) ctx.addIssue({ code: "custom", path: ["postalCode"], message: "Add the PIN code" });
     if (details.taxId) {
       if (!GSTIN.test(details.taxId)) ctx.addIssue({ code: "custom", path: ["taxId"], message: "A GSTIN is 15 characters, like 33ABCDE1234F1Z5" });
       else if (!gstinChecksumOk(details.taxId)) ctx.addIssue({ code: "custom", path: ["taxId"], message: "This GSTIN's last character doesn't match: check it for a typo" });
@@ -88,6 +90,9 @@ export const billingDetailsInput = z.object({
 });
 
 export type BillingDetails = z.infer<typeof billingDetailsInput>;
+
+/** What the customer's tax number is called where they are: GSTIN in India, TRN in the UAE. */
+export const taxIdLabel = (country: string | null | undefined) => (country === "IN" ? "GSTIN" : country === "AE" ? "TRN" : "Tax ID");
 
 export type TaxLine = { code: string; name: string; /** Basis points: 900 = 9%. */ bp: number };
 export type Tax = { kind: "cgst_sgst" | "igst" | "export"; lines: TaxLine[] };
@@ -120,7 +125,7 @@ export function meteroidCustomerPatch(details: BillingDetails) {
       line1: details.line1,
       line2: addressLine2(details),
       city: details.city,
-      zip_code: details.postalCode,
+      zip_code: details.postalCode ?? null,
       state: details.country === "IN" && details.state ? INDIAN_STATES[details.state] : null,
       country: details.country,
     },

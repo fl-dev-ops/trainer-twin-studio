@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { api, useApi } from "@/lib/api";
-import { countries, INDIAN_STATES, type BillingDetails } from "@/lib/billing/details";
+import { countries, INDIAN_STATES, taxIdLabel, type BillingDetails } from "@/lib/billing/details";
 import { formatMoney, formatUsd } from "@/lib/billing/pricing";
 import { cn } from "@/lib/utils";
 
@@ -349,7 +349,7 @@ function DetailsSection({ details }: { details: BillingDetails | null }) {
   const [editing, setEditing] = useState(false);
   const countryList = useMemo(() => countries(), []);
   const address = details
-    ? [details.line1, details.line2, [details.postalCode, details.city].join(" "), details.country === "IN" && details.state ? `${INDIAN_STATES[details.state]} (${details.state})` : null, countryList.find((c) => c.code === details.country)?.name].filter(Boolean)
+    ? [details.line1, details.line2, [details.postalCode, details.city].filter(Boolean).join(" "), details.country === "IN" && details.state ? `${INDIAN_STATES[details.state]} (${details.state})` : null, countryList.find((c) => c.code === details.country)?.name].filter(Boolean)
     : [];
   return (
     <Section title="Billing information" action={<Button variant="ghost" size="sm" onClick={() => setEditing(true)}>{details ? "Edit" : "Add"}</Button>}>
@@ -359,7 +359,7 @@ function DetailsSection({ details }: { details: BillingDetails | null }) {
             <Row title="Billing emails" detail={details.emails.join(", ")} />
             <Row title="Legal name" detail={details.legalName} />
             <Row title="Billing address" detail={address.map((line) => <span key={line} className="block">{line}</span>)} />
-            {details.taxId ? <Row title={details.country === "IN" ? "GSTIN" : "Tax number"} detail={details.taxId} /> : null}
+            {details.taxId ? <Row title={taxIdLabel(details.country)} detail={details.taxId} /> : null}
             <Row title="Phone" detail={details.phone || <span className="text-destructive">Add a phone number to pay online.</span>} />
           </>
         ) : (
@@ -444,8 +444,8 @@ function DetailsForm({ details, onDone }: { details: BillingDetails | null; onDo
             {invalid("city") ? <FieldError>{error?.text}</FieldError> : null}
           </Field>
           <Field data-invalid={invalid("postalCode")}>
-            <FieldLabel htmlFor="billing-postal">Postal code</FieldLabel>
-            <Input id="billing-postal" value={form.postalCode} onChange={set("postalCode")} maxLength={20} required />
+            <FieldLabel htmlFor="billing-postal">{india ? "PIN code" : "Postal code (optional)"}</FieldLabel>
+            <Input id="billing-postal" value={form.postalCode ?? ""} onChange={set("postalCode")} maxLength={20} required={india} />
             {invalid("postalCode") ? <FieldError>{error?.text}</FieldError> : null}
           </Field>
         </div>
@@ -460,7 +460,7 @@ function DetailsForm({ details, onDone }: { details: BillingDetails | null; onDo
           </Field>
         ) : null}
         <Field data-invalid={invalid("taxId")}>
-          <FieldLabel htmlFor="billing-tax">{india ? "GSTIN (optional)" : "Tax number (optional)"}</FieldLabel>
+          <FieldLabel htmlFor="billing-tax">{`${taxIdLabel(form.country)} (optional)`}</FieldLabel>
           <Input id="billing-tax" value={form.taxId ?? ""} onChange={set("taxId")} maxLength={50} placeholder={india ? "33ABCDE1234F1Z5" : "e.g. VAT or TRN number"} />
           {invalid("taxId") ? <FieldError>{error?.text}</FieldError> : null}
         </Field>

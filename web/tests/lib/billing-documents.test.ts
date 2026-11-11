@@ -58,6 +58,21 @@ test("rule 22: Karnataka invoice uses IGST 18%, the issued GSTIN and place of su
   expect(doc.buyer).toMatchObject({ lines: ["10 School Street", "Suite 1", "Bengaluru 560001", "Karnataka (29)", "India"], taxLabel: "GSTIN", taxId: "29ABCDE1234F1Z5" });
 });
 
+test.each([undefined, null, ""])("rule 7: UAE buyer without postal code %j has a clean Dubai address and TRN on both PDFs", async (zip_code) => {
+  const doc = document({
+    customer_details: { name: "Dubai Coaching", email: "billing@dubai.example", vat_number: "100123456700003", billing_address: { line1: "10 Street", city: "Dubai", zip_code, country: "AE" } },
+    subtotal: 30000, tax_amount: 0, tax_breakdown: [],
+  });
+  expect(doc.buyer).toMatchObject({ lines: ["10 Street", "Dubai", "United Arab Emirates"], taxLabel: "TRN", taxId: "100123456700003" });
+  for (const bytes of [await renderInvoice(doc), await renderReceipt(doc, paidAt)]) {
+    const { text } = await pdfText(bytes);
+    expect(text.split("\n")).toContain("Dubai");
+    expect(text).toContain("TRN 100123456700003");
+    expect(text).not.toContain("Tax ID 100123456700003");
+    expect(text).not.toContain("GSTIN 100123456700003");
+  }
+});
+
 test.each([seller.lutArn, ""])("rule 22: export PDFs carry declaration and LUT ARN or staff placeholder (%j)", async (arn) => {
   const exemption = [EXPORT_DECLARATION, `LUT ARN: ${arn || "(to be added in Meteroid › Invoicing entity › legal footer)"}`];
   const doc = billingDocument({
