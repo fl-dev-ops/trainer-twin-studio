@@ -34,7 +34,8 @@ export async function GET(request: Request, { params }: Params) {
   });
   if (!session) return Response.json({ error: "Session not found" }, { status: 404 });
   // Presigned download URL for the recording (1 hour); null when no audio exists.
-  const audioUrl = session.s3AudioKey ? await presignedGetUrl(session.s3AudioKey, 3600).catch((error) => {
+  const audioKey = orgOwnKey(api.org.id, session.s3AudioKey);
+  const audioUrl = audioKey ? await presignedGetUrl(audioKey, 3600).catch((error) => {
     console.error("Failed to presign audio recording:", error);
     return null;
   }) : null;

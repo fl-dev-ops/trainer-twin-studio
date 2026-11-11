@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { errorResponse, refusals } from "@/lib/errors";
 import { db } from "@/lib/db";
 import { resolveSessionUser, visibleSessions } from "@/lib/session-user";
-import { presignedGetUrl } from "@/lib/s3";
+import { orgOwnKey, presignedGetUrl } from "@/lib/s3";
 
 /** Recording access is limited to its learner or a studio member (admin or team) in the same org. */
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -16,6 +16,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     where: { id, ...visible },
     select: { s3AudioKey: true, userId: true },
   });
-  if (!session?.s3AudioKey) return errorResponse(refusals.notFound());
-  return NextResponse.redirect(await presignedGetUrl(session.s3AudioKey, 3600));
+  // Only a file under this call's org is signed (practice rule 27).
+  const key = orgOwnKey(org.id, session?.s3AudioKey);
+  if (!key) return errorResponse(refusals.notFound());
+  return NextResponse.redirect(await presignedGetUrl(key, 3600));
 }
