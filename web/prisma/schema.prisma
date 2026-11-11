@@ -975,6 +975,8 @@ model TwinCalibration {
   turns           Int?
   offTurns        Int?
   scoredAt        DateTime?
+  /// The end workflow claims scoring before calling the model, so two workers never both pay for it (specs/practice.md rule 14).
+  scoreClaimedAt  DateTime?
 
   session InterviewSession        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   ratings TwinCalibrationRating[]

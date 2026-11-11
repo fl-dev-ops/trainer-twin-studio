@@ -46,6 +46,7 @@ export async function POST(req: Request) {
       mode: body.mode === "chat" ? "chat" : "voice",
       idempotencyKey: typeof body.idempotencyKey === "string" ? body.idempotencyKey : undefined,
       holdOpening: body.holdOpening === true,
+      calibrate: body.calibrate === true,
     });
     if (!started.ok) return NextResponse.json({ error: started.error, ...(started.code ? { code: started.code } : {}) }, { status: started.status });
     const activation = { session: started.session, participantToken: started.participantToken, room: started.room, conversationToken: started.conversationToken };

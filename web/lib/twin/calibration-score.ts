@@ -68,28 +68,38 @@ Transcript (line numbers in brackets):
 ${transcript}`;
 }
 
+/** A claim older than this is a worker that died: another may take it over. */
+const CLAIM_SECONDS = 2 * 60;
+
 /**
- * Scores a finished calibration with Jev and saves it: the trainer's real turns and the "Feels off" they meant.
- * Returns the raw counts (unsaved) when Jev can't be reached, so a later call can still score it.
+ * Scores a call's calibration once (specs/practice.md rule 14), from the end workflow after the agent's final
+ * transcript: claims it (so two workers never both call Jev), scores and saves it. Without questions for Jev the raw
+ * counts are saved. Jev failing clears the claim and throws, for the workflow to retry. Already scored, claimed by
+ * another worker, or no calibration: does nothing.
  */
-export async function scoreCalibration(orgId: string, calibrationId: string): Promise<CalibrationScore & { scored: boolean }> {
-  const row = await db.twinCalibration.findFirst({
-    where: { id: calibrationId, session: { orgId } },
+export async function scoreCalibrationOnce(sessionId: string) {
+  const claimedBefore = new Date(Date.now() - CLAIM_SECONDS * 1000);
+  const { count } = await db.twinCalibration.updateMany({
+    where: { sessionId, scoredAt: null, OR: [{ scoreClaimedAt: null }, { scoreClaimedAt: { lt: claimedBefore } }] },
+    data: { scoreClaimedAt: new Date() },
+  });
+  if (!count) return null;
+  const row = await db.twinCalibration.findUniqueOrThrow({
+    where: { sessionId },
     select: {
+      id: true,
       session: { select: { transcript: true, agent: { select: { name: true } } } },
       ratings: { select: { turnIndex: true, question: true, reply: true, rating: true } },
     },
   });
-  if (!row) throw new Error("Calibration not found");
   const turns = attachRatings(transcriptTurns(row.session.transcript), row.ratings);
   const questions = scoreQuestions(turns);
-  if (!Object.keys(questions).length) return { ...rawScore(turns), scored: false };
   try {
-    const score = scoreFrom(turns, await decide(stateFor(turns, row.session.agent.name), questions));
-    await db.twinCalibration.update({ where: { id: calibrationId }, data: { turns: score.turns, offTurns: score.off, scoredAt: new Date() } });
-    return { ...score, scored: true };
+    const score = Object.keys(questions).length ? scoreFrom(turns, await decide(stateFor(turns, row.session.agent.name), questions)) : rawScore(turns);
+    await db.twinCalibration.update({ where: { id: row.id }, data: { turns: score.turns, offTurns: score.off, scoredAt: new Date() } });
+    return score;
   } catch (error) {
-    console.error("Calibration scoring failed:", error);
-    return { ...rawScore(turns), scored: false };
+    await db.twinCalibration.update({ where: { id: row.id }, data: { scoreClaimedAt: null } });
+    throw error;
   }
 }

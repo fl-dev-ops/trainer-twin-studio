@@ -3,6 +3,7 @@
  * Handles POST /api/v1/chat/completions by delegating to compiler & runtime.
  */
 
+import { isFeelsOffMessage } from "@/lib/twin/stats";
 import { uploadBytes } from "@/lib/upload-bytes";
 import { createHash } from "node:crypto";
 import { db } from "@/lib/db";
@@ -64,7 +65,7 @@ const CODE_SUBMISSION_PREFIX = "__TRAINERTWIN_CODE_SUBMISSION__:";
 const WHITEBOARD_SUBMISSION_PREFIX = "__TRAINERTWIN_WHITEBOARD_SUBMISSION__:";
 /** Calibration: the trainer pressed "Feels off" on a reply (the page sends it as their message). */
 const CALIBRATION_OFF_QUESTION = "Okay. What felt off about that?";
-const isFeelsOff = (text: string) => /^feels? off$/.test(text.toLowerCase().replace(/[^a-z ]/g, "").replace(/\s+/g, " ").trim());
+const isFeelsOff = isFeelsOffMessage;
 const isCalibrationSession = async (sessionId: string) =>
   Boolean(await db.twinCalibration.findUnique({ where: { sessionId }, select: { id: true } }));
 

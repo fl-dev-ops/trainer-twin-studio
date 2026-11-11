@@ -25,6 +25,8 @@ export type StartSessionInput = {
   idempotencyKey?: string;
   /** The page releases the opening itself ("begin-opening"), e.g. after its get-ready countdown. */
   holdOpening?: boolean;
+  /** A studio member calibrating a twin: the call's calibration is created with it (specs/practice.md rule 12). */
+  calibrate?: boolean;
 };
 
 export type OpenedSession = NonNullable<Awaited<ReturnType<typeof activateSession>>>;

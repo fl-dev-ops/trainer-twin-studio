@@ -78,12 +78,33 @@
 11. **Every refusal is ours** (People rule 23): code, status and message from the table below, the same wherever it
     is checked; anything not described here is refused.
 
+## Calibration (admin and team testing a twin)
+
+12. **A calibration is a studio call marked at Start.** Start with `calibrate: true` (admin/team, a live twin of
+    their org) creates the call and its calibration record in the same transaction; the practice check (rules 1–6)
+    applies as for any studio call, and the calibrate page shows its refusal instead of Start. A learner asking for a
+    calibration is refused (`studio_only`); there is no separate "mark this call" step.
+13. **Rating** a reply ("Good" / "Feels off") belongs to the calibration's creator and works only while its call is
+    live (`calibration_ended` after). Someone else's calibration, another org's or a deleted call's answers
+    `not_found`. The turn number is a whole number from 0 and the reply text at most 8,000 characters
+    (`invalid_input`). Rating the same turn again replaces its rating.
+14. **Scoring** runs once in the call's end workflow, after the agent's final transcript (or its wait) and with the
+    ratings saved by then: it calls the scoring model once per calibration, saves the result, and is retried by the
+    workflow when the model fails. A scored calibration isn't scored again. Until it is scored, pages show the raw
+    counts.
+15. **Viewing** a calibration (list or review) is for the org's admin and team; an archived twin's or a deleted
+    call's calibration answers `not_found`. Lists show at most the 100 newest.
+16. **"Feels off"** means the same thing everywhere: one rule in `web/lib/twin/stats.ts` (case-insensitive,
+    punctuation ignored, "feel off" too), matched by the chat brain's own copy (a test checks they agree).
+
 ## Checks (must always hold)
 
 - No live call is more than 10 minutes past its limit (rule 7: deadline + 2 minutes, 3 hours without an allowance, 10
   minutes starting).
 - No person has two live calls in one org.
 - Every ended call that spent seconds has exactly one usage row; `failed` and `revoked` calls have none.
+- Every calibration belongs to a twin call of its creator. Every calibration created under rule 12 (from 15 Nov 2026)
+  whose call ended (`completed` or `abandoned`) more than an hour ago is scored; older ones may stay unscored.
 - Assignments: see [People Checks](people.md#checks-must-always-hold-webscriptscheck-org-peoplets).
 
 ## Refusals
@@ -103,6 +124,7 @@ Same columns as [People](people.md#refusals). **Where**: PG page loader (`/t/`, 
 | `credits_short` | 403 | You need at least 5 minutes to start a call; you have {n}. Ask your trainer for more. | Learner balance 1–4 minutes | PG, ST |
 | `org_credits_out` | 403 | Your organization has no credits left. Contact TrainerTwin to add more. | Studio on a billed org, org balance under 1 minute | PG, ST |
 | `org_credits_short` | 403 | Your organization needs at least 5 credits to start a call; it has {n}. Contact TrainerTwin to add more. | Studio on a billed org, 1–4 minutes | PG, ST |
+| `calibration_ended` | 409 | This calibration call has ended. | Rating after the call ended | T (`calibrations.rate`) |
 | `call_replaced` | 409 | This call was replaced by one you started elsewhere. | A newer start ended this call while it was being set up | ST |
 | `voice_only` | 400 | Twin calls are voice only. | A twin call in another mode | ST |
 | `recording_too_big` | 413 | A recording can be at most 200 MB. | Agent recording upload over 200 MB | RT |

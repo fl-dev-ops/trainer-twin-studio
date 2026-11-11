@@ -7,7 +7,7 @@ import { beforeSettings } from "@/lib/context-upload";
 import { assignablePeople } from "@/lib/learners";
 import { LEARNER_ROLE } from "@/lib/org";
 import { LEARNER, orgPeople, orgPerson } from "@/lib/org-people";
-import { refusals } from "@/lib/errors";
+import { AppError, refusals } from "@/lib/errors";
 import { learnerMinutes, MAX_LEARNER_MINUTES } from "@/lib/minutes";
 import { studioProcedure, t } from "@/lib/trpc";
 import { runTwinAssign } from "@/lib/workflow-runs";
@@ -24,7 +24,7 @@ import { AVATAR_VIDEO_TYPES, AvatarError, avatarPhotoUrl, avatarState, avatarVid
 import { getRun } from "workflow/api";
 import { isTwinReport, reportState } from "@/lib/twin/session-report";
 import { stripAttachments } from "@/lib/markers";
-import { rawScore, scoreCalibration, type CalibrationScore } from "@/lib/twin/calibration-score";
+import { rawScore, type CalibrationScore } from "@/lib/twin/calibration-score";
 import { sessionEvidence } from "@/lib/twin/evidence";
 import { updateTwin } from "@/lib/twin/manage";
 import { attachRatings, durationSeconds, firstExchange, lastSevenDays, likeRateByWeek, mostAsked, titleFrom, transcriptTurns } from "@/lib/twin/stats";
@@ -136,6 +136,7 @@ async function calibrationRows(orgId: string, agentId: string) {
   const rows = await db.twinCalibration.findMany({
     where: { session: { orgId, agentId, deletedAt: null } },
     orderBy: { createdAt: "desc" },
+    take: 100, // the newest (specs/practice.md rule 15)
     select: {
       id: true,
       createdAt: true,
@@ -509,6 +510,9 @@ const usersRouter = t.router({
   }),
 });
 
+/** One calibration of this org that can still be seen: its call not deleted, its twin not archived (rule 15). */
+const orgCalibration = (orgId: string, id: string) => ({ id, session: { orgId, deletedAt: null, agent: { archivedAt: null } } });
+
 const calibrationsRouter = t.router({
   /** One twin's calibrations with their like/off counts. */
   list: studioProcedure.input(slugInput).query(({ ctx, input }) => twinCall(async () => {
@@ -528,7 +532,7 @@ const calibrationsRouter = t.router({
   /** One calibration: the call's transcript with the ratings on the replies that were rated. */
   get: studioProcedure.input(z.object({ id: z.string().min(1).max(100) })).query(async ({ ctx, input }) => {
     const row = await db.twinCalibration.findFirst({
-      where: { id: input.id, session: { orgId: ctx.user.orgId } },
+      where: orgCalibration(ctx.user.orgId, input.id),
       select: {
         createdAt: true,
         turns: true,
@@ -538,7 +542,7 @@ const calibrationsRouter = t.router({
         ratings: { orderBy: { turnIndex: "asc" }, select: { turnIndex: true, question: true, reply: true, rating: true } },
       },
     });
-    if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Calibration not found" });
+    if (!row) throw refusals.notFound();
     // The saved transcript usually comes from the voice agent, so ratings are matched to it by the reply they rated.
     const turns = await withTurnAttachments(
       ctx.user.orgId,
@@ -561,37 +565,6 @@ const calibrationsRouter = t.router({
     .input(z.object({ sessionId: z.string().min(1).max(100) }))
     .query(({ ctx, input }) => sessionEvidence(ctx.user.orgId, input.sessionId)),
 
-  /** Marks a just-started twin call as a calibration (idempotent). */
-  start: studioProcedure
-    .input(slugInput.extend({ sessionId: z.string().min(1).max(100) }))
-    .mutation(({ ctx, input }) => twinCall(async () => {
-      const found = await findTwinAgent(ctx.user.orgId, input.slug);
-      const session = await db.interviewSession.findFirst({
-        where: { id: input.sessionId, orgId: ctx.user.orgId, userId: ctx.user.id, agentId: found.id },
-        select: { id: true },
-      });
-      if (!session) throw refusals.notFound();
-      const calibration = await db.twinCalibration.upsert({
-        where: { sessionId: session.id },
-        create: { sessionId: session.id, createdByUserId: ctx.user.id },
-        update: {},
-        select: { id: true },
-      });
-      return { calibrationId: calibration.id };
-    })),
-
-  /**
-   * Right after a calibration call ends: Jev counts the trainer's real turns and the "Feels off" they meant (mis-clicks
-   * and feedback lines left out), saved on the calibration. Raw counts if Jev can't be reached.
-   */
-  score: studioProcedure
-    .input(z.object({ calibrationId: z.string().min(1).max(100) }))
-    .mutation(async ({ ctx, input }) => {
-      const found = await db.twinCalibration.findFirst({ where: { id: input.calibrationId, session: { orgId: ctx.user.orgId } }, select: { id: true } });
-      if (!found) throw new TRPCError({ code: "NOT_FOUND", message: "Calibration not found" });
-      return scoreCalibration(ctx.user.orgId, found.id);
-    }),
-
   /** Rates one twin reply; rating the same turn again replaces it. */
   rate: studioProcedure
     .input(z.object({
@@ -602,11 +575,15 @@ const calibrationsRouter = t.router({
       rating: z.enum(["like", "off"]),
     }))
     .mutation(async ({ ctx, input }) => {
+      // The creator's own calibration, while its call is live (specs/practice.md rule 13).
       const calibration = await db.twinCalibration.findFirst({
-        where: { id: input.calibrationId, session: { orgId: ctx.user.orgId } },
-        select: { id: true },
+        where: { ...orgCalibration(ctx.user.orgId, input.calibrationId), createdByUserId: ctx.user.id },
+        select: { id: true, session: { select: { status: true } } },
       });
-      if (!calibration) throw new TRPCError({ code: "NOT_FOUND", message: "Calibration not found" });
+      if (!calibration) throw refusals.notFound();
+      if (!["activating", "active"].includes(calibration.session.status)) {
+        throw new AppError("calibration_ended", "This calibration call has ended.", 409);
+      }
       const fields = { question: input.question || null, reply: input.reply, rating: input.rating };
       await db.twinCalibrationRating.upsert({
         where: { calibrationId_turnIndex: { calibrationId: calibration.id, turnIndex: input.turnIndex } },

@@ -222,13 +222,9 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
       setEnding(false);
       const savedId = calibrationIdRef.current;
       if (twin && !learner && savedId && !unloading) {
-        // Off /calibrate (a refresh there starts over): the saved calibration's own page. Its score is counted on the
-        // way (that page shows the raw count meanwhile) and the page updates when it lands.
+        // Off /calibrate (a refresh there starts over): the saved calibration's own page. The end workflow scores it
+        // (that page shows the raw count meanwhile).
         setPhase("leaving");
-        void twinClient.calibrations.score
-          .mutate({ calibrationId: savedId })
-          .catch((scoreError) => console.error("Could not score the calibration:", scoreError))
-          .finally(() => void queryClient.invalidateQueries());
         void queryClient.invalidateQueries();
         router.replace(`/twin/${encodeURIComponent(slug)}/calibration/${encodeURIComponent(savedId)}`);
         return;
@@ -287,6 +283,8 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
         body: JSON.stringify({
           ...(learner?.code ? { shareCode: learner.code } : { agentSlug: slug }),
           idempotencyKey: crypto.randomUUID(),
+          // A studio call on the twin page is a calibration, created with the call (specs/practice.md rule 12).
+          ...(twin && !learner ? { calibrate: true } : {}),
           // The agent waits for "begin-opening" (sent after the countdown) before it speaks.
           holdOpening: true,
         }),
@@ -300,19 +298,9 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
       const active = { sessionId: launch.session.id as string, runtimeToken: launch.session.runtimeToken as string };
       connectionRef.current = active;
       setConnection(active);
-      if (twin && !learner) {
-        // Saved as a calibration before anything can be rated (rating stays off until then); a failure only
-        // loses the ratings, not the call. Creating it is idempotent, so retrying is safe.
-        void withRetries(() => twinClient.calibrations.start.mutate({ slug, sessionId: active.sessionId }))
-          .then(({ calibrationId: id }) => {
-            calibrationIdRef.current = id;
-            setCalibrationId(id);
-          })
-          .catch((saveError) => {
-            console.error("Could not save the calibration:", saveError);
-            setCalibrationFailed(true);
-            toast.error("Ratings in this call can't be saved.");
-          });
+      if (typeof launch.session.calibrationId === "string") {
+        calibrationIdRef.current = launch.session.calibrationId;
+        setCalibrationId(launch.session.calibrationId);
       }
       await room.connect(url, launch.participantToken).catch((connectError) => {
         console.error("LiveKit connect failed:", connectError);
@@ -599,7 +587,6 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
             photoUrl={photoUrl}
             seconds={seconds}
             turns={turns}
-            calibrationId={twin ? calibrationId : null}
             onRestart={() => void start()}
           />
         ) : (
@@ -919,7 +906,6 @@ function CallSummary({
   photoUrl,
   seconds,
   turns,
-  calibrationId,
   onRestart,
 }: {
   transcriptHref?: string;
@@ -929,8 +915,6 @@ function CallSummary({
   photoUrl: string | null;
   seconds: number;
   turns: CalibrationTurn[];
-  /** Twin calibrations: Jev counts the turns and the meant "Feels off" from the saved call. */
-  calibrationId: string | null;
   onRestart: () => void;
 }) {
   // What the call itself shows: every line of yours except the Feels off button's, every Feels off.
@@ -938,20 +922,8 @@ function CallSummary({
     turns: turns.filter((turn) => turn.speaker === "you" && !isFeelsOffMessage(turn.text)).length,
     off: turns.filter((turn) => turn.rating === "off").length,
   }), [turns]);
-  /** Jev's count for a twin calibration (the raw count if it fails); null while counting. */
-  const [counted, setCounted] = useState<CalibrationScore | null>(null);
-  useEffect(() => {
-    if (!calibrationId) return;
-    let live = true;
-    twinClient.calibrations.score
-      .mutate({ calibrationId })
-      .then((result) => live && setCounted({ turns: result.turns, off: result.off }))
-      .catch(() => live && setCounted(raw));
-    return () => {
-      live = false;
-    };
-  }, [calibrationId, raw]);
-  const score = calibrationId ? counted : raw;
+  // The call's own counts; the end workflow's score shows on the calibration's page.
+  const score = raw;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-6 pt-20 pb-10">

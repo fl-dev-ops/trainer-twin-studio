@@ -226,6 +226,8 @@ export async function activateSession(input: {
   contextIds?: string[] | null;
   mode?: DeliveryMode;
   idempotencyKey?: string;
+  /** A studio member calibrating a twin (specs/practice.md rule 12). */
+  calibrate?: boolean;
 }) {
   const person = await practicePerson(input.orgId, input.userId); // every session path goes through here
   const mode = input.mode ?? "voice";
@@ -304,6 +306,9 @@ export async function activateSession(input: {
       activationKey = `twin:${randomBytes(18).toString("base64url")}`; // twin calls never resume (rule 5)
     }
   }
+  // Calibrating: admin and team, a twin (rule 12).
+  if (input.calibrate && !studio) throw refusals.studioOnly();
+  if (input.calibrate && !twin) throw refusals.notFound();
   // All twin sessions go through LiveKit (also enforced by a DB trigger); the agent cuts metered calls at the deadline.
   if (twin && mode !== "voice") throw practiceRefusals.voiceOnly();
   if (!studio && mode !== "voice") throw new MinutesError("Practice sessions are voice only", 400);
@@ -349,7 +354,7 @@ export async function activateSession(input: {
   // The org's balance from Meteroid now, before the lock (no network calls while it's held).
   if (studio && mode === "voice") await orgCredits(input.orgId, { fresh: true });
 
-  const { session, replaced, usageOrgIds } = await withLock([minutesLock(input.orgId)], async (tx) => {
+  const { session, replaced, usageOrgIds, calibrationId } = await withLock([minutesLock(input.orgId)], async (tx) => {
     const current = await practicePerson(input.orgId, input.userId, tx); // disabled or moved since the checks above
     // One live call per person (rule 5): their others end now, charged, before the balance is counted.
     const live = await tx.interviewSession.findMany({
@@ -389,7 +394,12 @@ export async function activateSession(input: {
         data: snapshot.docIds.map((documentId) => ({ sessionId: created.id, documentId })),
       });
     }
+    // The calibration with its call, before the chat brain first reads it (it remembers the answer for the call).
+    const calibration = input.calibrate
+      ? await tx.twinCalibration.create({ data: { sessionId: created.id, createdByUserId: input.userId }, select: { id: true } })
+      : null;
     return {
+      calibrationId: calibration?.id ?? null,
       session: created,
       replaced: ended.filter((row) => row?.endedNow).map((row) => row!.id),
       usageOrgIds: ended.map((row) => row?.usageOrgId).filter((id): id is string => Boolean(id)),
@@ -425,7 +435,7 @@ export async function activateSession(input: {
   }
 
   // secondsLeft: the call must end after this many seconds (metered calls; null = not metered).
-  return { id: session.id, agentSlug: session.agentSlug, status: "active", mode, runtimeToken: token, secondsLeft: session.allowedSeconds };
+  return { id: session.id, agentSlug: session.agentSlug, status: "active", mode, runtimeToken: token, secondsLeft: session.allowedSeconds, calibrationId };
 }
 
 export async function authorizeRuntimeSession(idOrToken: string, tokenParam?: string) {
