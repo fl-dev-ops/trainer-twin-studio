@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import * as nextHeaders from "next/headers";
 import * as sessionUser from "@/lib/session-user";
 import { ensureDeployment } from "@/lib/deployments";
-import { dropLearnerAssignments } from "@/lib/members";
+import { changeMemberRole } from "@/lib/members";
 import { listUsers } from "@/lib/learners";
 import { loadSharedSession, loadTwinLink } from "@/lib/pages/learner";
 import { loadOrgHome } from "@/lib/pages/org-home";
@@ -111,7 +111,7 @@ describe.skipIf(!localMinutesDb)("learner pages with minutes (local database)", 
   });
 
   test.each(["admin", "team"])("studio %s sees no metering on common shared sessions or twin preview, without learner assignments", async (role) => {
-    await dropLearnerAssignments(f.org.id, `${f.learner.id}-member`);
+    await changeMemberRole({ orgId: f.org.id, email: f.learner.email, role: "team" });
     const link = await db.twinShareLink.create({ data: { orgId: f.org.id, agentId: f.twin.id, code: `${code}-studio`, minutesPerUser: 30 } });
     if (role === "admin") await db.member.update({ where: { id: `${f.trainer.id}-member` }, data: { role: "team" } });
     await db.member.update({ where: { id: `${f.learner.id}-member` }, data: { role } });
@@ -137,7 +137,7 @@ describe.skipIf(!localMinutesDb)("learner pages with minutes (local database)", 
 
   test("listUsers leaves out someone moved to the studio team (one member row per account: their role decides)", async () => {
     await balance(119);
-    await dropLearnerAssignments(f.org.id, `${f.learner.id}-member`);
+    await changeMemberRole({ orgId: f.org.id, email: f.learner.email, role: "team" });
     await db.member.update({ where: { id: `${f.learner.id}-member` }, data: { role: "team" } });
     expect((await listUsers(f.org.id)).find((row) => row.email === f.learner.email)).toBeUndefined();
   });
@@ -199,7 +199,7 @@ describe.skipIf(!localMinutesDb)("learner pages with minutes (local database)", 
     await db.member.update({ where: { id: `${f.learner.id}-member` }, data: { disabledAt: new Date() } });
     const before = await commonState();
     const credits = await availableOrgSeconds(f.org.id);
-    expect(await loadSharedSession(link.code)).toEqual({ kind: "twinUnavailable", email: f.learner.email, message: "Your access has been disabled. Contact your trainer." });
+    expect(await loadSharedSession(link.code)).toEqual({ kind: "twinUnavailable", email: f.learner.email, message: "Your access to this organization has been turned off. Ask its admin to turn it back on." });
     expect(await commonState()).toEqual(before);
     expect(await availableOrgSeconds(f.org.id)).toBe(credits);
   });

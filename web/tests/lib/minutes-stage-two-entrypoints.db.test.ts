@@ -10,11 +10,12 @@ import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minut
 describe.skipIf(!localMinutesDb)("credits stage two assignment entrypoints (local database)", () => {
   let f: MinutesFixture;
   let personEmail: ReturnType<typeof spyOn<typeof email, "sendPersonEmail">>;
-  let trainerOrg: ReturnType<typeof spyOn<typeof org, "getTrainerOrg">>;
+  let trainerOrg: ReturnType<typeof spyOn<typeof org, "studioOrg">>;
   beforeEach(async () => {
     f = minutesFixture(); await f.create();
+    await db.member.delete({ where: { id: `${f.learner.id}-member` } });
     personEmail = spyOn(email, "sendPersonEmail").mockResolvedValue({ success: true });
-    trainerOrg = spyOn(org, "getTrainerOrg").mockResolvedValue({ ...f.org, accentColor: null, role: "admin", user: f.trainer });
+    trainerOrg = spyOn(org, "studioOrg").mockResolvedValue({ ...f.org, accentColor: null, role: "admin", user: f.trainer });
   });
   afterEach(async () => {
     personEmail?.mockRestore(); trainerOrg?.mockRestore();

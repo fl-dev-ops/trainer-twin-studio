@@ -12,6 +12,8 @@ mock.module("@/lib/session-user", () => ({
   resolveSessionUser: async () => ({ org: { id: "org1" }, user: { id: "u1", email: "a@x.com" } }),
 }));
 mock.module("@/lib/db", () => ({
+  withLock: async () => { throw new Error("Unexpected locked write in read-only fixture"); },
+  isUniqueViolation: (error: any) => error?.code === "P2002",
   db: {
     interviewSession: {
       findFirst: async () => session,

@@ -5,9 +5,11 @@ import { expect, mock, test } from "bun:test";
 
 const memberWheres: Record<string, unknown>[] = [];
 mock.module("@/lib/auth", () => ({
-  auth: { api: { verifyApiKey: async () => ({ valid: true, key: { id: "k1", referenceId: "org1", metadata: null } }) } },
+  auth: { api: { verifyApiKey: async () => ({ valid: true, key: { id: "k1", referenceId: "org1", metadata: { createdByUserId: "t1" } } }) } },
 }));
 mock.module("@/lib/db", () => ({
+  withLock: async () => { throw new Error("Unexpected locked write in read-only fixture"); },
+  isUniqueViolation: (error: any) => error?.code === "P2002",
   db: {
     organization: { findUnique: async () => ({ id: "org1", slug: "acme", name: "Acme" }) },
     // Only org1's learner u1 exists in org1; u2 is a learner of another organization.

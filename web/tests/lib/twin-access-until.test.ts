@@ -4,6 +4,8 @@ type Row = { id: string; orgId: string; agentId: string; minutesLimit: number; s
 let assignment: Row;
 
 mock.module("@/lib/db", () => ({
+  withLock: async () => { throw new Error("Unexpected locked write in read-only fixture"); },
+  isUniqueViolation: (error: any) => error?.code === "P2002",
   db: {
     twinAssignment: { findUnique: async () => assignment, update: async () => assignment },
     twinShareLink: { findUnique: async () => null },

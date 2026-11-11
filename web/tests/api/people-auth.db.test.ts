@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { auth } from "@/lib/auth";
-import { POST } from "@/app/api/auth/[...all]/route";
+import { GET, POST, PATCH, PUT, DELETE, OPTIONS, OPEN_AUTH_ROUTES } from "@/app/api/auth/[...all]/route";
 import * as email from "@/lib/email";
 import { addPeopleToOrg, orgPerson } from "@/lib/org-people";
 import { BASE_DOMAIN } from "@/lib/base-domain";
-import { dropLearnerAssignments } from "@/lib/members";
+import { changeMemberRole, setMemberDisabled } from "@/lib/members";
 import { ensureDeployment } from "@/lib/deployments";
 import { listTwinAssignments } from "@/lib/twin-access";
 import { roleplayRouter } from "@/lib/roleplay/trpc";
@@ -130,34 +130,11 @@ describe.skipIf(!localMinutesDb)("people sign in with email codes, never passwor
     return { twin, roleplay };
   };
 
-  test("dropLearnerAssignments removes only this org's assignments, is repeatable, and leaves other memberships intact", async () => {
-    const other = minutesFixture();
-    try {
-      await other.create();
-      // A person can be a learner in two orgs; cleanup must not remove the other org's access.
-      await db.member.create({ data: { id: `${f.learner.id}-${other.org.id}-member`, organizationId: other.org.id, userId: f.learner.id, role: "user", createdAt: new Date() } });
-      await assignments();
-      const retained = await assignments(other);
-      await dropLearnerAssignments(other.org.id, `${f.learner.id}-member`); // wrong org is a no-op
-      expect(await db.twinAssignment.count({ where: { orgId: f.org.id } })).toBe(1);
-      await dropLearnerAssignments(f.org.id, `${f.learner.id}-member`);
-      await dropLearnerAssignments(f.org.id, `${f.learner.id}-member`);
-      await dropLearnerAssignments(f.org.id, "missing-member");
-      expect(await db.twinAssignment.count({ where: { orgId: f.org.id } })).toBe(0);
-      expect(await db.rolePlayAssignment.count({ where: { orgId: f.org.id } })).toBe(0);
-      expect(await db.twinAssignment.findUnique({ where: { id: retained.twin.id } })).toEqual(retained.twin);
-      expect(await db.rolePlayAssignment.findUnique({ where: { id: retained.roleplay.id } })).toEqual(retained.roleplay);
-    } finally { await other.clean(); }
-  });
-
-  test.each(["team", "user"])("Better Auth update-member-role to %s drops studio assignments only and keeps session history", async (role) => {
+  test.each(["team", "user"])("staff changeMemberRole to %s drops studio assignments only and keeps session history", async (role) => {
     const { twin, roleplay } = await assignments();
     const pastTwin = await f.session({ agentId: f.twin.id, agentSlug: f.twin.slug, twinAssignmentId: twin.id, transcript: [{ who: "learner", text: "Twin history" }], report: { summary: "Twin report" } });
     const pastRoleplay = await f.session({ assignmentId: roleplay.id, transcript: [{ who: "learner", text: "Role-play history" }], report: { summary: "Role-play report" } });
-    const signedIn = await post("sign-in/email-otp", { email: f.trainer.email, otp: await otp(f.trainer.email) });
-    expect(signedIn.status).toBe(200);
-    const response = await post("organization/update-member-role", { organizationId: f.org.id, memberId: `${f.learner.id}-member`, role }, cookies(signedIn));
-    expect(response.status).toBe(200);
+    await changeMemberRole({ orgId: f.org.id, email: f.learner.email, role });
     expect(await orgPerson(f.org.id, { userId: f.learner.id })).toMatchObject({ role });
     const isLearner = role === "user";
     expect(await db.twinAssignment.count({ where: { orgId: f.org.id } })).toBe(isLearner ? 1 : 0);
@@ -174,8 +151,126 @@ describe.skipIf(!localMinutesDb)("people sign in with email codes, never passwor
     const signedIn = await post("sign-in/email-otp", { email: f.trainer.email, otp: await otp(f.trainer.email) });
     expect(signedIn.status).toBe(200);
     const response = await post("organization/invite-member", { organizationId: f.org.id, email: `invite-${f.org.id}@example.com`, role }, cookies(signedIn));
-    expect(response.status).toBe(403);
-    expect(await response.json()).toMatchObject({ message: expect.stringContaining("Add people from Settings") });
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "Not found.", code: "not_found" });
     expect(await db.invitation.count({ where: { organizationId: f.org.id } })).toBe(0);
   });
+  const rowCounts = async () => Promise.all([
+    db.user.count({ where: { email: { contains: f.org.id } } }),
+    db.member.count({ where: { organizationId: f.org.id } }),
+    db.session.count({ where: { userId: { in: [f.learner.id, f.trainer.id] } } }),
+    db.account.count({ where: { userId: { in: [f.learner.id, f.trainer.id] } } }),
+    db.verification.count({ where: { identifier: { contains: f.org.id } } }),
+    db.invitation.count({ where: { organizationId: f.org.id } }),
+    db.apikey.count({ where: { referenceId: f.org.id } }),
+  ]);
+  test("every OPEN_AUTH_ROUTES entry passes through the real route handler to Better Auth", async () => {
+    const expected = ["GET /get-session", "POST /sign-out", "GET /ok", "GET /error", "POST /email-otp/send-verification-otp", "POST /sign-in/email-otp", "POST /sign-in/social", "GET /callback/google", "POST /callback/google", "POST /organization/set-active", "POST /update-user"];
+    expect([...OPEN_AUTH_ROUTES].sort()).toEqual(expected.sort());
+    const downstream = spyOn(auth, "handler").mockImplementation(async () => Response.json({ passedThrough: true }));
+    try {
+      const before = await rowCounts();
+      for (const entry of OPEN_AUTH_ROUTES) {
+        const [method, path] = entry.split(" ");
+        const request = new Request(`https://dash.${BASE_DOMAIN}/api/auth${path}`, { method, ...(method === "POST" ? { body: JSON.stringify({ name: "Updated" }) } : {}) });
+        expect(await (await (method === "GET" ? GET : POST)(request)).json()).toEqual({ passedThrough: true });
+        expect(downstream.mock.calls.at(-1)?.[0]).toBe(request);
+      }
+      expect(downstream).toHaveBeenCalledTimes(expected.length);
+      expect(await rowCounts()).toEqual(before);
+    } finally { downstream.mockRestore(); }
+  });
+  test.each(["organization/leave", "organization/update", "organization/list-members", "organization/get-full-organization", "organization/update-member-role", "organization/add-member", "organization/invite-member", "organization/remove-member", "organization/create", "api-key/create", "api-key/list", "api-key/delete", "sign-in/email", "sign-up/email", "change-password", "email-otp/reset-password", "forget-password/email-otp"])("refuses not_found for closed Better Auth path %s with no writes", async (path) => {
+    const before = await rowCounts();
+    for (const method of ["GET", "POST"]) {
+      const response = method === "POST" ? await post(path, { organizationId: f.org.id, userId: f.learner.id, email: f.learner.email, role: "admin" }) : await GET(new Request(`https://dash.${BASE_DOMAIN}/api/auth/${path}`));
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: "Not found.", code: "not_found" });
+    }
+    expect(await rowCounts()).toEqual(before);
+  });
+  test("refuses not_found for wrong methods on every open auth path without calling Better Auth", async () => {
+    const before = await rowCounts();
+    const downstream = spyOn(auth, "handler");
+    try {
+      for (const entry of OPEN_AUTH_ROUTES) {
+        const [method, path] = entry.split(" ");
+        for (const wrong of ["GET", "POST", "PATCH", "PUT", "DELETE"]) {
+          if (OPEN_AUTH_ROUTES.has(`${wrong} ${path}`)) continue;
+          // GET/POST are the only exported handlers; these calls exercise their method allowlist too.
+          const response = await (method === "GET" ? GET : POST)(new Request(`https://dash.${BASE_DOMAIN}/api/auth${path}`, { method: wrong }));
+          expect(response.status).toBe(404);
+          expect(await response.json()).toEqual({ error: "Not found.", code: "not_found" });
+        }
+      }
+      expect(downstream).not.toHaveBeenCalled();
+      expect(await rowCounts()).toEqual(before);
+    } finally { downstream.mockRestore(); }
+  });
+  test("refuses not_found through actual PATCH/PUT/DELETE/OPTIONS exports before Better Auth or writes", async () => {
+    const before = await rowCounts(); const downstream = spyOn(auth, "handler");
+    try {
+      for (const handler of [PATCH, PUT, DELETE, OPTIONS]) {
+        const response = await handler();
+        expect(response.status).toBe(404);
+        expect(await response.json()).toEqual({ error: "Not found.", code: "not_found" });
+      }
+      expect(downstream).not.toHaveBeenCalled(); expect(await rowCounts()).toEqual(before);
+    } finally { downstream.mockRestore(); }
+  });
+  test("leaving an org has no Better Auth hook, so no app code calls leaveOrganization (its HTTP route is closed above)", async () => {
+    const { Glob } = await import("bun");
+    const callers: string[] = [];
+    for (const root of ["lib", "app", "workflows", "components", "scripts"]) {
+      for await (const file of new Glob(`${root}/**/*.{ts,tsx}`).scan({ cwd: process.cwd() })) {
+        if (file.startsWith("lib/generated/")) continue;
+        if ((await Bun.file(file).text()).includes("leaveOrganization")) callers.push(file);
+      }
+    }
+    expect(callers).toEqual([]);
+  });
+  test("refuses invalid_input for update-user image or name+image, but a name-only update works", async () => {
+    const signedIn = await post("sign-in/email-otp", { email: f.trainer.email, otp: await otp(f.trainer.email) });
+    const cookie = cookies(signedIn);
+    const before = await rowCounts();
+    const original = await db.user.findUniqueOrThrow({ where: { id: f.trainer.id } });
+    for (const body of [{ image: "https://evil.test/picture" }, { name: "Changed", image: "https://evil.test/picture" }, {}, { name: "Changed", extra: true }]) {
+      const response = await post("update-user", body, cookie);
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ code: "invalid_input", error: "Only your name can be changed here." });
+      expect(await db.user.findUniqueOrThrow({ where: { id: f.trainer.id } })).toEqual(original);
+      expect(await rowCounts()).toEqual(before);
+    }
+    expect((await post("update-user", { name: "Updated name" }, cookie)).status).toBe(200);
+    expect(await db.user.findUniqueOrThrow({ where: { id: f.trainer.id } })).toMatchObject({ name: "Updated name", image: original.image });
+  });
+  test("refuses member_action_closed from server-side addMember/updateMemberRole/removeMember/createInvitation", async () => {
+    const signedIn = await post("sign-in/email-otp", { email: f.trainer.email, otp: await otp(f.trainer.email) });
+    const headers = new Headers({ cookie: cookies(signedIn) });
+    const outsider = await db.user.create({ data: { id: `${f.org.id}-new-team`, email: `new-team-${f.org.id}@example.com`, name: "New team", emailVerified: true } });
+    const before = await rowCounts();
+    const member = await db.member.findUniqueOrThrow({ where: { id: `${f.learner.id}-member` } });
+    const actions = [
+      () => auth.api.addMember({ headers, body: { organizationId: f.org.id, userId: outsider.id, role: "team" } }),
+      () => auth.api.updateMemberRole({ headers, body: { organizationId: f.org.id, memberId: member.id, role: "team" } }),
+      () => auth.api.removeMember({ headers, body: { organizationId: f.org.id, memberIdOrEmail: member.id } }),
+      () => auth.api.createInvitation({ headers, body: { organizationId: f.org.id, email: `invited-${f.org.id}@example.com`, role: "user" } }),
+    ];
+    for (const action of actions) {
+      const error = await action().catch((error) => error);
+      expect(error).toMatchObject({ status: "FORBIDDEN", statusCode: 403, body: { code: "member_action_closed", message: "Add, change and disable people from Settings." } });
+      expect(await rowCounts()).toEqual(before);
+      expect(await db.member.findUniqueOrThrow({ where: { id: member.id } })).toEqual(member);
+    }
+  });
+  test("refuses member_disabled at the sign-in hook, with no login created", async () => {
+    await setMemberDisabled({ orgId: f.org.id, actorUserId: f.trainer.id, memberId: `${f.learner.id}-member`, disabled: true });
+    const code = await otp(f.learner.email);
+    const before = await db.session.count({ where: { userId: f.learner.id } });
+    const response = await post("sign-in/email-otp", { email: f.learner.email, otp: code });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ code: "member_disabled", message: "Your access to this organization has been turned off. Ask its admin to turn it back on." });
+    expect(await db.session.count({ where: { userId: f.learner.id } })).toBe(before);
+  });
+
 });

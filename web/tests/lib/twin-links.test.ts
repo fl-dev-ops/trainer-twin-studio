@@ -18,6 +18,8 @@ const slugMatch = (value: string, where: unknown) =>
   typeof where === "string" ? value === where : value.toLowerCase() === String((where as { equals: string }).equals).toLowerCase();
 
 mock.module("@/lib/db", () => ({
+  withLock: async () => { throw new Error("Unexpected locked write in read-only fixture"); },
+  isUniqueViolation: (error: any) => error?.code === "P2002",
   db: {
     persona: {
       findFirst: async ({ where }: { where: { orgId: string; isOwn: boolean; slug: unknown } }) =>

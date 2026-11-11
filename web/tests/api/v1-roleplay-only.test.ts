@@ -9,10 +9,13 @@ const record = (name: string, where: Where) => ((seen[name] ??= []).push(where),
 
 const isRoleplay = (where: Where) => where.kind === "ROLEPLAY" || (where.agent as Where | undefined)?.kind === "ROLEPLAY";
 mock.module("@/lib/auth", () => ({
-  auth: { api: { verifyApiKey: async () => ({ valid: true, key: { id: "k1", referenceId: "org1", metadata: null } }) } },
+  auth: { api: { verifyApiKey: async () => ({ valid: true, key: { id: "k1", referenceId: "org1", metadata: { createdByUserId: "t1" } } }) } },
 }));
 mock.module("@/lib/db", () => ({
+  withLock: async () => { throw new Error("Unexpected locked write in read-only fixture"); },
+  isUniqueViolation: (error: any) => error?.code === "P2002",
   db: {
+    member: { findMany: async () => [{ id: "trainer-member", role: "team", disabledAt: null, createdAt: new Date(0), user: { id: "t1", name: "Trainer", email: "trainer@acme.com", image: null } }] },
     organization: { findUnique: async () => ({ id: "org1", slug: "acme", name: "Acme" }) },
     agent: {
       findMany: async ({ where }: { where: Where }) => (record("agent.findMany", where), []),

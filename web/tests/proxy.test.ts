@@ -29,7 +29,7 @@ test("dash host + /auth (bare) redirects to auth host sign-in", () => {
   assert.match(location(res)!, /\/sign-in$/);
 });
 
-test("dash host + no cookie still redirects to sign-in", () => {
+test("refuses signed_out on dash pages by redirecting to sign-in", () => {
   const res = proxy(request(`dash.${BASE}`, "/"));
   assert.match(location(res)!, new RegExp(`^https://auth\\.${BASE.replace(".", "\\.")}/sign-in$`));
 });

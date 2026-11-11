@@ -40,7 +40,7 @@ describe.skipIf(!localMinutesDb)("flow: people first at every entry point", () =
   beforeEach(async () => {
     f = minutesFixture(); outside.start(); outside.reset(); await f.create();
     await fundOrg({ orgId: f.org.id, minutes: 300 });
-    key = spyOn(externalApi, "requireExternalApi").mockResolvedValue({ org: f.org, actorUserId: f.trainer.id, keyId: "test-key" });
+    key = spyOn(externalApi, "requireExternalApi").mockResolvedValue({ org: f.org, trainer: { memberId: `${f.trainer.id}-member`, userId: f.trainer.id, ...f.trainer, image: null, role: "admin", disabled: false, disabledAt: null, addedAt: new Date() }, actorUserId: f.trainer.id, keyId: "test-key" });
   });
   afterEach(async () => { key?.mockRestore(); await f.clean(); outside.stop(); });
 
@@ -94,7 +94,7 @@ describe.skipIf(!localMinutesDb)("flow: people first at every entry point", () =
     expect((await post(f.trainer.email)).status).toBe(409);
     await db.member.update({ where: { id: body.user.memberId }, data: { disabledAt: new Date() } });
     const disabled = await post(to); expect(disabled.status).toBe(409);
-    expect(await disabled.json()).toMatchObject({ error: expect.stringContaining("re-enable") });
+    expect(await disabled.json()).toMatchObject({ error: expect.stringContaining("Re-enable") });
     expect(outside.emails).toHaveLength(1);
     await invariant();
   });
@@ -134,6 +134,7 @@ describe.skipIf(!localMinutesDb)("flow: people first at every entry point", () =
       await db.member.update({ where: { id: `${f.trainer.id}-member` }, data: { role } });
       expect(await twinAccessByCode({ orgId: f.org.id, user: f.trainer, code: link.code, join: true })).toEqual({ agentId: f.twin.id, assignmentId: null });
     }
+    await db.member.update({ where: { id: `${f.trainer.id}-member` }, data: { role: "admin" } });
     expect(await db.twinAssignment.count({ where: { userId: f.trainer.id } })).toBe(0);
     expect(outside.emails).toEqual([]);
     await invariant();

@@ -21,12 +21,15 @@ export function minutesFixture() {
   const twin = { id: `${id}-twin`, slug: `${id}-twin`, name: "Twin", data: {} };
   return {
     org, learner, trainer, roleplay, twin,
-    async create() {
-      await db.organization.create({ data: { ...org, createdAt: new Date() } });
-      for (const [user, role] of [[learner, "user"], [trainer, "admin"]] as const) {
-        await db.user.create({ data: { ...user, emailVerified: true } });
-        await db.member.create({ data: { id: `${user.id}-member`, userId: user.id, organizationId: id, role, createdAt: new Date() } });
-      }
+    async create(learnerMember = true) {
+      // Publish the org with its admin atomically: parallel invariant checks must never see an admin-less fixture.
+      await db.$transaction(async (tx) => {
+        for (const user of [learner, trainer]) await tx.user.create({ data: { ...user, emailVerified: true } });
+        await tx.organization.create({ data: { ...org, createdAt: new Date(), members: { create: [
+          { id: `${trainer.id}-member`, userId: trainer.id, role: "admin", createdAt: new Date() },
+          ...(learnerMember ? [{ id: `${learner.id}-member`, userId: learner.id, role: "user", createdAt: new Date() }] : []),
+        ] } } });
+      });
       const persona = await db.persona.create({ data: { orgId: id, slug: id, name: "Persona", data: {}, isOwn: true } });
       for (const [agent, kind] of [[roleplay, "ROLEPLAY"], [twin, "TWIN"]] as const) {
         await db.agent.create({ data: { ...agent, kind, orgId: id, personaId: persona.id } });

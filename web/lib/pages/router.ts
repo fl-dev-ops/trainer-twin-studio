@@ -1,4 +1,3 @@
-import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { orgPeople } from "@/lib/org-people";
 import { db } from "@/lib/db";
@@ -25,6 +24,7 @@ import {
   listSpecSummaries,
   listUploads,
 } from "@/lib/specs";
+import { refusals, toTRPCError } from "@/lib/errors";
 import { protectedProcedure, publicProcedure, studioProcedure, t } from "@/lib/trpc";
 import { startableAgentSlugs } from "@/lib/twin-access";
 import { avatarState, ownTwinPersona } from "@/lib/twin/avatar";
@@ -39,7 +39,7 @@ import { avatarState, ownTwinPersona } from "@/lib/twin/avatar";
 const slugInput = z.object({ slug: z.string().min(1).max(200) });
 const optional = z.string().max(200).optional();
 const notFound = (): never => {
-  throw new TRPCError({ code: "NOT_FOUND" });
+  throw toTRPCError(refusals.notFound());
 };
 
 export const pageRouter = t.router({

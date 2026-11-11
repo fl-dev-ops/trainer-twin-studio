@@ -75,8 +75,8 @@
     `GET /ok`, `GET /error`, `POST /email-otp/send-verification-otp`, `POST /sign-in/email-otp`,
     `POST /sign-in/social`, `GET|POST /callback/google`, `POST /organization/set-active` and `POST /update-user`
     (name only). Every other path or method is `not_found` with nothing written, including anything a Better Auth
-    update adds. Better Auth's own member actions (add, invite, remove, leave, change role) are refused even when
-    called from server code.
+    update adds. Better Auth's own member actions (add, invite, remove, change role) are refused even when called
+    from server code; leaving has no Better Auth hook, so no app code may call it (a test checks).
 14. **Access is checked against the database on every request.** A login is cached in its cookie for up to 5
     minutes, so "has a login" never means "may use this org": every studio and portal check reads the person's
     member row (enabled, role) from the database. Proxy cookie checks only route pages.
@@ -138,8 +138,8 @@ or used-up code; Google `signup_disabled`) keep its codes and are shown by the s
 | `studio_only` | 403 | Only the organization's admin and team can do this. | A learner on a studio page, procedure or route (rule 15) | PG, T, R |
 | `org_pin_invalid` | 403 | This tab's organization is no longer available to you. Reload the page. | Tab org header isn't an enabled admin/team membership (rule 16) | T, R |
 | `member_disabled` | 403 | Your access to this organization has been turned off. Ask its admin to turn it back on. | The signed-in person is disabled in the org asked for (tab org header), or in every org they belong to (all orgs: also at sign-in) | BA (sign-in), PG, T, R, S |
-| `person_disabled` | 409 | {email} is disabled in this organization. Re-enable them first. | Adding, assigning or giving credits to a disabled person | S |
-| `person_is_studio` | 409 | {email} is on the team. Team members practise with the organization's credits, not as learners. | A learner action (add as learner, assign, learner credits) for admin/team | S |
+| `person_disabled` | 409 | {email} is disabled in this organization. Re-enable them first. | Adding or assigning a disabled person (giving credits skips them with the reason instead; see [Credits](credits.md)) | S |
+| `person_is_studio` | 409 | {email} is on the team. Team members practise with the organization's credits, not as learners. | A learner action (add as learner, assign) for admin/team (giving credits skips them with the reason) | S |
 | `invalid_email` | 400 | Not a valid email: {email} | Adding people with a malformed email | S |
 | `invalid_input` | 400 | (what is wrong, per field) | A request body that fails its schema | T, R |
 | `one_admin` | 409 | This organization already has an admin. Add people as team or learner. | Anything that would make a second admin | S, DB |

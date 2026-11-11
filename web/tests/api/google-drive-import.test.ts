@@ -1,3 +1,4 @@
+import { errorResponse, refusals } from "@/lib/errors";
 import { afterEach, beforeEach, expect, mock, test } from "bun:test";
 import { NextRequest } from "next/server";
 import { encryptToken } from "@shared/youtube/tokens.server";
@@ -10,7 +11,7 @@ let uploadFailure = false;
 const imported: { orgId: string; file: File }[] = [];
 const queries: unknown[] = [];
 const updates: unknown[] = [];
-mock.module("@/lib/org", () => ({ getTrainerOrg: async () => actor }));
+mock.module("@/lib/org", () => ({ getTrainerOrg: async () => actor, studioOrRefusal: async () => (actor) ?? errorResponse(refusals.signedOut()) }));
 mock.module("@/lib/db", () => ({ db: { knowledgeDocument: {
   findFirst: async (query: unknown) => { queries.push(query); return existing ? { id: "already-imported" } : null; },
   update: async (query: unknown) => { updates.push(query); },

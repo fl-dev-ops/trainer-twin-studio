@@ -9,6 +9,8 @@ mock.module("@/lib/auth", () => ({
   auth: { api: { getSession: async () => (role === null ? null : { user: { id: "u1", name: "U", email: "u@example.com" }, session: { activeOrganizationId: null } }) } },
 }));
 mock.module("@/lib/db", () => ({
+  withLock: async () => { throw new Error("Unexpected locked write in read-only fixture"); },
+  isUniqueViolation: (error: any) => error?.code === "P2002",
   db: {
     member: {
       findMany: async () => (role === null ? [] : [{ role, organization: { id: "org", slug: "acme", metadata: null } }]),

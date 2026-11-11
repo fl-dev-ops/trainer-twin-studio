@@ -5,7 +5,9 @@ let deploymentStatus = "active";
 let existing: { id: string; status: string; userId: string; agentSlug: string; mode: string; activationKey: string; allowedSeconds: number; startedAt: Date } | null = null;
 let updatedStatus = "";
 
-mock.module("@/lib/db", () => ({ db: {
+mock.module("@/lib/db", () => ({
+  withLock: async () => { throw new Error("Unexpected locked write in read-only fixture"); },
+  isUniqueViolation: (error: any) => error?.code === "P2002", db: {
   rolePlayAssignment: {
     findFirst: async () => ({
       id: "assignment", memberId: "member", member: { userId: "learner" }, status,

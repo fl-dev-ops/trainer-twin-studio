@@ -51,8 +51,12 @@ const fakeDb = {
   skillSource: { createMany: async ({ data }: { data: Row[] }) => void skillSources.push(...data) },
   $transaction: async (fn: (tx: unknown) => unknown) => fn(fakeDb),
 };
-mock.module("@/lib/db", () => ({ db: fakeDb }));
+mock.module("@/lib/db", () => ({
+  withLock: async () => { throw new Error("Unexpected locked write in read-only fixture"); },
+  isUniqueViolation: (error: any) => error?.code === "P2002", db: fakeDb }));
+const realS3 = await import("@/lib/s3");
 mock.module("@/lib/s3", () => ({
+  ...realS3,
   s3Configured: true,
   scenarioArtifactsPrefix: (orgId: string, slug: string, version: number) => `p/${orgId}/scenario-ingest/scenarios/${slug}/v${version}`,
   scenarioRunPrefix: (orgId: string, runId: string) => `p/${orgId}/scenario-ingest/runs/${runId}`,

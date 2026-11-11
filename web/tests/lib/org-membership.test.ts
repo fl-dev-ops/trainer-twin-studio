@@ -32,13 +32,15 @@ test("studio memberships first: pinned tab, then active org, then the oldest; le
   expect(pickMembership([])).toBeNull();
 });
 
-test("the request's pinned org header is honoured only for the person's own studio orgs", async () => {
+test("refuses org_pin_invalid instead of falling back from a stale tab header", async () => {
   rows = [row("a", "admin"), row("b", "team")];
   activeOrganizationId = "a";
   const pinned = (id: string) => new Headers({ [ORG_PIN_HEADER]: id });
   expect((await currentMembership(new Headers()))?.member?.organization.id).toBe("a");
   expect((await currentMembership(pinned("b")))?.member?.organization.id).toBe("b");
-  expect((await currentMembership(pinned("someone-elses")))?.member?.organization.id).toBe("a");
+  const refused = await currentMembership(pinned("someone-elses"));
+  expect(refused?.member).toBeNull();
+  expect(refused?.refusal).toMatchObject({ code: "org_pin_invalid", status: 403, message: "This tab's organization is no longer available to you. Reload the page." });
 });
 
 test("the switcher lists studio orgs only", async () => {

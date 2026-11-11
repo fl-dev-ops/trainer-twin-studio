@@ -16,7 +16,7 @@ describe.skipIf(!localMinutesDb)("v1 assignment email minutes (local database)",
     assignmentEmail = spyOn(email, "sendPersonEmail").mockResolvedValue({ success: true });
     f = minutesFixture();
     await f.create();
-    api = spyOn(externalApi, "requireExternalApi").mockResolvedValue({ org: f.org, actorUserId: f.trainer.id, keyId: "test-key" });
+    api = spyOn(externalApi, "requireExternalApi").mockResolvedValue({ org: f.org, trainer: { memberId: `${f.trainer.id}-member`, userId: f.trainer.id, ...f.trainer, image: null, role: "admin", disabled: false, disabledAt: null, addedAt: new Date() }, actorUserId: f.trainer.id, keyId: "test-key" });
   });
   afterEach(async () => { api?.mockRestore(); assignmentEmail?.mockRestore(); await f.clean(); });
   const request = (method: string, body: unknown) => new Request("https://example.com/api/v1/assignments", {
@@ -27,6 +27,7 @@ describe.skipIf(!localMinutesDb)("v1 assignment email minutes (local database)",
   const post = (body = { email: f.learner.email, scenario: f.roleplay.slug }) => POST(request("POST", body));
   const patch = (id: string, body: unknown) => PATCH(request("PATCH", body), { params: Promise.resolve({ id }) });
   const createAssignment = async () => {
+    await db.member.delete({ where: { id: `${f.learner.id}-member` } });
     const response = await post();
     expect(response.status).toBe(201);
     const { assignment } = await response.json();

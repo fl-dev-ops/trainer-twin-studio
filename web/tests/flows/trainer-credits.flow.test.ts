@@ -25,7 +25,7 @@ describe.skipIf(!localMinutesDb)("flow: trainer gives learners credits → learn
 
   beforeAll(async () => {
     outside.start();
-    await f.create();
+    await f.create(false);
     // People are members immediately; no Better Auth invitation or request headers.
   });
   afterAll(async () => {

@@ -14,7 +14,8 @@ describe.skipIf(!localMinutesDb)("v1 minutes entrypoints (local database)", () =
   let invitationEmail: ReturnType<typeof spyOn<typeof email, "sendPersonEmail">>;
   beforeEach(async () => {
     f = minutesFixture(); await f.create();
-    api = spyOn(externalApi, "requireExternalApi").mockResolvedValue({ org: f.org, actorUserId: f.trainer.id, keyId: "test-key" });
+    await db.member.delete({ where: { id: `${f.learner.id}-member` } });
+    api = spyOn(externalApi, "requireExternalApi").mockResolvedValue({ org: f.org, trainer: { memberId: `${f.trainer.id}-member`, userId: f.trainer.id, ...f.trainer, image: null, role: "admin", disabled: false, disabledAt: null, addedAt: new Date() }, actorUserId: f.trainer.id, keyId: "test-key" });
     invitationEmail = spyOn(email, "sendPersonEmail").mockResolvedValue({ success: true });
   });
   afterEach(async () => { api?.mockRestore(); invitationEmail?.mockRestore(); await f.clean(); });

@@ -3,7 +3,7 @@ import * as sessions from "@/lib/interview-sessions";
 import * as livekit from "@/lib/livekit";
 
 import { BEFORE_UPLOAD_REFUSED } from "@/lib/context-upload";
-import { MemberError } from "@/lib/members";
+import { AppError } from "@/lib/errors";
 import { MinutesError } from "@/lib/minutes";
 import { TwinAccessError } from "@/lib/twin-access";
 import { connectVoice, openSession, startRefusal, startSessionNow, type OpenedSession } from "@/lib/session-activation";
@@ -16,7 +16,7 @@ const db = {
   },
   voice: { findFirst: mock(async () => null) },
 };
-mock.module("@/lib/db", () => ({ db }));
+mock.module("@/lib/db", () => ({ db, withLock: async () => { throw new Error("Unexpected locked write"); } }));
 
 const input = { orgId: "org", userId: "learner", mode: "voice" as const };
 const session = { id: "session", runtimeToken: "runtime", secondsLeft: 300 } as OpenedSession;
@@ -35,7 +35,7 @@ afterEach(() => { for (const spy of spies.splice(0).reverse()) spy.mockRestore()
 
 test.each([
   [new MinutesError("Need minutes", 403), { status: 403, code: "minutes", error: "Need minutes" }],
-  [new MemberError("Disabled", 403), { status: 403, error: "Disabled" }],
+  [new AppError("member_disabled", "Disabled", 403), { status: 403, error: "Disabled", code: "member_disabled" }],
   [new TwinAccessError("No access", 404), { status: 404, error: "No access" }],
   ...["Context not found", BEFORE_UPLOAD_REFUSED, "Deployment does not allow chat"].map((message) => [new Error(message), { status: 400, error: message }]),
 ])("startRefusal maps expected refusals: %s", (error, expected) => {

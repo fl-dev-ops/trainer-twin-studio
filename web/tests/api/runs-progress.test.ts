@@ -1,3 +1,4 @@
+import { errorResponse, refusals } from "@/lib/errors";
 import { beforeEach, expect, mock, test } from "bun:test";
 import { progressToken } from "@/lib/run-progress";
 import type { EmailProgress } from "@/workflows/send-emails";
@@ -14,7 +15,7 @@ const getReadable = mock(() => new ReadableStream({ start(controller) {
   controller.close();
 } }));
 const getRun = mock((_runId: string) => ({ exists: Promise.resolve(exists), getReadable }));
-mock.module("@/lib/org", () => ({ getTrainerOrg: async () => org }));
+mock.module("@/lib/org", () => ({ getTrainerOrg: async () => org, studioOrRefusal: async () => (org) ?? errorResponse(refusals.signedOut()) }));
 mock.module("workflow/api", () => ({ getRun }));
 const { GET } = await import("@/app/api/runs/[token]/route");
 const read = (token = progressToken("org-1", "wrun_1")) => GET(new Request(`https://dash.example.com/api/runs/${token}`), { params: Promise.resolve({ token }) });
@@ -24,7 +25,7 @@ test("GET runs requires a trainer org before looking up any run", async () => {
   org = null;
   const response = await read();
   expect(response.status).toBe(401);
-  expect(await response.json()).toEqual({ error: "Unauthorized" });
+  expect(await response.json()).toEqual({ error: "Sign in first.", code: "signed_out" });
   expect(getRun).not.toHaveBeenCalled();
 });
 

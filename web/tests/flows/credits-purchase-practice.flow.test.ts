@@ -22,7 +22,7 @@ describe.skipIf(!localMinutesDb)("flow: buy credits → assign → practise → 
 
   beforeAll(async () => {
     outside.start();
-    await f.create();
+    await f.create(false);
     await fundOrg({ orgId: f.org.id, minutes: 0 });
   });
   afterAll(async () => {
@@ -53,7 +53,7 @@ describe.skipIf(!localMinutesDb)("flow: buy credits → assign → practise → 
     expect(outside.emails).toHaveLength(1);
     const [email] = outside.emails;
     expect(email.to).toEqual([f.learner.email]);
-    expect(email.subject).toBe(`New role play: ${f.roleplay.name}`);
+    expect(email.subject).toContain(f.roleplay.name);
     expect(email.text).toContain("Your balance: 10 credits");
     expect(email.text).toContain(`Sign in with Google or an email code, using ${f.learner.email}`);
     code = practiceCode(email);

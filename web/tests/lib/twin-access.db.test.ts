@@ -6,6 +6,7 @@ import * as delivery from "@/lib/queue-emails";
 import { signInUrl } from "@/lib/invite/links";
 import { assignTwinAndInvite, assignTwinLearners } from "@/lib/invite/twin";
 import { createTwinShareLink, twinAccessByAgent, twinAccessByCode, TwinAccessError, twinShareUrl } from "@/lib/twin-access";
+import { AppError } from "@/lib/errors";
 import { orgPerson } from "@/lib/org-people";
 
 // Twin access is by account (specs/people.md rule 4); a shared link adds the person to the org first (rule 6), with no
@@ -20,7 +21,7 @@ describe.skipIf(!localMinutesDb)("twin access and twin assign (local database)",
     assignTwinLearners({ org: f.org, by: f.trainer, agent: { id: f.twin.id, name: f.twin.name }, emails, accessUntil });
   const rejects = async (promise: Promise<unknown>, status: number, message: string | RegExp) => {
     const error = await promise.then(() => null, (e: unknown) => e);
-    expect(error).toBeInstanceOf(TwinAccessError);
+    expect(error).toBeInstanceOf(message === "Your access to this organization has been turned off. Ask its admin to turn it back on." ? AppError : TwinAccessError);
     expect(error).toMatchObject({ status, message: expect.stringMatching(message) });
   };
   beforeEach(async () => {
@@ -125,7 +126,7 @@ describe.skipIf(!localMinutesDb)("twin access and twin assign (local database)",
     const link = await createTwinShareLink({ orgId: f.org.id, agentId: f.twin.id, minutesPerUser: 30, createdByUserId: f.trainer.id });
     expect(await twinAccessByCode({ orgId: f.org.id, user: f.trainer, code: link.code, join: true })).toEqual({ assignmentId: null, agentId: f.twin.id });
     await db.member.update({ where: { id: `${f.learner.id}-member` }, data: { disabledAt: new Date() } });
-    await rejects(twinAccessByCode({ orgId: f.org.id, user: f.learner, code: link.code, join: true }), 403, "Your access has been disabled. Contact your trainer.");
+    await rejects(twinAccessByCode({ orgId: f.org.id, user: f.learner, code: link.code, join: true }), 403, "Your access to this organization has been turned off. Ask its admin to turn it back on.");
     await db.twinShareLink.update({ where: { id: link.id }, data: { status: "disabled" } });
     await rejects(twinAccessByCode({ orgId: f.org.id, user: stranger(), code: link.code, join: true }), 403, "no longer active");
     expect(await db.twinAssignment.count({ where: { orgId: f.org.id } })).toBe(0);
@@ -140,7 +141,7 @@ describe.skipIf(!localMinutesDb)("twin access and twin assign (local database)",
     const link = await createTwinShareLink({ orgId: f.org.id, agentId: f.twin.id, minutesPerUser: 30, createdByUserId: f.trainer.id });
     await db.member.update({ where: { id: `${f.learner.id}-member` }, data: { disabledAt: new Date() } });
     await expect(twinAccessByCode({ orgId: f.org.id, user: f.learner, code: link.code, join })).rejects.toMatchObject({
-      name: "TwinAccessError", status: 403, message: "Your access has been disabled. Contact your trainer.",
+      name: "AppError", code: "member_disabled", status: 403, message: "Your access to this organization has been turned off. Ask its admin to turn it back on.",
     });
     expect(await db.twinAssignment.findUniqueOrThrow({ where: { id: assignment.id } })).toEqual(assignment);
     expect(await orgPerson(f.org.id, { userId: f.learner.id })).toMatchObject({ disabled: true });

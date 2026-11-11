@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { errorResponse, refusals } from "@/lib/errors";
 import { db } from "@/lib/db";
 import { resolveSessionUser, visibleSessions } from "@/lib/session-user";
 import { authorizeRuntimeSession } from "@/lib/interview-sessions";
@@ -53,7 +54,7 @@ export async function GET(
   }
 
   if (!session) {
-    return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    return errorResponse(refusals.notFound());
   }
 
   const runtimeState = session.runtimeState as Record<string, unknown> | null;

@@ -41,9 +41,9 @@ for (const [name, run, spy] of [
     expect(run.maxRetries).toBe(0);
   });
   test(`${name} turns MinutesError and PeopleError into a refusal and rethrows anything else`, async () => {
-    for (const error of [new MinutesError("Need credits", 409), new PeopleError("An organization has exactly one admin.", 403), new PeopleError("Disabled", 409)]) {
+    for (const error of [new MinutesError("Need credits", 409), new PeopleError("one_admin", "This organization already has an admin. Add people as team or learner.", 409), new PeopleError("person_disabled", "Disabled", 409)]) {
       spy().mockRejectedValue(error);
-      expect(await run(input as never)).toEqual({ ok: false, status: error.status, error: error.message });
+      expect(await run(input as never)).toEqual({ ok: false, status: error.status, error: error.message, code: error.code });
     }
     const error = new Error("database unavailable");
     spy().mockRejectedValue(error);

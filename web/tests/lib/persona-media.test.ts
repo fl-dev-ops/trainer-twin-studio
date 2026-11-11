@@ -47,7 +47,9 @@ mock.module("@/lib/db", () => ({
     },
   },
 }));
+const realS3 = await import("@/lib/s3");
 mock.module("@/lib/s3", () => ({
+  ...realS3,
   voicePrefix: (orgId: string | null, id: string) => `base/${orgId ?? "global"}/tts-voices/${id}`,
   avatarPrefix: (orgId: string | null, id: string) => `base/${orgId ?? "global"}/avatars/${id}`,
   putObject: async (key: string, body: unknown) => {

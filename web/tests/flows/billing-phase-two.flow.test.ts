@@ -1,3 +1,4 @@
+import { withLock } from "@/lib/db";
 import "./flow-env";
 import { afterAll, afterEach, beforeEach, describe, expect, mock, setSystemTime, spyOn, test } from "bun:test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -11,7 +12,7 @@ import { billingOverview, buyPacks, checkAllBilling, invoiceIssuedEmail, invoice
 import { toInvoice } from "@/lib/billing/meteroid";
 import * as billingMeteroid from "@/lib/billing/meteroid";
 import { ensurePaymentLink } from "@/lib/billing/razorpay";
-import { grantMinutes, giveStartingMinutes, grantMinutesToMany, learnerBalance } from "@/lib/minutes";
+import { grantMinutes, giveStartingMinutes as startingMinutesInTx, grantMinutesToMany, learnerBalance } from "@/lib/minutes";
 import { activateSession } from "@/lib/interview-sessions";
 import { POST } from "@/app/api/meteroid/webhook/route";
 
@@ -65,6 +66,8 @@ async function expectAppPdfs(email: Sent | undefined, filenames: string[]) {
     expect(pdf.getTitle()).toBe(`${attachment.filename.startsWith("RCPT-") ? "Receipt" : "Invoice"} ${attachment.filename.slice(0, -4)}`);
   }
 }
+
+const giveStartingMinutes = (input: Parameters<typeof startingMinutesInTx>[1]) => withLock([`minutes:${input.orgId}`], (tx) => startingMinutesInTx(tx, input));
 
 describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meteroid/Resend)", () => {
   let f: MinutesFixture;

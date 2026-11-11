@@ -109,7 +109,6 @@ The `studio-admin` procedure says: find exact slug → read current state → ch
 | GET `/api/knowledge/documents` | `web/app/api/knowledge/documents/route.ts`: composer knowledge picker; see [Knowledge](knowledge.md). |
 | POST `/api/uploads`; POST `/api/uploads/[id]/complete` | Corresponding `web/app/api/uploads/` route files; temporary attachment creation/completion. |
 | GET / POST `/api/internal/uploads/expire` | `web/app/api/internal/uploads/expire/route.ts`: shared expiry cron. Requires cron/internal secret on Vercel; no-secret local calls are allowed. |
-| POST `/api/copilot/document` | `web/app/api/copilot/document/route.ts`: separate legacy multipart-to-Markdown converter, 2 MiB cap, 400 on missing/conversion failure; no role check inside the handler. Not the current composer's S3 path. |
 
 ### Allowed internal studio actions
 

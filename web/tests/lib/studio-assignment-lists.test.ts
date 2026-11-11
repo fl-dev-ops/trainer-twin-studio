@@ -17,7 +17,9 @@ const assignments = members.map((member) => ({ id: `rp-${member.id}`, memberId: 
   assignedAt: new Date(0), expiresAt: new Date(), deployment: { agentId: "agent" } }));
 const agent = { id: "agent", slug: "scenario", name: "Scenario", kind: "ROLEPLAY", data: {}, version: 1,
   visibility: "private", order: 0, updatedAt: new Date(0), persona: { name: "Persona", data: {} } };
-mock.module("@/lib/db", () => ({ db: {
+mock.module("@/lib/db", () => ({
+  withLock: async () => { throw new Error("Unexpected locked write in read-only fixture"); },
+  isUniqueViolation: (error: any) => error?.code === "P2002", db: {
   member: { findMany: people }, twinAssignment: { findMany: twins },
   rolePlayAssignment: { findMany: async () => assignments },
   agent: { findMany: async () => [agent] }, specDraft: { findMany: async () => [] },

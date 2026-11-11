@@ -63,6 +63,7 @@ describe.skipIf(!localMinutesDb)("role-play assign (local database)", () => {
   });
 
   test("custom startingMinutes appears in the new learner's email", async () => {
+    await db.member.delete({ where: { id: `${f.learner.id}-member` } });
     await fund(12);
     expect(await inviteToRoleplay(input([f.learner.email], 12))).toMatchObject({ added: 1, emailFailures: 0 });
     expect((await learnerBalance(f.org.id, f.learner.email)).balanceSeconds).toBe(720);
@@ -83,6 +84,7 @@ describe.skipIf(!localMinutesDb)("role-play assign (local database)", () => {
     { usedSeconds: 1861, expectedMinutes: 0 },
   ])("resend floors and clamps balance after $usedSeconds seconds of usage", async ({ usedSeconds, expectedMinutes }) => {
     await fund(30);
+    await grantMinutes({ orgId: f.org.id, email: f.learner.email, minutes: 30 });
     await inviteToRoleplay(input());
     const startedAt = new Date("2026-01-01T00:00:00Z");
     await f.session({ startedAt, endedAt: new Date(startedAt.getTime() + usedSeconds * 1000), allowedSeconds: usedSeconds });
