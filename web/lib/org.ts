@@ -50,8 +50,10 @@ const membershipSelect = {
 } as const;
 
 /** All enabled memberships, oldest first: disabled ones are out at once, even while the cached session cookie (lib/auth.ts) is still valid. */
-export const enabledMemberships = (userId: string) =>
-  db.member.findMany({ where: { userId, disabledAt: null }, orderBy: { createdAt: "asc" }, select: membershipSelect });
+export const enabledMemberships = async (userId: string) => (await allMemberships(userId)).filter((member) => !member.disabledAt);
+
+const allMemberships = (userId: string) =>
+  db.member.findMany({ where: { userId }, orderBy: { createdAt: "asc" }, select: { ...membershipSelect, disabledAt: true } });
 
 /**
  * The membership this request works in (pickMembership), from the request headers; null when signed out. The login
@@ -61,13 +63,17 @@ export const enabledMemberships = (userId: string) =>
 export async function currentMembership(requestHeaders: Headers) {
   const session = await auth.api.getSession({ headers: requestHeaders });
   if (!session) return null;
-  const memberships = await enabledMemberships(session.user.id);
+  const all = await allMemberships(session.user.id);
+  const memberships = all.filter((member) => !member.disabledAt);
   const pinned = requestHeaders.get(ORG_PIN_HEADER);
+  // Turned off in the org asked for (or in every org): member_disabled, not "not a member".
+  const disabledIn = (orgId?: string | null) => all.some((member) => member.organization.id === orgId && member.disabledAt);
   if (pinned && !memberships.some((member) => member.organization.id === pinned && isStudioRole(member.role))) {
-    return { session, member: null, refusal: refusals.orgPinInvalid() };
+    return { session, member: null, refusal: disabledIn(pinned) ? refusals.memberDisabled() : refusals.orgPinInvalid() };
   }
   const member = pickMembership(memberships, session.session.activeOrganizationId, pinned);
-  return { session, member, refusal: member ? null : refusals.noOrg() };
+  if (member) return { session, member, refusal: null };
+  return { session, member: null, refusal: all.length ? refusals.memberDisabled() : refusals.noOrg() };
 }
 
 /** The refusal for a request that isn't from a studio member (signed_out, org_pin_invalid, no_org, studio_only). */
@@ -168,11 +174,19 @@ export function orgMetadata(metadata: string | null): Record<string, unknown> {
 
 const LOGO = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/;
 export const MAX_LOGO_BYTES = 1_000_000;
+// The first bytes of each allowed type: the data URL's label alone proves nothing.
+const MAGIC: Record<string, (bytes: Buffer) => boolean> = {
+  png: (bytes) => bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
+  jpeg: (bytes) => bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff,
+  webp: (bytes) => bytes.subarray(0, 4).toString("ascii") === "RIFF" && bytes.subarray(8, 12).toString("ascii") === "WEBP",
+};
 
-/** A logo the org may use: a PNG/JPEG/WebP data URL of at most MAX_LOGO_BYTES (specs/people.md rule 21). */
+/** A logo the org may use: a PNG/JPEG/WebP image (by its bytes) of at most MAX_LOGO_BYTES (specs/people.md rule 21). */
 export function isValidLogo(logo: string) {
   const match = LOGO.exec(logo);
-  return !!match && Buffer.byteLength(match[2], "base64") <= MAX_LOGO_BYTES;
+  if (!match) return false;
+  const bytes = Buffer.from(match[2], "base64");
+  return bytes.length <= MAX_LOGO_BYTES && MAGIC[match[1]](bytes);
 }
 
 /**
@@ -180,7 +194,7 @@ export function isValidLogo(logo: string) {
  * it) and accent colour. The subdomain and the staff-set metadata flags are kept as they are.
  */
 export async function updateOrgSettings(orgId: string, input: { name: string; logo: string | null; websiteUrl: string | null; accentColor: string }) {
-  if (input.logo && !isValidLogo(input.logo)) throw new AppError("logo_invalid", "Use a PNG, JPEG or WebP logo up to 1 MB.", 400);
+  if (input.logo !== null && !isValidLogo(input.logo)) throw new AppError("logo_invalid", "Use a PNG, JPEG or WebP logo up to 1 MB.", 400);
   const org = await db.organization.findUniqueOrThrow({ where: { id: orgId }, select: { metadata: true } });
   return db.organization.update({
     where: { id: orgId },

@@ -44,3 +44,6 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   return (await open(request)) ?? handler.POST(request);
 }
+
+const closed = () => errorResponse(refusals.notFound());
+export { closed as PATCH, closed as PUT, closed as DELETE, closed as OPTIONS };

@@ -82,8 +82,8 @@
     member row (enabled, role) from the database. Proxy cookie checks only route pages.
 15. **The studio is for admin and team.** Learners get the portal (their org home, twin and practice pages) and
     their own account (name, sign out). Every studio page loader, tRPC procedure and API route refuses them with
-    `studio_only` — including the overview, talk, voices, developer, knowledge and TTS voice routes and the team,
-    branding and billing parts of Settings.
+    `studio_only` — including the overview, talk, voices, developer, knowledge, version and TTS routes (speech too:
+    only studio members, or the voice agent with the TTS key) and the team, branding and billing parts of Settings.
 16. **A tab's org must still be yours.** A request with the tab's org header (`x-trainertwin-org`) is served only
     for that org, and only while the person is an enabled admin/team member of it; otherwise `org_pin_invalid`
     (the tab must reload). Without the header the org is picked as before (pinned → active → oldest studio org).
@@ -137,13 +137,14 @@ or used-up code; Google `signup_disabled`) keep its codes and are shown by the s
 | `no_org` | 403 | You're not a member of this organization. | Logged in, but no enabled membership in the org asked for | PG (to `/auth/no-org`), T, R |
 | `studio_only` | 403 | Only the organization's admin and team can do this. | A learner on a studio page, procedure or route (rule 15) | PG, T, R |
 | `org_pin_invalid` | 403 | This tab's organization is no longer available to you. Reload the page. | Tab org header isn't an enabled admin/team membership (rule 16) | T, R |
-| `member_disabled` | 403 | Your access to this organization has been turned off. Ask its admin to turn it back on. | The signed-in person is disabled in this org (all orgs: at sign-in) | BA (sign-in), PG, T, R, S |
+| `member_disabled` | 403 | Your access to this organization has been turned off. Ask its admin to turn it back on. | The signed-in person is disabled in the org asked for (tab org header), or in every org they belong to (all orgs: also at sign-in) | BA (sign-in), PG, T, R, S |
 | `person_disabled` | 409 | {email} is disabled in this organization. Re-enable them first. | Adding, assigning or giving credits to a disabled person | S |
 | `person_is_studio` | 409 | {email} is on the team. Team members practise with the organization's credits, not as learners. | A learner action (add as learner, assign, learner credits) for admin/team | S |
 | `invalid_email` | 400 | Not a valid email: {email} | Adding people with a malformed email | S |
 | `invalid_input` | 400 | (what is wrong, per field) | A request body that fails its schema | T, R |
 | `one_admin` | 409 | This organization already has an admin. Add people as team or learner. | Anything that would make a second admin | S, BA, DB |
 | `admin_fixed` | 403 | The admin's role can't be changed and the admin can't be disabled. | Disabling or changing the role of the admin | S, BA |
+| `calls_not_ended` | 500 | Disabled, but {n} call(s) in progress could not be ended yet. Disable again to retry. | Disabling committed but ending a running call failed (rule 18) | S |
 | `self_disable` | 400 | You can't disable yourself. | Disabling your own membership | S |
 | `member_action_closed` | 403 | Add, change and disable people from Settings. | Better Auth add/invite/remove/leave/role change (server code) | BA |
 | `token_invalid` | 400 | This setup link is invalid or already used. | Founder token missing or spent | R, S |

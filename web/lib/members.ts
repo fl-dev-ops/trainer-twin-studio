@@ -64,7 +64,10 @@ export async function setMemberDisabled(input: { orgId: string; memberId: string
   const failed = (await Promise.allSettled(open.map((session) => closeInterviewSession(session.id, "abandoned")))).filter(
     (result): result is PromiseRejectedResult => result.status === "rejected",
   );
-  if (failed.length) throw new AggregateError(failed.map((result) => result.reason), `Could not end ${failed.length} call(s); disable again to retry`);
+  if (failed.length) {
+    console.error("[members] could not end calls after disabling:", failed.map((result) => result.reason));
+    throw new PeopleError("calls_not_ended", `Disabled, but ${failed.length} call(s) in progress could not be ended yet. Disable again to retry.`, 500);
+  }
 }
 
 /**

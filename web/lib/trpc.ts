@@ -53,8 +53,10 @@ export async function createServerTrpcContext(): Promise<TrpcContext> {
 // (lib/errors.ts) keep their tRPC code (pages redirect on it) and add their own as `data.refusal`.
 export const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
-  errorFormatter: ({ shape, error }) =>
-    error.cause instanceof AppError ? { ...shape, data: { ...shape.data, refusal: error.cause.code } } : shape,
+  errorFormatter: ({ shape, error }) => {
+    const refusal = error.cause instanceof AppError ? error.cause.code : error.code === "BAD_REQUEST" ? "invalid_input" : error.code === "NOT_FOUND" ? "not_found" : null;
+    return refusal ? { ...shape, data: { ...shape.data, refusal } } : shape;
+  },
 });
 
 /** A refusal thrown anywhere below becomes its tRPC error, with its status and message. */

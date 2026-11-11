@@ -23,7 +23,7 @@ export async function GET(request: Request) {
 }
 
 const bodySchema = z.object({
-  token: z.string().min(10),
+  token: z.string(),
   orgName: z.string().trim().min(1).max(80),
   websiteUrl: z.string().trim().max(2048).refine((value) => {
     if (!value) return true;

@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { getSessionOrg } from "@/lib/org";
+import { studioOrRefusal } from "@/lib/org";
 import { OrganizationKnowledgeService } from "@/lib/org-knowledge";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_req: Request, { params }: Params) {
-  const org = await getSessionOrg();
-  if (!org) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const org = await studioOrRefusal();
+  if (org instanceof Response) return org;
 
   const { id } = await params;
   if (!id) return NextResponse.json({ error: "Document ID required" }, { status: 400 });

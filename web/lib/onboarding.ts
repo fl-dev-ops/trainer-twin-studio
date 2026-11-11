@@ -52,7 +52,10 @@ export async function foundOrg(input: { token: string; user: { id: string; email
       });
     })
     .catch((error: unknown) => {
-      throw isUniqueViolation(error) ? onboardingRefusals.slugTaken() : error;
+      if (error instanceof AppError) throw error;
+      if (isUniqueViolation(error)) throw onboardingRefusals.slugTaken();
+      console.error("Onboarding failed:", error);
+      throw onboardingRefusals.failed();
     });
   try {
     await runOnboarding(org.id);
