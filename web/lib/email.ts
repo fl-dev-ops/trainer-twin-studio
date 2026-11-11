@@ -395,8 +395,6 @@ export type BillingEmailArgs = {
   /** What the invoice is for: "TrainerTwin Paid plan, 3 Dec – 2 Jan", "Minute pack: 100 credits". */
   description: string;
   billingUrl: string;
-  /** How to pay by bank transfer, shown on issued, reminder and paused emails. */
-  paymentInstructions?: string | null;
   /** Razorpay's payment page for the invoice: a Pay now button (specs/billing.md rule 28). */
   payUrl?: string | null;
   /** Paid emails: what the payment did ("Your organization is now on the Paid plan."). */
@@ -406,17 +404,11 @@ export type BillingEmailArgs = {
 export function billingEmail(args: BillingEmailArgs) {
   const org = escapeHtml(args.orgName);
   const invoice = escapeHtml(args.invoiceNumber);
-  const bank = args.paymentInstructions
-    ? `<p><strong>${args.payUrl ? "Or pay by bank transfer" : "How to pay"}:</strong><br>${escapeHtml(args.paymentInstructions).replace(/\n/g, "<br>")}<br>Please quote <strong>${invoice}</strong> with your payment.</p>`
-    : args.payUrl ? "" : `<p>The payment details are on the attached invoice. Please quote <strong>${invoice}</strong> with your payment.</p>`;
+  // Razorpay's page takes the payment (card, or bank transfer where Razorpay offers it); without a link, reply to pay.
   const pay = args.payUrl
-    ? `<div style="text-align: center; margin: 28px 0;"><a href="${escapeHtml(args.payUrl)}" class="btn" target="_blank">Pay ${escapeHtml(args.amount)} now</a></div>${bank}`
-    : bank;
-  const payText = [
-    args.payUrl ? `Pay online: ${args.payUrl}` : null,
-    args.paymentInstructions ? `${args.payUrl ? "Or pay by bank transfer" : "How to pay"}: ${args.paymentInstructions} Please quote ${args.invoiceNumber} with your payment.` : null,
-    !args.payUrl && !args.paymentInstructions ? `The payment details are on the attached invoice. Please quote ${args.invoiceNumber} with your payment.` : null,
-  ].filter(Boolean).join(" ");
+    ? `<div style="text-align: center; margin: 28px 0;"><a href="${escapeHtml(args.payUrl)}" class="btn" target="_blank">Pay ${escapeHtml(args.amount)} now</a></div>`
+    : `<p>To pay invoice <strong>${invoice}</strong>, reply to this email and we'll send you a payment link.</p>`;
+  const payText = args.payUrl ? `Pay online: ${args.payUrl}` : `To pay invoice ${args.invoiceNumber}, reply to this email and we'll send you a payment link.`;
   const content = {
     issued: {
       subject: `Your TrainerTwin invoice ${args.invoiceNumber}: ${args.amount} due ${args.dueDate}`,

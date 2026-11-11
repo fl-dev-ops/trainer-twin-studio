@@ -106,9 +106,10 @@ bun scripts/check-billing.ts                       # the billing rules that must
 ```
 
 Billing (plans, invoices, minute packs, pausing; `specs/billing.md`) lives in Settings › Billing. Invoices come from
-Meteroid; the app emails them (and its own receipts) from `billing@trainertwin.com`. Staff mark invoices paid in
-Meteroid. Optional env: `BILLING_PAYMENT_INSTRUCTIONS` (bank details in the invoice emails), `GST_LUT_REFERENCE`
-(on export invoices), `METEROID_GRPC_URL` (default `https://meteroid-api.foreverlearning.in`).
+Meteroid, which also holds the company's details (Settings › Invoicing entity); the app draws the invoice and receipt
+PDFs and emails them from `billing@trainertwin.com`. Customers pay with Pay now (Razorpay, `RAZORPAY_ENABLED=true`);
+a payment made outside Razorpay is marked paid by staff in Meteroid. Optional env: `GST_LUT_REFERENCE` (on export
+invoices), `METEROID_GRPC_URL` (default `https://meteroid-api.foreverlearning.in`).
 
 Webhooks (grants added in Meteroid show up in the app within seconds; without them the Credits page still re-reads
 Meteroid every minute). Meteroid can't reach localhost, so each developer runs their own Cloudflare tunnel for the

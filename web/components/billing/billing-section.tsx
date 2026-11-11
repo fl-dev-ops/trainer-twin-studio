@@ -160,7 +160,7 @@ function PlanCard({ overview }: { overview: Billed }) {
           <Alert variant="destructive">
             <AlertTitle>Your plan is paused</AlertTitle>
             <AlertDescription>
-              Invoice {overview.overdueInvoice.number} ({formatMoney(overview.overdueInvoice.totalCents, overview.overdueInvoice.currency)}) was due {day(overview.overdueInvoice.dueDate)}. No new calls can start and no credits can be given until your overdue invoices are paid. {overview.overdueInvoice.payUrl ? "" : "Pay by bank transfer using the details on the invoice, quoting its number. "}Already paid? Reply to the invoice email.
+              Invoice {overview.overdueInvoice.number} ({formatMoney(overview.overdueInvoice.totalCents, overview.overdueInvoice.currency)}) was due {day(overview.overdueInvoice.dueDate)}. No new calls can start and no credits can be given until your overdue invoices are paid. {overview.overdueInvoice.payUrl ? "" : "Add a phone number to your billing details to pay online, or reply to the invoice email. "}Already paid? Reply to the invoice email.
               {overview.overdueInvoice.payUrl ? <div className="mt-3"><PayNow url={overview.overdueInvoice.payUrl} /></div> : null}
             </AlertDescription>
           </Alert>
@@ -169,7 +169,7 @@ function PlanCard({ overview }: { overview: Billed }) {
           <Alert>
             <AlertTitle>Upgrade waiting for payment</AlertTitle>
             <AlertDescription>
-              Invoice {overview.upgradeInvoice.number} ({formatMoney(overview.upgradeInvoice.totalCents, overview.upgradeInvoice.currency)}) is due {day(overview.upgradeInvoice.dueDate)}. You move to the Paid plan as soon as it&apos;s paid; unpaid by then, the upgrade is cancelled and you stay on Trial.{overview.upgradeInvoice.payUrl ? "" : " Pay by bank transfer using the details on the invoice, quoting its number."}
+              Invoice {overview.upgradeInvoice.number} ({formatMoney(overview.upgradeInvoice.totalCents, overview.upgradeInvoice.currency)}) is due {day(overview.upgradeInvoice.dueDate)}. You move to the Paid plan as soon as it&apos;s paid; unpaid by then, the upgrade is cancelled and you stay on Trial.{overview.upgradeInvoice.payUrl ? "" : " Add a phone number to your billing details to pay online, or reply to the invoice email."}
               {overview.upgradeInvoice.payUrl ? <div className="mt-3"><PayNow url={overview.upgradeInvoice.payUrl} /></div> : null}
             </AlertDescription>
           </Alert>
@@ -378,7 +378,7 @@ function InvoicesCard({ invoices }: { invoices: Invoice[] }) {
     <Card>
       <CardHeader>
         <CardTitle>Invoices</CardTitle>
-        <CardDescription>Pay online with Pay now, or by bank transfer using the details on the invoice (quote its number). Paid invoices have a receipt.</CardDescription>
+        <CardDescription>Pay online with Pay now (card, or bank transfer where offered). Paid invoices have a receipt.</CardDescription>
       </CardHeader>
       <CardContent>
         {invoices.length ? (

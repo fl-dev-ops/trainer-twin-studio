@@ -35,8 +35,39 @@ export function encodeProto(fields: ProtoField[]): Buffer {
   }));
 }
 
-/** One gRPC-web call; throws MeteroidError on a non-zero status. */
-export async function meteroidGrpc(service: string, method: string, fields: ProtoField[]) {
+/** Protobuf fields of a message: each field number's values (bytes for strings and messages, numbers for varints). */
+export function decodeProto(message: Buffer) {
+  const fields = new Map<number, (Buffer | number)[]>();
+  let at = 0;
+  const varint = () => {
+    let value = 0;
+    let shift = 0;
+    for (;;) {
+      const byte = message[at++];
+      value += (byte & 127) * 2 ** shift;
+      if (byte < 128) return value;
+      shift += 7;
+    }
+  };
+  while (at < message.length) {
+    const key = varint();
+    const [field, wire] = [Math.floor(key / 8), key % 8];
+    let value: Buffer | number;
+    if (wire === 0) value = varint();
+    else if (wire === 2) {
+      const length = varint();
+      value = message.subarray(at, at + length);
+      at += length;
+    } else if (wire === 1) { value = Number(message.readBigUInt64LE(at)); at += 8; }
+    else if (wire === 5) { value = message.readUInt32LE(at); at += 4; }
+    else throw new Error(`Unsupported protobuf wire type ${wire}`);
+    fields.set(field, [...(fields.get(field) ?? []), value]);
+  }
+  return fields;
+}
+
+/** One gRPC-web call: the reply's message. Throws MeteroidError on a non-zero status. */
+export async function meteroidGrpc(service: string, method: string, fields: ProtoField[]): Promise<Buffer> {
   const message = encodeProto(fields);
   const frame = Buffer.alloc(5);
   frame.writeUInt32BE(message.length, 1);
@@ -48,10 +79,45 @@ export async function meteroidGrpc(service: string, method: string, fields: Prot
     body: Buffer.concat([frame, message]),
     signal: AbortSignal.timeout(15_000),
   });
-  const body = Buffer.from(await response.arrayBuffer()).toString("latin1");
+  const reply = Buffer.from(await response.arrayBuffer());
+  const body = reply.toString("latin1");
   const status = response.headers.get("grpc-status") ?? body.match(/grpc-status:\s*(\d+)/)?.[1];
   const detail = decodeURIComponent(response.headers.get("grpc-message") ?? body.match(/grpc-message:\s*([^\r\n]*)/)?.[1] ?? "");
   if (!response.ok || status !== "0") throw new MeteroidError(`Meteroid ${method}: http ${response.status}, grpc ${status ?? "?"} ${detail}`.trim(), response.ok ? 400 : response.status);
+  // gRPC-web frames: [flag, 4-byte length, payload]; flag 0 is the message (the trailers frame has the high bit set).
+  return reply.length >= 5 && reply[0] === 0 ? reply.subarray(5, 5 + reply.readUInt32BE(1)) : Buffer.alloc(0);
+}
+
+export type Seller = { name: string; line1: string; line2: string; city: string; zip: string; state: string; country: string; gstin: string; email: string };
+
+let sellerCache: { at: number; seller: Seller } | null = null;
+const SELLER_TTL_MS = 10 * 60_000;
+
+/**
+ * Us, as on every invoice and receipt: Meteroid's default invoicing entity (Meteroid › Settings › Invoicing entity),
+ * the one place the company's name, address, GSTIN and contact live. Read through the API Meteroid's dashboard uses
+ * (no REST endpoint for it); kept for 10 minutes.
+ */
+/** The tenant's default invoicing entity, as Meteroid has it (its id, and the fields a seller has, maybe empty). */
+export async function defaultInvoicingEntity(): Promise<Seller & { id: string }> {
+  const reply = decodeProto(await meteroidGrpc("meteroid.api.invoicingentities.v1.InvoicingEntitiesService", "GetInvoicingEntity", []));
+  const entity = reply.get(1)?.[0];
+  if (!Buffer.isBuffer(entity)) throw new Error("Meteroid returned no invoicing entity");
+  const fields = decodeProto(entity);
+  const text = (field: number) => {
+    const value = fields.get(field)?.[0];
+    return Buffer.isBuffer(value) ? value.toString("utf8") : "";
+  };
+  return { id: text(1), name: text(4), line1: text(14), line2: text(15), zip: text(16), state: text(17), city: text(18), gstin: text(19), country: text(20), email: text(41) };
+}
+
+export async function sellerDetails(): Promise<Seller> {
+  if (sellerCache && Date.now() - sellerCache.at < SELLER_TTL_MS) return sellerCache.seller;
+  const entity = await defaultInvoicingEntity();
+  const seller: Seller = { name: entity.name, line1: entity.line1, line2: entity.line2, zip: entity.zip, state: entity.state, city: entity.city, gstin: entity.gstin, country: entity.country, email: entity.email };
+  if (!seller.name || !seller.gstin) throw new Error("Meteroid's invoicing entity has no legal name or GSTIN: fill it in (Meteroid › Settings › Invoicing entity)");
+  sellerCache = { at: Date.now(), seller };
+  return seller;
 }
 
 const INVOICES = "meteroid.api.invoices.v1.InvoicesService";

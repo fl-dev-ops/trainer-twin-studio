@@ -9,6 +9,7 @@ import {
   getInvoice,
   getSubscription,
   getInvoiceRaw,
+  sellerDetails,
   listInvoices,
   PAID_PLAN,
   patchCustomer,
@@ -421,17 +422,16 @@ export function describeInvoice(row: Pick<BillingInvoice, "kind" | "credits" | "
   return "TrainerTwin";
 }
 
-const paymentInstructions = () => process.env.BILLING_PAYMENT_INSTRUCTIONS?.trim() || null;
-
 /** The invoice as the PDFs show it, from Meteroid (its numbers, lines, tax and the customer when it was issued). */
 async function documentOf(row: Pick<BillingInvoice, "id" | "orgId">) {
   const payments = await db.billingPayment.findMany({ where: { invoiceId: row.id }, select: { id: true, method: true } });
-  return billingDocument(await getInvoiceRaw(row.id), await orgName(row.orgId), Object.fromEntries(payments.map((p) => [p.id, p.method])));
+  const [raw, name, seller] = await Promise.all([getInvoiceRaw(row.id), orgName(row.orgId), sellerDetails()]);
+  return billingDocument(raw, name, seller, Object.fromEntries(payments.map((p) => [p.id, p.method])));
 }
 
 /** The tax invoice PDF (lib/billing/documents.ts). */
 export async function invoicePdf(row: Pick<BillingInvoice, "id" | "orgId" | "status" | "paymentLinkUrl">) {
-  return renderInvoice(await documentOf(row), paymentInstructions(), row.status === "unpaid" ? row.paymentLinkUrl : null);
+  return renderInvoice(await documentOf(row), row.status === "unpaid" ? row.paymentLinkUrl : null, row.status === "unpaid");
 }
 
 /** The receipt PDF of a paid invoice. */
@@ -466,7 +466,6 @@ async function emailOnce(row: BillingInvoice, event: BillingEmailArgs["event"], 
       dueDate: shortDay(row.dueDate),
       description: describeInvoice(row),
       billingUrl: `${studioUrl()}settings?tab=billing`,
-      paymentInstructions: paymentInstructions(),
       payUrl: row.status === "unpaid" ? row.paymentLinkUrl : null,
       outcome,
     },

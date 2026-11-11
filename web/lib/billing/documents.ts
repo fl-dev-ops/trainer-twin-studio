@@ -1,6 +1,6 @@
 import { PDFDocument, PDFString, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
 import { countryName, INDIAN_STATES } from "@/lib/billing/details";
-import type { RawInvoice } from "@/lib/billing/meteroid";
+import type { RawInvoice, Seller } from "@/lib/billing/meteroid";
 
 /**
  * The invoice and receipt PDFs (specs/billing.md rules 21–22), in one layout (Stripe's: title and numbers top left,
@@ -10,22 +10,14 @@ import type { RawInvoice } from "@/lib/billing/meteroid";
  * export mention.
  */
 
-/** Us, as on every invoice (also Meteroid's invoicing entity: scripts/meteroid-billing-setup.ts). */
-export const SELLER = {
-  name: "Forever Learning Solutions Pvt Ltd",
-  line1: "No. 52/2A1 School Street, Right side",
-  line2: "Selaiyur, Rajakilpakkam, Tambaram, Tamil Nadu (33)",
-  city: "Kanchipuram",
-  zip: "600073",
-  state: "Tamil Nadu",
-  gstin: "33AAGCF6592D1ZN",
-  sac: "998314",
-  email: "billing@trainertwin.com",
-};
+/** What we sell, for GST: online education and training services (one SAC for everything). */
+export const SAC = "998314";
 
 export const receiptNumber = (invoiceNumber: string) => `RCPT-${invoiceNumber}`;
 
 export type BillingDocument = {
+  /** Us: Meteroid's invoicing entity (lib/billing/meteroid.ts sellerDetails). */
+  seller: Seller;
   number: string;
   issuedOn: string;
   dueOn: string;
@@ -68,7 +60,7 @@ const METHOD: Record<string, string> = { card: "Card", upi: "UPI", netbanking: "
  * The invoice as the PDFs show it, from Meteroid's invoice (GET /invoices/{id}). `methods`: how each Razorpay payment
  * was made (payment id → Razorpay's method); anything else was a bank transfer marked by staff.
  */
-export function billingDocument(raw: RawInvoice, orgName: string, methods: Record<string, string | null> = {}): BillingDocument {
+export function billingDocument(raw: RawInvoice, orgName: string, seller: Seller, methods: Record<string, string | null> = {}): BillingDocument {
   const currency = String(raw.currency ?? "USD");
   const customer = (raw.customer_details ?? {}) as { name?: string; email?: string | null; vat_number?: string | null; billing_address?: Record<string, string | null> | null };
   const address = customer.billing_address ?? {};
@@ -77,6 +69,7 @@ export function billingDocument(raw: RawInvoice, orgName: string, methods: Recor
   const stateCode = india ? Object.entries(INDIAN_STATES).find(([, name]) => name === address.state)?.[0] : undefined;
   const breakdown = (raw.tax_breakdown ?? []) as { name: string; tax_rate: string; tax_amount: number; exemption_type?: string | null; exemption_reason?: string | null }[];
   return {
+    seller,
     number: String(raw.invoice_number ?? ""),
     issuedOn: String(raw.invoice_date ?? raw.created_at ?? "").slice(0, 10),
     dueOn: String(raw.due_date ?? raw.invoice_date ?? "").slice(0, 10),
@@ -100,7 +93,7 @@ export function billingDocument(raw: RawInvoice, orgName: string, methods: Recor
       const unit = Number(line.unit_price ?? 0);
       return {
         description: describe(String(line.name ?? ""), line.description, quantity),
-        detail: [`SAC ${SELLER.sac}`, period(line.start_date, line.end_date)].filter(Boolean).join(" · "),
+        detail: [`SAC ${SAC}`, period(line.start_date, line.end_date)].filter(Boolean).join(" · "),
         quantity: String(quantity),
         unitPrice: money(Math.round(unit * 10_000) / 100, currency, 4),
         amountCents: Math.round(quantity * unit * 100),
@@ -208,8 +201,10 @@ async function sheet(title: string, doc: BillingDocument, meta: [string, string]
 
   y -= 14;
   const top = y;
-  s.text(SELLER.name, LEFT, y, { bold: true });
-  for (const line of [SELLER.line1, SELLER.line2, `${SELLER.city} ${SELLER.zip}`, "India", `GSTIN ${SELLER.gstin}`, SELLER.email]) s.text(line, LEFT, (y -= 13));
+  const seller = doc.seller;
+  s.text(seller.name, LEFT, y, { bold: true });
+  const sellerLines = [seller.line1, seller.line2, [seller.city, seller.zip].filter(Boolean).join(" "), countryName(seller.country) ?? seller.country, `GSTIN ${seller.gstin}`, seller.email];
+  for (const line of sellerLines.filter(Boolean)) s.text(line, LEFT, (y -= 13));
   let by = top;
   const col = 260;
   s.text("Bill to", col, by, { bold: true });
@@ -271,10 +266,10 @@ function footer(s: Sheet, left: string, note: string) {
   s.text("Page 1 of 1", RIGHT, 36, { size: 7.5, align: "right" });
 }
 
-async function finish(pdf: PDFDocument, title: string, at: Date) {
+async function finish(pdf: PDFDocument, title: string, at: Date, author: string) {
   // The same document renders the same bytes (dates from it, not the clock): an emailed copy can be retried.
   pdf.setTitle(title);
-  pdf.setAuthor(SELLER.name);
+  pdf.setAuthor(author);
   pdf.setProducer("TrainerTwin");
   pdf.setCreator("TrainerTwin");
   pdf.setCreationDate(at);
@@ -282,8 +277,8 @@ async function finish(pdf: PDFDocument, title: string, at: Date) {
   return Buffer.from(await pdf.save());
 }
 
-/** The tax invoice. Under the amount: `payUrl` (Razorpay's page, "Pay online") and `paymentInstructions` (bank transfer). */
-export async function renderInvoice(doc: BillingDocument, paymentInstructions?: string | null, payUrl?: string | null) {
+/** The tax invoice. Under the amount, while it's unpaid: `payUrl` (Razorpay's page, "Pay online"). */
+export async function renderInvoice(doc: BillingDocument, payUrl?: string | null, unpaid = !!payUrl) {
   const { pdf, s, y: start } = await sheet("Invoice", doc, [
     ["Invoice number", doc.number],
     ["Date of issue", longDay(doc.issuedOn)],
@@ -299,17 +294,14 @@ export async function renderInvoice(doc: BillingDocument, paymentInstructions?: 
     s.text(payUrl, LEFT + 62, y, { color: rgb(0.3, 0.33, 0.9) });
     s.link(payUrl, LEFT, y - 3, 62 + s.width(payUrl), 13);
     y -= 22;
-  }
-  if (paymentInstructions) {
-    s.text(payUrl ? "Or by bank transfer" : "How to pay", LEFT, y, { bold: true });
-    for (const part of paymentInstructions.split(/\n/).flatMap((line) => s.wrap(line, RIGHT - LEFT))) s.text(part, LEFT, (y -= 12));
-    s.text(`Please quote ${doc.number} with your payment.`, LEFT, (y -= 12));
-    y -= 18;
+  } else if (unpaid) {
+    s.text(`To pay, write to ${doc.seller.email || "us"} for a payment link, quoting ${doc.number}.`, LEFT, y);
+    y -= 22;
   }
   s.text(`Invoice for ${doc.forWhom}`, LEFT, y);
   linesAndTotals(s, doc, y - 32, ["Amount due", doc.totalCents]);
   footer(s, `${doc.number} · ${due}`, "This is a computer-generated invoice and needs no signature. Prices include GST where it applies.");
-  return finish(pdf, `Invoice ${doc.number}`, new Date(`${doc.issuedOn}T00:00:00Z`));
+  return finish(pdf, `Invoice ${doc.number}`, new Date(`${doc.issuedOn}T00:00:00Z`), doc.seller.name);
 }
 
 /** The payment receipt: the invoice's lines and totals, and the payments that settled it. */
@@ -346,5 +338,5 @@ export async function renderReceipt(doc: BillingDocument, paidAt: Date) {
     y -= 18;
   }
   footer(s, `${receiptNumber(doc.number)} · paid ${paidOn}`, "This receipt confirms payment of the invoice above, which is the tax invoice.");
-  return finish(pdf, `Receipt ${receiptNumber(doc.number)}`, paidAt);
+  return finish(pdf, `Receipt ${receiptNumber(doc.number)}`, paidAt, doc.seller.name);
 }

@@ -5,16 +5,32 @@
  *   - plan "Paid": $300 a month, tax included, due 2 days after each invoice, no credits;
  *   - MINS can be sold (product "Minute packs") at $0.25 (100 credits = $25: staff selling minutes in Meteroid's UI; the app sets its own net
  *     price per customer for tax-inclusive packs);
- *   - the invoicing entity (the seller on every invoice): our address, GSTIN, SAC on the footer, 2-day terms, contact;
+ *   - the invoicing entity (the seller on every invoice), when it isn't filled in yet: our address, GSTIN, SAC on the
+ *     footer, 2-day terms, contact. Afterwards Meteroid is where the company's details are edited;
  *   - the app's webhook endpoint also gets invoice.finalized / paid / voided and subscription.cancelled / ended.
  * Customer emails are switched off separately (all 11 kinds, every tenant; done 11 Nov 2026 in Meteroid's database).
  *
  *   bun scripts/meteroid-billing-setup.ts --webhook-url https://dash.trainertwin.com/api/meteroid/webhook [--dry-run]
  */
 import { meteroid } from "@/lib/meteroid";
-import { meteroidGrpc, PAID_NET_TERMS, PAID_PLAN } from "@/lib/billing/meteroid";
+import { defaultInvoicingEntity, meteroidGrpc, PAID_NET_TERMS, PAID_PLAN } from "@/lib/billing/meteroid";
 import { PAID_MONTHLY_CENTS, PACK_CENTS, PACK_CREDITS } from "@/lib/billing/pricing";
-import { SELLER } from "@/lib/billing/documents";
+import { SAC } from "@/lib/billing/documents";
+
+/**
+ * The company as first set on a tenant's invoicing entity. Meteroid is the source afterwards: edit it there
+ * (Settings › Invoicing entity); invoices and receipts read it from Meteroid (lib/billing/meteroid.ts sellerDetails).
+ */
+const SELLER = {
+  name: "Forever Learning Solutions Pvt Ltd",
+  line1: "No. 52/2A1 School Street, Right side",
+  line2: "Selaiyur, Rajakilpakkam, Tambaram, Tamil Nadu (33)",
+  city: "Kanchipuram",
+  zip: "600073",
+  state: "Tamil Nadu",
+  gstin: "33AAGCF6592D1ZN",
+  email: "billing@trainertwin.com",
+};
 import { CREDIT_UNIT } from "@/lib/meteroid";
 
 const args = process.argv.slice(2);
@@ -70,16 +86,18 @@ const prices = (await meteroid<Page<{ currency: string; unit_price: string; arch
 if (prices.some((price) => price.currency === "USD" && !price.archived_at && Number(price.unit_price) === Number(unitPrice))) done.push(`ok: ${CREDIT_UNIT} costs $${unitPrice}`);
 else await step(`set ${CREDIT_UNIT} price to $${unitPrice}`, () => meteroid("PUT", `/credit-units/${unit.id}/prices/USD`, { unit_price: unitPrice }));
 
-// 3. The invoicing entity (gRPC: the REST API has no invoicing-entity endpoint).
-const someCustomer = (await meteroid<Page<{ invoicing_entity_id: string }>>("GET", "/customers?per_page=1")).data?.[0];
-if (!someCustomer) throw new Error("No customer in this tenant to find the invoicing entity from");
-await step(`invoicing entity ${someCustomer.invoicing_entity_id}: address, GSTIN ${SELLER.gstin}, SAC footer, net ${PAID_NET_TERMS} days, contact ${SELLER.email}`, () =>
+// 3. The invoicing entity (gRPC: the REST API has no invoicing-entity endpoint): filled in once. Meteroid is the source
+//    of the company's details afterwards; a re-run never overwrites edits made there.
+// Read first; a failed read stops here rather than risk writing over the company's details.
+const entity = await defaultInvoicingEntity();
+if (entity.gstin) done.push(`ok: invoicing entity filled in (${entity.name}, GSTIN ${entity.gstin}); edit it in Meteroid`);
+else await step(`invoicing entity ${entity.id}: address, GSTIN ${SELLER.gstin}, SAC footer, net ${PAID_NET_TERMS} days, contact ${SELLER.email}`, () =>
   meteroidGrpc("meteroid.api.invoicingentities.v1.InvoicingEntitiesService", "UpdateInvoicingEntity", [
-    [1, someCustomer.invoicing_entity_id],
+    [1, entity.id],
     [2, [
       [4, SELLER.name],
       [9, PAID_NET_TERMS],
-      [10, `SAC ${SELLER.sac} (online education and training services). Prices include GST where it applies.`],
+      [10, `SAC ${SAC} (online education and training services). Prices include GST where it applies.`],
       [14, SELLER.line1],
       [15, SELLER.line2],
       [16, SELLER.zip],
