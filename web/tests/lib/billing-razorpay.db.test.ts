@@ -3,10 +3,7 @@ import Papa from "papaparse";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 import { fundOrg } from "../setup/meteroid";
 
-const previousEnabled = process.env.RAZORPAY_ENABLED;
-process.env.RAZORPAY_ENABLED = "true"; // check-billing captures the switch when it builds the SQL.
-const { BILLING_CHECKS } = await import("../../scripts/check-billing");
-if (previousEnabled === undefined) delete process.env.RAZORPAY_ENABLED; else process.env.RAZORPAY_ENABLED = previousEnabled;
+import { BILLING_CHECKS } from "../../scripts/check-billing";
 
 describe.skipIf(!localMinutesDb)("billing Razorpay schema, invariants and accountant CSV (local DB)", () => {
   let f: MinutesFixture;
@@ -18,7 +15,7 @@ describe.skipIf(!localMinutesDb)("billing Razorpay schema, invariants and accoun
   async function report(month: string, fixtures: Record<string, unknown> = {}) {
     // Preload only fakes Razorpay; the script's real top-level query runs against the same test DB as this suite.
     const child = Bun.spawn([process.execPath, "--preload", "./tests/setup/billing-razorpay-script-preload.ts", "scripts/billing-fee-report.ts", "--month", month], {
-      cwd: process.cwd(), env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL!, RAZORPAY_ENABLED: "true", RAZORPAY_KEY_ID: "rzp_test_report", RAZORPAY_KEY_SECRET: "test-secret", BILLING_REPORT_RAZORPAY_FIXTURES: JSON.stringify(fixtures) }, stdout: "pipe", stderr: "pipe",
+      cwd: process.cwd(), env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL!, RAZORPAY_KEY_ID: "rzp_test_report", RAZORPAY_KEY_SECRET: "test-secret", BILLING_REPORT_RAZORPAY_FIXTURES: JSON.stringify(fixtures) }, stdout: "pipe", stderr: "pipe",
     });
     const [stdout, stderr, exitCode] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
     return { stdout, stderr, exitCode, rows: Papa.parse<Record<string, string>>(stdout.trim(), { header: true }).data };
@@ -55,13 +52,16 @@ describe.skipIf(!localMinutesDb)("billing Razorpay schema, invariants and accoun
     await db.billingInvoice.update({ where: { id: invoiceData().id }, data: { paymentLinkId: "plink_check" } }); expect(await broken(linkCheck)).toBe(0);
     await db.billingInvoice.update({ where: { id: invoiceData().id }, data: { paymentLinkId: null, status: "void" } }); expect(await broken(linkCheck)).toBe(0);
   });
-  test("new Check: Razorpay disabled exempts old unpaid phone-bearing invoices in the real check-billing script", async () => {
+  test("new Check: old unpaid phone-bearing invoices fail the real check-billing script even without Razorpay keys", async () => {
     await db.orgBilling.update({ where: { orgId: f.org.id }, data: { billingDetails: { phone: "+19876543210" } } });
     await db.billingInvoice.create({ data: { ...invoiceData(), createdAt: new Date(Date.now() - 2 * 3600000) } });
     expect(await broken(linkCheck)).toBe(1);
-    const child = Bun.spawn([process.execPath, "scripts/check-billing.ts"], { cwd: process.cwd(), env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL!, RAZORPAY_ENABLED: "false" }, stdout: "pipe", stderr: "pipe" });
-    const [stdout] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
-    expect(stdout.split("\n").find((line) => line.includes("whose org has a phone"))).toBe(`ok   ${linkCheck.rule}`);
+    const env = { ...process.env, DATABASE_URL: process.env.DATABASE_URL! };
+    delete env.RAZORPAY_KEY_ID; delete env.RAZORPAY_KEY_SECRET;
+    const child = Bun.spawn([process.execPath, "scripts/check-billing.ts"], { cwd: process.cwd(), env, stdout: "pipe", stderr: "pipe" });
+    const [stdout, stderr, exitCode] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
+    expect(exitCode).toBe(1); expect(stderr).toBe("");
+    expect(stdout.split("\n").find((line) => line.includes("whose org has a phone"))).toContain(`FAIL ${linkCheck.rule} (`);
   });
   test("Checks: fresh unpaid invoice gets the one-hour grace even with a non-UTC PostgreSQL session", async () => {
     await db.orgBilling.update({ where: { orgId: f.org.id }, data: { billingDetails: { phone: "+19876543210" } } });

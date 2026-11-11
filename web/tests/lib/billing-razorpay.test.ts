@@ -6,13 +6,13 @@ import { billingDetailsInput, meteroidCustomerPatch } from "@/lib/billing/detail
 import { billingEmail } from "@/lib/email";
 import { billingDocument, renderInvoice } from "@/lib/billing/documents";
 import { seller } from "../setup/billing-meteroid-fixture";
-import { cancelPaymentLink, createInvoicePaymentLink, fetchPayment, paymentLinkByReference, razorpayEnabled, RazorpayDisabledError, RazorpayError, settlementRecon } from "@/lib/razorpay";
+import { cancelPaymentLink, createInvoicePaymentLink, fetchPayment, paymentLinkByReference, RazorpayError, settlementRecon } from "@/lib/razorpay";
 
 const details = { legalName: "Example Ltd", country: "US", line1: "10 Street", city: "Boston", postalCode: "02110", emails: ["billing@example.com"], phone: "+19876543210" };
-const names = ["RAZORPAY_ENABLED", "RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"];
+const names = ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"];
 const original = Object.fromEntries(names.map((key) => [key, process.env[key]]));
 const server = setupServer();
-beforeEach(() => { process.env.RAZORPAY_ENABLED = "true"; process.env.RAZORPAY_KEY_ID = "rzp_test_billing"; process.env.RAZORPAY_KEY_SECRET = "test-secret"; server.listen({ onUnhandledRequest: "error" }); });
+beforeEach(() => { process.env.RAZORPAY_KEY_ID = "rzp_test_billing"; process.env.RAZORPAY_KEY_SECRET = "test-secret"; server.listen({ onUnhandledRequest: "error" }); });
 afterEach(() => { server.close(); server.resetHandlers(); for (const [key, value] of Object.entries(original)) if (value === undefined) delete process.env[key]; else process.env[key] = value; });
 
 test.each(["+1 987-654-3210", "+1 (987) 654.3210", "+12345678", "+123456789012345"])("rule 7: phone %s is normalized and copied to Meteroid", (phone) => {
@@ -51,10 +51,18 @@ test("rules 32, 34: cancellation, payment fees and paged settlement endpoints", 
   expect(await settlementRecon(2026, 11, 1000, 100)).toEqual([{ entity_id: "pay_1", settlement_id: "setl_1" }]);
   expect(paths).toEqual(["POST /v1/payment_links/plink_1/cancel", "GET /v1/payments/pay_1", "GET /v1/settlements/recon/combined?year=2026&month=11&skip=1000&count=100"]);
 });
-test("Razorpay disabled refuses calls before network; API errors retain status for reference recovery", async () => {
-  process.env.RAZORPAY_ENABLED = "false"; expect(razorpayEnabled()).toBe(false);
-  await expect(fetchPayment("pay_1")).rejects.toBeInstanceOf(RazorpayDisabledError);
-  process.env.RAZORPAY_ENABLED = " true "; expect(razorpayEnabled()).toBe(true);
+test.each(names)("missing %s fails invoice link creation and billing API calls before network", async (key) => {
+  delete process.env[key];
+  let requests = 0;
+  server.use(http.all("https://api.razorpay.com/v1/*", () => { requests++; return HttpResponse.json({}); }));
+  await expect(createInvoicePaymentLink({ amount: 30000, currency: "USD", description: "Invoice", referenceId: "inv-1", notes: {}, customer: { name: details.legalName, email: details.emails[0], contact: details.phone }, callbackUrl: "https://dash.test/settings" })).rejects.toThrow(`${key} is not set`);
+  await expect(fetchPayment("pay_1")).rejects.toThrow(`${key} is not set`);
+  await expect(cancelPaymentLink("plink_1")).rejects.toThrow(`${key} is not set`);
+  await expect(paymentLinkByReference("inv-1")).rejects.toThrow(`${key} is not set`);
+  await expect(settlementRecon(2026, 11)).rejects.toThrow(`${key} is not set`);
+  expect(requests).toBe(0);
+});
+test("Razorpay API errors retain status for reference recovery", async () => {
   server.use(http.get("https://api.razorpay.com/v1/payments/pay_1", () => HttpResponse.json({ error: { description: "bad payment" } }, { status: 400 })));
   await expect(fetchPayment("pay_1")).rejects.toMatchObject({ status: 400, message: expect.stringContaining("bad payment") });
   await expect(fetchPayment("pay_1")).rejects.toBeInstanceOf(RazorpayError);

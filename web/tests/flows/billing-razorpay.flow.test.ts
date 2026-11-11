@@ -7,7 +7,7 @@ import { fundOrg, availableOrgSeconds } from "../setup/meteroid";
 import { outsideServices, razorpayWebhook } from "./harness";
 import { sellerReply } from "../setup/billing-meteroid-fixture";
 import { billingOverview, buyPacks, invoiceIssuedEmail, invoiceOverdue, invoicePaid, invoiceVoided, requestUpgrade, saveBillingDetails, syncInvoice, syncOrgInvoices } from "@/lib/billing/billing";
-import { closePaymentLink, ensurePaymentLink } from "@/lib/billing/razorpay";
+import { closePaymentLink, ensurePaymentLink, reconcilePaymentLink } from "@/lib/billing/razorpay";
 import { billingRouter } from "@/lib/billing/trpc";
 import { createPaymentLinkPurchase, linkInvoicePurchase } from "@/lib/credit-purchases";
 import { POST } from "@/app/api/razorpay/webhook/route";
@@ -36,7 +36,7 @@ describe.skipIf(!localMinutesDb)("billing Razorpay phase 3 (real DB; MSW Meteroi
   const outside = outsideServices();
   const invoices = new Map<string, Raw>(); const links = new Map<string, Raw>();
   const creates: Raw[] = [], marks: Record<number, string>[] = [], cancels: string[] = [], lookups: string[] = [], patches: Raw[] = [];
-  const envNames = ["RAZORPAY_ENABLED", "RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET", "METEROID_GRPC_URL"];
+  const envNames = ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET", "METEROID_GRPC_URL"];
   const oldEnv = Object.fromEntries(envNames.map((name) => [name, process.env[name]]));
   let lag = false, failMark = false;
   const id = () => `invoice-${f.org.id}`;
@@ -53,7 +53,7 @@ describe.skipIf(!localMinutesDb)("billing Razorpay phase 3 (real DB; MSW Meteroi
   const pay = async (paymentId = `pay_${f.org.id}`, patch: Raw = {}) => razorpayWebhook("payment_link.paid", { payment_link: { entity: { id: (await row()).paymentLinkId, notes: { invoiceId: id() } } }, payment: { entity: { id: paymentId, amount: 30000, currency: "USD", ...patch } } });
   function linkPaid(linkId: string, paymentId = `pay_${f.org.id}`) { Object.assign(links.get(linkId)!, { status: "paid", amount_paid: 30000, payments: [{ payment_id: paymentId, amount: 30000, status: "captured" }] }); }
   beforeEach(async () => {
-    process.env.RAZORPAY_ENABLED = "true"; process.env.RAZORPAY_KEY_ID = "rzp_test_billing"; process.env.RAZORPAY_KEY_SECRET = "test-secret"; process.env.RAZORPAY_WEBHOOK_SECRET = "billing-webhook-secret"; process.env.METEROID_GRPC_URL = "https://meteroid-grpc.test";
+    process.env.RAZORPAY_KEY_ID = "rzp_test_billing"; process.env.RAZORPAY_KEY_SECRET = "test-secret"; process.env.RAZORPAY_WEBHOOK_SECRET = "billing-webhook-secret"; process.env.METEROID_GRPC_URL = "https://meteroid-grpc.test";
     starts.length = creates.length = marks.length = cancels.length = lookups.length = patches.length = 0; invoices.clear(); links.clear(); executeSteps = true; lag = failMark = false;
     outside.start(); f = minutesFixture(); await f.create(); await fundOrg({ orgId: f.org.id, minutes: 0 });
     await db.orgBilling.update({ where: { orgId: f.org.id }, data: { billingDetails: details } });
@@ -100,9 +100,8 @@ describe.skipIf(!localMinutesDb)("billing Razorpay phase 3 (real DB; MSW Meteroi
     expect(creates[0]).toMatchObject({ amount: 30000, currency: "USD", accept_partial: false, notify: { email: false, sms: false }, reminder_enable: false, callback_method: "get", reference_id: id(), customer: { name: details.legalName, email: details.emails[0], contact: details.phone }, notes: { invoiceId: id(), orgId: f.org.id } });
     const callback = new URL(creates[0].callback_url); expect(callback.pathname).toBe("/settings"); expect(callback.searchParams.get("tab")).toBe("billing"); expect(callback.searchParams.get("paid")).toBe(first.number); expect(creates[0].expire_by).toBeUndefined();
   });
-  test.each(["off", "no phone", "paid", "void", "$0"])("rule 27: no payment link for %s", async (reason) => {
+  test.each(["no phone", "paid", "void", "$0"])("rule 27: no payment link for %s", async (reason) => {
     executeSteps = false;
-    if (reason === "off") process.env.RAZORPAY_ENABLED = "false";
     if (reason === "no phone") { const { phone, ...legacy } = details; await db.orgBilling.update({ where: { orgId: f.org.id }, data: { billingDetails: legacy } }); }
     await prepare();
     if (reason === "paid" || reason === "void") await db.billingInvoice.update({ where: { id: id() }, data: { status: reason } });
@@ -111,6 +110,32 @@ describe.skipIf(!localMinutesDb)("billing Razorpay phase 3 (real DB; MSW Meteroi
     if (reason !== "$0") expect(await ensurePaymentLink(id())).toBeNull();
     expect(creates).toHaveLength(0);
     if (reason === "no phone") expect(await billingOverview(f.org.id)).toMatchObject({ billed: true, invoices: [expect.objectContaining({ payUrl: null })] });
+  });
+  test("missing Razorpay keys: link creation fails but invoice-issued still emails without Pay now", async () => {
+    delete process.env.RAZORPAY_KEY_ID; delete process.env.RAZORPAY_KEY_SECRET;
+    await prepare();
+    await expect(ensurePaymentLink(id())).rejects.toThrow("RAZORPAY_KEY_ID is not set");
+    expect(await row()).toMatchObject({ paymentLinkId: null, paymentLinkUrl: null, issuedEmailAt: expect.any(Date) });
+    const email = outside.emails.find((email) => email.idempotencyKey === `billing-issued-${id()}`)!;
+    expect(email).toBeDefined();
+    expect(email.text).toContain("reply to this email and we'll send you a payment link");
+    for (const content of [email.text, email.html]) expect(content).not.toMatch(/Pay online:|Pay .* now/);
+    expect(creates).toEqual([]);
+  });
+  test.each(["upgrade", "buy"])("missing Razorpay keys: %s returns payUrl null and sends its invoice", async (operation) => {
+    delete process.env.RAZORPAY_KEY_ID; delete process.env.RAZORPAY_KEY_SECRET;
+    if (operation === "buy") await db.orgBilling.update({ where: { orgId: f.org.id }, data: { plan: "paid", paidSubscriptionId: sub() } });
+    const result = operation === "upgrade" ? await requestUpgrade(f.org.id) : await buyPacks(f.org.id, 1, randomUUID());
+    expect(result.payUrl).toBeNull(); expect((await row()).issuedEmailAt).not.toBeNull(); expect(creates).toEqual([]);
+    expect(await availableOrgSeconds(f.org.id)).toBe(0);
+  });
+  test("missing Razorpay keys: reconciliation throws and best-effort close logs its failure, rather than silently skipping", async () => {
+    const invoice = await prepare();
+    delete process.env.RAZORPAY_KEY_ID; delete process.env.RAZORPAY_KEY_SECRET;
+    await expect(reconcilePaymentLink(invoice)).rejects.toThrow("RAZORPAY_KEY_ID is not set");
+    const log = spyOn(console, "error").mockImplementation(() => {});
+    try { await closePaymentLink(invoice); expect(log).toHaveBeenCalledWith(expect.stringContaining("closing the payment link"), "RAZORPAY_KEY_ID is not set"); } finally { log.mockRestore(); }
+    expect(cancels).toEqual([]);
   });
   test("rules 7, 28: save normalized phone to Meteroid, upgrade and retry return same payUrl, overview and issued email include it", async () => {
     await saveBillingDetails(f.org.id, { ...details, phone: "+1 987-654-3210" }); expect(patches[0].phone).toBe(details.phone);
@@ -162,9 +187,16 @@ describe.skipIf(!localMinutesDb)("billing Razorpay phase 3 (real DB; MSW Meteroi
     expect((await row()).razorpayPaymentId).toBeNull(); expect((await row()).paidRunAt).toBeNull(); expect(await db.billingPayment.count({ where: { invoiceId: id() } })).toBe(0);
     failMark = false; expect((await pay()).status).toBe(200); expect((await row()).status).toBe("paid");
   });
-  test("bad signature is 401; disabled webhook is 404 and makes no links", async () => {
-    const request = () => new Request("http://dash.test/api/razorpay/webhook", { method: "POST", body: "{}", headers: { "x-razorpay-signature": "0".repeat(64) } });
-    expect((await POST(request())).status).toBe(401); process.env.RAZORPAY_ENABLED = "false"; expect((await POST(request())).status).toBe(404); await prepare(); expect(creates).toEqual([]); expect(marks).toEqual([]);
+  test("webhook always checks signatures: bad signature is 401, missing secret throws, valid signature is accepted without API keys", async () => {
+    const request = () => new Request("http://dash.test/api/razorpay/webhook", { method: "POST", body: "not JSON", headers: { "x-razorpay-signature": "0".repeat(64) } });
+    expect(await (await POST(request())).json()).toEqual({ error: "Invalid signature" });
+    expect((await POST(request())).status).toBe(401);
+    delete process.env.RAZORPAY_WEBHOOK_SECRET;
+    await expect(POST(request())).rejects.toThrow("RAZORPAY_WEBHOOK_SECRET is not set");
+    process.env.RAZORPAY_WEBHOOK_SECRET = "billing-webhook-secret";
+    delete process.env.RAZORPAY_KEY_ID; delete process.env.RAZORPAY_KEY_SECRET;
+    expect(await razorpayWebhook("payment.authorized", {})).toEqual({ status: 200, body: { ok: true, ignored: "payment.authorized" } });
+    expect(creates).toEqual([]); expect(marks).toEqual([]);
   });
   test.each(["void", "overdue upgrade", "bank transfer"])("rule 32: cancels link on %s", async (reason) => {
     if (reason === "overdue upgrade") { await requestUpgrade(f.org.id); invoices.get(id())!.due_date = "2020-01-01"; await invoiceOverdue(id()); }

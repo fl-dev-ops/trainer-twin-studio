@@ -9,12 +9,14 @@ import { outsideServices } from "./harness";
 import { seller, sellerReply } from "../setup/billing-meteroid-fixture";
 import { billingOverview, buyPacks, checkAllBilling, invoiceIssuedEmail, invoiceOverdue, invoicePaid, invoiceReminder, paidSubscriptionEnded, recordInvoice, requestUpgrade, saveBillingDetails, startInvoiceWorkflows, syncInvoice, syncOrgInvoices } from "@/lib/billing/billing";
 import { toInvoice } from "@/lib/billing/meteroid";
+import { ensurePaymentLink } from "@/lib/billing/razorpay";
 import { grantMinutes, giveStartingMinutes, grantMinutesToMany, learnerBalance } from "@/lib/minutes";
 import { activateSession } from "@/lib/interview-sessions";
 import { POST } from "@/app/api/meteroid/webhook/route";
 
 const originalGrpcUrl = process.env.METEROID_GRPC_URL;
-const originalRazorpayEnabled = process.env.RAZORPAY_ENABLED;
+const razorpayKeys = ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"] as const;
+const originalRazorpayKeys = razorpayKeys.map((key) => process.env[key]);
 const starts: { name: string; id: string }[] = [];
 let runSteps = true;
 let failStart = false;
@@ -22,7 +24,7 @@ mock.module("workflow/api", () => ({ start: async (fn: Function, [id]: [string])
   starts.push({ name: fn.name, id });
   if (failStart) throw new Error("workflow unavailable");
   // Durable timers are tested separately: run only the immediate production steps, with real DB and MSW.
-  if (runSteps && fn.name === "invoiceIssued") await invoiceIssuedEmail(id);
+  if (runSteps && fn.name === "invoiceIssued") { await ensurePaymentLink(id).catch(() => null); await invoiceIssuedEmail(id); }
   if (runSteps && fn.name === "invoicePaid") await invoicePaid(id);
   return { runId: `run-${id}` };
 } }));
@@ -83,7 +85,9 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
     return POST(new Request("http://dash.test/api/meteroid/webhook", { method: "POST", body, headers: { "webhook-id": id, "webhook-timestamp": timestamp, "webhook-signature": options.bad ? "v1,wrong" : `v1,${signature}` } }));
   }
   beforeEach(async () => {
-    setSystemTime(new Date("2026-11-01T12:00:00Z")); process.env.METEROID_GRPC_URL = "https://meteroid-grpc.test"; process.env.RAZORPAY_ENABLED = "false";
+    setSystemTime(new Date("2026-11-01T12:00:00Z")); process.env.METEROID_GRPC_URL = "https://meteroid-grpc.test";
+    // These lifecycle tests deliberately exercise missing-key failures, never real Razorpay requests.
+    for (const key of razorpayKeys) delete process.env[key];
     starts.length = requests.length = syncs.length = 0; invoices.clear(); sent.clear(); topups.clear(); runSteps = true; failStart = grpcPaidRace = false;
     outside.start(); f = minutesFixture(); await f.create(); await fundOrg({ orgId: f.org.id, minutes: 100 });
     outside.use(
@@ -119,12 +123,12 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
   });
   afterEach(async () => {
     setSystemTime(); await f.clean(); for (const other of extra.splice(0)) await other.clean();
-    outside.stop(); expect(outside.unexpected).toEqual([]); outside.reset(); outside.resetHandlers();
+    outside.stop(); expect(outside.unexpected).toEqual([]); expect(outside.paymentLinks).toEqual([]); expect(outside.razorpayReads).toEqual([]); outside.reset(); outside.resetHandlers();
+    razorpayKeys.forEach((key, index) => { if (originalRazorpayKeys[index] === undefined) delete process.env[key]; else process.env[key] = originalRazorpayKeys[index]; });
   });
 
   afterAll(() => {
     if (originalGrpcUrl === undefined) delete process.env.METEROID_GRPC_URL; else process.env.METEROID_GRPC_URL = originalGrpcUrl;
-    if (originalRazorpayEnabled === undefined) delete process.env.RAZORPAY_ENABLED; else process.env.RAZORPAY_ENABLED = originalRazorpayEnabled;
   });
 
   test("rules 1–3: billed org starts Trial, never expires or receives plan credits; rule 26 cached overview survives Meteroid down", async () => {
@@ -162,7 +166,7 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
     expect(email).toMatchObject({ from: "TrainerTwin Billing <billing@trainertwin.com>", reply_to: "support@trainertwin.com", to: details.emails });
     await expectAppPdfs(email, [`INV-${upgrade()}.pdf`]);
     expect(email.text).toContain(`To pay invoice INV-${upgrade()}, reply to this email and we'll send you a payment link.`);
-    expect(email.text).not.toMatch(/bank|SWIFT|IFSC|How to pay/i);
+    expect(email.text).not.toMatch(/bank|SWIFT|IFSC|How to pay|Pay online:|Pay .* now/i);
     expect(await db.minuteLedger.count({ where: { orgId: f.org.id } })).toBe(0);
   });
   test("rules 11, 21, 22: upgrade paid activates Paid, sends receipt and invoice exactly once; paid org cannot upgrade", async () => {
@@ -395,7 +399,7 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
     await plan("paid"); await expect(buyPacks(f.org.id, 11, randomUUID())).rejects.toMatchObject({ status: 400 });
     const key = randomUUID(), grantsBefore = grantRequests.length;
     const first = await buyPacks(f.org.id, 1, key), second = await buyPacks(f.org.id, 1, key);
-    expect(first).toEqual(second); expect(topups.size).toBe(1);
+    expect(first).toEqual(second); expect(first.payUrl).toBeNull(); expect(topups.size).toBe(1);
     expect(requests.filter((r) => r.path === "/top-ups").map((r) => r.key)).toEqual([`pack-${f.org.id}-${key}`, `pack-${f.org.id}-${key}`]);
     expect(requests.find((r) => r.path === "/top-ups")!.body).toMatchObject({ amount: 100, collection: "SEND_INVOICE", credit_unit: "MINS" });
     expect(new Date(String(requests.find((r) => r.path === "/top-ups")!.body!.expires_at)).toISOString()).toBe("2027-11-01T23:59:59.000Z");
