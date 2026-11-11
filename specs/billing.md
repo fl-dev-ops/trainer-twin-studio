@@ -99,14 +99,15 @@
 
 ### Invoices, receipts and emails
 
-20. **Marking paid:** a Razorpay payment marks its invoice paid automatically (rules 29–31); a bank transfer is
-    marked paid by staff in Meteroid.
+20. **Marking paid:** a Razorpay payment (card, or bank transfer through Razorpay) marks its invoice paid
+    automatically (rules 29–31). A payment made outside Razorpay is marked paid by staff in Meteroid. The app never
+    prints bank details: an invoice without a payment link says to reply to the email for one.
 21. **Emails** come only from the app, from `billing@trainertwin.com` (reply-to `support@trainertwin.com`), to the
     org's billing emails (the org admin when there are none). Meteroid's own customer emails are off in every tenant.
 
     | Event | Email | Attached |
     | --- | --- | --- |
-    | Invoice issued (any kind) | "Your TrainerTwin invoice INV-… : $… due …", with payment instructions | The invoice PDF |
+    | Invoice issued (any kind) | "Your TrainerTwin invoice INV-… : $… due …", with Pay now (rule 28) | The invoice PDF |
     | Due tomorrow (renewal only) | "Reminder: invoice … is due tomorrow" | The invoice PDF |
     | Paused (renewal only) | "Your TrainerTwin plan is paused" | The invoice PDF |
     | Upgrade cancelled | "Your upgrade was cancelled" | — |
@@ -118,10 +119,11 @@
     invoice: its number, dates, lines, tax and the customer as it was when issued. Meteroid's own PDF isn't used (it
     can't be restyled and never shows a payment).
     - **Invoice** (the tax invoice): number, date of issue, date due, place of supply (state and code, or "outside
-      India (export of services)"); the seller (name, address, GSTIN, email) and the customer (name, address with
-      state, GSTIN or tax ID, email); the amount due; how to pay (`BILLING_PAYMENT_INSTRUCTIONS`); each line with SAC
-      998314 (and its period); taxable value, CGST/SGST or IGST, total; the export mention when exempt; "computer
-      generated, needs no signature".
+      India (export of services)"); the seller (name, address, GSTIN, email: Meteroid's invoicing entity, the one
+      place the company's details are kept and edited) and the customer (name, address with state, GSTIN or tax ID,
+      email); the amount due; Pay online while it's unpaid (rule 28); each line with SAC 998314 (and its period);
+      taxable value, CGST/SGST or IGST, total; the export mention when exempt; "computer generated, needs no
+      signature".
     - **Receipt** "RCPT-<invoice number>": the same header and lines, "amount paid on <date>", and a payment history
       (method, reference, date, amount). Downloadable from Settings › Billing once paid.
     The same invoice renders the same bytes every time (dates come from the invoice and payment).

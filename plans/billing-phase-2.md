@@ -204,8 +204,8 @@ guards against recording a payment twice (Meteroid's `MarkInvoiceAsPaid` called 
 
 1. **LUT:** confirmed / filed, and its reference number (`GST_LUT_REFERENCE`; until then export invoices say "under
    LUT" without a number).
-2. **How customers pay:** bank details for the invoice emails (`BILLING_PAYMENT_INSTRUCTIONS`) and/or a bank account
-   on Meteroid's invoicing entity (printed on the PDF).
+2. **How customers pay:** settled 11 Nov: through Razorpay only (Pay now; bank transfers enabled in Razorpay, not
+   printed by the app). Company details live in Meteroid's invoicing entity.
 3. **INR prices**, if Indian customers should be invoiced in INR.
 
 ## Risks

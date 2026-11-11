@@ -10,11 +10,10 @@ Secrets: `~/.config/meteroid/keys.env`. Prod DB: `neon connection-string product
 
 ## Before (needs you)
 
-1. **How customers pay** (shown to them in phase 2), either or both:
-   - Vercel `trainer-twin-studio` production env `BILLING_PAYMENT_INSTRUCTIONS` (e.g. "Bank transfer to Forever
-     Learning Solutions Pvt Ltd, A/c …, IFSC …, SWIFT …"), shown in the invoice, reminder and paused emails;
-   - Meteroid › Production › Settings › Bank accounts: add the account and set it on the invoicing entity, so the PDF
-     prints it.
+1. **How customers pay:** through Razorpay only (Pay now). For bank transfers, enable them in Razorpay, not in the app:
+   Razorpay Dashboard › Account & Settings › International payments › **International bank transfers** › Activate
+   (customers abroad pay into a USD account by ACH / SEPA / SWIFT; Razorpay matches it to the link). The company's
+   name, address and GSTIN on invoices come from Meteroid › Settings › Invoicing entity: check them there.
 2. **LUT:** once confirmed, `GST_LUT_REFERENCE` in the same Vercel env, **and** re-save customers who already saved
    billing details (the wording is copied into Meteroid when details are saved):
    `DATABASE_URL="$PROD" METEROID_API_KEY=$METEROID_PROD_API_KEY GST_LUT_REFERENCE=<ref> bun scripts/billing-sync-customers.ts`.
