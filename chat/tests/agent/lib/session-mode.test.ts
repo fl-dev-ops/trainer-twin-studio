@@ -91,6 +91,7 @@ describe("composed instructions", () => {
 });
 
 describe("runtime events", () => {
+  process.env.COPILOT_SERVICE_SECRET = "test-secret";
   const handler = channel.routes!.find((route) => route.path === "/v1/chat/completions")!.handler as any;
   afterEach(() => clearSessionModeCache());
 
@@ -99,7 +100,8 @@ describe("runtime events", () => {
     let message: string | undefined;
     const request = new Request("http://localhost/v1/chat/completions", {
       method: "POST",
-      headers: { "content-type": "application/json", "x-trainertwin-org-id": "org1", "x-trainertwin-session-id": sessionId, "x-trainertwin-agent-slug": "a" },
+      // The service secret's Basic auth carries the org (the channel no longer trusts an org header alone).
+      headers: { "content-type": "application/json", authorization: `Basic ${Buffer.from("org1:test-secret").toString("base64")}`, "x-trainertwin-session-id": sessionId, "x-trainertwin-agent-slug": "a" },
       body: JSON.stringify({ messages: [{ role, content }] }),
     });
     const info = console.info;

@@ -182,14 +182,12 @@ export default defineChannel({
       return Response.json({ ready: true, sessionId, existing: Boolean(await resolveSession(sessionId)) });
     }),
     POST("/v1/chat/completions", async (request, { from, waitUntil }) => {
+      // Only callers holding the service secret (the voice agent, the studio: Basic orgId:secret). The org comes from
+      // that, never from a header anyone could send (it ran the model for any org without a secret).
       const principal = studioPrincipal(request);
-      const orgHeader = request.headers.get("x-trainertwin-org-id")?.trim();
+      if (!principal) return Response.json({ error: "Unauthorized" }, { status: 401 });
+      const orgId = principal.principalId;
       const bearer = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
-
-      const orgId = principal?.principalId ?? orgHeader;
-      if (!orgId) {
-        return Response.json({ error: "Organization is required" }, { status: 401 });
-      }
 
       const thinkingBudgetHeader = request.headers.get("x-thinking-budget")?.trim();
       if (thinkingBudgetHeader !== undefined && !thinkingBudgetSchema.safeParse(thinkingBudgetHeader).success) {
