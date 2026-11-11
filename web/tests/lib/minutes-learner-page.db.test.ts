@@ -121,11 +121,15 @@ describe.skipIf(!localMinutesDb)("learner pages with minutes (local database)", 
     if (view.kind === "flow") expect(view.props.access).not.toHaveProperty("minutesLeft");
   });
 
-  test("assigned twin shows used below a minute, then passes minutesLeft and minutesTotal", async () => {
+  test("assigned twin shows used below a minute, blocked below five, then passes minutesLeft and minutesTotal", async () => {
     await db.twinAssignment.create({ data: { orgId: f.org.id, agentId: f.twin.id, userId: f.learner.id, minutesLimit: 999, shareCode: `${code}-twin` } });
     expect(await loadTwinLink("twin")).toMatchObject({ kind: "flow", props: { access: { ok: false, reason: "used" } } });
     await balance(119);
-    expect(await loadTwinLink("twin")).toMatchObject({ kind: "flow", props: { access: { ok: true, preview: false, minutesLeft: 1, minutesTotal: 10 } } });
+    expect(await loadTwinLink("twin")).toMatchObject({ kind: "flow", props: { access: { ok: false, reason: "blocked", message: "You need at least 5 minutes to start a call; you have 1. Ask your trainer for more." } } });
+    await db.minuteLedger.deleteMany({ where: { orgId: f.org.id } });
+    await db.interviewSession.deleteMany({ where: { orgId: f.org.id } });
+    await balance(300);
+    expect(await loadTwinLink("twin")).toMatchObject({ kind: "flow", props: { access: { ok: true, preview: false, minutesLeft: 5, minutesTotal: 10 } } });
   });
 
   test("Users page shares the same floored learner balance across modules", async () => {

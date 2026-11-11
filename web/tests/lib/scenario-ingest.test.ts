@@ -53,7 +53,7 @@ const fakeDb = {
 };
 mock.module("@/lib/db", () => ({
   withLock: async () => { throw new Error("Unexpected locked write in read-only fixture"); },
-  isUniqueViolation: (error: any) => error?.code === "P2002", db: fakeDb }));
+  isUniqueViolation: (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "P2002", db: fakeDb }));
 const realS3 = await import("@/lib/s3");
 mock.module("@/lib/s3", () => ({
   ...realS3,

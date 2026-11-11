@@ -6,10 +6,10 @@ const members = ["admin", "team", "user", "user"].map((role, index) => ({
   user: { id: `user-${index}`, name: `Person ${index}`, email: `person-${index}@example.com`, image: null },
 }));
 let noLearners = false;
-const people = mock(async ({ where }: any) => members.filter((member) =>
+const people = mock(async ({ where }: { where: { organizationId?: string; agentId?: string; role?: { in: string[] }; id?: { in: string[] }; userId?: { in: string[] }; disabledAt?: null } }) => members.filter((member) =>
   (!noLearners || member.role !== "user") && (!where.role || where.role.in.includes(member.role))
   && (!where.id || where.id.in.includes(member.id)) && (where.disabledAt !== null || member.disabledAt === null)));
-const twins = mock(async ({ where }: any) => members
+const twins = mock(async ({ where }: { where: { organizationId?: string; agentId?: string; role?: { in: string[] }; id?: { in: string[] }; userId?: { in: string[] }; disabledAt?: null } }) => members
   .filter((member) => !where.userId || where.userId.in.includes(member.user.id))
   .map((member) => ({ id: `twin-${member.id}`, status: "active", accessUntil: null, shareCode: member.id,
     shareLinkId: null, createdAt: new Date(0), user: member.user })));
@@ -19,7 +19,7 @@ const agent = { id: "agent", slug: "scenario", name: "Scenario", kind: "ROLEPLAY
   visibility: "private", order: 0, updatedAt: new Date(0), persona: { name: "Persona", data: {} } };
 mock.module("@/lib/db", () => ({
   withLock: async () => { throw new Error("Unexpected locked write in read-only fixture"); },
-  isUniqueViolation: (error: any) => error?.code === "P2002", db: {
+  isUniqueViolation: (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "P2002", db: {
   member: { findMany: people }, twinAssignment: { findMany: twins },
   rolePlayAssignment: { findMany: async () => assignments },
   agent: { findMany: async () => [agent] }, specDraft: { findMany: async () => [] },

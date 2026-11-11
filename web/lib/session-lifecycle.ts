@@ -20,7 +20,7 @@ export async function closeInterviewSession(
     evidence: data.evidence as Prisma.InputJsonValue | undefined,
     replaceTranscript: data.replaceTranscript,
   });
-  if (finalized && finalized.previousStatus !== finalized.finalStatus) await startSessionEnd(finalized.id);
+  if (finalized?.endedNow) await startSessionEnd(finalized.id);
   return finalized;
 }
 
@@ -46,7 +46,7 @@ export async function sweepStaleCalls() {
   let ended = 0;
   for (const { id } of stale) {
     try {
-      if ((await closeInterviewSession(id, "abandoned"))?.previousStatus !== "abandoned") ended++;
+      if ((await closeInterviewSession(id, "abandoned"))?.endedNow) ended++;
     } catch (error) {
       console.error(`[session-sweep] ${id}: could not end:`, error);
     }

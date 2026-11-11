@@ -40,7 +40,7 @@ const originalRazorpayKeys = razorpayKeys.map((key) => process.env[key]);
 const starts: { name: string; id: string }[] = [];
 let runSteps = true;
 let failStart = false;
-mock.module("workflow/api", () => ({ start: async (fn: Function, [id]: [string]) => {
+mock.module("workflow/api", () => ({ start: async (fn: { name: string }, [id]: [string]) => {
   starts.push({ name: fn.name, id });
   if (failStart) throw new Error("workflow unavailable");
   // Durable timers are tested separately: run only the immediate production steps, with real DB and MSW.

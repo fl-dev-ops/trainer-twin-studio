@@ -15,7 +15,7 @@ import { listAgentContextRequired, listAgentContextUploads, listScenarioIntroVid
 import { learnerBalance } from "@/lib/minutes";
 import { AppError } from "@/lib/errors";
 import { practicePerson, startAllowance } from "@/lib/practice";
-import { resolveTwinPath, twinAccessByCode, twinAssignmentCode } from "@/lib/twin-access";
+import { assertLiveTwin, resolveTwinPath, twinAccessByCode, twinAssignmentCode } from "@/lib/twin-access";
 import { beforeSettings } from "@/lib/context-upload";
 
 /**
@@ -206,6 +206,7 @@ export async function twinAccessFor(org: { id: string }, user: { id: string; nam
   const name = user.name || user.email;
   try {
     const person = await practicePerson(org.id, user.id);
+    await assertLiveTwin(org.id, agentId);
     const code = isStudioRole(person.role) ? null : (await twinAssignmentCode({ orgId: org.id, user, agentId })).code;
     await startAllowance(org.id, person);
     if (!code) return { ok: true, preview: true, name, email: user.email };

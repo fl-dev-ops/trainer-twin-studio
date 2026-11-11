@@ -11,7 +11,7 @@ const versions = [{ entitySlug: "acme-a", version: 1, data: skill("a", "A v1") }
 
 mock.module("@/lib/db", () => ({
   withLock: async () => { throw new Error("Unexpected locked write in read-only fixture"); },
-  isUniqueViolation: (error: any) => error?.code === "P2002",
+  isUniqueViolation: (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "P2002",
   db: {
     agent: { findMany: async () => live },
     specVersion: {

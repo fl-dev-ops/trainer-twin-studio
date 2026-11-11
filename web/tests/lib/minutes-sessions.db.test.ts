@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import * as nextServer from "next/server";
 import * as livekit from "@/lib/livekit";
 import { startSessionNow } from "@/lib/session-activation";
-import { activateSession, finalizeInterviewSession, ORG_OUT_OF_CREDITS } from "@/lib/interview-sessions";
+import { activateSession, finalizeInterviewSession } from "@/lib/interview-sessions";
 import { OUT_OF_MINUTES, grantMinutes, learnerBalance, recordSessionUsage, sessionUsageSeconds } from "@/lib/minutes";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
@@ -68,7 +68,7 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
     const session = await f.session({ status });
     expect((await learnerBalance(f.org.id, f.learner.email)).usedSeconds).toBe(0);
     await recordSessionUsage(session.id);
-    expect(await db.minuteLedger.findMany({ where: { sessionId: session.id }, select: { seconds: true } })).toEqual([{ seconds: 0 }]);
+    expect(await db.minuteLedger.findMany({ where: { sessionId: session.id }, select: { seconds: true } })).toEqual([]);
     expect((await learnerBalance(f.org.id, f.learner.email)).usedSeconds).toBe(0);
   });
 
@@ -94,7 +94,7 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
   });
 
   test("zero-balance learners are refused before runtime initialization or session creation", async () => {
-    await expect(activate()).rejects.toMatchObject({ name: "MinutesError", status: 403 });
+    await expect(activate()).rejects.toMatchObject({ name: "PracticeError", status: 403 });
     expect(fetchMock).not.toHaveBeenCalled();
     expect(await db.interviewSession.count({ where: { orgId: f.org.id } })).toBe(0);
   });
@@ -106,7 +106,7 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
       expect(await activate()).toMatchObject({ secondsLeft: 300 });
     } else {
       const before = await db.interviewSession.count({ where: { orgId: f.org.id } });
-      await expect(activate()).rejects.toMatchObject({ name: "MinutesError", status: 403, message: seconds === 0 ? OUT_OF_MINUTES : `You need at least 5 minutes to start a call; you have ${Math.floor(seconds / 60)}. Ask your trainer for more.` });
+      await expect(activate()).rejects.toMatchObject({ name: "PracticeError", status: 403, message: seconds === 0 ? OUT_OF_MINUTES : `You need at least 5 minutes to start a call; you have ${Math.floor(seconds / 60)}. Ask your trainer for more.` });
       expect(fetchMock).not.toHaveBeenCalled();
       expect(await db.interviewSession.count({ where: { orgId: f.org.id } })).toBe(before);
     }
@@ -115,7 +115,7 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
   test.each(["admin", "team"])("billed %s refuses 299 seconds before creating a session", async (role) => {
     await db.member.update({ where: { id: `${f.trainer.id}-member` }, data: { role } });
     await fundOrg({ orgId: f.org.id, minutes: 299 / 60 });
-    await expect(activate({ userId: f.trainer.id, userEmail: f.trainer.email })).rejects.toMatchObject({ name: "MinutesError", status: 403, message: "Your organization needs at least 5 credits to start a call; it has 4. Contact TrainerTwin to add more." });
+    await expect(activate({ userId: f.trainer.id, userEmail: f.trainer.email })).rejects.toMatchObject({ name: "PracticeError", status: 403, message: "Your organization needs at least 5 credits to start a call; it has 4. Contact TrainerTwin to add more." });
     expect(fetchMock.mock.calls.every(([url]) => String(url).includes("meteroid.test"))).toBe(true);
     expect(await db.interviewSession.count({ where: { orgId: f.org.id } })).toBe(0);
   });
@@ -140,7 +140,7 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
   test.each(["admin", "team"])("billed %s voice calls use org credits directly; zero credits refuses before runtime", async (role) => {
     await db.member.update({ where: { id: `${f.trainer.id}-member` }, data: { role } });
     await fundOrg({ orgId: f.org.id, minutes: 0 });
-    await expect(activate({ userId: f.trainer.id, userEmail: f.trainer.email })).rejects.toMatchObject({ name: "MinutesError", status: 403, message: ORG_OUT_OF_CREDITS });
+    await expect(activate({ userId: f.trainer.id, userEmail: f.trainer.email })).rejects.toMatchObject({ name: "PracticeError", status: 403, code: "org_credits_out", message: "Your organization has no credits left. Contact TrainerTwin to add more." });
     expect(await db.interviewSession.count({ where: { orgId: f.org.id } })).toBe(0);
     await fundOrg({ orgId: f.org.id, minutes: 5 });
     const result = await activate({ userId: f.trainer.id, userEmail: f.trainer.email });

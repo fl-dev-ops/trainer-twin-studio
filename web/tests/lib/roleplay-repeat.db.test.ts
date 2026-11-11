@@ -89,7 +89,7 @@ describe.skipIf(!localMinutesDb)("repeat role-play activation (local database)",
   test("another account (even with the learner's email) and another org cannot start a role-play link", async () => {
     expect(await activateSession({ ...input(), userId: f.trainer.id })).toBeNull();
     expect(await activateSession({ ...input(), userId: f.trainer.id, userEmail: f.learner.email })).toBeNull();
-    expect(await activateSession({ ...input(), orgId: `${f.org.id}-missing` })).toBeNull();
+    await expect(activateSession({ ...input(), orgId: `${f.org.id}-missing` })).rejects.toMatchObject({ code: "no_org", status: 403 });
     expect(await sessions()).toHaveLength(0);
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -97,7 +97,7 @@ describe.skipIf(!localMinutesDb)("repeat role-play activation (local database)",
   test("a used link with exhausted minutes cannot start again", async () => {
     await db.rolePlayAssignment.update({ where: { id: assignment.id }, data: { status: "used" } });
     await f.session({ assignmentId: assignment.id, startedAt: new Date(0), endedAt: new Date(600_000) });
-    await expect(activateSession(input())).rejects.toMatchObject({ name: "MinutesError", status: 403 });
+    await expect(activateSession(input())).rejects.toMatchObject({ code: "credits_out", status: 403 });
     expect(await sessions()).toHaveLength(1);
     expect(fetchMock).not.toHaveBeenCalled();
   });

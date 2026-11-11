@@ -19,7 +19,7 @@ const slugMatch = (value: string, where: unknown) =>
 
 mock.module("@/lib/db", () => ({
   withLock: async () => { throw new Error("Unexpected locked write in read-only fixture"); },
-  isUniqueViolation: (error: any) => error?.code === "P2002",
+  isUniqueViolation: (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "P2002",
   db: {
     persona: {
       findFirst: async ({ where }: { where: { orgId: string; isOwn: boolean; slug: unknown } }) =>

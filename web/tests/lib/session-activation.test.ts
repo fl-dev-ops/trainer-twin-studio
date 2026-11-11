@@ -36,7 +36,7 @@ afterEach(() => { for (const spy of spies.splice(0).reverse()) spy.mockRestore()
 test.each([
   [new MinutesError("Need minutes", 403), { status: 403, code: "minutes", error: "Need minutes" }],
   [new AppError("member_disabled", "Disabled", 403), { status: 403, error: "Disabled", code: "member_disabled" }],
-  [new TwinAccessError("No access", 404), { status: 404, error: "No access" }],
+  [new TwinAccessError("twin_not_assigned", "No access", 403), { status: 403, code: "twin_not_assigned", error: "No access" }],
   ...["Context not found", BEFORE_UPLOAD_REFUSED, "Deployment does not allow chat"].map((message) => [new Error(message), { status: 400, error: message }]),
 ])("startRefusal maps expected refusals: %s", (error, expected) => {
   expect(startRefusal(error)).toEqual({ ok: false, ...expected });

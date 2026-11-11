@@ -9,12 +9,12 @@ mock.module("@/lib/auth", () => ({
 }));
 mock.module("@/lib/db", () => ({
   withLock: async () => { throw new Error("Unexpected locked write in read-only fixture"); },
-  isUniqueViolation: (error: any) => error?.code === "P2002",
+  isUniqueViolation: (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "P2002",
   db: {
     organization: { findUnique: async () => ({ id: "org1", slug: "acme", name: "Acme" }) },
     // Only org1's learner u1 exists in org1; u2 is a learner of another organization.
     member: {
-      findMany: async ({ where }: { where: Record<string, any> }) => {
+      findMany: async ({ where }: { where: Record<string, unknown> & { role: { in: string[] } } }) => {
         memberWheres.push(where);
         if (where.role.in.includes("user")) return [];
         return [{ id: "trainer-member", role: "team", disabledAt: null, createdAt: new Date(0), user: { id: "t1", name: "Trainer", email: "trainer@acme.com", image: null } }];

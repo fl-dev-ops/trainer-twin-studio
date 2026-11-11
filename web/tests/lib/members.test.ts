@@ -1,6 +1,7 @@
 import { beforeEach, expect, mock, test } from "bun:test";
 import { AppError } from "@/lib/errors";
 
+type Where = { organizationId?: string; id?: string; userId?: string; user?: { email: { equals: string } } };
 type Row = { id: string; userId: string; organizationId: string; role: string; disabledAt: Date | null; createdAt: Date; user: { id: string; name: string; email: string; image: null } };
 let members: Row[] = [];
 let calls: [string, unknown][] = [];
@@ -11,10 +12,10 @@ let locks: string[][] = [];
 const op = (name: string) => async (args: unknown) => (calls.push([name, args]), { count: 1 });
 const db = {
   member: {
-    findFirst: async ({ where }: any) => members.find((m) => m.organizationId === where.organizationId && (!where.id || m.id === where.id) && (!where.userId || m.userId === where.userId) && (!where.user || m.user.email.toLowerCase() === where.user.email.equals)) ?? null,
-    findMany: async ({ where }: any) => members.filter((m) => !where.userId || m.userId === where.userId),
-    count: async ({ where }: any) => members.filter((m) => m.userId === where.userId && !m.disabledAt && m.id !== where.id?.not).length,
-    update: async (args: any) => { calls.push(["member.update", args]); return Object.assign(members.find((m) => m.id === args.where.id)!, args.data); },
+    findFirst: async ({ where }: { where: Where }) => members.find((m) => m.organizationId === where.organizationId && (!where.id || m.id === where.id) && (!where.userId || m.userId === where.userId) && (!where.user || m.user.email.toLowerCase() === where.user.email.equals)) ?? null,
+    findMany: async ({ where }: { where: Where }) => members.filter((m) => !where.userId || m.userId === where.userId),
+    count: async ({ where }: { where: { userId: string; id?: { not: string } } }) => members.filter((m) => m.userId === where.userId && !m.disabledAt && m.id !== where.id?.not).length,
+    update: async (args: { where: { id: string }; data: Partial<Row> }) => { calls.push(["member.update", args]); return Object.assign(members.find((m) => m.id === args.where.id)!, args.data); },
   },
   session: { deleteMany: op("session.deleteMany") },
   twinAssignment: { updateMany: op("twinAssignment.updateMany"), deleteMany: op("twinAssignment.deleteMany") },

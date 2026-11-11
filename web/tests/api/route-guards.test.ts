@@ -50,6 +50,8 @@ const classification: Record<string, Guard> = {
   "POST internal/scenario-runs": "internal/cron secret",
   "POST internal/scenarios": "internal/cron secret",
   "POST internal/twin-skills": "internal/cron secret",
+  "GET internal/sessions/sweep": "internal/cron secret",
+  "POST internal/sessions/sweep": "internal/cron secret",
   "GET internal/uploads/expire": "internal/cron secret",
   "POST internal/uploads/expire": "internal/cron secret",
   "POST internal/usage": "internal/cron secret",

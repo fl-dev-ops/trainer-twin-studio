@@ -7,7 +7,7 @@ let updatedStatus = "";
 
 mock.module("@/lib/db", () => ({
   withLock: async () => { throw new Error("Unexpected locked write in read-only fixture"); },
-  isUniqueViolation: (error: any) => error?.code === "P2002", db: {
+  isUniqueViolation: (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "P2002", db: {
   rolePlayAssignment: {
     findFirst: async () => ({
       id: "assignment", memberId: "member", member: { userId: "learner" }, status,
@@ -25,7 +25,7 @@ mock.module("@/lib/db", () => ({
   },
   twinAssignment: { findMany: async () => [] },
   user: { findUnique: async () => ({ email: "learner@example.com" }) },
-  member: { findMany: async () => [], findFirst: async () => null }, // not disabled in the org
+  member: { findMany: async () => [], findFirst: async ({ where }: { where: { userId: string } }) => where.userId === "learner" ? { id: "member", role: "user", disabledAt: null, createdAt: new Date(0), user: { id: "learner", name: "Learner", email: "learner@example.com", image: null } } : null },
 } }));
 
 const { activateSession } = await import("../../lib/interview-sessions");
@@ -56,7 +56,7 @@ test("inactive deployments, expired/cancelled statuses and mismatched assignment
   status = "expired";
   expect(await activateSession(input)).toBeNull();
   status = "pending";
-  expect(await activateSession({ ...input, userId: "outsider" })).toBeNull();
+  await expect(activateSession({ ...input, userId: "outsider" })).rejects.toMatchObject({ code: "no_org", status: 403 });
   status = "cancelled";
   expect(await activateSession(input)).toBeNull();
   expect(updatedStatus).toBe("");

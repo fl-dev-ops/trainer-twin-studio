@@ -1,6 +1,9 @@
 import { timingSafeEqual } from "node:crypto";
 
-const same = (a: string, b: string) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
+const same = (a: string, b: string) => {
+  const [left, right] = [Buffer.from(a), Buffer.from(b)];
+  return left.length === right.length && timingSafeEqual(left, right);
+};
 
 /**
  * Vercel cron and internal callers: `Authorization: Bearer <CRON_SECRET>` (or `x-internal-secret`). Without a secret

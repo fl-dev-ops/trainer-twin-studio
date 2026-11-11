@@ -116,6 +116,12 @@ function usable(assignment: AssignmentRow | null, user: Person) {
   return { assignmentId: assignment.id, agentId: assignment.agentId };
 }
 
+/** A twin of this org that isn't archived (specs/practice.md rule 2); not_found otherwise. */
+export async function assertLiveTwin(orgId: string, agentId: string) {
+  const live = await db.agent.findFirst({ where: { id: agentId, orgId, kind: "TWIN", archivedAt: null }, select: { id: true } });
+  if (!live) throw refusals.notFound();
+}
+
 /** What a /s/<code> code is for twins: a personal assignment or a common share link (null: not a twin code). */
 export async function findTwinCode(code: string) {
   const assignment = await db.twinAssignment.findUnique({ where: { shareCode: code }, select: { ...assignmentSelect, orgId: true } });
@@ -138,16 +144,16 @@ export async function twinAccessByCode(input: { orgId: string; user: Person; cod
   if (!found) return null;
   // Another org's code answers like an unknown one (it doesn't confirm the code exists).
   if (found.orgId !== input.orgId) throw refusals.notFound();
-  // An archived twin can't be practised, through any code (specs/practice.md rule 2).
-  if (!(await db.agent.findFirst({ where: { id: found.agentId, orgId: input.orgId, kind: "TWIN", archivedAt: null }, select: { id: true } }))) {
-    throw refusals.notFound();
-  }
-  if (found.type === "assignment") return usable(found.assignment, input.user);
-
-  if (found.link.status !== "active") throw twinRefusals.linkDisabled();
-  // A disabled member gets nothing through a link, even with an assignment left over (specs/people.md rule 8).
+  await assertLiveTwin(input.orgId, found.agentId);
+  // A disabled member gets nothing through any code (specs/people.md rule 8); a personal code needs a member.
   const member = await orgPerson(input.orgId, { userId: input.user.id });
   if (member?.disabled) throw refusals.memberDisabled();
+  if (found.type === "assignment") {
+    if (!member) throw refusals.noOrg();
+    return usable(found.assignment, input.user);
+  }
+
+  if (found.link.status !== "active") throw twinRefusals.linkDisabled();
   const existing = await db.twinAssignment.findUnique({
     where: { agentId_userId: { agentId: found.agentId, userId: input.user.id } },
     select: assignmentSelect,
@@ -189,6 +195,7 @@ export async function twinAssignmentCode(input: { orgId: string; user: Person; a
 
 /** Twin access for a direct start (portal / talk page): the user's own assignment on that twin. */
 export async function twinAccessByAgent(input: { orgId: string; user: Person; agentId: string }) {
+  await assertLiveTwin(input.orgId, input.agentId);
   const assignment = await db.twinAssignment.findFirst({
     where: { orgId: input.orgId, agentId: input.agentId, userId: input.user.id },
     select: assignmentSelect,

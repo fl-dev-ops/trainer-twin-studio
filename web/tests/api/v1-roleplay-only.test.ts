@@ -13,7 +13,7 @@ mock.module("@/lib/auth", () => ({
 }));
 mock.module("@/lib/db", () => ({
   withLock: async () => { throw new Error("Unexpected locked write in read-only fixture"); },
-  isUniqueViolation: (error: any) => error?.code === "P2002",
+  isUniqueViolation: (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "P2002",
   db: {
     member: { findMany: async () => [{ id: "trainer-member", role: "team", disabledAt: null, createdAt: new Date(0), user: { id: "t1", name: "Trainer", email: "trainer@acme.com", image: null } }] },
     organization: { findUnique: async () => ({ id: "org1", slug: "acme", name: "Acme" }) },

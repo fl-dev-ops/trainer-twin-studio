@@ -56,7 +56,7 @@ describe.skipIf(!localMinutesDb)("starting minutes entrypoints (local database)"
   test("share-link preview grants nothing; short join creates nothing; funded/repeated join grants once", async () => {
     const link = await createTwinShareLink({ orgId: f.org.id, agentId: f.twin.id, minutesPerUser: 999, createdByUserId: f.trainer.id });
     const input = { orgId: f.org.id, user: f.learner, code: link.code };
-    expect(await twinAccessByCode({ ...input, join: false })).toEqual({ assignmentId: null, agentId: f.twin.id });
+    await expect(twinAccessByCode({ ...input, join: false })).rejects.toMatchObject({ code: "no_org", status: 403 });
     expect(await db.minuteLedger.count({ where: { orgId: f.org.id } })).toBe(0);
     await expect(twinAccessByCode({ ...input, join: true })).rejects.toMatchObject({ status: 409, message: expect.stringContaining("Not enough credits") });
     expect(await db.twinAssignment.count({ where: { orgId: f.org.id } })).toBe(0);
@@ -69,7 +69,7 @@ describe.skipIf(!localMinutesDb)("starting minutes entrypoints (local database)"
   });
 
   test.each(["admin", "team", "user"])("Better Auth refuses invitations for %s without writing credits or members", async (role) => {
-    const plugin = auth.options.plugins.find((p) => p.id === "organization") as any;
+    const plugin = auth.options.plugins.find((p) => p.id === "organization") as unknown as { options: { organizationHooks: { beforeCreateInvitation(input: unknown): Promise<unknown> } } };
     await expect(plugin.options.organizationHooks.beforeCreateInvitation({ invitation: { role, email: f.learner.email, inviterId: f.trainer.id }, organization: { id: f.org.id } }))
       .rejects.toMatchObject({ status: "FORBIDDEN", body: { message: "Add, change and disable people from Settings." } });
     expect(await db.minuteLedger.count({ where: { orgId: f.org.id } })).toBe(0);

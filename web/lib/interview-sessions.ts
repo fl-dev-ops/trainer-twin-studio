@@ -73,17 +73,22 @@ export async function finalizeSessionRow(input: {
     });
     if (!existing) return null;
 
+    // Ending: a live call ends; an abandoned one may still become completed (the agent's own end arrives after the
+    // page's); completed, failed and revoked calls keep their end. The update that changes the status wins, so two
+    // ends at once start the end work once (specs/practice.md rule 8).
     let becameCompleted = false;
+    let endedNow = false;
     if (input.requestedStatus) {
       const finalStatus = resolveSessionEndStatus(existing.status, input.requestedStatus);
       const transitioned = await tx.interviewSession.updateMany({
         where: {
           id: input.sessionId,
-          status: { not: "completed" },
+          status: finalStatus === "completed" ? { in: ["activating", "active", "closing", "abandoned"] } : { in: ["activating", "active", "closing"] },
         },
         data: { status: finalStatus },
       });
-      becameCompleted = finalStatus === "completed" && transitioned.count === 1;
+      endedNow = transitioned.count === 1;
+      becameCompleted = finalStatus === "completed" && endedNow;
     }
 
     const storeTranscript = input.replaceTranscript
@@ -94,7 +99,7 @@ export async function finalizeSessionRow(input: {
     const updated = await tx.interviewSession.update({
       where: { id: input.sessionId },
       data: {
-        ...(input.requestedStatus ? { endedAt: existing.endedAt ?? new Date(), runtimeTokenHash: null } : {}),
+        ...(endedNow ? { endedAt: existing.endedAt ?? new Date(), runtimeTokenHash: null } : {}),
         ...(storeTranscript ? { transcript: input.transcript } : {}),
         ...(mergedEvidence ? { evidence: mergedEvidence } : {}),
         ...(input.s3AudioKey ? { s3AudioKey: input.s3AudioKey } : {}),
@@ -114,13 +119,14 @@ export async function finalizeSessionRow(input: {
     }
 
     // The call's charge, in the transaction that ends it: one row per call, however many times it is finalized.
-    const usage = input.requestedStatus ? await writeSessionUsage(tx, input.sessionId) : { report: null };
+    const usage = endedNow ? await writeSessionUsage(tx, input.sessionId) : { report: null };
 
     return {
       ...updated,
       previousStatus: existing.status,
       finalStatus: updated.status,
       becameCompleted,
+      endedNow,
       usageOrgId: usage.report,
       transcriptAvailable: Array.isArray(updated.transcript) && updated.transcript.length > 0,
     };
@@ -251,9 +257,8 @@ export async function activateSession(input: {
     twin = { assignmentId: access.assignmentId };
     agentId = access.agentId;
     deploymentId = (await ensureDeployment(input.orgId, agentId)).id;
-    activationKey = input.idempotencyKey
-      ? `twin:${access.assignmentId}:${input.idempotencyKey}`
-      : `direct:${randomBytes(18).toString("base64url")}`;
+    // Twin calls never resume: every start is a new call (specs/practice.md rule 5).
+    activationKey = `twin:${randomBytes(18).toString("base64url")}`;
   } else if (input.shareCode) {
     const found = roleplayInvite;
     if (
@@ -296,6 +301,7 @@ export async function activateSession(input: {
     const agentRow = await db.agent.findFirst({ where: { id: agentId, orgId: input.orgId }, select: { kind: true } });
     if (agentRow?.kind === "TWIN") {
       twin = { assignmentId: studio ? null : (await twinAccessByAgent({ orgId: input.orgId, user, agentId })).assignmentId };
+      activationKey = `twin:${randomBytes(18).toString("base64url")}`; // twin calls never resume (rule 5)
     }
   }
   // All twin sessions go through LiveKit (also enforced by a DB trigger); the agent cuts metered calls at the deadline.
@@ -385,7 +391,7 @@ export async function activateSession(input: {
     }
     return {
       session: created,
-      replaced: ended.filter((row) => row && row.previousStatus !== row.finalStatus).map((row) => row!.id),
+      replaced: ended.filter((row) => row?.endedNow).map((row) => row!.id),
       usageOrgIds: ended.map((row) => row?.usageOrgId).filter((id): id is string => Boolean(id)),
     };
   }, { timeout: 15_000, maxWait: 15_000 });

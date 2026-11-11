@@ -24,7 +24,7 @@ const { SignInForm } = await import("@/components/auth/sign-in-form");
 const { GoogleSignInButton } = await import("@/components/auth/google-sign-in-button");
 const { default: SignInPage } = await import("@/app/auth/sign-in/page");
 
-type Element = ReactElement<Record<string, any>>;
+type Element = ReactElement<Record<string, unknown> & { children?: ReactNode; onChange(event: { target: { value: string } }): void; onSubmit(event: { preventDefault(): void }): Promise<void>; onClick(): Promise<void> }>;
 function find(node: ReactNode, predicate: (element: Element) => boolean): Element | undefined {
   if (Array.isArray(node)) return node.map((child) => find(child, predicate)).find(Boolean);
   if (!React.isValidElement(node)) return;
