@@ -13,26 +13,30 @@ Meteroid dev and Sandbox with real Razorpay test payments, migrations checked on
 
 ## A. Decisions and answers (before merge)
 
-- [ ] **Accountant:** LUT (RFD-11) filed for FY 2026-27 for GSTIN 33AAGCF6592D1ZN? (ARN optional, for
-      `GST_LUT_REFERENCE`). Without it, export invoices must charge IGST: don't invoice customers abroad until it's filed.
+- [x] **Accountant:** LUT (RFD-11) for FY 2026-27 — not filed yet (11 Nov); the CA files it and sends the ARN. Until
+      then **every org stays on Trial** and no export invoice is issued (export invoices must be dated on/after the
+      filing, with "Export of services without payment of tax under LUT / LUT ARN: …", which the app prints).
+- [ ] **LUT ARN received** → type it into **Meteroid Production › Settings › Invoicing entity › legal footer**
+      ("LUT ARN: AD33…"). The app reads it from there; nothing to deploy.
 - [ ] **Accountant:** SAC **998314** right for what we sell? (one constant: `SAC` in `web/lib/billing/documents.ts`)
 - [ ] **Accountant:** USD invoices for Indian customers OK? (everyone pays in USD today; INR would need INR prices)
 - [ ] **Accountant:** one continuous invoice series `INV-0001…` OK, or a new series each financial year?
-- [ ] **Prices final:** Paid $300/month and packs 100 credits for $25, both tax included. Custom price for anyone
-      (Olga?) — set with `scripts/billing-price.ts` **before** that org upgrades.
-- [ ] **Invoice copies kept unchanged:** today the PDFs are drawn when emailed or downloaded, with the company's
-      details as Meteroid has them *then*. If the address or GSTIN ever changes, old invoices would show the new one.
-      Decide: snapshot the seller onto each invoice when it's issued (small change, recommended), or accept it.
-- [ ] **Pausing policy:** Paid renewal due 2 days after it's issued; paused from the day after. OK for real
-      customers (e.g. Olga), or a longer grace?
-- [ ] **Phase 1 Razorpay credit-purchase scripts** (`org-payment-link.ts`, `link-invoice.ts`, `reconcile-purchases.ts`):
-      keep as a staff tool, or retire now that packs exist?
-- [ ] **Who upgrades the existing orgs, and when** (olga, careerwithvasanth, latencytest all start on Trial).
+- [x] **Plans (decided 11 Nov):** Trial for every org; paid plans are per org, made in Meteroid (Olga: a `CUSTOM` plan,
+      $300/month, tax included). No upgrade button in the app; staff subscribe the org in Meteroid. Plan options and
+      switching in the app: issue #19 (later). Packs: 100 credits for $25, tax included.
+- [x] **Invoice copies kept unchanged (decided 11 Nov):** each invoice and receipt PDF is saved to S3 as first sent.
+- [x] **Payment terms (decided 11 Nov):** set in Meteroid on each org's plan or subscription; the org is paused the
+      day after the due date. Nothing in the code to change.
+- [x] **Phase 1 Razorpay credit-purchase scripts:** kept for development only (not used in production).
+- [x] **Existing orgs:** all stay on Trial until the ARN; then staff subscribe Olga to her $300 plan in Meteroid.
+      careerwithvasanth stays on Trial.
+- [ ] **Olga today (phase 1, already live):** you add **1,000 minutes** to olga in Meteroid Production (Customers ›
+      olga › Credits › grant); she gets the "credits added" email, gives credits to her learners, they practise.
 
 ## B. Setup outside the code (before merge)
 
 - [ ] **Meteroid Production › Settings › Invoicing entity:** company name, address, GSTIN, contact email right
-      (invoices read them from here). The setup script fills it only if empty.
+      (invoices read them from here); legal footer = "LUT ARN: …" once received. The setup script fills it only if empty.
 - [ ] **Meteroid customer emails off** in every tenant (done 11 Nov; check `disabled_kinds` has all 11 kinds for prod).
 - [ ] **Razorpay live:** generate live API keys; confirm **International payments** are on (customers pay in USD).
 - [ ] **Razorpay live webhook:** Dashboard › Webhooks › Add `https://dash.trainertwin.com/api/razorpay/webhook`, a new
@@ -40,7 +44,7 @@ Meteroid dev and Sandbox with real Razorpay test payments, migrations checked on
 - [ ] *(Optional)* Razorpay › International payments › **International bank transfers** › Activate (customers abroad
       can pay by bank transfer on the same Pay now page). No app setting.
 - [ ] **Vercel** `trainer-twin-studio` › Production env: `RAZORPAY_KEY_ID` (rzp_live_…), `RAZORPAY_KEY_SECRET`,
-      `RAZORPAY_WEBHOOK_SECRET`. (Already set: `METEROID_*`, `RESEND_*`, `CRON_SECRET`.) Optional: `GST_LUT_REFERENCE`.
+      `RAZORPAY_WEBHOOK_SECRET`. (Already set: `METEROID_*`, `RESEND_*`, `CRON_SECRET`, `S3_*` / `AWS_*` for the kept PDFs.)
 - [ ] *(Test mode, optional)* Razorpay **test** webhook → `https://dev-webhooks.foreverlearning.in/api/razorpay/webhook`,
       secret = `RAZORPAY_WEBHOOK_SECRET` in `web/.env`, event `payment_link.paid`: to see real deliveries once.
 
@@ -52,9 +56,9 @@ Meteroid dev and Sandbox with real Razorpay test payments, migrations checked on
       `pg_dump -Fc --no-owner --no-privileges -d "$PROD" -f ~/Backups/trainertwin/prod-pre-billing-<date>.dump`.
 - [ ] **Meteroid Production setup** (go-ahead), dry-run first, then for real:
       `METEROID_API_KEY=$METEROID_PROD_API_KEY bun scripts/meteroid-billing-setup.ts --webhook-url https://dash.trainertwin.com/api/meteroid/webhook --dry-run`
-      (expected: create plan "Paid"; sell MINS under product "Minute packs"; MINS $0.25; invoicing entity (only if
-      empty); webhook + invoice.finalized/paid/voided, subscription.cancelled/ended). All additive; the current app
-      ignores the new webhook events.
+      (expected: sell MINS under product "Minute packs"; MINS $0.25; invoicing entity (only if empty); webhook +
+      invoice.finalized/paid/voided, subscription.cancelled/ended). All additive; the current app ignores the new
+      webhook events.
 - [ ] **Merge PR #18** → Vercel builds web and runs migrations `20261112120000_billing_phase2` and
       `20261113120000_billing_razorpay` (add-only; every org stays on Trial). Chat, copilot, voice agent unchanged.
 
@@ -62,7 +66,7 @@ Meteroid dev and Sandbox with real Razorpay test payments, migrations checked on
 
 - [ ] `/api/health` 200.
 - [ ] `DATABASE_URL="$PROD" bun scripts/check-billing.ts` and `bun scripts/check-org-people.ts`: all ok.
-- [ ] Settings › Billing loads for each org: "Trial plan, Active", "Add your billing details first".
+- [ ] Settings › Billing loads for each org: "Trial plan, Active", "contact TrainerTwin" to upgrade, no prices shown.
 - [ ] Vercel › Settings › Cron Jobs lists `/api/internal/billing/check` (00:15 UTC).
 - [ ] Meteroid › Production › Webhooks: next delivery 200.
 - [ ] Razorpay webhook: `curl -s -o /dev/null -w "%{http_code}" -X POST https://dash.trainertwin.com/api/razorpay/webhook`
@@ -70,13 +74,14 @@ Meteroid dev and Sandbox with real Razorpay test payments, migrations checked on
 - [ ] Nothing from the old flows broke: a team call starts and ends; Credits page balances as before.
 - [ ] Remove `VERCEL_FORCE_NO_BUILD_CACHE` from Vercel if still there (phase 1 leftover).
 
-## E. First real customer (e.g. Olga)
+## E. First paid customer (Olga, once the LUT ARN is in Meteroid)
 
-- [ ] Custom price set first if agreed (`scripts/billing-price.ts`).
-- [ ] Billing details filled in (legal name, address, tax ID, billing emails, **phone**).
-- [ ] **Upgrade to Paid** → Razorpay page; invoice email with Pay now arrives at her billing emails.
-- [ ] She pays → back on Settings › Billing "Payment received"; Paid plan; receipt email; Razorpay payment visible
-      in the Razorpay dashboard and in `scripts/billing-fee-report.ts`.
+- [ ] Her billing details filled in (legal name, address, tax ID, billing emails, **phone**) — by her admin or by you.
+- [ ] In Meteroid Production: create her **plan** (type Custom, e.g. "Olga – $300/month", USD, tax included, payment
+      terms as agreed, monthly rate $300) and her **subscription** on it (start today, not charged automatically).
+- [ ] The invoice email with Pay now reaches her billing emails; her Billing page shows "Upgrade waiting for payment".
+      The invoice is dated today (on/after the LUT filing) and shows the LUT declaration and ARN.
+- [ ] She pays → "Payment received"; Paid plan; receipt email; payment in Razorpay and in the fee report.
 - [ ] (Paid outside Razorpay instead: Meteroid › Invoices › Mark as paid, amount = total, **once**; its link is
       cancelled automatically.)
 - [ ] **One month later: watch the first real renewal** (never seen live; Meteroid's clock can't be sped up):
@@ -88,8 +93,7 @@ Meteroid dev and Sandbox with real Razorpay test payments, migrations checked on
       `DATABASE_URL="$PROD" RAZORPAY_KEY_ID=… RAZORPAY_KEY_SECRET=… bun scripts/billing-fee-report.ts --month YYYY-MM > fees.csv`.
 - [ ] Duplicate payments (log `DUPLICATE payment … Refund it in Razorpay`; `duplicate` rows in the fee report):
       refund in Razorpay; credit note in Meteroid if an invoice was involved.
-- [ ] Once the LUT ARN is known: set `GST_LUT_REFERENCE` in Vercel, redeploy, then
-      `DATABASE_URL="$PROD" METEROID_API_KEY=$METEROID_PROD_API_KEY GST_LUT_REFERENCE=<ref> bun scripts/billing-sync-customers.ts`.
+- [ ] Each financial year: a new LUT → update the ARN in Meteroid's invoicing entity legal footer (April).
 - [ ] A customer leaves: cancel their Paid subscription in Meteroid → back to Trial.
 - [ ] Before any Meteroid upgrade: re-run `scripts/billing-live-check.ts` on the dev tenant (the app uses Meteroid's
       dashboard API for void / mark paid / company details, which isn't a public contract). Keep "Consolidate

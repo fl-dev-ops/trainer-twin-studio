@@ -9,9 +9,9 @@
 
 | Actor | What they do here |
 | --- | --- |
-| Org admin / team (studio) | Fill in billing details; upgrade to Paid; buy minute packs; see and download invoices and receipts. |
+| Org admin / team (studio) | Fill in billing details; pay invoices (Pay now); buy minute packs on a paid plan; see and download invoices and receipts. |
 | Learner | Nothing: never sees billing. A paused org stops their calls. |
-| TrainerTwin staff | In Meteroid: mark invoices paid when money arrives, give free credits, set a custom price (`web/scripts/billing-price.ts`), cancel a Paid plan. |
+| TrainerTwin staff | In Meteroid: make an org's plan and subscription (the upgrade), mark payments made outside Razorpay, give free credits, cancel a paid plan, keep the company's details and the LUT ARN. |
 | Meteroid | Issues every invoice, renews the Paid plan monthly, grants a pack's credits when its invoice is paid, tells the app by webhook. |
 
 ## Words used here
@@ -32,8 +32,10 @@
 
 1. **Every billed org starts on Trial**, existing ones too: Trial is the "Credits" subscription every billed org already
    has, so nothing changes in Meteroid. Trial costs nothing, never expires and includes no credits.
-2. **Paid: $300 a month, tax included**, unless staff set a custom price for the org (`OrgBilling.paidMonthlyCents`).
-   It includes no credits. All phase 2 invoices are in **USD** (whether Indian customers need INR invoices is with the accounts team).
+2. **Paid plans are per org, made in Meteroid.** Trial is the one plan every org has. A paid plan is made by staff in
+   Meteroid for one org (a `CUSTOM` plan, e.g. "Olga – $300/month", tax included, with its own payment terms), and
+   only that org is ever on it: no org sees another org's plan or price. Plans include no credits. All invoices are in
+   **USD**. Choosing and switching between plans in the app is future work (issue #19).
 3. **Credits come only from minute packs and grants** (staff, the 30-credit trial grant). A plan never adds credits.
 4. **Minute pack: 100 credits for $25, tax included.** One purchase is 1 to 10 packs; the invoice total is $25 ×
    packs, or 1 cent less when GST rounding can't land on it exactly (CGST and SGST are rounded separately), never more. Its credits expire 365 days after the pack's invoice is issued.
@@ -41,7 +43,8 @@
 ### Who and what
 
 5. **Admin and team** see Settings › Billing and do everything in it. Learners never see billing (403).
-6. **Billing details come first.** Upgrading and buying packs are refused (400) until the org has billing details.
+6. **Billing details come first.** Buying packs is refused (400) until the org has billing details, and staff move an
+   org to a paid plan only once they're saved (they go on its invoices).
 7. **Billing details rules** (any other field is refused too): legal name (1–200 characters); country (ISO code); street, city and postal code;
    **state when the country is India** (one of India's GST states, with its code); for India an optional GSTIN (15
    characters, the GST format, its first two digits equal to the state's code), elsewhere an optional tax number (up
@@ -56,20 +59,22 @@
    | --- | --- |
    | India, Tamil Nadu (33) | CGST 9% + SGST 9% |
    | India, any other state | IGST 18% |
-   | Outside India | None: "Supply meant for export under LUT (`GST_LUT_REFERENCE`) without payment of IGST" |
+   | Outside India | None, with the declaration "Export of services without payment of tax under LUT" and "LUT ARN: …" |
 
-   An invoice uses the tax that applies when Meteroid issues it.
+   An invoice uses the tax that applies when Meteroid issues it. The LUT ARN is kept in Meteroid (the invoicing
+   entity's legal footer), with the company's other details; an export invoice must not be issued before the year's
+   LUT is filed (our CA, 11 Nov 2026).
 
 ### Upgrading
 
-10. **Upgrade to Paid** (Trial orgs only): the app creates the org's Paid subscription in Meteroid, starting today, due
-    2 days after each invoice, never charged automatically. Meteroid issues the first (`upgrade`) invoice at once. The
-    org stays on Trial, shown as "upgrade waiting for payment", until that invoice is paid. Asking again while one
-    waits returns the same upgrade; a Paid or paused org is refused (409).
-11. **Upgrade paid:** the org is on Paid from then on. Its plan renews every month on the day the upgrade was asked
-    for.
+10. **Staff upgrade an org in Meteroid:** they create the org's subscription on its own plan (rule 2), never charged
+    automatically. Meteroid issues the first (`upgrade`) invoice; the app takes any live subscription other than the
+    Trial ("Credits") one as the org's paid subscription, and its first invoice as the upgrade. The org stays on Trial,
+    shown as "upgrade waiting for payment", until that invoice is paid. There is no upgrade button in the app; a Trial
+    org's Billing page says to contact TrainerTwin.
+11. **Upgrade paid:** the org is on Paid from then on. Its plan renews as its Meteroid subscription says.
 12. **Upgrade not paid by its due date:** when it becomes overdue the app voids the invoice and cancels the
-    subscription, and the org stays on Trial ("upgrade cancelled" email). It can upgrade again any time. If the
+    subscription, and the org stays on Trial ("upgrade cancelled" email). Staff can subscribe it again any time. If the
     invoice was paid in the meantime, nothing is cancelled.
 
 ### Renewals and pausing
@@ -126,7 +131,8 @@
       signature".
     - **Receipt** "RCPT-<invoice number>": the same header and lines, "amount paid on <date>", and a payment history
       (method, reference, date, amount). Downloadable from Settings › Billing once paid.
-    The same invoice renders the same bytes every time (dates come from the invoice and payment).
+    Each is kept as first sent (S3): later emails and downloads send that same copy, so an issued invoice never
+    changes, even if the company's details later do.
 23. **Invoices above $0 only:** a $0 invoice (the Credits subscription's monthly one) is never stored, shown or emailed.
 
 ### Keeping in step with Meteroid
@@ -154,7 +160,7 @@
     phone saved gets no link (bank transfer only) until it has one.
 28. **Pay now** appears wherever the invoice does: the invoice, reminder and paused emails (a button), the invoice PDF
     ("Pay online" and the link), and Settings › Billing (a button on each unpaid invoice and in the upgrade and paused
-    notices). "Upgrade to Paid" and "Buy" take the person straight to the payment page; after paying they come back
+    notices). "Buy" takes the person straight to the payment page; after paying they come back
     to Settings › Billing, which shows the payment within seconds.
 29. **A payment** (Razorpay's signed `payment_link.paid` webhook) counts only when the link is the invoice's and the
     amount and currency equal the invoice total. Then, once per Razorpay payment: the payment is recorded; the Meteroid
@@ -177,8 +183,8 @@
 
 ## Checks (must always hold; `web/scripts/check-billing.ts`)
 
-- Every `paid` org has a Paid subscription id; every `trial` org with a Paid subscription id has an unpaid `upgrade`
-  invoice of it (an upgrade asked for in the last hour may not have its copy yet).
+- Every `paid` org has a paid subscription id; every `trial` org with a paid subscription id has an unpaid `upgrade`
+  invoice of it (one subscribed in the last hour may not have its copy yet).
 - Every paused org is `paid` and has an overdue unpaid `renewal`.
 - No `paid` org that isn't paused has a renewal of its current subscription unpaid since before yesterday (the 00:15 UTC
   daily check has had its chance).
