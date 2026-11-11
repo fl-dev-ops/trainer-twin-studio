@@ -8,6 +8,13 @@ mock.module("@/lib/db", () => ({
   isUniqueViolation: (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "P2002",
   db: {
     agent: { findFirst: async () => ({ id: "t1" }) },
+    // The learner is an enabled member (twinAccessByCode checks it before the code: specs/practice.md rule 1).
+    member: {
+      findFirst: async () => ({
+        id: "m1", role: "user", createdAt: new Date(0), disabledAt: null,
+        user: { id: "u1", name: "Ana", email: "ana@x.com", image: null },
+      }),
+    },
     twinAssignment: { findUnique: async () => assignment, update: async () => assignment },
     twinShareLink: { findUnique: async () => null },
   },
