@@ -1,9 +1,6 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { CreditsPage } from "@/components/credits/credits-page";
-import { api, useApi } from "@/lib/api";
-
+/** The Credits page became Usage; old links (e.g. "credits added" emails) land there. */
 export default function CreditsRoute() {
-  const credits = useApi(["page.credits"], () => api.minutes.org.query());
-  return <CreditsPage credits={credits} />;
+  redirect("/usage");
 }

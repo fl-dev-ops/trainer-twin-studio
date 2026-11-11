@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 /** How often the studio checks whether the org's credits changed (minutes.version: a database read, no Meteroid call). */
 const CHECK_EVERY_MS = 5_000;
 /** Everything that shows credit numbers: reloaded when they change. */
-const CREDIT_QUERIES = ["minutes.org", "page.credits", "minutes.learner", "page.users"];
+const CREDIT_QUERIES = ["minutes.org", "page.usage", "minutes.activity", "minutes.learner", "page.users"];
 
 /**
  * Reloads the studio's credit numbers when the org's credits change anywhere: a grant or expiry in Meteroid, minutes
@@ -31,7 +31,7 @@ function useLiveCredits() {
   }, [version, queryClient]);
 }
 
-/** The sidebar's Credits link, with the org's remaining credits; amber when a new learner's minutes no longer fit. */
+/** The sidebar's Usage link, with the org's remaining credits; amber when a new learner's minutes no longer fit. */
 export function SidebarCredits({ active }: { active: boolean }) {
   useLiveCredits();
   const { data } = useQuery({ queryKey: ["minutes.org"], queryFn: () => api.minutes.org.query(), staleTime: 60_000 });
@@ -40,13 +40,13 @@ export function SidebarCredits({ active }: { active: boolean }) {
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
-        render={<Link href="/credits" />}
+        render={<Link href="/usage" />}
         isActive={active}
-        tooltip={left ? `Credits · ${left} left` : "Credits"}
+        tooltip={left ? `Usage · ${left} left` : "Usage"}
         variant="nav"
       >
         <CreditsIcon />
-        <span>Credits</span>
+        <span>Usage</span>
         {left ? (
           <span className={cn("ml-auto text-xs tabular-nums text-muted-foreground group-data-[collapsible=icon]:hidden", low && "font-medium text-caution")}>
             {left}

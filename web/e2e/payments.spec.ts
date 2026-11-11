@@ -18,15 +18,14 @@ test("Payments: signed grant, duplicate delivery, partial refund and forged sign
     payment_link: { entity: { id: purchase.razorpayId, notes: { purchaseId: purchase.id } } },
     payment: { entity: { id: purchase.paymentId, amount: 80000, currency: "INR" } },
   };
-  await page.goto("/credits");
+  await page.goto("/usage");
   const remaining = page.locator("section").filter({ has: page.getByText("Remaining credits", { exact: true }) }).locator("p").nth(1);
   await expect(remaining).toHaveText(/[\d,]+ min/);
   const before = Number((await remaining.innerText()).replace(/[^\d]/g, ""));
   const showHistory = async () => {
     await page.reload();
-    await page.getByRole("tab", { name: "Credits added" }).click();
   };
-  const topup = page.locator("main li").filter({ hasText: `Paid ₹800 · Razorpay ${purchase.razorpayId}` });
+  const topup = page.getByRole("region", { name: "Credits added" }).locator("li").filter({ hasText: `Paid ₹800 · Razorpay ${purchase.razorpayId}` });
 
   const paid = await post("payment_link.paid", payment);
   expect(paid.status()).toBe(200);

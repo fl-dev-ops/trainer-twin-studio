@@ -385,7 +385,7 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
     await expectAppPdfs(sent.get(`billing-paused-${id}`), [`INV-${id}.pdf`]);
     await expectAppPdfs(sent.get(`billing-reminder-${id}`), [`INV-${id}.pdf`]);
     expect((await billing()).balanceMinutes).toBe(100);
-    for (const call of [() => grantMinutes({ orgId: f.org.id, email: f.learner.email, minutes: 5 }), () => giveStartingMinutes({ orgId: f.org.id, emails: [f.learner.email], minutes: 5 }), () => grantMinutesToMany({ orgId: f.org.id, emails: [f.learner.email], minutes: 5 })]) await expect(call()).rejects.toMatchObject({ name: "MinutesError", status: 403, message: expect.stringContaining("Settings › Billing") });
+    for (const call of [() => grantMinutes({ orgId: f.org.id, email: f.learner.email, minutes: 5 }), () => giveStartingMinutes({ orgId: f.org.id, emails: [f.learner.email], minutes: 5 }), () => grantMinutesToMany({ orgId: f.org.id, emails: [f.learner.email], minutes: 5 })]) await expect(call()).rejects.toMatchObject({ name: "MinutesError", status: 403, message: expect.stringContaining("Billing page") });
     await expect(buyPacks(f.org.id, 1, randomUUID())).rejects.toMatchObject({ status: 409, message: expect.stringContaining("pay the overdue invoice first") });
     paid(id); await invoicePaid(id, new Date("2026-11-04"));
     expect((await billing()).pausedAt).toBeNull(); expect(sent.get(`billing-paid-${id}`)?.text).toContain("plan is active");
@@ -418,7 +418,7 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
     await expect(activate()).rejects.toMatchObject({ status: 403, message: "Practice is paused for this organization right now. Please ask your trainer." });
     for (const role of ["admin", "team"]) {
       await db.member.update({ where: { id: `${f.trainer.id}-member` }, data: { role } });
-      await expect(activate(f.trainer.id, f.trainer.email)).rejects.toMatchObject({ status: 403, message: expect.stringContaining("Settings › Billing") });
+      await expect(activate(f.trainer.id, f.trainer.email)).rejects.toMatchObject({ status: 403, message: expect.stringContaining("Billing page") });
     }
     expect((await activate(f.learner.id, f.learner.email, "live-call"))?.id).toBe(live!.id);
     expect((await learnerBalance(f.org.id, f.learner.email)).grantedSeconds).toBe(before);

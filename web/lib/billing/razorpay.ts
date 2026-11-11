@@ -22,8 +22,8 @@ import {
 
 type Row = Pick<BillingInvoice, "id" | "orgId" | "number" | "status" | "totalCents" | "currency" | "paymentLinkId" | "paymentLinkUrl">;
 
-/** Where the payer lands after paying: Settings › Billing, which shows the payment as it arrives. */
-const callbackUrl = (number: string) => `${studioUrl()}settings?tab=billing&paid=${encodeURIComponent(number)}`;
+/** Where the payer lands after paying: Billing, which shows the payment as it arrives. */
+const callbackUrl = (number: string) => `${studioUrl()}billing?paid=${encodeURIComponent(number)}`;
 
 /**
  * The invoice's payment link (rule 27), made once: the link's reference is the invoice id, so a retry that finds

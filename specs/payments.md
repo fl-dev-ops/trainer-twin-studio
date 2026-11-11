@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | TrainerTwin staff | Create links, link Dashboard invoices, report/apply missed payments. | `web/scripts/org-payment-link.ts`, `link-invoice.ts`, `reconcile-purchases.ts` |
 | Payer | Pays on Razorpay's hosted page; may receive Razorpay email/SMS. | `web/lib/razorpay.ts` `createPaymentLink` |
-| Admin / team | See credits and Meteroid grant history, not purchase management. | `web/components/credits/credits-page.tsx`; `web/lib/minutes-trpc.ts` |
+| Admin / team | See credits and Meteroid grant history, not purchase management. | `web/components/usage/usage-page.tsx`; `web/lib/minutes-trpc.ts` |
 | Razorpay | Sends signature-authenticated payment/refund callbacks. | `web/app/api/razorpay/webhook/route.ts` |
 
 ## Words used here
@@ -90,7 +90,7 @@ The script defaults to one hour and refund-days 30; validates options; report mo
 - Shared POST `/api/razorpay/webhook`: `web/app/api/razorpay/webhook/route.ts` POST; always signature-checked, with no off-mode 404. URL `https://dash.trainertwin.com/api/razorpay/webhook` serves phase 1 events and phase 3 invoice-link payments. Meteroid's separate webhook still supplies invoice/credit events; see [Billing code](billing-code.md).
 - Operator scripts listed above; optional note and production flag. Reconciliation also accepts `--older-than`, `--refund-days` (ignored).
 - Internal service functions: `web/lib/credit-purchases.ts` `createPaymentLinkPurchase`, `linkInvoicePurchase`, `purchasePaid`, `purchaseRefunded`, `reconcilePurchases`.
-- Credits display: `web/lib/minutes-trpc.ts` `minutes.org`, `web/components/credits/credits-page.tsx`; shows Meteroid grants, not purchase lifecycle management.
+- Credits display: `web/lib/minutes-trpc.ts` `minutes.org`, `web/components/usage/usage-page.tsx`; shows Meteroid grants, not purchase lifecycle management.
 
 ## Talks to
 

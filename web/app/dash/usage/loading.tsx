@@ -1,6 +1,6 @@
 import { LoadingTable } from "@/components/page-skeletons";
 
-/** Credits: balance cards, then the credits-added table. */
+/** Usage: balance, where credits went, activity. */
 export default function Loading() {
   return <LoadingTable header />;
 }

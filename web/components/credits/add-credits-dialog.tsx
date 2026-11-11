@@ -45,7 +45,7 @@ export function AddCreditsDialog({ email, name, open, onOpenChange, givenMinutes
     try {
       await api.minutes.add.mutate({ email, minutes, note: note.trim() || undefined });
       toast.success(`${minutes} min added for ${name}`);
-      await Promise.all(["minutes.learner", "minutes.org", "page.credits", "page.users"].map((key) => queryClient.invalidateQueries({ queryKey: [key] })));
+      await Promise.all(["minutes.learner", "minutes.org", "page.usage", "minutes.activity", "page.users"].map((key) => queryClient.invalidateQueries({ queryKey: [key] })));
       setNote("");
       onOpenChange(false);
     } catch (error) {

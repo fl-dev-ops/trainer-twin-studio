@@ -9,7 +9,8 @@ import { getOrgBySlug, getSessionOrg } from "@/lib/org";
 
 const bodySchema = z
   .object({
-    kind: z.enum(["bug", "feature", "other"]).default("bug"),
+    // support: the studio's Support dialog (subject on the first line of the message).
+    kind: z.enum(["bug", "feature", "other", "support"]).default("bug"),
     message: z.string().trim().min(5).max(5000),
     url: z.string().trim().max(2048).optional().nullable(),
     // The browser's PostHog session replay, and the call the report is about (learner twin calls).

@@ -17,6 +17,7 @@ import { hasUnsentUsage, orgCredits, orgGrants, refreshOrgCredits } from "@/lib/
 import { scheduleOrgUsage } from "@/lib/schedule-org-credits";
 import { runAddOrgPeople, runGiveCredits } from "@/lib/workflow-runs";
 import { studioProcedure, t } from "@/lib/trpc";
+import { activity, type UsageRow } from "@/lib/usage-report";
 
 /**
  * Credits (practice minutes; 1 credit = 1 minute) over /api/trpc (`minutes`): the org's balance and what was added to
@@ -51,6 +52,17 @@ function grantEntry(grant: CreditGrant): CreditEntry {
   const expiry = grant.expiresAt ? `${grant.status === "EXPIRED" ? "expired" : "expires"} ${day(grant.expiresAt)}` : null;
   return { id: grant.id, minutes: grant.minutes, note: [grant.reason, expiry].filter(Boolean).join(" · ") || null, at: grant.createdAt ?? "", by: null };
 }
+
+/** The grant that expires next (still active), for the Usage page's balance card. */
+function nextExpiry(grants: CreditGrant[], now = Date.now()) {
+  const next = grants
+    .filter((grant) => grant.status !== "EXPIRED" && grant.expiresAt && new Date(grant.expiresAt).getTime() > now)
+    .sort((a, b) => a.expiresAt!.localeCompare(b.expiresAt!))[0];
+  return next ? { minutes: next.minutes, reason: next.reason, at: next.expiresAt! } : null;
+}
+
+// shortcut: the log shows the newest 500 movements of the range (totals use every row); page server-side if orgs outgrow it.
+const LOG_LIMIT = 500;
 
 /** Keeps the org's copy of Meteroid fresh enough for a page, and sends usage a failed workflow left behind. */
 async function freshEnough(orgId: string) {
@@ -93,10 +105,39 @@ export const minutesRouter = t.router({
       billed: credits.billed,
       balanceMinutes: Math.max(0, credits.minutes),
       addedMinutes: grants.reduce((sum, grant) => sum + grant.minutes, 0),
+      nextExpiry: nextExpiry(grants),
       defaultMinutes: DEFAULT_LEARNER_MINUTES,
       maxMinutes: MAX_LEARNER_MINUTES,
       grants: grants.map(grantEntry),
       learners,
+    };
+  }),
+
+  /**
+   * The Usage page's Details (the last `days` days, by UTC date): per twin / role play, per team member, and every credit movement (lib/usage-report.ts). Database only: no Meteroid call.
+   */
+  activity: studioProcedure.input(z.object({ days: z.union([z.literal(7), z.literal(30), z.literal(90)]) })).query(async ({ ctx, input }) => {
+    const now = new Date();
+    const since = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - (input.days - 1)));
+    const rows = await db.$queryRaw<UsageRow[]>`
+      SELECT l."id", l."type", l."seconds", l."email", l."userId", l."actorUserId", l."note", l."createdAt",
+        a."id" AS "agentId", a."name" AS "agentName", a."kind"::text AS kind, (c."id" IS NOT NULL) AS calibration
+      FROM "MinuteLedger" l
+      LEFT JOIN "InterviewSession" s ON s."id" = l."sessionId"
+      LEFT JOIN "Agent" a ON a."id" = s."agentId"
+      LEFT JOIN "TwinCalibration" c ON c."sessionId" = s."id"
+      WHERE l."orgId" = ${ctx.user.orgId} AND l."type" IN ('grant', 'reclaim', 'usage', 'org_usage') AND l."createdAt" >= ${since}
+      ORDER BY l."createdAt" DESC`;
+    const report = activity(rows, input.days);
+    const log = report.log.slice(0, LOG_LIMIT);
+    const ids = [...new Set([...log.flatMap((entry) => [entry.personId, entry.byId]), ...report.team.map((person) => person.userId)].filter((id): id is string => Boolean(id)))];
+    const users = ids.length ? await db.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, email: true } }) : [];
+    const nameOf = new Map(users.map((user) => [user.id, user.name || user.email]));
+    return {
+      ...report,
+      team: report.team.map((person) => ({ ...person, name: (person.userId && nameOf.get(person.userId)) || person.email || "Someone" })),
+      log: log.map((entry) => ({ ...entry, person: (entry.personId && nameOf.get(entry.personId)) || entry.personEmail, by: entry.byId ? nameOf.get(entry.byId) ?? null : null })),
+      logTotal: report.log.length,
     };
   }),
 

@@ -14,6 +14,7 @@ export type SendEmailOptions = {
   html: string;
   text?: string;
   from?: string;
+  replyTo?: string;
   /** Resend sends one email per key (24 h): a retried workflow step can't send it twice. */
   idempotencyKey?: string;
   /** Files sent with the email (billing: invoice and receipt PDFs). */
@@ -30,6 +31,7 @@ export async function sendEmail({
   html,
   text,
   from = DEFAULT_FROM_EMAIL,
+  replyTo = DEFAULT_REPLY_TO,
   idempotencyKey,
   attachments,
 }: SendEmailOptions) {
@@ -45,7 +47,7 @@ export async function sendEmail({
       from,
       to,
       ...(cc ? { cc } : {}),
-      replyTo: DEFAULT_REPLY_TO,
+      replyTo,
       subject,
       html,
       text,
@@ -363,7 +365,7 @@ export function orgCreditsEmail(args: OrgCreditsEmailArgs) {
       <p>Hi there,<br><strong>${plural(args.added, "credit")}</strong>${args.reason ? ` (${escapeHtml(args.reason)})` : ""} were added to <strong>${escapeHtml(args.orgName)}</strong>.${expiry}
       Your organization's balance is now <strong>${plural(args.balance, "credit")}</strong> (1 credit = 1 minute of practice).</p>
       <div style="text-align: center; margin: 28px 0;">
-        <a href="${escapeHtml(args.creditsUrl)}" class="btn" target="_blank">See credits</a>
+        <a href="${escapeHtml(args.creditsUrl)}" class="btn" target="_blank">See usage</a>
       </div>
     `,
   });
@@ -427,7 +429,7 @@ export function billingEmail(args: BillingEmailArgs) {
     },
     upgrade_cancelled: {
       subject: `Your upgrade to the TrainerTwin Paid plan was cancelled`,
-      lines: [`Invoice <strong>${invoice}</strong> (${escapeHtml(args.amount)}) for upgrading <strong>${org}</strong> to the Paid plan wasn't paid by <strong>${escapeHtml(args.dueDate)}</strong>, so we cancelled it. You're still on the Trial plan, and you can upgrade again any time from Settings › Billing.`],
+      lines: [`Invoice <strong>${invoice}</strong> (${escapeHtml(args.amount)}) for upgrading <strong>${org}</strong> to the Paid plan wasn't paid by <strong>${escapeHtml(args.dueDate)}</strong>, so we cancelled it. You're still on the Trial plan, and you can upgrade again any time: just reply to this email.`],
       text: `Invoice ${args.invoiceNumber} (${args.amount}) for upgrading ${args.orgName} to the Paid plan wasn't paid by ${args.dueDate}, so we cancelled it. You're still on the Trial plan; you can upgrade again any time.`,
     },
     paid: {
@@ -468,17 +470,20 @@ export async function sendIssueReportEmail(input: {
   replayUrl: string | null;
 }) {
   const where = input.org ? ` · ${input.org}` : "";
-  const subject = `Issue reported (${input.kind})${where} · ${input.reporter.name || input.reporter.email}`;
+  const support = input.kind === "support";
+  const subject = support
+    ? `Support: ${input.message.split("\n")[0].slice(0, 120)}${where} · ${input.reporter.name || input.reporter.email}`
+    : `Issue reported (${input.kind})${where} · ${input.reporter.name || input.reporter.email}`;
   const link = (label: string, url: string | null) =>
     url ? `<li><strong>${label}:</strong> <a href="${escapeHtml(url)}" class="muted-link">${escapeHtml(url)}</a></li>` : "";
   const html = renderEmailLayout({
     title: escapeHtml(subject),
     previewText: escapeHtml(input.message.slice(0, 120)),
     contentHtml: `
-      <h1>Issue reported</h1>
+      <h1>${support ? "Support request" : "Issue reported"}</h1>
       <p>
         <strong>${escapeHtml(input.reporter.name || input.reporter.email)}</strong> (${escapeHtml(input.reporter.email)})${input.org ? ` in <strong>${escapeHtml(input.org)}</strong>` : ""}
-        reported a <strong>${escapeHtml(input.kind)}</strong>.
+        ${support ? "asked for support. Reply to this email to answer them." : `reported a <strong>${escapeHtml(input.kind)}</strong>.`}
       </p>
       <p style="white-space: pre-wrap; padding: 12px 16px; background: #f1f5f9; border-radius: 8px;">${escapeHtml(input.message)}</p>
       <ul>
@@ -498,5 +503,6 @@ export async function sendIssueReportEmail(input: {
       .filter(([, url]) => url)
       .map(([label, url]) => `${label}: ${url}`),
   ].join("\n");
-  return sendEmail({ to: input.to, cc: input.cc, subject, html, text });
+  // Replies go straight to the person who wrote it (we can only send from our own domain).
+  return sendEmail({ to: input.to, cc: input.cc, subject, html, text, replyTo: input.reporter.email });
 }

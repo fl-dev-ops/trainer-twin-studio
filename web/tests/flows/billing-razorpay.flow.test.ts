@@ -95,7 +95,7 @@ describe.skipIf(!localMinutesDb)("billing Razorpay phase 3 (real DB; MSW Meteroi
     expect(await ensurePaymentLink(id())).toBe(url); expect(creates).toHaveLength(2); expect(links.size).toBe(1); expect(lookups).toEqual([id()]);
     expect((await row()).paymentLinkId).toBe(first.paymentLinkId);
     expect(creates[0]).toMatchObject({ amount: 30000, currency: "USD", accept_partial: false, notify: { email: false, sms: false }, reminder_enable: false, callback_method: "get", reference_id: id(), customer: { name: details.legalName, email: details.emails[0], contact: details.phone }, notes: { invoiceId: id(), orgId: f.org.id } });
-    const callback = new URL(creates[0].callback_url); expect(callback.pathname).toBe("/settings"); expect(callback.searchParams.get("tab")).toBe("billing"); expect(callback.searchParams.get("paid")).toBe(first.number); expect(creates[0].expire_by).toBeUndefined();
+    const callback = new URL(creates[0].callback_url); expect(callback.pathname).toBe("/billing"); expect(callback.searchParams.get("paid")).toBe(first.number); expect(creates[0].expire_by).toBeUndefined();
   });
   test.each(["no phone", "paid", "void", "$0"])("rule 27: no payment link for %s", async (reason) => {
     executeSteps = false;

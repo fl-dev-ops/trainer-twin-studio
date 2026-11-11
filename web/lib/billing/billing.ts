@@ -30,7 +30,7 @@ import { ADMIN, orgPeople } from "@/lib/org-people";
  * packs, and pausing an org whose Paid renewal is overdue. Meteroid issues every invoice and is the truth for whether
  * one is paid; this module keeps the app's copy (OrgBilling, BillingInvoice), applies what each invoice event means,
  * and sends the billing emails, each once. The workflows in workflows/invoice-issued.ts and invoice-paid.ts call it;
- * so do the webhook, the daily check and Settings › Billing.
+ * so do the webhook, the daily check and the Billing page.
  */
 
 export class BillingError extends Error {
@@ -462,7 +462,7 @@ async function emailOnce(row: BillingInvoice, event: BillingEmailArgs["event"], 
       amount: formatMoney(row.totalCents, row.currency),
       dueDate: shortDay(row.dueDate),
       description: describeInvoice(row),
-      billingUrl: `${studioUrl()}settings?tab=billing`,
+      billingUrl: `${studioUrl()}billing`,
       payUrl: row.status === "unpaid" ? row.paymentLinkUrl : null,
       outcome,
     },
@@ -561,7 +561,7 @@ export async function checkAllBilling(now = new Date()) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// Settings › Billing
+// The Billing page
 
 export type BillingInvoiceView = {
   id: string;

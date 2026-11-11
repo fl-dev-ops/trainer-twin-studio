@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { BillingError, invoicePdfFor, orgInvoice } from "@/lib/billing/billing";
 import { currentMembership, isStudioRole } from "@/lib/org";
 
-/** An invoice's PDF (drawn by the app from Meteroid's invoice, specs/billing.md rule 22), for the org's admin and team (Settings › Billing; specs/billing.md rule 5). */
+/** An invoice's PDF (drawn by the app from Meteroid's invoice, specs/billing.md rule 22), for the org's admin and team (the Billing page; specs/billing.md rule 5). */
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const current = await currentMembership(await headers());
   if (!current) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
