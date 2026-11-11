@@ -142,8 +142,8 @@ or used-up code; Google `signup_disabled`) keep its codes and are shown by the s
 | `person_is_studio` | 409 | {email} is on the team. Team members practise with the organization's credits, not as learners. | A learner action (add as learner, assign, learner credits) for admin/team | S |
 | `invalid_email` | 400 | Not a valid email: {email} | Adding people with a malformed email | S |
 | `invalid_input` | 400 | (what is wrong, per field) | A request body that fails its schema | T, R |
-| `one_admin` | 409 | This organization already has an admin. Add people as team or learner. | Anything that would make a second admin | S, BA, DB |
-| `admin_fixed` | 403 | The admin's role can't be changed and the admin can't be disabled. | Disabling or changing the role of the admin | S, BA |
+| `one_admin` | 409 | This organization already has an admin. Add people as team or learner. | Anything that would make a second admin | S, DB |
+| `admin_fixed` | 403 | The admin's role can't be changed and the admin can't be disabled. | Disabling or changing the role of the admin | S |
 | `calls_not_ended` | 500 | Disabled, but {n} call(s) in progress could not be ended yet. Disable again to retry. | Disabling committed but ending a running call failed (rule 18) | S |
 | `self_disable` | 400 | You can't disable yourself. | Disabling your own membership | S |
 | `member_action_closed` | 403 | Add, change and disable people from Settings. | Better Auth add/invite/remove/leave/role change (server code) | BA |

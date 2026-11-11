@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { API_LEARNER_ROLE, isApiError, paginationFromUrl, requireExternalApi } from "@/lib/external-api";
-import { AppError, errorResponse } from "@/lib/errors";
+import { AppError, errorResponse, refusals } from "@/lib/errors";
 import { addLearnerByApi } from "@/lib/invite/org";
 import { MinutesError } from "@/lib/minutes";
 import { LEARNER, orgPeople, type OrgPerson } from "@/lib/org-people";
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
   const api = await requireExternalApi(request, "users", "write");
   if (isApiError(api)) return api;
   const parsed = createSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return Response.json({ error: "A valid email is required" }, { status: 400 });
+  if (!parsed.success) return errorResponse(refusals.invalidInput("A valid email is required"));
 
   try {
     // Added to the org as a learner right away (with starting credits) and emailed; they just sign in.
