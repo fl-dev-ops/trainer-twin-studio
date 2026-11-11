@@ -29,7 +29,7 @@ invoice; our app still sends every email; Razorpay only collects the money.
   within seconds of paying.
 - **Daily reconcile workflow:** compares Razorpay payments with open invoices and settles any whose webhook was
   missed.
-- **Turning Razorpay back on:** `RAZORPAY_ENABLED=true`, live keys, the Razorpay webhook. The Razorpay code from
+- **Razorpay always on** (the `RAZORPAY_ENABLED` switch was removed, 11 Nov): live keys and the Razorpay webhook. The Razorpay code from
   PR #15 (switched off today) is reused.
 - **Refunds:** by hand, in Razorpay; recorded in Meteroid by hand as a credit note (decision 3).
 - **Fees, GST on fees, currency conversion:** Razorpay deducts its fee (about 2% + 18% GST on it for Indian payments;
@@ -71,7 +71,7 @@ card in USD for Olga, UPI / cards / netbanking for Indian customers) instead of 
    `dev-webhooks.foreverlearning.in` carries Razorpay's test webhooks too).
 3. Tests by the test-writer agent; module specs by the spec-writer agent.
 4. Rehearsal on a fresh prod copy against the **Sandbox** tenant and Razorpay test mode.
-5. Production: live Razorpay keys, the live webhook and `RAZORPAY_ENABLED=true`, **only with your go-ahead**.
+5. Production: live Razorpay keys and the live webhook, **only with your go-ahead**.
 
 ## Open questions
 

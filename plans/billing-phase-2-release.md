@@ -24,8 +24,8 @@ Secrets: `~/.config/meteroid/keys.env`. Prod DB: `neon connection-string product
    - Dashboard › Webhooks › Add: URL `https://dash.trainertwin.com/api/razorpay/webhook`, a new secret, events
      **`payment_link.paid`** (and, for phase 1 purchases, `invoice.paid`, `refund.processed`).
    - Vercel `trainer-twin-studio` production env: `RAZORPAY_KEY_ID` (rzp_live_…), `RAZORPAY_KEY_SECRET`,
-     `RAZORPAY_WEBHOOK_SECRET` (the webhook's secret), `RAZORPAY_ENABLED=true`. Without `RAZORPAY_ENABLED=true` the
-     app bills exactly as phase 2 (bank transfer only, no Pay now).
+     `RAZORPAY_WEBHOOK_SECRET` (the webhook's secret). Razorpay is always on; without these keys
+     invoices go out without Pay now and payments have to be marked by staff in Meteroid.
 4. Nothing else in Vercel: `METEROID_*`, `RESEND_*` and `CRON_SECRET` are already set; `METEROID_GRPC_URL` and
    `BILLING_FROM_EMAIL` default correctly.
 
@@ -57,7 +57,7 @@ Secrets: `~/.config/meteroid/keys.env`. Prod DB: `neon connection-string product
    - Vercel › Settings › Cron Jobs lists `/api/internal/billing/check` (00:15 UTC);
    - Meteroid › Production › Webhooks: the next delivery shows 200.
    - Razorpay: `curl -s -o /dev/null -w "%{http_code}" -X POST https://dash.trainertwin.com/api/razorpay/webhook` is
-     **401** (on, signature checked), not 404 (off).
+     **401** (signature checked; a 500 means `RAZORPAY_WEBHOOK_SECRET` isn't set).
 6. **No test invoices in prod:** invoices are numbered tax documents. The first real one is a customer's upgrade.
 
 ## The first customer (e.g. Olga)
@@ -82,7 +82,7 @@ Secrets: `~/.config/meteroid/keys.env`. Prod DB: `neon connection-string product
 - **Paid twice** (logged as `DUPLICATE payment … Refund it in Razorpay`, and `status = duplicate` in the fee report):
   refund it in Razorpay › Payments, and record a credit note in Meteroid if an invoice was involved.
 - **Monthly fee report** for the accountant: `DATABASE_URL="$PROD" RAZORPAY_KEY_ID=… RAZORPAY_KEY_SECRET=…
-  RAZORPAY_ENABLED=true bun scripts/billing-fee-report.ts --month 2026-12 > fees-2026-12.csv`.
+  bun scripts/billing-fee-report.ts --month 2026-12 > fees-2026-12.csv`.
 - Free credits: a grant in Meteroid (unchanged from phase 1).
 - Keep the invoicing entity's "Consolidate recurring invoices" **off** (it is, in every tenant): a consolidated
   invoice has no subscription, so a Paid renewal inside one wouldn't be recognised.
@@ -93,7 +93,7 @@ Secrets: `~/.config/meteroid/keys.env`. Prod DB: `neon connection-string product
 ## Rollback
 
 Vercel instant rollback to the previous deployment. The migrations only add, so the old code runs on the new schema.
-Online payments alone: set `RAZORPAY_ENABLED=false` (the app falls back to bank transfer; links already sent stop
-being honoured by the webhook, so tell anyone who pays one).
+Online payments alone: remove the live Razorpay keys from Vercel and redeploy (invoices then go out without Pay now;
+payments are marked by staff in Meteroid).
 The Meteroid changes are additive (an unused plan, a product on MINS, entity details, extra webhook events the old
 code ignores). Data: the Neon branch from step 1.

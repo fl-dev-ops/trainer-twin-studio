@@ -147,8 +147,7 @@
 
 ### Paying online (Razorpay, phase 3)
 
-27. **One payment link per invoice.** With Razorpay on (`RAZORPAY_ENABLED=true`), every unpaid invoice above $0, of
-    any kind, gets one Razorpay payment link: its exact total and currency (USD), no partial payments, no expiry, the
+27. **One payment link per invoice.** Razorpay is always on: every unpaid invoice above $0, of any kind, gets one Razorpay payment link: its exact total and currency (USD), no partial payments, no expiry, the
     customer's billing name, first billing email and phone. Razorpay sends nothing itself (no email, SMS or reminders).
     The link is made once (its Razorpay reference is the invoice id: a retry finds it instead of making another),
     when the invoice is first handled: the invoice-issued workflow, an upgrade, a pack. An invoice whose org has no
@@ -184,8 +183,8 @@
 - No `paid` org that isn't paused has a renewal of its current subscription unpaid since before yesterday (the 00:15 UTC
   daily check has had its chance).
 - Every `BillingInvoice` belongs to a billed org and has a total above 0.
-- Every Razorpay payment that settled an invoice is recorded once, and that invoice is paid; with Razorpay on, every
-  unpaid invoice above $0 older than an hour whose org has a phone has a payment link.
+- Every Razorpay payment that settled an invoice is recorded once, and that invoice is paid; every unpaid invoice above
+  $0 older than an hour whose org has a phone has a payment link.
 - Every paid invoice has had its "paid" email; every invoice that isn't void its "issued" email (allowing an hour for
   a running workflow; the daily check sends any a dead workflow left).
 
