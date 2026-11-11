@@ -1,7 +1,8 @@
 import { expect, setSystemTime, test } from "bun:test";
 import { decodePDFRawStream, PDFArray, PDFDocument, PDFRawStream } from "pdf-lib";
-import { billingDocument, money, receiptNumber, renderInvoice, renderReceipt, SELLER } from "@/lib/billing/documents";
+import { billingDocument, money, receiptNumber, renderInvoice, renderReceipt, SAC } from "@/lib/billing/documents";
 import type { RawInvoice } from "@/lib/billing/meteroid";
+import { seller } from "../setup/billing-meteroid-fixture";
 
 const customer = {
   name: "Example Coaching Pvt Ltd", email: "accounts@example.com", vat_number: "33AAGCF6592D1ZN",
@@ -19,7 +20,7 @@ const raw: RawInvoice = {
   transactions: [{ provider_transaction_id: "bank-001", status: "SETTLED", payment_type: "PAYMENT", amount: 30000, processed_at: "2026-11-12T10:30:00Z" }],
 };
 const paidAt = new Date("2026-11-12T10:30:00Z");
-const document = (patch: RawInvoice = {}) => billingDocument({ ...raw, ...patch }, "Fallback Org");
+const document = (patch: RawInvoice = {}) => billingDocument({ ...raw, ...patch }, "Fallback Org", seller);
 
 async function pdfText(bytes: Buffer) {
   expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
@@ -34,7 +35,7 @@ async function pdfText(bytes: Buffer) {
 
 test("rule 22: Tamil Nadu invoice preserves issued buyer, moves state after city, and shows both 9% taxes", () => {
   expect(document()).toMatchObject({
-    number: "INV-001", issuedOn: "2026-11-11", dueOn: "2026-11-13", currency: "USD",
+    seller, number: "INV-001", issuedOn: "2026-11-11", dueOn: "2026-11-13", currency: "USD",
     buyer: { name: customer.name, lines: ["10 School Street", "Floor 2", "Chennai 600001", "Tamil Nadu (33)", "India"], email: customer.email, taxLabel: "GSTIN", taxId: customer.vat_number },
     placeOfSupply: "Tamil Nadu (33)", forWhom: customer.name, subtotalCents: 25424, totalCents: 30000,
     taxes: [{ label: "CGST 9%", cents: 2288 }, { label: "SGST 9%", cents: 2288 }], exemption: null,
@@ -107,25 +108,25 @@ test.each([
   expect(money(cents, currency, decimals)).toBe(expected);
 });
 
-test("rule 22: invoice is a valid app PDF with seller/buyer, line, dates, taxes and multiline payment instructions", async () => {
-  const { pdf, text } = await pdfText(await renderInvoice(document(), "Bank: Example Bank\nAccount: 123456\nSWIFT: EXAMPLE"));
-  expect(pdf.getTitle()).toBe("Invoice INV-001"); expect(pdf.getAuthor()).toBe(SELLER.name);
+test("rule 22: invoice uses the document seller, buyer, lines, dates and taxes without bank instructions", async () => {
+  const { pdf, text } = await pdfText(await renderInvoice(document()));
+  expect(pdf.getTitle()).toBe("Invoice INV-001"); expect(pdf.getAuthor()).toBe(seller.name);
   expect(pdf.getCreator()).toBe("TrainerTwin"); expect(pdf.getProducer()).toBe("TrainerTwin");
-  for (const value of ["Invoice", "INV-001", "Date of issue", "11 November 2026", "Date due", "13 November 2026", "Place of supply", SELLER.name, SELLER.line1, SELLER.gstin, SELLER.email, customer.name, customer.email, `GSTIN ${customer.vat_number}`, "Chennai 600001", "Tamil Nadu (33)", "US$300.00 due 13 November 2026", "How to pay", "Bank: Example Bank", "Account: 123456", "SWIFT: EXAMPLE", "Please quote INV-001 with your payment.", "SAC 998314 · 11 Nov – 10 Dec 2026", "Subtotal (taxable value)", "US$254.24", "CGST 9%", "SGST 9%", "US$22.88", "Amount due", "computer-generated invoice and needs no signature"]) expect(text).toContain(value);
-  expect(text).not.toContain("Payment history");
+  for (const value of ["Invoice", "INV-001", "Date of issue", "11 November 2026", "Date due", "13 November 2026", "Place of supply", seller.name, seller.line1, seller.line2, `${seller.city} ${seller.zip}`, seller.gstin, seller.email, customer.name, customer.email, `GSTIN ${customer.vat_number}`, "Chennai 600001", "Tamil Nadu (33)", "US$300.00 due 13 November 2026", "SAC 998314 · 11 Nov – 10 Dec 2026", "Subtotal (taxable value)", "US$254.24", "CGST 9%", "SGST 9%", "US$22.88", "Amount due", "computer-generated invoice and needs no signature"]) expect(text).toContain(value);
+  for (const value of ["Payment history", "How to pay", "Bank", "Account:", "SWIFT", "Pay online"]) expect(text).not.toContain(value);
 });
 
 test("rule 22: receipt is a valid app PDF with same invoice lines/totals and settled payment history", async () => {
   const { pdf, text } = await pdfText(await renderReceipt(document(), paidAt));
-  expect(receiptNumber("INV-001")).toBe("RCPT-INV-001"); expect(SELLER.sac).toBe("998314");
-  expect(pdf.getTitle()).toBe("Receipt RCPT-INV-001"); expect(pdf.getAuthor()).toBe(SELLER.name);
-  for (const value of ["Receipt", "INV-001", "RCPT-INV-001", "Date paid", "US$300.00 paid on 12 November 2026", SELLER.name, customer.name, "SAC 998314 · 11 Nov – 10 Dec 2026", "CGST 9%", "SGST 9%", "Amount paid", "Payment history", "Bank transfer · bank-001", "12 November 2026", "US$300.00", "which is the tax invoice"]) expect(text).toContain(value);
+  expect(receiptNumber("INV-001")).toBe("RCPT-INV-001"); expect(SAC).toBe("998314");
+  expect(pdf.getTitle()).toBe("Receipt RCPT-INV-001"); expect(pdf.getAuthor()).toBe(seller.name);
+  for (const value of ["Receipt", "INV-001", "RCPT-INV-001", "Date paid", "US$300.00 paid on 12 November 2026", seller.name, seller.line1, seller.line2, `${seller.city} ${seller.zip}`, seller.gstin, seller.email, customer.name, "SAC 998314 · 11 Nov – 10 Dec 2026", "CGST 9%", "SGST 9%", "Amount paid", "Payment history", "Bank transfer · bank-001", "12 November 2026", "US$300.00", "which is the tax invoice"]) expect(text).toContain(value);
   expect(text).not.toContain("Amount due"); expect(text).not.toContain("How to pay");
 });
 
 test.each(["invoice", "receipt"] as const)("rule 22: %s bytes are deterministic across render dates with document/payment metadata dates", async (kind) => {
   const doc = document();
-  const render = () => kind === "invoice" ? renderInvoice(doc, "Bank account\nReference INV-001") : renderReceipt(doc, paidAt);
+  const render = () => kind === "invoice" ? renderInvoice(doc, "https://rzp.io/inv-001") : renderReceipt(doc, paidAt);
   try {
     setSystemTime(new Date("2026-11-14")); const first = await render();
     setSystemTime(new Date("2027-02-01")); const second = await render();
@@ -148,7 +149,7 @@ test.each(["EUR", "INR"])("rule 22: both PDFs preserve %s amounts without unsupp
 test.each(["invoice", "receipt"] as const)("rule 22: %s handles non-WinAnsi buyer names and wrapped long descriptions without crashing", async (kind) => {
   const description = "Coaching practice for customer conversations and feedback across the monthly service period";
   const doc = document({ customer_details: { ...customer, name: "தமிழ் பெயர் 中文 😀" }, line_items: [{ ...raw.line_items![0], description }] });
-  const bytes = kind === "invoice" ? await renderInvoice(doc, "Bank: தமிழ்\nAccount: 123") : await renderReceipt(doc, paidAt);
+  const bytes = kind === "invoice" ? await renderInvoice(doc) : await renderReceipt(doc, paidAt);
   const { text } = await pdfText(bytes);
   expect(text).toContain("?");
   expect(text.replace(/\n/g, " ")).toContain(`TrainerTwin Paid plan: ${description}`);

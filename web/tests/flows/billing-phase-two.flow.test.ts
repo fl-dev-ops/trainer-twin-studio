@@ -6,6 +6,7 @@ import { PDFDocument } from "pdf-lib";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "../lib/minutes-test-db";
 import { fundOrg, grantRequests } from "../setup/meteroid";
 import { outsideServices } from "./harness";
+import { seller, sellerReply } from "../setup/billing-meteroid-fixture";
 import { billingOverview, buyPacks, checkAllBilling, invoiceIssuedEmail, invoiceOverdue, invoicePaid, invoiceReminder, paidSubscriptionEnded, recordInvoice, requestUpgrade, saveBillingDetails, startInvoiceWorkflows, syncInvoice, syncOrgInvoices } from "@/lib/billing/billing";
 import { toInvoice } from "@/lib/billing/meteroid";
 import { grantMinutes, giveStartingMinutes, grantMinutesToMany, learnerBalance } from "@/lib/minutes";
@@ -39,6 +40,7 @@ async function expectAppPdfs(email: Sent | undefined, filenames: string[]) {
     expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
     const pdf = await PDFDocument.load(bytes, { updateMetadata: false });
     expect(pdf.getProducer()).toBe("TrainerTwin");
+    expect(pdf.getAuthor()).toBe(seller.name);
     expect(pdf.getTitle()).toBe(`${attachment.filename.startsWith("RCPT-") ? "Receipt" : "Invoice"} ${attachment.filename.slice(0, -4)}`);
   }
 }
@@ -85,6 +87,7 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
     starts.length = requests.length = syncs.length = 0; invoices.clear(); sent.clear(); topups.clear(); runSteps = true; failStart = grpcPaidRace = false;
     outside.start(); f = minutesFixture(); await f.create(); await fundOrg({ orgId: f.org.id, minutes: 100 });
     outside.use(
+      http.post("https://meteroid-grpc.test/meteroid.api.invoicingentities.v1.InvoicingEntitiesService/GetInvoicingEntity", () => new HttpResponse(sellerReply())),
       http.patch("https://meteroid.test/api/v1/customers/:id", async ({ request, params }) => { requests.push({ method: "PATCH", path: `/customers/${params.id}`, key: request.headers.get("idempotency-key"), body: await request.json() as Raw }); return HttpResponse.json({ id: params.id }); }),
       http.get("https://meteroid.test/api/v1/plans", () => HttpResponse.json({ data: [{ id: "paid-plan", name: "Paid", status: "ACTIVE" }] })),
       http.get("https://meteroid.test/api/v1/plans/paid-plan", () => HttpResponse.json({ id: "paid-plan", price_components: [{ id: "price", name: "Monthly" }] })),
@@ -158,6 +161,8 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
     const email = sent.get(`billing-issued-${upgrade()}`)!;
     expect(email).toMatchObject({ from: "TrainerTwin Billing <billing@trainertwin.com>", reply_to: "support@trainertwin.com", to: details.emails });
     await expectAppPdfs(email, [`INV-${upgrade()}.pdf`]);
+    expect(email.text).toContain(`To pay invoice INV-${upgrade()}, reply to this email and we'll send you a payment link.`);
+    expect(email.text).not.toMatch(/bank|SWIFT|IFSC|How to pay/i);
     expect(await db.minuteLedger.count({ where: { orgId: f.org.id } })).toBe(0);
   });
   test("rules 11, 21, 22: upgrade paid activates Paid, sends receipt and invoice exactly once; paid org cannot upgrade", async () => {
@@ -291,7 +296,7 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
     await invoiceOverdue(id, new Date("2026-11-04")); await invoiceOverdue(id, new Date("2026-11-04"));
     expect((await billing()).pausedAt).not.toBeNull();
     expect([...sent.keys()].filter((k) => k.startsWith("billing-paused"))).toHaveLength(1);
-    await expectAppPdfs(sent.get(`billing-paused-${id}`), [`INV-${id}.pdf`]); // how to pay is on it
+    await expectAppPdfs(sent.get(`billing-paused-${id}`), [`INV-${id}.pdf`]);
     await expectAppPdfs(sent.get(`billing-reminder-${id}`), [`INV-${id}.pdf`]);
     expect((await billing()).balanceMinutes).toBe(100);
     for (const call of [() => grantMinutes({ orgId: f.org.id, email: f.learner.email, minutes: 5 }), () => giveStartingMinutes({ orgId: f.org.id, emails: [f.learner.email], minutes: 5 }), () => grantMinutesToMany({ orgId: f.org.id, emails: [f.learner.email], minutes: 5 })]) await expect(call()).rejects.toMatchObject({ name: "MinutesError", status: 403, message: expect.stringContaining("Settings › Billing") });

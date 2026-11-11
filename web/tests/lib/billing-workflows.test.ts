@@ -21,7 +21,7 @@ const { invoiceIssued } = await import("@/workflows/invoice-issued");
 const { invoicePaid } = await import("@/workflows/invoice-paid");
 beforeEach(() => { calls.length = waits.length = linkAndEmail.length = 0; row = { kind: "renewal", status: "unpaid", dueDate: "2099-01-03" }; paidKind = "upgrade"; paidAfter = 0; overdueAction = "paused"; failOverdue = failPaid = failPayLink = false; });
 
-test.each([false, true])("rules 27–28: payment link step precedes email; failure %s never blocks bank-transfer email", async (fails) => {
+test.each([false, true])("rules 27–28: payment link step precedes email; failure %s never blocks reply-for-payment-link email", async (fails) => {
   row.kind = "pack"; failPayLink = fails;
   expect(await invoiceIssued("inv")).toEqual({ status: "emailed" });
   expect(linkAndEmail).toEqual(["link:inv", "email:inv"]);

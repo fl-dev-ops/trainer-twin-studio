@@ -14,6 +14,7 @@ import { GET as receiptDownload } from "@/app/api/billing/invoices/[id]/receipt/
 import { GET as cronCheck, POST as cronPost } from "@/app/api/internal/billing/check/route";
 import { db, localMinutesDb, minutesFixture, meteroidServer, type MinutesFixture } from "./minutes-test-db";
 import { fundOrg } from "../setup/meteroid";
+import { seller, sellerReply } from "../setup/billing-meteroid-fixture";
 
 const details = { legalName: "DB Billing Ltd", country: "US", line1: "10 Street", city: "Boston", postalCode: "02110", emails: ["billing@example.com"], phone: "+19876543210" };
 
@@ -21,7 +22,7 @@ describe.skipIf(!localMinutesDb)("billing phase 2 constraints and studio API (lo
   let f: MinutesFixture;
   let membership: ReturnType<typeof spyOn<typeof org, "currentMembership">>;
   let headers: ReturnType<typeof spyOn<typeof nextHeaders, "headers">>;
-  const env = { CRON_SECRET: process.env.CRON_SECRET, INTERNAL_API_SECRET: process.env.INTERNAL_API_SECRET, VERCEL: process.env.VERCEL };
+  const env = { CRON_SECRET: process.env.CRON_SECRET, INTERNAL_API_SECRET: process.env.INTERNAL_API_SECRET, VERCEL: process.env.VERCEL, METEROID_GRPC_URL: process.env.METEROID_GRPC_URL };
   const caller = (role = "admin", orgId = f.org.id) => billingRouter.createCaller({ user: { ...f.trainer, orgId, orgSlug: f.org.slug, role } });
   const invoiceData = () => ({ id: `invoice-${f.org.id}`, orgId: f.org.id, number: "INV-DB-001", kind: "other", status: "unpaid", totalCents: 2500, currency: "USD", issuedAt: new Date("2026-11-01"), dueDate: new Date("2026-11-03") });
   function identity(role: string | null, orgId = f.org.id) {
@@ -29,10 +30,12 @@ describe.skipIf(!localMinutesDb)("billing phase 2 constraints and studio API (lo
   }
   const download = (route: typeof invoiceDownload, id = invoiceData().id) => route(new Request("http://dash.test/api/billing/invoices/id"), { params: Promise.resolve({ id }) });
   beforeEach(async () => {
+    process.env.METEROID_GRPC_URL = "https://meteroid-grpc.test";
     f = minutesFixture(); await f.create(); await fundOrg({ orgId: f.org.id, minutes: 0 });
     headers = spyOn(nextHeaders, "headers").mockResolvedValue(new Headers());
     membership = spyOn(org, "currentMembership"); identity("admin");
     meteroidServer.use(
+      http.post("https://meteroid-grpc.test/meteroid.api.invoicingentities.v1.InvoicingEntitiesService/GetInvoicingEntity", () => new HttpResponse(sellerReply())),
       http.get("https://meteroid.test/api/v1/invoices/:id", ({ params }) => HttpResponse.json({
         id: params.id, invoice_number: "INV-DB-001", invoice_date: "2026-11-01", due_date: "2026-11-03", currency: "USD", subtotal: 2500, tax_amount: 0, total: 2500,
         customer_details: { name: "Invoice-time DB Ltd", email: "billing@example.com", billing_address: { line1: "10 Street", city: "Boston", zip_code: "02110", country: "US" } },
@@ -131,6 +134,7 @@ describe.skipIf(!localMinutesDb)("billing phase 2 constraints and studio API (lo
       expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
       const pdf = await PDFDocument.load(bytes, { updateMetadata: false });
       expect(pdf.getProducer()).toBe("TrainerTwin");
+      expect(pdf.getAuthor()).toBe(seller.name);
       expect(pdf.getTitle()).toBe(filename.startsWith("RCPT-") ? "Receipt RCPT-INV-DB-001" : "Invoice INV-DB-001");
     }
   });

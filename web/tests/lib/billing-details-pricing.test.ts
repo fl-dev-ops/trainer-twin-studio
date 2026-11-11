@@ -113,10 +113,11 @@ test("formatMoney uses invoice currency and Indian grouping for INR, while defau
 });
 
 test.each(["issued", "reminder", "paused", "upgrade_cancelled", "paid"] as const)("rule 21: %s email escapes billing text and links to billing", (event) => {
-  const email = billingEmail({ event, orgName: "<script>org</script>", invoiceNumber: "INV-001", amount: "$300.00", dueDate: "13 Nov 2026", description: "Paid <plan>", billingUrl: "https://dash.test/settings?tab=billing", paymentInstructions: "Bank <acct>\nReference", outcome: "Paid plan active" });
+  const email = billingEmail({ event, orgName: "<script>org</script>", invoiceNumber: "INV-001", amount: "$300.00", dueDate: "13 Nov 2026", description: "Paid <plan>", billingUrl: "https://dash.test/settings?tab=billing", outcome: "Paid plan active" });
   expect(email.html).not.toContain("<script>org</script>");
   if (event !== "paid") expect(email.html).toContain("&lt;script&gt;org&lt;/script&gt;");
   if (event === "issued" || event === "paid") expect(email.html).toContain("Paid &lt;plan&gt;");
   expect(email.text).toContain("https://dash.test/settings?tab=billing");
   if (event === "paid") expect(email.text).toContain("Paid plan active");
+  for (const content of [email.html, email.text]) expect(content).not.toMatch(/bank|SWIFT|IFSC|How to pay/i);
 });

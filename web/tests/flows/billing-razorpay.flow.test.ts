@@ -5,6 +5,7 @@ import { http, HttpResponse } from "msw";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "../lib/minutes-test-db";
 import { fundOrg, availableOrgSeconds } from "../setup/meteroid";
 import { outsideServices, razorpayWebhook } from "./harness";
+import { sellerReply } from "../setup/billing-meteroid-fixture";
 import { billingOverview, buyPacks, invoiceIssuedEmail, invoiceOverdue, invoicePaid, invoiceVoided, requestUpgrade, saveBillingDetails, syncInvoice, syncOrgInvoices } from "@/lib/billing/billing";
 import { closePaymentLink, ensurePaymentLink } from "@/lib/billing/razorpay";
 import { billingRouter } from "@/lib/billing/trpc";
@@ -35,7 +36,7 @@ describe.skipIf(!localMinutesDb)("billing Razorpay phase 3 (real DB; MSW Meteroi
   const outside = outsideServices();
   const invoices = new Map<string, Raw>(); const links = new Map<string, Raw>();
   const creates: Raw[] = [], marks: Record<number, string>[] = [], cancels: string[] = [], lookups: string[] = [], patches: Raw[] = [];
-  const envNames = ["RAZORPAY_ENABLED", "RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET", "METEROID_GRPC_URL", "BILLING_PAYMENT_INSTRUCTIONS"];
+  const envNames = ["RAZORPAY_ENABLED", "RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET", "METEROID_GRPC_URL"];
   const oldEnv = Object.fromEntries(envNames.map((name) => [name, process.env[name]]));
   let lag = false, failMark = false;
   const id = () => `invoice-${f.org.id}`;
@@ -52,11 +53,12 @@ describe.skipIf(!localMinutesDb)("billing Razorpay phase 3 (real DB; MSW Meteroi
   const pay = async (paymentId = `pay_${f.org.id}`, patch: Raw = {}) => razorpayWebhook("payment_link.paid", { payment_link: { entity: { id: (await row()).paymentLinkId, notes: { invoiceId: id() } } }, payment: { entity: { id: paymentId, amount: 30000, currency: "USD", ...patch } } });
   function linkPaid(linkId: string, paymentId = `pay_${f.org.id}`) { Object.assign(links.get(linkId)!, { status: "paid", amount_paid: 30000, payments: [{ payment_id: paymentId, amount: 30000, status: "captured" }] }); }
   beforeEach(async () => {
-    process.env.RAZORPAY_ENABLED = "true"; process.env.RAZORPAY_KEY_ID = "rzp_test_billing"; process.env.RAZORPAY_KEY_SECRET = "test-secret"; process.env.RAZORPAY_WEBHOOK_SECRET = "billing-webhook-secret"; process.env.METEROID_GRPC_URL = "https://meteroid-grpc.test"; process.env.BILLING_PAYMENT_INSTRUCTIONS = "Bank account 123";
+    process.env.RAZORPAY_ENABLED = "true"; process.env.RAZORPAY_KEY_ID = "rzp_test_billing"; process.env.RAZORPAY_KEY_SECRET = "test-secret"; process.env.RAZORPAY_WEBHOOK_SECRET = "billing-webhook-secret"; process.env.METEROID_GRPC_URL = "https://meteroid-grpc.test";
     starts.length = creates.length = marks.length = cancels.length = lookups.length = patches.length = 0; invoices.clear(); links.clear(); executeSteps = true; lag = failMark = false;
     outside.start(); f = minutesFixture(); await f.create(); await fundOrg({ orgId: f.org.id, minutes: 0 });
     await db.orgBilling.update({ where: { orgId: f.org.id }, data: { billingDetails: details } });
     outside.use(
+      http.post("https://meteroid-grpc.test/meteroid.api.invoicingentities.v1.InvoicingEntitiesService/GetInvoicingEntity", () => new HttpResponse(sellerReply())),
       http.patch("https://meteroid.test/api/v1/customers/:id", async ({ request }) => { patches.push(await request.json() as Raw); return HttpResponse.json({}); }),
       http.get("https://meteroid.test/api/v1/plans", () => HttpResponse.json({ data: [{ id: "paid-plan", name: "Paid", status: "ACTIVE" }] })),
       http.get("https://meteroid.test/api/v1/plans/paid-plan", () => HttpResponse.json({ id: "paid-plan", price_components: [{ id: "price", name: "Monthly" }] })),

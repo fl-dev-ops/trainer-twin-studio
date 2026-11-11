@@ -5,6 +5,7 @@ import { decodePDFRawStream, PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStre
 import { billingDetailsInput, meteroidCustomerPatch } from "@/lib/billing/details";
 import { billingEmail } from "@/lib/email";
 import { billingDocument, renderInvoice } from "@/lib/billing/documents";
+import { seller } from "../setup/billing-meteroid-fixture";
 import { cancelPaymentLink, createInvoicePaymentLink, fetchPayment, paymentLinkByReference, razorpayEnabled, RazorpayDisabledError, RazorpayError, settlementRecon } from "@/lib/razorpay";
 
 const details = { legalName: "Example Ltd", country: "US", line1: "10 Street", city: "Boston", postalCode: "02110", emails: ["billing@example.com"], phone: "+19876543210" };
@@ -59,22 +60,36 @@ test("Razorpay disabled refuses calls before network; API errors retain status f
   await expect(fetchPayment("pay_1")).rejects.toBeInstanceOf(RazorpayError);
 });
 
-test.each(["issued", "reminder", "paused"] as const)("rule 28: %s email includes online button/text and bank fallback", (event) => {
-  const args = { event, orgName: "Example", invoiceNumber: "INV-1", amount: "$300.00", dueDate: "13 Nov 2026", description: "Paid plan", billingUrl: "https://dash.test/settings?tab=billing", paymentInstructions: "Bank <acct>", payUrl: "https://rzp.io/123?a=1&b=2" };
-  const email = billingEmail(args);
+test.each(["issued", "reminder", "paused"] as const)("rules 21, 28: %s email includes online button/text without bank details", (event) => {
+  const email = billingEmail({ event, orgName: "Example", invoiceNumber: "INV-1", amount: "$300.00", dueDate: "13 Nov 2026", description: "Paid plan", billingUrl: "https://dash.test/settings?tab=billing", payUrl: "https://rzp.io/123?a=1&b=2" });
   expect(email.html).toContain('href="https://rzp.io/123?a=1&amp;b=2"'); expect(email.html).toContain("Pay $300.00 now");
-  expect(email.html).toContain("Or pay by bank transfer"); expect(email.html).toContain("Bank &lt;acct&gt;");
-  expect(email.text).toContain("Pay online: https://rzp.io/123?a=1&b=2"); expect(email.text).toContain("Or pay by bank transfer");
-  const bankOnly = billingEmail({ ...args, payUrl: null }); expect(bankOnly.html).not.toContain("Pay $300.00 now"); expect(bankOnly.text).toContain("How to pay");
+  expect(email.text).toContain("Pay online: https://rzp.io/123?a=1&b=2");
+  for (const content of [email.html, email.text]) {
+    expect(content).not.toMatch(/bank|account|SWIFT|IFSC|How to pay/i);
+    expect(content).not.toContain("we'll send you a payment link");
+  }
+});
+
+test.each([undefined, null, ""])("rule 21: missing payUrl %s asks for a payment link by reply, never bank details", (payUrl) => {
+  for (const event of ["issued", "reminder", "paused"] as const) {
+    const email = billingEmail({ event, orgName: "Example", invoiceNumber: "INV-<1>", amount: "$300.00", dueDate: "13 Nov 2026", description: "Paid plan", billingUrl: "https://dash.test/settings?tab=billing", payUrl });
+    expect(email.html).toContain("To pay invoice <strong>INV-&lt;1&gt;</strong>, reply to this email and we'll send you a payment link.");
+    expect(email.text).toContain("To pay invoice INV-<1>, reply to this email and we'll send you a payment link.");
+    for (const content of [email.html, email.text]) {
+      expect(content).not.toMatch(/bank|account|SWIFT|IFSC|How to pay/i);
+      expect(content).not.toContain("Pay $300.00 now");
+      expect(content).not.toContain("Pay online:");
+    }
+  }
 });
 
 test("rule 28: legacy details without phone still render a valid deterministic invoice, with a clickable Pay online annotation when present", async () => {
-  const doc = billingDocument({ id: "inv-1", invoice_number: "INV-1", invoice_date: "2026-11-11", due_date: "2026-11-13", currency: "USD", total: 30000, subtotal: 30000, tax_amount: 0, customer_details: { name: details.legalName, email: details.emails[0], billing_address: { line1: details.line1, city: details.city, zip_code: details.postalCode, country: details.country } }, line_items: [{ name: "Paid plan", quantity: "1", unit_price: "300" }] }, "Fallback");
+  const doc = billingDocument({ id: "inv-1", invoice_number: "INV-1", invoice_date: "2026-11-11", due_date: "2026-11-13", currency: "USD", total: 30000, subtotal: 30000, tax_amount: 0, customer_details: { name: details.legalName, email: details.emails[0], billing_address: { line1: details.line1, city: details.city, zip_code: details.postalCode, country: details.country } }, line_items: [{ name: "Paid plan", quantity: "1", unit_price: "300" }] }, "Fallback", seller);
   const payUrl = "https://rzp.io/123";
   let first: Buffer;
   try {
-    setSystemTime(new Date("2026-11-14")); first = await renderInvoice(doc, "Bank account 123", payUrl);
-    setSystemTime(new Date("2027-02-01")); expect(first.equals(await renderInvoice(doc, "Bank account 123", payUrl))).toBe(true);
+    setSystemTime(new Date("2026-11-14")); first = await renderInvoice(doc, payUrl);
+    setSystemTime(new Date("2027-02-01")); expect(first.equals(await renderInvoice(doc, payUrl))).toBe(true);
   } finally { setSystemTime(); }
   const pdf = await PDFDocument.load(first, { updateMetadata: false }); expect(pdf.getPageCount()).toBe(1); expect(pdf.getProducer()).toBe("TrainerTwin");
   const page = pdf.getPage(0); const annots = page.node.Annots()!; expect(annots.size()).toBe(1);
@@ -82,6 +97,6 @@ test("rule 28: legacy details without phone still render a valid deterministic i
   expect(link.lookup(PDFName.of("A"), PDFDict).lookup(PDFName.of("URI"), PDFString).decodeText()).toBe(payUrl);
   const streams = page.node.Contents() as PDFArray;
   const text = Array.from({ length: streams.size() }, (_, i) => Buffer.from(decodePDFRawStream(streams.lookup(i, PDFRawStream)).decode()).toString()).join("\n").match(/<([0-9A-F]+)> Tj/g)!.map((draw) => Buffer.from(draw.slice(1, draw.indexOf(">")), "hex").toString("latin1")).join("\n");
-  expect(text).toContain("Pay online"); expect(text).toContain(payUrl); expect(text).toContain("Or by bank transfer");
-  expect((await PDFDocument.load(await renderInvoice(doc, "Bank account 123"))).getPage(0).node.Annots()?.size() ?? 0).toBe(0);
+  expect(text).toContain("Pay online"); expect(text).toContain(payUrl); expect(text).not.toMatch(/bank|Account:|SWIFT|IFSC/i);
+  expect((await PDFDocument.load(await renderInvoice(doc))).getPage(0).node.Annots()?.size() ?? 0).toBe(0);
 });
