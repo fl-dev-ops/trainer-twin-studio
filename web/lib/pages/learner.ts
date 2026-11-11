@@ -14,7 +14,8 @@ import { resolveSessionUser } from "@/lib/session-user";
 import { listAgentContextRequired, listAgentContextUploads, listScenarioIntroVideos } from "@/lib/specs";
 import { learnerBalance } from "@/lib/minutes";
 import { AppError } from "@/lib/errors";
-import { resolveTwinPath, TwinAccessError, twinAccessByCode, twinAssignmentCode } from "@/lib/twin-access";
+import { practicePerson, startAllowance } from "@/lib/practice";
+import { resolveTwinPath, twinAccessByCode, twinAssignmentCode } from "@/lib/twin-access";
 import { beforeSettings } from "@/lib/context-upload";
 
 /**
@@ -99,14 +100,20 @@ export async function loadSharedSession(code: string): Promise<SharedSessionView
     // Opening a common twin link is where an existing account joins (specs/people.md rule 6); starting the call
     // only uses that membership.
     const twin = await twinAccessByCode({ orgId: org.id, user, code, join: true }).catch((error: unknown) => {
-      if (error instanceof TwinAccessError || error instanceof AppError) return error;
+      if (error instanceof AppError) return error;
       throw error;
     });
-    if (twin instanceof TwinAccessError || twin instanceof AppError) return { kind: "twinUnavailable", message: twin.message, email: user.email };
+    if (twin instanceof AppError) return { kind: "twinUnavailable", message: twin.message, email: user.email };
     if (twin) {
+      // The practice check Start uses (specs/practice.md rule 1): the page shows its refusal instead of a Start.
+      const refused = await practicePerson(org.id, user.id).then((person) => startAllowance(org.id, person)).then(() => null, (error: unknown) => {
+        if (error instanceof AppError) return error;
+        throw error;
+      });
       // Someone who just joined through a common link got their starting credits on the way in.
       const left = twin.assignmentId ? await minutesLeft() : null;
-      if (left !== null && left < MIN_START_MINUTES) return { kind: "outOfMinutes", email: user.email, minutesLeft: Math.max(0, left) };
+      if (refused?.code === "credits_out" || refused?.code === "credits_short") return { kind: "outOfMinutes", email: user.email, minutesLeft: Math.max(0, left ?? 0) };
+      if (refused) return { kind: "twinUnavailable", message: refused.message, email: user.email };
       return { kind: "session", props: { ...(await twinSessionView(org.id, twin.agentId, code, user.name)), minutesLeft: left } };
     }
   }
@@ -180,25 +187,34 @@ export async function twinProfile(agentId: string): Promise<Pick<FlowProps, "tra
   };
 }
 
+/** The page's word for a refusal it has its own copy for; any other refusal shows its message (`blocked`). */
+const ACCESS_REASONS: Record<string, "notMember" | "unassigned" | "ended" | "used"> = {
+  no_org: "notMember",
+  twin_not_assigned: "unassigned",
+  twin_access_revoked: "ended",
+  twin_access_ended: "ended",
+  credits_out: "used",
+};
+
 /**
- * The signed-in person's access to a twin (null: signed out): their minutes left, or why they can't talk to it.
- * Studio members (admin, team) get a preview: calls started like Try as learner (no minutes, not counted).
+ * The signed-in person's access to a twin (null: signed out), from the practice check that Start uses
+ * (specs/practice.md rule 1): their minutes left, or why they can't talk to it. Studio members (admin, team) get a
+ * preview, refused too when Start would refuse it (org paused, org credits short).
  */
-export async function twinAccessFor(org: { id: string }, user: { id: string; name: string; email: string } | null, agentId: string, studio: boolean): Promise<LearnerAccess> {
+export async function twinAccessFor(org: { id: string }, user: { id: string; name: string; email: string } | null, agentId: string): Promise<LearnerAccess> {
   if (!user) return null;
-  if (studio) return { ok: true, preview: true, name: user.name || user.email, email: user.email };
+  const name = user.name || user.email;
   try {
-    const found = await twinAssignmentCode({ orgId: org.id, user, agentId });
+    const person = await practicePerson(org.id, user.id);
+    const code = isStudioRole(person.role) ? null : (await twinAssignmentCode({ orgId: org.id, user, agentId })).code;
+    await startAllowance(org.id, person);
+    if (!code) return { ok: true, preview: true, name, email: user.email };
     // The learner's own minutes in this org, shared by every twin and role play they have.
     const minutes = await learnerBalance(org.id, user.email);
-    return minutes.balanceSeconds < 60
-      ? { ok: false, name: user.name || user.email, email: user.email, reason: "used" }
-      : { ok: true, preview: false, name: user.name || user.email, email: user.email, code: found.code, minutesLeft: Math.floor(minutes.balanceSeconds / 60), minutesTotal: Math.floor(minutes.grantedSeconds / 60) };
+    return { ok: true, preview: false, name, email: user.email, code, minutesLeft: Math.floor(minutes.balanceSeconds / 60), minutesTotal: Math.floor(minutes.grantedSeconds / 60) };
   } catch (error) {
-    if (!(error instanceof TwinAccessError)) throw error;
-    // In the learner's words: why they can't talk (messages from usable() in lib/twin-access.ts).
-    const reason = /removed|ended/.test(error.message) ? "ended" : (await orgPerson(org.id, { userId: user.id })) ? "unassigned" : "notMember";
-    return { ok: false, name: user.name || user.email, email: user.email, reason };
+    if (!(error instanceof AppError)) throw error;
+    return { ok: false, name, email: user.email, reason: ACCESS_REASONS[error.code] ?? "blocked", message: error.message };
   }
 }
 
@@ -218,7 +234,7 @@ export async function loadTwinLink(slug: string): Promise<TwinLinkView> {
   if (!org || !twin) return { kind: "notFound" };
   const [profile, access] = await Promise.all([
     twinProfile(twin.agentId),
-    twinAccessFor(org, user, twin.agentId, user ? await isStudioMember(org.id, user.id) : false),
+    twinAccessFor(org, user, twin.agentId),
   ]);
   return { kind: "flow", props: { path: `/t/${encodeURIComponent(slug)}`, ...profile, access } };
 }

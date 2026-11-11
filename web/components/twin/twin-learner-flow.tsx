@@ -34,7 +34,8 @@ export type LearnerAccess =
   | { ok: true; preview: false; name: string; email: string; code: string; minutesLeft: number; minutesTotal: number }
   /** A studio member (admin, team): the learner page as learners see it; calls use no minutes and aren't counted. */
   | { ok: true; preview: true; name: string; email: string }
-  | { ok: false; name: string; email: string; reason: "notMember" | "unassigned" | "ended" | "used" }
+  /** blocked: any other refusal of the practice check (org paused, too few minutes…), said by `message`. */
+  | { ok: false; name: string; email: string; reason: "notMember" | "unassigned" | "ended" | "used" | "blocked"; message?: string }
   | null;
 
 export type Trainer = { name: string; title: string | null; bio: string | null; photoUrl: string | null };
@@ -51,7 +52,8 @@ export const firstName = (name: string) => name.split(/[\s@]/)[0] || name;
 const ISSUES = ["Wrong or made-up answer", "Didn't understand me", "Audio or connection", "Too slow", "Something else"];
 
 /** Why someone can't talk, said plainly (title, what to do). */
-export function noAccessCopy(reason: "notMember" | "unassigned" | "ended" | "used", trainer: string) {
+export function noAccessCopy(reason: "notMember" | "unassigned" | "ended" | "used" | "blocked", trainer: string, message?: string) {
+  if (reason === "blocked") return { title: "You can't start a call right now", body: message ?? `Ask ${trainer} for help.` };
   if (reason === "used") return { title: "You've used all your minutes", body: `Ask ${trainer} for more time to keep practising.` };
   if (reason === "ended") return { title: "Your access has ended", body: `Ask ${trainer} if you'd like to keep practising.` };
   if (reason === "unassigned") return { title: "This twin isn't yours yet", body: `Ask ${trainer} to give you this twin.` };
@@ -150,7 +152,7 @@ export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string;
     );
   }
 
-  const blocked = access && !access.ok ? noAccessCopy(access.reason, coach) : null;
+  const blocked = access && !access.ok ? noAccessCopy(access.reason, coach, access.message) : null;
   return (
     <div className="flex min-h-svh flex-col bg-background">
       {topBar}

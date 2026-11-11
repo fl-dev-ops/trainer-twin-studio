@@ -4,7 +4,6 @@ import { activateSession } from "@/lib/interview-sessions";
 import { activateLiveKitSession, closeLiveKitSession } from "@/lib/livekit";
 import { AppError } from "@/lib/errors";
 import { MinutesError } from "@/lib/minutes";
-import { TwinAccessError } from "@/lib/twin-access";
 import type { DeliveryMode } from "@/lib/deployments";
 
 /**
@@ -39,7 +38,6 @@ export type SessionStart =
 export function startRefusal(error: unknown): Refusal | null {
   if (error instanceof MinutesError) return { ok: false, status: error.status, error: error.message, code: "minutes" };
   if (error instanceof AppError) return { ok: false, status: error.status, error: error.message, code: error.code };
-  if (error instanceof TwinAccessError) return { ok: false, status: error.status, error: error.message };
   const message = error instanceof Error ? error.message : "";
   if (message === "Context not found" || message === BEFORE_UPLOAD_REFUSED || message.startsWith("Deployment does not allow ")) {
     return { ok: false, status: 400, error: message };

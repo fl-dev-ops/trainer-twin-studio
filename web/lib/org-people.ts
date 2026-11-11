@@ -130,6 +130,8 @@ export async function addPeopleToOrg(input: {
   /** Who is adding them (credits ledger). */
   byUserId?: string | null;
   startingMinutes?: number;
+  /** More writes for these people (their twin or role-play assignments) in the same locked transaction. */
+  then?: (tx: Prisma.TransactionClient, people: AddedPerson[]) => Promise<void>;
 }): Promise<AddedPerson[]> {
   const emails = [...new Set(input.emails.map(lower))].filter(Boolean);
   if (!emails.length) return [];
@@ -160,10 +162,12 @@ export async function addPeopleToOrg(input: {
       });
     }
     const added = new Map((await orgPeople(input.orgId, { emails: fresh }, tx)).map((person) => [person.email, person]));
-    return emails.map((email): AddedPerson => {
+    const people = emails.map((email): AddedPerson => {
       const startingCredits = credited.has(email) ? input.startingMinutes ?? DEFAULT_LEARNER_MINUTES : 0;
       return added.has(email) ? { ...added.get(email)!, added: true, startingCredits } : { ...known.get(email)!, added: false, startingCredits };
     });
+    await input.then?.(tx, people);
+    return people;
   });
   if (result.some((person) => person.startingCredits)) await scheduleOrgUsage(input.orgId);
   return result;

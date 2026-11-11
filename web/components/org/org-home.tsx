@@ -65,7 +65,7 @@ export function OrgHome({ org, viewer, twins, trainer, roleplays }: {
   const [signingIn, setSigningIn] = useState(false);
   const [main, ...others] = twins;
   const coach = main ? firstName(main.trainer.name) : org.name;
-  const blocked = main?.access && !main.access.ok ? noAccessCopy(main.access.reason, coach) : null;
+  const blocked = main?.access && !main.access.ok ? noAccessCopy(main.access.reason, coach, main.access.message) : null;
   const usable = twins.some((item) => item.access?.ok) || roleplays.length > 0;
   const website = org.websiteUrl && hostOf(org.websiteUrl) ? { url: org.websiteUrl, host: hostOf(org.websiteUrl) } : null;
 
@@ -300,7 +300,7 @@ function TrainerCard({ trainer, orgName }: { trainer: Trainer; orgName: string }
 /** Another trainer's twin at this org: who they are, and a way to it (or why not yet). */
 function OtherTrainer({ item, signedIn, onSignIn }: { item: OrgHomeTwin; signedIn: boolean; onSignIn: () => void }) {
   const coach = firstName(item.trainer.name);
-  const blocked = item.access && !item.access.ok ? noAccessCopy(item.access.reason, coach) : null;
+  const blocked = item.access && !item.access.ok ? noAccessCopy(item.access.reason, coach, item.access.message) : null;
   return (
     <article className={cn(CARD, "flex items-center gap-4 p-5")}>
       <TwinPortrait name={item.trainer.name} photoUrl={item.trainer.photoUrl} className="size-14 shrink-0 rounded-2xl text-xl" />

@@ -1,4 +1,5 @@
-import { orgPerson } from "@/lib/org-people";
+import { errorResponse, refusals } from "@/lib/errors";
+import { practicePerson, practiceRefusals } from "@/lib/practice";
 import { NextResponse } from "next/server";
 import { authorizeRuntimeSession, type SessionEndStatus } from "@/lib/interview-sessions";
 import { closeInterviewSession } from "@/lib/session-lifecycle";
@@ -19,16 +20,16 @@ export async function GET() {
 /** Learner-triggered activation. No runtime or LiveKit resources exist before this call. */
 export async function POST(req: Request) {
   const { org, user } = await resolveSessionUser();
-  if (!org || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!org || !user) return errorResponse(refusals.signedOut());
   const body = await req.json().catch(() => null);
   if (!body || (!body.shareCode && !body.agentSlug && !body.deploymentKey)) {
-    return NextResponse.json({ error: "shareCode, agentSlug, or deploymentKey is required" }, { status: 400 });
+    return errorResponse(refusals.invalidInput("shareCode, agentSlug, or deploymentKey is required"));
   }
   if (!body.shareCode) {
-    const member = await orgPerson(org.id, { userId: user.id });
-    if (!member) return NextResponse.json({ error: "Invalid session URL" }, { status: 403 });
-    // Starting an agent by slug skips assignments and minutes: studio members (admin, team) trying it only.
-    if (!body.deploymentKey && !isStudioRole(member.role)) return NextResponse.json({ error: "Invalid session URL" }, { status: 403 });
+    const member = await practicePerson(org.id, user.id).catch((error: unknown) => errorResponse(error));
+    if (member instanceof Response) return member;
+    // Starting an agent by slug skips assignments: studio members (admin, team) trying it only.
+    if (!body.deploymentKey && !isStudioRole(member.role)) return errorResponse(refusals.studioOnly());
   }
 
   try {
@@ -65,7 +66,7 @@ export async function PATCH(req: Request) {
   }
   const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
   const session = await authorizeRuntimeSession(String(body.id), token);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return errorResponse(practiceRefusals.runtimeTokenInvalid());
   // The rest (room, credits, report) runs in the session's end workflow (lib/session-lifecycle.ts).
   await closeInterviewSession(session.id, body.status as SessionEndStatus);
   return NextResponse.json({ ok: true });

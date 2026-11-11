@@ -38,7 +38,7 @@ export async function loadOrgHome(): Promise<OrgHomeView> {
     const [path, profile, access] = await Promise.all([
       twinSharePath(org.id, org.slug, agent.id),
       twinProfile(agent.id),
-      twinAccessFor(org, user, agent.id, studio),
+      twinAccessFor(org, user, agent.id),
     ]);
     return {
       href: `/t/${encodeURIComponent(path)}`,

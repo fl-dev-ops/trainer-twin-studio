@@ -21,14 +21,25 @@ export type TwinAssignInput = {
  * ("added" too when they joined just now). The assign-twin workflow's first step (workflows/assign-twin.ts).
  */
 export async function assignTwinLearners(input: TwinAssignInput) {
-  const people = await addPeopleToOrg({ orgId: input.org.id, emails: input.emails, role: LEARNER, byUserId: input.by.id, startingMinutes: input.startingMinutes });
-  const { stats, invites } = await assignTwin({
+  // People and their assignments in one locked transaction (specs/practice.md rule 10): all or nothing.
+  let assigned: Awaited<ReturnType<typeof assignTwin>> | undefined;
+  const people = await addPeopleToOrg({
     orgId: input.org.id,
-    agentId: input.agent.id,
-    people: people.map(({ userId, email }) => ({ userId, email })),
-    accessUntil: input.accessUntil,
-    assignedByUserId: input.by.id,
+    emails: input.emails,
+    role: LEARNER,
+    byUserId: input.by.id,
+    startingMinutes: input.startingMinutes,
+    then: async (tx, added) => {
+      assigned = await assignTwin({
+        orgId: input.org.id,
+        agentId: input.agent.id,
+        people: added.map(({ userId, email }) => ({ userId, email })),
+        accessUntil: input.accessUntil,
+        assignedByUserId: input.by.id,
+      }, tx);
+    },
   });
+  const { stats, invites } = assigned ?? { stats: { added: 0, reactivated: 0, skipped: 0 }, invites: [] };
   const byEmail = new Map(people.map((person) => [person.email, person]));
   const balances = await learnerMinutes(input.org.id, invites.map((invite) => invite.to));
   const org = { slug: input.org.slug, name: await orgName(input.org.id) };

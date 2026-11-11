@@ -227,23 +227,28 @@ export function sessionUsageSeconds(row: { allowedSeconds: number | null; starte
 }
 
 /**
- * Writes a closed metered call's usage row: a learner's minutes (usage), or the org's credits for an admin/team call
- * (org_usage, then sent to Meteroid). Safe to call more than once (one row per session).
+ * Writes an ended metered call's usage row in `tx` (specs/practice.md rule 8): a learner's minutes (usage), or the
+ * org's credits for an admin/team call (org_usage, sent to Meteroid after commit: `report`). One row per session;
+ * a second call writes nothing. `failed` and `revoked` calls spent nothing and get no row.
  */
-export async function recordSessionUsage(sessionId: string) {
-  const row = await db.interviewSession.findUnique({
+export async function writeSessionUsage(tx: Tx, sessionId: string) {
+  const row = await tx.interviewSession.findUnique({
     where: { id: sessionId },
     select: { id: true, orgId: true, userId: true, allowedSeconds: true, chargesOrg: true, startedAt: true, endedAt: true, status: true, user: { select: { email: true } } },
   });
-  if (!row || row.allowedSeconds == null || !row.endedAt) return;
+  if (!row || row.allowedSeconds == null || !row.endedAt || row.status === "failed" || row.status === "revoked") return { report: null };
   const seconds = sessionUsageSeconds(row);
-  const written = await db.minuteLedger.create({
-    data: { orgId: row.orgId, email: lower(row.user.email), userId: row.userId, type: row.chargesOrg ? "org_usage" : "usage", seconds: -seconds, sessionId: row.id },
-  }).then(() => true, (error: unknown) => {
-    if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) throw error;
-    return false;
+  const { count } = await tx.minuteLedger.createMany({
+    data: [{ orgId: row.orgId, email: lower(row.user.email), userId: row.userId, type: row.chargesOrg ? "org_usage" : "usage", seconds: -seconds, sessionId: row.id }],
+    skipDuplicates: true,
   });
-  if (written && row.chargesOrg && seconds > 0) await scheduleOrgUsage(row.orgId);
+  return { report: count && row.chargesOrg && seconds > 0 ? row.orgId : null };
+}
+
+/** writeSessionUsage on its own, then Meteroid's usage report. Safe to repeat (the end workflow's retry). */
+export async function recordSessionUsage(sessionId: string) {
+  const { report } = await writeSessionUsage(db, sessionId);
+  if (report) await scheduleOrgUsage(report);
 }
 
 /** Minutes added to a learner (a grant), with who did it. */

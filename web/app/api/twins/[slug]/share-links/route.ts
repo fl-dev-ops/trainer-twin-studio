@@ -1,7 +1,8 @@
+import { AppError, errorResponse } from "@/lib/errors";
 import { z } from "zod";
 import { BASE_DOMAIN } from "@/lib/base-domain";
 import { studioOrRefusal } from "@/lib/org";
-import { createTwinShareLink, findTwinAgent, listTwinShareLinks, setTwinShareLinkStatus, TwinAccessError } from "@/lib/twin-access";
+import { createTwinShareLink, findTwinAgent, listTwinShareLinks, setTwinShareLinkStatus } from "@/lib/twin-access";
 
 export const runtime = "nodejs";
 
@@ -9,7 +10,7 @@ const createSchema = z.object({ minutesPerUser: z.number().int().min(1).max(10_0
 const updateSchema = z.object({ linkId: z.string().min(1), status: z.enum(["active", "disabled"]) }).strict();
 
 const failed = (error: unknown) => {
-  if (error instanceof TwinAccessError) return Response.json({ error: error.message }, { status: error.status });
+  if (error instanceof AppError) return errorResponse(error);
   throw error;
 };
 

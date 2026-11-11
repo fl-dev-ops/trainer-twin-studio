@@ -1,20 +1,19 @@
 import { createHash, createHmac, randomBytes } from "node:crypto";
-import { orgPerson } from "@/lib/org-people";
 import { assignmentMatchesUser } from "@/lib/assignments";
-import { db } from "@/lib/db";
+import { db, withLock } from "@/lib/db";
+import { refusals } from "@/lib/errors";
+import { practicePerson, practiceRefusals, startAllowance } from "@/lib/practice";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { ensureDeployment, type DeliveryMode } from "@/lib/deployments";
 import { initRuntimeState } from "@/lib/runtime/runtime";
 import { getAgentConfigForAgent } from "@/lib/specs";
-import { assertNotDisabledIn } from "@/lib/members";
 import { isStudioRole } from "@/lib/org";
-import { TwinAccessError, twinAccessByAgent, twinAccessByCode } from "@/lib/twin-access";
+import { twinAccessByAgent, twinAccessByCode } from "@/lib/twin-access";
 import { pinTwinSkills, TWIN_SOURCE } from "@/lib/twins";
 import { beforeSettings, usesBeforeSettings } from "@/lib/context-upload";
-import { learnerBalance, MinutesError, OUT_OF_MINUTES, recordSessionUsage } from "@/lib/minutes";
-import { MIN_START_MINUTES } from "@/lib/minutes-config";
+import { MinutesError, minutesLock, writeSessionUsage } from "@/lib/minutes";
+import { scheduleOrgUsage } from "@/lib/schedule-org-credits";
 import { orgCredits } from "@/lib/org-credits";
-import { pausedReason } from "@/lib/billing/paused";
 import { BEFORE_UPLOAD_REFUSED, uploadAllowed } from "@/lib/context-upload";
 
 const shareCode = () => randomBytes(18).toString("base64url");
@@ -26,17 +25,6 @@ const runtimeToken = (sessionId: string) => {
 };
 
 export type SessionEndStatus = "completed" | "abandoned";
-
-export const ORG_OUT_OF_CREDITS = "Your organization has no credits left for calls. Contact TrainerTwin to add more.";
-
-const whole = (seconds: number) => Math.max(0, Math.floor(seconds / 60));
-/** Refused below MIN_START_MINUTES: nothing left, or too little for a call worth starting. */
-const learnerTooShort = (seconds: number) => seconds <= 0
-  ? OUT_OF_MINUTES
-  : `You need at least ${MIN_START_MINUTES} minutes to start a call; you have ${whole(seconds)}. Ask your trainer for more.`;
-const orgTooShort = (seconds: number) => seconds <= 0
-  ? ORG_OUT_OF_CREDITS
-  : `Your organization needs at least ${MIN_START_MINUTES} credits to start a call; it has ${whole(seconds)}. Contact TrainerTwin to add more.`;
 
 export function resolveSessionEndStatus(current: string, requested: SessionEndStatus): SessionEndStatus {
   return current === "completed" ? "completed" : requested;
@@ -59,14 +47,17 @@ export function mergeSessionEvidence(
   return incoming ? { ...jsonRecord(current), ...jsonRecord(incoming) } : undefined;
 }
 
+/**
+ * Ends (or updates) a call in one transaction, its usage row included (specs/practice.md rule 8), then reports org
+ * usage to Meteroid. Pass `tx` to end it inside a caller's transaction; the caller then reports `usageOrgId`.
+ */
 export async function finalizeInterviewSession(input: Parameters<typeof finalizeSessionRow>[0]) {
-  const finalized = await finalizeSessionRow(input);
-  // A learner's call: its seconds come off their minutes (once, however many times it is finalized).
-  if (finalized && input.requestedStatus) await recordSessionUsage(finalized.id);
+  const finalized = await db.$transaction((tx) => finalizeSessionRow(input, tx));
+  if (finalized?.usageOrgId) await scheduleOrgUsage(finalized.usageOrgId);
   return finalized;
 }
 
-async function finalizeSessionRow(input: {
+export async function finalizeSessionRow(input: {
   sessionId: string;
   requestedStatus?: SessionEndStatus;
   transcript?: Prisma.InputJsonValue;
@@ -74,8 +65,8 @@ async function finalizeSessionRow(input: {
   s3AudioKey?: string;
   /** The voice agent's full transcript replaces the browser's provisional one (twin sessions). */
   replaceTranscript?: boolean;
-}) {
-  return db.$transaction(async (tx) => {
+}, tx: Prisma.TransactionClient) {
+  {
     const existing = await tx.interviewSession.findUnique({
       where: { id: input.sessionId },
       select: { status: true, endedAt: true, transcript: true, evidence: true, reportStatus: true, assignmentId: true },
@@ -122,14 +113,18 @@ async function finalizeSessionRow(input: {
       });
     }
 
+    // The call's charge, in the transaction that ends it: one row per call, however many times it is finalized.
+    const usage = input.requestedStatus ? await writeSessionUsage(tx, input.sessionId) : { report: null };
+
     return {
       ...updated,
       previousStatus: existing.status,
       finalStatus: updated.status,
       becameCompleted,
+      usageOrgId: usage.report,
       transcriptAvailable: Array.isArray(updated.transcript) && updated.transcript.length > 0,
     };
-  });
+  }
 }
 
 async function sessionSnapshot(orgId: string, agentId: string, contextId?: string | null, contextIds: string[] = []) {
@@ -147,7 +142,7 @@ async function sessionSnapshot(orgId: string, agentId: string, contextId?: strin
         })
       : Promise.resolve([]),
   ]);
-  if (!agent) throw new Error("Agent not found");
+  if (!agent) throw refusals.notFound(); // archived or gone (specs/practice.md rule 2)
   if (documents.length !== docIds.length) throw new Error("Context not found");
   // Before the call only a PDF or an image up to 10 MB, for every agent (the pickers say the same).
   if (documents.some((doc) => !uploadAllowed(doc, "before"))) throw new Error(BEFORE_UPLOAD_REFUSED);
@@ -207,6 +202,13 @@ export async function createAssignedSession(input: {
   });
 }
 
+/**
+ * Starts (or resumes) a call (specs/practice.md rules 1–6). Everything that can refuse is checked first: the person
+ * (an enabled member), what they start (role-play link, twin code, twin by slug or deployment), its mode, the live
+ * agent and its documents. Then one transaction under the org's credits lock re-checks the person, ends their other
+ * live calls (charged), checks the allowance and creates the call; a refusal there rolls everything back, so nothing
+ * is ended. After it commits: the replaced calls' end work, then the chat brain. Null: an invalid or used link.
+ */
 export async function activateSession(input: {
   orgId: string;
   userId: string;
@@ -219,8 +221,10 @@ export async function activateSession(input: {
   mode?: DeliveryMode;
   idempotencyKey?: string;
 }) {
-  await assertNotDisabledIn(input.userId, input.orgId); // every session path goes through here
+  const person = await practicePerson(input.orgId, input.userId); // every session path goes through here
   const mode = input.mode ?? "voice";
+  const studio = isStudioRole(person.role);
+  const user = { id: input.userId, email: person.email };
   const requestedDocs = Array.from(new Set([...(input.contextIds ?? []), ...(input.contextId ? [input.contextId] : [])]));
   let assignmentId: string | null = null;
   let deploymentId: string;
@@ -228,11 +232,6 @@ export async function activateSession(input: {
   let activationKey: string;
   // Twin sessions: the learner's assignment on that twin (null for admin/team trying it).
   let twin: { assignmentId: string | null } | null = null;
-  const person = { id: input.userId, email: input.userEmail ?? "" };
-  // Learners' calls use their minutes; admin and team voice calls (trying agents, calibrating twins) use the org's
-  // credits when Meteroid bills the org (chargesOrg below), and are free otherwise.
-  const membership = await orgPerson(input.orgId, { userId: input.userId });
-  const metered = !isStudioRole(membership?.role);
 
   const roleplayInvite = input.shareCode
     ? await db.rolePlayAssignment.findFirst({
@@ -246,8 +245,8 @@ export async function activateSession(input: {
 
   if (input.shareCode && !roleplayInvite) {
     // Not a role-play invite: a twin assignment code or a twin share link. Joining through a link happened when the
-    // page opened (lib/pages/learner.ts); a call start never adds anyone (specs/people.md rule 6).
-    const access = await twinAccessByCode({ orgId: input.orgId, user: person, code: input.shareCode, join: false });
+    // page opened (lib/pages/learner.ts); a call start never adds anyone (specs/practice.md rule 3).
+    const access = await twinAccessByCode({ orgId: input.orgId, user, code: input.shareCode, join: false });
     if (!access) return null;
     twin = { assignmentId: access.assignmentId };
     agentId = access.agentId;
@@ -283,9 +282,9 @@ export async function activateSession(input: {
       deploymentId = found.id;
       agentId = found.agentId;
     } else {
-      if (!input.agentSlug) throw new Error("Agent is required");
-      const agent = await db.agent.findFirst({ where: { slug: input.agentSlug, orgId: input.orgId }, select: { id: true } });
-      if (!agent) throw new Error("Agent not found");
+      if (!input.agentSlug) throw refusals.invalidInput("Say which agent to start.");
+      const agent = await db.agent.findFirst({ where: { slug: input.agentSlug, orgId: input.orgId, archivedAt: null }, select: { id: true } });
+      if (!agent) throw refusals.notFound();
       deploymentId = (await ensureDeployment(input.orgId, agent.id)).id;
       agentId = agent.id;
     }
@@ -293,21 +292,15 @@ export async function activateSession(input: {
       ? `deployment:${deploymentId}:${input.idempotencyKey}`
       : `direct:${randomBytes(18).toString("base64url")}`;
 
-    // A twin started directly (portal, talk page, API key): admin and team without limits, others need their assignment.
+    // A twin started directly (portal, talk page, API key): admin and team without an assignment, learners need one.
     const agentRow = await db.agent.findFirst({ where: { id: agentId, orgId: input.orgId }, select: { kind: true } });
     if (agentRow?.kind === "TWIN") {
-      if (!metered) {
-        twin = { assignmentId: null };
-      } else {
-        const access = await twinAccessByAgent({ orgId: input.orgId, user: person, agentId });
-        twin = { assignmentId: access.assignmentId };
-      }
+      twin = { assignmentId: studio ? null : (await twinAccessByAgent({ orgId: input.orgId, user, agentId })).assignmentId };
     }
   }
-  // All twin sessions go through LiveKit (also enforced by a DB trigger).
-  if (twin && mode !== "voice") throw new TwinAccessError("Twin sessions are voice only", 400);
-  // Minutes are cut by the voice agent at the deadline; a chat session has no one to cut it.
-  if (metered && mode !== "voice") throw new MinutesError("Practice sessions are voice only", 400);
+  // All twin sessions go through LiveKit (also enforced by a DB trigger); the agent cuts metered calls at the deadline.
+  if (twin && mode !== "voice") throw practiceRefusals.voiceOnly();
+  if (!studio && mode !== "voice") throw new MinutesError("Practice sessions are voice only", 400);
 
   const existing = await db.interviewSession.findUnique({ where: { activationKey } });
   if (existing && ["activating", "active"].includes(existing.status)) {
@@ -331,50 +324,13 @@ export async function activateSession(input: {
     return null;
   }
 
-  // A paused org starts no voice calls (specs/billing.md rule 16); a running one (resumed above) keeps going.
-  if (mode === "voice") {
-    const paused = await pausedReason(input.orgId, metered ? "learner" : "studio");
-    if (paused) throw new MinutesError(paused, 403);
-  }
-
-  // A learner has one live call per org: a new one ends the others (each pays for the time it ran), then the
-  // balance decides how long this one may run.
-  let allowedSeconds: number | null = null;
-  if (metered) {
-    const email = person.email || (await db.user.findUniqueOrThrow({ where: { id: input.userId }, select: { email: true } })).email;
-    const live = await db.interviewSession.findMany({
-      where: { orgId: input.orgId, userId: input.userId, status: { in: ["activating", "active"] } },
-      select: { id: true },
-    });
-    if (live.length) {
-      const { closeInterviewSession } = await import("@/lib/session-lifecycle");
-      for (const row of live) await closeInterviewSession(row.id, "abandoned");
-    }
-    allowedSeconds = (await learnerBalance(input.orgId, email)).balanceSeconds;
-    if (allowedSeconds < MIN_START_MINUTES * 60) throw new MinutesError(learnerTooShort(allowedSeconds), 403);
-  }
-  let chargesOrg = false;
-  if (!metered && mode === "voice") {
-    const credits = await orgCredits(input.orgId, { fresh: true });
-    if (credits.billed) {
-      if (credits.seconds < MIN_START_MINUTES * 60) throw new MinutesError(orgTooShort(credits.seconds), 403);
-      chargesOrg = true;
-      allowedSeconds = credits.seconds;
-    }
-  }
-
   const snapshot = await sessionSnapshot(input.orgId, agentId, input.contextId, requestedDocs);
   for (const document of snapshot.documents) {
     if (document.ownerUserId && document.ownerUserId !== input.userId) throw new Error("Context not found");
   }
   // Documents at the start only when the agent's before settings turn pre-session uploads on (twins, new role plays).
   if (snapshot.docIds.length && usesBeforeSettings(snapshot.agent.data, snapshot.agent.kind) && !beforeSettings(snapshot.agent.data).preUpload) {
-    throw new TwinAccessError(snapshot.agent.kind === "TWIN" ? "This twin does not take documents" : "This role play does not take documents", 400);
-  }
-  // Everyone who starts a call is a member of the org (specs/people.md rule 6): a twin share link added them above
-  // (twinAccessByCode); nothing here adds anyone.
-  if (!membership && !(await orgPerson(input.orgId, { userId: input.userId }))) {
-    throw new TwinAccessError("You are not a member of this organization. Ask your trainer to add you.", 403);
+    throw refusals.invalidInput(snapshot.agent.kind === "TWIN" ? "This twin does not take documents" : "This role play does not take documents");
   }
   const primaryId = snapshot.docIds[0];
   const primary = snapshot.documents.find((document) => document.id === primaryId);
@@ -384,13 +340,19 @@ export async function activateSession(input: {
     ? await pinTwinSkills(input.orgId, snapshot.agent.personaId)
     : undefined;
   const sessionSnapshotData = compiledConfig || twinSkills ? { ...(compiledConfig ?? {}), ...(twinSkills ? { twinSkills } : {}) } : undefined;
-  const session = await db.$transaction(async (tx) => {
-    if (!assignmentId) {
-      await tx.interviewSession.updateMany({
-        where: { orgId: input.orgId, userId: input.userId, agentId, status: "active" },
-        data: { status: "abandoned", endedAt: new Date(), runtimeTokenHash: null },
-      });
-    }
+  // The org's balance from Meteroid now, before the lock (no network calls while it's held).
+  if (studio && mode === "voice") await orgCredits(input.orgId, { fresh: true });
+
+  const { session, replaced, usageOrgIds } = await withLock([minutesLock(input.orgId)], async (tx) => {
+    const current = await practicePerson(input.orgId, input.userId, tx); // disabled or moved since the checks above
+    // One live call per person (rule 5): their others end now, charged, before the balance is counted.
+    const live = await tx.interviewSession.findMany({
+      where: { orgId: input.orgId, userId: input.userId, status: { in: ["activating", "active"] } },
+      select: { id: true },
+    });
+    const ended = [];
+    for (const row of live) ended.push(await finalizeSessionRow({ sessionId: row.id, requestedStatus: "abandoned" }, tx));
+    const { allowedSeconds, chargesOrg } = mode === "voice" ? await startAllowance(input.orgId, current, tx) : { allowedSeconds: null, chargesOrg: false };
     const created = await tx.interviewSession.create({
       data: {
         orgId: input.orgId,
@@ -421,8 +383,19 @@ export async function activateSession(input: {
         data: snapshot.docIds.map((documentId) => ({ sessionId: created.id, documentId })),
       });
     }
-    return created;
-  });
+    return {
+      session: created,
+      replaced: ended.filter((row) => row && row.previousStatus !== row.finalStatus).map((row) => row!.id),
+      usageOrgIds: ended.map((row) => row?.usageOrgId).filter((id): id is string => Boolean(id)),
+    };
+  }, { timeout: 15_000, maxWait: 15_000 });
+
+  // The calls this one replaced: their end work (room, report) and Meteroid's usage report.
+  if (usageOrgIds.length) await scheduleOrgUsage(input.orgId);
+  if (replaced.length) {
+    const { startSessionEnd } = await import("@/lib/session-end");
+    for (const id of replaced) await startSessionEnd(id);
+  }
 
   const token = runtimeToken(session.id);
   try {
@@ -448,7 +421,7 @@ export async function activateSession(input: {
   }
 
   // secondsLeft: the call must end after this many seconds (metered calls; null = not metered).
-  return { id: session.id, agentSlug: session.agentSlug, status: "active", mode, runtimeToken: token, secondsLeft: allowedSeconds };
+  return { id: session.id, agentSlug: session.agentSlug, status: "active", mode, runtimeToken: token, secondsLeft: session.allowedSeconds };
 }
 
 export async function authorizeRuntimeSession(idOrToken: string, tokenParam?: string) {

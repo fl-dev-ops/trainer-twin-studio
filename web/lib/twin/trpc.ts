@@ -7,6 +7,7 @@ import { beforeSettings } from "@/lib/context-upload";
 import { assignablePeople } from "@/lib/learners";
 import { LEARNER_ROLE } from "@/lib/org";
 import { LEARNER, orgPeople, orgPerson } from "@/lib/org-people";
+import { refusals } from "@/lib/errors";
 import { learnerMinutes, MAX_LEARNER_MINUTES } from "@/lib/minutes";
 import { studioProcedure, t } from "@/lib/trpc";
 import { runTwinAssign } from "@/lib/workflow-runs";
@@ -14,7 +15,6 @@ import {
   accessUntilSchema,
   findTwinAgent,
   listTwinAssignments,
-  TwinAccessError,
   twinSharePath,
   twinShareUrl,
 } from "@/lib/twin-access";
@@ -38,14 +38,11 @@ const slugInput = z.object({ slug: z.string().min(1).max(200) });
 const asRecord = (value: unknown) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
 const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : null);
 
-/** twin-access and minutes errors keep their meaning over tRPC. */
+/** Avatar errors as tRPC errors (our refusals, AppError, are handled for every procedure in lib/trpc.ts). */
 async function twinCall<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
   } catch (error) {
-    if (error instanceof TwinAccessError) {
-      throw new TRPCError({ code: error.status === 404 ? "NOT_FOUND" : error.status === 400 ? "BAD_REQUEST" : "FORBIDDEN", message: error.message });
-    }
     if (error instanceof AvatarError) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
     throw error;
   }
@@ -573,7 +570,7 @@ const calibrationsRouter = t.router({
         where: { id: input.sessionId, orgId: ctx.user.orgId, userId: ctx.user.id, agentId: found.id },
         select: { id: true },
       });
-      if (!session) throw new TwinAccessError("That call is not yours to calibrate", 404);
+      if (!session) throw refusals.notFound();
       const calibration = await db.twinCalibration.upsert({
         where: { sessionId: session.id },
         create: { sessionId: session.id, createdByUserId: ctx.user.id },

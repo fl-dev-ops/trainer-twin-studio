@@ -1,3 +1,4 @@
+import { errorResponse, refusals } from "@/lib/errors";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { type SessionEndStatus } from "@/lib/interview-sessions";
@@ -12,7 +13,7 @@ import { LearnerMemoryService } from "@/lib/learner-memory";
  */
 export async function POST(request: Request) {
   const { org, user } = await resolveSessionUser();
-  if (!org || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!org || !user) return errorResponse(refusals.signedOut());
 
   const body = await request.json().catch(() => null);
   if (!body?.sessionId) return NextResponse.json({ error: "Missing sessionId" }, { status: 400 });
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
     where: { id: String(body.sessionId), orgId: org.id, userId: user.id },
     select: { id: true },
   });
-  if (!existing) return NextResponse.json({ error: "Session not found" }, { status: 404 });
+  if (!existing) return errorResponse(refusals.notFound());
 
   const finalized = await closeInterviewSession(existing.id, requestedStatus, {
     transcript: transcript as Prisma.InputJsonValue | undefined,

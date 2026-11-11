@@ -2,7 +2,7 @@ import { AppError, errorResponse } from "@/lib/errors";
 import { z } from "zod";
 import { studioOrRefusal } from "@/lib/org";
 import { runTwinAssign } from "@/lib/workflow-runs";
-import { accessUntilSchema, findTwinAgent, listTwinAssignments, TwinAccessError, twinUrl, updateTwinAssignment } from "@/lib/twin-access";
+import { accessUntilSchema, findTwinAgent, listTwinAssignments, twinUrl, updateTwinAssignment } from "@/lib/twin-access";
 
 export const runtime = "nodejs";
 
@@ -20,7 +20,6 @@ const updateSchema = z.object({
 
 const failed = (error: unknown) => {
   if (error instanceof AppError) return errorResponse(error);
-  if (error instanceof TwinAccessError) return Response.json({ error: error.message }, { status: error.status });
   throw error;
 };
 
