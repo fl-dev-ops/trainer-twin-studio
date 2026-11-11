@@ -29,12 +29,13 @@ the people work). Code, tests and module specs follow it.
 
 ### What the build changed (11 Nov 2026, from the spike on our Meteroid)
 
-- **Receipt (decision 7):** Meteroid's PDF never shows that it was paid (its renderer passes no payment status, and it
-  renders each PDF once). So the app makes the receipt: a PDF "Payment receipt RCPT-<invoice number>" (seller, buyer,
-  invoice, amount, date, bank references, balance $0), emailed with the invoice when it's paid and downloadable from
-  Settings › Billing. The invoice stays the tax invoice.
-- **Currency:** every invoice is in **USD** for now (no INR prices were set); Meteroid prints the INR conversion on
-  each PDF. INR prices are a later decision.
+- **Invoice and receipt PDFs (decision 7):** Meteroid's PDF never shows that it was paid (its renderer passes no
+  payment status, and it renders each PDF once) and can't be restyled. So the app draws both PDFs itself, from
+  Meteroid's invoice data, in Stripe's layout (as on LiveKit's invoices, 11 Nov): the invoice (the tax invoice, with
+  place of supply, both GSTINs, SAC per line, CGST/SGST or IGST, the export mention) and the receipt
+  "RCPT-<invoice number>" with a payment history. Meteroid still numbers and calculates every invoice.
+- **Currency:** every invoice is in **USD** for now (no INR prices were set). The app's PDFs show no INR conversion
+  (Meteroid's did); whether Indian customers need INR invoices is asked of the accounts team.
 - **Tax:** set per customer by the app from the billing address (Meteroid's custom taxes): Tamil Nadu CGST 9% + SGST
   9%, other states IGST 18%, abroad exempt with the LUT wording. Checked on real invoices. SAC 998314 is in the
   invoice footer (one SAC for everything we sell). Meteroid prints no state, so the app puts it on address line 2.

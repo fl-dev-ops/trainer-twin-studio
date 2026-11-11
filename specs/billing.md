@@ -24,7 +24,7 @@
 | Invoice | A Meteroid invoice above $0, with the app's copy (`BillingInvoice`). Kinds: `upgrade` (the first invoice of a Paid subscription the org hasn't paid yet), `renewal` (every later Paid invoice), `pack` (a minute pack), `other` (anything staff made by hand). |
 | Due date | The invoice's due date in Meteroid (2 days after it's issued for the Paid plan). An invoice is **overdue** from 00:00 UTC the day after its due date. |
 | Paused | `OrgBilling.pausedAt` is set: a Paid renewal is overdue. |
-| Receipt | The app's PDF saying an invoice was paid (Meteroid's PDF never shows payment). |
+| Receipt | The app's PDF saying an invoice was paid (rule 22). |
 
 ## Rules
 
@@ -33,7 +33,7 @@
 1. **Every billed org starts on Trial**, existing ones too: Trial is the "Credits" subscription every billed org already
    has, so nothing changes in Meteroid. Trial costs nothing, never expires and includes no credits.
 2. **Paid: $300 a month, tax included**, unless staff set a custom price for the org (`OrgBilling.paidMonthlyCents`).
-   It includes no credits. All phase 2 invoices are in **USD**; each PDF also shows the INR conversion.
+   It includes no credits. All phase 2 invoices are in **USD** (whether Indian customers need INR invoices is with the accounts team).
 3. **Credits come only from minute packs and grants** (staff, the 30-credit trial grant). A plan never adds credits.
 4. **Minute pack: 100 credits for $25, tax included.** One purchase is 1 to 10 packs; the invoice total is $25 ×
    packs, or 1 cent less when GST rounding can't land on it exactly (CGST and SGST are rounded separately), never more. Its credits expire 365 days after the pack's invoice is issued.
@@ -104,17 +104,25 @@
 
     | Event | Email | Attached |
     | --- | --- | --- |
-    | Invoice issued (any kind) | "Your TrainerTwin invoice INV-… : $… due …", with payment instructions | Meteroid's invoice PDF |
-    | Due tomorrow (renewal only) | "Reminder: invoice … is due tomorrow" | Meteroid's invoice PDF |
-    | Paused (renewal only) | "Your TrainerTwin plan is paused" | Meteroid's invoice PDF |
+    | Invoice issued (any kind) | "Your TrainerTwin invoice INV-… : $… due …", with payment instructions | The invoice PDF |
+    | Due tomorrow (renewal only) | "Reminder: invoice … is due tomorrow" | The invoice PDF |
+    | Paused (renewal only) | "Your TrainerTwin plan is paused" | The invoice PDF |
     | Upgrade cancelled | "Your upgrade was cancelled" | — |
     | Invoice paid (any kind) | "Payment received for INV-…", and what it did (Paid plan active, plan active again, credits added) | Receipt PDF and the invoice PDF |
 
     Each email goes out **once** per invoice and event (Resend idempotency key `billing-<event>-<invoice id>`, and the
     app's record of it), even when Meteroid sends a webhook again or a workflow step retries.
-22. **Receipt PDF:** "Payment receipt RCPT-<invoice number>": the seller (name, address, GSTIN), the customer (name,
-    address, tax number), the invoice number and date, the amount and date paid, the payment references, and balance
-    due $0.00. Downloadable from Settings › Billing once paid.
+22. **The PDFs** are drawn by the app (`web/lib/billing/documents.ts`) in one layout (Stripe's), from Meteroid's
+    invoice: its number, dates, lines, tax and the customer as it was when issued. Meteroid's own PDF isn't used (it
+    can't be restyled and never shows a payment).
+    - **Invoice** (the tax invoice): number, date of issue, date due, place of supply (state and code, or "outside
+      India (export of services)"); the seller (name, address, GSTIN, email) and the customer (name, address with
+      state, GSTIN or tax ID, email); the amount due; how to pay (`BILLING_PAYMENT_INSTRUCTIONS`); each line with SAC
+      998314 (and its period); taxable value, CGST/SGST or IGST, total; the export mention when exempt; "computer
+      generated, needs no signature".
+    - **Receipt** "RCPT-<invoice number>": the same header and lines, "amount paid on <date>", and a payment history
+      (method, reference, date, amount). Downloadable from Settings › Billing once paid.
+    The same invoice renders the same bytes every time (dates come from the invoice and payment).
 23. **Invoices above $0 only:** a $0 invoice (the Credits subscription's monthly one) is never stored, shown or emailed.
 
 ### Keeping in step with Meteroid
