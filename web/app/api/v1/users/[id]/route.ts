@@ -1,5 +1,5 @@
 import { AppError, errorResponse, refusals } from "@/lib/errors";
-import { LEARNER, orgPerson } from "@/lib/org-people";
+import { inOtherOrgs, LEARNER, orgPerson } from "@/lib/org-people";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { setMemberDisabled } from "@/lib/members";
@@ -28,7 +28,7 @@ async function handlePATCH(request: Request, { params }: Params) {
   const current = await db.user.findUniqueOrThrow({ where: { id }, select });
   // The same name again changes nothing; an account other orgs use too is the person's to rename (specs/api.md rule 5).
   if (current.name === parsed.data.name) return Response.json({ user: { ...current, memberId: learner.memberId, role: API_LEARNER_ROLE } });
-  if (await db.member.count({ where: { userId: id, organizationId: { not: api.org.id } } })) {
+  if (await inOtherOrgs(id, api.org.id)) {
     throw new AppError("account_shared", "This person's account is also used by another organization. They can change their name in Settings.", 409);
   }
   const user = await db.user.update({ where: { id }, data: { name: parsed.data.name }, select });

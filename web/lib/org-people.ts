@@ -190,3 +190,8 @@ async function accountsFor(emails: string[], tx: Prisma.TransactionClient) {
   });
   return find();
 }
+
+/** Whether this account is also a member (disabled included) of an org other than `orgId` (specs/api.md rule 5). */
+export async function inOtherOrgs(userId: string, orgId: string, tx: Db = db) {
+  return (await tx.member.count({ where: { userId, organizationId: { not: orgId } } })) > 0;
+}
