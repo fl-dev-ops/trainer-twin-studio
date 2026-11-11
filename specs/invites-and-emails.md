@@ -1,6 +1,6 @@
 # People and emails
 
-> Despite this file's old name, org invitations are gone. Adding a person makes them a member immediately. Twin/role-play assignment first adds the learner, then gives account-bound access. Each action builds one combined email per affected person, normally delivered by `send-emails`. Sign-in codes and support alerts use the same Resend sender. Owners: `web/lib/org-people.ts`, `web/lib/invite/*`, `web/lib/email.ts`, `web/lib/queue-emails.ts`. Agreed rules: [People](people.md).
+> Despite this file's old name, org invitations are gone. Adding a person makes them a member immediately. Twin/role-play assignment first adds the learner, then gives account-bound access. Each action builds one combined email per affected person, normally delivered by `send-emails`. Sign-in codes and support alerts use the shared Resend sender; billing uses its own billing@ sender through the same transport. Owners: `web/lib/org-people.ts`, `web/lib/invite/*`, `web/lib/email.ts`, `web/lib/queue-emails.ts`. Agreed rules: [People](people.md).
 
 ## Who uses it
 
@@ -30,6 +30,7 @@
 - `Invitation` stays as historical data. Migration closes all pending rows as accepted. New Better Auth invite-member requests fail; old `/invite` pages only redirect. There is no awaiting-user pool (`web/lib/auth.ts` `beforeCreateInvitation`; `web/app/auth/invite/page.tsx`).
 - `OutboundEmail` is person or orgCredits plus optional idempotencyKey, carried by a workflow, not an app email table. Progress: sent/failed per address, then done with sent count/failed addresses (`web/workflows/send-emails.ts`).
 - `OrgBilling.announcedGrantIds` stores announced Meteroid grant IDs. Migration initializes it from existing grants, avoiding historical announcements (`web/lib/org-credits-email.ts`; people-first migration).
+- Billing email completion lives on `BillingInvoice`: issuedEmailAt, reminderAt, overdueEmailAt (paused or upgrade-cancelled), paidEmailAt. Workflow claims are issuedRunAt/paidRunAt; billing does not use the person-email `OutboundEmail` payload (`web/prisma/schema.prisma` `BillingInvoice`; `web/lib/billing/billing.ts` `EMAIL_FIELD`, `claim`, `emailOnce`; [Billing code](billing-code.md)).
 
 ## How it works
 
@@ -68,6 +69,24 @@ Copilot filters staff through `studioPeopleEmails`, then invokes the shared help
 
 `sync-org-credits` refreshes, then its announce step calls `announceNewGrants`. Each positive cached grant not in announcedGrantIds sends the enabled admin an orgCredits email, key `org-credits:<grantId>`, amount, cached balance, expiry/reason and studio credits link. Successful batch pushes IDs. Missing admin or missing Resend also marks IDs announced; other send failures throw and retry the whole announce step (`web/workflows/sync-org-credits.ts`; `web/workflows/steps/org-credits.ts` `announce`; `web/lib/org-credits-email.ts`).
 
+### Billing emails
+
+[Billing rules](billing.md) and [Billing code](billing-code.md) own invoice events and payment effects. Their workflows call `emailOnce`, then `web/lib/email.ts` `sendBillingEmail` / `billingEmail`, not the person-email queue. Default sender: `TrainerTwin Billing <billing@trainertwin.com>` (BILLING_FROM_EMAIL override), reply-to support@trainertwin.com. Recipients: current billing-detail emails, otherwise the enabled org admin; no recipient logs and sends nothing (`web/lib/billing/billing.ts` `recipients`, `emailOnce`).
+
+| Event | Current subject / content | Attachments / marker |
+| --- | --- | --- |
+| Invoice issued, any kind | `Your TrainerTwin invoice <number>: <amount> due <date>`; org, description, tax-inclusive amount, due date and payment instructions. | Meteroid `<number>.pdf` / issuedEmailAt |
+| Unpaid renewal due tomorrow | `Reminder: invoice <number> (<amount>) is due tomorrow`; due date, payment instructions, pause warning, reply if already paid. Only on the UTC day before due. | Meteroid `<number>.pdf` / reminderAt |
+| Overdue current renewal, org paused | `Your TrainerTwin plan is paused: invoice <number> is overdue`; no new calls/grants, payment instructions, reply if paid. | Meteroid `<number>.pdf` / overdueEmailAt |
+| Unpaid upgrade cancelled | `Your upgrade to the TrainerTwin Paid plan was cancelled`; remains Trial, upgrade again from Billing. | None / overdueEmailAt |
+| Invoice paid, any kind | `Payment received for invoice <number>: thank you`; amount/description, plan activation (or staff follow-up for an unmatched/cancelled lost-ID upgrade), current active/still-paused renewal outcome, or pack credits being added separately. | App `RCPT-<number>.pdf` then Meteroid `<number>.pdf` / paidEmailAt |
+
+Pointers: `web/lib/email.ts` `billingEmail`; `web/lib/billing/billing.ts` `invoiceIssuedEmail`, `invoiceReminder`, `invoiceOverdue`, `invoicePaid`, `emailOnce`. HTML is escaped; plain text uses the same values, with amounts formatted in the invoice currency (`web/lib/billing/pricing.ts` `formatMoney`) and a See billing link to `dash.<base>/settings?tab=billing`. BILLING_PAYMENT_INSTRUCTIONS supplies bank instructions; otherwise issued/reminder/paused text refers to its attached invoice.
+
+Each invoice/event has a durable marker plus Resend key `billing-<event>-<invoice id>` (`event`: issued, reminder, paused, upgrade_cancelled, paid). Markers prevent ordinary retries after the provider's 24-hour key window; the key covers overlapping sends inside that window. Meteroid PDFs are fetched before sending (10 attempts, 3-second waits when not ready); paid adds a locally rendered receipt. Ordinary send failure throws and leaves the marker null. Missing RESEND_API_KEY is nevertheless recorded as completed; provider success followed by local save failure can duplicate beyond 24 hours. Daily repair waits 10 minutes for issued/paid workflow claims. It also retries overdue renewals with missing paused mail and finishes void-upgrade cancellation/email when overdueAt is set. Each overdue repair catches its own error. Missed reminders are best effort and never sent on a later day. See [Billing code — Mismatches](billing-code.md#mismatches) (`web/lib/billing/billing.ts` `pdfOf`, `emailOnce`, `syncOrgInvoices`).
+
+A paid pack also produces the existing orgCredits email to the admin after Meteroid's PAID grant → wallet.funded → sync → announce. It is separate from the paid receipt, keyed `org-credits:<grantId>`, and still uses the shared default sender, not billing@ (`web/app/api/meteroid/webhook/route.ts` POST; `web/workflows/sync-org-credits.ts` `syncOrgCredits`; `web/lib/org-credits-email.ts` `announceNewGrants`; `web/lib/email.ts` `sendOrgCreditsEmail`). Meteroid's own customer emails must be disabled outside this app; setup does not disable them (`web/scripts/meteroid-billing-setup.ts` header).
+
 ### Templates and links
 
 All templates are in `web/lib/email.ts`; person/org-credit values are HTML-escaped and have plain text versions.
@@ -81,7 +100,7 @@ All templates are in `web/lib/email.ts`; person/org-credit values are HTML-escap
 
 Links are HTTPS: added learner → `<org>.<base>/`; added studio → `dash.<base>/`; twin → `<org>.<base>/t/<path>`; roleplay → `<org>.<base>/s/<code>`; org credits → `dash.<base>/credits`. Founder script prints `auth.<base>/onboarding?t=<token>` without emailing. Old invitation token redirects by stored role/org, irrespective of status/expiry, or `/sign-in` if unknown (`web/lib/invite/links.ts`; `web/lib/twin-access.ts`; `web/scripts/founder-invite.ts`; `web/app/auth/invite/page.tsx`).
 
-Razorpay separately sends its provider-controlled payment-link notification to supplied payer email (`web/lib/razorpay.ts` `createPaymentLink`, notify.email; [Payments](payments.md)). Password-reset/invitation assignment templates were removed (`web/lib/email.ts`).
+The retained phase 1 Razorpay path, only when RAZORPAY_ENABLED=true, separately sends its provider-controlled payment-link notification to supplied payer email; it remains off for phase 2 (`web/lib/razorpay.ts` `razorpayEnabled`, `createPaymentLink`, notify.email; [Payments](payments.md)). Password-reset/invitation assignment templates were removed (`web/lib/email.ts`).
 
 ### Workflows, retries and progress
 
@@ -93,7 +112,7 @@ Razorpay separately sends its provider-controlled payment-link notification to s
 
 Progress token is run ID plus HMAC-SHA256 signature over org/run with BETTER_AUTH_SECRET. GET `/api/runs/:token` requires studio, returns 404 for invalid/other-org/missing run, streams no-store NDJSON. `followEmailProgress` buffers lines and shows sent/failed/background toasts; it does not undo the action (`web/lib/run-progress.ts`; `web/app/api/runs/[token]/route.ts`; `web/lib/follow-email-progress.ts`).
 
-`sendEmail` loads Resend key at module initialization. Missing key warns and returns false (except development OTP); provider errors/exceptions log and return false. Default sender `RESEND_FROM_EMAIL` or TrainerTwin <no-reply@trainertwin.com>, reply-to support@trainertwin.com, optional CC. No bounce/inbox handler (`web/lib/email.ts`).
+`sendEmail` loads Resend key at module initialization. Missing key warns and returns false (except development OTP); provider errors/exceptions log and return false. Default sender `RESEND_FROM_EMAIL` or TrainerTwin <no-reply@trainertwin.com>, reply-to support@trainertwin.com, optional CC, explicit sender override and optional nonempty PDF attachments (`SendEmailOptions`, `sendEmail`). Billing overrides the sender through `sendBillingEmail`. No bounce/inbox handler (`web/lib/email.ts`).
 
 ## Rules
 
@@ -104,6 +123,7 @@ Progress token is run ID plus HMAC-SHA256 signature over org/run with BETTER_AUT
 5. Email failures leave memberships, access and credits intact and surface through immediate flags, queued progress or logs. Resend keys deduplicate only within the provider's 24-hour window (`web/lib/email.ts`; `web/lib/queue-emails.ts`).
 6. Pending role-play resend intentionally creates a new email event while preserving code/date (`web/lib/invite/roleplay.ts`). REST immediate sends and workflow-startup fallback preserve the original event key, as allowed by People rule 12 (`web/lib/queue-emails.ts` `deliverEmail`, `queueEmails`).
 7. Org grant announcement excludes known/nonpositive grants; existing migration-time grants are marked known. No admin/missing Resend still consumes announcement IDs (`web/lib/org-credits-email.ts`; people-first migration).
+8. Billing uses one invoice/event completion marker and key, with issued/reminder/paused invoice PDF and paid receipt-plus-invoice attachments; cancelled has none. It sends to billing emails or enabled admin, not learners unless that address was explicitly entered as a billing recipient (`web/lib/billing/billing.ts` `recipients`, `emailOnce`; `web/lib/email.ts` `sendBillingEmail`; [Billing code](billing-code.md)).
 
 ## Entry points
 
@@ -112,6 +132,7 @@ Progress token is run ID plus HMAC-SHA256 signature over org/run with BETTER_AUT
 - Old GET `/invite?token=...`: `web/app/auth/invite/page.tsx`; now redirect only.
 - Email OTP endpoints: `web/lib/auth.ts`; [Auth](auth.md). POST issues: `web/app/api/issues/route.ts`.
 - Workflows: `add-org-people`, `assign-twin`, `assign-roleplay`, `give-credits`, `send-emails` (deliverEmails), `sync-org-credits`. Steps: `web/workflows/steps/{learners,send-emails,org-credits}.ts`.
+- Billing: `web/workflows/invoice-issued.ts` `invoiceIssued`, `invoice-paid.ts` `invoicePaid`, `steps/billing.ts`; `web/lib/billing/billing.ts` `emailOnce`; `web/lib/email.ts` `billingEmail`, `sendBillingEmail`. Started by Meteroid webhook, Billing requests and daily check; see [Billing code](billing-code.md).
 - GET `/api/runs/:token` live delivery progress; `web/scripts/founder-invite.ts` prints founder link; `web/scripts/check-org-people.ts` checks membership/assignment/ledger invariants. Old invite-emails, invite-org-learners, schedule-invite-emails and invitation acceptance helpers are removed.
 
 ## Talks to
@@ -131,6 +152,8 @@ Progress token is run ID plus HMAC-SHA256 signature over org/run with BETTER_AUT
 
 ## Mismatches
 
+- **Billing rule 21 / Checks:** invoice mail still marks skipped missing-key sends completed; provider success followed by failed marker persistence can duplicate mail after Resend's window. Dead issued/paid repair only scans recent invoices and handles at most one missing completion per row/pass. Paused/cancelled mail repair and the paused attachment are now implemented; rule 19 explicitly allows the usual sender for pack grant announcements, and rule 25 allows best-effort reminders. Paused copy still promises full recovery on one payment despite other overdue renewals. Full list: [Billing code — Mismatches](billing-code.md#mismatches) (`web/lib/billing/billing.ts:433–461,484–498`; `web/lib/email.ts:426–427`).
+
 - **People rule 12:** `web/lib/org-credits-email.ts:22–37` loops inline inside one announce step, not one retryable step per email; a failure delays later grants and retries the whole loop (`web/workflows/steps/org-credits.ts:19–22`).
 - **People rule 11:** `web/lib/org-credits-email.ts:19–40` marks grants announced with no enabled admin or missing Resend, despite sending no email; later sync will not deliver them. Concurrent announce runs can also reread the same IDs; Resend deduplication lasts only 24 hours (`web/lib/email.ts:16`).
 - **People learner-ledger check:** starting grants commit before account/member writes; later persistence failure can leave orphan ledger rows and no added email (`web/lib/org-people.ts:143–159`; `web/lib/minutes.ts:176–178`). Details and script bypasses: [Organizations and roles — Mismatches](orgs-and-roles.md#mismatches).
@@ -147,6 +170,7 @@ Progress token is run ID plus HMAC-SHA256 signature over org/run with BETTER_AUT
 
 ## Tests today
 
+- Billing: `web/tests/lib/billing-details-pricing.test.ts` checks all five escaped templates and receipt text; `web/tests/flows/billing-phase-two.flow.test.ts` checks billing sender/recipients, PDF attachments, event keys, markers, retry failures, fallback admin and late pause retries. This billing spec refresh ran billing-details-pricing, billing-meteroid and billing-workflows: 106 pass / 0 fail (487 assertions). No billing DB/flow/live delivery run for this refresh.
 - Unit: `web/tests/lib/person-email.test.ts`, `email-idempotency.test.ts`, `email-otp-delivery.test.ts`, `send-emails-workflow.test.ts`, `send-emails-steps.test.ts`, `queue-emails.test.ts`, `run-progress.test.ts`, `follow-email-progress.test.ts`; route `web/tests/api/runs-progress.test.ts`.
 - DB: `web/tests/lib/org-people.db.test.ts`, `invite/org.db.test.ts`, `invite-roleplay-minutes.db.test.ts`, `org-credits-email.db.test.ts`; API `web/tests/api/v1-assignment-email-minutes.db.test.ts`, `people-auth.db.test.ts`.
-- Flow/browser: `web/tests/flows/org-people.flow.test.ts`, `web/e2e/people.spec.ts`, credit/practice suites. No tests run for this edit. Captured Resend/workflow mocks do not prove inbox delivery, deployed retries or late retries beyond 24 hours.
+- Flow/browser: `web/tests/flows/org-people.flow.test.ts`, `web/e2e/people.spec.ts`, credit/practice suites. No people DB/flow/browser suites run for this edit; billing unit results are above. Captured Resend/workflow mocks do not prove inbox delivery, deployed retries or late retries beyond 24 hours.
