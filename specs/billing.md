@@ -3,7 +3,7 @@
 > **A rule spec.** It says how billing *must* work; the code follows it, and a difference is a bug in the code.
 > [Credits](credits.md) (spending), [Payments](payments.md) (phase 1 Razorpay purchases, off) and
 > [People](people.md) (who gets which email) must agree with it. Agreed 11 Nov 2026 (`plans/billing-phase-2.md`);
-> phase 3 (Razorpay collects the money, `plans/billing-phase-3.md`) adds online payment without changing these rules.
+> phase 3 (Razorpay collects the money, `plans/billing-phase-3.md`) adds online payment: rules 27–35.
 
 ## Who uses it
 
@@ -45,7 +45,8 @@
 7. **Billing details rules** (any other field is refused too): legal name (1–200 characters); country (ISO code); street, city and postal code;
    **state when the country is India** (one of India's GST states, with its code); for India an optional GSTIN (15
    characters, the GST format, its first two digits equal to the state's code), elsewhere an optional tax number (up
-   to 50 characters); 1 to 5 billing emails. Anything else is refused (400) with the field's problem.
+   to 50 characters); 1 to 5 billing emails; a phone number with its country code (`+` then 8 to 15 digits: Razorpay
+   needs it for card payments in USD). Anything else is refused (400) with the field's problem.
 8. **Saving billing details** updates the Meteroid customer first (name, address, tax number, billing emails and tax),
    then the app's copy. When Meteroid can't be reached, nothing is saved and the person is told to try again (502);
    when it refuses, nothing is saved and they're told to contact TrainerTwin (502). Meteroid prints no state, so the state and its code go on the address's second line.
@@ -98,7 +99,8 @@
 
 ### Invoices, receipts and emails
 
-20. **Marking paid (phase 2)** is done by staff in Meteroid only. The app never marks an invoice paid in phase 2.
+20. **Marking paid:** a Razorpay payment marks its invoice paid automatically (rules 29–31); a bank transfer is
+    marked paid by staff in Meteroid.
 21. **Emails** come only from the app, from `billing@trainertwin.com` (reply-to `support@trainertwin.com`), to the
     org's billing emails (the org admin when there are none). Meteroid's own customer emails are off in every tenant.
 
@@ -141,6 +143,37 @@
     Meteroid. Pausing and unpausing ask Meteroid first whether the invoice was paid, so they wait until it's back
     (the workflow step retries; the daily check catches up).
 
+### Paying online (Razorpay, phase 3)
+
+27. **One payment link per invoice.** With Razorpay on (`RAZORPAY_ENABLED=true`), every unpaid invoice above $0, of
+    any kind, gets one Razorpay payment link: its exact total and currency (USD), no partial payments, no expiry, the
+    customer's billing name, first billing email and phone. Razorpay sends nothing itself (no email, SMS or reminders).
+    The link is made once (its Razorpay reference is the invoice id: a retry finds it instead of making another),
+    when the invoice is first handled: the invoice-issued workflow, an upgrade, a pack. An invoice whose org has no
+    phone saved gets no link (bank transfer only) until it has one.
+28. **Pay now** appears wherever the invoice does: the invoice, reminder and paused emails (a button), the invoice PDF
+    ("Pay online" and the link), and Settings › Billing (a button on each unpaid invoice and in the upgrade and paused
+    notices). "Upgrade to Paid" and "Buy" take the person straight to the payment page; after paying they come back
+    to Settings › Billing, which shows the payment within seconds.
+29. **A payment** (Razorpay's signed `payment_link.paid` webhook) counts only when the link is the invoice's and the
+    amount and currency equal the invoice total. Then, once per Razorpay payment: the payment is recorded; the Meteroid
+    invoice is marked paid with the Razorpay payment id as its reference, unless Meteroid already shows it paid; and
+    rules 11, 17, 19 and 21 follow as for any paid invoice.
+30. **Wrong amount, wrong currency or an unknown link:** nothing changes; it's logged for staff; Razorpay is answered
+    200 so it stops retrying.
+31. **Paid twice** (a card payment after a bank transfer was marked, or two payments): the invoice is marked paid once;
+    the extra payment is recorded as a duplicate and logged for staff to refund by hand.
+32. **A link closes** when its invoice is voided (an upgrade cancelled, staff) or paid another way: the app cancels it
+    in Razorpay so it can't be paid again.
+33. **Missed webhooks:** the daily check asks Razorpay about the link of every unpaid invoice and settles any paid one
+    the same way (rule 29), and makes the links rule 27 is missing.
+34. **Fee report:** every Razorpay payment is kept with its amount and currency, the INR it converted to, Razorpay's
+    fee and the GST on that fee, the method and whether it was international.
+    `web/scripts/billing-fee-report.ts --month YYYY-MM` writes them as a CSV for the accountant, with Razorpay's
+    settlement id and date once settled. Refunds are done by hand in Razorpay and as a credit note in Meteroid.
+35. **Phase 1 credit purchases** (a Razorpay link or invoice tied to a `CreditPurchase`) keep working through the same
+    webhook, unchanged.
+
 ## Checks (must always hold; `web/scripts/check-billing.ts`)
 
 - Every `paid` org has a Paid subscription id; every `trial` org with a Paid subscription id has an unpaid `upgrade`
@@ -149,6 +182,8 @@
 - No `paid` org that isn't paused has a renewal of its current subscription unpaid since before yesterday (the 00:15 UTC
   daily check has had its chance).
 - Every `BillingInvoice` belongs to a billed org and has a total above 0.
+- Every Razorpay payment that settled an invoice is recorded once, and that invoice is paid; with Razorpay on, every
+  unpaid invoice above $0 older than an hour whose org has a phone has a payment link.
 - Every paid invoice has had its "paid" email; every invoice that isn't void its "issued" email (allowing an hour for
   a running workflow; the daily check sends any a dead workflow left).
 

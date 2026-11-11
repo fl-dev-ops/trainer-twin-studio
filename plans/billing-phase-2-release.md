@@ -1,6 +1,6 @@
-# Billing phase 2 release runbook (plans, invoices, minute packs, pausing)
+# Billing phases 2 and 3 release runbook (plans, invoices, minute packs, pausing, paying online)
 
-Rule spec: `specs/billing.md`. Built and rehearsed 11 Nov 2026: the whole lifecycle against Meteroid's **dev** tenant
+Rule spec: `specs/billing.md` (phase 3, Razorpay: rules 27–35). Phases 2 and 3 ship together. Built and rehearsed 11 Nov 2026: the whole lifecycle against Meteroid's **dev** tenant
 (`web/scripts/billing-live-check.ts`, 13 checks), through the local app and UI against the **Sandbox** tenant (real
 webhooks through the tunnel, real workflows), and the migration on a fresh copy of prod. Every step below is safe to
 repeat. **Meteroid Production and the prod database change only with explicit go-ahead.**
@@ -19,7 +19,15 @@ Secrets: `~/.config/meteroid/keys.env`. Prod DB: `neon connection-string product
    billing details (the wording is copied into Meteroid when details are saved):
    `DATABASE_URL="$PROD" METEROID_API_KEY=$METEROID_PROD_API_KEY GST_LUT_REFERENCE=<ref> bun scripts/billing-sync-customers.ts`.
    Until then export invoices say "under LUT" without a number.
-3. Nothing else in Vercel: `METEROID_*`, `RESEND_*` and `CRON_SECRET` are already set; `METEROID_GRPC_URL` and
+3. **Razorpay live** (phase 3):
+   - Razorpay Dashboard (live mode) › Settings › API keys: generate the live key pair.
+   - Confirm **International payments** are enabled (Account & Settings › International payments): customers pay in USD.
+   - Dashboard › Webhooks › Add: URL `https://dash.trainertwin.com/api/razorpay/webhook`, a new secret, events
+     **`payment_link.paid`** (and, for phase 1 purchases, `invoice.paid`, `refund.processed`).
+   - Vercel `trainer-twin-studio` production env: `RAZORPAY_KEY_ID` (rzp_live_…), `RAZORPAY_KEY_SECRET`,
+     `RAZORPAY_WEBHOOK_SECRET` (the webhook's secret), `RAZORPAY_ENABLED=true`. Without `RAZORPAY_ENABLED=true` the
+     app bills exactly as phase 2 (bank transfer only, no Pay now).
+4. Nothing else in Vercel: `METEROID_*`, `RESEND_*` and `CRON_SECRET` are already set; `METEROID_GRPC_URL` and
    `BILLING_FROM_EMAIL` default correctly.
 
 ## Release
@@ -49,6 +57,8 @@ Secrets: `~/.config/meteroid/keys.env`. Prod DB: `neon connection-string product
    - Settings › Billing loads for each org: "Trial plan, Active", no invoices, "Add your billing details first";
    - Vercel › Settings › Cron Jobs lists `/api/internal/billing/check` (00:15 UTC);
    - Meteroid › Production › Webhooks: the next delivery shows 200.
+   - Razorpay: `curl -s -o /dev/null -w "%{http_code}" -X POST https://dash.trainertwin.com/api/razorpay/webhook` is
+     **401** (on, signature checked), not 404 (off).
 6. **No test invoices in prod:** invoices are numbered tax documents. The first real one is a customer's upgrade.
 
 ## The first customer (e.g. Olga)
@@ -58,15 +68,22 @@ Secrets: `~/.config/meteroid/keys.env`. Prod DB: `neon connection-string product
 2. Custom price, if agreed: `DATABASE_URL="$PROD" bun scripts/billing-price.ts --org olga --monthly <USD>` **before**
    the upgrade.
 3. **Upgrade to Paid** → invoice email (PDF attached) to her billing emails.
-4. Money arrives → **Meteroid › Production › Invoices › the invoice › Mark as paid** (amount = total, reference = bank
-   transfer id). **Once only:** Meteroid records a second payment if marked twice. Within seconds: Paid plan, receipt
-   email.
-5. Minute packs: Settings › Billing › Buy → invoice → mark paid the same way → credits arrive, "credits added" email.
+4. She clicks **Pay now** (in the email, on the PDF or in Settings › Billing), pays by card in USD on Razorpay's page
+   and comes back to Settings › Billing: "Payment received", Paid plan, receipt email, within seconds. Nothing to do
+   for staff.
+   Paid by bank transfer instead: **Meteroid › Production › Invoices › the invoice › Mark as paid** (amount = total,
+   reference = bank transfer id; **once only**: Meteroid records a second payment if marked twice). Its Razorpay link
+   is cancelled automatically.
+5. Minute packs: Settings › Billing › Buy → straight to Razorpay → paid → credits arrive, "credits added" email.
 
 ## Day to day (staff)
 
-- Mark invoices paid in Meteroid when money arrives (as above). A paused org is unpaused as soon as its overdue
-  renewal is marked paid.
+- Online payments need nothing. Bank transfers: mark the invoice paid in Meteroid when the money arrives (as above). A
+  paused org is unpaused as soon as its overdue renewal is paid.
+- **Paid twice** (logged as `DUPLICATE payment … Refund it in Razorpay`, and `status = duplicate` in the fee report):
+  refund it in Razorpay › Payments, and record a credit note in Meteroid if an invoice was involved.
+- **Monthly fee report** for the accountant: `DATABASE_URL="$PROD" RAZORPAY_KEY_ID=… RAZORPAY_KEY_SECRET=…
+  RAZORPAY_ENABLED=true bun scripts/billing-fee-report.ts --month 2026-12 > fees-2026-12.csv`.
 - Free credits: a grant in Meteroid (unchanged from phase 1).
 - Keep the invoicing entity's "Consolidate recurring invoices" **off** (it is, in every tenant): a consolidated
   invoice has no subscription, so a Paid renewal inside one wouldn't be recognised.
@@ -76,6 +93,8 @@ Secrets: `~/.config/meteroid/keys.env`. Prod DB: `neon connection-string product
 
 ## Rollback
 
-Vercel instant rollback to the previous deployment. The migration only adds, so the old code runs on the new schema.
+Vercel instant rollback to the previous deployment. The migrations only add, so the old code runs on the new schema.
+Online payments alone: set `RAZORPAY_ENABLED=false` (the app falls back to bank transfer; links already sent stop
+being honoured by the webhook, so tell anyone who pays one).
 The Meteroid changes are additive (an unused plan, a product on MINS, entity details, extra webhook events the old
 code ignores). Data: the Neon branch from step 1.

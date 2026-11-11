@@ -1,8 +1,9 @@
 # Billing phase 3: Razorpay collects the money
 
-Status: **plan, decisions agreed 11 Nov 2026**; nothing built yet. Builds on phase 2
+Status: **built 11 Nov 2026 on branch `billing-phase-2`, shipping together with phase 2** (rules 27–35 in
+`specs/billing.md`; runbook `plans/billing-phase-2-release.md`). Builds on phase 2
 (`plans/billing-phase-2.md`): who owns what, what the customer receives and the invoice PDF are defined there and don't
-change. Start after phase 2 has run a billing cycle.
+change. (Decided 11 Nov: build now and release phases 2 and 3 together; everyone pays in USD.)
 
 **Goal:** customers pay online through Razorpay, and payments are recorded automatically. Meteroid still issues the
 invoice; our app still sends every email; Razorpay only collects the money.
@@ -35,6 +36,20 @@ invoice; our app still sends every email; Razorpay only collects the money.
   about 3% + GST for international cards) and settles **net, in INR** (international: about T+7 working days, at the
   processing bank's rate). None of this touches the customer's invoice or Meteroid. The app stores each payment's
   gross, fee, tax on fee and settled INR for the monthly report (decision 2).
+
+## What the build found (11 Nov 2026, Razorpay test mode + Meteroid Sandbox)
+
+- **Everyone pays in USD** (decision 11 Nov): Razorpay offers cards only for USD (no UPI / netbanking), and needs the
+  payer's phone, so billing details now ask for one.
+- Razorpay's page asks for mobile and email again even though the link carries them (normal for payment links).
+- After paying, Razorpay sends the payer back to Settings › Billing; the page asks Razorpay at once (`confirmPayment`),
+  so the payment shows in seconds even before Razorpay's webhook arrives.
+- **Meteroid reads an invoice as unpaid for a moment after it's marked paid**, so a retried webhook marked it twice
+  (two payments in Meteroid). Fixed: the Razorpay payment id saved with the mark stops any second one; tested with
+  three deliveries at once.
+- A bank-transfer payment cancels the invoice's link, so it can't be paid twice.
+- Razorpay's fee data (INR amount, fee, GST on the fee) comes with each payment: a US$25 card payment was ₹2,295.74,
+  fee ₹86.70 including ₹13.22 GST.
 
 ## Why not Razorpay's invoices
 
