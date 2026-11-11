@@ -46,9 +46,9 @@ test("startRefusal leaves unknown errors and non-errors unclassified", () => {
   for (const error of [new Error("database unavailable"), "Context not found", null]) expect(startRefusal(error)).toBeNull();
 });
 
-test("openSession returns invalid-link and minutes refusals, but throws unknown failures", async () => {
+test("openSession returns not_found for an invalid link, minutes refusals, and throws unknown failures", async () => {
   activate.mockResolvedValueOnce(null);
-  expect(await openSession(input)).toEqual({ ok: false, status: 403, error: "Invalid or already used session URL" });
+  expect(await openSession(input)).toEqual({ ok: false, status: 404, error: "Not found.", code: "not_found" });
   activate.mockRejectedValueOnce(new MinutesError("Need minutes", 403));
   expect(await openSession(input)).toEqual({ ok: false, status: 403, error: "Need minutes", code: "minutes" });
   const error = new Error("database unavailable");
