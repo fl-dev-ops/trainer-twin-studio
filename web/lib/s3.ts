@@ -131,3 +131,8 @@ export async function deletePrefix(prefix: string) {
     continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;
   } while (continuationToken);
 }
+
+/** `key` when it is one of this org's files (under orgPrefix), else null: never sign another org's file (practice rule 27). */
+export function orgOwnKey(orgId: string, key: unknown): string | null {
+  return typeof key === "string" && key.startsWith(`${orgPrefix(orgId)}/`) && !key.includes("..") ? key : null;
+}

@@ -126,6 +126,27 @@
 21. **A role play's id is its org's.** Generating or importing one whose id belongs to another org is refused
     (`name_taken`), and one that is a twin (`invalid_input`), before any model is called.
 
+## Ending, reports and the call's tokens
+
+22. **The page ends its own call only.** Finalize is for the call's owner while an enabled member, with status
+    `completed` or `abandoned` and the browser's transcript (kept only while the agent's isn't saved). It never
+    sets evidence, the recording or "transcript final"; a body over 1 MB is refused (`invalid_input`). It answers
+    without waiting for anything else (learner memory runs after).
+23. **Ends are applied one at a time per call** (the row is locked first), so two ends at once never lose each
+    other's transcript, evidence or end time.
+24. **Every ended call gets its end work** (room closed, report or calibration score): a call whose end work never
+    started (the workflow couldn't start, the lookup failed) is started again by the 5-minute sweep within a day of
+    its end, and when its owner is disabled. Calls ended before this rule are left as they are.
+25. **A report** is generated at most once per call. One not finished 30 minutes after the call ended shows as
+    unavailable and is marked failed by the sweep; a late run never overwrites it. Report prompts are capped in size.
+26. **Two tokens per call.** The agent's runtime token (model calls, status and recording from the agent) is given
+    only to the agent's dispatch, never to the browser or the room's metadata. The browser gets its own token for its
+    call's live features only (commands, UI state, the call's snapshot). Each works only while its call is live
+    (`runtime_token_invalid`).
+27. **Recordings** are signed only for keys under the call's own org.
+28. **Emails**: a subject is one line (line breaks removed), a permanently refused email (a bad address, a changed
+    body for the same key) isn't retried, and an issue report's link must be http(s).
+
 ## Checks (must always hold)
 
 - No live call is more than 10 minutes past its limit (rule 7: deadline + 2 minutes, 3 hours without an allowance, 10
@@ -134,6 +155,8 @@
 - Every ended call that spent seconds has exactly one usage row; `failed` and `revoked` calls have none.
 - Every calibration belongs to a twin call of its creator. Every calibration created under rule 12 (from 15 Nov 2026)
   whose call ended (`completed` or `abandoned`) more than an hour ago is scored; older ones may stay unscored.
+- Every call that ended (`completed`/`abandoned`) more than an hour and less than a day ago has had its end work
+  started.
 - Assignments: see [People Checks](people.md#checks-must-always-hold-webscriptscheck-org-peoplets).
 
 ## Refusals

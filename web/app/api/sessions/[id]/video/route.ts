@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { errorResponse, refusals } from "@/lib/errors";
 import { db } from "@/lib/db";
 import { resolveSessionUser, visibleSessions } from "@/lib/session-user";
-import { orgPrefix, presignedGetUrl } from "@/lib/s3";
+import { orgOwnKey, orgPrefix, presignedGetUrl } from "@/lib/s3";
 
 /** Video recording access is limited to its learner or a studio member (admin or team) in the same org. */
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -24,10 +24,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       ? (session.evidence as Record<string, unknown>)
       : {};
 
-  const videoKey =
-    typeof evidence.videoS3Key === "string" && evidence.videoS3Key
-      ? evidence.videoS3Key
-      : `${orgPrefix(org.id)}/recordings/${id}/video.mp4`;
+  const videoKey = orgOwnKey(org.id, evidence.videoS3Key) ?? `${orgPrefix(org.id)}/recordings/${id}/video.mp4`;
 
   try {
     const signedUrl = await presignedGetUrl(videoKey, 3600);

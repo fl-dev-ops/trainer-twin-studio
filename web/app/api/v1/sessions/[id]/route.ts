@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { isApiError, requireExternalApi } from "@/lib/external-api";
-import { orgPrefix, presignedGetUrl } from "@/lib/s3";
+import { orgOwnKey, orgPrefix, presignedGetUrl } from "@/lib/s3";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -43,11 +43,10 @@ export async function GET(request: Request, { params }: Params) {
   // composite-egress recording path is used when a video egress was started.
   const evidence = session.evidence && typeof session.evidence === "object" ? (session.evidence as Record<string, unknown>) : {};
   const videoKey =
-    typeof evidence.videoS3Key === "string" && evidence.videoS3Key
-      ? evidence.videoS3Key
-      : internal.videoEgressId
+    orgOwnKey(api.org.id, evidence.videoS3Key)
+      ?? (internal.videoEgressId
         ? `${orgPrefix(api.org.id)}/recordings/${id}/video.mp4`
-        : null;
+        : null);
   const videoUrl = videoKey ? await presignedGetUrl(videoKey, 3600).catch((error) => {
     console.error("Failed to presign video recording:", error);
     return null;

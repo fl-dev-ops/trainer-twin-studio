@@ -29,10 +29,7 @@ export async function POST(request: Request) {
             typeof e === "object" && e !== null && typeof (e as { text?: unknown }).text === "string",
         )
       : undefined;
-  const evidence =
-    typeof body.evidence === "object" && body.evidence !== null && Object.keys(body.evidence).length > 0
-      ? body.evidence
-      : undefined;
+  // The page never sets evidence (recording keys, "transcript final"): only the agent and the server do (rule 22).
 
   const existing = await db.interviewSession.findFirst({
     where: { id: String(body.sessionId), orgId: org.id, userId: user.id },
@@ -42,7 +39,6 @@ export async function POST(request: Request) {
 
   const finalized = await closeInterviewSession(existing.id, requestedStatus, {
     transcript: transcript as Prisma.InputJsonValue | undefined,
-    evidence: evidence as Prisma.InputJsonValue | undefined,
   });
   if (!finalized) return NextResponse.json({ error: "Session not found" }, { status: 404 });
 
