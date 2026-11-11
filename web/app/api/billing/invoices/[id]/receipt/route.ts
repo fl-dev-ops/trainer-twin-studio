@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { BillingError, orgInvoice, receiptPdfFor } from "@/lib/billing/billing";
-import { receiptNumber } from "@/lib/billing/receipt";
+import { receiptNumber } from "@/lib/billing/documents";
 import { currentMembership, isStudioRole } from "@/lib/org";
 
 /** A paid invoice's receipt (the app's PDF, specs/billing.md rule 22), for the org's admin and team. */

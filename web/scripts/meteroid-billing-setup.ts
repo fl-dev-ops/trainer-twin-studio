@@ -14,7 +14,7 @@
 import { meteroid } from "@/lib/meteroid";
 import { meteroidGrpc, PAID_NET_TERMS, PAID_PLAN } from "@/lib/billing/meteroid";
 import { PAID_MONTHLY_CENTS, PACK_CENTS, PACK_CREDITS } from "@/lib/billing/pricing";
-import { SELLER } from "@/lib/billing/receipt";
+import { SELLER } from "@/lib/billing/documents";
 import { CREDIT_UNIT } from "@/lib/meteroid";
 
 const args = process.argv.slice(2);

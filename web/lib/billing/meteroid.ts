@@ -84,9 +84,10 @@ export type MeteroidInvoice = {
   packCredits: number;
 };
 
-type RawInvoice = Record<string, unknown> & {
-  line_items?: { name?: string; quantity?: string; start_date?: string; end_date?: string }[];
-  transactions?: { provider_transaction_id?: string | null; status?: string; payment_type?: string }[];
+/** Meteroid's invoice as its REST API returns it (the fields the app reads). */
+export type RawInvoice = Record<string, unknown> & {
+  line_items?: { name?: string; description?: string | null; quantity?: string; unit_price?: string; start_date?: string; end_date?: string }[];
+  transactions?: { provider_transaction_id?: string | null; status?: string; payment_type?: string; amount?: number; processed_at?: string | null }[];
 };
 
 /** Meteroid names a credit purchase's line "Purchase credits" (meteroid-store services/credit/purchase.rs). */
@@ -119,29 +120,16 @@ export function toInvoice(raw: RawInvoice): MeteroidInvoice {
   };
 }
 
+export const getInvoiceRaw = (invoiceId: string) => meteroid<RawInvoice>("GET", `/invoices/${encodeURIComponent(invoiceId)}`);
+
 export async function getInvoice(invoiceId: string) {
-  return toInvoice(await meteroid<RawInvoice>("GET", `/invoices/${encodeURIComponent(invoiceId)}`));
+  return toInvoice(await getInvoiceRaw(invoiceId));
 }
 
 /** The customer's invoices, newest first (one page: enough for a daily check). */
 export async function listInvoices(customerId: string, perPage = 50) {
   const page = await meteroid<{ data?: RawInvoice[] }>("GET", `/invoices?customer_id=${encodeURIComponent(customerId)}&order_by=invoice_date.desc&per_page=${perPage}`);
   return (page.data ?? []).map(toInvoice);
-}
-
-/** The invoice's PDF; null until Meteroid has rendered it (a few seconds after it's finalized). */
-export async function invoicePdf(invoiceId: string): Promise<Buffer | null> {
-  const key = process.env.METEROID_API_KEY?.trim();
-  if (!key) throw new Error("METEROID_API_KEY is not set");
-  const base = (process.env.METEROID_API_URL?.trim() || "https://meteroid-rest.foreverlearning.in/api/v1").replace(/\/$/, "");
-  const response = await fetch(`${base}/invoices/${encodeURIComponent(invoiceId)}/download`, {
-    headers: { authorization: `Bearer ${key}` },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (response.status === 404) return null;
-  if (!response.ok) throw new MeteroidError(`Meteroid invoice PDF ${invoiceId}: ${response.status}`, response.status);
-  const pdf = Buffer.from(await response.arrayBuffer());
-  return pdf.subarray(0, 5).toString() === "%PDF-" ? pdf : null;
 }
 
 /** Saves billing details on the customer (lib/billing/details.ts meteroidCustomerPatch). */

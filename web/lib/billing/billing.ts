@@ -8,7 +8,7 @@ import {
   createPaidSubscription,
   getInvoice,
   getSubscription,
-  invoicePdf,
+  getInvoiceRaw,
   listInvoices,
   PAID_PLAN,
   patchCustomer,
@@ -16,7 +16,7 @@ import {
   type MeteroidInvoice,
 } from "@/lib/billing/meteroid";
 import { formatMoney, MAX_PACKS, PACK_CENTS, PACK_CREDITS, PACK_VALID_DAYS, packPrice, PAID_MONTHLY_CENTS } from "@/lib/billing/pricing";
-import { receiptNumber, renderReceipt } from "@/lib/billing/receipt";
+import { billingDocument, receiptNumber, renderInvoice, renderReceipt } from "@/lib/billing/documents";
 import { orgName } from "@/lib/invite/person-email";
 import { studioUrl } from "@/lib/invite/links";
 import { MeteroidError } from "@/lib/meteroid";
@@ -400,30 +400,21 @@ export function describeInvoice(row: Pick<BillingInvoice, "kind" | "credits" | "
   return "TrainerTwin";
 }
 
-/** Meteroid renders the PDF a few seconds after finalizing: wait for it (a step retry waits longer). */
-async function pdfOf(invoiceId: string) {
-  for (let attempt = 0; attempt < 10; attempt++) {
-    const pdf = await invoicePdf(invoiceId);
-    if (pdf) return pdf;
-    await new Promise((resolve) => setTimeout(resolve, 3_000));
-  }
-  throw new Error(`Meteroid hasn't rendered invoice ${invoiceId}'s PDF yet`);
+const paymentInstructions = () => process.env.BILLING_PAYMENT_INSTRUCTIONS?.trim() || null;
+
+/** The invoice as the PDFs show it, from Meteroid (its numbers, lines, tax and the customer when it was issued). */
+async function documentOf(row: Pick<BillingInvoice, "id" | "orgId">) {
+  return billingDocument(await getInvoiceRaw(row.id), await orgName(row.orgId));
 }
 
+/** The tax invoice PDF (lib/billing/documents.ts). */
+export async function invoicePdf(row: Pick<BillingInvoice, "id" | "orgId">) {
+  return renderInvoice(await documentOf(row), paymentInstructions());
+}
+
+/** The receipt PDF of a paid invoice. */
 export async function receiptPdf(row: BillingInvoice) {
-  const billing = await db.orgBilling.findUniqueOrThrow({ where: { orgId: row.orgId } });
-  return renderReceipt({
-    invoiceNumber: row.number,
-    issuedAt: row.issuedAt,
-    paidAt: row.paidAt ?? new Date(),
-    totalCents: row.totalCents,
-    taxCents: row.taxCents,
-    currency: row.currency,
-    references: row.paymentRefs,
-    description: describeInvoice(row),
-    customer: detailsOf(billing),
-    customerName: await orgName(row.orgId),
-  });
+  return renderReceipt(await documentOf(row), row.paidAt ?? row.updatedAt);
 }
 
 /**
@@ -439,7 +430,7 @@ async function emailOnce(row: BillingInvoice, event: BillingEmailArgs["event"], 
     return false;
   }
   const attachments: { filename: string; content: Buffer }[] = [];
-  if (event !== "upgrade_cancelled") attachments.push({ filename: `${row.number}.pdf`, content: await pdfOf(row.id) });
+  if (event !== "upgrade_cancelled") attachments.push({ filename: `${row.number}.pdf`, content: await invoicePdf(row) });
   if (event === "paid") attachments.unshift({ filename: `${receiptNumber(row.number)}.pdf`, content: await receiptPdf(row) });
   const result = await sendBillingEmail({
     to,
@@ -453,7 +444,7 @@ async function emailOnce(row: BillingInvoice, event: BillingEmailArgs["event"], 
       dueDate: shortDay(row.dueDate),
       description: describeInvoice(row),
       billingUrl: `${studioUrl()}settings?tab=billing`,
-      paymentInstructions: process.env.BILLING_PAYMENT_INSTRUCTIONS?.trim() || null,
+      paymentInstructions: paymentInstructions(),
       outcome,
     },
   });
@@ -608,14 +599,12 @@ export async function orgInvoice(orgId: string, invoiceId: string) {
 }
 
 export async function invoicePdfFor(orgId: string, invoiceId: string) {
-  await orgInvoice(orgId, invoiceId);
-  const pdf = await viaMeteroid("downloading the invoice", () => invoicePdf(invoiceId));
-  if (!pdf) throw new BillingError("The invoice PDF isn't ready yet; try again in a minute.", 409);
-  return pdf;
+  const row = await orgInvoice(orgId, invoiceId);
+  return viaMeteroid("reading the invoice", () => invoicePdf(row));
 }
 
 export async function receiptPdfFor(orgId: string, invoiceId: string) {
   const row = await orgInvoice(orgId, invoiceId);
   if (row.status !== "paid") throw new BillingError("This invoice isn't paid yet.", 409);
-  return receiptPdf(row);
+  return viaMeteroid("reading the invoice", () => receiptPdf(row));
 }

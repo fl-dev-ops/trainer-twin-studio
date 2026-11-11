@@ -1,7 +1,7 @@
 /**
  * Billing phase 2 against a real Meteroid tenant (dev or sandbox; never production): runs the whole lifecycle of
  * specs/billing.md with throwaway orgs in the local test database, and checks each step. Workflows aren't running, so
- * their steps are called directly; emails are skipped (no RESEND_API_KEY) but the PDFs they'd attach are fetched.
+ * their steps are called directly; emails are skipped (no RESEND_API_KEY) but the PDFs they would attach are drawn.
  * Cleans up after itself (cancels subscriptions, archives customers, deletes the orgs).
  *
  *   METEROID_API_KEY=<dev or sandbox key> bun scripts/billing-live-check.ts
@@ -80,7 +80,7 @@ try {
 
   assert.equal(await billing.invoiceIssuedEmail(rows[0].id), true);
   assert.equal(await billing.invoiceIssuedEmail(rows[0].id), false);
-  ok("issued email: once (invoice PDF fetched from Meteroid)");
+  ok("issued email: once (invoice PDF drawn from Meteroid's invoice)");
 
   assert.equal((await billing.invoiceOverdue(rows[0].id)).action, "none");
   const later = new Date(rows[0].dueDate.getTime() + DAY + 60_000);
