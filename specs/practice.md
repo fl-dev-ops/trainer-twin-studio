@@ -68,9 +68,9 @@
    start): the first end wins, and the call's usage row is written in the same transaction that ends it (one row per
    call; reporting it to Meteroid follows after commit). Its end work (room closed, report) then runs in the end
    workflow and is retried. The report uses the agent's transcript; a page ending the call never skips it.
-9. **Runtime token** works only while its call is live; after that it is refused (`runtime_token_invalid`). With it
-   the agent may report the call's status and recording; the page ends a call only through its owner's finalize,
-   which can't set the recording. A recording upload is at most 200 MB.
+9. **Runtime token** works only while its call is live; after that it is refused (`runtime_token_invalid`); see rule
+   26 for which token does what. The page ends a call only through its owner's finalize, which can't set the
+   recording (the agent reports it through its webhook).
 10. **Assigning** a twin adds the people (People rules 6–9) and writes their assignments in the same locked
     transaction, all or nothing; a disabled person or a team member is refused (`person_disabled`,
     `person_is_studio`). Restoring a revoked assignment is refused the same way. Assigning someone who already has
@@ -180,7 +180,6 @@ Same columns as [People](people.md#refusals). **Where**: PG page loader (`/t/`, 
 | `calibration_ended` | 409 | This calibration call has ended. | Rating after the call ended | T (`calibrations.rate`) |
 | `call_replaced` | 409 | This call was replaced by one you started elsewhere. | A newer start ended this call while it was being set up | ST |
 | `voice_only` | 400 | Twin calls are voice only. | A twin call in another mode | ST |
-| `recording_too_big` | 413 | A recording can be at most 200 MB. | Agent recording upload over 200 MB | RT |
 | `roleplay_not_assigned` | 403 | This role play isn't assigned to you. | A link of another account (studio members included) | PG, ST |
 | `roleplay_access_removed` | 403 | Your access to this role play was removed. Ask your trainer. | Link cancelled or expired | PG, ST |
 | `mode_not_allowed` | 400 | This role play can't be started as {mode}. | Mode outside the deployment's allowed modes, or a learner not calling by voice | ST |
