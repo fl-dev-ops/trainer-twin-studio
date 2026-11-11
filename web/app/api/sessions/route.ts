@@ -22,14 +22,14 @@ export async function POST(req: Request) {
   const { org, user } = await resolveSessionUser();
   if (!org || !user) return errorResponse(refusals.signedOut());
   const body = await req.json().catch(() => null);
-  if (!body || (!body.shareCode && !body.agentSlug && !body.deploymentKey)) {
-    return errorResponse(refusals.invalidInput("shareCode, agentSlug, or deploymentKey is required"));
+  if (!body || (!body.shareCode && !body.agentSlug)) {
+    return errorResponse(refusals.invalidInput("shareCode or agentSlug is required"));
   }
   if (!body.shareCode) {
     const member = await practicePerson(org.id, user.id).catch((error: unknown) => errorResponse(error));
     if (member instanceof Response) return member;
     // Starting an agent by slug skips assignments: studio members (admin, team) trying it only.
-    if (!body.deploymentKey && !isStudioRole(member.role)) return errorResponse(refusals.studioOnly());
+    if (!isStudioRole(member.role)) return errorResponse(refusals.studioOnly());
   }
 
   try {
@@ -41,7 +41,6 @@ export async function POST(req: Request) {
       userEmail: user.email,
       shareCode: typeof body.shareCode === "string" ? body.shareCode : undefined,
       agentSlug: typeof body.agentSlug === "string" ? body.agentSlug : undefined,
-      deploymentKey: typeof body.deploymentKey === "string" ? body.deploymentKey : undefined,
       contextId: typeof body.contextId === "string" ? body.contextId : undefined,
       mode: body.mode === "chat" ? "chat" : "voice",
       idempotencyKey: typeof body.idempotencyKey === "string" ? body.idempotencyKey : undefined,

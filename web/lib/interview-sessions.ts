@@ -221,7 +221,6 @@ export async function activateSession(input: {
   userEmail?: string;
   shareCode?: string;
   agentSlug?: string;
-  deploymentKey?: string;
   contextId?: string | null;
   contextIds?: string[] | null;
   mode?: DeliveryMode;
@@ -284,19 +283,13 @@ export async function activateSession(input: {
     });
     activationKey = live?.activationKey ?? `assignment:${found.id}:${randomBytes(18).toString("base64url")}`;
   } else {
-    const found = input.deploymentKey
-      ? await db.deployment.findFirst({ where: { publicKey: input.deploymentKey, orgId: input.orgId, status: "active" } })
-      : null;
-    if (found) {
-      deploymentId = found.id;
-      agentId = found.agentId;
-    } else {
-      if (!input.agentSlug) throw refusals.invalidInput("Say which agent to start.");
-      const agent = await db.agent.findFirst({ where: { slug: input.agentSlug, orgId: input.orgId, archivedAt: null }, select: { id: true } });
-      if (!agent) throw refusals.notFound();
-      deploymentId = (await ensureDeployment(input.orgId, agent.id)).id;
-      agentId = agent.id;
-    }
+    // By name: admin and team trying an agent (learners start from their link; specs/practice.md rule 1).
+    if (!studio) throw refusals.studioOnly();
+    if (!input.agentSlug) throw refusals.invalidInput("Say which agent to start.");
+    const agent = await db.agent.findFirst({ where: { slug: input.agentSlug, orgId: input.orgId, archivedAt: null }, select: { id: true } });
+    if (!agent) throw refusals.notFound();
+    deploymentId = (await ensureDeployment(input.orgId, agent.id)).id;
+    agentId = agent.id;
     activationKey = input.idempotencyKey
       ? `deployment:${deploymentId}:${input.idempotencyKey}`
       : `direct:${randomBytes(18).toString("base64url")}`;

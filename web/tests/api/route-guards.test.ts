@@ -95,7 +95,6 @@ const classification: Record<string, Guard> = {
   "POST personas/[slug]/sources": "studio",
   "POST personas/[slug]/synthesize": "studio",
   "POST personas": "studio",
-  "GET portal/agents": "public",
   "POST razorpay/webhook": "webhook signature",
   "DELETE role-play/[slug]/assignments": "studio",
   "PUT role-play/[slug]/assignments": "studio",

@@ -97,6 +97,26 @@
 16. **"Feels off"** means the same thing everywhere: one rule in `web/lib/twin/stats.ts` (case-insensitive,
     punctuation ignored, "feel off" too), matched by the chat brain's own copy (a test checks they agree).
 
+## Role plays
+
+17. **A learner practises a role play only through their own link** (`/s/<code>` of a `RolePlayAssignment`). The link
+    page and Start run the same check (rule 1) in the same order: signed in → enabled member (`no_org`,
+    `member_disabled`) → the link is theirs (`roleplay_not_assigned`; the page offers to switch account) → the link
+    is open, `pending` or `used` (`roleplay_access_removed` once cancelled or expired) → the role play is live, not
+    archived (`not_found`) → org not paused → credits (rule 4). Another org's or an unknown code is `not_found`.
+    Admin and team start a role play by name only (`studio_only` for learners); nothing else starts one.
+18. **Role-play calls resume.** Starting again on a link with a call still live returns that call (same deadline),
+    only when it is still live; a reload or a second tab joins it rather than ending it.
+19. **Assigning** a role play adds the people (People rules 6–9) and writes their assignments in the same locked
+    transaction, all or nothing (as rule 10). The dashboard, the copilot and the REST API share it: a disabled or
+    team person is refused (`person_disabled`, `person_is_studio`), and someone who already has the role play keeps
+    their link (`assignment_exists` 409 only for the API's explicit move of a link to them).
+20. **Saving a role play** (builder, settings, draft publish, spec upload) runs one at a time per role play: the
+    version only moves when the content changes, its files and examples belong to that version, and a save that
+    lost the race is refused cleanly (`not_found` if it was archived meanwhile), never a 500.
+21. **A role play's id is its org's.** Generating or importing one with a name that belongs to another org is
+    refused (`name_taken`) before any model is called.
+
 ## Checks (must always hold)
 
 - No live call is more than 10 minutes past its limit (rule 7: deadline + 2 minutes, 3 hours without an allowance, 10
@@ -128,6 +148,11 @@ Same columns as [People](people.md#refusals). **Where**: PG page loader (`/t/`, 
 | `call_replaced` | 409 | This call was replaced by one you started elsewhere. | A newer start ended this call while it was being set up | ST |
 | `voice_only` | 400 | Twin calls are voice only. | A twin call in another mode | ST |
 | `recording_too_big` | 413 | A recording can be at most 200 MB. | Agent recording upload over 200 MB | RT |
+| `roleplay_not_assigned` | 403 | This role play isn't assigned to you. | A link of another account (studio members included) | PG, ST |
+| `roleplay_access_removed` | 403 | Your access to this role play was removed. Ask your trainer. | Link cancelled or expired | PG, ST |
+| `mode_not_allowed` | 400 | This role play can't be started as {mode}. | Mode outside the deployment's allowed modes | ST |
+| `assignment_exists` | 409 | That learner already has this role play. | REST API moving a link to someone who has one | R |
+| `name_taken` | 409 | That name is used by another organization. Pick another. | A role play's id belongs to another org | S |
 | `runtime_token_invalid` | 401 | This call is no longer available. | Runtime token missing, wrong, or its call has ended | RT |
 
 ## Open questions

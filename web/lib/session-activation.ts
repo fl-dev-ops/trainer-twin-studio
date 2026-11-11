@@ -19,7 +19,6 @@ export type StartSessionInput = {
   userEmail?: string;
   shareCode?: string;
   agentSlug?: string;
-  deploymentKey?: string;
   contextId?: string;
   mode: DeliveryMode;
   idempotencyKey?: string;
