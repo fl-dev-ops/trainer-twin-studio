@@ -1,5 +1,5 @@
 import { getRun } from "workflow/api";
-import { getTrainerOrg } from "@/lib/org";
+import { studioOrRefusal } from "@/lib/org";
 import { progressRun } from "@/lib/run-progress";
 
 /**
@@ -8,8 +8,8 @@ import { progressRun } from "@/lib/run-progress";
  * invite emails going out (workflows/invite-emails.ts).
  */
 export async function GET(_request: Request, { params }: { params: Promise<{ token: string }> }) {
-  const org = await getTrainerOrg();
-  if (!org) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const org = await studioOrRefusal();
+  if (org instanceof Response) return org;
   const runId = progressRun(org.id, (await params).token);
   if (!runId) return Response.json({ error: "Not found" }, { status: 404 });
   const run = getRun(runId);

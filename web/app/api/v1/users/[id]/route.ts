@@ -39,6 +39,6 @@ export async function DELETE(request: Request, { params }: Params) {
   // Never deleted: "remove" disables the learner (signed out, access revoked, history kept). Same 204 / 404 contract.
   const learner = await findOrgLearner(api.org.id, { id });
   if (!learner) return Response.json({ error: "User not found" }, { status: 404 });
-  await setMemberDisabled({ orgId: api.org.id, memberId: learner.memberId, actorUserId: api.actorUserId ?? "", disabled: true });
+  await setMemberDisabled({ orgId: api.org.id, memberId: learner.memberId, actorUserId: api.actorUserId, disabled: true });
   return new Response(null, { status: 204 });
 }

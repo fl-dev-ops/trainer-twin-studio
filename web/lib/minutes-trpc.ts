@@ -1,4 +1,3 @@
-import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { MAX_INVITES } from "@/lib/invite/emails";
@@ -27,17 +26,6 @@ import { studioProcedure, t } from "@/lib/trpc";
 const emailInput = z.string().trim().toLowerCase().email().max(320);
 const amount = z.number().int().min(1).max(MAX_LEARNER_MINUTES);
 const note = z.string().trim().max(200).optional();
-
-async function minutesCall<T>(fn: () => Promise<T>): Promise<T> {
-  try {
-    return await fn();
-  } catch (error) {
-    if (error instanceof MinutesError) {
-      throw new TRPCError({ code: error.status === 409 ? "CONFLICT" : error.status === 403 ? "FORBIDDEN" : "BAD_REQUEST", message: error.message });
-    }
-    throw error;
-  }
-}
 
 const toMinutes = (seconds: number) => Math.floor(seconds / 60);
 
@@ -137,10 +125,10 @@ export const minutesRouter = t.router({
    */
   addMany: studioProcedure
     .input(z.object({ emails: z.array(emailInput).min(1).max(100), minutes: amount, note }))
-    .mutation(({ ctx, input }) => minutesCall(() =>
+    .mutation(({ ctx, input }) =>
       // The give-credits workflow (workflows/give-credits.ts): credits, then a "credits added" email each.
       runGiveCredits({ org: { id: ctx.user.orgId, slug: ctx.user.orgSlug }, by: { id: ctx.user.id, name: ctx.user.name }, emails: input.emails, minutes: input.minutes, note: input.note }),
-    )),
+    ),
 
   /**
    * Adds people to the org (Settings › Team and Users; specs/people.md): members right away, learners with their
@@ -148,17 +136,17 @@ export const minutesRouter = t.router({
    */
   addPeople: studioProcedure
     .input(z.object({ emails: z.array(emailInput).min(1).max(MAX_INVITES), role: z.enum(["team", "user"]), minutes: amount.optional() }))
-    .mutation(({ ctx, input }) => minutesCall(async () => {
+    .mutation(async ({ ctx, input }) => {
       const org = await db.organization.findUniqueOrThrow({ where: { id: ctx.user.orgId }, select: { id: true, slug: true, name: true } });
       // The add-org-people workflow (workflows/add-org-people.ts): members, starting credits, emails.
       return runAddOrgPeople({ org, by: { id: ctx.user.id, name: ctx.user.name }, emails: input.emails, role: input.role, minutes: input.minutes });
-    })),
+    }),
 
   /** Adds credits to one learner, on top of what they have, from the org's balance, and emails them. */
-  add: studioProcedure.input(z.object({ email: emailInput, minutes: amount, note })).mutation(({ ctx, input }) => minutesCall(async () => {
+  add: studioProcedure.input(z.object({ email: emailInput, minutes: amount, note })).mutation(async ({ ctx, input }) => {
     const result = await runGiveCredits({ org: { id: ctx.user.orgId, slug: ctx.user.orgSlug }, by: { id: ctx.user.id, name: ctx.user.name }, emails: [input.email], minutes: input.minutes, note: input.note });
     if (result.skipped.length) throw new MinutesError(`${result.skipped[0].email} ${result.skipped[0].reason}.`, 400);
     const own = await learnerBalance(ctx.user.orgId, input.email);
     return { grantedMinutes: input.minutes, balanceMinutes: Math.floor(own.balanceSeconds / 60), orgBalanceMinutes: result.orgBalanceMinutes ?? 0 };
-  })),
+  }),
 });

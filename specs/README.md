@@ -13,6 +13,11 @@ Not the public API docs (those are in `docs/`, published). Not plans (those are 
 - **Module specs** (everything else) describe the code as it is, using the rules below. A module spec that
   disagrees with a rule spec is a bug to fix in the code, listed under *Mismatches* until it is fixed.
 
+Each rule spec ends with a **Refusals** table: one row per condition the platform refuses, with its code, status,
+message, when it applies and every layer that must check it. The same condition always gives the same code, status
+and message. Anything a rule spec doesn't describe is refused. Every code appears in a test titled `refuses <code>`;
+a module spec whose code refuses differently is a bug in the code (list it under *Mismatches*).
+
 (Added 11 Nov 2026: module specs only ever described the code, so an email-based assignment model nobody wanted was
 documented as "how it works" and never questioned. See `plans/people-and-sign-in.md`.)
 

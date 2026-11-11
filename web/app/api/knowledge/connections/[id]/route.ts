@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getTrainerOrg } from "@/lib/org";
+import { studioOrRefusal } from "@/lib/org";
 import { deleteConnection } from "@/lib/connectors";
 
 export const dynamic = "force-dynamic";
@@ -8,8 +8,8 @@ export async function DELETE(
   request: Request,
   props: { params: Promise<{ id: string }> }
 ) {
-  const trainer = await getTrainerOrg();
-  if (!trainer) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const trainer = await studioOrRefusal();
+  if (trainer instanceof Response) return trainer;
 
   const { id } = await props.params;
   const url = new URL(request.url);

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { getTrainerOrg } from "@/lib/org";
+import { studioOrRefusal } from "@/lib/org";
 import { readSpecDraft, saveSpecDraft, publishSpecDraft } from "@/lib/spec-drafts";
 import { generateSpecBundle } from "@/lib/spec-generation";
 import { findOrgOrGlobalPersona, validSlug } from "@/lib/specs";
@@ -28,8 +28,8 @@ const inputSchema = z.object({
 const GENERIC_SAVE_ERROR = "Failed to save the change, try again in a few seconds";
 
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
-  const org = await getTrainerOrg();
-  if (!org) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const org = await studioOrRefusal();
+  if (org instanceof Response) return org;
   const { slug: agentSlug } = await params;
   if (!validSlug(agentSlug)) return Response.json({ error: "Invalid scenario id" }, { status: 400 });
 

@@ -36,6 +36,21 @@ export const PEOPLE_CHECKS = [
                             where m."organizationId" = l."orgId" and lower(u.email) = lower(l.email))`,
   },
   {
+    rule: "every org has exactly one admin",
+    sql: `select count(*)::int as n from organization o
+          where (select count(*) from member m where m."organizationId" = o.id and m.role = 'admin') <> 1`,
+  },
+  {
+    rule: "no disabled member holds an active twin, a pending role play or a call in progress",
+    sql: `select (select count(*) from "TwinAssignment" t join member m on m."organizationId" = t."orgId" and m."userId" = t."userId"
+                  where m."disabledAt" is not null and t.status = 'active')
+               + (select count(*) from "RolePlayAssignment" r join member m on m.id = r."memberId"
+                  where m."disabledAt" is not null and r.status = 'pending')
+               + (select count(*) from "InterviewSession" s join member m on m."organizationId" = s."orgId" and m."userId" = s."userId"
+                  where m."disabledAt" is not null and s.status in ('assigned', 'activating', 'active'))
+               as n`,
+  },
+  {
     rule: "no pending invitations (people are added straight to their org)",
     sql: `select count(*)::int as n from invitation where status = 'pending'`,
   },

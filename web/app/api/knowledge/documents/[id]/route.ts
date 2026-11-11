@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { getTrainerOrg } from "@/lib/org";
+import { studioOrRefusal } from "@/lib/org";
 import { OrganizationKnowledgeService } from "@/lib/org-knowledge";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function DELETE(_req: Request, { params }: Params) {
-  const trainer = await getTrainerOrg();
-  if (!trainer) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const trainer = await studioOrRefusal();
+  if (trainer instanceof Response) return trainer;
 
   const { id } = await params;
   if (!id) return NextResponse.json({ error: "Document ID required" }, { status: 400 });
@@ -24,8 +24,8 @@ export async function DELETE(_req: Request, { params }: Params) {
 }
 
 export async function POST(_req: Request, { params }: Params) {
-  const trainer = await getTrainerOrg();
-  if (!trainer) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const trainer = await studioOrRefusal();
+  if (trainer instanceof Response) return trainer;
 
   const { id } = await params;
   if (!id) return NextResponse.json({ error: "Document ID required" }, { status: 400 });

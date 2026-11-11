@@ -1,7 +1,7 @@
+import { AppError, errorResponse } from "@/lib/errors";
 import { orgPerson } from "@/lib/org-people";
 import { db } from "@/lib/db";
 import { copilotStudioInput, runCopilotStudio } from "@/lib/copilot-studio";
-import { MinutesError } from "@/lib/minutes";
 import { isStudioRole } from "@/lib/org";
 import { ingestAuthorized, ScenarioIngestError } from "@/lib/scenario-ingest";
 import { TwinAccessError } from "@/lib/twin-access";
@@ -36,7 +36,8 @@ export async function POST(request: Request) {
     );
     return Response.json(result);
   } catch (error) {
-    if (error instanceof ScenarioIngestError || error instanceof TwinAccessError || error instanceof MinutesError) {
+    if (error instanceof AppError) return errorResponse(error);
+    if (error instanceof ScenarioIngestError || error instanceof TwinAccessError) {
       return Response.json({ error: error.message }, { status: error.status });
     }
     console.error("[API:internal:copilot-studio] failed:", error);

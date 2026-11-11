@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { getTrainerOrg } from "@/lib/org";
+import { studioOrRefusal } from "@/lib/org";
 import { assertDriveOrigin, DriveError, driveCookieOptions, DRIVE_STATE_COOKIE, startDriveOAuth } from "@/lib/google-drive";
 
 export async function POST(request: Request) {
-  const actor = await getTrainerOrg();
-  if (!actor) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const actor = await studioOrRefusal();
+  if (actor instanceof Response) return actor;
   try {
     assertDriveOrigin(request);
     const result = startDriveOAuth(actor);

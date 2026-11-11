@@ -1,6 +1,7 @@
-import { initTRPC, TRPCError } from "@trpc/server";
+import { initTRPC } from "@trpc/server";
 import { headers } from "next/headers";
 import superjson from "superjson";
+import { AppError, refusals, toTRPCError } from "@/lib/errors";
 import { currentMembership, isStudioRole } from "@/lib/org";
 
 /**
@@ -16,14 +17,16 @@ export type TrpcContext = {
   user: TrpcUser | null;
   /** Signed in, even when `user` is null for want of an (enabled) membership. */
   signedIn?: boolean;
+  /** Why `user` is null when signed in (no_org, org_pin_invalid). */
+  refusal?: AppError | null;
 };
 
-async function userFrom(requestHeaders: Headers): Promise<Pick<TrpcContext, "user" | "signedIn">> {
+async function userFrom(requestHeaders: Headers): Promise<Pick<TrpcContext, "user" | "signedIn" | "refusal">> {
   // The org this request works in, as for getSessionOrg / getTrainerOrg (lib/org.ts): pinned tab, active org, oldest.
   const current = await currentMembership(requestHeaders);
   if (!current) return { user: null, signedIn: false };
-  const { session, member } = current;
-  if (!member) return { user: null, signedIn: true };
+  const { session, member, refusal } = current;
+  if (!member) return { user: null, signedIn: true, refusal };
   return {
     signedIn: true,
     user: {
@@ -46,20 +49,32 @@ export async function createServerTrpcContext(): Promise<TrpcContext> {
   return userFrom(await headers());
 }
 
-// superjson: Dates (and Map/Set) reach client pages as they did through server-component props.
-export const t = initTRPC.context<TrpcContext>().create({ transformer: superjson });
+// superjson: Dates (and Map/Set) reach client pages as they did through server-component props. Our refusals
+// (lib/errors.ts) keep their tRPC code (pages redirect on it) and add their own as `data.refusal`.
+export const t = initTRPC.context<TrpcContext>().create({
+  transformer: superjson,
+  errorFormatter: ({ shape, error }) =>
+    error.cause instanceof AppError ? { ...shape, data: { ...shape.data, refusal: error.cause.code } } : shape,
+});
+
+/** A refusal thrown anywhere below becomes its tRPC error, with its status and message. */
+const refusalsAsTrpc = t.middleware(async ({ next }) => {
+  const result = await next();
+  if (!result.ok && result.error.cause instanceof AppError) throw toTRPCError(result.error.cause);
+  return result;
+});
 
 /** Anyone, signed in or not: learner-portal pages resolve the org from the host themselves. */
-export const publicProcedure = t.procedure;
+export const publicProcedure = t.procedure.use(refusalsAsTrpc);
 
-export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
+export const protectedProcedure = publicProcedure.use(({ ctx, next }) => {
   // Signed in without an org is FORBIDDEN (pages send it to /auth/no-org); no session at all is UNAUTHORIZED (sign-in).
-  if (!ctx.user) throw new TRPCError({ code: ctx.signedIn ? "FORBIDDEN" : "UNAUTHORIZED" });
+  if (!ctx.user) throw toTRPCError(ctx.refusal ?? (ctx.signedIn ? refusals.noOrg() : refusals.signedOut()));
   return next({ ctx: { ...ctx, user: ctx.user } });
 });
 
 /** Studio members only (admin, team): they manage twins and role plays. */
 export const studioProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (!isStudioRole(ctx.user.role)) throw new TRPCError({ code: "FORBIDDEN" });
+  if (!isStudioRole(ctx.user.role)) throw toTRPCError(refusals.studioOnly());
   return next({ ctx });
 });

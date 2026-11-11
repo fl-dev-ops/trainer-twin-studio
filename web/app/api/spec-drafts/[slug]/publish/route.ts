@@ -1,4 +1,4 @@
-import { getTrainerOrg } from "@/lib/org";
+import { studioOrRefusal } from "@/lib/org";
 import { publishSpecDraft, readSpecDraft } from "@/lib/spec-drafts";
 import { findOrgOrGlobalPersona } from "@/lib/specs";
 
@@ -6,8 +6,8 @@ export const runtime = "nodejs";
 
 /** Publishes the working draft as the current published Agent + Domain versions. */
 export async function POST(_request: Request, { params }: { params: Promise<{ slug: string }> }) {
-  const org = await getTrainerOrg();
-  if (!org) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const org = await studioOrRefusal();
+  if (org instanceof Response) return org;
   const { slug } = await params;
 
   const draft = await readSpecDraft(slug, org.id).catch(() => null);

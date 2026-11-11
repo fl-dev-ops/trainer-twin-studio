@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { getTrainerOrg } from "@/lib/org";
+import { studioOrRefusal } from "@/lib/org";
 import { youtubeImportSchema } from "@/lib/youtube";
 import { previewYouTubeImport } from "@/lib/youtube-ingestion";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const trainer = await getTrainerOrg();
-  if (!trainer) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const trainer = await studioOrRefusal();
+  if (trainer instanceof Response) return trainer;
 
   try {
     const json = await request.json();

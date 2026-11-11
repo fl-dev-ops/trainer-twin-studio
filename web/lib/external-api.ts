@@ -1,5 +1,7 @@
 import { auth } from "@/lib/auth";
-import { LEARNER, orgPerson } from "@/lib/org-people";
+import { errorResponse, AppError } from "@/lib/errors";
+import { STUDIO_ROLES } from "@/lib/roles";
+import { LEARNER, orgPeople, orgPerson, type OrgPerson } from "@/lib/org-people";
 import { db } from "@/lib/db";
 
 export type ExternalApiResource = "users" | "sessions" | "assignments" | "scenarios";
@@ -13,7 +15,9 @@ export type ExternalApiAction = "read" | "write";
 export type ExternalApiContext = {
   org: { id: string; slug: string; name: string };
   keyId: string;
-  actorUserId: string | null;
+  /** The enabled admin/team member who created the key: the API acts as them (specs/people.md rule 22). */
+  trainer: OrgPerson;
+  actorUserId: string;
 };
 
 export function externalApiKey(request: Request) {
@@ -48,11 +52,10 @@ export async function requireExternalApi(
   if (!org) return Response.json({ error: "API key organization not found" }, { status: 401 });
 
   const metadata = verification.key.metadata as { createdByUserId?: unknown } | null;
-  return {
-    org,
-    keyId: verification.key.id,
-    actorUserId: typeof metadata?.createdByUserId === "string" ? metadata.createdByUserId : null,
-  };
+  const creator = typeof metadata?.createdByUserId === "string" ? metadata.createdByUserId : null;
+  const [trainer] = creator ? await orgPeople(org.id, { roles: [...STUDIO_ROLES], userIds: [creator] }) : [];
+  if (!trainer) return errorResponse(new AppError("api_key_owner_gone", "This API key's owner is no longer on the team. Create a new key.", 403));
+  return { org, keyId: verification.key.id, trainer, actorUserId: trainer.userId };
 }
 
 export function isApiError(value: ExternalApiContext | Response): value is Response {

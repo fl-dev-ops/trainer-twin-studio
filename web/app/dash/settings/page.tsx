@@ -16,7 +16,7 @@ export default function SettingsPage() {
   const requested = useSearchParams().get("tab");
   const { user, organization, team } = useApi(["page.settings"], () => api.page.settings.query());
   // Learners have no Team or Billing tab, so ?tab=team or ?tab=billing falls back to Account for them.
-  const tab = TABS.find((name) => name === requested && ((name !== "team" && name !== "billing") || team)) ?? "account";
+  const tab = TABS.find((name) => name === requested && (name === "account" || team)) ?? "account";
   // The URL holds the tab, so the sidebar's Settings link (no ?tab) is Account again. replaceState: no server request.
   const selectTab = (value: unknown) => window.history.replaceState(null, "", value === "account" ? "/settings" : `/settings?tab=${value}`);
 
@@ -33,7 +33,7 @@ export default function SettingsPage() {
         <TabsList>
           <TabsTrigger value="account">Account</TabsTrigger>
           {team ? <TabsTrigger value="team">Team</TabsTrigger> : null}
-          <TabsTrigger value="branding">Branding</TabsTrigger>
+          {organization ? <TabsTrigger value="branding">Branding</TabsTrigger> : null}
           {team ? <TabsTrigger value="billing">Billing</TabsTrigger> : null}
         </TabsList>
 
@@ -47,9 +47,11 @@ export default function SettingsPage() {
           </TabsContent>
         ) : null}
 
-        <TabsContent value="branding" className="pt-3">
-          <OrganizationForm organization={organization} />
-        </TabsContent>
+        {organization ? (
+          <TabsContent value="branding" className="pt-3">
+            <OrganizationForm organization={organization} />
+          </TabsContent>
+        ) : null}
 
         {team ? (
           <TabsContent value="billing" className="pt-3">

@@ -3,14 +3,13 @@ import { assignmentExpiresAt, newAssignmentShareCode } from "@/lib/assignments";
 import { db } from "@/lib/db";
 import { ensureDeployment } from "@/lib/deployments";
 import { MinutesError } from "@/lib/minutes";
-import { PeopleError } from "@/lib/org-people";
+import { AppError, errorResponse } from "@/lib/errors";
 import { findOrgLearner, isApiError, paginationFromUrl, requireExternalApi } from "@/lib/external-api";
 import {
   assignmentDetails,
   assignmentDetailSelect,
   assignmentView,
   emailAssignment,
-  findKeyTrainer,
   findScenario,
   learnerFor,
   practiceUrl,
@@ -52,16 +51,17 @@ export async function POST(request: Request) {
   const parsed = createSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "email or userId and a valid scenario slug are required" }, { status: 400 });
 
-  const [agent, trainer] = await Promise.all([findScenario(api.org.id, parsed.data.scenario), findKeyTrainer(api.org.id, api.actorUserId)]);
+  const agent = await findScenario(api.org.id, parsed.data.scenario);
+  const trainer = api.trainer;
   if (!agent) return Response.json({ error: "Scenario not found" }, { status: 404 });
-  if (!trainer) return Response.json({ error: "API key creator is no longer an organization trainer" }, { status: 403 });
 
   // The learner: an existing one by userId, or by email (added to the org first when new, with starting credits).
   let learner;
   try {
     learner = await learnerFor(api.org.id, { email: parsed.data.email, userId: parsed.data.userId }, trainer.userId);
   } catch (error) {
-    if (error instanceof PeopleError || error instanceof MinutesError) return Response.json({ error: error.message }, { status: 409 });
+    if (error instanceof AppError) return errorResponse(error);
+    if (error instanceof MinutesError) return Response.json({ error: error.message }, { status: error.status });
     throw error;
   }
   if (!learner) return Response.json({ error: "User not found" }, { status: 404 });

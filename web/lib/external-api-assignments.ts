@@ -18,12 +18,6 @@ export function findScenario(orgId: string, slug: string) {
   });
 }
 
-/** The trainer the key acts for: its creator while they are still a studio member (403 otherwise). */
-export async function findKeyTrainer(orgId: string, actorUserId: string | null) {
-  const [trainer] = await orgPeople(orgId, { roles: ["admin", "team"], ...(actorUserId ? { userIds: [actorUserId] } : {}) });
-  return trainer ?? null;
-}
-
 /**
  * The learner an API call names (specs/people.md): by `userId`, an existing learner of the org; by email, added to the
  * org as a learner when new (with their starting credits). Refused (PeopleError, MinutesError) like the dashboard.

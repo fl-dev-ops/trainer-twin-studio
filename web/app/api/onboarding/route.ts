@@ -1,46 +1,25 @@
-import { randomUUID } from "node:crypto";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { BASE_DOMAIN } from "@/lib/base-domain";
+import { familyOrigin } from "@/lib/base-domain";
 import { auth } from "@/lib/auth";
-import { ChromaTenantService } from "@/lib/chroma-tenant";
-import { db } from "@/lib/db";
+import { errorResponse, refusals } from "@/lib/errors";
+import { foundOrg, slugRefusal } from "@/lib/onboarding";
 import {
   createNotionOAuthState,
   notionAuthorizationUrl,
 } from "@/lib/notion-oauth";
 import { getOrCreateOrgKnowledgeBase } from "@/lib/org-knowledge";
-import { unlinkOrgFromMeteroid } from "@/lib/org-billing-setup";
-import { runOnboarding } from "@/lib/workflow-runs";
-import { validateOrgSlug } from "@/lib/slugs";
 import { startYouTubeOAuth } from "@/lib/youtube-oauth";
 
 export const runtime = "nodejs";
 
-function familyOrigin(requestHost: string | null, name: string) {
-  // Preserve the port so local proxies (portless :NNNN) keep working.
-  const port = requestHost?.includes(":")
-    ? `:${requestHost.split(":")[1]}`
-    : "";
-  return `https://${name}.${BASE_DOMAIN}${port}`;
-}
-
 /** Live slug availability for the onboarding form. */
 export async function GET(request: Request) {
-  const slug =
-    new URL(request.url).searchParams.get("slug")?.toLowerCase() ?? "";
+  const slug = new URL(request.url).searchParams.get("slug")?.toLowerCase() ?? "";
   if (!slug) return NextResponse.json({ available: false });
-  const problem = validateOrgSlug(slug);
-  if (problem) return NextResponse.json({ available: false, reason: problem });
-  const taken = await db.organization.findUnique({
-    where: { slug },
-    select: { id: true },
-  });
-  return NextResponse.json({
-    available: !taken,
-    reason: taken ? "That subdomain is taken" : null,
-  });
+  const refusal = await slugRefusal(slug);
+  return NextResponse.json({ available: !refusal, reason: refusal?.message ?? null });
 }
 
 const bodySchema = z.object({
@@ -58,122 +37,43 @@ const bodySchema = z.object({
   knowledgeConnector: z.enum(["none", "notion", "youtube"]).default("none"),
 });
 
-/** Founder onboarding: exchange an invite token for a fresh organization. */
+/** Founder onboarding (specs/people.md rule 20): exchange a setup token for a fresh organization. */
 export async function POST(request: Request) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session)
-    return NextResponse.json({ error: "Sign in first" }, { status: 401 });
-
-  const parsed = bodySchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success)
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
-
-  const invite = await db.founderInvite.findUnique({
-    where: { token: parsed.data.token },
-  });
-  if (!invite || invite.acceptedAt) {
-    return NextResponse.json(
-      { error: "This invite is invalid or already used" },
-      { status: 400 },
-    );
-  }
-  if (
-    invite.email &&
-    invite.email.toLowerCase() !== session.user.email.toLowerCase()
-  ) {
-    return NextResponse.json(
-      { error: "This invite belongs to a different email address" },
-      { status: 403 },
-    );
-  }
-
-  const { orgName, slug } = parsed.data;
-  const websiteUrl = parsed.data.websiteUrl
-    ? new URL(parsed.data.websiteUrl).toString()
-    : null;
-  const problem = validateOrgSlug(slug);
-  if (problem) return NextResponse.json({ error: problem }, { status: 400 });
-  if (
-    await db.organization.findUnique({ where: { slug }, select: { id: true } })
-  ) {
-    return NextResponse.json(
-      { error: "That subdomain is taken" },
-      { status: 409 },
-    );
-  }
-
-  let createdOrgId: string | undefined;
   try {
-    const [, org] = await db.$transaction([
-      db.founderInvite.update({
-        where: { token: invite.token },
-        data: { acceptedAt: new Date() },
-      }),
-      db.organization.create({
-        data: {
-          id: randomUUID(),
-          name: orgName,
-          slug,
-          websiteUrl,
-          createdAt: new Date(),
-          members: {
-            create: {
-              id: randomUUID(),
-              userId: session.user.id,
-              role: "admin", // the founder; better-auth creatorRole
-              createdAt: new Date(),
-            },
-          },
-        },
-      }),
-    ]);
-    createdOrgId = org.id;
-    // The onboard-org workflow (workflows/onboard-org.ts): its Chroma database and Meteroid customer.
-    await runOnboarding(org.id);
-    // A founder may already belong to other orgs: the studio opens in the new one (sets the session cookie).
-    await auth.api.setActiveOrganization({ headers: await headers(), body: { organizationId: org.id } });
-    const dashboard = familyOrigin((await headers()).get("host"), "dash");
-    let redirect = `${dashboard}/`;
-
-    if (parsed.data.knowledgeConnector !== "none") {
-      try {
-        if (parsed.data.knowledgeConnector === "notion") {
-          const kb = await getOrCreateOrgKnowledgeBase(org.id);
-          const state = await createNotionOAuthState(
-            org.id,
-            session.user.id,
-            kb.id,
-          );
-          redirect = notionAuthorizationUrl(state);
-        } else {
-          redirect = await startYouTubeOAuth(org.id, session.user.id);
-        }
-      } catch (connectorError) {
-        console.error("Could not start onboarding connector:", connectorError);
-        redirect = `${dashboard}/twin/knowledge?error=${encodeURIComponent("Workspace created, but the connector could not be started")}`;
-      }
+    const session = await auth.api.getSession({ headers: await headers() });
+    if (!session) throw refusals.signedOut();
+    const parsed = bodySchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) throw refusals.invalidInput("Fill in your organization's name, website and subdomain.");
+    const org = await foundOrg({
+      token: parsed.data.token,
+      user: session.user,
+      name: parsed.data.orgName,
+      slug: parsed.data.slug,
+      websiteUrl: parsed.data.websiteUrl ? new URL(parsed.data.websiteUrl).toString() : null,
+    });
+    const dashboard = familyOrigin((await headers()).get("host") ?? "", "dash");
+    // The org exists from here on: nothing below undoes it (rule 20).
+    try {
+      // A founder may already belong to other orgs: the studio opens in the new one (sets the session cookie).
+      await auth.api.setActiveOrganization({ headers: await headers(), body: { organizationId: org.id } });
+    } catch (error) {
+      console.error("Could not switch to the new organization:", error);
     }
-
-    return NextResponse.json({ redirect, slug: org.slug });
+    return NextResponse.json({ redirect: await connectorStart(parsed.data.knowledgeConnector, org.id, session.user.id, dashboard), slug: org.slug });
   } catch (error) {
-    console.error("Onboarding failed:", error);
-    if (createdOrgId) {
-      await ChromaTenantService.deleteOrgDatabase(createdOrgId).catch(() => {});
-      const billing = await db.orgBilling.findUnique({ where: { orgId: createdOrgId }, select: { meteroidCustomerId: true } }).catch(() => null);
-      if (billing) await unlinkOrgFromMeteroid(billing.meteroidCustomerId).catch((undoError: unknown) => console.error("Could not undo the Meteroid customer:", undoError));
-      await db.organization
-        .delete({ where: { id: createdOrgId } })
-        .catch(() => {});
-    }
-    await db.founderInvite
-      .update({
-        where: { token: invite.token },
-        data: { acceptedAt: null },
-      })
-      .catch(() => {});
-    return NextResponse.json(
-      { error: "Could not create the organization" },
-      { status: 500 },
-    );
+    return errorResponse(error);
+  }
+}
+
+/** Where the founder goes next: the chosen knowledge connector's sign-in, else the studio. */
+async function connectorStart(connector: "none" | "notion" | "youtube", orgId: string, userId: string, dashboard: string) {
+  if (connector === "none") return `${dashboard}/`;
+  try {
+    if (connector === "youtube") return await startYouTubeOAuth(orgId, userId);
+    const kb = await getOrCreateOrgKnowledgeBase(orgId);
+    return notionAuthorizationUrl(await createNotionOAuthState(orgId, userId, kb.id));
+  } catch (error) {
+    console.error("Could not start onboarding connector:", error);
+    return `${dashboard}/twin/knowledge?error=${encodeURIComponent("Workspace created, but the connector could not be started")}`;
   }
 }

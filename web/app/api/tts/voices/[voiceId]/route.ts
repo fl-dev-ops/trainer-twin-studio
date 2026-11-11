@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getSessionOrg } from "@/lib/org";
+import { studioOrRefusal } from "@/lib/org";
 import { deletePrefix, getObjectText, presignedGetUrl, voicePrefix } from "@/lib/s3";
 
 /**
@@ -42,8 +42,8 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ voiceId: string }> },
 ) {
-  const org = await getSessionOrg();
-  if (!org) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const org = await studioOrRefusal();
+  if (org instanceof Response) return org;
   const name = String((await request.json()).name ?? "").trim();
   if (!name) return NextResponse.json({ error: "name is required" }, { status: 400 });
   if (name.length > 60) return NextResponse.json({ error: "name must be 60 characters or fewer" }, { status: 400 });
@@ -66,8 +66,8 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ voiceId: string }> },
 ) {
-  const org = await getSessionOrg();
-  if (!org) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const org = await studioOrRefusal();
+  if (org instanceof Response) return org;
   const { voiceId } = await params;
   const voice = await db.voice.findFirst({ where: { id: voiceId, orgId: org.id }, select: { kind: true } });
   if (!voice) return NextResponse.json({ error: "voice not found" }, { status: 404 });

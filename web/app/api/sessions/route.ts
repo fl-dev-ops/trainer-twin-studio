@@ -5,14 +5,14 @@ import { closeInterviewSession } from "@/lib/session-lifecycle";
 import { after } from "next/server";
 import { runSessionStart } from "@/lib/run-session-start";
 import { warmChatOpening } from "@/lib/session-warm";
-import { getTrainerOrg } from "@/lib/org";
+import { studioOrRefusal } from "@/lib/org";
 import { resolveSessionUser } from "@/lib/session-user";
 import { isStudioRole } from "@/lib/org";
 import { listSessions } from "@/lib/specs";
 
 export async function GET() {
-  const trainer = await getTrainerOrg();
-  if (!trainer) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const trainer = await studioOrRefusal();
+  if (trainer instanceof Response) return trainer;
   return NextResponse.json({ sessions: await listSessions(trainer.id) });
 }
 

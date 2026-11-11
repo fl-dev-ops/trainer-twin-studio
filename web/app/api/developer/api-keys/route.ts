@@ -1,14 +1,14 @@
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { getTrainerOrg } from "@/lib/org";
+import { studioOrRefusal } from "@/lib/org";
 
 const createSchema = z.object({ name: z.string().trim().min(1).max(60) }).strict();
 const deleteSchema = z.object({ id: z.string().min(1) }).strict();
 
 export async function GET() {
-  const trainer = await getTrainerOrg();
-  if (!trainer) return Response.json({ error: "Forbidden" }, { status: 403 });
+  const trainer = await studioOrRefusal();
+  if (trainer instanceof Response) return trainer;
   const keys = await db.apikey.findMany({
     where: { referenceId: trainer.id, configId: "default" },
     orderBy: { createdAt: "desc" },
@@ -26,8 +26,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const trainer = await getTrainerOrg();
-  if (!trainer) return Response.json({ error: "Forbidden" }, { status: 403 });
+  const trainer = await studioOrRefusal();
+  if (trainer instanceof Response) return trainer;
   const parsed = createSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Enter a key name of up to 60 characters" }, { status: 400 });
 
@@ -54,8 +54,8 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const trainer = await getTrainerOrg();
-  if (!trainer) return Response.json({ error: "Forbidden" }, { status: 403 });
+  const trainer = await studioOrRefusal();
+  if (trainer instanceof Response) return trainer;
   const parsed = deleteSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Missing API key ID" }, { status: 400 });
 

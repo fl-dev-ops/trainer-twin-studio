@@ -2,8 +2,7 @@ import { giveLearnerCredits, type GiveCreditsInput } from "@/lib/invite/credits"
 import { addOrgPeople, type AddPeopleInput } from "@/lib/invite/org";
 import { assignRoleplayLearners, type RoleplayAssignInput } from "@/lib/invite/roleplay";
 import { assignTwinLearners, type TwinAssignInput } from "@/lib/invite/twin";
-import { MinutesError } from "@/lib/minutes";
-import { PeopleError } from "@/lib/org-people";
+import { refusedOf, type Refused } from "@/lib/errors";
 import { queueEmails } from "@/lib/queue-emails";
 import type { OutboundEmail } from "../send-emails";
 
@@ -14,12 +13,8 @@ import type { OutboundEmail } from "../send-emails";
  * person, a second admin) comes back as `{ ok: false }`.
  */
 
-export type Refused = { ok: false; status: number; error: string };
-
-function refused(error: unknown): Refused {
-  if (error instanceof MinutesError || error instanceof PeopleError) return { ok: false, status: error.status, error: error.message };
-  throw error;
-}
+export type { Refused };
+const refused = refusedOf;
 
 /** Adds the people to the org as learners, then the twin access. */
 export async function assignTwin(input: TwinAssignInput) {

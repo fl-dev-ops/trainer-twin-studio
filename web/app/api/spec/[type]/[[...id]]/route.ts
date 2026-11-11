@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getTrainerOrg } from "@/lib/org";
+import { studioOrRefusal } from "@/lib/org";
 import {
   deleteSpec,
   isSpecType,
@@ -14,8 +14,8 @@ type Params = { params: Promise<{ type: string; id?: string[] }> };
 export async function GET(_req: Request, { params }: Params) {
   const { type, id } = await params;
   if (!isSpecType(type)) return NextResponse.json({ error: "Bad type" }, { status: 400 });
-  const org = await getTrainerOrg();
-  if (!org) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const org = await studioOrRefusal();
+  if (org instanceof Response) return org;
 
   if (!id) return NextResponse.json({ specs: await listSpecs(type, org.id) });
 
@@ -39,8 +39,8 @@ export async function GET(_req: Request, { params }: Params) {
 export async function PUT(req: Request, { params }: Params) {
   const { type, id } = await params;
   if (!isSpecType(type) || !id) return NextResponse.json({ error: "Bad request" }, { status: 400 });
-  const org = await getTrainerOrg();
-  if (!org) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const org = await studioOrRefusal();
+  if (org instanceof Response) return org;
   const body = await req.json().catch(() => null);
   if (typeof body?.text !== "string") {
     return NextResponse.json({ error: "Missing text" }, { status: 400 });
@@ -59,8 +59,8 @@ export async function PUT(req: Request, { params }: Params) {
 export async function DELETE(_req: Request, { params }: Params) {
   const { type, id } = await params;
   if (!isSpecType(type) || !id) return NextResponse.json({ error: "Bad request" }, { status: 400 });
-  const org = await getTrainerOrg();
-  if (!org) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const org = await studioOrRefusal();
+  if (org instanceof Response) return org;
   try {
     await deleteSpec(type, id.join("/"), org.id);
     return NextResponse.json({ ok: true });

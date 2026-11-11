@@ -13,6 +13,7 @@ import { presignedGetUrl } from "@/lib/s3";
 import { resolveSessionUser } from "@/lib/session-user";
 import { listAgentContextRequired, listAgentContextUploads, listScenarioIntroVideos } from "@/lib/specs";
 import { learnerBalance } from "@/lib/minutes";
+import { AppError } from "@/lib/errors";
 import { resolveTwinPath, TwinAccessError, twinAccessByCode, twinAssignmentCode } from "@/lib/twin-access";
 import { beforeSettings } from "@/lib/context-upload";
 
@@ -98,10 +99,10 @@ export async function loadSharedSession(code: string): Promise<SharedSessionView
     // Opening a common twin link is where an existing account joins (specs/people.md rule 6); starting the call
     // only uses that membership.
     const twin = await twinAccessByCode({ orgId: org.id, user, code, join: true }).catch((error: unknown) => {
-      if (error instanceof TwinAccessError) return error;
+      if (error instanceof TwinAccessError || error instanceof AppError) return error;
       throw error;
     });
-    if (twin instanceof TwinAccessError) return { kind: "twinUnavailable", message: twin.message, email: user.email };
+    if (twin instanceof TwinAccessError || twin instanceof AppError) return { kind: "twinUnavailable", message: twin.message, email: user.email };
     if (twin) {
       // Someone who just joined through a common link got their starting credits on the way in.
       const left = twin.assignmentId ? await minutesLeft() : null;

@@ -7,7 +7,7 @@ import { beforeSettings } from "@/lib/context-upload";
 import { assignablePeople } from "@/lib/learners";
 import { LEARNER_ROLE } from "@/lib/org";
 import { LEARNER, orgPeople, orgPerson } from "@/lib/org-people";
-import { learnerMinutes, MAX_LEARNER_MINUTES, MinutesError } from "@/lib/minutes";
+import { learnerMinutes, MAX_LEARNER_MINUTES } from "@/lib/minutes";
 import { studioProcedure, t } from "@/lib/trpc";
 import { runTwinAssign } from "@/lib/workflow-runs";
 import {
@@ -47,7 +47,6 @@ async function twinCall<T>(fn: () => Promise<T>): Promise<T> {
       throw new TRPCError({ code: error.status === 404 ? "NOT_FOUND" : error.status === 400 ? "BAD_REQUEST" : "FORBIDDEN", message: error.message });
     }
     if (error instanceof AvatarError) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
-    if (error instanceof MinutesError) throw new TRPCError({ code: error.status === 409 ? "CONFLICT" : error.status === 403 ? "FORBIDDEN" : "BAD_REQUEST", message: error.message });
     throw error;
   }
 }

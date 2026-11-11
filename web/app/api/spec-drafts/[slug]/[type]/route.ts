@@ -1,14 +1,14 @@
 import yaml from "js-yaml";
 import { db } from "@/lib/db";
-import { getTrainerOrg } from "@/lib/org";
+import { studioOrRefusal } from "@/lib/org";
 import { readSpecDraft, saveSpecDraft } from "@/lib/spec-drafts";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ slug: string; type: string }> },
 ) {
-  const org = await getTrainerOrg();
-  if (!org) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const org = await studioOrRefusal();
+  if (org instanceof Response) return org;
   const { slug, type } = await params;
   if (type !== "agent") {
     return Response.json({ error: "Not found" }, { status: 404 });
@@ -29,8 +29,8 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ slug: string; type: string }> },
 ) {
-  const org = await getTrainerOrg();
-  if (!org) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const org = await studioOrRefusal();
+  if (org instanceof Response) return org;
 
   const { slug, type } = await params;
   if (type !== "agent") return Response.json({ error: "Only agent settings can be updated" }, { status: 400 });

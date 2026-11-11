@@ -1,9 +1,7 @@
-import { orgPerson } from "@/lib/org-people";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { resolveSessionUser } from "@/lib/session-user";
+import { resolveSessionUser, visibleSessions } from "@/lib/session-user";
 import { authorizeRuntimeSession } from "@/lib/interview-sessions";
-import { isStudioRole } from "@/lib/org";
 
 /**
  * Returns snapshot of an interview session: coverage, phase, status.
@@ -36,11 +34,10 @@ export async function GET(
   if (!session) {
     try {
       const { org, user } = await resolveSessionUser();
-      if (org && user) {
-        const member = await orgPerson(org.id, { userId: user.id });
-        const trainer = isStudioRole(member?.role);
+      const visible = org && user ? await visibleSessions(org.id, user.id) : null;
+      if (visible) {
         session = await db.interviewSession.findFirst({
-          where: { id, orgId: org.id, deletedAt: null, ...(trainer ? {} : { userId: user.id }) },
+          where: { id, ...visible },
           select: {
             id: true,
             status: true,

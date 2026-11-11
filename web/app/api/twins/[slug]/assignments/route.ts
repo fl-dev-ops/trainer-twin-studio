@@ -1,6 +1,6 @@
+import { AppError, errorResponse } from "@/lib/errors";
 import { z } from "zod";
-import { MinutesError } from "@/lib/minutes";
-import { getTrainerOrg } from "@/lib/org";
+import { studioOrRefusal } from "@/lib/org";
 import { runTwinAssign } from "@/lib/workflow-runs";
 import { accessUntilSchema, findTwinAgent, listTwinAssignments, TwinAccessError, twinUrl, updateTwinAssignment } from "@/lib/twin-access";
 
@@ -19,14 +19,15 @@ const updateSchema = z.object({
 }).strict();
 
 const failed = (error: unknown) => {
-  if (error instanceof TwinAccessError || error instanceof MinutesError) return Response.json({ error: error.message }, { status: error.status });
+  if (error instanceof AppError) return errorResponse(error);
+  if (error instanceof TwinAccessError) return Response.json({ error: error.message }, { status: error.status });
   throw error;
 };
 
 /** Who has access to this twin, with minutes used. Studio only (admin, team). */
 export async function GET(_request: Request, { params }: { params: Promise<{ slug: string }> }) {
-  const trainer = await getTrainerOrg();
-  if (!trainer) return Response.json({ error: "Forbidden" }, { status: 403 });
+  const trainer = await studioOrRefusal();
+  if (trainer instanceof Response) return trainer;
   try {
     const agent = await findTwinAgent(trainer.id, (await params).slug);
     const assignments = await listTwinAssignments(trainer.id, agent.id);
@@ -38,8 +39,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
 
 /** Assigns the twin to people by email (new people get their starting minutes), and emails them their link. */
 export async function PUT(request: Request, { params }: { params: Promise<{ slug: string }> }) {
-  const trainer = await getTrainerOrg();
-  if (!trainer) return Response.json({ error: "Forbidden" }, { status: 403 });
+  const trainer = await studioOrRefusal();
+  if (trainer instanceof Response) return trainer;
   const parsed = assignSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Give a list of emails and an optional future accessUntil" }, { status: 400 });
   try {
@@ -59,8 +60,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ slug
 
 /** Revokes or restores one person's access (their minutes are managed on the person). */
 export async function PATCH(request: Request, { params }: { params: Promise<{ slug: string }> }) {
-  const trainer = await getTrainerOrg();
-  if (!trainer) return Response.json({ error: "Forbidden" }, { status: 403 });
+  const trainer = await studioOrRefusal();
+  if (trainer instanceof Response) return trainer;
   const parsed = updateSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Give an assignmentId and a status" }, { status: 400 });
   try {

@@ -4,13 +4,12 @@ import { db } from "@/lib/db";
 import { ensureDeployment } from "@/lib/deployments";
 import { isApiError, requireExternalApi } from "@/lib/external-api";
 import { MinutesError } from "@/lib/minutes";
-import { PeopleError } from "@/lib/org-people";
+import { AppError, errorResponse } from "@/lib/errors";
 import {
   assignmentDetails,
   assignmentDetailSelect,
   assignmentView,
   emailAssignment,
-  findKeyTrainer,
   findScenario,
   learnerFor,
   practiceUrl,
@@ -45,12 +44,9 @@ export async function PATCH(request: Request, { params }: Params) {
   });
   if (!current) return Response.json({ error: "Assignment not found" }, { status: 404 });
 
-  const [target, trainer] = await Promise.all([
-    parsed.data.scenario ? findScenario(api.org.id, parsed.data.scenario) : current.deployment.agent,
-    findKeyTrainer(api.org.id, api.actorUserId),
-  ]);
+  const target = parsed.data.scenario ? await findScenario(api.org.id, parsed.data.scenario) : current.deployment.agent;
+  const trainer = api.trainer;
   if (!target) return Response.json({ error: "Scenario not found" }, { status: 404 });
-  if (!trainer) return Response.json({ error: "API key creator is no longer an organization trainer" }, { status: 403 });
   // The learner: unchanged, an existing one by userId, or by email (added to the org first when new).
   let learner;
   try {
@@ -60,7 +56,8 @@ export async function PATCH(request: Request, { params }: Params) {
       trainer.userId,
     );
   } catch (error) {
-    if (error instanceof PeopleError || error instanceof MinutesError) return Response.json({ error: error.message }, { status: 409 });
+    if (error instanceof AppError) return errorResponse(error);
+    if (error instanceof MinutesError) return Response.json({ error: error.message }, { status: error.status });
     throw error;
   }
   if (!learner) return Response.json({ error: "User not found" }, { status: 404 });

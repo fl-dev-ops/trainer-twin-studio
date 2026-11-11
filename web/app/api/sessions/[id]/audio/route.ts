@@ -1,25 +1,21 @@
-import { orgPerson } from "@/lib/org-people";
 import { NextResponse } from "next/server";
+import { errorResponse, refusals } from "@/lib/errors";
 import { db } from "@/lib/db";
-import { resolveSessionUser } from "@/lib/session-user";
+import { resolveSessionUser, visibleSessions } from "@/lib/session-user";
 import { presignedGetUrl } from "@/lib/s3";
-import { isStudioRole } from "@/lib/org";
 
 /** Recording access is limited to its learner or a studio member (admin or team) in the same org. */
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { org, user } = await resolveSessionUser();
-  if (!org || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!org || !user) return errorResponse(refusals.signedOut());
   const { id } = await params;
+  // Someone without access gets the same answer as for a session that doesn't exist.
+  const visible = await visibleSessions(org.id, user.id);
+  if (!visible) return errorResponse(refusals.notFound());
   const session = await db.interviewSession.findFirst({
-    where: { id, orgId: org.id },
+    where: { id, ...visible },
     select: { s3AudioKey: true, userId: true },
   });
-  if (!session?.s3AudioKey) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (session.userId !== user.id) {
-    const trainer = await orgPerson(org.id, { userId: user.id });
-    if (!isStudioRole(trainer?.role)) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-  }
+  if (!session?.s3AudioKey) return errorResponse(refusals.notFound());
   return NextResponse.redirect(await presignedGetUrl(session.s3AudioKey, 3600));
 }

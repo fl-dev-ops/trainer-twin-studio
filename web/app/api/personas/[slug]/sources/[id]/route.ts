@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { getTrainerOrg } from "@/lib/org";
+import { studioOrRefusal } from "@/lib/org";
 import { deletePersonaSource } from "@/lib/persona-synthesis";
 
 type Params = { params: Promise<{ slug: string; id: string }> };
 
 export async function DELETE(_req: Request, { params }: Params) {
-  const org = await getTrainerOrg();
-  if (!org) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const org = await studioOrRefusal();
+  if (org instanceof Response) return org;
   const { id } = await params;
   try {
     await deletePersonaSource(id, org.id);

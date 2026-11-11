@@ -1,9 +1,10 @@
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { API_LEARNER_ROLE, isApiError, paginationFromUrl, requireExternalApi } from "@/lib/external-api";
-import { addLearnerByApi, ApiAddError } from "@/lib/invite/org";
+import { AppError, errorResponse } from "@/lib/errors";
+import { addLearnerByApi } from "@/lib/invite/org";
 import { MinutesError } from "@/lib/minutes";
-import { LEARNER, orgPeople, PeopleError, type OrgPerson } from "@/lib/org-people";
+import { LEARNER, orgPeople, type OrgPerson } from "@/lib/org-people";
 
 const createSchema = z.object({ email: z.string().trim().email().max(320) }).strict();
 
@@ -45,12 +46,13 @@ export async function POST(request: Request) {
 
   try {
     // Added to the org as a learner right away (with starting credits) and emailed; they just sign in.
-    const { person, created, emailSent } = await addLearnerByApi({ org: api.org, actorUserId: api.actorUserId, email: parsed.data.email });
+    const { person, created, emailSent } = await addLearnerByApi({ org: api.org, by: { userId: api.trainer.userId, name: api.trainer.name }, email: parsed.data.email });
     const verified = await emailsVerified([person.userId]);
     return Response.json({ user: userView(person, verified.has(person.userId)), created, emailSent }, { status: created ? 201 : 200 });
   } catch (error) {
-    if (error instanceof ApiAddError || error instanceof PeopleError || error instanceof MinutesError) {
-      return Response.json({ error: error.message }, { status: error instanceof MinutesError ? 409 : error.status });
+    if (error instanceof AppError) return errorResponse(error);
+    if (error instanceof MinutesError) {
+      return Response.json({ error: error.message }, { status: error.status });
     }
     throw error;
   }
