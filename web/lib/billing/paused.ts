@@ -10,6 +10,6 @@ export async function pausedReason(orgId: string, who: "studio" | "learner", tx:
   const billing = await tx.orgBilling.findUnique({ where: { orgId }, select: { pausedAt: true } });
   if (!billing?.pausedAt) return null;
   return who === "studio"
-    ? "Your organization's plan is paused because an invoice is overdue. Pay it to continue (Settings › Billing)."
+    ? "Your organization's plan is paused because an invoice is overdue. Pay it on the Billing page to continue."
     : "Practice is paused for this organization right now. Please ask your trainer.";
 }

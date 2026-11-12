@@ -7,7 +7,7 @@ import { MAX_PACKS } from "@/lib/billing/pricing";
 import { studioProcedure, t } from "@/lib/trpc";
 
 /**
- * Settings › Billing over /api/trpc (`billing`, specs/billing.md): the org's plan, billing details and invoices;
+ * The Billing page over /api/trpc (`billing`, specs/billing.md): the org's plan, billing details and invoices;
  * saving details and buying minute packs (staff move an org to a paid plan in Meteroid). Admin and team only (rule 5). PDFs download from
  * /api/billing/invoices/[id]/{pdf,receipt}.
  */

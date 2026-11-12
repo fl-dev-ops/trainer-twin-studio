@@ -208,7 +208,7 @@ describe.skipIf(!localMinutesDb)("Module 1 refusal contract and access flows", (
     await refusal(await addUser(apiRequest(f.trainer.email)), 409, "person_is_studio", `${f.trainer.email} is on the team. Team members practise with the organization's credits, not as learners.`);
     await refusal(await addUser(apiRequest(`short-${f.org.id}@example.com`)), 409, "minutes", "Not enough credits in your organization's balance: 1 new person needs 30 min, 29 min left. Ask TrainerTwin to top it up.");
     await db.orgBilling.update({ where: { orgId: f.org.id }, data: { plan: "paid", paidSubscriptionId: `paid-${f.org.id}`, pausedAt: new Date() } });
-    await refusal(await addUser(apiRequest(`paused-${f.org.id}@example.com`)), 403, "minutes", "Your organization's plan is paused because an invoice is overdue. Pay it to continue (Settings › Billing).");
+    await refusal(await addUser(apiRequest(`paused-${f.org.id}@example.com`)), 403, "minutes", "Your organization's plan is paused because an invoice is overdue. Pay it on the Billing page to continue.");
     expect(await rows()).toEqual(before);
   });
   test("refuses invalid_input for REST email schema failures with the exact field message", async () => {

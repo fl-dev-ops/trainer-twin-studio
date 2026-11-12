@@ -14,6 +14,8 @@ import {
   FieldSeparator,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from "@/components/ui/input-otp";
+import { REGEXP_ONLY_DIGITS } from "input-otp";
 import { Spinner } from "@/components/ui/spinner";
 import { authClient } from "@/lib/auth-client";
 import { safeFamilyRedirect } from "@/lib/base-domain";
@@ -127,19 +129,28 @@ export function SignInForm({
           {codeSent ? (
             <Field data-invalid={Boolean(error)}>
               <FieldLabel htmlFor="code">Code</FieldLabel>
-              <Input
+              {/* One box per digit; pasting the whole code from the email fills them all. */}
+              <InputOTP
                 id="code"
                 name="code"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                pattern="[0-9]{6}"
                 maxLength={6}
-                placeholder="6-digit code"
+                pattern={REGEXP_ONLY_DIGITS}
+                autoComplete="one-time-code"
                 value={code}
-                onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
+                onChange={setCode}
+                containerClassName="justify-center"
+                aria-invalid={Boolean(error)}
                 autoFocus
                 required
-              />
+              >
+                <InputOTPGroup>
+                  {[0, 1, 2].map((index) => <InputOTPSlot key={index} index={index} aria-invalid={Boolean(error)} />)}
+                </InputOTPGroup>
+                <InputOTPSeparator />
+                <InputOTPGroup>
+                  {[3, 4, 5].map((index) => <InputOTPSlot key={index} index={index} aria-invalid={Boolean(error)} />)}
+                </InputOTPGroup>
+              </InputOTP>
               <FieldDescription>
                 If {email.trim()} has a TrainerTwin account, we&apos;ve sent it a code. It works for 10 minutes.{" "}
                 <button type="button" className="text-foreground underline underline-offset-4" disabled={busy} onClick={() => void sendCode()}>

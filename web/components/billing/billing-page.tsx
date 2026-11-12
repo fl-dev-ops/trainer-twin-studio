@@ -1,0 +1,468 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "next/navigation";
+import { Download, FileCheck2, Minus, MoreHorizontal, Plus } from "lucide-react";
+import type { Country } from "react-phone-number-input";
+import { toast } from "sonner";
+import { BillingIcon } from "@/components/icons";
+import { PageContainer } from "@/components/page-container";
+import { PageHeader } from "@/components/page-header";
+import { PhoneInput } from "@/components/reui/phone-input";
+import { PageSection, SECTION_CARD, SectionRow } from "@/components/page-section";
+import { SupportDialog } from "@/components/support-dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { api, useApi } from "@/lib/api";
+import { countries, INDIAN_STATES, taxIdLabel, type BillingDetails } from "@/lib/billing/details";
+import { formatMoney, formatUsd } from "@/lib/billing/pricing";
+import { cn } from "@/lib/utils";
+
+/**
+ * Billing (specs/billing.md), for admin and team: the plan and its status, minute packs (Paid plan), every invoice with
+ * its PDF and, once paid, its receipt, and the billing details on them. Credits and where they went are on Usage.
+ */
+
+type Overview = Awaited<ReturnType<typeof api.billing.overview.query>>;
+type Billed = Extract<Overview, { billed: true }>;
+type Invoice = Billed["invoices"][number];
+
+const QUERY = ["billing.overview"];
+const INVOICES_SHOWN = 5;
+/** Fixed columns (what, date, status, amount, Pay, menu), so every row lines up whether it can be paid or not. */
+const INVOICE_GRID = "grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-4 sm:grid-cols-[minmax(0,1fr)_96px_88px_80px_64px_32px]";
+const day = (iso: string) => new Date(iso.length === 10 ? `${iso}T00:00:00Z` : iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+
+const STATUS: Record<Invoice["status"], { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
+  paid: { label: "Paid", variant: "secondary" },
+  unpaid: { label: "Due", variant: "outline" },
+  overdue: { label: "Overdue", variant: "destructive" },
+  void: { label: "Cancelled", variant: "outline" },
+};
+
+/**
+ * Downloads a PDF with fetch, not a plain link, so the request carries this tab's org (components/org-pin.tsx): someone
+ * in several orgs gets this org's invoice even after switching org in another tab.
+ */
+async function download(href: string, filename: string) {
+  const response = await fetch(href);
+  if (!response.ok) {
+    const body = await response.json().catch(() => null) as { error?: string } | null;
+    toast.error(body?.error ?? "Could not download it; please try again.");
+    return;
+  }
+  const url = URL.createObjectURL(await response.blob());
+  const link = Object.assign(document.createElement("a"), { href: url, download: filename });
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+const message = (error: unknown) => (error instanceof Error ? error.message : "Something went wrong; please try again.");
+
+/** Razorpay's page for an invoice: in this tab, so the payer comes back here (Razorpay's callback). */
+function PayNow({ url, label = "Pay now" }: { url: string; label?: string }) {
+  return <Button variant="brand" size="sm" onClick={() => window.location.assign(url)}>{label}</Button>;
+}
+
+/**
+ * Back from Razorpay (`?paid=INV-…`): the payment reaches us by webhook within seconds, so the page checks again
+ * every 3 s for up to 2 minutes and says when it has arrived.
+ */
+function PaymentArriving({ invoices }: { invoices: Invoice[] }) {
+  const params = useSearchParams();
+  const number = params.get("paid");
+  const linkId = params.get("razorpay_payment_link_id");
+  const queryClient = useQueryClient();
+  const [gaveUp, setGaveUp] = useState(false);
+  const paid = invoices.find((invoice) => invoice.number === number)?.status === "paid";
+  // Ask Razorpay now rather than wait for its webhook (the server checks with Razorpay, not this URL).
+  useEffect(() => {
+    if (!linkId) return;
+    void api.billing.confirmPayment.mutate({ paymentLinkId: linkId })
+      .then(() => queryClient.invalidateQueries({ queryKey: QUERY }))
+      .catch(() => undefined);
+  }, [linkId, queryClient]);
+  useEffect(() => {
+    if (!number || paid) return;
+    const started = Date.now();
+    const timer = window.setInterval(() => {
+      if (Date.now() - started > 120_000) {
+        setGaveUp(true);
+        window.clearInterval(timer);
+      } else void queryClient.invalidateQueries({ queryKey: QUERY });
+    }, 3_000);
+    return () => window.clearInterval(timer);
+  }, [number, paid, queryClient]);
+  if (!number) return null;
+  return (
+    <Alert>
+      <AlertTitle>{paid ? "Payment received, thank you" : "Confirming your payment…"}</AlertTitle>
+      <AlertDescription>
+        {paid
+          ? `Invoice ${number} is paid. Your receipt is on its way by email and below.`
+          : gaveUp
+            ? `It's taking longer than usual. If you paid, invoice ${number} will show as paid shortly and you'll get a receipt by email.`
+            : `We're waiting for Razorpay to confirm invoice ${number}. This usually takes a few seconds.`}
+      </AlertDescription>
+    </Alert>
+  );
+}
+
+export function BillingPage() {
+  const overview = useApi(QUERY, () => api.billing.overview.query());
+  return (
+    <PageContainer className="max-w-3xl">
+      <PageHeader icon={BillingIcon} title="Billing" description="Your plan, minute packs, invoices and billing details." />
+      <div className="mt-8 flex flex-col gap-10">
+        {overview.billed ? (
+          <>
+            <PaymentArriving invoices={overview.invoices} />
+            <PlanSection overview={overview} />
+            <AddOnsSection overview={overview} />
+            <InvoicesSection invoices={overview.invoices} />
+            <DetailsSection details={overview.details} />
+          </>
+        ) : (
+          <div className={cn(SECTION_CARD, "px-5 py-6 text-sm text-muted-foreground")}>Billing isn&apos;t set up for this organization yet. Contact TrainerTwin.</div>
+        )}
+      </div>
+    </PageContainer>
+  );
+}
+
+function PlanSection({ overview }: { overview: Billed }) {
+  // The Support dialog, blank or pre-filled to ask for an upgrade (staff move orgs to a paid plan; specs/billing.md rule 10).
+  const [support, setSupport] = useState<string | null>(null);
+  const paused = Boolean(overview.pausedAt);
+  const paid = overview.plan === "paid";
+  const price = overview.planCents ? `${formatUsd(overview.planCents)} / month, tax included` : "Your paid plan";
+  return (
+    <PageSection title="Plan">
+      <div className={SECTION_CARD}>
+        <SectionRow
+          title={(
+            <span className="flex items-center gap-2">
+              {paid ? "Paid plan" : "Trial plan"}
+              {paused ? <Badge variant="destructive">Paused</Badge> : overview.upgradePending ? <Badge variant="outline">Upgrade waiting for payment</Badge> : <Badge variant="secondary">Active</Badge>}
+            </span>
+          )}
+          detail={paid ? `${price}${overview.renewsOn ? ` · renews ${day(overview.renewsOn)}` : ""}` : "Free, with no expiry. Credits come from minute packs and grants."}
+        >
+          <Button variant="outline" size="sm" onClick={() => setSupport("")}>Support</Button>
+          {paid ? null : <Button variant="brand" size="sm" onClick={() => setSupport("Upgrade to a paid plan")}>Request upgrade</Button>}
+        </SectionRow>
+        {paused && overview.overdueInvoice ? (
+          <div className="border-t border-(--border) p-5">
+            <Alert variant="destructive">
+              <AlertTitle>Your plan is paused</AlertTitle>
+              <AlertDescription>
+                Invoice {overview.overdueInvoice.number} ({formatMoney(overview.overdueInvoice.totalCents, overview.overdueInvoice.currency)}) was due {day(overview.overdueInvoice.dueDate)}. No new calls can start and no credits can be given until your overdue invoices are paid. {overview.overdueInvoice.payUrl ? "" : "Add a phone number to your billing details to pay online, or reply to the invoice email. "}Already paid? Reply to the invoice email.
+                {overview.overdueInvoice.payUrl ? <div className="mt-3"><PayNow url={overview.overdueInvoice.payUrl} /></div> : null}
+              </AlertDescription>
+            </Alert>
+          </div>
+        ) : null}
+        {overview.upgradeInvoice ? (
+          <div className="border-t border-(--border) p-5">
+            <Alert>
+              <AlertTitle>Upgrade waiting for payment</AlertTitle>
+              <AlertDescription>
+                Invoice {overview.upgradeInvoice.number} ({formatMoney(overview.upgradeInvoice.totalCents, overview.upgradeInvoice.currency)}) is due {day(overview.upgradeInvoice.dueDate)}. You move to the Paid plan as soon as it&apos;s paid; unpaid by then, the upgrade is cancelled and you stay on Trial.{overview.upgradeInvoice.payUrl ? "" : " Add a phone number to your billing details to pay online, or reply to the invoice email."}
+                {overview.upgradeInvoice.payUrl ? <div className="mt-3"><PayNow url={overview.upgradeInvoice.payUrl} /></div> : null}
+              </AlertDescription>
+            </Alert>
+          </div>
+        ) : null}
+        {paid && !paused && overview.dueInvoice ? (
+          <SectionRow title={`Invoice ${overview.dueInvoice.number} is due ${day(overview.dueInvoice.dueDate)}`} detail="Unpaid by then, the plan is paused.">
+            <span className="text-sm tabular-nums">{formatMoney(overview.dueInvoice.totalCents, overview.dueInvoice.currency)}</span>
+            {overview.dueInvoice.payUrl ? <PayNow url={overview.dueInvoice.payUrl} /> : null}
+          </SectionRow>
+        ) : null}
+      </div>
+      {/* Remounted per opening, so it starts from its subject. */}
+      {support !== null ? <SupportDialog key={support} open onOpenChange={(open) => { if (!open) setSupport(null); }} subject={support} /> : null}
+    </PageSection>
+  );
+}
+
+function AddOnsSection({ overview }: { overview: Billed }) {
+  const [open, setOpen] = useState(false);
+  const paused = Boolean(overview.pausedAt);
+  // Why a pack can't be bought now (specs/billing.md rules 6 and 19), or null.
+  const blocked = overview.plan !== "paid"
+    ? "Available on the Paid plan."
+    : paused
+      ? "Pay the overdue invoice first."
+      : !overview.details
+        ? "Add your billing details first."
+        : null;
+  return (
+    <PageSection title="Add-ons">
+      <div className={SECTION_CARD}>
+        <SectionRow
+          title="Minute packs"
+          detail={blocked ?? `${overview.pack.credits} credits for ${formatUsd(overview.pack.cents)}, tax included. Added when the invoice is paid; they expire a year later.`}
+        >
+          <Button variant="ghost" size="sm" render={<Link href="/usage" />} nativeButton={false}>See usage</Button>
+          <Button variant="brand" size="sm" disabled={Boolean(blocked)} onClick={() => setOpen(true)}>Buy credits</Button>
+        </SectionRow>
+      </div>
+      <BuyPacksDialog overview={overview} open={open} onOpenChange={setOpen} />
+    </PageSection>
+  );
+}
+
+function BuyPacksDialog({ overview, open, onOpenChange }: { overview: Billed; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const queryClient = useQueryClient();
+  const [packs, setPacks] = useState(1);
+  // One purchase per choice: a click retried after a timeout reuses it (the server makes one invoice per id).
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  const [busy, setBusy] = useState(false);
+  const choose = (count: number) => {
+    setPacks(Math.min(overview.pack.maxPacks, Math.max(1, count)));
+    setRequestId(crypto.randomUUID());
+  };
+  async function buy() {
+    setBusy(true);
+    try {
+      const result = await api.billing.buyPacks.mutate({ packs, requestId });
+      setRequestId(crypto.randomUUID());
+      if (result.payUrl) return window.location.assign(result.payUrl);
+      toast.success(`Invoice ${result.number ?? ""} is on its way by email. The credits are added once it's paid.`.replace("  ", " "));
+      await queryClient.invalidateQueries({ queryKey: QUERY });
+      onOpenChange(false);
+    } catch (error) {
+      toast.error(message(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Buy credits</DialogTitle>
+          <DialogDescription>{overview.pack.credits} credits a pack, {formatUsd(overview.pack.cents)} each, tax included. 1 credit = 1 minute of practice.</DialogDescription>
+        </DialogHeader>
+        <div className="flex items-center justify-between gap-4 py-2">
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="icon-sm" aria-label="One pack less" disabled={packs <= 1} onClick={() => choose(packs - 1)}><Minus /></Button>
+            <span className="w-16 text-center text-sm tabular-nums" aria-live="polite">{packs} {packs === 1 ? "pack" : "packs"}</span>
+            <Button variant="outline" size="icon-sm" aria-label="One pack more" disabled={packs >= overview.pack.maxPacks} onClick={() => choose(packs + 1)}><Plus /></Button>
+          </div>
+          <div className="text-right">
+            <p className="m-0 text-sm font-medium tabular-nums">{(packs * overview.pack.credits).toLocaleString()} credits</p>
+            <p className="m-0 text-sm text-muted-foreground tabular-nums">{formatUsd(packs * overview.pack.cents)}</p>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="brand" disabled={busy} onClick={() => void buy()}>{busy ? "Creating invoice…" : "Continue to pay"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function InvoicesSection({ invoices }: { invoices: Invoice[] }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? invoices : invoices.slice(0, INVOICES_SHOWN);
+  return (
+    <PageSection
+      title="Invoices"
+      action={invoices.length > INVOICES_SHOWN ? <Button variant="ghost" size="sm" onClick={() => setAll(!all)}>{all ? "Show fewer" : "View all"}</Button> : null}
+    >
+      <div className={SECTION_CARD}>
+        {shown.length ? shown.map((invoice) => {
+          const payable = invoice.payUrl && (invoice.status === "unpaid" || invoice.status === "overdue") ? invoice.payUrl : null;
+          return (
+            <div key={invoice.id} className={cn(INVOICE_GRID, "border-t border-(--border) px-5 py-3 text-sm first:border-t-0")}>
+              <span className="truncate" title={invoice.number}>{invoice.description}</span>
+              <span className="hidden text-muted-foreground tabular-nums sm:block">{day(invoice.issuedAt)}</span>
+              <span className="hidden sm:block" title={invoice.status === "unpaid" || invoice.status === "overdue" ? `Due ${day(invoice.dueDate)}` : undefined}>
+                <Badge variant={STATUS[invoice.status].variant}>{STATUS[invoice.status].label}</Badge>
+              </span>
+              <span className="text-right tabular-nums">{formatMoney(invoice.totalCents, invoice.currency)}</span>
+              <span className="hidden justify-end sm:flex">{payable ? <PayNow url={payable} label="Pay" /> : null}</span>
+              <DropdownMenu>
+                <DropdownMenuTrigger render={<Button variant="subtle" size="icon-sm" aria-label={`More for ${invoice.number}`} />}>
+                  <MoreHorizontal />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {payable ? <DropdownMenuItem className="sm:hidden" onClick={() => window.location.assign(payable)}>Pay {formatMoney(invoice.totalCents, invoice.currency)}</DropdownMenuItem> : null}
+                  <DropdownMenuItem onClick={() => void download(`/api/billing/invoices/${invoice.id}/pdf`, `${invoice.number}.pdf`)}>
+                    <Download /> Download invoice
+                  </DropdownMenuItem>
+                  {invoice.status === "paid" ? (
+                    <DropdownMenuItem onClick={() => void download(`/api/billing/invoices/${invoice.id}/receipt`, `RCPT-${invoice.number}.pdf`)}>
+                      <FileCheck2 /> Download receipt
+                    </DropdownMenuItem>
+                  ) : null}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          );
+        }) : <p className="m-0 px-5 py-6 text-center text-sm text-muted-foreground">No invoices yet.</p>}
+      </div>
+      <p className="m-0 text-xs text-muted-foreground">Invoices and receipts are emailed to your billing emails. Pay online with Pay now (card, or bank transfer where offered).</p>
+    </PageSection>
+  );
+}
+
+function DetailsSection({ details }: { details: BillingDetails | null }) {
+  const [editing, setEditing] = useState(false);
+  const countryList = useMemo(() => countries(), []);
+  const address = details
+    ? [details.line1, details.line2, [details.postalCode, details.city].filter(Boolean).join(" "), details.country === "IN" && details.state ? `${INDIAN_STATES[details.state]} (${details.state})` : null, countryList.find((c) => c.code === details.country)?.name].filter(Boolean)
+    : [];
+  return (
+    <PageSection title="Billing information" action={<Button variant="ghost" size="sm" onClick={() => setEditing(true)}>{details ? "Edit" : "Add"}</Button>}>
+      <div className={SECTION_CARD}>
+        {details ? (
+          <>
+            <SectionRow title="Billing emails" detail={details.emails.join(", ")} />
+            <SectionRow title="Legal name" detail={details.legalName} />
+            <SectionRow title="Billing address" detail={address.map((line) => <span key={line} className="block">{line}</span>)} />
+            {details.taxId ? <SectionRow title={taxIdLabel(details.country)} detail={details.taxId} /> : null}
+            <SectionRow title="Phone" detail={details.phone || <span className="text-destructive">Add a phone number to pay online.</span>} />
+          </>
+        ) : (
+          <SectionRow title="No billing details yet" detail="They go on every invoice, and you need them to buy minute packs." >
+            <Button variant="outline" size="sm" onClick={() => setEditing(true)}>Add billing details</Button>
+          </SectionRow>
+        )}
+      </div>
+      <Sheet open={editing} onOpenChange={setEditing}>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-md!">
+          <SheetHeader>
+            <SheetTitle>Billing information</SheetTitle>
+            <SheetDescription>Who invoices are made out to. For India, the state decides the GST (Tamil Nadu: CGST + SGST; other states: IGST); outside India, no Indian GST.</SheetDescription>
+          </SheetHeader>
+          {/* Remounted each time it opens, so it starts from what's saved. */}
+          {editing ? <DetailsForm details={details} onDone={() => setEditing(false)} /> : null}
+        </SheetContent>
+      </Sheet>
+    </PageSection>
+  );
+}
+
+const EMPTY: BillingDetails = { legalName: "", country: "IN", line1: "", line2: undefined, city: "", postalCode: "", state: undefined, taxId: undefined, emails: [], phone: "" };
+const FIELDS = ["legalName", "country", "line1", "city", "postalCode", "state", "taxId", "emails", "phone"];
+
+function DetailsForm({ details, onDone }: { details: BillingDetails | null; onDone: () => void }) {
+  const queryClient = useQueryClient();
+  // Details saved before the phone was asked for have none: the form asks for it.
+  const [form, setForm] = useState<BillingDetails>(details ? { ...details, phone: details.phone ?? "" } : EMPTY);
+  const [emails, setEmails] = useState((details?.emails ?? []).join(", "));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<{ field: string; text: string } | null>(null);
+  const countryList = useMemo(() => countries(), []);
+  const india = form.country === "IN";
+  const set = (key: keyof BillingDetails) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm({ ...form, [key]: event.target.value });
+
+  async function save(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const list = emails.split(/[\s,;]+/).map((value) => value.trim()).filter(Boolean);
+      await api.billing.saveDetails.mutate({ details: { ...form, state: india ? form.state : undefined, emails: list } });
+      toast.success("Billing details saved");
+      await queryClient.invalidateQueries({ queryKey: QUERY });
+      onDone();
+    } catch (failure) {
+      const text = message(failure);
+      const field = /^([a-zA-Z]+)(\.\d+)?: /.exec(text)?.[1] ?? "form";
+      setError({ field, text: text.replace(/^[a-zA-Z]+(\.\d+)?: /, "") });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const invalid = (field: string) => error?.field === field;
+  return (
+    <form onSubmit={save} className="flex flex-col gap-5 px-4 pb-4">
+      <FieldGroup>
+        <Field data-invalid={invalid("legalName")}>
+          <FieldLabel htmlFor="billing-name">Legal name</FieldLabel>
+          <Input id="billing-name" value={form.legalName} onChange={set("legalName")} maxLength={200} required />
+          {invalid("legalName") ? <FieldError>{error?.text}</FieldError> : null}
+        </Field>
+        <Field data-invalid={invalid("country")}>
+          <FieldLabel htmlFor="billing-country">Country</FieldLabel>
+          <NativeSelect id="billing-country" value={form.country} onChange={set("country")} className="w-full">
+            {countryList.map((country) => <option key={country.code} value={country.code}>{country.name}</option>)}
+          </NativeSelect>
+          {invalid("country") ? <FieldError>{error?.text}</FieldError> : null}
+        </Field>
+        <Field data-invalid={invalid("line1")}>
+          <FieldLabel htmlFor="billing-line1">Address</FieldLabel>
+          <Input id="billing-line1" value={form.line1} onChange={set("line1")} maxLength={200} required placeholder="Street and number" />
+          <Input aria-label="Address line 2" value={form.line2 ?? ""} onChange={set("line2")} maxLength={200} placeholder="Area, building (optional)" />
+          {invalid("line1") ? <FieldError>{error?.text}</FieldError> : null}
+        </Field>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field data-invalid={invalid("city")}>
+            <FieldLabel htmlFor="billing-city">City</FieldLabel>
+            <Input id="billing-city" value={form.city} onChange={set("city")} maxLength={100} required />
+            {invalid("city") ? <FieldError>{error?.text}</FieldError> : null}
+          </Field>
+          <Field data-invalid={invalid("postalCode")}>
+            <FieldLabel htmlFor="billing-postal">{india ? "PIN code" : "Postal code (optional)"}</FieldLabel>
+            <Input id="billing-postal" value={form.postalCode ?? ""} onChange={set("postalCode")} maxLength={20} required={india} />
+            {invalid("postalCode") ? <FieldError>{error?.text}</FieldError> : null}
+          </Field>
+        </div>
+        {india ? (
+          <Field data-invalid={invalid("state")}>
+            <FieldLabel htmlFor="billing-state">State</FieldLabel>
+            <NativeSelect id="billing-state" value={form.state ?? ""} onChange={set("state")} className="w-full" required>
+              <option value="" disabled>Choose the state</option>
+              {Object.entries(INDIAN_STATES).sort((a, b) => a[1].localeCompare(b[1])).map(([code, name]) => <option key={code} value={code}>{name} ({code})</option>)}
+            </NativeSelect>
+            {invalid("state") ? <FieldError>{error?.text}</FieldError> : null}
+          </Field>
+        ) : null}
+        <Field data-invalid={invalid("taxId")}>
+          <FieldLabel htmlFor="billing-tax">{`${taxIdLabel(form.country)} (optional)`}</FieldLabel>
+          <Input id="billing-tax" value={form.taxId ?? ""} onChange={set("taxId")} maxLength={50} placeholder={india ? "33ABCDE1234F1Z5" : "e.g. VAT or TRN number"} />
+          {invalid("taxId") ? <FieldError>{error?.text}</FieldError> : null}
+        </Field>
+        <Field data-invalid={invalid("emails")}>
+          <FieldLabel htmlFor="billing-emails">Billing emails</FieldLabel>
+          <Input id="billing-emails" value={emails} onChange={(event) => setEmails(event.target.value)} placeholder="accounts@company.com, you@company.com" required />
+          {invalid("emails") ? <FieldError>{error?.text}</FieldError> : <p className="text-xs text-muted-foreground">Up to 5, separated by commas. Invoices and receipts go here.</p>}
+        </Field>
+        <Field data-invalid={invalid("phone")}>
+          <FieldLabel htmlFor="billing-phone">Phone</FieldLabel>
+          {/* E.164 (+ and digits), as Razorpay needs it; the country preselects from the billing address. */}
+          <PhoneInput
+            id="billing-phone"
+            value={form.phone ?? ""}
+            onChange={(value) => setForm({ ...form, phone: value ?? "" })}
+            defaultCountry={form.country as Country}
+            placeholder="Phone number"
+            aria-invalid={invalid("phone")}
+            required
+          />
+          {invalid("phone") ? <FieldError>{error?.text}</FieldError> : <p className="text-xs text-muted-foreground">With the country code. Needed to pay online by card.</p>}
+        </Field>
+      </FieldGroup>
+      {error && !FIELDS.includes(error.field) ? <p role="alert" className="text-sm text-destructive">{error.text}</p> : null}
+      <div className="flex gap-2">
+        <Button type="submit" disabled={busy}>{busy ? "Saving…" : "Save billing details"}</Button>
+        <Button type="button" variant="outline" onClick={onDone}>Cancel</Button>
+      </div>
+    </form>
+  );
+}

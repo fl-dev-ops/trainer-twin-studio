@@ -64,7 +64,7 @@ const eslintConfig = defineConfig([...nextVitals, ...nextTs, {
   // studio's shared presentational components built on them (plans/design-system-alignment.md D8). Pages and
   // feature components are not on this list; they use these components' props.
   files: [
-    "components/{ui,ai-elements,agents-ui,extend}/**",
+    "components/{ui,ai-elements,agents-ui,extend,reui}/**",
     "components/{page-header,page-container,page-skeletons,user-avatar}.tsx",
     "components/twin/twin-face.tsx",
     "components/persona/persona-parts.tsx",
@@ -77,9 +77,9 @@ const eslintConfig = defineConfig([...nextVitals, ...nextTs, {
     "shadcn/require-static-classes": "off",
   },
 }, {
-  // Vendored registries (ai-sdk elements, LiveKit agents-ui, extend.ai viewers) are third-party code refreshed from
+  // Vendored registries (ai-sdk elements, LiveKit agents-ui, extend.ai viewers, ReUI) are third-party code refreshed from
   // their registries; editing them would drift from upstream on every update (plans/design-system-alignment.md D8).
-  files: ["components/{ai-elements,agents-ui,extend}/**"],
+  files: ["components/{ai-elements,agents-ui,extend,reui}/**"],
   rules: {
     "shadcn/no-raw-colors": "off",
     "shadcn/no-inline-styles": "off",

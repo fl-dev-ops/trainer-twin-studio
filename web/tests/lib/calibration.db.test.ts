@@ -103,7 +103,7 @@ describe.skipIf(!localMinutesDb)("Module 3 calibration (real PostgreSQL)", () =>
     expect(await rows()).toEqual({ sessions: 0, calibrations: 0, ratings: 0 });
   });
   test.each([
-    ["org_paused", 10, "Your organization's plan is paused because an invoice is overdue. Pay it to continue (Settings › Billing)."],
+    ["org_paused", 10, "Your organization's plan is paused because an invoice is overdue. Pay it on the Billing page to continue."],
     ["org_credits_out", 0, "Your organization has no credits left. Contact TrainerTwin to add more."],
     ["org_credits_short", 4, "Your organization needs at least 5 credits to start a call; it has 4. Contact TrainerTwin to add more."],
   ] as const)("refuses org_paused, refuses org_credits_out and refuses org_credits_short without a calibration (%s)", async (code, minutes, message) => {

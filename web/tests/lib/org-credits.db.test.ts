@@ -124,15 +124,15 @@ describe.skipIf(!localMinutesDb)("org credits from Meteroid", () => {
     const at = new Date("2026-01-02");
     wallets.set(customer(), { balance: 7, as_of: at.toISOString() });
     grants.set(customer(), [
-      { id: "grant", amount: 10, credit_unit: "MINS", reason: "Pack", expires_at: "2027-01-02T00:00:00Z", status: "ACTIVE", created_at: "2026-01-01T00:00:00Z" },
+      { id: "grant", amount: 10, credit_unit: "MINS", reason: "Credit purchased on a paid invoice", source: "PURCHASE", expires_at: "2027-01-02T00:00:00Z", status: "ACTIVE", created_at: "2026-01-01T00:00:00Z" },
       { id: "other", amount: 99, credit_unit: "OTHER" },
     ]);
     expect(await refreshOrgCredits(f.org.id, at)).toEqual({ counted: false });
     expect(await refreshOrgCredits(f.org.id, new Date(at.getTime() + 1))).toEqual({ counted: false });
     expect(await refreshOrgCredits(f.org.id, new Date(at.getTime() - 1))).toEqual({ counted: true });
     const billing = await db.orgBilling.findUniqueOrThrow({ where: { orgId: f.org.id } });
-    expect(billing).toMatchObject({ balanceMinutes: 7, balanceAsOf: at, syncedAt: expect.any(Date), grants: [{ id: "grant", minutes: 10, reason: "Pack", expiresAt: "2027-01-02T00:00:00Z", status: "ACTIVE", createdAt: "2026-01-01T00:00:00Z" }] });
-    expect(await api().org()).toMatchObject({ billed: true, balanceMinutes: 7, addedMinutes: 10, grants: [{ id: "grant", minutes: 10, note: "Pack · expires 2 Jan 2027", by: null }] });
+    expect(billing).toMatchObject({ balanceMinutes: 7, balanceAsOf: at, syncedAt: expect.any(Date), grants: [{ id: "grant", minutes: 10, reason: "Credit purchased on a paid invoice", source: "PURCHASE", expiresAt: "2027-01-02T00:00:00Z", status: "ACTIVE", createdAt: "2026-01-01T00:00:00Z" }] });
+    expect(await api().org()).toMatchObject({ billed: true, balanceMinutes: 7, addedMinutes: 10, grants: [{ id: "grant", minutes: 10, note: "Minute pack", expiresAt: "2027-01-02T00:00:00Z", expired: false, by: null }] });
     expect(await refreshOrgCredits("unknown", at)).toEqual({ counted: true });
   });
 
@@ -214,7 +214,7 @@ describe.skipIf(!localMinutesDb)("org credits from Meteroid", () => {
         balanceMinutes: recounts ? 10 : 20,
         balanceAsOf: new Date(recounts ? "2020-01-04" : "2020-01-01"),
         syncedAt: expect.any(Date), grants: expect.arrayContaining(expired.map((grant) => ({
-          id: grant.id, minutes: grant.amount, expiresAt: grant.expires_at, reason: null, status: "EXPIRED", createdAt: null,
+          id: grant.id, minutes: grant.amount, expiresAt: grant.expires_at, reason: null, status: "EXPIRED", createdAt: null, source: null,
         }))),
       });
       expect(await orgCredits(f.org.id)).toEqual({ billed: true, seconds: 600, minutes: 10 });
@@ -237,7 +237,7 @@ describe.skipIf(!localMinutesDb)("org credits from Meteroid", () => {
     wallets.set(customer(), { balance: 10, as_of: "2026-01-03T00:00:00.000Z" });
     await db.minuteLedger.create({ data: { orgId: f.org.id, type: "grant", seconds: 60, email: f.learner.email } });
     grants.set(customer(), [{ id: "expired", amount: 10, credit_unit: "MINS", status: "EXPIRED", reason: "Trial", expires_at: "2026-01-02T00:00:00Z" }]);
-    expect(await api().org()).toMatchObject({ balanceMinutes: 9, grants: [{ note: "Trial · expired 2 Jan 2026" }] });
+    expect(await api().org()).toMatchObject({ balanceMinutes: 9, grants: [{ note: "From TrainerTwin", expired: true }] });
     expect(reports).toEqual([f.org.id]);
   });
 

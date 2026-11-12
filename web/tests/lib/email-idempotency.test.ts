@@ -34,6 +34,7 @@ test("sendEmail without a key keeps legacy sends working without an idempotency 
   expect(await email.sendEmail({ to: "a@example.com", subject: "Invite", html: "<p>Hello</p>" })).toMatchObject({ success: true });
   expect(requests).toHaveLength(1);
   expect(requests[0].key).toBeNull();
+  expect(requests[0].body.reply_to).toBe("support@trainertwin.com");
 });
 
 test.each([
@@ -62,9 +63,9 @@ test("sendOtpEmail sends the 6-digit code with its 10-minute expiry", async () =
   expect(String(requests[0].body.html)).toContain("expires in 10 minutes");
 });
 
-test("email subjects remove CR/LF before reaching Resend", async () => {
-  expect(await email.sendEmail({ to: "a@example.com", subject: "  Hello\r\nInjected\nLine\rEnd  ", html: "<p>Safe</p>" })).toMatchObject({ success: true });
-  expect(requests[0].body.subject).toBe("Hello Injected Line End");
+test("email subjects remove CR/LF while preserving the support reply-to", async () => {
+  expect(await email.sendEmail({ to: "a@example.com", subject: "  Hello\r\nInjected\nLine\rEnd  ", html: "<p>Safe</p>", replyTo: "reporter@example.com" })).toMatchObject({ success: true });
+  expect(requests[0].body).toMatchObject({ subject: "Hello Injected Line End", reply_to: "reporter@example.com" });
 });
 test("Resend rejection preserves the HTTP status for workflow retry classification", async () => {
   server.use(http.post("https://api.resend.com/emails", () => HttpResponse.json({ name: "validation_error", message: "Invalid recipient", statusCode: 422 }, { status: 422 }), { once: true }));

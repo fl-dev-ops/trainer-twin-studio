@@ -27,9 +27,10 @@ const NET_TERMS = 2;
 
 const SELLER = {
   name: "Forever Learning Solutions Pvt Ltd",
-  line1: "No. 52/2A1 School Street, Right side",
-  line2: "Selaiyur, Rajakilpakkam, Tambaram, Tamil Nadu (33)",
-  city: "Kanchipuram",
+  // As on the GST registration (LUT form RFD-11, 11 Nov 2026).
+  line1: "52/2A1, School Street, Right Side",
+  line2: "Selaiyur, Chengalpattu, Tamil Nadu (33)",
+  city: "Chennai",
   zip: "600073",
   state: "Tamil Nadu",
   gstin: "33AAGCF6592D1ZN",

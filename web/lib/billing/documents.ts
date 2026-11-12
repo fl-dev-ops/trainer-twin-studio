@@ -1,5 +1,5 @@
 import { PDFDocument, PDFString, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
-import { countryName, EXPORT_DECLARATION, INDIAN_STATES } from "@/lib/billing/details";
+import { countryName, EXPORT_DECLARATION, INDIAN_STATES, taxIdLabel } from "@/lib/billing/details";
 import type { RawInvoice, Seller } from "@/lib/billing/meteroid";
 
 /**
@@ -83,7 +83,7 @@ export function billingDocument(raw: RawInvoice, orgName: string, seller: Seller
         return [address.line1, line2, [address.city, address.zip_code].filter(Boolean).join(" "), state, country ? countryName(country) ?? country : null];
       })().filter((line): line is string => !!line),
       email: customer.email ?? null,
-      taxLabel: india ? "GSTIN" : "Tax ID",
+      taxLabel: taxIdLabel(country),
       taxId: customer.vat_number || null,
     },
     placeOfSupply: india ? `${address.state ?? "India"}${stateCode ? ` (${stateCode})` : ""}` : "Outside India (export of services)",

@@ -7,7 +7,7 @@ test("Settings adds a learner, assigns a twin, and all three people lists show t
   const email = `e2e-lists-${Date.now()}@example.com`;
   const name = email.split("@")[0];
   await page.goto("/settings?tab=team");
-  const users = page.locator('[data-slot="card"]').filter({ has: page.locator('[data-slot="card-title"]').filter({ hasText: /^Users/ }) });
+  const users = page.getByRole("region", { name: "Users", exact: true });
   await users.getByRole("button", { name: "Add", exact: true }).click();
   const add = page.getByRole("dialog", { name: "Add users", exact: true });
   await add.getByLabel("Email addresses").fill(email);
@@ -15,7 +15,7 @@ test("Settings adds a learner, assigns a twin, and all three people lists show t
   await add.getByRole("button", { name: "Add", exact: true }).click();
   await expect(add).toBeHidden();
   await users.getByRole("searchbox", { name: "Search users" }).fill(email);
-  const settingsRow = users.getByRole("listitem").filter({ hasText: email });
+  const settingsRow = users.getByRole("row").filter({ hasText: email });
   await expect(settingsRow).toHaveCount(1);
   await expect(settingsRow).toContainText(name);
   await expect(settingsRow).not.toContainText(/Invite|pending|waiting/i);

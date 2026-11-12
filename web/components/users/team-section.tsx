@@ -1,15 +1,17 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { MoreHorizontal, Plus } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { UserAvatar } from "@/components/user-avatar";
 import { Button } from "@/components/ui/button";
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageSection, SECTION_CARD } from "@/components/page-section";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from "@/components/ui/item";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CreditsPager, usePage } from "@/components/credits/credits-pager";
 import { InviteUser } from "@/components/users/invite-user";
 import { DEFAULT_LEARNER_MINUTES } from "@/lib/minutes-config";
 import { useRefresh } from "@/lib/use-refresh";
@@ -26,13 +28,76 @@ export type TeamMember = {
 };
 
 const ROLE_LABEL: Record<string, string> = { admin: "Admin", team: "Team", user: "User" };
-const day = (iso: string) => new Date(iso).toLocaleDateString();
-// Divided rows (no boxes): avatar · name / email · status badge · actions on the right.
-function Initial({ name, email }: { name?: string | null; email: string }) {
+const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+/** One group's people, 20 a page, as a table like Usage's "Twins and role plays": who, email, role, when added, and a menu. */
+function MembersTable({ members, empty, currentUserId, busy, onToggle }: {
+  members: TeamMember[];
+  empty: string;
+  currentUserId: string;
+  busy: string | null;
+  onToggle: (member: TeamMember) => void;
+}) {
+  const { rows, ...pager } = usePage(members);
   return (
-    <ItemMedia className="translate-y-0! self-center!">
-      <UserAvatar user={{ name, email }} size="lg" />
-    </ItemMedia>
+    <div className={`${SECTION_CARD} overflow-hidden`}>
+      {rows.length ? (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead className="hidden sm:table-cell">Email</TableHead>
+              <TableHead>Role</TableHead>
+              <TableHead className="hidden sm:table-cell">Added</TableHead>
+              <TableHead><span className="sr-only">Actions</span></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((member) => {
+              const you = member.userId === currentUserId;
+              const locked = you || member.role === "admin";
+              const learner = member.role === "user";
+              return (
+                <TableRow key={member.id} className={learner ? "relative" : undefined} data-disabled={member.disabledAt ? true : undefined}>
+                  <TableCell>
+                    <span className={`flex min-w-0 items-center gap-3 ${member.disabledAt ? "opacity-60" : ""}`}>
+                      <UserAvatar user={{ name: member.name, email: member.email }} size="sm" />
+                      {learner ? (
+                        // A learner's row opens their page (/users/<id>): the name is the link, stretched over the row.
+                        <Link href={`/users/${member.userId}`} className="truncate font-medium outline-none after:absolute after:inset-0 hover:underline focus-visible:after:ring-2 focus-visible:after:ring-ring">
+                          {member.name}
+                        </Link>
+                      ) : <span className="truncate font-medium">{member.name}</span>}
+                      {you ? <span className="shrink-0 text-muted-foreground">(you)</span> : null}
+                      {member.disabledAt ? <Badge variant="error" title={`Disabled ${day(member.disabledAt)}`}>Disabled</Badge> : null}
+                    </span>
+                  </TableCell>
+                  <TableCell className="hidden max-w-56 truncate text-muted-foreground sm:table-cell">{member.email}</TableCell>
+                  <TableCell><Badge variant="secondary">{ROLE_LABEL[member.role] ?? member.role}</Badge></TableCell>
+                  <TableCell className="hidden text-muted-foreground tabular-nums sm:table-cell">{day(member.createdAt)}</TableCell>
+                  <TableCell className="text-right">
+                    {locked ? null : (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger render={<Button variant="subtle" size="icon-sm" className="relative" aria-label={`More for ${member.name}`} disabled={busy === member.id} />}>
+                          <MoreHorizontal />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem variant={member.disabledAt ? "default" : "destructive"} onClick={() => onToggle(member)}>
+                            {member.disabledAt ? "Enable" : "Disable"}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      ) : (
+        <p className="m-0 px-5 py-6 text-center text-sm text-muted-foreground">{empty}</p>
+      )}
+      <CreditsPager {...pager} />
+    </div>
   );
 }
 
@@ -72,47 +137,6 @@ export function TeamSection(props: {
     );
   };
 
-  function memberItems(members: TeamMember[]) {
-    return members.map((member) => {
-      const you = member.userId === props.currentUserId;
-      const locked = you || member.role === "admin";
-      // A learner's row opens their page (/users/<id>): the name is the link, stretched over the row.
-      const learner = member.role === "user";
-      return (
-        <Item key={member.id} role="listitem" size="row" className={learner ? "relative" : undefined} data-disabled={member.disabledAt ? true : undefined}>
-          <Initial name={member.name} email={member.email} />
-          <ItemContent>
-            <ItemTitle className="text-body">
-              {learner ? (
-                <Link
-                  href={`/users/${member.userId}`}
-                  className="outline-none after:absolute after:inset-0 after:rounded-lg hover:underline focus-visible:after:ring-3 focus-visible:after:ring-ring/50"
-                >
-                  {member.name}
-                </Link>
-              ) : member.name}
-              {you ? <span className="font-normal text-muted-foreground">(you)</span> : null}
-            </ItemTitle>
-            <ItemDescription className="line-clamp-none flex flex-wrap items-center gap-1.5">
-              <span>{member.email}</span>
-              {member.disabledAt ? (
-                <>· <Badge variant="error">Disabled {day(member.disabledAt)}</Badge></>
-              ) : null}
-            </ItemDescription>
-          </ItemContent>
-          <ItemActions className="relative">
-            <Badge variant="secondary">{ROLE_LABEL[member.role] ?? member.role}</Badge>
-            {locked ? null : (
-              <Button variant="ghost" size="sm" disabled={busy === member.id} onClick={() => setDisabled(member, !member.disabledAt)}>
-                {member.disabledAt ? "Enable" : "Disable"}
-              </Button>
-            )}
-          </ItemActions>
-        </Item>
-      );
-    });
-  }
-
   const groups = [
     { title: "Team", role: "team", studio: true, invite: "Add team members", hint: "Team members run the studio: twins, role plays, sessions and settings." },
     { title: "Users", role: "user", studio: false, invite: "Add users", hint: `Users practise with the twins and role plays you give them. Each new user gets ${DEFAULT_LEARNER_MINUTES} credits (1 credit = 1 min of practice) from your organization's credits.` },
@@ -120,18 +144,29 @@ export function TeamSection(props: {
   const matches = (needle: string, ...fields: string[]) => fields.some((field) => field.toLowerCase().includes(needle));
 
   return (
-    <div className="grid gap-6">
+    <div className="flex flex-col gap-10">
       {groups.map((group) => {
         const all = props.members.filter((member) => (member.role !== "user") === group.studio);
         const needle = (query[group.role] ?? "").trim().toLowerCase();
         const members = all.filter((member) => matches(needle, member.name, member.email));
         return (
-          <Card key={group.title}>
-            <CardHeader>
-              <CardTitle>
-                {group.title} <span className="text-muted-foreground font-normal">· {all.filter((m) => !m.disabledAt).length}</span>
-              </CardTitle>
-              <CardAction>
+          <PageSection
+            key={group.title}
+            label={group.title}
+            title={<>{group.title} <span className="text-muted-foreground font-normal">· {all.filter((m) => !m.disabledAt).length}</span></>}
+            description={group.hint}
+            action={(
+              <>
+                {all.length ? (
+                  <div className="w-56 max-w-full">
+                    <SearchInput
+                      aria-label={`Search ${group.title.toLowerCase()}`}
+                      placeholder="Search by name or email"
+                      value={query[group.role] ?? ""}
+                      onChange={(event) => setQuery((current) => ({ ...current, [group.role]: event.target.value }))}
+                    />
+                  </div>
+                ) : null}
                 <Dialog open={inviting === group.role} onOpenChange={(open) => setInviting(open ? group.role : null)}>
                   <DialogTrigger render={<Button size="sm" />}>
                     <Plus />
@@ -145,26 +180,17 @@ export function TeamSection(props: {
                     <InviteUser role={group.role} onDone={() => setInviting(null)} />
                   </DialogContent>
                 </Dialog>
-              </CardAction>
-            </CardHeader>
-            <CardContent className="grid gap-3">
-              {all.length ? (
-                <SearchInput
-                  aria-label={`Search ${group.title.toLowerCase()}`}
-                  placeholder="Search by name or email"
-                  value={query[group.role] ?? ""}
-                  onChange={(event) => setQuery((current) => ({ ...current, [group.role]: event.target.value }))}
-                />
-              ) : null}
-              {members.length ? (
-                <ItemGroup divided>
-                  {memberItems(members)}
-                </ItemGroup>
-              ) : (
-                <p className="text-sm text-muted-foreground">{needle ? "No one matches that search." : "No one yet."}</p>
-              )}
-            </CardContent>
-          </Card>
+              </>
+            )}
+          >
+            <MembersTable
+              members={members}
+              empty={needle ? "No one matches that search." : "No one yet."}
+              currentUserId={props.currentUserId}
+              busy={busy}
+              onToggle={(member) => void setDisabled(member, !member.disabledAt)}
+            />
+          </PageSection>
         );
       })}
     </div>

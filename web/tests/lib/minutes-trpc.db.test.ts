@@ -1,6 +1,6 @@
 import { fundOrg } from "../setup/meteroid";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { minutesRouter } from "@/lib/minutes-trpc";
+import { grantLabel, minutesRouter } from "@/lib/minutes-trpc";
 import { grantMinutes, recordSessionUsage } from "@/lib/minutes";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
@@ -17,20 +17,30 @@ describe.skipIf(!localMinutesDb)("minutes tRPC (local database)", () => {
       const code = !ctx.user && !ctx.signedIn ? "UNAUTHORIZED" : "FORBIDDEN";
       await expect(api.org()).rejects.toMatchObject({ code });
       await expect(api.version()).rejects.toMatchObject({ code });
+      await expect(api.activity({ days: 30 })).rejects.toMatchObject({ code });
       await expect(api.learner({ email: f.learner.email })).rejects.toMatchObject({ code });
       await expect(api.add({ email: f.learner.email, minutes: 1 })).rejects.toMatchObject({ code });
     }
   });
 
+  test("grant labels: customers see what a grant is, never its internal reason", () => {
+    expect(grantLabel({ reason: "Free trial" })).toBe("Free trial");
+    expect(grantLabel({ reason: "Credit purchased on a paid invoice", source: "PURCHASE" })).toBe("Minute pack");
+    expect(grantLabel({ reason: "Credit purchased on a paid invoice" })).toBe("Minute pack"); // cached before `source` was kept
+    expect(grantLabel({ reason: "Paid ₹800 · Razorpay plink_1" })).toBe("Purchase");
+    expect(grantLabel({ reason: "Release check (webhook)", source: "MANUAL" })).toBe("From TrainerTwin");
+    expect(grantLabel({ reason: null })).toBe("From TrainerTwin");
+  });
+
   test("has no take-back procedure", () => {
-    expect(Object.keys(minutesRouter._def.procedures).sort()).toEqual(["add", "addMany", "addPeople", "learner", "org", "version"]);
+    expect(Object.keys(minutesRouter._def.procedures).sort()).toEqual(["activity", "add", "addMany", "addPeople", "learner", "org", "version"]);
     expect(minutesRouter._def.procedures).not.toHaveProperty("takeBack");
   });
 
   test.each(["admin", "team"])("%s queries exact credit shapes and adds normalized learner credits without changing earlier rows", async (role) => {
     const api = caller(role);
     expect(typeof await api.version()).toBe("string");
-    expect(await api.org()).toEqual({ balanceMinutes: 0, addedMinutes: 0, defaultMinutes: 30, maxMinutes: 360, billed: false, grants: [], learners: [] });
+    expect(await api.org()).toEqual({ balanceMinutes: 0, addedMinutes: 0, nextExpiry: null, defaultMinutes: 30, maxMinutes: 360, billed: false, grants: [], learners: [] });
     expect(await api.learner({ email: f.learner.email })).toEqual({ givenMinutes: 0, usedMinutes: 0, balanceMinutes: 0, orgBalanceMinutes: 0, maxMinutes: 360, added: [] });
 
     await fund(100);
@@ -54,8 +64,8 @@ describe.skipIf(!localMinutesDb)("minutes tRPC (local database)", () => {
     const entry = (row: typeof first, by: string | null) => ({ id: row.id, minutes: row.seconds / 60, note: row.note, at: row.createdAt.toISOString(), by });
 
     expect(await api.org()).toEqual({
-      balanceMinutes: 85, addedMinutes: 120, defaultMinutes: 30, maxMinutes: 360,
-      billed: true, grants: expect.arrayContaining([expect.objectContaining({ minutes: 100, note: "test", by: null }), expect.objectContaining({ minutes: 20, note: "Second top-up", by: null })]),
+      balanceMinutes: 85, addedMinutes: 120, defaultMinutes: 30, maxMinutes: 360, nextExpiry: null,
+      billed: true, grants: expect.arrayContaining([expect.objectContaining({ minutes: 100, note: "From TrainerTwin", by: null }), expect.objectContaining({ minutes: 20, note: "From TrainerTwin", by: null })]),
       learners: [{ email: f.learner.email, userId: f.learner.id, name: f.learner.name, image: null, givenMinutes: 35, usedMinutes: 1.5, leftMinutes: 33 }],
     });
     expect(await api.learner({ email: ` ${f.learner.email.toUpperCase()} ` })).toEqual({
@@ -64,6 +74,14 @@ describe.skipIf(!localMinutesDb)("minutes tRPC (local database)", () => {
     });
     expect(after.filter((row) => row.type === "grant").reduce((sum, row) => sum + row.seconds, 0)).toBe(35 * 60);
     expect(after.some((row) => row.type === "topup")).toBe(false);
+
+    // The last 7 days: the 5 min given today and today's role-play call (the 30 min grant was moved to January).
+    const week = await api.activity({ days: 7 });
+    expect(week.totals).toMatchObject({ assigned: 5, learnerRoleplay: 2, calibration: 0 });
+    expect(week.agents).toEqual([expect.objectContaining({ calls: 1, kind: "ROLEPLAY", learnerMinutes: 2, teamMinutes: 0 })]);
+    expect(week.team).toEqual([]);
+    expect(week.log.map((entry) => [entry.category, entry.minutes, entry.by])).toEqual(expect.arrayContaining([["assigned", 5, f.trainer.name], ["learnerRoleplay", 1.5, null]]));
+    expect(week.logTotal).toBe(2);
   });
 
   test("maps short balance to CONFLICT and learner cap to BAD_REQUEST", async () => {

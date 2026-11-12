@@ -16,7 +16,7 @@ Meteroid dev and Sandbox with real Razorpay test payments, migrations checked on
 - [x] **Accountant:** LUT (RFD-11) for FY 2026-27 — not filed yet (11 Nov); the CA files it and sends the ARN. Until
       then **every org stays on Trial** and no export invoice is issued (export invoices must be dated on/after the
       filing, with "Export of services without payment of tax under LUT / LUT ARN: …", which the app prints).
-- [ ] **LUT ARN received** → type it into **Meteroid Production › Settings › Invoicing entity › legal footer**
+- [x] **LUT ARN received** (AD331126012484I, filed 11 Nov 2026; set in dev, Sandbox and Production 11 Nov) → type it into **Meteroid Production › Settings › Invoicing entity › legal footer**
       ("LUT ARN: AD33…"). The app reads it from there; nothing to deploy.
 - [ ] **Accountant:** SAC **998314** right for what we sell? (one constant: `SAC` in `web/lib/billing/documents.ts`)
 - [ ] **Accountant:** USD invoices for Indian customers OK? (everyone pays in USD today; INR would need INR prices)
@@ -35,9 +35,9 @@ Meteroid dev and Sandbox with real Razorpay test payments, migrations checked on
 
 ## B. Setup outside the code (before merge)
 
-- [ ] **Meteroid Production › Settings › Invoicing entity:** company name, address, GSTIN, contact email right
+- [x] **Meteroid Production › Settings › Invoicing entity:** company name, address, GSTIN, contact email right *(11 Nov: address set to the GST registration, all three tenants.)*
       (invoices read them from here); legal footer = "LUT ARN: …" once received. The setup script fills it only if empty.
-- [ ] **Meteroid customer emails off** in every tenant (done 11 Nov; check `disabled_kinds` has all 11 kinds for prod).
+- [x] **Meteroid customer emails off** in every tenant (done 11 Nov; check `disabled_kinds` has all 11 kinds for prod).
 - [ ] **Razorpay live:** generate live API keys; confirm **International payments** are on (customers pay in USD).
 - [ ] **Razorpay live webhook:** Dashboard › Webhooks › Add `https://dash.trainertwin.com/api/razorpay/webhook`, a new
       secret, events `payment_link.paid` (and `invoice.paid`, `refund.processed` for phase 1 purchases).
@@ -50,26 +50,26 @@ Meteroid dev and Sandbox with real Razorpay test payments, migrations checked on
 
 ## C. Release (merge day, in order)
 
-- [ ] **No old invoices to email:** prod Meteroid has no invoice above $0 (checked 11 Nov: 3 invoices, all $0):
+- [x] **No old invoices to email:** prod Meteroid has no invoice above $0 (checked 11 Nov: 3 invoices, all $0):
       `curl -s -H "Authorization: Bearer $METEROID_PROD_API_KEY" "https://meteroid-rest.foreverlearning.in/api/v1/invoices?per_page=100" | python3 -c "import json,sys; print([i['invoice_number'] for i in json.load(sys.stdin)['data'] if i['total']>0])"` prints `[]`.
-- [ ] **Backups right before:** Neon branch `pre-billing-<date>` from `production`; and
+- [x] **Backups right before:** Neon branch `pre-billing-<date>` from `production`; and
       `pg_dump -Fc --no-owner --no-privileges -d "$PROD" -f ~/Backups/trainertwin/prod-pre-billing-<date>.dump`.
-- [ ] **Meteroid Production setup** (go-ahead), dry-run first, then for real:
+- [x] **Meteroid Production setup** (go-ahead), dry-run first, then for real:
       `METEROID_API_KEY=$METEROID_PROD_API_KEY bun scripts/meteroid-billing-setup.ts --webhook-url https://dash.trainertwin.com/api/meteroid/webhook --dry-run`
       (expected: sell MINS under product "Minute packs"; MINS $0.25; invoicing entity (only if empty); webhook +
       invoice.finalized/paid/voided, subscription.cancelled/ended). All additive; the current app ignores the new
       webhook events.
-- [ ] **Merge PR #18** → Vercel builds web and runs migrations `20261112120000_billing_phase2` and
+- [x] **Merge PR #18** → Vercel builds web and runs migrations `20261112120000_billing_phase2` and *(merged 11 Nov, `47ff272`; backup branch `br-round-brook-azvxs0oy`, dump `prod-pre-billing-release-20261111-1407.dump`.)*
       `20261113120000_billing_razorpay` (add-only; every org stays on Trial). Chat, copilot, voice agent unchanged.
 
 ## D. After deploy (same day)
 
-- [ ] `/api/health` 200.
-- [ ] `DATABASE_URL="$PROD" bun scripts/check-billing.ts` and `bun scripts/check-org-people.ts`: all ok.
+- [x] `/api/health` 200.
+- [x] `DATABASE_URL="$PROD" bun scripts/check-billing.ts` and `bun scripts/check-org-people.ts`: all ok.
 - [ ] Settings › Billing loads for each org: "Trial plan, Active", "contact TrainerTwin" to upgrade, no prices shown.
 - [ ] Vercel › Settings › Cron Jobs lists `/api/internal/billing/check` (00:15 UTC).
-- [ ] Meteroid › Production › Webhooks: next delivery 200.
-- [ ] Razorpay webhook: `curl -s -o /dev/null -w "%{http_code}" -X POST https://dash.trainertwin.com/api/razorpay/webhook`
+- [x] Meteroid › Production › Webhooks: next delivery 200.
+- [x] Razorpay webhook: `curl -s -o /dev/null -w "%{http_code}" -X POST https://dash.trainertwin.com/api/razorpay/webhook`
       is **401** (signature checked; 500 = `RAZORPAY_WEBHOOK_SECRET` missing).
 - [ ] Nothing from the old flows broke: a team call starts and ends; Credits page balances as before.
 - [ ] Remove `VERCEL_FORCE_NO_BUILD_CACHE` from Vercel if still there (phase 1 leftover).

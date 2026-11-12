@@ -10,7 +10,8 @@ import { getOrgBySlug, getSessionOrg } from "@/lib/org";
 
 const bodySchema = z
   .object({
-    kind: z.enum(["bug", "feature", "other"]).default("bug"),
+    // support: the studio's Support dialog (subject on the first line of the message).
+    kind: z.enum(["bug", "feature", "other", "support"]).default("bug"),
     message: z.string().trim().min(5).max(5000),
     // A web page link only (it becomes a link in the alert email: practice rule 28).
     url: z.string().trim().max(2048).regex(/^https?:\/\//i, "A link must start with http:// or https://").optional().nullable(),

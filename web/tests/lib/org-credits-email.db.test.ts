@@ -19,7 +19,7 @@ describe.skipIf(!localMinutesDb)("org credits announcement (local database; send
     expect(send).toHaveBeenCalledTimes(2);
     for (const [index, id, amount] of [[0, "g1", 100], [1, "g2", 30]] as const) {
       expect(send.mock.calls[index]).toEqual([
-        { kind: "orgCredits", args: { to: f.trainer.email, orgName: f.org.name, added: amount, balance: 230, reason: "Pack", expires: "10 Nov 2027", creditsUrl: expect.stringMatching(/\/credits$/) } },
+        { kind: "orgCredits", args: { to: f.trainer.email, orgName: f.org.name, added: amount, balance: 230, reason: "Pack", expires: "10 Nov 2027", creditsUrl: expect.stringMatching(/\/usage$/) } },
         `org-credits:${id}`,
       ]);
     }

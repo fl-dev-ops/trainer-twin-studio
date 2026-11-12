@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { addressLine2, billingDetailsInput, countries, countryName, EXPORT_DECLARATION, gstinChecksumOk, INDIAN_STATES, meteroidCustomerPatch, taxFor } from "@/lib/billing/details";
+import { addressLine2, billingDetailsInput, countries, countryName, EXPORT_DECLARATION, gstinChecksumOk, INDIAN_STATES, meteroidCustomerPatch, taxFor, taxIdLabel } from "@/lib/billing/details";
 import { CURRENCY, PACK_CENTS, PACK_CREDITS, PACK_VALID_DAYS, formatMoney, packPrice, totalWithTax } from "@/lib/billing/pricing";
 import { billingEmail } from "@/lib/email";
 
@@ -26,7 +26,25 @@ describe("billing rules 7–9: details and tax", () => {
     [{ phone: undefined }, "phone", "Add a phone number with its country code"],
   ] as const)("refuses %j at %s with its field problem", (patch, field, message) => problem(patch, field, message));
 
-  test.each(["legalName", "line1", "city", "postalCode"])("requires %s", (field) => problem({ [field]: "  " }, field));
+  test.each(["legalName", "line1", "city"])("requires %s", (field) => problem({ [field]: "  " }, field));
+  test.each([undefined, "", "  "])("rule 7: India requires postalCode %j with the PIN code problem", (postalCode) => {
+    problem({ postalCode }, "postalCode", "Add the PIN code");
+  });
+  for (const country of ["AE", "US"]) {
+    test.each([undefined, "", "  "])(`rule 7: ${country} accepts optional postalCode %j and clears Meteroid zip_code`, (postalCode) => {
+      const parsed = billingDetailsInput.parse({ ...details, country, state: undefined, postalCode });
+      expect(parsed.postalCode).toBeUndefined();
+      expect(meteroidCustomerPatch(parsed).billing_address.zip_code).toBeNull();
+    });
+  }
+  test.each(["IN", "AE", "US"])("rule 7: %s trims a supplied postalCode and copies it to Meteroid", (country) => {
+    const parsed = billingDetailsInput.parse({ ...details, country, state: country === "IN" ? details.state : undefined, postalCode: " 600001 " });
+    expect(parsed.postalCode).toBe("600001");
+    expect(meteroidCustomerPatch(parsed).billing_address.zip_code).toBe("600001");
+  });
+  test.each([["IN", "GSTIN"], ["AE", "TRN"], ["US", "Tax ID"], [null, "Tax ID"], [undefined, "Tax ID"]] as const)("rule 7: taxIdLabel(%j) is %s", (country, label) => {
+    expect(taxIdLabel(country)).toBe(label);
+  });
   test.each([["legalName", 200], ["line1", 200], ["line2", 200], ["city", 100], ["postalCode", 20]] as const)("enforces %s maximum %s", (field, max) => {
     expect(billingDetailsInput.safeParse({ ...details, [field]: "x".repeat(max) }).success).toBe(true);
     problem({ [field]: "x".repeat(max + 1) }, field);

@@ -42,13 +42,14 @@
 
 ### Who and what
 
-5. **Admin and team** see Settings › Billing and do everything in it. Learners never see billing (403).
+5. **Admin and team** see the Billing page (`/billing`) and do everything in it. Learners never see billing (403).
 6. **Billing details come first.** Buying packs is refused (400) until the org has billing details, and staff move an
    org to a paid plan only once they're saved (they go on its invoices).
-7. **Billing details rules** (any other field is refused too): legal name (1–200 characters); country (ISO code); street, city and postal code;
+7. **Billing details rules** (any other field is refused too): legal name (1–200 characters); country (ISO code); street and city; postal code
+   (required in India as the PIN code; optional elsewhere, since some countries, e.g. the UAE, have none);
    **state when the country is India** (one of India's GST states, with its code); for India an optional GSTIN (15
    characters, the GST format, its first two digits equal to the state's code), elsewhere an optional tax number (up
-   to 50 characters); 1 to 5 billing emails; a phone number with its country code (`+` then 8 to 15 digits: Razorpay
+   to 50 characters), shown on invoices as "TRN" for the UAE and "Tax ID" elsewhere; 1 to 5 billing emails; a phone number with its country code (`+` then 8 to 15 digits: Razorpay
    needs it for card payments in USD). Anything else is refused (400) with the field's problem.
 8. **Saving billing details** updates the Meteroid customer first (name, address, tax number, billing emails and tax),
    then the app's copy. When Meteroid can't be reached, nothing is saved and the person is told to try again (502);
@@ -130,7 +131,7 @@
       taxable value, CGST/SGST or IGST, total; the export mention when exempt; "computer generated, needs no
       signature".
     - **Receipt** "RCPT-<invoice number>": the same header and lines, "amount paid on <date>", and a payment history
-      (method, reference, date, amount). Downloadable from Settings › Billing once paid.
+      (method, reference, date, amount). Downloadable from the Billing page (`/billing`) once paid.
     Each is kept as first sent (S3): later emails and downloads send that same copy, so an issued invoice never
     changes, even if the company's details later do.
 23. **Invoices above $0 only:** a $0 invoice (the Credits subscription's monthly one) is never stored, shown or emailed.
@@ -146,7 +147,7 @@
     an overdue renewal not paused (or its email not sent), an overdue upgrade not cancelled (or not finished), an org
     paused with nothing overdue (unpaused), the Paid subscription ended in Meteroid (rule 18), a workflow that died
     before its email (claimed over 10 minutes ago). Reminders are best effort: a missed one isn't sent later.
-26. **Meteroid down:** Settings › Billing shows the app's copy; saving details, upgrading and buying packs fail with
+26. **Meteroid down:** the Billing page (`/billing`) shows the app's copy; saving details, upgrading and buying packs fail with
     a message to try again (502) and change nothing. Starting a call reads only the app's copy, so calls never wait on
     Meteroid. Pausing and unpausing ask Meteroid first whether the invoice was paid, so they wait until it's back
     (the workflow step retries; the daily check catches up).
@@ -159,9 +160,9 @@
     when the invoice is first handled: the invoice-issued workflow, an upgrade, a pack. An invoice whose org has no
     phone saved gets no link (bank transfer only) until it has one.
 28. **Pay now** appears wherever the invoice does: the invoice, reminder and paused emails (a button), the invoice PDF
-    ("Pay online" and the link), and Settings › Billing (a button on each unpaid invoice and in the upgrade and paused
+    ("Pay online" and the link), and the Billing page (`/billing`) (a button on each unpaid invoice and in the upgrade and paused
     notices). "Buy" takes the person straight to the payment page; after paying they come back
-    to Settings › Billing, which shows the payment within seconds.
+    to the Billing page (`/billing`), which shows the payment within seconds.
 29. **A payment** (Razorpay's signed `payment_link.paid` webhook) counts only when the link is the invoice's and the
     amount and currency equal the invoice total. Then, once per Razorpay payment: the payment is recorded; the Meteroid
     invoice is marked paid with the Razorpay payment id as its reference, unless Meteroid already shows it paid; and

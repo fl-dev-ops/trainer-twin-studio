@@ -31,7 +31,7 @@ export async function announceNewGrants(orgId: string) {
             ? new Date(grant.expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })
             : null,
           reason: grant.reason,
-          creditsUrl: `${studioUrl()}credits`,
+          creditsUrl: `${studioUrl()}usage`,
         },
       }, `org-credits:${grant.id}`);
       if (!result.success && result.error !== "RESEND_API_KEY is not set") throw new Error(`Org credits email to ${admin.email}: ${result.error}`);

@@ -15,7 +15,7 @@ the people work). Code, tests and module specs follow it.
 
 | # | Decision |
 | --- | --- |
-| 1 | **Seller:** Forever Learning Solutions Pvt Ltd, **GSTIN 33AAGCF6592D1ZN** (33 = Tamil Nadu), No. 52/2A1 School Street, Right side, Selaiyur, Rajakilpakkam, Kanchipuram, Tambaram, Tamil Nadu 600073. |
+| 1 | **Seller:** Forever Learning Solutions Pvt Ltd, **GSTIN 33AAGCF6592D1ZN** (33 = Tamil Nadu), 52/2A1, School Street, Right Side, Selaiyur, Chennai, Chengalpattu, Tamil Nadu 600073 (as on the GST registration). |
 | 2 | **LUT** (for customers abroad, e.g. Olga): to be confirmed by you / your accountant. The invoice gets a LUT reference field now; the number is filled in when confirmed. |
 | 3 | **Every org starts on the Trial plan** ($0, no expiry for now), Olga too. An org moves to the **Paid plan only after it has paid** its first Paid invoice. |
 | 4 | **No plan includes credits.** Credits come only from **minute packs** and **grants** (as in phase 1). |

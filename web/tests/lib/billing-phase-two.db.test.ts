@@ -226,9 +226,9 @@ describe.skipIf(!localMinutesDb)("billing phase 2 constraints and studio API (lo
   test("rule 16: pausedReason uses cached DB; paused org refuses new learners (starting credits) but adds team", async () => {
     expect(await pausedReason("unbilled", "learner")).toBeNull(); expect(await pausedReason(f.org.id, "studio")).toBeNull();
     await db.orgBilling.update({ where: { orgId: f.org.id }, data: { plan: "paid", paidSubscriptionId: `paid-${f.org.id}`, pausedAt: new Date() } });
-    expect(await pausedReason(f.org.id, "learner")).toContain("ask your trainer"); expect(await pausedReason(f.org.id, "studio")).toContain("Settings › Billing");
+    expect(await pausedReason(f.org.id, "learner")).toContain("ask your trainer"); expect(await pausedReason(f.org.id, "studio")).toContain("Billing page");
     const api = minutesRouter.createCaller({ user: { ...f.trainer, orgId: f.org.id, orgSlug: f.org.slug, role: "admin" } });
-    await expect(api.addPeople({ emails: [`new-${f.learner.email}`], role: "user" })).rejects.toMatchObject({ code: "FORBIDDEN", message: expect.stringContaining("Settings › Billing") });
+    await expect(api.addPeople({ emails: [`new-${f.learner.email}`], role: "user" })).rejects.toMatchObject({ code: "FORBIDDEN", message: expect.stringContaining("Billing page") });
     expect(await db.member.count({ where: { organizationId: f.org.id, user: { email: `new-${f.learner.email}` } } })).toBe(0);
     expect(await api.addPeople({ emails: [`team-${f.learner.email}`], role: "team" })).toMatchObject({ added: expect.anything() });
     expect(await db.member.count({ where: { organizationId: f.org.id, role: "team", user: { email: `team-${f.learner.email}` } } })).toBe(1);

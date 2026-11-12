@@ -32,7 +32,7 @@ setup("seed and sign in", async () => {
   }
   // next dev compiles a page on its first request (can take 20 s+): do it now, not inside a test's time limit.
   const warm = [
-    ["admin", e2eUrl("dash", "/credits")],
+    ["admin", e2eUrl("dash", "/usage")],
     ["admin", e2eUrl("dash", "/api/trpc/minutes.version")],
     ["admin", e2eUrl("dash", "/users")],
     ["learner", e2eUrl(seed.org.slug)],

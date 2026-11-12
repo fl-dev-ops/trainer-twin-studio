@@ -24,7 +24,7 @@ const rows: Case[] = [
   { name: "other-org code (not a /t state)", state: "otherOrg", code: "not_found", message: "Not found." },
   { name: "disabled common link (personal /t and /s stay usable)", state: "linkDisabled", code: "twin_link_disabled", message: "This link is no longer active. Ask your trainer for a new one." },
   { name: "paused learner", state: "paused", code: "org_paused", reason: "blocked", message: "Practice is paused for this organization right now. Please ask your trainer." },
-  { name: "paused studio", state: "paused", studio: true, code: "org_paused", reason: "blocked", message: "Your organization's plan is paused because an invoice is overdue. Pay it to continue (Settings › Billing)." },
+  { name: "paused studio", state: "paused", studio: true, code: "org_paused", reason: "blocked", message: "Your organization's plan is paused because an invoice is overdue. Pay it on the Billing page to continue." },
   ...[0, 30].map((seconds): Case => ({ name: `learner ${seconds}s`, seconds, code: "credits_out", reason: "used", message: "You've used all your practice minutes. Ask your trainer for more." })),
   ...[1, 2, 3, 4].map((minutes): Case => ({ name: `learner ${minutes}min`, seconds: minutes * 60, code: "credits_short", reason: "blocked", message: `You need at least 5 minutes to start a call; you have ${minutes}. Ask your trainer for more.` })),
   { name: "learner exactly 5min", seconds: 300 },

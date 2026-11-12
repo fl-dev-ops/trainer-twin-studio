@@ -51,7 +51,8 @@ export async function minutesBalance(customerId: string, timeoutMs?: number): Pr
   return { minutes: check.balance, asOf: check.as_of ? new Date(check.as_of) : new Date(0) };
 }
 
-export type CreditGrant = { id: string; minutes: number; reason: string | null; expiresAt: string | null; status: string | null; createdAt: string | null };
+/** `source`: Meteroid's origin of the grant (MANUAL, or PURCHASE for a paid top-up invoice); missing in copies cached before it was kept. */
+export type CreditGrant = { id: string; minutes: number; reason: string | null; expiresAt: string | null; status: string | null; createdAt: string | null; source?: string | null };
 
 /** The customer's minute grants (what was added to the org: free minutes, packs), newest first. */
 export async function minuteGrants(customerId: string): Promise<CreditGrant[]> {
@@ -65,6 +66,7 @@ export async function minuteGrants(customerId: string): Promise<CreditGrant[]> {
       expiresAt: (grant.expires_at as string | null) ?? null,
       status: (grant.status as string | null) ?? null,
       createdAt: (grant.created_at as string | null) ?? null,
+      source: (grant.source as string | null) ?? null,
     }))
     .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
 }

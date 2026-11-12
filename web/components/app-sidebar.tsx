@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
-import { BrandMark, PersonaIcon, RoleplayIcon, SessionsIcon, SettingsIcon, SetupIcon, TwinIcon, UsersIcon } from "@/components/icons";
+import { BillingIcon, BrandMark, PersonaIcon, RoleplayIcon, SessionsIcon, SettingsIcon, SetupIcon, SupportIcon, TwinIcon, UsersIcon } from "@/components/icons";
+import { SupportDialog } from "@/components/support-dialog";
 import { SidebarCredits } from "@/components/credits/sidebar-credits";
 import { OrgSwitcher, type SwitchableOrg } from "@/components/org-switcher";
 import { SidebarAccountMenu } from "@/components/sidebar-account-menu";
@@ -45,7 +47,7 @@ const NAV_GROUPS = [
 /** Reference nav-item metrics: 32px row, 8px radius, 14px/20px text, 20px icon. */
 type NavItem = { title: string; href: string; icon: typeof TwinIcon; also?: string[] };
 const NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((group) => group.items);
-const NAV_HREFS = [...NAV_ITEMS.flatMap((item) => [item.href, ...(item.also ?? [])]), "/credits", "/settings"];
+const NAV_HREFS = [...NAV_ITEMS.flatMap((item) => [item.href, ...(item.also ?? [])]), "/usage", "/billing", "/settings"];
 
 const matches = (pathname: string, href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
@@ -77,6 +79,20 @@ function Brand() {
       </button>
       <ThemeToggle />
     </div>
+  );
+}
+
+/** Opens the Support dialog from anywhere in the studio. */
+function SidebarSupport() {
+  const [open, setOpen] = useState(false);
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton onClick={() => setOpen(true)} tooltip="Support" variant="nav">
+        <SupportIcon />
+        <span>Support</span>
+      </SidebarMenuButton>
+      <SupportDialog open={open} onOpenChange={setOpen} />
+    </SidebarMenuItem>
   );
 }
 
@@ -121,7 +137,14 @@ export function AppSidebar({ hideRoleplay = false, orgs = [], orgId = null }: {
         {/* Reference "rail-foot": pinned to the bottom, 12px gap, 12px top padding. */}
         <div className="mt-auto flex flex-col gap-3 pt-3">
           <SidebarMenu className="gap-2">
-            <SidebarCredits active={isActive(pathname, "/credits")} />
+            <SidebarCredits active={isActive(pathname, "/usage")} />
+            <SidebarMenuItem>
+              <SidebarMenuButton render={<Link href="/billing" />} isActive={isActive(pathname, "/billing")} tooltip="Billing" variant="nav">
+                <BillingIcon />
+                <span>Billing</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarSupport />
             <SidebarMenuItem>
               <SidebarMenuButton
                 render={<Link href="/settings" />}
