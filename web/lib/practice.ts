@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { AppError, refusals } from "@/lib/errors";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { learnerBalance, OUT_OF_MINUTES } from "@/lib/minutes";
-import { MIN_START_MINUTES } from "@/lib/minutes-config";
+import { MAX_STUDIO_CALL_MINUTES, MIN_START_MINUTES } from "@/lib/minutes-config";
 import { orgCredits } from "@/lib/org-credits";
 import { orgPerson, type OrgPerson } from "@/lib/org-people";
 import { isStudioRole } from "@/lib/roles";
@@ -60,5 +60,5 @@ export async function startAllowance(orgId: string, person: OrgPerson, tx: Tx = 
   if (!credits.billed) return { allowedSeconds: null, chargesOrg: false };
   if (credits.seconds < 60) throw practiceRefusals.orgCreditsOut();
   if (credits.seconds < MIN_START_MINUTES * 60) throw practiceRefusals.orgCreditsShort(credits.seconds);
-  return { allowedSeconds: credits.seconds, chargesOrg: true };
+  return { allowedSeconds: Math.min(credits.seconds, MAX_STUDIO_CALL_MINUTES * 60), chargesOrg: true };
 }

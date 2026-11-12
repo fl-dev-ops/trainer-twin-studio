@@ -23,7 +23,7 @@
 | Usable assignment | The learner's `TwinAssignment` for that twin with status `active` and `accessUntil` empty or in the future. |
 | Common link | A `TwinShareLink` code at `/s/<code>`; opening it while signed in adds an existing account to the org (People rule 6). |
 | Call | A practice `InterviewSession`: `activating` → `active` → ended (`completed`, `abandoned`, `failed`, `revoked`). "Live" means activating or active. |
-| Allowance | The seconds a call may last (`allowedSeconds`): the learner's balance at start (learners), or the org's (studio on a billed org). |
+| Allowance | The seconds a call may last (`allowedSeconds`): the learner's balance at start (learners), or the smaller of the org's available balance and `MAX_STUDIO_CALL_MINUTES` (studio on a billed org). |
 | Practice check | The one function that decides whether this person may start a call on this twin now, with the refusal when not. |
 
 ## Rules
@@ -47,9 +47,13 @@
    code exists).
 4. **Credits.** A learner needs at least `MIN_START_MINUTES` (5) of their own credits to start (`credits_out` under 1
    minute, `credits_short` for 1–4). Admin/team on a billed org need 5 of the org's credits (`org_credits_out`,
-   `org_credits_short`); unbilled orgs are free. While live, a billed studio call holds its whole allowance (other
-   starts see it as spent), so two trainers can't both spend the same credits. A paused org starts nothing
-   (`org_paused`, Billing's pause messages), and its running calls continue.
+   `org_credits_short`); unbilled orgs remain free and unmetered. A new billed studio voice call (twin, calibration or
+   role play) gets the smaller of the org's available credits and `MAX_STUDIO_CALL_MINUTES` (30), a code constant in
+   `web/lib/minutes-config.ts`, never an environment setting. That is both its reservation and maximum duration;
+   there is no automatic extension. While live it holds that allowance, leaving the rest for other trainers and
+   learner grants. Ending charges only elapsed seconds up to the allowance and releases the unused reservation.
+   Learner allowances are unchanged. Resuming an existing call keeps its original allowance and deadline.
+   A paused org starts nothing (`org_paused`, Billing's pause messages), and its running calls continue.
 5. **One live call per person.** Start takes the org's credits lock (`minutes:<org>`), re-runs the practice check
    counting the person's other live calls as ended now, and only then ends (and charges) those calls and creates the
    new one, all in one transaction with no network calls; LiveKit and the chat brain are set up after it commits. A

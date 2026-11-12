@@ -5,7 +5,8 @@ import * as specs from "@/lib/specs";
 import * as schedule from "@/lib/schedule-org-credits";
 import { activateSession, finalizeInterviewSession } from "@/lib/interview-sessions";
 import { sweepStaleCalls } from "@/lib/session-lifecycle";
-import { learnerBalance, recordSessionUsage } from "@/lib/minutes";
+import { grantMinutes, learnerBalance, recordSessionUsage } from "@/lib/minutes";
+import { MAX_STUDIO_CALL_MINUTES } from "@/lib/minutes-config";
 import { orgCredits } from "@/lib/org-credits";
 import { setMemberDisabled, changeMemberRole } from "@/lib/members";
 import { assignTwinLearners } from "@/lib/invite/twin";
@@ -101,7 +102,7 @@ describe.skipIf(!localMinutesDb)("Module 2 atomic start/end/assignment scenarios
     expect(ending).toHaveBeenCalledWith(first!.id);
   });
 
-  test("two studio members on a billed org reserve the first call's whole allowance", async () => {
+  test("a studio call with only ten credits reserves those ten, so another call must wait", async () => {
     await db.member.update({ where: { id: `${f.learner.id}-member` }, data: { role: "team" } });
     await db.twinAssignment.delete({ where: { id: assignment.id } });
     await fundOrg({ orgId: f.org.id, minutes: 10 });
@@ -109,6 +110,58 @@ describe.skipIf(!localMinutesDb)("Module 2 atomic start/end/assignment scenarios
     expect(first?.secondsLeft).toBe(600); expect(await orgCredits(f.org.id)).toMatchObject({ seconds: 0 });
     await expect(activateSession({ orgId: f.org.id, userId: f.learner.id, agentSlug: f.twin.slug })).rejects.toMatchObject({ code: "org_credits_out", status: 403 });
     expect(await live()).toBe(1); expect(ending).not.toHaveBeenCalled();
+  });
+
+  test("two concurrent studio calls leave credits for a learner grant and release unused reservations on end", async () => {
+    const teammate = await db.user.create({ data: { id: `${f.org.id}-team`, name: "Team", email: `${f.org.id}-team@example.com`, emailVerified: true } });
+    await db.member.create({ data: { id: `${teammate.id}-member`, organizationId: f.org.id, userId: teammate.id, role: "team", createdAt: new Date() } });
+    await fundOrg({ orgId: f.org.id, minutes: 100 });
+    const [first, second] = await Promise.all([
+      start(true),
+      activateSession({ orgId: f.org.id, userId: teammate.id, agentSlug: f.twin.slug, mode: "voice" }),
+    ]);
+    const reserved = MAX_STUDIO_CALL_MINUTES * 60;
+    expect(first!.secondsLeft).toBe(reserved);
+    expect(second!.secondsLeft).toBe(reserved);
+    expect(await live()).toBe(2);
+    expect((await orgCredits(f.org.id)).seconds).toBe(6000 - 2 * reserved);
+    await grantMinutes({ orgId: f.org.id, email: f.learner.email, minutes: 10 });
+    expect((await learnerBalance(f.org.id, f.learner.email)).balanceSeconds).toBe(600);
+    expect((await orgCredits(f.org.id)).seconds).toBe(5400 - 2 * reserved);
+    // End early: charge about eight minutes, not the reservation, and release the rest immediately.
+    await db.interviewSession.update({ where: { id: first!.id }, data: { startedAt: new Date(Date.now() - 480_000) } });
+    await finalizeInterviewSession({ sessionId: first!.id, requestedStatus: "completed" });
+    const charge = await db.minuteLedger.findUniqueOrThrow({ where: { sessionId: first!.id } });
+    expect(charge.type).toBe("org_usage");
+    expect(charge.seconds).toBeLessThanOrEqual(-480);
+    expect(charge.seconds).toBeGreaterThanOrEqual(-485);
+    expect((await orgCredits(f.org.id)).seconds).toBe(5400 - reserved + charge.seconds);
+    // A late end still cannot charge beyond that second call's reserved limit.
+    await db.interviewSession.update({ where: { id: second!.id }, data: { startedAt: new Date(Date.now() - (reserved + 600) * 1000) } });
+    await finalizeInterviewSession({ sessionId: second!.id, requestedStatus: "completed" });
+    expect(await db.minuteLedger.findUniqueOrThrow({ where: { sessionId: second!.id } })).toMatchObject({ type: "org_usage", seconds: -reserved });
+    expect((await orgCredits(f.org.id)).seconds).toBe(5400 - reserved + charge.seconds);
+  });
+
+  test.each([4, 5])("concurrent studio starts with only the cap plus %s credits cannot overspend", async (remainder) => {
+    await db.member.update({ where: { id: `${f.learner.id}-member` }, data: { role: "team" } });
+    await db.twinAssignment.delete({ where: { id: assignment.id } });
+    await fundOrg({ orgId: f.org.id, minutes: MAX_STUDIO_CALL_MINUTES + remainder });
+    const outcomes = await Promise.allSettled([
+      start(true),
+      activateSession({ orgId: f.org.id, userId: f.learner.id, agentSlug: f.twin.slug, mode: "voice" }),
+    ]);
+    const fulfilled = outcomes.filter((result) => result.status === "fulfilled");
+    expect(fulfilled).toHaveLength(remainder === 5 ? 2 : 1);
+    if (remainder === 4) {
+      const refused = outcomes.find((result) => result.status === "rejected");
+      if (!refused || refused.status !== "rejected") throw new Error("Expected short-credit refusal");
+      expect(refused.reason).toMatchObject({ code: "org_credits_short", status: 403 });
+    }
+    expect(fulfilled.map((result) => result.value!.secondsLeft).sort((a, b) => a! - b!)).toEqual(
+      remainder === 5 ? [300, MAX_STUDIO_CALL_MINUTES * 60] : [MAX_STUDIO_CALL_MINUTES * 60],
+    );
+    expect((await orgCredits(f.org.id)).seconds).toBe(remainder === 5 ? 0 : 240);
   });
 
   test("studio's second preview of the same twin uses the normal charged end path after commit", async () => {

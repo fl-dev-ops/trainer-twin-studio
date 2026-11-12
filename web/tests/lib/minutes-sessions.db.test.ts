@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import * as nextServer from "next/server";
 import * as livekit from "@/lib/livekit";
 import { ensureDeployment } from "@/lib/deployments";
+import { MAX_STUDIO_CALL_MINUTES } from "@/lib/minutes-config";
 import { startSessionNow } from "@/lib/session-activation";
 import { activateSession, finalizeInterviewSession } from "@/lib/interview-sessions";
 import { OUT_OF_MINUTES, grantMinutes, learnerBalance, recordSessionUsage, sessionUsageSeconds } from "@/lib/minutes";
@@ -124,12 +125,53 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
     expect(await db.interviewSession.count({ where: { orgId: f.org.id } })).toBe(0);
   });
 
-  test("learners start voice calls with their balance as allowance and secondsLeft", async () => {
-    await fund();
+  test.each([10, 60])("learner's %s minutes remain their allowance, without the studio cap", async (minutes) => {
+    await fund(minutes);
     const result = await activate();
-    expect(result).toMatchObject({ status: "active", mode: "voice", secondsLeft: 600 });
-    expect(await db.interviewSession.findUniqueOrThrow({ where: { id: result!.id } })).toMatchObject({ allowedSeconds: 600, status: "active" });
+    expect(result).toMatchObject({ status: "active", mode: "voice", secondsLeft: minutes * 60 });
+    expect(await db.interviewSession.findUniqueOrThrow({ where: { id: result!.id } })).toMatchObject({ allowedSeconds: minutes * 60, status: "active" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([5, 12, MAX_STUDIO_CALL_MINUTES])("studio allowance uses the available %s credits when at or below the cap", async (minutes) => {
+    await fundOrg({ orgId: f.org.id, minutes });
+    expect(await activate({ userId: f.trainer.id })).toMatchObject({ secondsLeft: minutes * 60 });
+    expect(await availableOrgSeconds(f.org.id)).toBe(0);
+  });
+
+  test.each(["admin", "team"].flatMap((role) => ["twin", "calibration", "roleplay"].map((kind) => ({ role, kind }))))(
+    "$role $kind call reserves only the studio cap and forwards that deadline to LiveKit",
+    async ({ role, kind }) => {
+      await db.member.update({ where: { id: `${f.trainer.id}-member` }, data: { role } });
+      await fundOrg({ orgId: f.org.id, minutes: 100 });
+      const agent = kind === "roleplay" ? f.roleplay : f.twin;
+      const connect = spyOn(livekit, "activateLiveKitSession").mockResolvedValue({ room: "test-room", token: "participant", dispatchId: "dispatch", videoEgressId: null, videoS3Key: null });
+      try {
+        const before = Math.floor(Date.now() / 1000);
+        const result = await startSessionNow({ orgId: f.org.id, userId: f.trainer.id, agentSlug: agent.slug, mode: "voice", calibrate: kind === "calibration" });
+        if (!result.ok) throw new Error(result.error);
+        const seconds = MAX_STUDIO_CALL_MINUTES * 60;
+        expect(result.session.secondsLeft).toBe(seconds);
+        expect(await db.interviewSession.findUniqueOrThrow({ where: { id: result.session.id } })).toMatchObject({ allowedSeconds: seconds, chargesOrg: true });
+        expect(await availableOrgSeconds(f.org.id)).toBe((100 - MAX_STUDIO_CALL_MINUTES) * 60);
+        expect(connect.mock.calls[0][0].endsAt).toBeGreaterThanOrEqual(before + seconds);
+        expect(connect.mock.calls[0][0].endsAt).toBeLessThanOrEqual(Math.floor(Date.now() / 1000) + seconds);
+        expect(await db.twinCalibration.count({ where: { sessionId: result.session.id } })).toBe(kind === "calibration" ? 1 : 0);
+      } finally { connect.mockRestore(); }
+    },
+  );
+
+  test.each([MAX_STUDIO_CALL_MINUTES, 60])("resuming a studio call keeps its original %s-minute allowance, without renewal", async (minutes) => {
+    await fundOrg({ orgId: f.org.id, minutes: 100 });
+    const input = { userId: f.trainer.id, idempotencyKey: "studio-resume" };
+    const first = await activate(input);
+    // Also cover a call started before the cap: only new calls receive the new limit.
+    await db.interviewSession.update({ where: { id: first!.id }, data: { allowedSeconds: minutes * 60, startedAt: new Date(Date.now() - 420_000) } });
+    const resumed = await activate(input);
+    expect(resumed).toMatchObject({ id: first!.id, resumed: true });
+    expect(resumed!.secondsLeft).toBeGreaterThanOrEqual(minutes * 60 - 425);
+    expect(resumed!.secondsLeft).toBeLessThanOrEqual(minutes * 60 - 420);
+    expect(await db.interviewSession.findUniqueOrThrow({ where: { id: first!.id } })).toMatchObject({ allowedSeconds: minutes * 60 });
   });
 
   test.each(["admin", "team"])("studio role %s starts without credit and is never metered", async (role) => {
