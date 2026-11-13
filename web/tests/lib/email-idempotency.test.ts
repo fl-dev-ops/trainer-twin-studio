@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, expect, spyOn, test } from "bun:test";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 
@@ -9,6 +9,7 @@ const server = setupServer(http.post("https://api.resend.com/emails", async ({ r
   return HttpResponse.json({ id: "email_test" });
 }));
 const originalKey = process.env.RESEND_API_KEY;
+const originalNodeEnv = process.env.NODE_ENV;
 let email: typeof import("@/lib/email");
 beforeAll(async () => {
   process.env.RESEND_API_KEY = "re_test_idempotency";
@@ -16,6 +17,10 @@ beforeAll(async () => {
   email = await import("@/lib/email");
 });
 beforeEach(() => { requests.length = 0; });
+afterEach(() => {
+  if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+  else Object.assign(process.env, { NODE_ENV: originalNodeEnv });
+});
 afterAll(() => {
   server.close();
   if (originalKey === undefined) delete process.env.RESEND_API_KEY;
@@ -56,11 +61,44 @@ test("sendOrgCreditsEmail forwards the grant's key", async () => {
   expect(requests[0].key).toBe("org-credits:g1");
 });
 
-test("sendOtpEmail sends the 6-digit code with its 10-minute expiry", async () => {
-  expect(await email.sendOtpEmail({ to: "a@example.com", otp: "123456" })).toMatchObject({ success: true });
-  expect(requests).toHaveLength(1);
-  expect(requests[0].body).toMatchObject({ to: "a@example.com", subject: "Your TrainerTwin Sign In code: 123456" });
-  expect(String(requests[0].body.html)).toContain("expires in 10 minutes");
+test("production sends the OTP with its expiry and never prints the code", async () => {
+  Object.assign(process.env, { NODE_ENV: "production" });
+  const info = spyOn(console, "info").mockImplementation(() => {});
+  try {
+    expect(await email.sendOtpEmail({ to: "a@example.com", otp: "123456" })).toMatchObject({ success: true });
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body).toMatchObject({ to: "a@example.com", subject: "Your TrainerTwin Sign In code: 123456" });
+    expect(String(requests[0].body.html)).toContain("expires in 10 minutes");
+    expect(info).not.toHaveBeenCalled();
+  } finally { info.mockRestore(); }
+});
+
+test("development with a configured Resend key logs the OTP and never contacts Resend", async () => {
+  Object.assign(process.env, { NODE_ENV: "development" });
+  const info = spyOn(console, "info").mockImplementation(() => {});
+  try {
+    expect(email.resend).not.toBeNull();
+    expect(await email.sendOtpEmail({ to: "a@example.com", otp: "123456" })).toEqual({ success: true });
+    expect(info).toHaveBeenCalledWith("[Dev sign-in] Code for a@example.com: 123456 (expires in 10 minutes)");
+    expect(requests).toHaveLength(0);
+  } finally { info.mockRestore(); }
+});
+
+test("development with a configured Resend key skips direct, person, credits, billing and support email", async () => {
+  Object.assign(process.env, { NODE_ENV: "development" });
+  const info = spyOn(console, "info").mockImplementation(() => {});
+  try {
+    const sends = [
+      () => email.sendEmail({ to: "a@example.com", subject: "Welcome", html: "<p>Hello</p>" }),
+      () => email.sendPersonEmail({ to: "a@example.com", orgName: "Org", credits: { added: 5, balance: 10 } }),
+      () => email.sendOrgCreditsEmail({ to: "a@example.com", orgName: "Org", added: 10, balance: 20, creditsUrl: "https://example.com/usage" }),
+      () => email.sendBillingEmail({ to: ["a@example.com"], args: { event: "paid", orgName: "Org", invoiceNumber: "INV-1", amount: "$25", dueDate: "13 Nov 2026", description: "Minute pack", billingUrl: "https://example.com/billing" } }),
+      () => email.sendIssueReportEmail({ to: "support@example.com", kind: "support", reporter: { name: "Lee", email: "a@example.com" }, org: "Org", message: "Help with billing", pageUrl: null, sessionUrl: null, posthogEventUrl: null, replayUrl: null }),
+    ];
+    for (const send of sends) expect(await send()).toEqual({ success: true, skipped: true });
+    expect(info).toHaveBeenCalledTimes(sends.length);
+    expect(requests).toHaveLength(0);
+  } finally { info.mockRestore(); }
 });
 
 test.each(["bug", "support"])("%s report delivery keeps the reporter reply-to and team CC", async (kind) => {

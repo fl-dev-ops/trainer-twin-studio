@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
-import { resend, sendOtpEmail } from "@/lib/email";
+import { resend, sendEmail, sendOtpEmail } from "@/lib/email";
 
 const originalNodeEnv = process.env.NODE_ENV;
 let info: ReturnType<typeof spyOn<typeof console, "info">>;
@@ -16,14 +16,22 @@ afterEach(() => {
   else Object.assign(process.env, { NODE_ENV: originalNodeEnv });
 });
 
-test("without Resend, development prints a real OTP and lets the sign-in form continue", async () => {
+test("development without Resend prints a real OTP and lets the sign-in form continue", async () => {
   Object.assign(process.env, { NODE_ENV: "development" });
   expect(await sendOtpEmail({ to: "known@example.com", otp: "123456" })).toEqual({ success: true });
   expect(info).toHaveBeenCalledWith("[Dev sign-in] Code for known@example.com: 123456 (expires in 10 minutes)");
 });
 
-test.each(["production", "test"])("without Resend, %s fails delivery rather than enabling terminal sign-in", async (nodeEnv) => {
+test("development skips ordinary email successfully even without Resend", async () => {
+  Object.assign(process.env, { NODE_ENV: "development" });
+  expect(await sendEmail({ to: "known@example.com", subject: "Welcome", html: "<p>Hello</p>" })).toEqual({ success: true, skipped: true });
+  expect(warn).not.toHaveBeenCalled();
+});
+
+test.each(["production", "test"])("without Resend, %s fails delivery without logging the OTP", async (nodeEnv) => {
   Object.assign(process.env, { NODE_ENV: nodeEnv });
   expect(await sendOtpEmail({ to: "known@example.com", otp: "123456" })).toMatchObject({ success: false });
   expect(info).not.toHaveBeenCalled();
+  expect(warn).toHaveBeenCalledTimes(1);
+  expect(JSON.stringify(warn.mock.calls)).not.toContain("123456");
 });

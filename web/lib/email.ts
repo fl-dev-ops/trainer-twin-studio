@@ -37,7 +37,7 @@ export type SendEmailOptions = {
   attachments?: { filename: string; content: Buffer }[];
 };
 
-/** Send via Resend; preserve subject sanitization, provider errors and missing-key behavior. */
+/** Development never sends email; other environments preserve Resend delivery and error handling. */
 export async function sendEmail({
   to,
   cc,
@@ -49,9 +49,13 @@ export async function sendEmail({
   idempotencyKey,
   attachments,
 }: SendEmailOptions) {
+  if (process.env.NODE_ENV === "development") {
+    console.info(`[Dev email] Skipped sending to ${Array.isArray(to) ? to.join(", ") : to}`);
+    return { success: true, skipped: true };
+  }
   if (!resend) {
     console.warn(
-      `[Email] RESEND_API_KEY is not set. Skipped sending "${subject}" to ${Array.isArray(to) ? to.join(", ") : to}`,
+      `[Email] RESEND_API_KEY is not set. Skipped sending to ${Array.isArray(to) ? to.join(", ") : to}`,
     );
     return { success: false, error: "RESEND_API_KEY is not set" };
   }
@@ -84,9 +88,9 @@ export async function sendEmail({
   }
 }
 
-/** Login code delivery, including development's existing terminal-only fallback when Resend is not configured. */
+/** Development sign-in uses a real OTP from the server terminal, never email, even with a configured key. */
 export async function sendOtpEmail(args: OtpEmailArgs) {
-  if (!resend && process.env.NODE_ENV === "development") {
+  if (process.env.NODE_ENV === "development") {
     // Local testing still uses a real, expiring OTP; never expose it in an HTTP response.
     console.info(`[Dev sign-in] Code for ${args.to}: ${args.otp} (expires in 10 minutes)`);
     return { success: true };

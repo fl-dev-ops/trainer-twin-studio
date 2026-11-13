@@ -53,7 +53,9 @@
     is 6 digits, valid 10 minutes, 3 tries, sent through Resend. Only existing accounts may sign in, through either
     method; operators create founders and org admins/team add other people. Unknown emails receive a generic success
     response to a code request, but no code is sent and no account is created. Signing in alone gives no org access.
-    In development only, when Resend is not configured, the OTP is printed in the dev-server terminal instead.
+    In development (`NODE_ENV=development`), the OTP is always printed in the dev-server terminal instead of emailed,
+    even when Resend is configured. It remains hashed, expiring and single-use; never return it in HTTP responses
+    or print it in production.
 11. **Emails.** Each action sends one email per affected person, combining what applies:
 
     | Action | Email says |
@@ -66,6 +68,8 @@
 
     A brand-new learner given a twin gets one email covering "added", the twin and their credits. Joining through a
     shared twin link sends none. Each email is sent at most once per event (Resend idempotency key).
+    Development suppresses all outbound email at the shared sender, regardless of configured credentials. Skipped
+    development sends report success so local workflows continue without delivery retries.
 12. **Emails go out through workflows** (`web/workflows/`), each email retried on its own. A failed email never undoes
     the action. Two exceptions, both keeping the email's idempotency key: the REST API sends at once so its response
     can say `emailSent` (a failure is then retried by the workflow), and when a workflow can't start the emails are

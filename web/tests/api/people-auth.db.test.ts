@@ -71,6 +71,31 @@ describe.skipIf(!localMinutesDb)("people sign in with email codes, never passwor
     expect((await post("sign-in/email-otp", { email: person.email, otp: code })).status).not.toBe(200);
   });
 
+  test("development signs in with the terminal OTP through the real delivery hook, without exposing it in HTTP", async () => {
+    send.mockRestore();
+    const previous = process.env.NODE_ENV;
+    Object.assign(process.env, { NODE_ENV: "development" });
+    const info = spyOn(console, "info").mockImplementation(() => {});
+    try {
+      const sent = await post("email-otp/send-verification-otp", { email: f.learner.email, type: "sign-in" });
+      expect(sent.status).toBe(200);
+      expect(await sent.json()).toEqual({ success: true });
+      const message = info.mock.calls.map(([value]) => String(value)).find((line) => line.startsWith(`[Dev sign-in] Code for ${f.learner.email}: `));
+      const code = message?.match(/: (\d{6}) \(expires in 10 minutes\)/)?.[1];
+      if (!code) throw new Error("The generated OTP was not printed to the server terminal");
+      const stored = await db.verification.findFirstOrThrow({ where: { identifier: { contains: f.learner.email } } });
+      expect(stored.value).not.toContain(code);
+      const signedIn = await post("sign-in/email-otp", { email: f.learner.email, otp: code });
+      expect(signedIn.status).toBe(200);
+      expect(cookies(signedIn)).toBeTruthy();
+      expect((await post("sign-in/email-otp", { email: f.learner.email, otp: code })).status).not.toBe(200);
+    } finally {
+      info.mockRestore();
+      if (previous === undefined) delete process.env.NODE_ENV;
+      else Object.assign(process.env, { NODE_ENV: previous });
+    }
+  });
+
   test("unknown emails receive no code and cannot create an account, even with a server-generated OTP", async () => {
     const address = `signup-${f.org.id}@example.com`;
     const sent = await post("email-otp/send-verification-otp", { email: address, type: "sign-in" });
