@@ -153,9 +153,7 @@ export function SignInForm({
                 </InputOTPGroup>
               </InputOTP>
               <FieldDescription id="code-help">
-                {process.env.NODE_ENV === "development"
-                  ? "Code printed in the server terminal. It expires in 10 minutes."
-                  : "Code sent. It expires in 10 minutes."}
+                Code expires in 10 minutes.
               </FieldDescription>
             </Field>
           ) : null}

@@ -31,7 +31,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
 
     await email.fill("learner.with.a.long.email.address@example.com");
     await send.click();
-    await expect(page.locator("#code-help")).toHaveText("Code printed in the server terminal. It expires in 10 minutes.");
+    await expect(page.locator("#code-help")).toHaveText("Code expires in 10 minutes.");
     const code = page.getByLabel("Code", { exact: true });
     const submit = page.getByRole("button", { name: "Sign in", exact: true });
     const slots = page.locator('[data-slot="input-otp-slot"]');
@@ -132,7 +132,7 @@ for (const [code, serverMessage, message] of [
     await page.goto(e2eUrl("auth", "/sign-in"));
     await page.getByLabel("Email", { exact: true }).fill("learner@example.com");
     await page.getByRole("button", { name: "Email me a code", exact: true }).click();
-    await expect(page.getByText("Code printed in the server terminal. It expires in 10 minutes.", { exact: true })).toBeVisible();
+    await expect(page.getByText("Code expires in 10 minutes.", { exact: true })).toBeVisible();
     await page.getByLabel("Code", { exact: true }).fill("123456");
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page.locator("form").getByRole("alert")).toHaveText(message);

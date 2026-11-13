@@ -53,7 +53,7 @@ test("email-first form keeps Google optional and codes private, complete and res
   const input = () => find(form(), (el) => el.props.id === "code")!;
   const submit = () => find(form(), (el) => el.props.type === "submit")!;
   expect(input().props).toMatchObject({ minLength: 6, maxLength: 6, autoComplete: "one-time-code", "aria-describedby": "code-help", required: true });
-  expect(find(form(), (el) => el.props.id === "code-help")!.props.children).toBe("Code sent. It expires in 10 minutes.");
+  expect(find(form(), (el) => el.props.id === "code-help")!.props.children).toBe("Code expires in 10 minutes.");
   expect(submit().props.disabled).toBe(true);
   input().props.onChange("12345");
   expect(submit().props.disabled).toBe(true);
@@ -70,13 +70,11 @@ test("email-first form keeps Google optional and codes private, complete and res
   expect(submit().props.disabled).toBe(false);
 });
 
-test.each(["production", "development"])("known accounts get the short delivery confirmation in %s", async (nodeEnv) => {
+test.each(["production", "development"])("code help is delivery-neutral in %s", async (nodeEnv) => {
   Object.assign(process.env, { NODE_ENV: nodeEnv });
   find(form(), (el) => el.props.id === "email")!.props.onChange({ target: { value: "known@example.com" } });
   await find(form(), (el) => el.type === "form")!.props.onSubmit({ preventDefault() {} });
-  expect(find(form(), (el) => el.props.id === "code-help")!.props.children).toBe(nodeEnv === "development"
-    ? "Code printed in the server terminal. It expires in 10 minutes."
-    : "Code sent. It expires in 10 minutes.");
+  expect(find(form(), (el) => el.props.id === "code-help")!.props.children).toBe("Code expires in 10 minutes.");
   expect(alert(form())).toBeUndefined();
 });
 

@@ -54,10 +54,10 @@
     method; operators create founders and org admins/team add other people. An unknown email's code request returns
     `USER_NOT_FOUND` (404): “This email isn't on TrainerTwin. Ask your trainer to add you.” No code is sent or account
     created, and the UI stays on email entry. This deliberately reveals registration status, an accepted usability
-    trade-off for the invite-only product. Known accounts see “Code sent. It expires in 10 minutes.” Native email-format
+    trade-off for the invite-only product. Known accounts see “Code expires in 10 minutes.” in every environment. Native email-format
     validation remains; a server `INVALID_EMAIL` refusal says “Enter a valid email address.” Signing in alone gives no org access.
     In development (`NODE_ENV=development`), the OTP is always printed in the dev-server terminal instead of emailed,
-    even when Resend is configured; the UI says “Code printed in the server terminal. It expires in 10 minutes.”
+    even when Resend is configured; the frontend does not describe or choose the delivery method.
     It remains hashed, expiring and single-use; never return it in HTTP responses or print it in production.
     Unknown-account requests additionally log “No local account found for this email” with the address only in development.
 11. **Emails.** Each action sends one email per affected person, combining what applies:
