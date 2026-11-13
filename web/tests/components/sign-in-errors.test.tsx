@@ -24,7 +24,7 @@ const { SignInForm } = await import("@/components/auth/sign-in-form");
 const { GoogleSignInButton } = await import("@/components/auth/google-sign-in-button");
 const { default: SignInPage } = await import("@/app/auth/sign-in/page");
 
-type Element = ReactElement<Record<string, unknown> & { children?: ReactNode; onChange(event: { target: { value: string } }): void; onSubmit(event: { preventDefault(): void }): Promise<void>; onClick(): Promise<void> }>;
+type Element = ReactElement<Record<string, unknown> & { children?: ReactNode; onChange(value: string | { target: { value: string } }): void; onSubmit(event: { preventDefault(): void }): Promise<void>; onClick(): Promise<void> }>;
 function find(node: ReactNode, predicate: (element: Element) => boolean): Element | undefined {
   if (Array.isArray(node)) return node.map((child) => find(child, predicate)).find(Boolean);
   if (!React.isValidElement(node)) return;
@@ -39,6 +39,32 @@ beforeEach(() => { state = []; cursor = 0; for (const fn of [social, emailOtp, s
 afterEach(() => {
   if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
   else Reflect.deleteProperty(globalThis, "window");
+});
+
+test("email-first form keeps Google optional and codes private, complete and resendable", async () => {
+  expect(find(render(() => SignInForm({ googleEnabled: false })), (el) => el.type === GoogleSignInButton)).toBeUndefined();
+  expect(find(form(), (el) => el.type === GoogleSignInButton)).toBeDefined();
+  find(form(), (el) => el.props.id === "email")!.props.onChange({ target: { value: "learner@example.com" } });
+  await find(form(), (el) => el.type === "form")!.props.onSubmit({ preventDefault() {} });
+
+  const input = () => find(form(), (el) => el.props.id === "code")!;
+  const submit = () => find(form(), (el) => el.props.type === "submit")!;
+  expect(input().props).toMatchObject({ minLength: 6, maxLength: 6, autoComplete: "one-time-code", "aria-describedby": "code-help", required: true });
+  expect(find(form(), (el) => el.props.id === "code-help")!.props.children).toBe("Codes are sent to registered emails and expire in 10 minutes.");
+  expect(submit().props.disabled).toBe(true);
+  input().props.onChange("12345");
+  expect(submit().props.disabled).toBe(true);
+  input().props.onChange("123456");
+  expect(submit().props.disabled).toBe(false);
+
+  await find(form(), (el) => el.props.children === "Resend code")!.props.onClick();
+  expect(send).toHaveBeenCalledTimes(2);
+  expect(input().props.value).toBe("");
+  expect(submit().props.disabled).toBe(true);
+
+  find(form(), (el) => el.props.id === "email")!.props.onChange({ target: { value: "other@example.com" } });
+  expect(find(form(), (el) => el.props.id === "code")).toBeUndefined();
+  expect(submit().props.disabled).toBe(false);
 });
 
 const invalid = "That code didn't work. Check the code, and that this is the email your trainer added.";

@@ -81,7 +81,7 @@ test.each(["issued", "reminder", "paused"] as const)("rules 21, 28: %s email inc
 test.each([undefined, null, ""])("rule 21: missing payUrl %s asks for a payment link by reply, never bank details", (payUrl) => {
   for (const event of ["issued", "reminder", "paused"] as const) {
     const email = billingEmail({ event, orgName: "Example", invoiceNumber: "INV-<1>", amount: "$300.00", dueDate: "13 Nov 2026", description: "Paid plan", billingUrl: "https://dash.test/settings?tab=billing", payUrl });
-    expect(email.html).toContain("To pay invoice <strong>INV-&lt;1&gt;</strong>, reply to this email and we'll send you a payment link.");
+    expect(email.html).toContain("To pay invoice INV-&lt;1&gt;, reply to this email and we&#39;ll send you a payment link.");
     expect(email.text).toContain("To pay invoice INV-<1>, reply to this email and we'll send you a payment link.");
     for (const content of [email.html, email.text]) {
       expect(content).not.toMatch(/bank|account|SWIFT|IFSC|How to pay/i);

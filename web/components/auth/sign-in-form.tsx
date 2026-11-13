@@ -14,7 +14,7 @@ import {
   FieldSeparator,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from "@/components/ui/input-otp";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { REGEXP_ONLY_DIGITS } from "input-otp";
 import { Spinner } from "@/components/ui/spinner";
 import { authClient } from "@/lib/auth-client";
@@ -81,10 +81,10 @@ export function SignInForm({
               href="/"
               className="flex flex-col items-center gap-2 font-medium"
             >
-              <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary shadow-xs">
+              <div className="flex size-8 items-center justify-center rounded-md">
                 <Image
                   src="/trainertwin-mark.svg"
-                  alt="TrainerTwin"
+                  alt=""
                   width={24}
                   height={24}
                   className="size-6"
@@ -96,18 +96,9 @@ export function SignInForm({
               Welcome to TrainerTwin
             </h1>
             <FieldDescription>
-              Sign in with Google, or with a code we email you.
+              Sign in with the email your trainer added.
             </FieldDescription>
           </div>
-
-          {googleEnabled ? (
-            <>
-              <Field>
-                <GoogleSignInButton />
-              </Field>
-              <FieldSeparator>Or continue with email</FieldSeparator>
-            </>
-          ) : null}
 
           <Field data-invalid={Boolean(error) && !codeSent}>
             <FieldLabel htmlFor="email">Email</FieldLabel>
@@ -117,6 +108,8 @@ export function SignInForm({
               type="email"
               placeholder="m@example.com"
               autoComplete="email"
+              aria-invalid={Boolean(error) && !codeSent}
+              aria-describedby={error && !codeSent ? "sign-in-error" : undefined}
               value={email}
               onChange={(event) => {
                 setEmail(event.target.value);
@@ -128,50 +121,58 @@ export function SignInForm({
 
           {codeSent ? (
             <Field data-invalid={Boolean(error)}>
-              <FieldLabel htmlFor="code">Code</FieldLabel>
-              {/* One box per digit; pasting the whole code from the email fills them all. */}
+              <div className="flex items-center justify-between gap-3">
+                <FieldLabel htmlFor="code">Code</FieldLabel>
+                <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void sendCode()}>
+                  Resend code
+                </Button>
+              </div>
+              {/* One input underneath the six cells keeps paste, autofill and keyboard navigation native. */}
               <InputOTP
                 id="code"
                 name="code"
+                minLength={6}
                 maxLength={6}
                 pattern={REGEXP_ONLY_DIGITS}
                 autoComplete="one-time-code"
                 value={code}
                 onChange={setCode}
-                containerClassName="justify-center"
                 aria-invalid={Boolean(error)}
+                aria-describedby={error ? "code-help sign-in-error" : "code-help"}
                 autoFocus
                 required
               >
                 <InputOTPGroup>
-                  {[0, 1, 2].map((index) => <InputOTPSlot key={index} index={index} aria-invalid={Boolean(error)} />)}
-                </InputOTPGroup>
-                <InputOTPSeparator />
-                <InputOTPGroup>
-                  {[3, 4, 5].map((index) => <InputOTPSlot key={index} index={index} aria-invalid={Boolean(error)} />)}
+                  {[0, 1, 2, 3, 4, 5].map((index) => <InputOTPSlot key={index} index={index} aria-invalid={Boolean(error)} />)}
                 </InputOTPGroup>
               </InputOTP>
-              <FieldDescription>
-                If {email.trim()} has a TrainerTwin account, we&apos;ve sent it a code. It works for 10 minutes.{" "}
-                <button type="button" className="text-foreground underline underline-offset-4" disabled={busy} onClick={() => void sendCode()}>
-                  Send a new code
-                </button>
+              <FieldDescription id="code-help">
+                Codes are sent to registered emails and expire in 10 minutes.
               </FieldDescription>
             </Field>
           ) : null}
 
           {error ? (
-            <p role="alert" className="text-destructive text-sm font-medium">
+            <p id="sign-in-error" role="alert" className="text-destructive text-sm font-medium">
               {error}
             </p>
           ) : null}
 
           <Field>
-            <Button type="submit" disabled={busy} className="w-full">
+            <Button type="submit" disabled={busy || (codeSent && code.length !== 6)} className="w-full">
               {busy ? <Spinner data-icon="inline-start" /> : null}
               {busy ? (codeSent ? "Signing in…" : "Sending…") : codeSent ? "Sign in" : "Email me a code"}
             </Button>
           </Field>
+
+          {googleEnabled ? (
+            <>
+              <FieldSeparator>Or</FieldSeparator>
+              <Field>
+                <GoogleSignInButton />
+              </Field>
+            </>
+          ) : null}
         </FieldGroup>
       </form>
 

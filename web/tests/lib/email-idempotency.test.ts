@@ -63,6 +63,32 @@ test("sendOtpEmail sends the 6-digit code with its 10-minute expiry", async () =
   expect(String(requests[0].body.html)).toContain("expires in 10 minutes");
 });
 
+test.each(["bug", "support"])("%s report delivery keeps the reporter reply-to and team CC", async (kind) => {
+  expect(await email.sendIssueReportEmail({
+    to: "devops@example.com", cc: ["team@example.com"], kind, reporter: { name: "Lee", email: "lee@example.com" },
+    org: "Acme", message: "Help with billing\nMore details", pageUrl: null, sessionUrl: null, posthogEventUrl: null, replayUrl: null,
+  })).toMatchObject({ success: true });
+  expect(requests).toHaveLength(1);
+  expect(requests[0].body).toMatchObject({
+    to: "devops@example.com", cc: ["team@example.com"], reply_to: "lee@example.com",
+    subject: kind === "support" ? "Support: Help with billing · Acme · Lee" : "Issue reported (bug) · Acme · Lee",
+  });
+});
+
+test("billing delivery keeps its sender, attachments and event idempotency key", async () => {
+  expect(await email.sendBillingEmail({
+    to: ["accounts@example.com"], args: { event: "paid", orgName: "Acme", invoiceNumber: "INV-1", amount: "$25.00", dueDate: "13 Nov 2026", description: "Minute pack", billingUrl: "https://dash.example.com/billing" },
+    attachments: [{ filename: "RCPT-INV-1.pdf", content: Buffer.from("receipt") }], idempotencyKey: "billing-paid-inv1",
+  })).toMatchObject({ success: true });
+  expect(requests).toHaveLength(1);
+  expect(requests[0].key).toBe("billing-paid-inv1");
+  expect(requests[0].body).toMatchObject({
+    to: ["accounts@example.com"], from: email.BILLING_FROM_EMAIL, reply_to: "support@trainertwin.com",
+    subject: "Payment received for invoice INV-1: thank you",
+    attachments: [{ filename: "RCPT-INV-1.pdf", content: Buffer.from("receipt").toString("base64") }],
+  });
+});
+
 test("email subjects remove CR/LF while preserving the support reply-to", async () => {
   expect(await email.sendEmail({ to: "a@example.com", subject: "  Hello\r\nInjected\nLine\rEnd  ", html: "<p>Safe</p>", replyTo: "reporter@example.com" })).toMatchObject({ success: true });
   expect(requests[0].body).toMatchObject({ subject: "Hello Injected Line End", reply_to: "reporter@example.com" });
