@@ -46,7 +46,13 @@ export function SignInForm({
     setError(null);
     const { error } = await authClient.emailOtp.sendVerificationOtp({ email: email.trim(), type: "sign-in" });
     setBusy(false);
-    if (error) return setError(error.code === "INVALID_EMAIL" ? "Enter a valid email address." : error.message ?? "Could not send the code");
+    if (error) {
+      if (error.code === "USER_NOT_FOUND") {
+        setCodeSent(false);
+        setCode("");
+      }
+      return setError(error.code === "INVALID_EMAIL" ? "Enter a valid email address." : error.message ?? "Could not send the code");
+    }
     setCodeSent(true);
     setCode("");
   }
@@ -147,7 +153,9 @@ export function SignInForm({
                 </InputOTPGroup>
               </InputOTP>
               <FieldDescription id="code-help">
-                If your trainer has added this email, you&apos;ll receive a code. Otherwise, ask your trainer to add you first. Codes expire in 10 minutes.
+                {process.env.NODE_ENV === "development"
+                  ? "Code printed in the server terminal. It expires in 10 minutes."
+                  : "Code sent. It expires in 10 minutes."}
               </FieldDescription>
             </Field>
           ) : null}

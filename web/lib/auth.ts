@@ -44,17 +44,17 @@ export const auth = betterAuth({
     : {},
   hooks: {
     after: createAuthMiddleware(async (ctx) => {
-      if (process.env.NODE_ENV !== "development" || ctx.path !== "/email-otp/send-verification-otp" || ctx.body?.type !== "sign-in") return;
+      if (ctx.path !== "/email-otp/send-verification-otp" || ctx.body?.type !== "sign-in") return;
       const result = ctx.context.returned;
       if (!result || typeof result !== "object" || !("success" in result) || result.success !== true || typeof ctx.body.email !== "string") return;
-      // Better Auth never invokes the sender for unknown accounts. Keep this diagnostic local and response-neutral.
-      try {
-        const email = ctx.body.email.toLowerCase();
-        if (!(await ctx.context.internalAdapter.findUserByEmail(email))) {
-          console.info(`[Dev sign-in] No local account found for this email: ${email}`);
-        }
-      } catch {
-        console.warn("[Dev sign-in] Could not check whether the local account exists.");
+      // Explicit registration feedback is intentional (People rule 10); never send users to an empty code step.
+      const email = ctx.body.email.toLowerCase();
+      const account = await ctx.context.internalAdapter.findUserByEmail(email).catch(() => {
+        throw new APIError("INTERNAL_SERVER_ERROR", { message: "Could not check this email. Try again." });
+      });
+      if (!account) {
+        if (process.env.NODE_ENV === "development") console.info(`[Dev sign-in] No local account found for this email: ${email}`);
+        throw new APIError("NOT_FOUND", { code: "USER_NOT_FOUND", message: "This email isn't on TrainerTwin. Ask your trainer to add you." });
       }
     }),
   },

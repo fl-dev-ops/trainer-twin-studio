@@ -99,8 +99,8 @@ describe.skipIf(!localMinutesDb)("people sign in with email codes, never passwor
   test("unknown emails receive no code and cannot create an account, even with a server-generated OTP", async () => {
     const address = `signup-${f.org.id}@example.com`;
     const sent = await post("email-otp/send-verification-otp", { email: address, type: "sign-in" });
-    expect(sent.status).toBe(200);
-    expect(await sent.json()).toEqual({ success: true });
+    expect(sent.status).toBe(404);
+    expect(await sent.json()).toEqual({ code: "USER_NOT_FOUND", message: "This email isn't on TrainerTwin. Ask your trainer to add you." });
     expect(send).not.toHaveBeenCalled();
     expect(await db.verification.count({ where: { identifier: { contains: address } } })).toBe(0);
     expect(await db.user.findUnique({ where: { email: address } })).toBeNull();
@@ -112,7 +112,7 @@ describe.skipIf(!localMinutesDb)("people sign in with email codes, never passwor
     expect(await db.user.findUnique({ where: { email: address } })).toBeNull();
   });
 
-  test.each(["development", "production", "test"])("unknown-email diagnostic is local-only, with the same public response in %s", async (nodeEnv) => {
+  test.each(["development", "production", "test"])("refuses USER_NOT_FOUND in %s while keeping unknown-account logs development-only", async (nodeEnv) => {
     const previous = process.env.NODE_ENV;
     Object.assign(process.env, { NODE_ENV: nodeEnv });
     const info = spyOn(console, "info").mockImplementation(() => {});
@@ -126,10 +126,10 @@ describe.skipIf(!localMinutesDb)("people sign in with email codes, never passwor
       expect(info).not.toHaveBeenCalled(); // The known sender is mocked; the diagnostic must stay silent.
       lookup.mockClear();
       const unknown = await post("email-otp/send-verification-otp", { email: address.toUpperCase(), type: "sign-in" });
-      expect(unknown.status).toBe(known.status);
-      expect(await unknown.json()).toEqual(knownBody);
+      expect(unknown.status).toBe(404);
+      expect(await unknown.json()).toEqual({ code: "USER_NOT_FOUND", message: "This email isn't on TrainerTwin. Ask your trainer to add you." });
       expect(knownBody).toEqual({ success: true });
-      expect(lookup).toHaveBeenCalledTimes(nodeEnv === "development" ? 2 : 1);
+      expect(lookup).toHaveBeenCalledTimes(2);
       if (nodeEnv === "development") expect(info).toHaveBeenCalledWith(`[Dev sign-in] No local account found for this email: ${address}`);
       else expect(info).not.toHaveBeenCalled();
       expect(send).toHaveBeenCalledTimes(1); // Only the existing account reaches the sender.
@@ -142,26 +142,24 @@ describe.skipIf(!localMinutesDb)("people sign in with email codes, never passwor
     }
   });
 
-  test("development diagnostics skip malformed requests and cannot turn a successful request into an error", async () => {
+  test("malformed requests skip the lookup and lookup failures are not misreported as missing accounts", async () => {
     const previous = process.env.NODE_ENV;
     Object.assign(process.env, { NODE_ENV: "development" });
     const info = spyOn(console, "info").mockImplementation(() => {});
-    const warn = spyOn(console, "warn").mockImplementation(() => {});
     const context = await auth.$context;
     const lookup = spyOn(context.internalAdapter, "findUserByEmail");
     try {
       expect((await post("email-otp/send-verification-otp", { email: "not-an-email", type: "sign-in" })).status).toBe(400);
       expect(info).not.toHaveBeenCalled();
       expect(lookup).not.toHaveBeenCalled();
-      // The endpoint finds no account, then the diagnostic lookup fails: keep the successful response unchanged.
-      lookup.mockResolvedValueOnce(null).mockRejectedValueOnce(new Error("Diagnostic lookup failed"));
+      // The endpoint finds no account, then the feedback lookup fails: report a server problem, not a false 404.
+      lookup.mockResolvedValueOnce(null).mockRejectedValueOnce(new Error("Account lookup failed"));
       const response = await post("email-otp/send-verification-otp", { email: `diagnostic-${f.org.id}@example.com`, type: "sign-in" });
-      expect(response.status).toBe(200);
-      expect(await response.json()).toEqual({ success: true });
-      expect(warn).toHaveBeenCalledWith("[Dev sign-in] Could not check whether the local account exists.");
+      expect(response.status).toBe(500);
+      expect(await response.json()).toMatchObject({ message: "Could not check this email. Try again." });
       expect(info).not.toHaveBeenCalled();
     } finally {
-      lookup.mockRestore(); info.mockRestore(); warn.mockRestore();
+      lookup.mockRestore(); info.mockRestore();
       if (previous === undefined) delete process.env.NODE_ENV;
       else Object.assign(process.env, { NODE_ENV: previous });
     }
