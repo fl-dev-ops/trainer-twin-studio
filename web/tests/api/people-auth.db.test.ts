@@ -112,6 +112,61 @@ describe.skipIf(!localMinutesDb)("people sign in with email codes, never passwor
     expect(await db.user.findUnique({ where: { email: address } })).toBeNull();
   });
 
+  test.each(["development", "production", "test"])("unknown-email diagnostic is local-only, with the same public response in %s", async (nodeEnv) => {
+    const previous = process.env.NODE_ENV;
+    Object.assign(process.env, { NODE_ENV: nodeEnv });
+    const info = spyOn(console, "info").mockImplementation(() => {});
+    const context = await auth.$context;
+    const lookup = spyOn(context.internalAdapter, "findUserByEmail");
+    try {
+      const address = `unknown-${f.org.id}@example.com`;
+      const known = await post("email-otp/send-verification-otp", { email: f.learner.email, type: "sign-in" });
+      expect(known.status).toBe(200);
+      const knownBody = await known.json();
+      expect(info).not.toHaveBeenCalled(); // The known sender is mocked; the diagnostic must stay silent.
+      lookup.mockClear();
+      const unknown = await post("email-otp/send-verification-otp", { email: address.toUpperCase(), type: "sign-in" });
+      expect(unknown.status).toBe(known.status);
+      expect(await unknown.json()).toEqual(knownBody);
+      expect(knownBody).toEqual({ success: true });
+      expect(lookup).toHaveBeenCalledTimes(nodeEnv === "development" ? 2 : 1);
+      if (nodeEnv === "development") expect(info).toHaveBeenCalledWith(`[Dev sign-in] No local account found for this email: ${address}`);
+      else expect(info).not.toHaveBeenCalled();
+      expect(send).toHaveBeenCalledTimes(1); // Only the existing account reaches the sender.
+      expect(await db.user.findUnique({ where: { email: address } })).toBeNull();
+      expect(await db.verification.count({ where: { identifier: { contains: address } } })).toBe(0);
+    } finally {
+      lookup.mockRestore(); info.mockRestore();
+      if (previous === undefined) delete process.env.NODE_ENV;
+      else Object.assign(process.env, { NODE_ENV: previous });
+    }
+  });
+
+  test("development diagnostics skip malformed requests and cannot turn a successful request into an error", async () => {
+    const previous = process.env.NODE_ENV;
+    Object.assign(process.env, { NODE_ENV: "development" });
+    const info = spyOn(console, "info").mockImplementation(() => {});
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    const context = await auth.$context;
+    const lookup = spyOn(context.internalAdapter, "findUserByEmail");
+    try {
+      expect((await post("email-otp/send-verification-otp", { email: "not-an-email", type: "sign-in" })).status).toBe(400);
+      expect(info).not.toHaveBeenCalled();
+      expect(lookup).not.toHaveBeenCalled();
+      // The endpoint finds no account, then the diagnostic lookup fails: keep the successful response unchanged.
+      lookup.mockResolvedValueOnce(null).mockRejectedValueOnce(new Error("Diagnostic lookup failed"));
+      const response = await post("email-otp/send-verification-otp", { email: `diagnostic-${f.org.id}@example.com`, type: "sign-in" });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ success: true });
+      expect(warn).toHaveBeenCalledWith("[Dev sign-in] Could not check whether the local account exists.");
+      expect(info).not.toHaveBeenCalled();
+    } finally {
+      lookup.mockRestore(); info.mockRestore(); warn.mockRestore();
+      if (previous === undefined) delete process.env.NODE_ENV;
+      else Object.assign(process.env, { NODE_ENV: previous });
+    }
+  });
+
   test("the founder invite script creates an account that can sign in without self-sign-up", async () => {
     const address = `founder-${f.org.id}@example.com`;
     const child = Bun.spawn([process.execPath, "scripts/founder-invite.ts", ` ${address.toUpperCase()} `], {

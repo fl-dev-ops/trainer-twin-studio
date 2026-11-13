@@ -46,7 +46,7 @@ export function SignInForm({
     setError(null);
     const { error } = await authClient.emailOtp.sendVerificationOtp({ email: email.trim(), type: "sign-in" });
     setBusy(false);
-    if (error) return setError(error.message ?? "Could not send the code");
+    if (error) return setError(error.code === "INVALID_EMAIL" ? "Enter a valid email address." : error.message ?? "Could not send the code");
     setCodeSent(true);
     setCode("");
   }
@@ -147,7 +147,7 @@ export function SignInForm({
                 </InputOTPGroup>
               </InputOTP>
               <FieldDescription id="code-help">
-                Codes are sent to registered emails and expire in 10 minutes.
+                If your trainer has added this email, you&apos;ll receive a code. Otherwise, ask your trainer to add you first. Codes expire in 10 minutes.
               </FieldDescription>
             </Field>
           ) : null}

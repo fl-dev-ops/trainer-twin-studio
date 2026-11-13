@@ -1,6 +1,6 @@
 import { apiKey } from "@better-auth/api-key";
 import { betterAuth } from "better-auth";
-import { APIError } from "better-auth/api";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { emailOTP, organization } from "better-auth/plugins";
 import { organizationAccess, organizationRoles } from "@/lib/auth-roles";
@@ -42,6 +42,22 @@ export const auth = betterAuth({
         },
       }
     : {},
+  hooks: {
+    after: createAuthMiddleware(async (ctx) => {
+      if (process.env.NODE_ENV !== "development" || ctx.path !== "/email-otp/send-verification-otp" || ctx.body?.type !== "sign-in") return;
+      const result = ctx.context.returned;
+      if (!result || typeof result !== "object" || !("success" in result) || result.success !== true || typeof ctx.body.email !== "string") return;
+      // Better Auth never invokes the sender for unknown accounts. Keep this diagnostic local and response-neutral.
+      try {
+        const email = ctx.body.email.toLowerCase();
+        if (!(await ctx.context.internalAdapter.findUserByEmail(email))) {
+          console.info(`[Dev sign-in] No local account found for this email: ${email}`);
+        }
+      } catch {
+        console.warn("[Dev sign-in] Could not check whether the local account exists.");
+      }
+    }),
+  },
   databaseHooks: {
     session: {
       create: {

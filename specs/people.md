@@ -52,10 +52,14 @@
 10. **Sign-in is Google or an email code.** No passwords anywhere (no password sign-in, sign-up or reset). The code
     is 6 digits, valid 10 minutes, 3 tries, sent through Resend. Only existing accounts may sign in, through either
     method; operators create founders and org admins/team add other people. Unknown emails receive a generic success
-    response to a code request, but no code is sent and no account is created. Signing in alone gives no org access.
+    response to a code request, but no code is sent and no account is created. The same UI message is shown for both:
+    “If your trainer has added this email, you'll receive a code. Otherwise, ask your trainer to add you first.”
+    Code expiry is shown alongside it. Native email-format validation remains; a server `INVALID_EMAIL` refusal says
+    “Enter a valid email address.” Signing in alone gives no org access.
     In development (`NODE_ENV=development`), the OTP is always printed in the dev-server terminal instead of emailed,
     even when Resend is configured. It remains hashed, expiring and single-use; never return it in HTTP responses
-    or print it in production.
+    or print it in production. A successful unknown-account code request logs “No local account found for this email”
+    with the address only in development; it never changes the HTTP response or creates an account.
 11. **Emails.** Each action sends one email per affected person, combining what applies:
 
     | Action | Email says |

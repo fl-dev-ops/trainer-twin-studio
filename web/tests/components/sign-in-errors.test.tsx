@@ -14,7 +14,7 @@ mock.module("react", () => ({ ...realReact, useState: (initial: unknown) => {
 } }));
 const social = mock(async (_args: unknown) => ({ error: null }));
 const emailOtp = mock(async (_args: unknown): Promise<{ error: { code?: string; message?: string } | null }> => ({ error: null }));
-const send = mock(async (_args: unknown) => ({ error: null }));
+const send = mock(async (_args: unknown): Promise<{ error: { code?: string; message?: string } | null }> => ({ error: null }));
 const push = mock();
 mock.module("@/lib/auth-client", () => ({ authClient: { signIn: { social, emailOtp }, emailOtp: { sendVerificationOtp: send } } }));
 mock.module("next/navigation", () => ({ useRouter: () => ({ push }), redirect: mock() }));
@@ -50,7 +50,7 @@ test("email-first form keeps Google optional and codes private, complete and res
   const input = () => find(form(), (el) => el.props.id === "code")!;
   const submit = () => find(form(), (el) => el.props.type === "submit")!;
   expect(input().props).toMatchObject({ minLength: 6, maxLength: 6, autoComplete: "one-time-code", "aria-describedby": "code-help", required: true });
-  expect(find(form(), (el) => el.props.id === "code-help")!.props.children).toBe("Codes are sent to registered emails and expire in 10 minutes.");
+  expect(find(form(), (el) => el.props.id === "code-help")!.props.children).toBe("If your trainer has added this email, you'll receive a code. Otherwise, ask your trainer to add you first. Codes expire in 10 minutes.");
   expect(submit().props.disabled).toBe(true);
   input().props.onChange("12345");
   expect(submit().props.disabled).toBe(true);
@@ -65,6 +65,21 @@ test("email-first form keeps Google optional and codes private, complete and res
   find(form(), (el) => el.props.id === "email")!.props.onChange({ target: { value: "other@example.com" } });
   expect(find(form(), (el) => el.props.id === "code")).toBeUndefined();
   expect(submit().props.disabled).toBe(false);
+});
+
+test.each(["known@example.com", "unknown@example.com"])("successful code requests show the same conditional guidance for %s", async (address) => {
+  find(form(), (el) => el.props.id === "email")!.props.onChange({ target: { value: address } });
+  await find(form(), (el) => el.type === "form")!.props.onSubmit({ preventDefault() {} });
+  expect(find(form(), (el) => el.props.id === "code-help")!.props.children).toBe("If your trainer has added this email, you'll receive a code. Otherwise, ask your trainer to add you first. Codes expire in 10 minutes.");
+  expect(alert(form())).toBeUndefined();
+});
+
+test("a malformed-email refusal asks for a valid address without opening the code step", async () => {
+  find(form(), (el) => el.props.id === "email")!.props.onChange({ target: { value: "not-an-email" } });
+  send.mockResolvedValueOnce({ error: { code: "INVALID_EMAIL", message: "Invalid email" } });
+  await find(form(), (el) => el.type === "form")!.props.onSubmit({ preventDefault() {} });
+  expect(alert(form())).toBe("Enter a valid email address.");
+  expect(find(form(), (el) => el.props.id === "code")).toBeUndefined();
 });
 
 const invalid = "That code didn't work. Check the code, and that this is the email your trainer added.";
