@@ -2,7 +2,7 @@
   "$schema": "https://mintlify.com/docs.json",
   "theme": "luma",
   "name": "TrainerTwin API",
-  "description": "Integrate organization learners, practice sessions, and role-play assignments with TrainerTwin.",
+  "description": "Add learners, assign published role plays, manage credits, and read practice results.",
   "colors": {
     "primary": "#4648D4",
     "light": "#6B6DDF",
@@ -22,15 +22,15 @@
         "groups": [
           {
             "group": "Get started",
-            "pages": ["index", "quickstart", "authentication"]
+            "pages": ["index", "quickstart", "authentication", "limits"]
           },
           {
             "group": "Guides",
-            "pages": ["guides/role-plays", "guides/users", "guides/credits", "guides/scenarios", "guides/assignments", "guides/sessions"]
+            "pages": ["guides/role-plays", "guides/scenarios", "guides/users", "guides/credits", "guides/assignments", "guides/sessions"]
           },
           {
             "group": "Resources",
-            "pages": ["errors", "limits"]
+            "pages": ["errors"]
           }
         ]
       },

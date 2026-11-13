@@ -5,6 +5,13 @@
 > Agreed behavior lives in [API rules](api.md), [People](people.md) and [Practice](practice.md). The published contract
 > is `docs/openapi.yaml`; `docs/trainer-twin-api.postman_collection.json` contains matching requests.
 
+## Public names
+
+Integrator docs say **role play**, **learner**, and **credits**. The JSON names stay compatible: role plays are listed at
+`/scenarios` and assigned as `scenario`; a session stores that slug as `agentSlug`. Learners are `/users` and `User.role`
+is always `member`. Credit routes use `users:read` and `users:write`, so a missing permission names `users`, not
+`credits`. Do not describe these resources as agents or invitations in public docs. `invitations` remains an empty array.
+
 ## Who uses it
 
 - An enabled org admin/team member creates a key on `/developer`; all default-config keys of that org can be listed

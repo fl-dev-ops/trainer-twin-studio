@@ -1,12 +1,15 @@
 ---
 title: "Credits"
-description: "Read balances and give learners credits safely from your integration."
+description: "Read the organization balance and give a learner credits without allocating twice."
 ---
 
-One credit is **one minute of practice**. Usage is measured in seconds, so read balances can contain fractional minutes.
-Credits given to learners come from your organization's existing balance; these endpoints do not purchase or mint credits.
+One **credit** is one minute of practice. Usage is stored in seconds, so a read can return a fraction, such as `5.5`.
 
-## Read the org balance
+These routes spend the organization's existing balance. They do not take payment and do not create credits. Buy or receive credits in the [TrainerTwin dashboard](https://dash.trainertwin.com).
+
+Reads use `users:read`. Grants use `users:write`. There is no separate credits permission. A missing permission says `can't read users` or `can't write users`.
+
+## Read the organization balance
 
 ```bash
 curl "https://dash.trainertwin.com/api/v1/credits" \
@@ -21,10 +24,13 @@ curl "https://dash.trainertwin.com/api/v1/credits" \
 }
 ```
 
-`balanceMinutes` is what can still be allocated: it already excludes learner grants, spending and active trainer-call reservations.
-The endpoint uses the existing `users:read` permission; no new API-key scope is needed.
+| Field | Meaning |
+| --- | --- |
+| `balanceMinutes` | Minutes still available to allocate or reserve. Learner grants, recorded usage, and active trainer-call reservations are already subtracted. |
+| `defaultLearnerMinutes` | Starting grant for a new learner. The API always uses 30. The dashboard can choose another amount for its own adds. |
+| `maxLearnerMinutes` | Most one learner can be allocated in total: 360. |
 
-## Read one learner's balance
+## Read a learner's credits
 
 ```bash
 curl "https://dash.trainertwin.com/api/v1/users/user_123/credits" \
@@ -41,50 +47,74 @@ curl "https://dash.trainertwin.com/api/v1/users/user_123/credits" \
 }
 ```
 
-`GET /users` and `GET /users/{id}` also include `creditsGiven` and `creditsLeft`. Disabled, foreign-org and unknown learners are not returned by credit reads. Admin/team members use the org balance, not a learner allocation.
+| Field | Meaning |
+| --- | --- |
+| `givenMinutes` | Allocated minutes minus historical take-backs. A spent minute still counts toward the 360 cap. |
+| `usedMinutes` | Finished calls, plus time already used in a live call. |
+| `balanceMinutes` | Minutes left. Clamped at zero. |
+
+`GET /users` and `GET /users/{id}` include the same remaining time as whole-minute fields `creditsGiven` and `creditsLeft`. This route keeps fractional minutes.
+
+Unknown, foreign, disabled, and trainer IDs are `404`. Trainers spend the organization balance directly; they do not have a learner allocation.
 
 ## Give credits
+
+Create one `Idempotency-Key` per intended grant and store it before you send the request. A UUID is a good key. It is 1 to 128 characters and cannot contain whitespace. The key belongs to the organization, so replacing the API key does not weaken it.
 
 ```bash
 curl "https://dash.trainertwin.com/api/v1/users/user_123/credits" \
   --request POST \
   --header "x-api-key: $TRAINERTWIN_API_KEY" \
-  --header "Idempotency-Key: grant-module-2-user-123" \
+  --header "Idempotency-Key: 6f1c0b7e-1a2b-4c3d-9e8f-123456789abc" \
   --header "content-type: application/json" \
   --data '{ "minutes": 30, "note": "Extra practice for module 2" }'
 ```
 
-Requires `users:write`. The body accepts whole `minutes` from 1 to 360 and an optional `note` of at most 200 characters.
-The learner must be enabled in the key's organization. This adds credits; it never replaces their balance.
+`minutes` is a whole number from 1 to 360. `note` is optional, trimmed, and at most 200 characters. Extra fields are rejected. This adds to the learner's allocation. It does not replace it.
 
-- **201:** a new grant was written (`created: true`).
-- **200:** this grant was already applied (`created: false`); no credits were added again.
-- **409 `idempotency_conflict`:** the same key was used with a different learner, amount or note.
+`201` is a new grant, `created: true`. `200` is the same grant already stored, `created: false`.
 
-The response includes the immutable `grant` (`id`, `userId`, `minutes`, `note`, `createdAt`), current learner `balanceMinutes`, current `orgBalanceMinutes`, `created` and `emailSent`.
+```json
+{
+  "grant": {
+    "id": "grant_123",
+    "userId": "user_123",
+    "minutes": 30,
+    "note": "Extra practice for module 2",
+    "createdAt": "2026-09-01T09:30:00.000Z"
+  },
+  "created": true,
+  "balanceMinutes": 60,
+  "orgBalanceMinutes": 45,
+  "emailSent": true
+}
+```
 
-## Retry without double allocation
+`grant.id` does not change on replay. `balanceMinutes` and `orgBalanceMinutes` are current and can change between the first response and a retry. `emailSent` means this request's notification was accepted, not that it reached the inbox. It is false on replay and when delivery is skipped.
 
-Create an **Idempotency-Key for each intended grant** and save it in your integration before sending the request.
-It must contain 1–128 non-whitespace characters. A UUID works well.
+| Result | Status | Code |
+| --- | --- | --- |
+| Missing or invalid `Idempotency-Key`, or `minutes` outside 1–360 | 400 | `invalid_input` |
+| This grant would put the learner over 360 allocated minutes | 400 | `minutes` |
+| Organization plan is paused | 403 | `minutes` |
+| Not enough organization credits for a new grant | 409 | `minutes` |
+| Same key, different learner, amount, or note | 409 | `idempotency_conflict` |
+| Disabled learner | 409 | `person_disabled` |
+| Admin or team member | 409 | `person_is_studio` |
+| Unknown or foreign learner | 404 | `not_found` |
 
-After a timeout or server failure, resend the **same key, learner, amount and note**. Never generate a new key merely because a response was lost.
-Keys belong to the organization, so replacing an API key does not lose retry protection. They remain attached to their ledger entries.
+A replay of a grant that already succeeded does not fail only because the organization was later paused or spent the balance. It still requires a valid key and an eligible learner.
 
-A replay returns the same grant ID, but its balance fields are current and may have changed since the first request.
-It still requires a valid API key and an eligible learner. A previously applied grant is not charged again if the org is now paused or its available balance has been spent.
+## Starting credits
 
-## Existing allocation rules
+`POST /users`, and assigning a role play to a new email, grant 30 credits once. Another role play does not grant 30 again. Use this endpoint for every later top-up.
 
-- Adding a new learner with `POST /users`, or assigning a role play to a new learner by email, grants **30 starting credits once**.
-- The separate credit endpoint adds to that allocation; assigning another role play does not replenish it.
-- A learner can currently be allocated **360 minutes in total**, net of historical reclaims. Spending minutes does **not** reset that cap.
-- A paused org cannot make a new grant.
-- Insufficient org balance is `minutes`/409; exceeding the learner allocation cap is `minutes`/400.
-- Disabled and studio recipients are refused with `person_disabled` or `person_is_studio`; unknown/foreign users return `not_found`.
+## If the response is lost
 
-## Notifications
+Send the same key, learner, `minutes`, and `note` again. Do not generate a new key because the HTTP response was lost.
 
-A newly written grant attempts the usual credits email after commit. `emailSent` means the sender accepted that notification during this request, not proof of inbox delivery. Development intentionally skips email delivery.
+- `200` and the same `grant.id`: stored once. No second email.
+- `201`: the first attempt had not been stored. This attempt stored it.
+- `409` `idempotency_conflict`: that key already belongs to a different grant. Use a new key only if you mean a new grant.
 
-Email failure never reverses the grant. Replaying a grant does not send another email and reports `emailSent: false`. A process interruption between commit and notification can leave that notification unsent; use the grant and balances, not an email, to confirm the allocation.
+A crash after the grant is stored and before the email is sent can leave the email unsent. The grant is still valid. Use `grant.id` and the balances as confirmation.

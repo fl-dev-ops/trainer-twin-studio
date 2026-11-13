@@ -1,11 +1,31 @@
 ---
-title: "Users"
-description: "Add, list, update, and remove learners in your organization."
+title: "Learners"
+description: "Add, list, rename, and disable learners. The path is /users."
 ---
 
-The users API manages learners, not trainers. Adding a learner makes them part of your organization right away (TrainerTwin creates their account if they don't have one). They get an email, **You've been added to *your organization* on TrainerTwin**, with a link to your organization's home page, where they sign in with Google or with a code sent to that email. There are no passwords and nothing to accept.
+A **learner** is a person who can practice. The path is `/users`. Every learner object has `role: "member"`. Admin and team accounts are not learners and are not returned here.
 
-To give someone a role play, you don't need to add them first: [assign](/guides/assignments) it to their email, and they're added the same way, with one email for both.
+Adding a learner creates their TrainerTwin account when they do not have one, adds them to your organization, and emails them. They sign in with Google or an email code. There is no invitation to accept and no password to set.
+
+To give someone a role play, you do not have to add them first. [Assign](/guides/assignments) by email and they are added in that request.
+
+Permission: `users:read` to list or read, `users:write` to add, rename, or disable.
+
+## Learner object
+
+| Field | Meaning |
+| --- | --- |
+| `id` | Account ID. Use this as `userId` everywhere else. |
+| `memberId` | Membership in this organization. Do not send it as `userId`. |
+| `name` | Display name. A new account is named from the email until you rename it. |
+| `email` | Lowercase sign-in email. |
+| `emailVerified` | True after they have signed in at least once. |
+| `role` | Always `"member"`. It means learner. |
+| `createdAt` | When they were added to this organization, not when the account was first created. Present on list, read, and add. Absent after rename. |
+| `creditsGiven` | Minutes allocated so far, after historical take-backs. Spending does not reduce this. Present on list, read, and add. Absent after rename. |
+| `creditsLeft` | Minutes still available, including time already used in a live call. Never negative. Absent after rename. |
+
+Disabled learners, trainers, and people in other organizations are `404` on read. They do not appear in the list.
 
 ## Add a learner
 
@@ -17,31 +37,41 @@ curl "https://dash.trainertwin.com/api/v1/users" \
   --data '{ "email": "learner@example.com" }'
 ```
 
-The response includes the learner and whether the email was delivered (`201`).
+The body is exactly `{ "email" }`. Maximum length 320.
+
+`201` the first time. `200` when that email is already an enabled learner. The second response has `created: false` and `emailSent: false`, and does not grant credits again.
 
 ```json
 {
   "user": {
     "id": "user_123",
+    "memberId": "member_123",
     "name": "learner",
     "email": "learner@example.com",
     "emailVerified": false,
-    "createdAt": "2026-11-11T09:30:00.000Z",
     "role": "member",
-    "memberId": "member_123"
+    "createdAt": "2026-11-11T09:30:00.000Z",
+    "creditsGiven": 30,
+    "creditsLeft": 30
   },
   "created": true,
   "emailSent": true
 }
 ```
 
-<Note>
-  A delivery failure does not undo the add. Read `emailSent` and handle follow-up in your platform.
-</Note>
+A new learner receives **30 credits** once, from the organization's balance. If the balance cannot cover those 30, nothing is added and the response is `409` `minutes`.
 
-Adding someone who is already a learner returns `200` with `created: false` and sends nothing. An email that belongs to one of your trainers (admin or team), or to a learner you removed, returns `409`.
+`emailSent: false` does not undo the add. The learner can still sign in. Your platform can tell them separately.
 
-A new learner gets **30 credits** (1 credit = 1 minute of practice) from your organization's prepaid balance. Credits are shared by every twin and role play and are used by the second during calls; learners see them as minutes. When the balance can't cover a new learner, the call returns `409`; contact TrainerTwin to top it up. Give a learner more through `POST /users/{id}/credits` with an Idempotency-Key, or in the dashboard. See [Credits](/guides/credits).
+| Result | Status | Code |
+| --- | --- | --- |
+| Email is not a valid address, or the body has extra fields | 400 | `invalid_input` |
+| Email belongs to an admin or team member in this organization | 409 | `person_is_studio` |
+| Email belongs to a disabled learner | 409 | `person_disabled` |
+| Organization balance cannot cover the starting 30 | 409 | `minutes` |
+| Organization plan is paused | 403 | `minutes` |
+
+Re-enable a disabled learner in the dashboard. This API cannot re-enable.
 
 ## List learners
 
@@ -50,9 +80,22 @@ curl "https://dash.trainertwin.com/api/v1/users?limit=50&offset=0" \
   --header "x-api-key: $TRAINERTWIN_API_KEY"
 ```
 
-The response contains enabled learners in `users`, newest first, including `creditsGiven` and `creditsLeft`. Add `?email=learner%40example.com` for an exact, case-insensitive lookup. Admin/team and disabled people are not listed. `invitations` is always empty (kept for older integrations).
+Enabled learners only, newest membership first. `?email=learner@example.com` is an exact, case-insensitive lookup. An invalid email filter is `400`.
 
-## Update a learner name
+`invitations` is always `[]`. Ignore it.
+
+## Read one learner
+
+```bash
+curl "https://dash.trainertwin.com/api/v1/users/user_123" \
+  --header "x-api-key: $TRAINERTWIN_API_KEY"
+```
+
+`200` is `{ "user": { ... } }` with the same credit fields as the list. Unknown, disabled, trainer, and foreign IDs are `404`.
+
+For the minute breakdown, including time already used, call [Read a learner's credits](/guides/credits). `creditsLeft` and `balanceMinutes` are the same remaining time.
+
+## Rename a learner
 
 ```bash
 curl "https://dash.trainertwin.com/api/v1/users/user_123" \
@@ -62,9 +105,13 @@ curl "https://dash.trainertwin.com/api/v1/users/user_123" \
   --data '{ "name": "Avery Patel" }'
 ```
 
-Email and organization role changes are not supported through this endpoint. An account used by another organization cannot be renamed here (`account_shared`/409); the person can change their own name in Settings. Sending the current name is a no-op.
+The name is trimmed, 1 to 100 characters, and is the only accepted field. Email and role cannot be changed here.
 
-## Remove a learner
+Sending the current name returns `200` and changes nothing. A changed name for an account that also belongs to another organization, even a disabled membership there, is `409` `account_shared`. That person renames themselves in Settings.
+
+The rename response includes `id`, `memberId`, `name`, `email`, `emailVerified`, and `role`. It does not include `createdAt`, `creditsGiven`, or `creditsLeft`. Read the learner again if you need those.
+
+## Disable a learner
 
 ```bash
 curl "https://dash.trainertwin.com/api/v1/users/user_123" \
@@ -72,4 +119,8 @@ curl "https://dash.trainertwin.com/api/v1/users/user_123" \
   --header "x-api-key: $TRAINERTWIN_API_KEY"
 ```
 
-A successful removal, including a retry for an already-disabled learner, returns `204 No Content`. Nothing is deleted: the learner is disabled — signed out and unable to sign in, with pending assignments cancelled and open sessions ended. Their account and historical sessions are kept. A removed learner no longer appears in list or detail responses; an organization trainer can re-enable them from Settings → Team and users.
+`204` with no body. The account and session history are kept. The learner is signed out, cannot sign in, open assignments are cancelled, and live calls are ended.
+
+`DELETE` again also returns `204`. It retries ending a call that was still open. If disable succeeded but a call could not be ended, the response is `500` `calls_not_ended`. Send `DELETE` again; do not try to add them a second time.
+
+A disabled learner disappears from list and detail. Their past sessions remain on [Sessions](/guides/sessions). This does not refund credits.

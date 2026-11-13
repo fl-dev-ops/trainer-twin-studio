@@ -1,39 +1,44 @@
 ---
 title: "Sessions"
-description: "Read practice sessions and their results."
+description: "Read role-play sessions, transcripts, reports, and recordings."
 ---
 
-A session is a practice run against a published role-play scenario. Org lists include learner calls and trainer previews; disabled learners' history remains available, while deleted sessions and twin calls are excluded. Sessions happen in the TrainerTwin app — learners start them from their assignment link or the learner portal. The API is **read-only** for sessions: list them and read their results.
+A **session** is one practice call. The same assignment can have many sessions. This API can only read them. The learner starts and rejoins the call in TrainerTwin, from `practiceUrl` or the learner home.
 
-A few things shape a session:
+Permission: `sessions:read`.
 
-- A learner starts a role play from its assignment link, as many times as they like: each practice is a new session with the same `assignmentId`.
-- A learner's call uses their credits (1 credit = 1 minute) and ends when they run out; it needs at least 5 to start. Admins' and team members' voice calls use the organization's credits.
-- A learner has one call at a time in your organization: starting another ends the open one.
+The list includes learner calls and trainer previews of role plays, including history for a learner you later disabled. It omits deleted sessions and every twin call. A twin session ID is `404`, the same as an unknown ID.
 
-See [Role plays end to end](/guides/role-plays).
+## Fields that keep older names
+
+| Field | Means |
+| --- | --- |
+| `agentSlug` | Role-play slug. Same value as `scenario` in filters and assignments. |
+| `agentVersion` | Role-play version pinned when the call was created. |
+| `personaSlug` | Persona identifier pinned to the call. |
+| `personaVersion` | Persona version pinned to the call. |
+| `scenario` query parameter | Filter by role-play slug. It matches `agentSlug`. |
+| `chargesOrg` | True when this trainer call is billed to the organization balance. False does not prove the caller was a learner; an unbilled trainer preview is also false. |
 
 ## List sessions
 
-Combine any of these filters:
-
-| Parameter | Description |
-| --- | --- |
-| `userId` | Sessions for one learner |
-| `scenario` | Sessions for one published scenario slug |
-| `assignmentId` | Every practice of one assignment |
-| `status` | `assigned`, `activating`, `active`, `closing`, `completed`, `abandoned`, `failed`, or `revoked` |
-| `from` | Started at or after this ISO 8601 timestamp |
-| `to` | Started at or before this ISO 8601 timestamp |
-| `limit` | Page size, `1`–`100` (default `50`) |
-| `offset` | Records to skip (default `0`) |
-
 ```bash
-curl "https://dash.trainertwin.com/api/v1/sessions?userId=user_123&status=completed&from=2026-09-01T00:00:00Z&to=2026-09-30T23:59:59Z&limit=25" \
+curl "https://dash.trainertwin.com/api/v1/sessions?userId=user_123&scenario=react-mock-interview&status=completed&limit=25" \
   --header "x-api-key: $TRAINERTWIN_API_KEY"
 ```
 
-Results are sorted by creation time, newest first, then by ID for tied timestamps. `from` must not be later than `to`; date filters use `startedAt` and therefore omit calls that have not started. The response includes pagination metadata — page through by increasing `offset` until `offset >= total`:
+| Parameter | Meaning |
+| --- | --- |
+| `userId` | One person's calls. A foreign or unknown ID returns an empty page, not `404`. |
+| `scenario` | Role-play slug. |
+| `assignmentId` | Every session started from one assignment. |
+| `status` | One of the statuses below. |
+| `from`, `to` | ISO 8601 bounds on `startedAt`. `from` must not be later than `to`. Calls that never started are excluded. |
+| `limit`, `offset` | Page size `1`–`100`, default `50`. See [Names and limits](/limits). |
+
+An invalid status, a reversed date range, or a bad page value is `400` `invalid_input`.
+
+Results are newest `createdAt` first, then by ID. The list has no transcript, report, or evidence.
 
 ```json
 {
@@ -41,43 +46,59 @@ Results are sorted by creation time, newest first, then by ID for tied timestamp
     {
       "id": "session_123",
       "userId": "user_123",
-      "personaSlug": "…",
+      "personaSlug": "hiring-manager",
       "personaVersion": 4,
       "agentSlug": "react-mock-interview",
       "agentVersion": 3,
+      "assignmentId": "assignment_123",
       "status": "completed",
       "mode": "voice",
+      "chargesOrg": false,
       "contextName": "Resume.pdf",
       "createdAt": "2026-09-02T10:00:00.000Z",
       "startedAt": "2026-09-02T10:01:00.000Z",
-      "endedAt": "2026-09-02T10:30:00.000Z"
+      "endedAt": "2026-09-02T10:18:00.000Z"
     }
   ],
-  "pagination": {
-    "limit": 25,
-    "offset": 0,
-    "total": 42
-  }
+  "pagination": { "limit": 25, "offset": 0, "total": 1 }
 }
 ```
 
-The list response contains session metadata without transcript or evidence payloads. Fetch one session for the full result.
+`assignmentId` is null when the call did not start from an assignment. `contextName` is the file the learner brought, or null. `mode` is `voice` or `chat`. `startedAt` is null until the call actually starts.
 
-## Get session results
+## Status
+
+| Status | Meaning |
+| --- | --- |
+| `assigned` | Created, not started. |
+| `activating` | Starting. Brief. |
+| `active` | Live. A dropped connection can rejoin this same session. |
+| `closing` | Ending. Brief. |
+| `completed` | Ended and saved. |
+| `abandoned` | Left before completion. A later start can leave the previous open call in this state. |
+| `failed` | Start or runtime failed. Not counted in an assignment's `practiceCount`. |
+| `revoked` | Stopped from the dashboard. |
+
+A learner needs at least 5 credits to start. The call ends when their credits run out. Trainer voice previews spend the organization balance and are capped at 30 minutes. This API does not start, end, or extend a call.
+
+## Read the result
 
 ```bash
 curl "https://dash.trainertwin.com/api/v1/sessions/session_123" \
   --header "x-api-key: $TRAINERTWIN_API_KEY"
 ```
 
-The detail response includes:
+The detail adds:
 
-- Pinned persona and scenario versions.
-- Session status, delivery mode, and timestamps.
-- Transcript data when available.
-- The stored `report` and `reportStatus` (`none`, `generating`, `completed`, `failed` or null). Reading does not trigger report generation; a completed call may still be waiting for its report.
-- Evidence data when available.
-- `chargesOrg`, true for billed trainer calls. A false value can also mean an unbilled trainer call, not only a learner.
-- `audioUrl` and `videoUrl` — presigned download URLs for the audio and video recordings, valid for one hour (`null` when that recording doesn't exist).
+| Field | Meaning |
+| --- | --- |
+| `transcript` | Stored transcript, or null. Shape can vary. Do not require a fixed schema. |
+| `report` | Stored report, or null. The body depends on the report type. |
+| `reportStatus` | `none`, `generating`, `completed`, `failed`, or null. This read does not generate a report. A completed call can still be waiting. |
+| `evidence` | Stored evidence, or null. Opaque. |
+| `audioUrl` | Download URL for the audio recording, valid for one hour, or null. |
+| `videoUrl` | Download URL for the video recording, valid for one hour, or null. |
 
-`startedAt` is `null` for a session the learner has not started yet (for example `assigned` or `failed` before it began).
+Request the session again when a URL expires. Do not store the URL as a permanent file location.
+
+Poll `status=completed` if you import results into your platform. Then poll the detail until `reportStatus` is `completed` or `failed` if you need the report. There is no webhook.

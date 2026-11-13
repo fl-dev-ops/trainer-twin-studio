@@ -3,7 +3,7 @@
     "_postman_id": "8b609760-ca67-4567-9252-72db440d5573",
     "name": "TrainerTwin API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Org-scoped role-play integration: list Studio-authored scenarios, add learners, allocate credits, assign practice and read sessions/results. Set apiKey and replace example IDs/emails. Writes spend your org's credits; test against an isolated environment first. For each NEW credit grant set a fresh creditRequestKey; keep the same key and body when retrying. Role-play authoring and call execution remain in TrainerTwin."
+    "description": "Add learners, read credits, assign published role plays, and read practice results for one organization. The role-play path is /scenarios; send its slug as scenario. A session returns that same slug as agentSlug. A learner's role is always member. Set apiKey and replace example IDs. For each new credit grant set a fresh creditRequestKey, then keep that same key and body if you retry. This collection does not buy credits, author role plays, or start calls."
   },
   "auth": {
     "type": "apikey",
@@ -25,10 +25,10 @@
   ],
   "item": [
     {
-      "name": "Scenarios (role plays)",
+      "name": "Role plays",
       "item": [
-        { "name": "List scenarios", "request": { "method": "GET", "url": "{{baseUrl}}/scenarios?limit=50&offset=0", "description": "Published role plays only, in dashboard order. Configuration is authored in Studio." } },
-        { "name": "Get scenario", "request": { "method": "GET", "url": "{{baseUrl}}/scenarios/{{scenarioSlug}}", "description": "Use stable metadata for integrations; data is opaque compatibility content." } }
+        { "name": "List role plays", "request": { "method": "GET", "url": "{{baseUrl}}/scenarios?limit=50&offset=0", "description": "Published role plays in dashboard order. The path is /scenarios. Twins and archived role plays are omitted. Save slug and send it as scenario." } },
+        { "name": "Get role play", "request": { "method": "GET", "url": "{{baseUrl}}/scenarios/{{scenarioSlug}}", "description": "One published role play. data is dashboard display content and is not a stable call contract." } }
       ]
     },
     {
@@ -47,13 +47,13 @@
           "header": [{ "key": "Content-Type", "value": "application/json" }],
           "body": { "mode": "raw", "raw": "{\n  \"name\": \"Avery Patel\"\n}", "options": { "raw": { "language": "json" } } }
         } },
-        { "name": "Disable learner", "request": { "method": "DELETE", "url": "{{baseUrl}}/users/{{userId}}", "description": "Disables access and ends live calls; does not delete the account/history. Repeat DELETE is 204." } }
+        { "name": "Disable learner", "request": { "method": "DELETE", "url": "{{baseUrl}}/users/{{userId}}", "description": "Disables access and ends live calls. Does not delete the account or history. Repeat DELETE is 204. calls_not_ended means send DELETE again." } }
       ]
     },
     {
       "name": "Credits",
       "item": [
-        { "name": "Read org credits", "request": { "method": "GET", "url": "{{baseUrl}}/credits", "description": "Requires users:read. Available credits exclude allocations and active trainer reservations. One credit is one minute." } },
+        { "name": "Read organization credits", "request": { "method": "GET", "url": "{{baseUrl}}/credits", "description": "Requires users:read. balanceMinutes is what can still be allocated. One credit is one minute. Does not buy credits." } },
         { "name": "Read learner credits", "request": { "method": "GET", "url": "{{baseUrl}}/users/{{userId}}/credits", "description": "Given, used and remaining minutes for one enabled org learner." } },
         { "name": "Grant learner credits (retry-safe)", "request": {
           "method": "POST", "url": "{{baseUrl}}/users/{{userId}}/credits",
@@ -66,7 +66,7 @@
     {
       "name": "Assignments",
       "item": [
-        { "name": "List assignments", "request": { "method": "GET", "url": "{{baseUrl}}/assignments?userId={{userId}}&limit=50&offset=0", "description": "Use userId or email as a filter, never both. Optional scenario filter." } },
+        { "name": "List assignments", "request": { "method": "GET", "url": "{{baseUrl}}/assignments?userId={{userId}}&limit=50&offset=0", "description": "Filter by userId or email, never both. Optional scenario is the role-play slug." } },
         { "name": "Assign role play", "request": {
           "method": "POST", "url": "{{baseUrl}}/assignments", "description": "Supply userId or email, never both. Email can add a new learner with 30 starting credits. Existing open pairs return unchanged without another email.",
           "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -85,7 +85,7 @@
       "name": "Sessions",
       "item": [
         { "name": "List sessions", "request": { "method": "GET", "url": "{{baseUrl}}/sessions?userId={{userId}}&limit=50&offset=0", "description": "Read-only role-play sessions. Optional scenario, assignmentId, status, from/to filters. Disabled learners' history remains visible; deleted/twin sessions are excluded." } },
-        { "name": "Get session transcript and result", "request": { "method": "GET", "url": "{{baseUrl}}/sessions/{{sessionId}}", "description": "Stored transcript, report/reportStatus, evidence and one-hour audio/video URLs. No model call or report generation is triggered by this read." } }
+        { "name": "Get session result", "request": { "method": "GET", "url": "{{baseUrl}}/sessions/{{sessionId}}", "description": "Stored transcript, report, reportStatus, evidence, and one-hour recording URLs. agentSlug is the role-play slug. This read does not generate a report." } }
       ]
     }
   ]

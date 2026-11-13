@@ -1,14 +1,12 @@
 openapi: 3.1.0
 info:
   title: TrainerTwin API
-  version: 1.1.0
+  version: 1.2.0
   description: |
-    Organization-scoped API for managing learners, credit allocations, practice sessions, and role-play assignments.
-    One credit is one minute. Credit amounts may include fractional minutes for usage measured in seconds.
-    The API covers role plays only; twins are not listed or returned. Sessions are read-only:
-    practice happens in the TrainerTwin app.
-    Scenarios can be listed via the API; scenario, persona, knowledge, and voice
-    configuration remains dashboard-only.
+    Organization API for learners, credits, role-play assignments, and practice results.
+    One credit is one minute. Usage can leave a fractional minute.
+    Product names and JSON names differ where an older field was kept: a role play is listed at /scenarios, assigned as scenario, and stored on a session as agentSlug. A learner is listed at /users and always has role member.
+    Twins are not included. Role-play, persona, and voice authoring stays in the dashboard. This API does not start calls or buy credits.
 servers:
   - url: https://dash.trainertwin.com/api/v1
     description: Production
@@ -16,23 +14,23 @@ security:
   - ApiKeyAuth: []
   - BearerAuth: []
 tags:
-  - name: Users
-    description: Invite and manage organization learners.
-  - name: Assignments
-    description: Give learners published scenarios to practise, as often as their credits allow.
-  - name: Scenarios
-    description: Read the organization's published role-play scenarios.
-  - name: Sessions
-    description: Read practice sessions and their results (read-only).
+  - name: Role plays
+    description: Published role plays. The path remains /scenarios. Assign the returned slug as scenario.
+  - name: Learners
+    description: Organization learners. The path remains /users. role is always member.
   - name: Credits
-    description: Read available credits and allocate them to learners from the organization's balance.
+    description: Read the organization balance and a learner's credits, and grant credits with users:read or users:write. Does not buy credits.
+  - name: Assignments
+    description: Give a learner a personal practice link to one published role play.
+  - name: Sessions
+    description: Read role-play sessions and stored results. agentSlug is the role-play slug. Does not start calls.
 paths:
   /scenarios:
     get:
       operationId: listScenarios
-      tags: [Scenarios]
-      summary: List scenarios
-      description: Lists the organization's published role-play scenarios in dashboard order (`order` ascending, newest first within the same order). Archived scenarios are not listed.
+      tags: [Role plays]
+      summary: List role plays
+      description: Lists published role plays in dashboard order (`order` ascending, then newest). The path is /scenarios. Archived role plays and twins are omitted. Private role plays in this organization are included.
       parameters:
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Offset'
@@ -66,9 +64,9 @@ paths:
       - $ref: '#/components/parameters/ScenarioSlug'
     get:
       operationId: getScenario
-      tags: [Scenarios]
-      summary: Get a scenario
-      description: Returns one published scenario including its role-play configuration (`data`). The data payload is dashboard-controlled and may gain fields at any time. Archived scenarios return `404`.
+      tags: [Role plays]
+      summary: Get a role play
+      description: Returns one published role play, including dashboard configuration in data. data is display content and may gain fields. An archived role play, a twin, or an unknown slug is 404.
       responses:
         '200':
           description: Scenario details.
@@ -93,7 +91,7 @@ paths:
   /users:
     get:
       operationId: listUsers
-      tags: [Users]
+      tags: [Learners]
       summary: List learners
       description: Lists enabled learners in the API key's organization, newest first, including creditsGiven and creditsLeft. Admin/team and disabled learners are omitted. An optional email filter is exact and case-insensitive. There are no pending invitations; invitations is always empty for compatibility.
       parameters:
@@ -136,8 +134,8 @@ paths:
         '500':
           $ref: '#/components/responses/ServerError'
     post:
-      operationId: inviteUser
-      tags: [Users]
+      operationId: addLearner
+      tags: [Learners]
       summary: Add a learner
       description: |
         Adds the email to the organization as a learner right away (creating their TrainerTwin account if needed) and
@@ -210,7 +208,7 @@ paths:
       - $ref: '#/components/parameters/UserId'
     get:
       operationId: getUser
-      tags: [Users]
+      tags: [Learners]
       summary: Get a learner
       responses:
         '200':
@@ -235,8 +233,8 @@ paths:
           $ref: '#/components/responses/ServerError'
     patch:
       operationId: updateUser
-      tags: [Users]
-      summary: Update a learner
+      tags: [Learners]
+      summary: Rename a learner
       description: Updates the learner's display name. Renaming an account used by another organization (disabled memberships included) returns account_shared/409; the same name is a no-op. Email and role changes are not supported.
       requestBody:
         required: true
@@ -279,9 +277,9 @@ paths:
           $ref: '#/components/responses/ServerError'
     delete:
       operationId: removeUser
-      tags: [Users]
-      summary: Remove a learner
-      description: Disables the learner, signs them out, cancels open assignments and ends live calls while preserving their account and history. Repeating DELETE for an already-disabled learner returns 204 and retries call cleanup. Disabled learners are omitted from user reads; their historical sessions remain readable.
+      tags: [Learners]
+      summary: Disable a learner
+      description: Disables the learner, signs them out, cancels open assignments, and ends live calls. The account and session history are kept. Repeating DELETE returns 204 and retries call cleanup. If disable succeeded but a live call could not be ended, the response is calls_not_ended/500; send DELETE again. Disabled learners are omitted from learner reads.
       responses:
         '204':
           description: Learner removed.
@@ -340,11 +338,11 @@ paths:
     post:
       operationId: createAssignment
       tags: [Assignments]
-      summary: Create an assignment
+      summary: Assign a role play
       description: |
-        Idempotently assigns a published scenario to a learner, by `userId` or by email. An email that isn't a learner yet is added to the organization first (with 30 starting credits), in the same request.
-        A pending or used assignment for the same learner and scenario is returned as it is, with `created: false` and no email.
-        A cancelled or expired one is reopened with a new `practiceUrl` and email (`201`, `created: true`).
+        Assigns one published role play to a learner, by userId or email, never both. The JSON field is scenario and its value is the role-play slug. An email that is not a learner yet is added first, with 30 starting credits, in the same request.
+        An open assignment for the same learner and role play is returned as it is, with created false and no email.
+        A cancelled or expired one is reopened with a new practiceUrl and email (201, created true). The assignment ID stays the same.
         Someone new to the organization's credits gets 30 (1 credit = 1 minute of practice) from its prepaid balance;
         `409` when the balance can't cover them. The learner practises through its personal `practiceUrl` as many times
         as their credits allow, signing in with the assigned email. Email failure does not roll back the assignment.
@@ -412,8 +410,8 @@ paths:
     patch:
       operationId: updateAssignment
       tags: [Assignments]
-      summary: Update an assignment
-      description: Moves an assignment to another learner, scenario, or both. Supply email or userId, never both. The old link is cancelled and history stays with it. An open target pair returns assignment_exists/409; a closed target pair is reopened with a new link. Repeating the same move returns the target unchanged without another email. A closed source with no open target returns roleplay_access_removed/403. Disabled/studio recipients are refused even for no-op requests.
+      summary: Move an assignment
+      description: Moves an assignment to another learner, role play, or both. The JSON field remains scenario. Supply email or userId, never both. The old link is cancelled and its session history stays on the assignment that produced it. An open destination returns assignment_exists/409. A closed destination is reopened and its existing assignment ID is returned. Repeating the same move returns changed false and no second email. A closed source with no open destination returns roleplay_access_removed/403. Disabled learners and trainers are refused even when the request would otherwise change nothing.
       requestBody:
         required: true
         content:
@@ -474,8 +472,8 @@ paths:
     delete:
       operationId: deleteAssignment
       tags: [Assignments]
-      summary: Delete an assignment
-      description: Removes only a pending assignment with no related sessions, including unstarted, failed or deleted sessions. Otherwise returns not_found/404. No history is detached, no credits are refunded, and a repeated delete returns 404.
+      summary: Remove an unused assignment
+      description: Removes a pending assignment only when it has no session rows. An unstarted, failed, or deleted session still blocks removal. Otherwise, and on a repeated delete, returns not_found/404. No credits are refunded and no email is sent.
       responses:
         '204':
           description: Assignment deleted.
@@ -494,7 +492,7 @@ paths:
       operationId: listSessions
       tags: [Sessions]
       summary: List sessions
-      description: Lists the organization's role-play calls, including trainer previews and disabled learners' history. Deleted sessions and twin calls are excluded. Results are newest first with an ID tie-break. Date filters use startedAt (so unstarted calls are excluded) and from must not exceed to. Use detail for transcript, report and evidence.
+      description: Lists this organization's role-play sessions, including trainer previews and disabled learners' history. Deleted sessions and twin calls are excluded. Filter scenario is the role-play slug and matches agentSlug. Results are newest first, then by ID. Date filters use startedAt, so unstarted calls are excluded, and from must not be later than to. Use the detail route for transcript, report, and evidence.
       parameters:
         - name: status
           in: query
@@ -539,7 +537,7 @@ paths:
       operationId: getSession
       tags: [Sessions]
       summary: Get a session
-      description: Returns pinned configuration version identifiers, stored transcript, report/reportStatus, evidence, and hour-long recording URLs when available. Reports may still be generating or unavailable; this read does not generate them. Deleted, foreign-org and twin sessions return 404.
+      description: Returns the session, including agentSlug (the role-play slug), pinned persona identifiers, stored transcript, report, reportStatus, evidence, and recording URLs valid for one hour. This read does not generate a report. Deleted, foreign, and twin sessions return 404.
       responses:
         '200':
           description: Session details.
@@ -725,7 +723,7 @@ components:
     ScenarioFilter:
       name: scenario
       in: query
-      description: Filter by published scenario slug.
+      description: Role-play slug. Same value as slug from GET /scenarios and agentSlug on a session.
       schema:
         type: string
     AssignmentFilter:
@@ -738,7 +736,7 @@ components:
       name: scenarioSlug
       in: path
       required: true
-      description: Scenario slug.
+      description: Role-play slug. The path parameter name remains scenarioSlug.
       schema:
         type: string
       example: react-mock-interview
@@ -947,6 +945,7 @@ components:
         role:
           type: string
           const: member
+          description: Always member. It means learner. Admin and team accounts are not returned.
         createdAt:
           type: string
           format: date-time
@@ -963,15 +962,19 @@ components:
       properties:
         slug:
           type: string
+          description: Role-play slug. Send this value as scenario when assigning or filtering.
           example: react-mock-interview
         name:
           type: string
+          description: Role-play name shown to the learner.
           example: React mock interview
         version:
           type: integer
+          description: Current published version. A session keeps the version it started with.
           example: 3
         visibility:
           type: string
+          description: Dashboard visibility. Private role plays in this organization are still returned.
           enum: [public, private]
     ScenarioSummary:
       type: object
@@ -995,7 +998,7 @@ components:
           example: 0
         assignmentCount:
           type: integer
-          description: Learners currently assigned to this scenario (pending or used assignments).
+          description: Open assignments for this role play (pending or historical used). Cancelled and expired assignments are not counted.
           example: 12
         createdAt:
           type: string
@@ -1025,7 +1028,7 @@ components:
           example: 0
         assignmentCount:
           type: integer
-          description: Learners currently assigned to this scenario (pending or used assignments).
+          description: Open assignments for this role play (pending or historical used). Cancelled and expired assignments are not counted.
           example: 12
         createdAt:
           type: string
@@ -1174,13 +1177,17 @@ components:
           example: user_123
         personaSlug:
           type: string
+          description: Persona identifier pinned to this session. Not a writable API resource.
         personaVersion:
           type: integer
+          description: Persona version pinned when the session was created.
         agentSlug:
           type: string
+          description: Role-play slug pinned to this session. Same value as scenario in filters and assignments.
           example: react-mock-interview
         agentVersion:
           type: integer
+          description: Role-play version pinned when the session was created.
         assignmentId:
           description: The assignment it was started from (each practice is a new session); null when started without one.
           type: [string, 'null']

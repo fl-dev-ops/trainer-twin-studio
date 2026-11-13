@@ -1,28 +1,28 @@
 ---
 title: "TrainerTwin API"
-description: "Connect your learning platform to TrainerTwin's organization-scoped API."
+description: "Add learners, assign role plays, manage credits, and read practice results."
 ---
 
-Use the TrainerTwin API to manage learners, inspect practice sessions, and assign published role-play scenarios from your own platform.
+Use this API from your server to connect a learning platform to one TrainerTwin organization.
 
 <CardGroup cols={2}>
   <Card title="Quickstart" icon="rocket" href="/quickstart">
-    Create a key and make your first API request.
+    Create a key and assign the first role play.
   </Card>
-  <Card title="Authentication" icon="key" href="/authentication">
-    Learn how organization-scoped API keys work.
+  <Card title="Names and limits" icon="book-open" href="/limits">
+    Role play, learner, credits, and the JSON fields that still use older names.
   </Card>
-  <Card title="Manage learners" icon="users" href="/guides/users">
-    Add, list, update, and remove organization learners.
+  <Card title="Learners" icon="users" href="/guides/users">
+    Add a learner, read their credits, and disable access.
   </Card>
-  <Card title="Track sessions" icon="play" href="/guides/sessions">
-    Read practice sessions, transcripts, evidence, and recordings.
+  <Card title="Role plays" icon="route" href="/guides/scenarios">
+    List the role plays your organization has published.
   </Card>
-  <Card title="Assign role-plays" icon="clipboard-check" href="/guides/assignments">
-    Give learners published role plays to practise.
+  <Card title="Assignments" icon="clipboard-check" href="/guides/assignments">
+    Give a learner a personal practice link.
   </Card>
-  <Card title="Role plays end to end" icon="route" href="/guides/role-plays">
-    Assign, send the learner to practise, and read the result.
+  <Card title="Sessions" icon="play" href="/guides/sessions">
+    Read transcripts, reports, evidence, and recordings.
   </Card>
 </CardGroup>
 
@@ -32,23 +32,25 @@ Use the TrainerTwin API to manage learners, inspect practice sessions, and assig
 https://dash.trainertwin.com/api/v1
 ```
 
-All requests and responses use JSON unless the endpoint returns `204 No Content`.
+Requests and responses are JSON, except `204 No Content`.
 
 <Note>
-  The API is designed for server-to-server integrations. Never expose an API key in browser or mobile application code.
+  Call this API from your server. Never put an API key in a browser, mobile app, or public repository.
 </Note>
 
-## What the API covers
+## What you can do
 
-| Resource | Use it to |
-| --- | --- |
-| Users | Add and manage learners in your organization |
-| Scenarios | List published role-play scenarios and read their configuration (read-only) |
-| Assignments | Give learners published scenarios to practise, as often as their credits allow |
-| Sessions | List sessions and read their results (read-only) |
+| You want | Product name | Request |
+| --- | --- | --- |
+| See published role plays | Role play | `GET /scenarios` |
+| Add or list learners | Learner | `POST /users`, `GET /users` |
+| See credits still available to allocate | Credits | `GET /credits` |
+| Give a learner more credits | Credits | `POST /users/{id}/credits` |
+| Give a learner a role play | Assignment | `POST /assignments` |
+| Read a finished practice | Session | `GET /sessions/{id}` |
 
-The API covers role plays only: twins are not listed and their sessions are not returned. Scenario, persona, knowledge, and voice configuration remain dashboard-only.
+The walkthrough is [Practice flow](/guides/role-plays). Creating a role play, buying credits, and running the call stay in the [TrainerTwin dashboard](https://dash.trainertwin.com). Twins are not in this API.
 
 <Tip>
-  Open the **API reference** tab to view every endpoint, parameter, request body, response, and generated code example.
+  Open the **API reference** tab for every field, status, and generated example. The reference uses the same names as this guide.
 </Tip>
