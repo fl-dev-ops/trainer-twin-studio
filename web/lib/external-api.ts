@@ -103,11 +103,15 @@ export async function findOrgLearner(orgId: string, by: { id: string } | { email
 }
 
 /** Collection pagination per the API contract: limit 1–100 (default 50), offset >= 0
- * (default 0). Present-but-invalid values return a 400 Response instead of being clamped. */
+ * (default 0). Present-but-invalid values throw invalid_input instead of being clamped. */
 export function paginationFromUrl(url: URL): { limit: number; offset: number } {
-  const limit = url.searchParams.has("limit") ? Number(url.searchParams.get("limit")) : 50;
-  const offset = url.searchParams.has("offset") ? Number(url.searchParams.get("offset")) : 0;
-  const valid = Number.isInteger(limit) && limit >= 1 && limit <= 100 && Number.isInteger(offset) && offset >= 0;
+  const limitText = url.searchParams.get("limit") ?? "50";
+  const offsetText = url.searchParams.get("offset") ?? "0";
+  const limit = Number(limitText);
+  const offset = Number(offsetText);
+  // Prisma skip is a signed 32-bit integer; reject coercions/overflow rather than producing a database 500.
+  const valid = /^\d+$/.test(limitText) && /^\d+$/.test(offsetText) && Number.isSafeInteger(limit) && limit >= 1 && limit <= 100
+    && Number.isSafeInteger(offset) && offset >= 0 && offset <= 2_147_483_647;
   if (!valid) throw refusals.invalidInput("limit must be 1–100 and offset 0 or more.");
   return { limit, offset };
 }

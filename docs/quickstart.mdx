@@ -45,6 +45,35 @@ description: "Create an API key and make your first TrainerTwin request."
     ```
   </Step>
 
+  <Step title="Add a learner if needed">
+    ```bash
+    curl "https://dash.trainertwin.com/api/v1/users" \
+      --request POST \
+      --header "x-api-key: $TRAINERTWIN_API_KEY" \
+      --header "content-type: application/json" \
+      --data '{ "email": "learner@example.com" }'
+    ```
+
+    Keep the returned `user.id` for the following requests. A new learner receives 30 starting credits once; a repeat
+    add returns the same learner without allocating again. There is no invitation acceptance step.
+  </Step>
+
+  <Step title="Read or add learner credits">
+    `GET /credits` shows your available org balance. `GET /users/{id}/credits` shows one learner's allocation and usage.
+    To give an existing learner more minutes, use a fresh key for this intended grant and reuse it on retries:
+
+    ```bash
+    curl "https://dash.trainertwin.com/api/v1/users/user_123/credits" \
+      --request POST \
+      --header "x-api-key: $TRAINERTWIN_API_KEY" \
+      --header "Idempotency-Key: grant-module-2-user-123" \
+      --header "content-type: application/json" \
+      --data '{ "minutes": 30, "note": "Extra practice" }'
+    ```
+
+    This spends existing org credits, not money or newly minted credits. See [Credits](/guides/credits).
+  </Step>
+
   <Step title="Assign a published scenario">
     Use a learner ID returned by the users endpoint and a published scenario slug from your TrainerTwin dashboard.
 

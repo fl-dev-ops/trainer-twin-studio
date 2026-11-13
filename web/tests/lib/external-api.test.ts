@@ -87,7 +87,7 @@ test("API key header and Bearer extraction trim values and prefer x-api-key", ()
   expect(externalApiKey(request({ authorization: "bearer token " }))).toBe("token");
   expect(externalApiKey(request({ authorization: "Basic token" }))).toBeNull();
 });
-test.each(["limit=0", "limit=101", "limit=1.5", "limit=bad", "offset=-1", "offset=0.5", "offset=bad"])("pagination throws invalid_input for %s; apiRoute returns a coded 400", async (query) => {
+test.each(["limit=0", "limit=101", "limit=1.5", "limit=bad", "limit=", "limit=1e2", "offset=-1", "offset=0.5", "offset=bad", "offset=", "offset=2147483648", "offset=9007199254740992"])("pagination throws invalid_input for %s; apiRoute returns a coded 400", async (query) => {
   const url = new URL(`https://test/api/v1/users?${query}`);
   expect(() => paginationFromUrl(url)).toThrow(expect.objectContaining({ code: "invalid_input", status: 400 }));
   const response = await apiRoute(async () => Response.json(paginationFromUrl(url)))(request());
@@ -102,7 +102,7 @@ test("a coded API refusal satisfies the published OpenAPI Error required/propert
   const spec = load(readFileSync(new URL("../../../docs/openapi.yaml", import.meta.url), "utf8")) as { components: { schemas: { Error: { type: string; required: string[]; properties: Record<string, { type: string }>; additionalProperties: boolean } } } };
   const schema = spec.components.schemas.Error;
   const body: Record<string, unknown> = await (await handle(request({}))).json();
-  expect(schema.type).toBe("object"); expect(schema.required).toEqual(["error"]); expect(schema.additionalProperties).toBe(false);
+  expect(schema.type).toBe("object"); expect(schema.required).toEqual(["error", "code"]); expect(schema.additionalProperties).toBe(false);
   expect(schema.properties.code.type).toBe("string");
   for (const field of schema.required) expect(Object.hasOwn(body, field)).toBe(true);
   for (const [field, value] of Object.entries(body)) { expect(schema.properties[field]).toBeDefined(); expect(typeof value).toBe(schema.properties[field].type); }
@@ -110,7 +110,7 @@ test("a coded API refusal satisfies the published OpenAPI Error required/propert
 test("every v1 resource method exports apiRoute(handleX), except the model-call route", () => {
   const root = join(import.meta.dir, "../../app/api/v1");
   const routes = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((entry) => entry.isDirectory() ? routes(join(dir, entry.name)) : entry.name === "route.ts" ? [join(dir, entry.name)] : []);
-  const resources = routes(root).filter((file) => !file.includes("/chat/")); expect(resources).toHaveLength(8);
+  const resources = routes(root).filter((file) => !file.includes("/chat/")); expect(resources).toHaveLength(10);
   for (const file of resources) {
     const source = readFileSync(file, "utf8");
     const methods = [...source.matchAll(/export const (GET|POST|PATCH|DELETE) = (.+);/g)]; expect(methods.length).toBeGreaterThan(0);

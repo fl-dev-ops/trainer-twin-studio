@@ -1,4 +1,6 @@
-import { db } from "@/lib/db";
+import { db, withLock } from "@/lib/db";
+import { minutesLock } from "@/lib/minutes";
+import { peopleLock } from "@/lib/org-people";
 import { deploymentAllowsMode, type DeliveryMode } from "@/lib/deployments";
 import { AppError, refusals } from "@/lib/errors";
 import { practicePerson } from "@/lib/practice";
@@ -42,3 +44,13 @@ export async function roleplayAccessByCode(input: { orgId: string; userId: strin
 
 /** A link that can be removed (dashboard and API alike): still pending and nobody has practised on it (rule 19). */
 export const removableLink = { status: "pending", sessions: { none: {} } } as const;
+
+/** Shares Start's minutes lock: a session cannot appear between the history check and removal. */
+export async function removeRoleplayAssignment(orgId: string, assignmentId: string, agentSlug?: string) {
+  return withLock([minutesLock(orgId), peopleLock(orgId)], async (tx) => {
+    const removed = await tx.rolePlayAssignment.deleteMany({
+      where: { id: assignmentId, orgId, ...removableLink, ...(agentSlug ? { deployment: { agent: { slug: agentSlug } } } : {}) },
+    });
+    return removed.count > 0;
+  });
+}

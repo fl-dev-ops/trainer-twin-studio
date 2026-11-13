@@ -101,6 +101,37 @@ describe.skipIf(!localMinutesDb)("Module 6 REST retries, account ownership and c
     expect(response.status).toBe(route === "API" ? 204 : 200);
     expect(await db.rolePlayAssignment.findUnique({ where: { id: assignment.id } })).toBeNull();
   });
+  test.each(["API", "dashboard"])("%s removal waits for a concurrent Start and keeps its assignment history", async (route) => {
+    const deployment = await ensureDeployment(f.org.id, f.roleplay.id);
+    const assignment = await db.rolePlayAssignment.create({ data: { orgId: f.org.id, deploymentId: deployment.id, memberId: `${f.learner.id}-member`, assignedByUserId: f.trainer.id, shareCode: `${f.org.id}-concurrent`, expiresAt: new Date(0) } });
+    const lock = database.withLock;
+    let inserted!: () => void; let release!: () => void; let deleting!: () => void;
+    const insertedRow = new Promise<void>((resolve) => { inserted = resolve; });
+    const mayCommit = new Promise<void>((resolve) => { release = resolve; });
+    const attemptedDelete = new Promise<void>((resolve) => { deleting = resolve; });
+    const started = lock([`minutes:${f.org.id}`], async (tx) => {
+      const session = await tx.interviewSession.create({ data: {
+        orgId: f.org.id, userId: f.learner.id, agentId: f.roleplay.id, assignmentId: assignment.id,
+        personaSlug: f.org.slug, personaVersion: 1, agentSlug: f.roleplay.slug, agentVersion: 1,
+        status: "active", allowedSeconds: 600, startedAt: new Date(), shareCode: `${f.org.id}-session`,
+      } });
+      inserted(); await mayCommit; return session;
+    });
+    await insertedRow;
+    spies.push(spyOn(database, "withLock").mockImplementation((keys, work, options) => {
+      expect(keys).toEqual([`minutes:${f.org.id}`, `people:${f.org.id}`]); deleting();
+      return lock(keys, work, options);
+    }));
+    const removed = route === "API"
+      ? deleteAssignment(request("DELETE"), params(assignment.id))
+      : dashboardDelete(request("DELETE", { assignmentId: assignment.id }), { params: Promise.resolve({ slug: f.roleplay.slug }) });
+    await attemptedDelete; release();
+    const [session, response] = await Promise.all([started, removed]);
+    expect(response.status).toBe(404);
+    expect(await db.rolePlayAssignment.findUniqueOrThrow({ where: { id: assignment.id } })).toEqual(assignment);
+    expect(await db.interviewSession.findUniqueOrThrow({ where: { id: session.id } })).toMatchObject({ assignmentId: assignment.id });
+  });
+
   test("refuses too_many_keys on the 21st API key without calling the plugin or writing a key", async () => {
     await db.apikey.createMany({ data: Array.from({ length: 20 }, (_, i) => ({ id: `${f.org.id}-key-${i}`, referenceId: f.org.id, key: `hash-${f.org.id}-${i}`, name: `Key ${i}`, createdAt: new Date(), updatedAt: new Date() })) });
     const original = await db.apikey.findMany({ where: { referenceId: f.org.id }, orderBy: { id: "asc" } });

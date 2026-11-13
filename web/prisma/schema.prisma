@@ -1062,12 +1062,15 @@ model MinuteLedger {
   sessionId      String?   @unique
   /// A paid top-up: its Razorpay payment (pay_…); a refund: its Razorpay refund (rfnd_…). One row each.
   externalId     String?   @unique
+  /// Integration credit grants: retry identity, unique per org; null for other ledger entries.
+  requestKey     String?
   actorUserId    String?
   note           String?
   createdAt      DateTime  @default(now())
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
+  @@unique([orgId, requestKey])
   @@index([orgId, email])
   @@index([orgId, type])
 }

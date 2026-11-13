@@ -51,7 +51,7 @@ describe.skipIf(!localMinutesDb)("flow: people first at every entry point", () =
     expect(outside.emails).toHaveLength(1);
     expect(outside.emails[0].to).toEqual([to]);
     expect(outside.emails[0].text).toContain("added you");
-    if (role === "user") expect(outside.emails[0].text).toContain("40 credits added");
+    if (role === "user") expect(outside.emails[0].text).toContain("Credits added: 40 credits");
     else expect(outside.emails[0].text).toContain("a team member");
     expect(await api().addPeople({ emails: [to], role })).toMatchObject({ added: 0, already: 1 });
     expect(outside.emails).toHaveLength(1);
@@ -68,8 +68,9 @@ describe.skipIf(!localMinutesDb)("flow: people first at every entry point", () =
     expect((await listTwinAssignments(f.org.id, f.twin.id)).find((p) => p.email === to)?.user.id).toBe(person.userId);
     expect(outside.emails).toHaveLength(1);
     expect(outside.emails[0].text).toContain("added you");
-    expect(outside.emails[0].text).toContain("You can now talk to Twin");
-    expect(outside.emails[0].text).toContain("30 credits added");
+    expect(outside.emails[0].subject).toContain("You can now talk to Twin");
+    expect(outside.emails[0].text).toContain("Twin: Twin");
+    expect(outside.emails[0].text).toContain("Credits added: 30 credits");
     await invariant();
   });
 
@@ -80,7 +81,7 @@ describe.skipIf(!localMinutesDb)("flow: people first at every entry point", () =
     expect(await db.rolePlayAssignment.findFirstOrThrow({ where: { orgId: f.org.id } })).toMatchObject({ memberId: person.memberId });
     expect(outside.emails).toHaveLength(1);
     expect(outside.emails[0].text).toContain("added you");
-    expect(outside.emails[0].text).toContain("30 credits added");
+    expect(outside.emails[0].text).toContain("Credits added: 30 credits");
     await invariant();
   });
 
@@ -163,7 +164,8 @@ describe.skipIf(!localMinutesDb)("flow: people first at every entry point", () =
     ] });
     expect(outside.emails).toHaveLength(1);
     expect(outside.emails[0].to).toEqual([to]);
-    expect(outside.emails[0].text).toContain("10 credits added. Your balance: 40 credits");
+    expect(outside.emails[0].text).toContain("Credits added: 10 credits");
+    expect(outside.emails[0].text).toContain("Your balance: 40 credits");
     try {
       expect(outside.emails[0].idempotencyKey).toMatch(new RegExp(`^credits:${f.org.id}:${to}:\\d+$`));
     } finally {

@@ -98,6 +98,24 @@ The first value establishes a baseline without invalidation. Each changed value 
 5. `minutes.org` returns `{ billed, balanceMinutes, addedMinutes, defaultMinutes, maxMinutes, grants, learners }`, not `topups`. Added minutes sum cached Meteroid grants, including expired ones. History rows label each grant by what it is, never its internal reason (`grantLabel`: "Free trial"; "Minute pack" for Meteroid `source: PURCHASE` grants; "Purchase" for phase 1 Razorpay grants; otherwise "From TrainerTwin"), with `expiresAt` and `expired` for the Expires column; staff are excluded from learners. Copies older than 60 seconds refresh and schedule any unsent usage (`web/lib/minutes-trpc.ts`).
 6. Paused orgs cannot write new learner grants or start new staff/learner voice calls (403). No-op grants and live-call resumes are not pause refusals. No credits are removed by pausing (`web/lib/minutes.ts` `refuseWhenPaused`; `web/lib/interview-sessions.ts` `activateSession`; [Billing code](billing-code.md)).
 
+### Public integration credits
+
+`GET /api/v1/credits` reports available org balance and the 30/360 learner defaults/limits. `GET /api/v1/users/{id}/credits`
+reports given/used/remaining minutes for an enabled learner; users list/get also expose creditsGiven/creditsLeft. Reads
+use existing users:read, and `POST /api/v1/users/{id}/credits` uses users:write. No new scope or org-credit minting API.
+
+The POST requires an Idempotency-Key and `{minutes,note?}`. `grantMinutes` refreshes the wallet before locking, then takes
+minutes:<org> and people:<org>, rechecks userId/email eligibility, and compares the ledger requestKey. Same org/key and
+same learner/amount/note writes nothing; a mismatch is idempotency_conflict/409. A matching eligible replay is not a new
+pause/cap/balance check. New grants retain the current five-minute **call-start** minimum but may allocate as little as
+one minute; the existing 360 total-allocation cap and org-balance checks remain. The nullable requestKey and unique
+(orgId,requestKey) index are added by `20261117120000_api_credit_request_key`; old rows remain unchanged.
+
+Responses contain the original grant and current balances. New grants attempt email after commit with credits:<ledgerId>;
+replays do not send again. An interrupted notification can be lost without an outbox, but the allocation is still
+idempotent. Existing dashboard bulk grants do not acquire request keys automatically. Sources:
+`web/lib/external-api-credits.ts`, `web/lib/minutes.ts`, [API rules](api.md), [Public API](public-api.md).
+
 ## Entry points
 
 - `/usage` (old `/credits` redirects there), learner dialogs and users/assignment grant forms: `web/components/usage/usage-page.tsx`, `web/components/credits/*`; `web/lib/minutes-trpc.ts` (`org`, `activity`, `version`, `learner`, `add`, `addMany`, `addPeople`).

@@ -20,12 +20,14 @@ Errors use a standard JSON shape: a message you can show, and a stable `code` to
 | `401` | `api_key_invalid`: the API key is missing, invalid, expired, or revoked | Replace or rotate the key |
 | `403` | `scope_missing`: the key can't do this; `api_key_owner_gone`: the key's creator is no longer on the team | Use a key with the permission, or create a new key as a current admin or team member |
 | `404` | The resource does not exist in the key's organization | Verify the resource ID or scenario slug |
-| `409` | The requested state conflicts with existing data, or your organization's credits can't cover a new learner | Read the current resource, or top up credits, before retrying |
+| `409` | A state conflict, insufficient org credits, disabled/studio recipient, or `idempotency_conflict` | Correct the conflict; do not change a timed-out grant's key merely to retry |
 | `429` | `rate_limited`: the key exceeded 120 requests per minute | Wait the number of seconds in the `Retry-After` header |
 | `500` | TrainerTwin could not complete the request | Retry with exponential backoff |
 
 ## Retry safely
 
 Retry `429` and `5xx` responses: repeating a request gives the same end state. Removing a user that is already removed returns `204` again, and repeating an assignment move returns the moved assignment unchanged. Do not automatically retry validation, authentication, authorization, or conflict responses.
+
+For credit grants, **reuse the original Idempotency-Key, learner, amount and note** after a timeout, 429 or 5xx. The same request cannot allocate twice. A different body with that key returns `idempotency_conflict`; use a new key only for a genuinely new grant. A replay returns the original grant and current balances, without another email.
 
 Assignment creation is idempotent for the same learner and scenario. While the assignment is pending or used, a repeated request returns it and does not send another email; a cancelled or expired one is reopened with a new link.

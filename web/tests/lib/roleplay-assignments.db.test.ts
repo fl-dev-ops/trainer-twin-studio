@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import * as deployments from "@/lib/deployments";
+import * as database from "@/lib/db";
 import * as externalApi from "@/lib/external-api";
 import * as delivery from "@/lib/external-api-assignments";
-import { POST } from "@/app/api/v1/assignments/route";
+import { GET as listAssignments, POST } from "@/app/api/v1/assignments/route";
 import { GET, PATCH } from "@/app/api/v1/assignments/[id]/route";
 import { assignRoleplayLearners, inviteToRoleplay } from "@/lib/invite/roleplay";
 import { setMemberDisabled } from "@/lib/members";
@@ -34,6 +35,11 @@ describe.skipIf(!localMinutesDb)("Module 4 atomic role-play assignment services 
   const post = (by: { email?: string; userId?: string }, scenario = f.roleplay.slug) => POST(request("POST", { ...by, scenario }));
   const params = (id: string) => ({ params: Promise.resolve({ id }) });
   const patch = (id: string, by: { email?: string; userId?: string; scenario?: string }) => PATCH(request("PATCH", by), params(id));
+  const newLearner = async (suffix: string) => {
+    const user = await db.user.create({ data: { id: `${f.org.id}-${suffix}`, email: `${suffix}-${f.org.id}@example.com`, name: suffix, emailVerified: true } });
+    await db.member.create({ data: { id: `${user.id}-member`, userId: user.id, organizationId: f.org.id, role: "user", createdAt: new Date() } });
+    return user;
+  };
 
   test("a failing link write rolls back the whole batch's accounts, memberships and starting credits", async () => {
     await fundOrg({ orgId: f.org.id, minutes: 100 });
@@ -142,8 +148,8 @@ describe.skipIf(!localMinutesDb)("Module 4 atomic role-play assignment services 
   });
 
   test.each(["cancelled", "expired"])("refuses roleplay_access_removed for a %s move source with no open target", async (status) => {
-    const original = await link(status); const before = await snapshot();
-    const response = await patch(original.id, { userId: f.trainer.id });
+    const original = await link(status); const target = await newLearner("closed-target"); const before = await snapshot();
+    const response = await patch(original.id, { userId: target.id });
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({ code: "roleplay_access_removed", error: "Your access to this role play was removed. Ask your trainer." });
     expect(await snapshot()).toEqual(before); expect(email).not.toHaveBeenCalled();
@@ -153,9 +159,53 @@ describe.skipIf(!localMinutesDb)("Module 4 atomic role-play assignment services 
     const original = await link(status); const before = await snapshot();
     const response = await patch(original.id, { userId: f.learner.id });
     expect(await snapshot()).toEqual(before); expect(email).not.toHaveBeenCalled();
-    // Expected 403 roleplay_access_removed; HEAD returns 200 with the closed source at app/api/v1/assignments/[id]/route.ts:52.
     expect(response.status).toBe(403);
     expect(await response.json()).toMatchObject({ code: "roleplay_access_removed" });
+  });
+
+  test.each(["same", "different"])("concurrent moves to %s targets recheck the source under the lock", async (destination) => {
+    const source = await link(); const history = await f.session({ assignmentId: source.id });
+    const a = await newLearner("target-a");
+    const b = destination === "same" ? a : await newLearner("target-b");
+    const lock = database.withLock;
+    let arrivals = 0; let release!: () => void;
+    const bothRead = new Promise<void>((resolve) => { release = resolve; });
+    spies.push(spyOn(database, "withLock").mockImplementation(async (keys, work, options) => {
+      if (keys.includes(`people:${f.org.id}`) && arrivals < 2) {
+        if (++arrivals === 2) release();
+        await bothRead;
+      }
+      return lock(keys, work, options);
+    }));
+    const results = await Promise.all([patch(source.id, { userId: a.id }), patch(source.id, { userId: b.id })]);
+    expect(results.map((result) => result.status).sort()).toEqual(destination === "same" ? [200, 200] : [200, 403]);
+    const bodies = await Promise.all(results.map((result) => result.json()));
+    expect(bodies.filter((body) => body.changed === true)).toHaveLength(1);
+    if (destination === "same") {
+      expect(bodies.filter((body) => body.changed === false)).toHaveLength(1);
+      expect(bodies[0].assignment.id).toBe(bodies[1].assignment.id);
+    }
+    expect(await db.rolePlayAssignment.count({ where: { orgId: f.org.id, status: "pending" } })).toBe(1);
+    expect(await db.rolePlayAssignment.findUniqueOrThrow({ where: { id: source.id } })).toMatchObject({ status: "cancelled" });
+    expect(await db.interviewSession.findUniqueOrThrow({ where: { id: history.id } })).toEqual(history);
+    expect(email).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([false, true])("refuses invalid_input when both recipient identifiers are supplied, matching=%s", async (same) => {
+    const source = await link(); const target = same ? f.learner : await newLearner("conflict"); const before = await snapshot();
+    const by = { userId: f.learner.id, email: target.email };
+    for (const response of [await post(by), await patch(source.id, by), await listAssignments(new Request(`https://test/api/v1/assignments?userId=${by.userId}&email=${encodeURIComponent(by.email)}`))]) {
+      expect(response.status).toBe(400); expect(await response.json()).toMatchObject({ code: "invalid_input" });
+    }
+    expect(await snapshot()).toEqual(before); expect(email).not.toHaveBeenCalled();
+  });
+
+  test.each(["person_disabled", "person_is_studio"])("unchanged PATCH still refuses %s instead of returning a usable link", async (code) => {
+    const source = await link();
+    await db.member.update({ where: { id: `${f.learner.id}-member` }, data: code === "person_disabled" ? { disabledAt: new Date() } : { role: "team" } });
+    const response = await patch(source.id, { userId: f.learner.id });
+    expect(response.status).toBe(409); expect(await response.json()).toMatchObject({ code });
+    expect(email).not.toHaveBeenCalled();
   });
 
   test("refuses assignment_exists when REST PATCH targets a learner with an open link; the old link stays open", async () => {

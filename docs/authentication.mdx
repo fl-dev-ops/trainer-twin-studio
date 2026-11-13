@@ -30,7 +30,7 @@ curl "https://dash.trainertwin.com/api/v1/sessions" \
 | Property | Behavior |
 | --- | --- |
 | Ownership | One organization |
-| Permissions | Read and write users and assignments; read sessions and scenarios |
+| Permissions | Read and write users (including learner credit grants) and assignments; read sessions and scenarios |
 | Expiration | One year after generation |
 | Rate limit | 120 requests per minute, per key |
 | Storage | Hashed; the full key cannot be recovered |
@@ -57,12 +57,15 @@ Revocation takes effect immediately.
 
 ```json
 {
-  "error": "Invalid API key"
+  "error": "Send a valid API key.",
+  "code": "api_key_invalid"
 }
 ```
 
 - `401` — the key is missing, invalid, expired, or revoked.
 - `429` — the key exceeded its rate limit.
-- `403` — the trainer who created the key is no longer an admin or team member of the organization. Generate a new key.
+- `403` — the key lacks a required scope (`scope_missing`), or its creator is no longer an enabled admin/team member (`api_key_owner_gone`).
+
+Credit reads use `users:read`; grants use `users:write`. There is no new credits scope or required key rotation.
 
 See [Errors](/errors) for the complete error model.

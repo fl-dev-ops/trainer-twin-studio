@@ -17,7 +17,7 @@ const createSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(320).optional(),
   userId: z.string().min(1).optional(),
   scenario: z.string().regex(/^[a-z0-9][a-z0-9._-]*$/i),
-}).strict().refine((value) => value.email || value.userId, "email or userId is required");
+}).strict().refine((value) => Boolean(value.email) !== Boolean(value.userId), "Supply either email or userId, not both.");
 
 async function handleGET(request: Request) {
   const api = await requireExternalApi(request, "assignments", "read");
@@ -25,6 +25,8 @@ async function handleGET(request: Request) {
   const userId = url.searchParams.get("userId") || undefined;
   const requestedEmail = url.searchParams.get("email")?.trim().toLowerCase() || undefined;
   const scenario = url.searchParams.get("scenario") || undefined;
+  if (userId && requestedEmail) throw refusals.invalidInput("Supply either email or userId, not both.");
+  if (requestedEmail && !z.email().safeParse(requestedEmail).success) throw refusals.invalidInput("A valid email filter is required.");
   const page = paginationFromUrl(url);
   // A learner outside the org (or unknown) matches nothing.
   const learner = requestedEmail ? await findOrgLearner(api.org.id, { email: requestedEmail })
@@ -35,7 +37,7 @@ async function handleGET(request: Request) {
     ...(scenario ? { deployment: { agent: { slug: scenario } } } : {}),
   };
   const [rows, total] = await Promise.all([
-    db.rolePlayAssignment.findMany({ where, orderBy: { assignedAt: "desc" }, skip: page.offset, take: page.limit, select: assignmentDetailSelect }),
+    db.rolePlayAssignment.findMany({ where, orderBy: [{ assignedAt: "desc" }, { id: "desc" }], skip: page.offset, take: page.limit, select: assignmentDetailSelect }),
     db.rolePlayAssignment.count({ where }),
   ]);
   return Response.json({ assignments: await assignmentDetails(api.org.id, api.org.slug, rows), pagination: { ...page, total } });
@@ -44,7 +46,7 @@ async function handleGET(request: Request) {
 async function handlePOST(request: Request) {
   const api = await requireExternalApi(request, "assignments", "write");
   const parsed = createSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return errorResponse(refusals.invalidInput("email or userId and a valid scenario slug are required"));
+  if (!parsed.success) return errorResponse(refusals.invalidInput("Supply either email or userId (not both), and a valid scenario slug."));
 
   const agent = await findScenario(api.org.id, parsed.data.scenario);
   const trainer = api.trainer;

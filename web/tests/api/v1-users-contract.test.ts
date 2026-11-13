@@ -11,6 +11,7 @@ mock.module("@/lib/db", () => ({
   withLock: async () => { throw new Error("Unexpected locked write in read-only fixture"); },
   isUniqueViolation: (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "P2002",
   db: {
+    $queryRaw: async () => [],
     organization: { findUnique: async () => ({ id: "org1", slug: "acme", name: "Acme" }) },
     member: {
       // The routes must query learners by the database role.
@@ -37,7 +38,7 @@ const params = { params: Promise.resolve({ id: "u1" }) };
 
 test("GET /users reports learners with role member", async () => {
   const body = await (await listUsers(request())).json();
-  expect(body.users).toEqual([{ ...learner, createdAt: new Date(0).toISOString(), role: "member", memberId: "m1" }]);
+  expect(body.users).toEqual([{ ...learner, createdAt: new Date(0).toISOString(), role: "member", memberId: "m1", creditsGiven: 0, creditsLeft: 0 }]);
 });
 
 test("GET /users/:id reports role member", async () => {

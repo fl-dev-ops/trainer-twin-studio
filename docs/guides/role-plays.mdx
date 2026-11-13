@@ -18,7 +18,7 @@ In the [TrainerTwin dashboard](https://dash.trainertwin.com):
 | | What it controls | How they get it |
 | --- | --- | --- |
 | **An assignment** | *Which* role play they can do, through a personal link, as many times as they like | `POST /assignments` |
-| **Credits** | *How long* they can practise, shared by every twin and role play | 30 when first added (by an assignment or `POST /users`); more from the dashboard |
+| **Credits** | *How long* they can practise, shared by every twin and role play | 30 when first added; more through `POST /users/{id}/credits` or the dashboard |
 
 ## The flow
 
@@ -66,7 +66,7 @@ Your platform                          TrainerTwin                           Lea
     curl "https://dash.trainertwin.com/api/v1/sessions?userId=user_123&scenario=react-mock-interview&status=completed" \
       --header "x-api-key: $TRAINERTWIN_API_KEY"
     ```
-    Then read one for its transcript, evidence, and recordings with `GET /sessions/{id}`. Every session has the `assignmentId` it came from. See [Sessions](/guides/sessions).
+    Then read one for its transcript, stored report/report status, evidence, and recordings with `GET /sessions/{id}`. Every session has the `assignmentId` it came from. See [Sessions](/guides/sessions).
   </Step>
 </Steps>
 
@@ -74,7 +74,7 @@ Your platform                          TrainerTwin                           Lea
 
 There's no limit on attempts: a learner can practise an assigned role play as many times as their credits allow. After a call they can choose **Practise again**, or open the same `practiceUrl` later; each practice starts a new session. A learner whose connection drops mid-call rejoins the same call while it's still open.
 
-The link keeps working until you remove the assignment (`DELETE /assignments/{id}`). To read every practice of one assignment:
+The link stays open until cancelled, moved or access is disabled. DELETE removes only a pending link with **no sessions**; it cannot remove practised access. To read every practice of one assignment:
 
 ```bash
 curl "https://dash.trainertwin.com/api/v1/sessions?assignmentId=assignment_123" \
@@ -91,7 +91,7 @@ curl "https://dash.trainertwin.com/api/v1/sessions?assignmentId=assignment_123" 
 - A learner has one call at a time in your organization: starting a new one ends any other that is still open.
 - Admins' and team members' voice calls use your organization's credits directly (also at least 5 to start).
 
-Giving a learner more credits, choosing how many a new learner starts with, and seeing who is running low are done in the dashboard (**Users** and **Credits**). The API doesn't change credits, except for the 30 a new learner gets.
+Your integration can read the org balance with `GET /credits`, read a learner's balance with `GET /users/{id}/credits`, and add credits with `POST /users/{id}/credits`. Credit grants require an `Idempotency-Key` so retries cannot allocate twice. See [Credits](/guides/credits). Starting-credit choices remain in Studio; API learner creation keeps the default 30.
 
 ## Emails the learner gets
 
@@ -99,11 +99,12 @@ Giving a learner more credits, choosing how many a new learner starts with, and 
 | --- | --- | --- |
 | `POST /assignments` (new or reopened), `PATCH /assignments/{id}` (changed) | **New role play**: the role play, its objective, the credits they have (to use on it as often as they like), and which email to sign in with. Someone new to your organization is told they were added, in the same email. | `practiceUrl`, their personal link |
 | `POST /users` | **You've been added to *your organization* on TrainerTwin**, with their credits | Your organization's home page, where they sign in with Google or an email code |
+| `POST /users/{id}/credits` (new grant) | Credits added and the learner's balance | No practice assignment is created |
 
-You don't need `POST /users` before assigning a role play: assigning by email adds the learner to your organization first, with one email for both. Every response reports `emailSent`. An assignment or a new learner is kept even when the email fails, so you can send the link yourself.
+You don't need `POST /users` before assigning a role play: assigning by email adds the learner to your organization first, with one email for both. New-write responses report `emailSent`; unchanged assignment responses omit it. An assignment or a new learner is kept even when the email fails, so you can send the link yourself.
 
 ## Done in the dashboard
 
 - Creating and editing role plays, personas, and voices.
-- Adding credits, choosing starting credits, and the Credits page.
+- Buying/funding the org's credits and choosing default starting allocations. Learner credit grants are also available through the API.
 - Twins: the API covers role plays only.

@@ -41,7 +41,7 @@ The response includes the learner and whether the email was delivered (`201`).
 
 Adding someone who is already a learner returns `200` with `created: false` and sends nothing. An email that belongs to one of your trainers (admin or team), or to a learner you removed, returns `409`.
 
-A new learner gets **30 credits** (1 credit = 1 minute of practice) from your organization's prepaid balance. Credits are shared by every twin and role play and are used by the second during calls; learners see them as minutes. When the balance can't cover a new learner, the call returns `409`; contact TrainerTwin to top it up. Give a learner more credits in the dashboard (**Users**, or the learner's page); they get an email saying so.
+A new learner gets **30 credits** (1 credit = 1 minute of practice) from your organization's prepaid balance. Credits are shared by every twin and role play and are used by the second during calls; learners see them as minutes. When the balance can't cover a new learner, the call returns `409`; contact TrainerTwin to top it up. Give a learner more through `POST /users/{id}/credits` with an Idempotency-Key, or in the dashboard. See [Credits](/guides/credits).
 
 ## List learners
 
@@ -50,7 +50,7 @@ curl "https://dash.trainertwin.com/api/v1/users?limit=50&offset=0" \
   --header "x-api-key: $TRAINERTWIN_API_KEY"
 ```
 
-The response contains your learners in `users`, newest first. `invitations` is always empty (there are no pending invitations; it's kept for older integrations).
+The response contains enabled learners in `users`, newest first, including `creditsGiven` and `creditsLeft`. Add `?email=learner%40example.com` for an exact, case-insensitive lookup. Admin/team and disabled people are not listed. `invitations` is always empty (kept for older integrations).
 
 ## Update a learner name
 
@@ -62,7 +62,7 @@ curl "https://dash.trainertwin.com/api/v1/users/user_123" \
   --data '{ "name": "Avery Patel" }'
 ```
 
-Email and organization role changes are not supported through this endpoint.
+Email and organization role changes are not supported through this endpoint. An account used by another organization cannot be renamed here (`account_shared`/409); the person can change their own name in Settings. Sending the current name is a no-op.
 
 ## Remove a learner
 
@@ -72,4 +72,4 @@ curl "https://dash.trainertwin.com/api/v1/users/user_123" \
   --header "x-api-key: $TRAINERTWIN_API_KEY"
 ```
 
-A successful removal returns `204 No Content`. Nothing is deleted: the learner is disabled — signed out and unable to sign in, with pending assignments cancelled and open sessions ended. Their account and historical sessions are kept. A removed learner no longer appears in list or detail responses; an organization trainer can re-enable them from Settings → Team and users.
+A successful removal, including a retry for an already-disabled learner, returns `204 No Content`. Nothing is deleted: the learner is disabled — signed out and unable to sign in, with pending assignments cancelled and open sessions ended. Their account and historical sessions are kept. A removed learner no longer appears in list or detail responses; an organization trainer can re-enable them from Settings → Team and users.

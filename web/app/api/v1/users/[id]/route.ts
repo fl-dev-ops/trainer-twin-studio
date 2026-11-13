@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { setMemberDisabled } from "@/lib/members";
 import { API_LEARNER_ROLE, findOrgLearner, requireExternalApi, apiRoute } from "@/lib/external-api";
+import { learnerBalance } from "@/lib/minutes";
 
 const updateSchema = z.object({ name: z.string().trim().min(1).max(100) }).strict();
 type Params = { params: Promise<{ id: string }> };
@@ -14,7 +15,9 @@ async function handleGET(request: Request, { params }: Params) {
   const learner = await findOrgLearner(api.org.id, { id });
   if (!learner) return errorResponse(refusals.notFound());
   const user = await db.user.findUniqueOrThrow({ where: { id }, select: { id: true, name: true, email: true, emailVerified: true } });
-  return Response.json({ user: { ...user, memberId: learner.memberId, role: API_LEARNER_ROLE, createdAt: learner.addedAt } });
+  const credits = await learnerBalance(api.org.id, learner.email);
+  return Response.json({ user: { ...user, memberId: learner.memberId, role: API_LEARNER_ROLE, createdAt: learner.addedAt,
+    creditsGiven: credits.grantedSeconds / 60, creditsLeft: Math.max(0, credits.balanceSeconds) / 60 } });
 }
 
 async function handlePATCH(request: Request, { params }: Params) {

@@ -1,4 +1,4 @@
-import { removableLink } from "@/lib/roleplay-access";
+import { removeRoleplayAssignment } from "@/lib/roleplay-access";
 import { z } from "zod";
 import { MAX_ASSIGNMENT_RECIPIENTS } from "@/lib/assignments";
 import { db } from "@/lib/db";
@@ -32,20 +32,11 @@ export async function DELETE(
   if (!parsed.success) return Response.json({ error: "Invalid request" }, { status: 400 });
 
   const { slug } = await params;
-  const assignment = await db.rolePlayAssignment.findFirst({
-    where: {
-      id: parsed.data.assignmentId,
-      orgId: trainer.id,
-      deployment: { agent: { slug } },
-      ...removableLink,
-    },
-    select: { id: true },
-  });
-  if (!assignment) {
+  const removed = await removeRoleplayAssignment(trainer.id, parsed.data.assignmentId, slug);
+  if (!removed) {
     return Response.json({ error: "Pending assignment not found" }, { status: 404 });
   }
 
-  await db.rolePlayAssignment.delete({ where: { id: assignment.id } });
   return Response.json({ removed: true });
 }
 

@@ -1,9 +1,10 @@
 openapi: 3.1.0
 info:
   title: TrainerTwin API
-  version: 1.0.0
+  version: 1.1.0
   description: |
-    Organization-scoped API for managing learners, practice sessions, and role-play assignments.
+    Organization-scoped API for managing learners, credit allocations, practice sessions, and role-play assignments.
+    One credit is one minute. Credit amounts may include fractional minutes for usage measured in seconds.
     The API covers role plays only; twins are not listed or returned. Sessions are read-only:
     practice happens in the TrainerTwin app.
     Scenarios can be listed via the API; scenario, persona, knowledge, and voice
@@ -13,6 +14,7 @@ servers:
     description: Production
 security:
   - ApiKeyAuth: []
+  - BearerAuth: []
 tags:
   - name: Users
     description: Invite and manage organization learners.
@@ -22,6 +24,8 @@ tags:
     description: Read the organization's published role-play scenarios.
   - name: Sessions
     description: Read practice sessions and their results (read-only).
+  - name: Credits
+    description: Read available credits and allocate them to learners from the organization's balance.
 paths:
   /scenarios:
     get:
@@ -53,6 +57,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
   /scenarios/{scenarioSlug}:
     parameters:
       - $ref: '#/components/parameters/ScenarioSlug'
@@ -78,13 +86,23 @@ paths:
           $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
   /users:
     get:
       operationId: listUsers
       tags: [Users]
       summary: List learners
-      description: Lists the learners in the API key's organization, newest first. `limit` and `offset` page through `users`. Learners are added straight to the organization, so there are no pending invitations; `invitations` is always empty and kept for older integrations.
+      description: Lists enabled learners in the API key's organization, newest first, including creditsGiven and creditsLeft. Admin/team and disabled learners are omitted. An optional email filter is exact and case-insensitive. There are no pending invitations; invitations is always empty for compatibility.
       parameters:
+        - name: email
+          in: query
+          schema:
+            type: string
+            format: email
+          description: Exact learner email, case-insensitive.
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Offset'
       responses:
@@ -113,6 +131,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
     post:
       operationId: inviteUser
       tags: [Users]
@@ -181,6 +203,8 @@ paths:
           $ref: '#/components/responses/Conflict'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
   /users/{userId}:
     parameters:
       - $ref: '#/components/parameters/UserId'
@@ -205,11 +229,15 @@ paths:
           $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
     patch:
       operationId: updateUser
       tags: [Users]
       summary: Update a learner
-      description: Updates the learner's display name. Email and role changes are not supported.
+      description: Updates the learner's display name. Renaming an account used by another organization (disabled memberships included) returns account_shared/409; the same name is a no-op. Email and role changes are not supported.
       requestBody:
         required: true
         content:
@@ -243,11 +271,17 @@ paths:
           $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/ServerError'
     delete:
       operationId: removeUser
       tags: [Users]
       summary: Remove a learner
-      description: Disables the learner. They are signed out and can no longer sign in, their pending assignments are cancelled and open sessions end; their account and historical sessions are kept. A removed learner is no longer listed or returned.
+      description: Disables the learner, signs them out, cancels open assignments and ends live calls while preserving their account and history. Repeating DELETE for an already-disabled learner returns 204 and retries call cleanup. Disabled learners are omitted from user reads; their historical sessions remain readable.
       responses:
         '204':
           description: Learner removed.
@@ -257,12 +291,16 @@ paths:
           $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
   /assignments:
     get:
       operationId: listAssignments
       tags: [Assignments]
       summary: List assignments
-      description: Lists the organization's assignments, newest first.
+      description: Lists the organization's assignments, newest first with a deterministic ID tie-break. Filter by userId or email, never both.
       parameters:
         - $ref: '#/components/parameters/UserIdFilter'
         - name: email
@@ -295,6 +333,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
     post:
       operationId: createAssignment
       tags: [Assignments]
@@ -337,6 +379,8 @@ paths:
           $ref: '#/components/responses/Conflict'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
   /assignments/{assignmentId}:
     parameters:
       - $ref: '#/components/parameters/AssignmentId'
@@ -361,11 +405,15 @@ paths:
           $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
     patch:
       operationId: updateAssignment
       tags: [Assignments]
       summary: Update an assignment
-      description: Moves an assignment to another learner, published scenario, or both. A change issues a new `practiceUrl` (the old link stops working) and emails the learner. Moving onto a learner and scenario pair that already has an assignment returns `409`, as does moving it to someone new to the organization's credits when the balance can't cover their 30.
+      description: Moves an assignment to another learner, scenario, or both. Supply email or userId, never both. The old link is cancelled and history stays with it. An open target pair returns assignment_exists/409; a closed target pair is reopened with a new link. Repeating the same move returns the target unchanged without another email. A closed source with no open target returns roleplay_access_removed/403. Disabled/studio recipients are refused even for no-op requests.
       requestBody:
         required: true
         content:
@@ -374,6 +422,8 @@ paths:
               type: object
               additionalProperties: false
               minProperties: 1
+              not:
+                required: [email, userId]
               properties:
                 userId:
                   type: string
@@ -419,10 +469,13 @@ paths:
           $ref: '#/components/responses/Conflict'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
     delete:
       operationId: deleteAssignment
       tags: [Assignments]
       summary: Delete an assignment
+      description: Removes only a pending assignment with no related sessions, including unstarted, failed or deleted sessions. Otherwise returns not_found/404. No history is detached, no credits are refunded, and a repeated delete returns 404.
       responses:
         '204':
           description: Assignment deleted.
@@ -432,12 +485,16 @@ paths:
           $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
   /sessions:
     get:
       operationId: listSessions
       tags: [Sessions]
       summary: List sessions
-      description: Lists practice-session summaries. Use the detail endpoint for transcript and evidence data.
+      description: Lists the organization's role-play calls, including trainer previews and disabled learners' history. Deleted sessions and twin calls are excluded. Results are newest first with an ID tie-break. Date filters use startedAt (so unstarted calls are excluded) and from must not exceed to. Use detail for transcript, report and evidence.
       parameters:
         - name: status
           in: query
@@ -471,6 +528,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
   /sessions/{sessionId}:
     parameters:
       - $ref: '#/components/parameters/SessionId'
@@ -478,7 +539,7 @@ paths:
       operationId: getSession
       tags: [Sessions]
       summary: Get a session
-      description: Returns pinned configuration versions, transcript, evidence, and presigned download URLs for the audio and video recordings when available.
+      description: Returns pinned configuration version identifiers, stored transcript, report/reportStatus, evidence, and hour-long recording URLs when available. Reports may still be generating or unavailable; this read does not generate them. Deleted, foreign-org and twin sessions return 404.
       responses:
         '200':
           description: Session details.
@@ -496,14 +557,140 @@ paths:
           $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /credits:
+    get:
+      operationId: getOrgCredits
+      tags: [Credits]
+      summary: Read available org credits
+      description: Requires users:read. Returns the spendable org balance after allocations, usage and active trainer reservations. Does not purchase or create credits. One credit is one minute; fractional minutes retain second-level usage.
+      responses:
+        '200':
+          description: Available org balance and learner allocation limits.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgCredits'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /users/{userId}/credits:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      operationId: getLearnerCredits
+      tags: [Credits]
+      summary: Read a learner's credits
+      description: Requires users:read. Returns allocated, used and remaining minutes, including usage so far in active calls. Unknown, foreign, disabled or studio users return 404.
+      responses:
+        '200':
+          description: Current learner balance.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LearnerCredits'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      operationId: grantLearnerCredits
+      tags: [Credits]
+      summary: Give a learner credits
+      description: |
+        Requires users:write. Adds whole minutes from the org's existing balance; does not replace a balance or mint credits.
+        A learner must be enabled in this org. Existing pause and 360-minute total-allocation limits apply.
+        Idempotency-Key is required and scoped to the org. Reusing it with the same learner, minutes and note returns
+        the original grant with created=false and current balances, never a second allocation. Different input returns
+        idempotency_conflict/409. A replay still checks key and learner eligibility, but does not fail solely because
+        the org was later paused or its remaining credits were spent. Request keys are retained with the ledger.
+        New grants attempt the standard credits email after commit. Email failure does not undo a grant.
+        Replays do not send again; emailSent is false on replay. A crash after commit but before notification may leave
+        an unsent notification; integrators should use the returned credit state, not email delivery, as confirmation.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [minutes]
+              properties:
+                minutes:
+                  type: integer
+                  minimum: 1
+                  maximum: 360
+                  example: 30
+                note:
+                  type: string
+                  maxLength: 200
+                  example: Extra practice for module 2
+      responses:
+        '201':
+          description: Credits allocated once.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditGrantResult'
+        '200':
+          description: Previously allocated grant returned; no new credits or email.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditGrantResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
 components:
   securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: The same org API key may be supplied as a Bearer token.
     ApiKeyAuth:
       type: apiKey
       in: header
       name: x-api-key
       description: Organization API key generated in Dashboard → account menu → Developer API (dash.trainertwin.com/developer).
   parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: A fresh key for each intended credit grant; reuse it unchanged after a timeout. Unique within the org.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+        pattern: '^\S+$'
+      example: grant-module-2-user-123
     Limit:
       name: limit
       in: query
@@ -516,10 +703,11 @@ components:
     Offset:
       name: offset
       in: query
-      description: Number of records to skip.
+      description: Number of records to skip (decimal integer).
       schema:
         type: integer
         minimum: 0
+        maximum: 2147483647
         default: 0
     UserId:
       name: userId
@@ -598,7 +786,7 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
     Forbidden:
-      description: API key creator is no longer an organization trainer (admin or team member).
+      description: The key lacks the required scope, its creator is no longer enabled admin/team, or an operation is refused (for example a paused credit grant or a closed assignment move).
       content:
         application/json:
           schema:
@@ -626,11 +814,89 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+    ServerError:
+      description: Unexpected server failure. Retrying a credit grant must use the original Idempotency-Key.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
   schemas:
+    OrgCredits:
+      type: object
+      additionalProperties: false
+      required: [balanceMinutes, defaultLearnerMinutes, maxLearnerMinutes]
+      properties:
+        balanceMinutes:
+          type: number
+          minimum: 0
+          example: 75
+        defaultLearnerMinutes:
+          type: integer
+          example: 30
+        maxLearnerMinutes:
+          type: integer
+          example: 360
+    LearnerCredits:
+      type: object
+      additionalProperties: false
+      required: [userId, givenMinutes, usedMinutes, balanceMinutes, maxLearnerMinutes]
+      properties:
+        userId:
+          type: string
+        givenMinutes:
+          type: number
+          description: Total allocations minus historical reclaims; spending does not reopen the allocation cap.
+        usedMinutes:
+          type: number
+          description: Finished-call usage plus active-call usage so far, in minutes.
+        balanceMinutes:
+          type: number
+          minimum: 0
+        maxLearnerMinutes:
+          type: integer
+          example: 360
+    CreditGrantResult:
+      type: object
+      additionalProperties: false
+      required: [grant, created, balanceMinutes, orgBalanceMinutes, emailSent]
+      properties:
+        grant:
+          type: object
+          additionalProperties: false
+          required: [id, userId, minutes, note, createdAt]
+          properties:
+            id:
+              type: string
+              description: Immutable ledger grant ID; stable on replay.
+            userId:
+              type: string
+            minutes:
+              type: integer
+              minimum: 1
+              maximum: 360
+            note:
+              type: [string, 'null']
+            createdAt:
+              type: string
+              format: date-time
+        created:
+          type: boolean
+          description: True only when this request wrote a new grant.
+        balanceMinutes:
+          type: number
+          minimum: 0
+          description: Current learner balance, which can change between retries.
+        orgBalanceMinutes:
+          type: number
+          minimum: 0
+          description: Current available org balance.
+        emailSent:
+          type: boolean
+          description: Sender accepted the notification during this request, not proof of inbox delivery. False on replay; development intentionally skips delivery.
     Error:
       type: object
       additionalProperties: false
-      required: [error]
+      required: [error, code]
       properties:
         error:
           type: string
@@ -642,7 +908,7 @@ components:
             A stable code for the refusal, the same wherever it happens: api_key_invalid (401), scope_missing (403),
             api_key_owner_gone (403), rate_limited (429, with a Retry-After header in seconds), invalid_input (400),
             invalid_email (400), not_found (404), person_disabled (409), person_is_studio (409),
-            assignment_exists (409), account_shared (409), roleplay_access_removed (403), minutes (credits: 400, 403
+            assignment_exists (409), account_shared (409), idempotency_conflict (409), roleplay_access_removed (403), minutes (credits: 400, 403
             or 409), calls_not_ended (500), internal_error (500).
           example: not_found
     Pagination:
@@ -684,6 +950,13 @@ components:
         createdAt:
           type: string
           format: date-time
+        creditsGiven:
+          type: number
+          description: Credits allocated to the learner, net of historical reclaims (1 credit = 1 minute). Returned by list/get/add.
+        creditsLeft:
+          type: number
+          minimum: 0
+          description: Available learner credits, including usage so far in active calls. Returned by list/get/add.
     Scenario:
       type: object
       required: [slug, name, version, visibility]
@@ -770,7 +1043,7 @@ components:
       type: object
       additionalProperties: false
       required: [scenario]
-      anyOf:
+      oneOf:
         - required: [userId]
         - required: [email]
       properties:
@@ -866,17 +1139,18 @@ components:
       type: string
       enum: [pending, used, expired, cancelled]
       x-enum-descriptions:
-        pending: Assigned; the learner has not practised it yet.
-        used: The learner has practised it at least once; the link still works.
+        pending: Open assignment; may have been practised any number of times. Use practiceCount for usage.
+        used: Historical open status, still accepted. New practice no longer changes pending to used.
         expired: Only on assignments made before links stopped expiring; assigning again reopens it.
         cancelled: The assignment was cancelled (for example by reassignment).
     SessionStatus:
       type: string
-      enum: [assigned, activating, active, completed, abandoned, failed, revoked]
+      enum: [assigned, activating, active, closing, completed, abandoned, failed, revoked]
       x-enum-descriptions:
         assigned: Assignment created; the learner has not started practicing yet.
         activating: Session is starting (transient).
         active: Session is live.
+        closing: Session is closing.
         completed: Learner finished the session.
         abandoned: Learner left before completing; a later start abandons this one.
         failed: Session activation or runtime failed.
@@ -916,6 +1190,9 @@ components:
           description: Delivery mode of the session.
           type: string
           enum: [chat, voice]
+        chargesOrg:
+          type: boolean
+          description: True for a billed trainer call that spends org credits directly; false does not alone prove the caller is a learner.
         contextName:
           type: [string, 'null']
         createdAt:
@@ -936,6 +1213,13 @@ components:
             transcript:
               description: Structured session transcript when available.
               type: [object, array, 'null']
+            report:
+              description: Stored session report when available. Its body is opaque and depends on the report type.
+              type: [object, array, 'null']
+            reportStatus:
+              description: Current persisted report-generation state; null/none means no report has been claimed yet.
+              type: [string, 'null']
+              enum: [none, generating, completed, failed, null]
             evidence:
               description: Structured evaluation evidence when available.
               type: [object, array, 'null']

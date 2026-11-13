@@ -22,7 +22,7 @@ async function handleGET(request: Request) {
   const [scenarios, total] = await Promise.all([
     db.agent.findMany({
       where: { orgId: api.org.id, kind: "ROLEPLAY", archivedAt: null },
-      orderBy: [{ order: "asc" }, { createdAt: "desc" }],
+      orderBy: [{ order: "asc" }, { createdAt: "desc" }, { id: "desc" }],
       skip: page.offset,
       take: page.limit,
       select: listSelect,

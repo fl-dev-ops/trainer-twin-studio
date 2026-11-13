@@ -3,7 +3,7 @@ title: "Sessions"
 description: "Read practice sessions and their results."
 ---
 
-A session is a learner's practice run against a published role-play scenario. Sessions happen in the TrainerTwin app — learners start them from their assignment link or the learner portal. The API is **read-only** for sessions: list them and read their results.
+A session is a practice run against a published role-play scenario. Org lists include learner calls and trainer previews; disabled learners' history remains available, while deleted sessions and twin calls are excluded. Sessions happen in the TrainerTwin app — learners start them from their assignment link or the learner portal. The API is **read-only** for sessions: list them and read their results.
 
 A few things shape a session:
 
@@ -22,7 +22,7 @@ Combine any of these filters:
 | `userId` | Sessions for one learner |
 | `scenario` | Sessions for one published scenario slug |
 | `assignmentId` | Every practice of one assignment |
-| `status` | `assigned`, `activating`, `active`, `completed`, `abandoned`, `failed`, or `revoked` |
+| `status` | `assigned`, `activating`, `active`, `closing`, `completed`, `abandoned`, `failed`, or `revoked` |
 | `from` | Started at or after this ISO 8601 timestamp |
 | `to` | Started at or before this ISO 8601 timestamp |
 | `limit` | Page size, `1`–`100` (default `50`) |
@@ -33,7 +33,7 @@ curl "https://dash.trainertwin.com/api/v1/sessions?userId=user_123&status=comple
   --header "x-api-key: $TRAINERTWIN_API_KEY"
 ```
 
-Results are sorted by creation time, newest first. The response includes pagination metadata — page through by increasing `offset` until `offset >= total`:
+Results are sorted by creation time, newest first, then by ID for tied timestamps. `from` must not be later than `to`; date filters use `startedAt` and therefore omit calls that have not started. The response includes pagination metadata — page through by increasing `offset` until `offset >= total`:
 
 ```json
 {
@@ -75,7 +75,9 @@ The detail response includes:
 - Pinned persona and scenario versions.
 - Session status, delivery mode, and timestamps.
 - Transcript data when available.
+- The stored `report` and `reportStatus` (`none`, `generating`, `completed`, `failed` or null). Reading does not trigger report generation; a completed call may still be waiting for its report.
 - Evidence data when available.
+- `chargesOrg`, true for billed trainer calls. A false value can also mean an unbilled trainer call, not only a learner.
 - `audioUrl` and `videoUrl` — presigned download URLs for the audio and video recordings, valid for one hour (`null` when that recording doesn't exist).
 
 `startedAt` is `null` for a session the learner has not started yet (for example `assigned` or `failed` before it began).

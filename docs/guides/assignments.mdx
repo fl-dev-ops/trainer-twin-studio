@@ -9,7 +9,7 @@ An assignment lets a learner practise a published role play through a personal l
 
 You need:
 
-- A learner `userId` from `GET /users`, or just an `email`. Someone new is added to your organization as a learner first (with their starting credits), in the same request.
+- A learner `userId` from `GET /users`, or just an `email`—never both in the same request. Someone new is added to your organization as a learner first (with their starting credits), in the same request.
 - A published scenario slug from `GET /scenarios` or the TrainerTwin dashboard.
 
 Scenario and persona configuration remains dashboard-only.
@@ -58,11 +58,11 @@ Creating the same learner-scenario pair again is safe. While the assignment is p
 
 ## Credits
 
-Someone new to your organization's credits gets **30** (1 credit = 1 minute of practice) from its prepaid balance when first assigned. If the balance can't cover them, the request returns `409` and nothing is assigned. Credits belong to the learner and are shared by every role play and twin, so assigning more role plays doesn't give more credits. A call ends when the learner's credits run out. Give learners more credits in the dashboard.
+Someone new to your organization's credits gets **30** (1 credit = 1 minute of practice) from its prepaid balance when first assigned. If the balance can't cover them, the request returns `409` and nothing is assigned. Credits belong to the learner and are shared by every role play and twin, so assigning more role plays doesn't give more credits. A call ends when the learner's credits run out. Give learners more through `POST /users/{id}/credits` with an Idempotency-Key, or in the dashboard. See [Credits](/guides/credits).
 
 ## Practising again
 
-There's no limit on attempts. Each practice starts a new session from the same `practiceUrl`, and `status` becomes `used` after the first. The link keeps working until you remove the assignment. List an assignment's sessions with `GET /sessions?assignmentId=…`.
+There's no limit on attempts while credits and access remain. Each new practice uses the same `practiceUrl`; a still-live call may be rejoined. The assignment remains `pending` even after practice (historical `used` links still work). Use `practiceCount`, not status, to count practices. List its sessions with `GET /sessions?assignmentId=…`.
 
 ## Change an assignment
 
@@ -76,7 +76,7 @@ curl "https://dash.trainertwin.com/api/v1/assignments/assignment_123" \
   --data '{ "scenario": "system-design-interview" }'
 ```
 
-You can also move it to an `email` address. A changed assignment sends a notification to the target learner and returns a new `practiceUrl` (the old link stops working). Moving it to someone new to your organization's credits gives them their 30 first, or returns `409` when the balance can't cover them. A no-op update returns `changed: false`, the existing `practiceUrl`, and sends no email. Moving onto a learner who already has that scenario assigned returns `409`.
+You can also move it to an `email` address. A changed assignment sends a notification to the target learner and returns a new `practiceUrl` (the old link stops working). Moving it to someone new to your organization's credits gives them their 30 first, or returns `409` when the balance can't cover them. A no-op or repeated completed move returns `changed: false`, the existing target `practiceUrl`, and sends no email. Recipient checks still apply. Moving onto an already-open learner/scenario pair returns `409`; a closed target pair is reopened with its historical assignment ID. Concurrent requests cannot create two destinations from the same source.
 
 ## Inspect an assignment
 
@@ -85,9 +85,9 @@ curl "https://dash.trainertwin.com/api/v1/assignments/assignment_123" \
   --header "x-api-key: $TRAINERTWIN_API_KEY"
 ```
 
-Returns the learner, scenario, current `status`, `practiceUrl`, how often it was practised (`practiceCount`), and when last (`lastPracticedAt`, or `null`). `status` is `pending` (not practised yet), `used` (practised at least once; the link still works), or `cancelled`. Assignments made before links stopped expiring may show `expired`; assigning again reopens them.
+Returns the learner, scenario, current `status`, `practiceUrl`, how often it was practised (`practiceCount`), and when last (`lastPracticedAt`, or `null`). `status` is `pending` (open, whether practised or not), historical `used` (also open), or `cancelled`. Assignments made before links stopped expiring may show `expired`; assigning again reopens them.
 
-List assignments with `GET /assignments`, filtered by `userId`, `email`, or `scenario`.
+List assignments with `GET /assignments`, filtered by `userId` or `email` (never both), and optionally `scenario`.
 
 ## Remove an assignment
 
@@ -97,4 +97,4 @@ curl "https://dash.trainertwin.com/api/v1/assignments/assignment_123" \
   --header "x-api-key: $TRAINERTWIN_API_KEY"
 ```
 
-Removing an assignment does not remove the scenario or historical practice sessions.
+DELETE succeeds only for a pending assignment with **no associated sessions**. Used, cancelled, expired or session-linked assignments return `404`, as does a repeated delete. No scenario/history is deleted and no credits are refunded. Use learner disable to remove all of a learner's access; moving an assignment cancels its old link.

@@ -1,321 +1,184 @@
-# Public API
+# Public integration API
 
-> TrainerTwin's organization API lets a server add and manage learners, read role-play scenarios, assign them, and read practice results. An organization API key chooses the organization and permissions. Practice itself starts in the app, not through these resource endpoints. One route under the same `/api/v1` prefix, `/chat/completions`, is a separate session-token runtime interface, not the integrator API. This module spec describes the implementation against [API rules](api.md), [People](people.md) and [Practice](practice.md), and records differences from the published `docs/` contract.
+> The organization API lets an integration list Studio-authored role plays, add/read learners, read/allocate credits,
+> assign practice, and read sessions and results. Role-play authoring and execution are outside this resource API.
+> Agreed behavior lives in [API rules](api.md), [People](people.md) and [Practice](practice.md). The published contract
+> is `docs/openapi.yaml`; `docs/trainer-twin-api.postman_collection.json` contains matching requests.
 
 ## Who uses it
 
-| Who | What they can do | Source |
-| --- | --- | --- |
-| Enabled organization admin or team member (a **trainer**) | Create, list and revoke any default-config API key of their current organization, not just their own. | `web/lib/org.ts` `getTrainerOrg`, `web/app/api/developer/api-keys/route.ts`, `web/lib/pages/router.ts` `developer` |
-| Learner (`member.role = user`) | Cannot manage keys. Uses the assignment link to practise in the app. | `web/lib/org.ts`, `web/lib/pages/router.ts` `developer`, `web/lib/pages/learner.ts` `loadSharedSession` |
-| API integrator | Uses a key to act on its organization's learners, assignments, scenarios and role-play sessions. No dashboard login is required for these requests. | `web/lib/external-api.ts` `requireExternalApi`, `web/app/api/v1/*/route.ts` |
-| Key creator | Supplies the acting trainer for every resource request. Missing creator metadata or a creator no longer enabled admin/team refuses the entire key; no fallback trainer. | `web/lib/external-api.ts:47–68` `requireExternalApi` |
-| Voice/runtime client | Sends a session runtime token to `/api/v1/chat/completions`; an organization API key does not authorize it. | `web/lib/runtime/openai.ts` `handleCompletions`, `web/lib/interview-sessions.ts` `authorizeRuntimeSession` |
+- An enabled org admin/team member creates a key on `/developer`; all default-config keys of that org can be listed
+  or revoked by its studio members (`web/app/api/developer/api-keys/route.ts`).
+- The integration acts as that key's enabled creator, without a dashboard login (`web/lib/external-api.ts`).
+- Learners practise through their personal link in TrainerTwin. They cannot manage integration keys.
+- `/api/v1/chat/completions` is a separate session-token model transport, **not** this API-key integration surface
+  (`web/lib/runtime/openai.ts`). Its runtime behavior remains in [Voice agent and chat](voice-agent-and-chat.md).
 
-## Words used here
+## Data and identities
 
-| Term | Meaning / code name |
+| Record / term | Meaning |
 | --- | --- |
-| Organization / org | Tenant selected from the verified key's `referenceId`, not from the caller's body, query or host (`web/lib/external-api.ts`). |
-| API key | Server secret with `tt_` prefix; the `Apikey` record stores its hash, permissions and organization reference (`web/lib/auth.ts`, `web/prisma/schema.prisma` `Apikey`). |
-| Scope / permission | A resource/action pair, such as `assignments:write`, passed to Better Auth's verifier (`web/lib/external-api.ts` `ExternalApiResource`, `ExternalApiAction`). |
-| Trainer | An `admin` or `team` organization member (`web/lib/org.ts` `STUDIO_ROLES`). |
-| Learner / API user | An enabled organization member with database role `user`. API responses call that role `member`; a user ID identifies the account, while `memberId` identifies its organization membership (`web/lib/external-api.ts` `API_LEARNER_ROLE`, `findOrgLearner`). |
-| Scenario | An organization `Agent` with `kind = ROLEPLAY` and `archivedAt = null`; the routes call this published. Twins are excluded (`web/lib/external-api-assignments.ts` `findScenario`). |
-| Deployment | The organization's delivery record for one agent. Assignment uniqueness checks use its ID (`web/lib/deployments.ts` `ensureDeployment`). |
-| Assignment | A `RolePlayAssignment` linking a required org member to a deployment, with a personal share code (`web/prisma/schema.prisma`). |
-| Practice URL | `https://<org.slug>.<BASE_DOMAIN>/s/<shareCode>` (`web/lib/external-api-assignments.ts` `practiceUrl`). |
-| Session / practice | One call; repeated practices can share an `assignmentId` (`web/lib/interview-sessions.ts` `activateSession`). |
-| Credit / minute | One minute of learner practice, represented by seconds in the ledger. Initial API grants are 30 credits; see [Credits](credits.md) (`web/lib/minutes-config.ts`, `web/lib/minutes.ts`). |
-| Runtime token | A session-scoped secret matched by its hash, separate from `Apikey` (`web/lib/interview-sessions.ts` `authorizeRuntimeSession`). |
+| API key | Better Auth `Apikey`, hashed secret, org in referenceId, creator in metadata.createdByUserId. |
+| User / learner | Enabled org member with database role user; public User.role stays member for compatibility. Account id is userId; org membership id is memberId. |
+| Scenario | Same-org, unarchived Agent with kind ROLEPLAY. Twins are excluded. Public names/identifiers are retained independently of future runtime redesign. |
+| Assignment | RolePlayAssignment for a deployment and member, unique by that pair, with a personal shareCode. |
+| Credits | One credit is one minute; the ledger stores integer seconds. Org balance belongs to Meteroid, less pending allocations/usage and active studio reservations. |
+| API grant | MinuteLedger type grant with userId and nullable requestKey; unique (orgId,requestKey). Existing non-API rows keep null. |
+| Session | One InterviewSession; several sessions may share an assignmentId. Read-only here, including persisted transcript/report/evidence. |
 
-## Data
+Sources: `web/prisma/schema.prisma`; `web/lib/org-people.ts`; `web/lib/minutes.ts`; `web/lib/org-credits.ts`;
+`web/lib/external-api-assignments.ts`. Migration `20261117120000_api_credit_request_key` adds only the nullable request
+key and its unique index. It does not change existing grants, balances, users or assignments.
 
-The API layer owns the key-management boundary, not separate copies of learners, scenarios or sessions.
+## Authentication and common responses
 
-| Record | Relevant fields and writers | Source |
-| --- | --- | --- |
-| `Apikey` (`apikey` table) | `id`, `configId` (default `default`), `name`, `start` (display prefix), `prefix`, `key` (hash), `referenceId` (org ID), `enabled`, `expiresAt`, `permissions` and `metadata` (serialized). Metadata records `createdByUserId`. Better Auth creates/verifies/updates usage; Developer DELETE removes the row. | `web/prisma/schema.prisma` `Apikey`, `web/lib/auth.ts`, `web/app/api/developer/api-keys/route.ts` |
-| Key usage fields | `rateLimitEnabled`, `rateLimitTimeWindow`, `rateLimitMax`, `requestCount`, `lastRequest`; optional quota/refill fields `remaining`, `refillAmount`, `refillInterval`, `lastRefillAt`; `createdAt`, `updatedAt`. Developer UI does not expose editing them. | Same schema and routes; `web/components/api-key-manager.tsx` |
-| `Member` / `User` | POST users creates a missing account and immediate learner membership through addPeopleToOrg. Existing learner is unchanged. PATCH renames an account only if it has no other org membership; repeating its current name writes nothing. DELETE disables membership, including on retry. No invitation creation. | `web/lib/org-people.ts`; `web/lib/invite/org.ts`; `web/app/api/v1/users/[id]/route.ts` |
-| `RolePlayAssignment` | `orgId`, `deploymentId`, `assignedByUserId`, required `memberId`, unique `shareCode`, `status`, `assignedAt`, `expiresAt`, nullable `usedAt`; default `mode = voice`. POST creates/reopens; PATCH move cancels the source and creates/reopens a target pair; DELETE physically deletes only a pending row with no sessions (`removableLink`). | `web/prisma/schema.prisma`, `web/app/api/v1/assignments/route.ts`, `web/app/api/v1/assignments/[id]/route.ts` |
-| `InterviewSession.assignmentId` | Nullable reference to the assignment; `onDelete: SetNull`. The schema would null historical references on deletion, but this API's DELETE excludes every row with a session, even failed, unstarted or soft-deleted sessions. Session metadata/results are read here; see [Sessions](sessions.md). | `web/prisma/schema.prisma` `InterviewSession`, `web/app/api/v1/sessions/*` |
-| `MinuteLedger` | Initial grants belong to normalized email + org, not to an assignment. Fresh-learner grants, account/member creation and assignment writes commit together under the org locks through addPeopleToOrg.then; email follows. See [Organizations and roles](orgs-and-roles.md#add-and-list-people), [People rule 17](people.md#rules) and [Credits](credits.md). | `web/lib/org-people.ts` `addPeopleToOrg`; `web/lib/minutes.ts` `giveStartingMinutes` |
+`requireExternalApi` accepts trimmed `x-api-key`, otherwise a Bearer key. A nonempty x-api-key wins if both are sent.
+Better Auth verifies the requested permission before the org and creator are read. The creator must still be enabled
+admin/team, checked through orgPeople on every request; no fallback trainer is used. The caller cannot choose an org
+by body/query/header (`web/lib/external-api.ts`).
 
-Lifecycles:
-
-- Key: created enabled → expires after 365 days, or row deleted on revocation. There is no renewal/expiry-edit route in the Developer API; rotate by creating another key (`web/lib/auth.ts`, `web/app/api/developer/api-keys/route.ts`).
-- Member: added immediately (account created first when missing); learner receives starting credits and combined added email. Old invitation table is unused; GET invitations is always empty (`web/lib/org-people.ts`; `web/lib/invite/org.ts`; `web/app/api/v1/users/route.ts`).
-- Assignment: new → pending; starts/ends/failed joins do not write used or usedAt. Legacy used rows remain open. POST open pair is a no-op; closed pair reopens the same ID with fresh code/dates and null usedAt. PATCH move leaves the source cancelled with its original owner/scenario/code/history and creates a target row, or reopens a closed target pair. DELETE removes only pending rows with no sessions; disabling cancels pending/used. (`web/lib/invite/roleplay.ts` `giveRoleplay`; `web/lib/external-api-assignments.ts` `assignScenario`; `web/lib/members.ts:52` `setMemberDisabled`; [Role plays](roleplays.md).)
-- Assignment writers still store `expiresAt = now + 30 days`, but current link opening/activation does not test that timestamp. A stored status of `expired` is different: it is not accepted for practice (`web/lib/assignments.ts` `assignmentExpiresAt`, `web/lib/pages/learner.ts` `loadSharedSession`, `web/lib/interview-sessions.ts` `activateSession`).
-
-## How it works
-
-### Create and use a key
-
-1. Open `/developer` on the dashboard (source `web/app/dash/developer/page.tsx`; dashboard path rewriting is in `web/proxy.ts`). `page.developer` checks `isStudioRole` and lists current-org `configId = default` keys, newest first. It returns only display fields, never the hash or secret (`web/lib/pages/router.ts` `developer`).
-2. Enter a trimmed name of 1–60 characters. The manager POSTs `{name}` to `/api/developer/api-keys`. The route uses `studioOrRefusal`, counts all keys with this org's `referenceId` (disabled, expired and nondefault configs included), and returns `too_many_keys`/409 when the count is at least 20. Otherwise it records the org and creator, then calls server-only `auth.api.createApiKey`. Count and create are not locked together (Mismatches). It returns `201 {key, record}`; `record` contains `id,name,start,enabled,expiresAt,lastRequest,createdAt`. The full secret lives in component state and is shown/copyable after creation; it is not returned by key lists (`web/components/api-key-manager.tsx`, `web/app/api/developer/api-keys/route.ts`).
-3. Better Auth generates a `tt_` key with configured key length 64, hashes it by default, sets expiry to 365 days and defaults permissions as below. There is no scope picker, custom expiry or per-key limit editor in this UI/route (`web/lib/auth.ts` API-key plugin; dependency `@better-auth/api-key` 1.7.15 `createApiKey`, `defaultKeyHasher`).
-4. Send a nonempty trimmed `x-api-key`, or `Authorization: Bearer <key>` (case-insensitive scheme). A nonempty `x-api-key` wins even if a valid bearer key is also present. `requireExternalApi` asks Better Auth to verify the exact resource/action and loads the organization by key `referenceId`. It then reads the creator's enabled admin/team membership through orgPeople on **every** request. Missing/nonstring createdByUserId or a missing/disabled/learner creator throws `api_key_owner_gone`/403; no oldest-trainer fallback. Successful context carries trainer and nonnull actorUserId. `apiRoute` translates the thrown refusal to `{error,code}` (`web/lib/external-api.ts:23–26,47–88` `externalApiKey`, `requireExternalApi`, `apiRoute`).
-5. Revoke through the manager's confirmation and DELETE `{id}`. It deletes only a current-org default-config row; success is `204`, missing/foreign key is `404`. All trainers can revoke another trainer's key in the same org. The next verification cannot find it (`web/app/api/developer/api-keys/route.ts`, `web/components/api-key-manager.tsx`).
-
-Default scopes and actual use (`web/lib/auth.ts`, every resource handler in `web/app/api/v1/`):
-
-| Resource | Granted on creation | Used by routes |
-| --- | --- | --- |
-| `users` | `read`, `write` | GET requires read; POST/PATCH/DELETE require write. |
-| `assignments` | `read`, `write` | GET requires read; POST/PATCH/DELETE require write. |
-| `sessions` | `read`, `write` | Only read is used. No session create/update/delete handler exists here. |
-| `scenarios` | `read` | Read only. |
-
-Old keys with an `assignments` permission entry but no `scenarios` entry receive `scenarios:[read]` in migration `web/prisma/migrations/20260901120000_scenarios_api_permission/migration.sql`. It does not update every old key.
-
-### Add or assign with starting credits
-
-- POST users first passes the shared enabled key-creator check, then validates email and calls `addLearnerByApi` with api.trainer. It adds through `addPeopleToOrg(role:user)`, emails only a new member and returns `{user,created,emailSent}` with 201 new/200 existing. `apiRoute` preserves AppErrors as `{error,code}` and original status (disabled/studio/short credits 409, paused credits 403); api_key_owner_gone is 403 for every resource operation (`web/lib/external-api.ts:47–88`; `web/lib/invite/org.ts` `addLearnerByApi`; `web/app/api/v1/users/route.ts:38–46,55–56`).
-- POST assignments validates scenario, ensures deployment, then calls `assignScenario`. Email wins over userId: `addPeopleToOrg.then` validates/adds the learner and writes the link under minutes then people lock in one transaction. userId alone uses orgPerson under the people lock; disabled/studio recipients get the same person_disabled/person_is_studio 409 as email, unknown/foreign gets not_found/404. `giveRoleplay` keeps open pending/legacy used pairs (200, created=false, no emailSent) or creates/reopens closed pairs (201 and combined email). (`web/app/api/v1/assignments/route.ts:44–79`; `web/lib/external-api-assignments.ts:31–60`; `web/lib/invite/roleplay.ts` `giveRoleplay`.)
-- PATCH resolves source and scenario before its transaction. `sameLearner` is true when no recipient was supplied, userId matches, **or** email matches. It checks closed status **before** the same-pair shortcut: a closed source returns the requested learner's pending/legacy used target link with changed=false, or `roleplay_access_removed`/403 if none exists. This retry lookup uses userId before email and does not check the target person's role/disabled state. An open same-pair request returns changed=false without person validation. A real move uses `assignScenario(moveFrom: id)` to cancel source and create/reopen target atomically; an open target is assignment_exists/409/“That learner already has this role play.” New target calls/counts use its ID; source history stays unchanged. The source is not re-read inside that transaction. (`web/app/api/v1/assignments/[id]/route.ts:39–95`; `web/lib/external-api-assignments.ts:39–58`.)
-- Starting credits are only for fresh learner memberships. Email-based people, grants and link writes commit together; failure rolls them all back. Existing members/userId-only targets receive no grant. Deployment ensuring precedes that transaction; email preparation/delivery follows it. (`web/lib/org-people.ts:141–172`; `web/lib/external-api-assignments.ts:45–60`; [People rule 17](people.md#rules), [Credits](credits.md).)
-- deliverEmail sends inline first so REST can return emailSent, as allowed by People rule 12; failed sends start deliverEmails with the same key and still report emailSent=false. Added key is `added:<memberId>`; assignment key `assignment:<id>:<shareCode>`. Combined person mail includes actual post-grant whole balance, objective/preparation and sign-in link. Failed delivery leaves state intact (`web/lib/queue-emails.ts`; `web/lib/external-api-assignments.ts` `emailAssignment`; `web/lib/invite/org.ts`). See [People and emails](invites-and-emails.md).
-- PATCH users changes name only: after finding an enabled learner, the current name again returns 200 with no write, even for a shared account. A different name checks `inOtherOrgs` (disabled memberships included) and refuses `account_shared`/409 before the global User update. DELETE finds a learner with disabled memberships included and calls `setMemberDisabled` every time: repeat DELETE is 204 after any leftover calls are ended; failed call ending remains `calls_not_ended`/500 and can be retried. No custom public learner grant amount/balance adjustment (`web/app/api/v1/users/[id]/route.ts:20–46`; `web/lib/org-people.ts:194–196` `inOtherOrgs`; `web/lib/members.ts:37–76` `setMemberDisabled`).
-
-### Repeat practice and results
-
-The returned practice link hands off to [Learner portal](learner-portal.md) and [Sessions](sessions.md). Opening it shares roleplayAccessByCode/startAllowance with new Start: org, enabled member, account ownership, pending/legacy used, live agent, active voice-enabled deployment, pause and five-minute allowance. Role-play assignees are members before activation; missing-member starts are refused. A later practice creates a new session with the same `assignmentId`; an activating/active call on the same assignment/user is resumed instead. The web session route, not POST `/api/v1/sessions`, starts practice (`web/lib/pages/learner.ts` `loadSharedSession`, `web/lib/interview-sessions.ts` `activateSession`, `web/app/api/sessions/route.ts`).
-
-`assignmentDetails` reports `practiceCount` as the number of sessions with that `assignmentId`, nonnull `startedAt` and status other than `failed`; `lastPracticedAt` is the maximum qualifying start or null. Active/abandoned sessions count. There is no `deletedAt` filter here, unlike the sessions list. A reopened pair keeps its ID and prior counts; a move leaves source calls/counts with the cancelled source and normally creates a target ID with zero calls. A closed target pair may instead reopen with its own earlier counts. GET `/sessions?assignmentId=…` applies ordinary session visibility filters and includes sessions without a start unless additional filters exclude them (`web/lib/external-api-assignments.ts` `assignmentDetails`, `web/app/api/v1/sessions/route.ts`).
-
-## Rules
-
-1. All resource handlers authenticate before validation or lookup. Only the runtime completions route uses different authentication. Missing/invalid keys cannot inspect resources (`web/app/api/v1/*/route.ts`, `web/lib/external-api.ts`).
-2. Each resource operation requires its listed scope. `requireExternalApi` throws `api_key_invalid`/401 for missing, unknown, expired or disabled keys or a missing org, `scope_missing`/403 for the plugin's `KEY_NOT_FOUND`, `rate_limited`/429 for `RATE_LIMITED` or `USAGE_EXCEEDED`, and `internal_error`/500 for `FAILED_TO_UPDATE_API_KEY`. In this plugin/config, KEY_NOT_FOUND means a missing permission; unknown-key verification uses INVALID_API_KEY (`web/lib/external-api.ts:36–68`; installed `@better-auth/api-key/dist/index.mjs` `validateApiKey`).
-3. Org comes only from key `referenceId`. Detail/mutation lookups constrain org; an out-of-org user, assignment, scenario or session ID answers like an unknown one. Email targets are added to this org as learners before assignment (`web/lib/external-api.ts` `findOrgLearner`, all resource route `where` clauses).
-4. Users list/detail/update operate only on enabled role `user` memberships. DELETE includes disabled learners so retry still calls the disabling service and returns 204; unknown/foreign/studio accounts remain not_found/404. API role output is always `member`, never the database spelling. The list's `createdAt` is membership creation, not account creation (`web/app/api/v1/users/route.ts`, `web/app/api/v1/users/[id]/route.ts:11–46`).
-5. Every resource operation checks the key's own enabled admin/team creator through orgPeople, after key/scope verification/org lookup. Missing metadata is api_key_owner_gone/403; no fallback trainer. Assignment mutations pass trainer.userId into assignScenario/giveRoleplay for new-row attribution; reopening keeps the original assignedByUserId. (`web/lib/external-api.ts:64–68`; `web/app/api/v1/assignments/route.ts:57`; `web/app/api/v1/assignments/[id]/route.ts:81–86`; `web/lib/invite/roleplay.ts` `giveRoleplay`.)
-6. Resource mutation bodies are strict objects: unknown fields, malformed JSON and wrong field types fail `invalid_input`/400. Email/name are trimmed; emails are lowercased before lookup/write. Assignment `userId` is nonempty but not trimmed, and scenario must match `^[a-z0-9][a-z0-9._-]*$` case-insensitively (`web/app/api/v1/users/*`, `web/app/api/v1/assignments/*`).
-7. POST requires scenario and email or userId; PATCH at least one target field. POST/assignScenario prefer email. PATCH's sameLearner shortcut treats either matching identifier as unchanged, even if the other names someone else; it can ignore a different email when userId is current. Contradictory fields are not rejected. The closed-source retry branch also resolves userId before email when neither matches the source. (`web/lib/external-api-assignments.ts:45–54`; `web/app/api/v1/assignments/[id]/route.ts:49–83`; assignment schemas.)
-8. Collection pagination is `limit=50`, `offset=0` by default; supplied values must coerce with JavaScript `Number` to integer limit 1–100 and offset ≥0 or throw invalid_input/400/“limit must be 1–100 and offset 0 or more.” Empty offset becomes 0, empty limit fails; exponent/hex forms can pass. Unknown query parameters are ignored; strict session validation receives only named extracted fields (`web/lib/external-api.ts:107–112` `paginationFromUrl`, collection GET handlers).
-9. The configured per-key rate allowance is 120 verifications with a 60,000 ms inactivity reset: the installed plugin resets when time since `lastRequest` is **greater than** the window, otherwise increments until the cap. Accepted verification happens before resource validation, so a later resource `400` still consumes usage. Rate denial is 429 with `Retry-After`: plugin `details.tryAgainIn` milliseconds are rounded up to seconds, minimum 1; absent/non-number details use 60 seconds. No remaining/reset headers are added (`web/lib/auth.ts:96–115`; `web/lib/external-api.ts:54–56,75–88`; installed `@better-auth/api-key/dist/index.mjs` `evaluateRateLimit`, `consumeRateLimit`).
-10. Pair uniqueness is DB `(deploymentId,memberId)`; ordinary POST/PATCH pair writes serialize under people lock. POST open pair keeps link/no email. Move refuses only an open target with assignment_exists; closed target can reopen. Closed-source PATCH returns an open target unchanged or roleplay_access_removed before any move/no-op. DELETE applies `removableLink` (pending, no sessions of any kind) in deleteMany; other/repeated deletes are not_found/404. DELETE bypasses the people lock, and source PATCH checks remain outside it. (`web/lib/external-api-assignments.ts:39–58`; `web/lib/org-people.ts:141–169`; `web/app/api/v1/assignments/[id]/route.ts:39–108`; `web/lib/roleplay-access.ts:43–44`; `web/prisma/schema.prisma`.)
-11. DELETE users disables: cancels pending and legacy used role-play links, revokes twin assignments/assigned sessions, closes live calls and keeps history/credits. Logins are deleted only with no other enabled membership. Re-enable restores no assignments. Retry repeats leftover call-ending work without changing disabledAt/history. (`web/lib/members.ts:37–76` `setMemberDisabled`; [Organizations and roles](orgs-and-roles.md).)
-12. Scenario read/assignment target lookup excludes twins and archived agents but does not check visibility or draft/version metadata beyond the agent row. Existing assignment GET/PATCH-without-scenario can still reference an archived role play (`web/lib/external-api-assignments.ts`, `web/app/api/v1/scenarios/*`, `web/app/api/v1/assignments/[id]/route.ts`).
-13. Sessions GET returns only same-org, non-deleted sessions whose agent is `ROLEPLAY`. It does not require the user to remain an enabled learner or the agent to remain unarchived. User/scenario/assignment filters are equality filters, not existence checks; unknown/foreign IDs normally yield an empty `200` list (`web/app/api/v1/sessions/route.ts`, `[id]/route.ts`).
-14. Every exported resource method in all eight route files uses `apiRoute(handleX)`. AppErrors keep `{error,code}` and their status through errorResponse; unknown exceptions are logged with method/path and returned as internal_error/500/“Something went wrong. Try again.” MinutesError is an AppError, so its code remains minutes, not a forced 409. The wrapper does not replace deliberately returned responses. Runtime completions keeps its own structured shape (`web/lib/external-api.ts:75–88`; `web/lib/errors.ts:38–40`; `web/lib/minutes.ts:19–23`; all resource exports in `web/app/api/v1/`; `web/lib/runtime/openai.ts`).
-15. Developer POST checks a maximum of 20 org keys before calling the plugin; its count includes disabled/expired/nondefault keys and is not atomic with creation. A different learner name is refused as account_shared when `inOtherOrgs` finds any other membership, disabled included; the same name again writes nothing (`web/app/api/developer/api-keys/route.ts:29–48`; `web/app/api/v1/users/[id]/route.ts:25–34`; `web/lib/org-people.ts:194–196`).
-
-### Refusals
-
-See [API — Refusals](api.md#refusals) for key/scope/rate/internal/account/key-count errors, [People — Refusals](people.md#refusals) for recipient/owner/call-ending errors and [Practice — Refusals](practice.md#refusals) for roleplay_access_removed. Shared AppError responses come from `web/lib/errors.ts`; remaining differences are listed below.
-
-## Entry points
-
-### Shared resource responses and errors
-
-All paths below are under `/api/v1`. A date selected as a `Date` serializes as an ISO timestamp. Successful collection responses include `{pagination:{limit,offset,total}}`. In all resource rows, add these shared errors (`web/lib/external-api.ts` `requireExternalApi`):
-
-| Status | Code | Exact `error` string / condition |
-| --- | --- | --- |
-| `401` | `api_key_invalid` | `Send a valid API key.` Missing, unknown, expired or disabled key, or its org is gone. |
-| `403` | `scope_missing` | `This API key can't {action} {resource}.` Missing permission for this operation. |
-| `403` | `api_key_owner_gone` | `This API key's owner is no longer on the team. Create a new key.` Missing/nonstudio/disabled creator on every resource request. |
-| `429` | `rate_limited` | `Too many requests. Try again in {n} seconds.` `Retry-After: n`, rounded up from plugin milliseconds, minimum 1, default 60. |
-| `400` | `invalid_input` | `limit must be 1–100 and offset 0 or more.` Invalid collection pagination. |
-| `500` | `internal_error` | `Something went wrong. Try again.` Unexpected failures or verifier FAILED_TO_UPDATE_API_KEY. |
-
-All handled resource refusals below are JSON `{error,code}`. Unknown/foreign resource lookups use not_found/404/“Not found.”; schema errors use invalid_input/400 with the field message. AppErrors from adding/resolving a learner preserve status (person_disabled/person_is_studio 409; minutes uses 400/403/409 by condition). `apiRoute` also preserves calls_not_ended/500 after a committed disable. Successful DELETE has no body. Sources: `web/lib/external-api.ts:29–88,107–112`, `web/lib/errors.ts:17–25,38–40`, `web/lib/members.ts:71–76`. Omitted methods are not implemented (Next returns `405` for unsupported methods, including POST `/sessions` and DELETE `/sessions/{id}`; see `web/tests/api/v1-roleplay-only.test.ts`).
-
-### Users
-
-Source for collection rows: `web/app/api/v1/users/route.ts`; detail rows: `web/app/api/v1/users/[id]/route.ts`; add-person errors: `web/lib/invite/org.ts` `addLearnerByApi`.
-
-| Method + path; scope | Input / validation | Success | Other handled errors / isolation |
-| --- | --- | --- | --- |
-| GET `/users`; `users:read` | Pagination only. | `200 {users,invitations:[],pagination}`. User fields id,name,email,emailVerified,createdAt,role,memberId; newest membership first; total enabled learners. | orgPeople learner/enabled filter, no studio. In-memory pagination (shortcut: scale past a few thousand). `web/app/api/v1/users/route.ts`. |
-| POST `/users`; `users:write` | Strict valid trimmed email ≤320. | `201` new / `200` existing `{user,created,emailSent}`; user fields same as list. Existing learner has emailSent=false (none sent). | invalid_input/400/“A valid email is required” for schema failure; person_disabled/person_is_studio 409 for disabled/studio recipients; minutes/409 for credit shortage or minutes/403 when paused; api_key_owner_gone/403 for missing enabled creator. `web/app/api/v1/users/route.ts`; `web/lib/invite/org.ts`; `web/lib/org-people.ts`. |
-| GET `/users/{id}`; `users:read` | Opaque account ID; no extra path schema. | `200 {user}` with same fields as list, including membership `createdAt`. | not_found/404 if unknown, foreign, trainer or disabled. |
-| PATCH `/users/{id}`; `users:write` | Strict `{name}`; trimmed length 1–100. Validation precedes member lookup. | `200 {user:{id,name,email,emailVerified,memberId,role}}`; **no `createdAt`**. | invalid_input/400/“A name of up to 100 characters is required”; not_found/404 with same visibility as GET; account_shared/409 for a changed name when another org membership exists (disabled included). Same name returns without any write; scoped member lookup and `inOtherOrgs` precede the global User update. |
-| DELETE `/users/{id}`; `users:write` | Opaque account ID. | `204` after `setMemberDisabled`, including already-disabled learners; retries end leftover calls. | not_found/404 for unknown/foreign/studio accounts. calls_not_ended/500 if disabling committed but call ending failed; AppErrors retain code/status and other failures become internal_error/500. |
-
-### Scenarios
-
-Source: `web/app/api/v1/scenarios/route.ts`, `web/app/api/v1/scenarios/[slug]/route.ts`.
-
-| Method + path; scope | Input / validation | Success | Other handled errors / isolation |
-| --- | --- | --- | --- |
-| GET `/scenarios`; `scenarios:read` | Pagination only. | `200 {scenarios,pagination}`. Each: `slug,name,version,visibility,order,createdAt,updatedAt,assignmentCount`. Order: `order ASC`, then `createdAt DESC`. Count is pending/used assignments of `deployments[0]`, or 0. | Same org, `ROLEPLAY`, unarchived; private scenarios are included. |
-| GET `/scenarios/{slug}`; `scenarios:read` | Raw slug path; no regex validator on this GET. | `200 {scenario}`: list fields plus raw `data`. | not_found/404, also for foreign, twin or archived agent. |
-
-### Assignments
-
-Source: `web/app/api/v1/assignments/route.ts`, `web/app/api/v1/assignments/[id]/route.ts`, `web/lib/external-api-assignments.ts`.
-
-`Assignment` mutation view is `{id,assignedAt,userId,email,scenario}` (scenario slug). `AssignmentDetail` is `{id,assignedAt,status,practiceCount,lastPracticedAt,user,scenario,practiceUrl}`. Its user is always the required member's account `{id,name,email}`; no pre-join/null-user fallback. Its `scenario` is the deployment agent's current `{slug,name,version,visibility}`, not session-pinned configuration (`assignmentView`, `assignmentDetails`, `assignmentDetailSelect`).
-
-| Method + path; scope | Input / validation | Success | Other handled errors / isolation |
-| --- | --- | --- | --- |
-| GET `/assignments`; `assignments:read` | Pagination; optional `userId`, trimmed/lowercased `email`, `scenario`. Empty filters ignored; no email/slug format validation. Email takes precedence over userId; either filter resolves enabled learner through orgPeople and matches memberId, unknown/foreign/disabled uses empty-member match. | `200 {assignments:AssignmentDetail[],pagination}`, newest `assignedAt` first, all statuses. | Always assignment org filter. Filters do not require scenario to remain published. |
-| POST `/assignments`; `assignments:write` | Strict target as Rules 6–7; scenario required. | `201 {assignment,practiceUrl,created:true,emailSent}` for new/reopened; `200 {assignment,practiceUrl,created:false}` for pending/used, with **no `emailSent`**. | invalid_input/400/“email or userId and a valid scenario slug are required”; not_found/404 for unknown/foreign userId or scenario; shared api_key_owner_gone/403 before validation; disabled/studio targets (email or userId) keep person_disabled/person_is_studio code/status. Supplied user/scenario resolved in key org. |
-| GET `/assignments/{id}`; `assignments:read` | Raw assignment ID. | `200 {assignment:AssignmentDetail}`. | not_found/404 for unknown/foreign; no status/archive exclusion. |
-| PATCH `/assignments/{id}`; `assignments:write` | Strict optional target fields; one required. Email max 320; nonempty userId; scenario regex as POST. | `200 {assignment,practiceUrl,changed:false}` for an open same pair or a closed-source retry with an open target; changed result adds `emailSent` and `changed:true`. | invalid_input/400/“Supply an email, userId, or scenario”; not_found/404 for missing/foreign assignment/scenario or unknown userId on a real move; shared creator 403 as POST; roleplay_access_removed/403 for closed source with no open target; assignment_exists/409/“That learner already has this role play.” for a real move to an open target. People/credit AppErrors retain code/status. Shortcut/retry skip target person validation. Source/target lookups scoped to org. |
-| DELETE `/assignments/{id}`; `assignments:write` | Raw assignment ID. | `204`, hard delete only when pending with no sessions of any kind, no credit refund/email. | not_found/404 for missing/foreign, used/cancelled/expired, any session association, or repeat DELETE. `removableLink` is in the deleteMany predicate; this endpoint no longer deletes practice history. |
-
-### Sessions
-
-Source: `web/app/api/v1/sessions/route.ts`, `web/app/api/v1/sessions/[id]/route.ts`.
-
-`SessionSummary` always selects `id,userId,personaSlug,personaVersion,agentSlug,agentVersion,assignmentId,status,mode,contextName,createdAt,startedAt,endedAt`. Nullable fields are returned, not omitted. `assignmentId` can be null, including after assignment deletion (`web/prisma/schema.prisma` `InterviewSession`).
-
-| Method + path; scope | Input / validation | Success | Other handled errors / isolation |
-| --- | --- | --- | --- |
-| GET `/sessions`; `sessions:read` | Pagination; optional `status` in `assigned,activating,active,completed,abandoned,failed,revoked`; `userId`, `scenario`, `assignmentId` nonempty strings if supplied; `from`,`to` ISO datetime with offset allowed. Empty values treated as absent. No from≤to check. | `200 {sessions:SessionSummary[],pagination}`, newest `createdAt` first. Filters combine with AND; dates bound **startedAt**, inclusive. | invalid_input/400/“Invalid session filters”; same-org, non-deleted role-play sessions only. Foreign filter IDs yield empty results, not `404`. |
-| GET `/sessions/{id}`; `sessions:read` | Raw session ID. | `200 {session}`: summary plus raw `transcript`, `evidence`, `audioUrl`, `videoUrl`. | not_found/404, also for foreign/deleted/twin session. Signing failure is logged and returns null for that recording, not an error response. |
-
-Recording URLs are signed for 3,600 seconds. `orgOwnKey` accepts audio `s3AudioKey` and video `evidence.videoS3Key` only under the session's org prefix. A missing/rejected video key falls back to the standard org recording path if `videoEgressId` exists. Internal `s3AudioKey` and `videoEgressId` are stripped; raw evidence is still returned. Object existence is not checked; presign failure logs and returns null (`web/app/api/v1/sessions/[id]/route.ts:35–57`, `web/lib/s3.ts` `orgOwnKey`, `presignedGetUrl`, `orgPrefix`; [Practice rule 27](practice.md#ending-reports-and-the-calls-tokens)).
-
-### Separate runtime route, still under `/api/v1`
-
-| Method + path | Input / validation | Responses / org boundary | Source |
-| --- | --- | --- | --- |
-| POST `/chat/completions` | Authorization header token, stripping optional case-insensitive `Bearer`; ignores `x-api-key`. Session token hash must match an activating/active/closing session. Parses JSON into the TypeScript `ChatCompletionRequest` shape (`model?`, `messages`, `tools?`, `stream?`); there is no full runtime schema validation. `messages` defaults to `[]`, `tools` to `[]`, stream to true; model output is `trainertwin-runtime`. Attachment arrays, when inspected in the learner-turn branch, require nonblank string `file_id`s available to that session. | `200` OpenAI-style JSON if stream false, otherwise SSE chunks, usage and `[DONE]`; new execution has `X-Execution-Count`, cached replay `X-Idempotent-Replay:true`. Session hash selects session/org; no caller org override or public scope/rate-limit wrapper. Structured errors `{error:{message,type,code?}}`: `401 Unauthorized: Missing runtime token`; `401 Unauthorized: Invalid or expired session token`; `400 Invalid JSON body`; `400 Invalid attachments: must be an array of { file_id: string }`; `400 Attached file is not available to this session.`; `500 Session spec unavailable`; caught pipeline failures `500` with code `internal_error`. Authorization happens outside that catch. | `web/app/api/v1/chat/completions/route.ts`, `web/lib/runtime/openai.ts` `handleCompletions`, `runCompletionPipeline`, `web/lib/interview-sessions.ts` `authorizeRuntimeSession` |
-
-This is a runtime/session boundary only; its conversation logic belongs to [Voice agent and chat](voice-agent-and-chat.md). Replay uses the most recent completion hash derived from the session token hash, ID and normalized messages; it does not hash stream/tools/model (`web/lib/runtime/openai.ts` `computeRequestHash`, `runCompletionPipeline`).
-
-### Key management and documentation surfaces
-
-| Entry | Contract / source |
+| Resource | Required permissions |
 | --- | --- |
-| Dashboard `/developer` | `web/app/dash/developer/page.tsx`, `web/components/api-key-manager.tsx`; link from `web/components/sidebar-account-menu.tsx`. |
-| tRPC `page.developer` | Display key list and `canManageApiKeys`; `web/lib/pages/router.ts`. |
-| GET `/api/developer/api-keys` | `200 {keys}` display fields as creation record; default-config current-org keys newest first. App-coded signed_out/401, no_org/org_pin_invalid/studio_only 403 from studioOrRefusal. `web/app/api/developer/api-keys/route.ts`. |
-| POST `/api/developer/api-keys` | Strict trimmed `{name}` length 1–60; `201 {key,record}`; plain `400 Enter a key name of up to 60 characters`; same app-coded studio refusal as GET; too_many_keys/409/“An organization can have at most 20 API keys. Revoke one first.” when current all-config org count ≥20. Same file `POST`. |
-| DELETE `/api/developer/api-keys` | Strict `{id}` nonempty string (not trimmed); `204`; `400 Missing API key ID`; same app-coded studio refusal as GET; `404 API key not found` for unknown/foreign/nondefault key. Same file. |
-| Better Auth catch-all `/api/auth/[...all]` | API-key plugin lifecycle endpoints are closed over HTTP: unlisted GET/POST pairs give not_found/404 before Better Auth. Developer handlers call auth.api on the server. See [Authentication](auth.md) for method gaps (`web/app/api/auth/[...all]/route.ts:12–45`; `web/lib/auth.ts`). |
-| Published docs | Mintlify `docs/docs.json` navigates `docs/index.mdx`, `quickstart.mdx`, `authentication.mdx`, `guides/*.mdx`, `errors.mdx`, `limits.mdx`; API reference reads `docs/openapi.yaml`; download is `docs/trainer-twin-api.postman_collection.json`. |
-| Emails | Combined person email for new learner/assignment; `web/lib/invite/org.ts` and `web/lib/external-api-assignments.ts` → `web/lib/queue-emails.ts` → sendPersonEmail. No key email or completion webhook. |
+| Users | read for GET, write for POST/PATCH/DELETE |
+| Credits | Existing users:read for GET, users:write for POST; no new scope or key rotation |
+| Scenarios | scenarios:read |
+| Assignments | assignments:read/write |
+| Sessions | sessions:read; no write handler (old keys may still carry an unused write permission) |
 
-## Talks to
+The default key prefix is tt_, length 64, lifetime 365 days. The configured allowance is 120 requests with a 60-second
+window. The installed plugin resets after inactivity since lastRequest, not a strict wall-clock bucket. Verification
+consumes usage before resource validation; a subsequent invalid-input response can still count. Rate refusals include
+Retry-After in seconds (ceil(plugin milliseconds), minimum 1, fallback 60). No remaining/reset headers are added.
+Sources: `web/lib/auth.ts`, installed `@better-auth/api-key`, `web/lib/external-api.ts`.
 
-- **Better Auth API-key plugin:** generates/hashes keys, stores org reference/permissions/creator metadata, verifies scopes and consumes rate usage. Installed dependency is `@better-auth/api-key` 1.7.15 (`web/package.json`, `web/lib/auth.ts`, `web/lib/external-api.ts`).
-- **PostgreSQL through Prisma:** keys and org-scoped resource lookups/writes; no external request chooses a tenant ID (`web/lib/db.ts`, route queries).
-- **[Credits](credits.md):** POST users/assignments and changed assignment PATCH request an initial 30-credit grant; failure must be returned before inviting/assigning (`web/lib/minutes.ts` `giveStartingMinutes`, callers above).
-- **[Invites and emails](invites-and-emails.md):** immediate member addition and combined email delivery; responses carry a delivery flag, not a rollback guarantee (`web/lib/invite/org.ts`, `web/lib/external-api-assignments.ts`).
-- **[Role plays](roleplays.md), [Learner portal](learner-portal.md), [Sessions](sessions.md):** scenario read and assignment link handoff; app starts sessions and owns runtime/report lifecycle. Public GET returns raw transcript/evidence, not a separate scored report field (`web/app/api/v1/sessions/[id]/route.ts`).
-- **S3:** signed recording download links, one hour; signing errors become null (`web/app/api/v1/sessions/[id]/route.ts`, `web/lib/s3.ts`).
-- **Mintlify:** publishes the handwritten guides and OpenAPI reference, not generated from handlers (`docs/docs.json`, `docs/package.json`).
+Every resource method uses apiRoute(handleX): AppErrors retain `{error,code}` and status; unexpected errors are logged
+and return internal_error/500. Missing/invalid keys are api_key_invalid/401, missing permissions scope_missing/403,
+and a missing/disabled/nonstudio creator api_key_owner_gone/403. Refer to [API refusals](api.md#refusals).
 
-## Edge cases and limits
+Bodies are strict objects. Pagination is limit 1–100 (default 50), offset 0–2147483647 (default 0), decimal digits only;
+blank, fractional, exponent/hex and unsafe integers are invalid_input/400. Lists return pagination.total. Unknown
+query parameters remain ignored. Users are paged in memory (the existing few-thousand-person limitation); scenarios,
+assignments and sessions use database skip/take with deterministic timestamp/ID ordering.
 
-- A demoted/disabled/missing creator blocks every resource operation, including reads/DELETE/name PATCH. The key row stays and membership re-enabling or returning to team can make it usable again; there is no automatic key deletion for owner removal. Verification consumes usage before creator lookup refuses it (`web/lib/external-api.ts:47–68`; `web/lib/members.ts`).
-- Names are account-wide, not org-specific. Sequential PATCH refuses a changed name for another-org membership (even disabled), and the same name is a no-op. Membership check and User update are separate reads/writes, not protected against a concurrent other-org join (Mismatches) (`web/app/api/v1/users/[id]/route.ts:25–34`; `web/lib/org-people.ts:194–196`).
-- `assignScenario` validates email and userId recipients under the people lock; disabled/studio recipients refuse. PATCH's open same-pair shortcut and closed-source retry skip this validation and can ignore contradictory identifiers. A closed source never returns itself as unchanged; it must find an open target or refuse (`web/lib/external-api-assignments.ts:45–54`; `web/app/api/v1/assignments/[id]/route.ts:49–83`).
-- POST/PATCH pair writes serialize; source PATCH lookups and DELETE do not. A post-commit assignment read/email failure leaves the write committed. Retrying a sequential move returns its open target without a second email; concurrent moves can still use an old source read (`web/lib/external-api-assignments.ts:39–60`; `web/app/api/v1/assignments/[id]/route.ts:39–95,104–110`).
-- Moving a link does not itself end a live call; it preserves source identity/history with a separate created/reopened target. DELETE cannot remove a row with any session, so it no longer nulls existing practice references in ordinary sequential use. The dashboard uses the same pending/no-sessions predicate but checks it before deleting by ID (Mismatches) (`web/app/api/v1/assignments/[id]/route.ts:104–110`; `web/app/api/role-play/[slug]/assignments/route.ts:35–48`; `web/lib/roleplay-access.ts:43–44`; `web/lib/external-api-assignments.ts:39–43`).
-- The 20-key check counts before Better Auth can clean up expired rows; expired keys still present can block creation. Count and create can race. The Developer lists/revokes default-config keys only, but the cap counts all configs (`web/app/api/developer/api-keys/route.ts:13–15,38–48,69–71`; installed `@better-auth/api-key/dist/index.mjs` `createApiKey`, `deleteAllExpiredApiKeys`).
-- Session status filtering omits `closing`, although runtime authorization accepts it; session selection does not coerce status. See open questions (`web/app/api/v1/sessions/route.ts`, `web/lib/interview-sessions.ts` `authorizeRuntimeSession`).
-- No custom scope selection, bulk API invitation/assignment, credit editing, scenario writing, session start/delete or integrator callback is implemented in the resource handlers (`web/app/api/v1/`, `web/app/api/developer/api-keys/route.ts`).
+## Resource endpoints
 
-## Mismatches
+All paths below are relative to `/api/v1`.
 
-### Against rule specs
-
-| Rule / refusal | Remaining difference (current file:line) |
+| Endpoint | Current implementation |
 | --- | --- |
-| API 1: at most 20 keys | The ordinary 21st key is refused with too_many_keys, but count and create are separate and unlocked. Two creations starting with 19 keys can both pass and leave 21 (`web/app/api/developer/api-keys/route.ts:38–48`). |
-| API 3–4 / Practice 19 / People 7–8: PATCH recipient checks | Actual assignment writes validate under the people lock. The open same-pair shortcut and closed-source retry do not validate disabled/studio target membership. `sameLearner` can ignore a different email when userId matches the source; the retry branch chooses userId before email, unlike the email-first service (`web/app/api/v1/assignments/[id]/route.ts:49–83`; `web/lib/external-api-assignments.ts:45–54`). A closed source with no open target now correctly refuses before the no-op shortcut. |
-| API 3–4 / Practice 19: source move and target history | Source status is read before the people lock and never rechecked inside it. Two requests moving the same open source to different targets can both create links, or a disable between read and write can be followed by a move. A cancelled/expired target pair reopens its ID/history instead of creating a new one (`web/app/api/v1/assignments/[id]/route.ts:39–41,54–86`; `web/lib/external-api-assignments.ts:39–43`; `web/lib/invite/roleplay.ts` `giveRoleplay`). |
-| API 3–4: DELETE checks and locking | API DELETE conditionally deletes pending/no-session links but does not use the people lock/shared mutation service. Dashboard DELETE checks removableLink, then deletes by ID only, also without the lock: a session or status change between those operations is not rechecked and can lose its assignment reference (`web/app/api/v1/assignments/[id]/route.ts:108`; `web/app/api/role-play/[slug]/assignments/route.ts:35–48`; `web/lib/roleplay-access.ts:44`). Sequential API/dashboard deletion no longer removes practice history. |
-| API 5: shared-account rename race | The normal other-org rename is refused and same-name writes are skipped. `inOtherOrgs` and the User update are not atomic with a different org adding that account, so a membership created between check and write can see an API-renamed shared name (`web/app/api/v1/users/[id]/route.ts:31–34`; `web/lib/org-people.ts:158–161,194–196`). |
-| People 23: Developer refusal vocabulary | Developer schema/missing-key errors still return only error, not invalid_input/not_found with our codes and shared not-found message (`web/app/api/developer/api-keys/route.ts:35,67,72`). These routes are not /api/v1 resources and do not use apiRoute. |
-| People 23: credits vocabulary | MinutesError still uses minutes for several conditions, absent from People's Refusals table. apiRoute preserves it rather than translating it; key and resource lookup/schema errors now have their agreed codes (`web/lib/minutes.ts:19–23`; `web/lib/external-api.ts:84`; `web/lib/errors.ts:38–40`). |
+| GET /scenarios | Unarchived org ROLEPLAY rows; order ASC, createdAt DESC, id DESC. Summary: slug, name, version, visibility, order, assignmentCount, timestamps. Private role plays are included. |
+| GET /scenarios/{slug} | Same visibility; adds opaque data for compatibility, not a stable runtime configuration contract. |
+| GET /users | Enabled learners only, newest membership first; optional exact case-insensitive email filter. Returns users, invitations:[], pagination. User includes creditsGiven/creditsLeft. |
+| POST /users | Strict email. Add learner/account through addPeopleToOrg, once-only 30 starting credits. 201 new, 200 existing; user, created, emailSent. Disabled/studio recipient refuses. |
+| GET /users/{id} | Same learner visibility and credit fields; membership createdAt, not account creation time. Foreign/disabled/studio/unknown is not_found/404. |
+| PATCH /users/{id} | Name only, trimmed 1–100 chars. Same name is a no-op. Other-org membership (disabled included) blocks a changed name with account_shared/409. No createdAt/credit counters in this mutation response. |
+| DELETE /users/{id} | Disable, sign out where applicable, cancel links/end live calls, retain history. Already disabled still invokes cleanup and returns 204. A committed disable whose call cleanup fails can return calls_not_ended/500. |
+| GET /credits | Available balanceMinutes, defaultLearnerMinutes (30), maxLearnerMinutes (360); no Meteroid identifiers. Refresh with cached fallback. |
+| GET /users/{id}/credits | userId, givenMinutes, usedMinutes, balanceMinutes, maxLearnerMinutes. Fractional usage is retained; displayed availability clamps at zero. |
+| POST /users/{id}/credits | Whole minutes 1–360, optional trimmed note ≤200, required Idempotency-Key. See retry behavior below. |
+| GET /assignments | Org assignments, all statuses; userId OR email filter, optional scenario, pagination. Invalid email or both recipient filters is invalid_input/400. Foreign/unknown/disabled recipient filters match nothing. |
+| POST /assignments | Scenario plus email OR userId. Email may add a learner with starting credits; userId must already be an eligible learner. Open pair returns 200 unchanged; new/reopened pair is 201. |
+| GET /assignments/{id} | user, scenario metadata, practiceUrl, status, assignedAt, practiceCount and lastPracticedAt. Archived/cancelled history remains readable. |
+| PATCH /assignments/{id} | Change recipient or scenario, never both email and userId. Locked source/target decision; unchanged and move retries return changed:false, no second email. |
+| DELETE /assignments/{id} | Under minutes/people locks, delete only pending/no-sessions. Otherwise/repeated delete is not_found/404. No credit refund or email. |
+| GET /sessions | Org ROLEPLAY calls, including trainer calls and disabled learners' history; deleted/twin calls excluded. Filter status, userId, scenario, assignmentId, from/to. Dates use startedAt, require from≤to, and omit unstarted calls. Includes closing status and chargesOrg. |
+| GET /sessions/{id} | Summary plus stored transcript, report/reportStatus, evidence and signed audio/video URLs. No generation is triggered. Unknown/foreign/deleted/twin is not_found/404. |
 
-The resource rate/scope/key refusals, coded validation/lookups and shared 500 wrapper now match API 1–2; retry DELETE users and ordinary shared-account rename checks match API 4–5. REST immediate delivery with emailSent and the same event key is allowed by People 12 (`web/lib/external-api.ts:29–88,107–112`; `web/app/api/v1/users/[id]/route.ts:20–46`; `web/lib/queue-emails.ts` `deliverEmail`).
+Route sources are `web/app/api/v1/<resource>/route.ts` and `<resource>/[id]/route.ts`; public scenario detail uses
+`scenarios/[slug]`. Credit handlers use `web/lib/external-api-credits.ts`, assignments use
+`web/lib/external-api-assignments.ts`, and all membership reads go through `web/lib/org-people.ts`.
 
-Reference scope: existing docs audit, with the people-sensitive OpenAPI/User/Assignment guide sections rechecked against current code for this update. No published build/site or inbox claim. The following are discrepancies or missing contract details, not proposed changes.
+## Credit grants and retries
 
-### Published reference and guides versus implementation
+The request key is trimmed, 1–128 non-whitespace characters, scoped to the org rather than one API key. API input never
+chooses an org. `grantMinutes` refreshes the remote balance before acquiring minutes:<org> then people:<org>. Inside
+those locks it validates userId/email membership, disabled/learner role, and checks the prior request row. Reusing the
+key with a different user, email, amount or normalized note is idempotency_conflict/409. Matching replays write nothing
+and bypass new-grant pause/cap/balance refusal; learner eligibility and key authorization still apply.
 
-| # | Documentation / other claim | Code today |
-| --- | --- | --- |
-| 1 | `docs/authentication.mdx`: every `/api/v1` request needs an org API key; `docs/index.mdx`: all responses JSON except 204; OpenAPI/Postman enumerate the integrator paths only. | POST `/api/v1/chat/completions` exists but is undocumented there, uses runtime tokens and defaults to SSE. Thus the blanket auth/format claims do not cover every route under the prefix (`web/app/api/v1/chat/completions/route.ts`, `web/lib/runtime/openai.ts`). |
-| 2 | `docs/authentication.mdx`: permissions are read/write users/assignments, read sessions/scenarios. | New keys also store `sessions:write`, although no handler uses it (`web/lib/auth.ts` `defaultPermissions`). |
-| 4 | `docs/limits.mdx`, `authentication.mdx`, `errors.mdx` and OpenAPI say 120 requests per minute. | Plugin uses time since **last accepted request**, not a calendar/fixed first-request window. Continued accepted activity extends time until reset; reset needs >60 seconds of inactivity. 429/Retry-After now agree with the errors guide and OpenAPI (`web/lib/external-api.ts:54–56,85`; installed `@better-auth/api-key/dist/index.mjs` `evaluateRateLimit`, `consumeRateLimit`). |
-| 5 | OpenAPI lists creator-no-longer-trainer 403 chiefly on three mutations; authentication example still shows only `{"error":"Invalid API key"}` and omits scope_missing. | Every resource checks its enabled studio creator and can refuse scope_missing. Errors guide now describes both; the auth example's message/shape is stale (`docs/authentication.mdx` Authentication errors; `docs/openapi.yaml` operation responses, `Forbidden`; `web/lib/external-api.ts:36–68`). |
-| 6 | Developer page denial copy says only owners/admins manage keys. | Current roles are admin/team/user; enabled team members manage keys too. The errors guide's old owner/admin wording is fixed (`web/lib/org.ts`, `web/lib/pages/router.ts` `developer`, `web/app/dash/developer/page.tsx:44`). |
-| 7 | OpenAPI security has only `ApiKeyAuth` (`x-api-key`). | Bearer org keys are accepted too (correctly described in `docs/authentication.mdx`), with header precedence left undocumented (`web/lib/external-api.ts` `externalApiKey`). |
-| 8 | `docs/limits.mdx`: another org's resource returns 404. | True for resource detail/ID mutations, not collection filters: foreign user/assignment/scenario IDs yield empty `200` lists. Explicit assignment email overrides userId filter (`web/app/api/v1/assignments/route.ts` GET, `sessions/route.ts` GET). |
-| 9 | OpenAPI assignment GET email query has `format: email`. | GET does no email validation, only trims/lowercases; arbitrary strings yield matches/empty list, not 400 (`web/app/api/v1/assignments/route.ts` GET). |
-| 10 | OpenAPI `AssignmentTarget.userId` and assignment PATCH `userId` allow empty string; PATCH email has no max length. | Code rejects empty IDs and email >320. POST OpenAPI already caps email at 320. Both schemas omit the trim/lowercase transforms and email/userId precedence (`web/app/api/v1/assignments/*` schemas). |
-| 11 | Assignment guide Practising again/Inspect and OpenAPI AssignmentStatus say pending means not practised and status becomes used after first practice. | Current Start/end/failure never writes used/usedAt; pending can have many calls. Used is legacy access status only. (`web/lib/interview-sessions.ts` `activateSession`, `finalizeSessionRow`; `web/lib/session-activation.ts:131–143`; `docs/openapi.yaml:865–872`.) |
-| 12 | Assignment guide Change/OpenAPI PATCH say any existing target pair returns 409, without explaining new target identity. | Conflict checks only pending/used target pairs; closed pairs reopen. A new target pair gets a new assignment ID; cancelled source and its counts stay readable. (`web/lib/external-api-assignments.ts:39–58`; `web/lib/invite/roleplay.ts:88–99`; `docs/openapi.yaml:368`.) |
-| 14 | `docs/guides/role-plays.mdx`: “Every response reports emailSent.” | Idempotent assignment POST and no-op PATCH omit it; GET/DELETE responses also do not carry it. Assignment guide and OpenAPI correctly limit its presence to changed/created mutations (`web/app/api/v1/assignments/*`). |
-| 15 | OpenAPI `practiceCount` and assignments guide say sessions started / how often learner practised; `lastPracticedAt` is latest practice. | Failed sessions are excluded; soft-deleted sessions are not. Moves now preserve source recipient/scenario attribution; reopened source/target pairs retain their own earlier counts. Session list hides soft-deleted records, so list length and count can differ (`web/lib/external-api-assignments.ts` `assignmentDetails`, `web/app/api/v1/sessions/route.ts`). |
-| 16 | `docs/guides/role-plays.mdx`: every session has the assignmentId it came from. | Direct/studio sessions can have null, and older deletes or other deletion paths can have nulled historical references. Current API DELETE excludes every assignment with sessions. OpenAPI `SessionSummary.assignmentId` correctly permits null (`web/prisma/schema.prisma`, `web/app/api/v1/sessions/*`). |
-| 17 | `docs/guides/sessions.mdx` session list example omits assignmentId. | Both list and detail select it on every returned session (`web/app/api/v1/sessions/*`); guide text/OpenAPI otherwise describe it. |
-| 18 | Sessions guide / OpenAPI recording URL descriptions: null when no recording exists. | Null also on presign errors; conversely a key/egress ID can yield a signed URL to a missing object because existence is not checked (`web/app/api/v1/sessions/[id]/route.ts`). |
-| 19 | `docs/guides/users.mdx`, OpenAPI DELETE user description: learner signed out and cannot sign in. | They retain authentication/sign-in for other enabled orgs; this org is disabled. Only last-enabled-membership disabling deletes auth sessions (`web/lib/members.ts` `setMemberDisabled`, `isDisabledUser`). |
-| 20 | Assignment guide / role-plays guide: link keeps working until assignment is removed; OpenAPI describes expired as historical only. | No timestamp expiry is enforced, agreeing with repeat practice. But writers still stamp 30-day expiresAt; cancelled status, changed/reopened share code, disabled access, disabled deployment or insufficient credits can also block the old link before deletion (`web/lib/assignments.ts`, `web/app/api/v1/assignments/*`, `web/lib/pages/learner.ts`, `web/lib/interview-sessions.ts`). |
-| 22 | `docs/guides/scenarios.mdx`: pre-existing keys were granted scenarios read by migration. | Migration only modifies keys with an assignments permission entry and no scenarios entry, not all pre-existing keys (`web/prisma/migrations/20260901120000_scenarios_api_permission/migration.sql`). |
-| 23 | API rules require the published contract to describe every resource refusal; OpenAPI operation responses omit 500 throughout, omit 403 on most reads/DELETEs and omit 409 on users PATCH. Error now permits code, but still requires only error. | apiRoute returns coded internal_error/500, every operation can return scope_missing/api_key_owner_gone 403, users PATCH can return account_shared/409, and all resource refusals include code. The former Error additionalProperties rejection of code is fixed, not a remaining mismatch (`docs/openapi.yaml:202–245,600–605,630–647`, other operation responses; `web/lib/external-api.ts:36–88`; `web/app/api/v1/users/[id]/route.ts:31–32`). |
-| 25 | Assignment guide/role-play guide DELETE instructions and OpenAPI DELETE do not state the pending/no-sessions restriction; users PATCH docs omit the shared-account/name-no-op rule. | DELETE refuses every non-pending or session-linked assignment with not_found/404. A shared-account rename is account_shared/409; current name is unchanged. Safe retries are now explained in docs/errors.mdx, but not the endpoint reference (`docs/openapi.yaml:208–257,422–434`; `docs/guides/assignments.mdx` Remove; `docs/guides/users.mdx` Update; `web/app/api/v1/assignments/[id]/route.ts:104–110`; `web/app/api/v1/users/[id]/route.ts:25–34`). |
-| 26 | Errors guide's blanket flat JSON claim extends beyond resource handlers if read literally. | Resources now do use a common coded catch; runtime completions deliberately keep nested OpenAI errors and framework 405 is not given that JSON shape (`docs/errors.mdx`; `web/lib/external-api.ts:75–88`; `web/lib/runtime/openai.ts` `handleCompletions`). |
+A new grant checks pause, spendable balance and MAX_LEARNER_MINUTES (360 total allocated, net of historical reclaims).
+Spending does not reopen that cap. The ledger row and request key commit together. After commit, usage reporting runs
+for a new grant or an unsent replay; Meteroid uses the ledger id as event id. No request can mint org credits.
 
-Prior-funded recipients need no new starting grant/funds check; they still pass the member checks. userId-only assignment resolution gives no starting credits. This matches the guides' once-per-org credit promise, not a remaining mismatch (`web/lib/minutes.ts:157–172` `giveStartingMinutes`; `web/lib/org-people.ts:142–169`; `web/lib/external-api-assignments.ts:45–54`).
+The response contains the immutable grant id/userId/minutes/note/createdAt, created (201 true, 200 false), current
+learner balanceMinutes, current orgBalanceMinutes and emailSent. Balance fields may change between retries. The
+receipt is read by its unique org/request key; there is no public grant deletion operation.
 
-Current assignment guide/OpenAPI match required learner userId/id/name and immediate addition by email; sign-in is Google or an email code, not a password (`docs/guides/assignments.mdx`; `docs/openapi.yaml` `Assignment`, `AssignmentDetail`; `web/lib/external-api-assignments.ts` `assignmentView`, `assignmentDetails`; `web/lib/auth.ts`). Current Users guide/OpenAPI match direct addition, 201/200 user/created/emailSent and always-empty invitations; API role spelling remains member; read-only sessions/scenarios, removed domain fields, ordinary pagination bounds, credit defaults and sequential reopen behavior otherwise match the handlers. `User.createdAt` is optional in the schema, so its omission from PATCH is not a schema violation (`docs/openapi.yaml`, routes above). `docs/quickstart.mdx`, `docs/README.md`, `docs/docs.json`, `docs/package.json` and `docs/vercel.json` add no further resource-contract discrepancy found in this source audit; no published-site/build assertion is made.
+New grants attempt the usual person/credits email with `credits:<ledgerId>` after commit. Failures return emailSent=false
+without undoing credits. Replays do not send again. This is durable **allocation** idempotency, not a durable email
+outbox: interruption between commit and notification can leave an email unsent. In development the sender intentionally
+skips delivery. Sources: `web/lib/minutes.ts` grantMinutes; `web/lib/external-api-credits.ts`; `web/lib/queue-emails.ts`.
 
-### Postman collection drift
+## Assignment mutations and history
 
-All rows refer to `docs/trainer-twin-api.postman_collection.json` request descriptions, query lists and saved success examples. Generated `<integer>` / `<boolean>` strings are placeholders, not real wire-type examples.
+POST/PATCH and filters reject simultaneous email and userId, including when they refer to the same account.
+`assignScenario` uses addPeopleToOrg's minutes/people transaction for email and takes those same locks for userId.
+It checks the target deployment belongs to an unarchived role play in the org. Disabled/studio recipients refuse;
+unknown userId returns not_found. Any source status and open target are reread under the locks:
 
-| Collection item | Difference from code / OpenAPI |
-| --- | --- |
-| List scenarios | Says “most relevant first”; code sorts dashboard `order ASC, createdAt DESC` (`web/app/api/v1/scenarios/route.ts`). |
-| Remove a learner | Says membership and assignments are removed. Code disables membership and changes access statuses; account/history stay (`web/app/api/v1/users/[id]/route.ts`, `web/lib/members.ts`). |
-| Invite learner examples | Entire pending-invitation response is obsolete; POST returns immediate user/created/emailSent, GET invitations=[] (`web/app/api/v1/users/route.ts`). |
-| Update learner example | Includes user `createdAt`, absent from PATCH projection (`web/app/api/v1/users/[id]/route.ts`). |
-| List assignments | Query list lacks supported email filter (`web/app/api/v1/assignments/route.ts`). |
-| List/get assignment examples | Omit `practiceCount` and `lastPracticedAt`; required-member identity has no nullable pre-join state (`web/lib/external-api-assignments.ts`). |
-| Create/change assignment examples | Omit required mutation `assignment.email`; examples show userId only, not an email-only unjoined state (that state no longer exists) (`web/lib/external-api-assignments.ts` `assignmentView`). Bodies showcase only userId/scenario, not supported email. |
-| Create existing assignment example | Shows `emailSent`; live-existing code omits it (`web/app/api/v1/assignments/route.ts` POST). |
-| List/get session examples | Omit `assignmentId`; get description refers to one recording URL and get example omits `videoUrl` (`web/app/api/v1/sessions/*`). Saved original list requests also omit assignmentId although the main request query includes it. |
-| Invite/create/change descriptions and Conflict examples | Do not explain initial 30 credits or insufficient-credit 409. POST assignments description does not explain live return versus cancelled/expired reopening; PATCH does not explain link rotation, no-op omission of emailSent, or duplicate-pair conflict. OpenAPI/guides have these details; implementations are the mutation flows above. |
-| Default list-sessions query | Enables placeholder `from=<dateTime>` and `to=<dateTime>`; it returns invalid_input/400/“Invalid session filters” until replaced/disabled. Other enabled user/scenario/assignment placeholders can hide all results (`web/app/api/v1/sessions/route.ts:19–27`). |
-| Saved refusal examples / rate headers | Error examples still show only error; saved rate-limit responses have no Retry-After. Live resource errors have code, and rate_limited/429 includes Retry-After seconds (`web/lib/external-api.ts:75–88`; `docs/openapi.yaml:618–647`). |
-| Update learner / Delete assignment descriptions | Omit account_shared/name-no-op and pending/no-sessions deletion restrictions (`web/app/api/v1/users/[id]/route.ts:25–34`; `web/app/api/v1/assignments/[id]/route.ts:104–110`). |
+- Open same pair: unchanged.
+- Open source, another open target: assignment_exists/409.
+- Closed source, requested open target: unchanged replay.
+- Closed source, no open target: roleplay_access_removed/403.
+- Otherwise create/reopen target and cancel source, returning the selected row from inside the transaction.
 
-The collection has the same 15 integrator operations as OpenAPI (no obsolete session POST/DELETE or domain fields); it also omits the separate runtime route. Collection-level `x-api-key:{{apiKey}}` auth and base URL agree with the resource API (`docs/openapi.yaml`, collection `auth`/`variable`, `web/lib/external-api.ts`).
+The source is not repointed: its calls retain their identity. A previously closed target pair reopens the **same** id
+with a fresh code and retains its own earlier calls; this existing history model was not redesigned. Repeated POST of
+an open pair sends no extra email. The API move itself does not end an already-live call; runtime behavior remains in
+[Sessions](sessions.md).
 
-### Product, plans, comments and UI
+API and dashboard deletion share removeRoleplayAssignment. It holds minutes:<org> (also held by Start) then people:<org>,
+and performs deleteMany with pending and no sessions predicates. The FK's onDelete:SetNull cannot detach a session
+created by a concurrently locked Start. Other nonconforming direct database writers are not covered by advisory locks.
+Sources: `web/lib/roleplay-access.ts`; API assignment routes; `web/app/api/role-play/[slug]/assignments/route.ts`.
 
-- `PRODUCT.md` describes the wider trainer/spec/runtime product, not a public API contract; no separate API requirement there overrides these handlers.
-- `plans/roleplay-preservation.md` section B still describes email link → “one attempt, 30 days”, public API session start, old `app/dash/agents` paths and no assignment contract tests. Current repeated-link activation, read-only public sessions and `web/tests/api/v1-*.db.test.ts` supersede those parts (`web/lib/interview-sessions.ts`, `web/app/api/v1/sessions/*`). Section A already acknowledges the read-only change.
-- `plans/prod-release-v2.md` says `/v1/*` role plays only and labels “v1 API (read-only, role plays only)”; only sessions/scenarios are read-only, users/assignments still mutate, and runtime completions does not filter agent kind. Its member-deletion summary overstates deletion: `setMemberDisabled` keeps history and cancels pending/legacy used links.
-- `plans/drop-domains.md` records approved domain removal; current API selections/OpenAPI/Postman have no domain fields. This is an explicit later exception to the frozen-contract language in `plans/roleplay-preservation.md` and `plans/roleplay-skill.md`, not a reason to restore domains.
-- UI invalid-link copy says expired/already completed at `web/app/(org)/s/[code]/page.tsx`; current used role-play links remain repeatable and timestamp expiry is ignored (`web/lib/pages/learner.ts`). Developer denial copy has the role mismatch listed above.
+Practice counts include started, non-failed sessions for that assignment, including active/abandoned and currently
+soft-deleted sessions; session list reads separately exclude deleted rows. Links remain pending after practice; legacy
+used stays open. Stored expiresAt is not enforced by current runtime, as documented in [Role plays](roleplays.md).
 
+## Session results and recordings
 
-## Open questions
+Session reads do not require the learner to remain enabled or the agent to remain unarchived. Filtering a foreign or
+unknown user/scenario/assignment id yields an empty list, not a detail 404. Transcript, report and evidence are stored
+JSON; the API does not promise the underlying runtime's internal structure or alter report selection/scoring.
+Report status may be none/generating/completed/failed/null. chargesOrg identifies billed trainer calls, not all trainer
+calls: free studio calls also have false.
 
-1. Is inactivity-based rate limiting intended? Recognition of RATE_LIMITED/USAGE_EXCEEDED and Retry-After seconds is fixed; the installed plugin still resets based on lastRequest, not a fixed one-minute window (`web/lib/external-api.ts:54–56,85`; `web/lib/auth.ts:107`; installed `@better-auth/api-key/dist/index.mjs` `evaluateRateLimit`). No production dependency exhaustion was exercised.
-2. Should contradictory email/userId be rejected? assignScenario prefers email, while PATCH can treat either matching value as unchanged and the retry branch resolves userId first (Mismatches) (`web/lib/external-api-assignments.ts:45–54`; `web/app/api/v1/assignments/[id]/route.ts:49–83`; `docs/openapi.yaml` `AssignmentTarget`).
-3. Are statistics intentionally lifetime-by-pair-ID including soft-deleted sessions and earlier practices after reopening? Moving leaves source attribution intact, but counts do not exclude soft-deleted rows (`web/lib/external-api-assignments.ts:116–135` `assignmentDetails`; `web/app/api/v1/sessions/route.ts:33–42`).
-4. Should closing be a supported public session status? Runtime accepts it; public filter/OpenAPI enum omit it, and returned rows are not status-normalized (`web/lib/interview-sessions.ts` `authorizeRuntimeSession`; `web/app/api/v1/sessions/route.ts:6–13`; `docs/openapi.yaml:873–883`).
-5. Should assignment expiry timestamps be retained? Writers still stamp 30 days although practice ignores the date. Moves cancel/preserve source and create/reopen target; DELETE now excludes any session-linked row (`web/lib/assignments.ts` `assignmentExpiresAt`; `web/app/api/v1/assignments/[id]/route.ts:78–108`; `web/prisma/schema.prisma` `RolePlayAssignment`).
-6. The two [API rule-spec open questions](api.md#open-questions) remain: short-lived signed copilot actor tokens/separate directional secrets, and approval for invite_learners. See [Copilot — Open questions](copilot.md#open-questions) for the current secret/header/publication and no-approval boundaries; neither proposal is implemented.
+Recording keys must belong to the session org (orgOwnKey). Links last one hour; signing failure yields null for that
+recording. Object existence is not checked. A video with an egress id can use its standard org-scoped fallback key.
+Internal s3AudioKey/videoEgressId are removed from the response, but existing evidence is retained for compatibility.
+Sources: `web/app/api/v1/sessions/[id]/route.ts`, `web/lib/s3.ts`.
 
-## Tests today
+## Remaining limits and mismatches
 
-| Layer | Existing coverage / source |
-| --- | --- |
-| Shared key/error unit | `web/tests/lib/external-api.test.ts`: key invalid/scope/rate/owner refusals, Retry-After rounding/default/minimum, internal_error logging, creator filtering/header precedence, pagination bounds, eight wrapped resource files and Error schema accepting code. Verifier/DB mocked, not real Better Auth exhaustion. |
-| API contract with mocks | `web/tests/api/v1-users-contract.test.ts`: API learner role remains member on list/get/PATCH. `web/tests/api/v1-roleplay-only.test.ts`: scenario/session role-play filters, twin 404, no session mutation exports. `web/tests/api/v1-assignments-isolation.test.ts`: foreign userId POST assignment returns 404 without exposure. These are not live HTTP/Better Auth tests. |
-| Database API tests | `web/tests/api/v1-minutes.db.test.ts`: initial grant, short balance, free resend/idempotent/reopened assignment. `web/tests/api/v1-assignment-email-minutes.db.test.ts`: email reports recipient balance after grant, PATCH recipient/scenario/grant behavior and short-balance preservation. `web/tests/api/v1-roleplay-practice.db.test.ts`: assignmentId on list/detail, filtered practices/pagination/foreign isolation, counts/latest dates, failed/unstarted exclusions and live practice counting. They bypass `requireExternalApi`; guarded by `localMinutesDb` in `web/tests/lib/minutes-test-db.ts`. |
-| Module 6 DB contract | `web/tests/api/module6-contract.db.test.ts`: repeat DELETE users calls disabling twice and retains history; account_shared for enabled/disabled other-org membership; same-name no write; API/dashboard assignment deletion retains session-linked and nonpending rows; ordinary too_many_keys refusal; concurrent copilot recordings/twin saves. `web/tests/lib/roleplay-assignments.db.test.ts` now also checks moved-link retry with no second email and closed-source roleplay_access_removed (including same-pair requests). These use real local Postgres/locks with auth/external services replaced; inspected, not run here. |
-| Shared library / DB boundaries | `web/tests/lib/assignments.test.ts`: identity/share code/change helpers. `web/tests/lib/minutes-ledger.db.test.ts`, `minutes-entrypoints.db.test.ts`, `invite-roleplay-minutes.db.test.ts`: credit/member/assignment boundaries. `web/tests/lib/person-email.test.ts`, `web/tests/lib/invite/emails.test.ts`: email content. See owning specs for their full coverage. |
-| Flows | `web/tests/flows/credit-purchases.flow.test.ts` calls API invitation/assignment against credit flows with shared API auth mocked. `web/tests/flows/credits-purchase-practice.flow.test.ts` covers purchase-to-practice boundary, not key management. |
-| Runtime | `web/tests/lib/runtime/runtime-stream.test.ts`: completion SSE format, usage/replay and authorization (DB/runtime fixtures, not ordinary API-key tests); `runtime-e2e.test.ts`, `runtime-check.test.ts` cover runtime behavior. See [Voice agent and chat](voice-agent-and-chat.md). |
-| Browser / Python | No dedicated Developer API/key-management browser suite found in `web/e2e`; learner/credits suites cover adjacent practice behavior. No dedicated integrator/key suite found in `agent/tests` or `chat/tests`; runtime behavior belongs to their owning module. |
+- **API 1, key management:** the studio's 20-key count/create is still not serialized. Concurrent key creations from
+  19 can exceed 20 (`web/app/api/developer/api-keys/route.ts`). No scope picker/expiry editor is exposed.
+- **API 5, account rename:** checking other-org memberships and updating User.name are not atomic with a new membership
+  created elsewhere (`web/app/api/v1/users/[id]/route.ts`, `web/lib/org-people.ts` inOtherOrgs). This pass does not change it.
+- **Notifications:** API add/assignment/credit state may commit before notification. Email startup/provider retries
+  do not constitute a durable outbox; replay does not recover an unsent post-commit email. Credit grants remain deduplicated.
+- **Runtime races remain separate:** full access rechecks on resume, simultaneous first starts, archive/save ordering,
+  and report-kind snapshot consistency are not changed here. See [Role plays](roleplays.md) and [Sessions](sessions.md).
+- **Mutable catalog:** a role play can be archived after a lookup. Authoring/archive writers do not all share the
+  integration mutation locks. This API rechecks the target in its transaction but does not freeze catalog lifetime.
+- **Public input compatibility:** User.role stays member; userId is opaque; user PATCH does not return list-only fields.
+  Invalid/unknown query parameter names are not globally rejected. User pagination still loads the org's learner list.
+- **Developer error vocabulary:** non-v1 key-management validation/missing-key errors remain uncoded. The separate model
+  transport retains its own errors/authentication. Neither is silently described as a resource API fix.
+- **Deferred product/security work:** End semantics #21; copilot service authority/invite approval #22; no integration
+  completion webhooks, runtime start APIs, bulk operations or org-credit purchases were added.
 
-Most important gaps: real Better Auth create/hash/expiry/revocation and live 120-request exhaustion/reset; concurrent key creation across the 20 cap; rename versus other-org join; source moves/DELETE versus disable/Start; contradictory identifiers, open no-op/retry target person checks and closed-target history; malformed/unknown mutation bodies; count/list differences after soft-delete; recording signing failure/isolation; complete OpenAPI-versus-response validation. Shared key/rate/error unit coverage and ordinary DB retry/rename/cap cases exist now; they do not prove these races or deployed services.
+## Tests and release boundary
 
-Validation for this spec refresh: `cd web && bun test tests/lib/external-api.test.ts` — 29 pass, 0 fail (mocked verifier/DB, including source wrapper inventory and OpenAPI Error properties). DB/flow/browser/live tests were not run; their coverage above is from source inspection. `cd web && bun test tests/specs-refusals.test.ts` also passed (2 pass, 0 fail): every rule-spec refusal, including api.md, has a matching refuses <code> test title. This is a title inventory, not layer coverage. No code, tests or published docs were edited.
+- `web/tests/api/v1-credits.db.test.ts`: real API keys, complete catalog→learner→grant→assignment→session/read flow,
+  grant replay/conflict/parallel spending, scopes, disabled/foreign/studio users, reservations, cap and notification failure.
+- `web/tests/lib/roleplay-assignments.db.test.ts`: same/different-target overlapping moves, recipient ambiguity,
+  no-op validation and existing assignment contracts.
+- `web/tests/api/module6-contract.db.test.ts`: deletion waiting for uncommitted session creation under Start's lock.
+- `web/tests/api/integration-contract.test.ts`: OpenAPI/resource method coverage, shared error declarations,
+  idempotency schema and Postman request coverage.
+- Existing API, people, credit and workflow suites remain regression coverage. External services are mocked in these
+  tests; their results do not prove live delivery, production migration safety or deployed runtime behavior.
+
+The request-key migration is additive and must precede the new web code. No production migration/deployment is part of
+this implementation pass; release gates from the hardening review remain outstanding.

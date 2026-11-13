@@ -10,7 +10,7 @@ const db = {
   agent: { findFirst: async () => ({ id: "agent", slug: "acme-rp", name: "RP", data: {} }) },
 };
 mock.module("@/lib/db", () => ({ db, withLock: async (keys: string[], work: (tx: typeof db) => Promise<unknown>) => {
-  expect(keys).toEqual(["people:org1"]); return work(db);
+  expect(keys).toEqual(["minutes:org1", "people:org1"]); return work(db);
 } }));
 const externalApi = await import("@/lib/external-api");
 mock.module("@/lib/external-api", () => ({

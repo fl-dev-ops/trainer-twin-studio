@@ -1,6 +1,6 @@
-import { studioPeopleEmails } from "@/lib/org-people";
+import { LEARNER, orgPerson, peopleLock, peopleRefusals, studioPeopleEmails } from "@/lib/org-people";
 import { db, withLock } from "@/lib/db";
-import { AppError } from "@/lib/errors";
+import { AppError, refusals } from "@/lib/errors";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { pausedReason } from "@/lib/billing/paused";
 import { DEFAULT_LEARNER_MINUTES, MAX_LEARNER_MINUTES } from "@/lib/minutes-config";
@@ -120,12 +120,34 @@ export async function grantMinutes(input: {
   userId?: string | null;
   note?: string | null;
   onlyIfNew?: boolean;
+  /** API retry identity; callers must supply the learner's userId too. */
+  requestKey?: string;
 }): Promise<{ grantedMinutes: number; balanceMinutes: number; orgBalanceMinutes: number }> {
   const amount = wholeMinutes(input.minutes);
   const email = lower(input.email);
-  return locked(input.orgId, async (tx) => {
+  if (input.requestKey && !input.userId) throw refusals.invalidInput("A learner ID is required for a retried grant.");
+  // Refresh before locking; the transaction subtracts current grants/reservations without a wallet network call.
+  await orgCredits(input.orgId, { fresh: true });
+  let reportUnsent = false;
+  return withLock([minutesLock(input.orgId), peopleLock(input.orgId)], async (tx) => {
+    if (input.userId) {
+      const person = await orgPerson(input.orgId, { userId: input.userId }, tx);
+      if (!person || person.email !== email) throw refusals.notFound();
+      if (person.disabled) throw peopleRefusals.personDisabled([email]);
+      if (person.role !== LEARNER) throw peopleRefusals.personIsStudio([email]);
+    }
+    const previous = input.requestKey
+      ? await tx.minuteLedger.findUnique({ where: { orgId_requestKey: { orgId: input.orgId, requestKey: input.requestKey } } })
+      : null;
+    if (previous && (previous.type !== "grant" || previous.userId !== input.userId || previous.email !== email || previous.seconds !== amount * 60 || previous.note !== (input.note ?? null))) {
+      throw new AppError("idempotency_conflict", "This Idempotency-Key was already used for a different credit grant.", 409);
+    }
     const learner = await learnerBalance(input.orgId, email, tx);
-    const orgBalance = (await orgCredits(input.orgId, { fresh: true, tx })).seconds;
+    const orgBalance = (await orgCredits(input.orgId, { tx })).seconds;
+    if (previous) {
+      reportUnsent = previous.meteroidSentAt === null;
+      return { grantedMinutes: 0, balanceMinutes: minutes(learner.balanceSeconds), orgBalanceMinutes: minutes(orgBalance) };
+    }
     if (input.onlyIfNew) {
       const given = await tx.minuteLedger.count({ where: { orgId: input.orgId, email, type: "grant" } });
       if (given > 0) return { grantedMinutes: 0, balanceMinutes: minutes(learner.balanceSeconds), orgBalanceMinutes: minutes(orgBalance) };
@@ -139,11 +161,11 @@ export async function grantMinutes(input: {
       throw new MinutesError(`${email} can be given at most ${MAX_LEARNER_MINUTES} minutes in total; ${minutes(Math.max(0, room))} more is possible.`, 400);
     }
     await tx.minuteLedger.create({
-      data: { orgId: input.orgId, email, userId: input.userId ?? null, type: "grant", seconds: amount * 60, actorUserId: input.actorUserId ?? null, note: input.note ?? null },
+      data: { orgId: input.orgId, email, userId: input.userId ?? null, type: "grant", seconds: amount * 60, actorUserId: input.actorUserId ?? null, note: input.note ?? null, ...(input.requestKey ? { requestKey: input.requestKey } : {}) },
     });
     return { grantedMinutes: amount, balanceMinutes: minutes(learner.balanceSeconds + amount * 60), orgBalanceMinutes: minutes(orgBalance - amount * 60) };
   }).then(async (result) => {
-    if (result.grantedMinutes) await scheduleOrgUsage(input.orgId);
+    if (result.grantedMinutes || reportUnsent) await scheduleOrgUsage(input.orgId);
     return result;
   });
 }
