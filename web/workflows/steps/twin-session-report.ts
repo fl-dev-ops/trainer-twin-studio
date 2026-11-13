@@ -1,4 +1,4 @@
-import { FatalError, RetryableError } from "workflow";
+import { FatalError, getWorkflowMetadata, RetryableError } from "workflow";
 import {
   buildTwinReport,
   loadTwinReportInput,
@@ -38,10 +38,10 @@ generateTwinReport.maxRetries = 3;
 
 export async function storeTwinReport(sessionId: string, report: TwinReport) {
   "use step";
-  await saveTwinReport(sessionId, report);
+  await saveTwinReport(sessionId, getWorkflowMetadata().workflowRunId, report);
 }
 
 export async function failTwinReport(sessionId: string) {
   "use step";
-  await markTwinReportFailed(sessionId);
+  await markTwinReportFailed(sessionId, getWorkflowMetadata().workflowRunId);
 }

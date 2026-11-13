@@ -8,10 +8,15 @@ Not the public API docs (those are in `docs/`, published). Not plans (those are 
 
 ## Two kinds of spec
 
-- **Rule specs** (`people.md`, `billing.md`) say how something *must* work. They are written and agreed **before** the code; the
+- **Rule specs** (`people.md`, `billing.md`, `practice.md`, `api.md`) say how something *must* work. They are written and agreed **before** the code; the
   code follows them, and a difference is a bug in the code. Each lists checks that must always hold.
 - **Module specs** (everything else) describe the code as it is, using the rules below. A module spec that
   disagrees with a rule spec is a bug to fix in the code, listed under *Mismatches* until it is fixed.
+
+Each rule spec ends with a **Refusals** table: one row per condition the platform refuses, with its code, status,
+message, when it applies and every layer that must check it. The same condition always gives the same code, status
+and message. Anything a rule spec doesn't describe is refused. Every code appears in a test titled `refuses <code>`;
+a module spec whose code refuses differently is a bug in the code (list it under *Mismatches*).
 
 (Added 11 Nov 2026: module specs only ever described the code, so an email-based assignment model nobody wanted was
 documented as "how it works" and never questioned. See `plans/people-and-sign-in.md`.)
@@ -96,3 +101,5 @@ browser `web/e2e`, Python `agent/tests`, `chat/tests`), and the most important u
 | 15 | [platform.md](platform.md) | Shared plumbing: uploads to S3 and their expiry, usage tracking, issue reports, crons, analytics, deploys and environments | `web/lib/uploads.ts`, `upload-*.ts`, `s3.ts`, `usage.ts`, `issue-alerts.ts`, `posthog-server.ts`, `web/vercel.json`, `web/scripts/vercel-build.sh`, `web/app/api/internal/*`, `web/app/api/upload*` |
 | 16 | [billing.md](billing.md) — rule spec | Agreed rules: Trial/Paid, tax-inclusive prices, billing details, invoice/receipt emails, packs, pauses and release checks | `specs/billing.md` Rules and Checks |
 | 17 | [billing-code.md](billing-code.md) — module spec | Phase 2 + 3 code: Meteroid subscriptions/top-ups, Razorpay invoice links/payments/fees, invoice workflows/emails/receipts, daily repairs, studio UI and pause gates | `web/lib/billing/*`, `web/lib/razorpay.ts`, `web/workflows/invoice-{issued,paid}.ts`, `web/app/api/{meteroid,razorpay}/webhook/route.ts`, `web/components/billing/*`, `web/scripts/billing-fee-report.ts` |
+| 18 | [practice.md](practice.md) — rule spec | Agreed rules: who may practise a twin; shared page/Start checks and refusals; common-link joining; locked starts, allowances, ending, runtime tokens and stale-call cleanup | `specs/practice.md` Rules, Checks and Refusals |
+| 19 | [api.md](api.md) — rule spec | Agreed rules: public REST keys, scopes, errors, safe retries, learner names, and studio copilot actor checks, save locks and session-only proxy | `specs/api.md` Rules, Refusals and Open questions |

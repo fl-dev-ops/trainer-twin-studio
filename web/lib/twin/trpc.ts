@@ -7,14 +7,15 @@ import { beforeSettings } from "@/lib/context-upload";
 import { assignablePeople } from "@/lib/learners";
 import { LEARNER_ROLE } from "@/lib/org";
 import { LEARNER, orgPeople, orgPerson } from "@/lib/org-people";
-import { learnerMinutes, MAX_LEARNER_MINUTES, MinutesError } from "@/lib/minutes";
+import { AppError, refusals } from "@/lib/errors";
+import { practicePerson, startAllowance } from "@/lib/practice";
+import { learnerMinutes, MAX_LEARNER_MINUTES } from "@/lib/minutes";
 import { studioProcedure, t } from "@/lib/trpc";
 import { runTwinAssign } from "@/lib/workflow-runs";
 import {
   accessUntilSchema,
   findTwinAgent,
   listTwinAssignments,
-  TwinAccessError,
   twinSharePath,
   twinShareUrl,
 } from "@/lib/twin-access";
@@ -24,7 +25,7 @@ import { AVATAR_VIDEO_TYPES, AvatarError, avatarPhotoUrl, avatarState, avatarVid
 import { getRun } from "workflow/api";
 import { isTwinReport, reportState } from "@/lib/twin/session-report";
 import { stripAttachments } from "@/lib/markers";
-import { rawScore, scoreCalibration, type CalibrationScore } from "@/lib/twin/calibration-score";
+import { rawScore, type CalibrationScore } from "@/lib/twin/calibration-score";
 import { sessionEvidence } from "@/lib/twin/evidence";
 import { updateTwin } from "@/lib/twin/manage";
 import { attachRatings, durationSeconds, firstExchange, lastSevenDays, likeRateByWeek, mostAsked, titleFrom, transcriptTurns } from "@/lib/twin/stats";
@@ -38,16 +39,12 @@ const slugInput = z.object({ slug: z.string().min(1).max(200) });
 const asRecord = (value: unknown) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
 const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : null);
 
-/** twin-access and minutes errors keep their meaning over tRPC. */
+/** Avatar errors as tRPC errors (our refusals, AppError, are handled for every procedure in lib/trpc.ts). */
 async function twinCall<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
   } catch (error) {
-    if (error instanceof TwinAccessError) {
-      throw new TRPCError({ code: error.status === 404 ? "NOT_FOUND" : error.status === 400 ? "BAD_REQUEST" : "FORBIDDEN", message: error.message });
-    }
     if (error instanceof AvatarError) throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
-    if (error instanceof MinutesError) throw new TRPCError({ code: error.status === 409 ? "CONFLICT" : error.status === 403 ? "FORBIDDEN" : "BAD_REQUEST", message: error.message });
     throw error;
   }
 }
@@ -140,6 +137,7 @@ async function calibrationRows(orgId: string, agentId: string) {
   const rows = await db.twinCalibration.findMany({
     where: { session: { orgId, agentId, deletedAt: null } },
     orderBy: { createdAt: "desc" },
+    take: 100, // the newest (specs/practice.md rule 15)
     select: {
       id: true,
       createdAt: true,
@@ -513,6 +511,9 @@ const usersRouter = t.router({
   }),
 });
 
+/** One calibration of this org that can still be seen: its call not deleted, its twin not archived (rule 15). */
+const orgCalibration = (orgId: string, id: string) => ({ id, session: { orgId, deletedAt: null, agent: { archivedAt: null } } });
+
 const calibrationsRouter = t.router({
   /** One twin's calibrations with their like/off counts. */
   list: studioProcedure.input(slugInput).query(({ ctx, input }) => twinCall(async () => {
@@ -522,17 +523,25 @@ const calibrationsRouter = t.router({
       db.agent.findUniqueOrThrow({ where: { id: found.id }, select: { persona: personaFace } }),
       orgAdmin(ctx.user.orgId),
     ]);
+    // The practice check Start runs (specs/practice.md rules 1, 12): the calibrate page shows its refusal instead of Start.
+    const blocked = await practicePerson(ctx.user.orgId, ctx.user.id)
+      .then((person) => startAllowance(ctx.user.orgId, person))
+      .then(() => null, (error: unknown) => {
+        if (error instanceof AppError) return error.message;
+        throw error;
+      });
     return {
       name: found.name,
       face: { person: admin, avatarUrl: aiAvatarUrl(persona.persona) },
       calibrations: rows.map((row) => omitRatings(row)),
+      blocked,
     };
   })),
 
   /** One calibration: the call's transcript with the ratings on the replies that were rated. */
   get: studioProcedure.input(z.object({ id: z.string().min(1).max(100) })).query(async ({ ctx, input }) => {
     const row = await db.twinCalibration.findFirst({
-      where: { id: input.id, session: { orgId: ctx.user.orgId } },
+      where: orgCalibration(ctx.user.orgId, input.id),
       select: {
         createdAt: true,
         turns: true,
@@ -542,7 +551,7 @@ const calibrationsRouter = t.router({
         ratings: { orderBy: { turnIndex: "asc" }, select: { turnIndex: true, question: true, reply: true, rating: true } },
       },
     });
-    if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Calibration not found" });
+    if (!row) throw refusals.notFound();
     // The saved transcript usually comes from the voice agent, so ratings are matched to it by the reply they rated.
     const turns = await withTurnAttachments(
       ctx.user.orgId,
@@ -565,37 +574,6 @@ const calibrationsRouter = t.router({
     .input(z.object({ sessionId: z.string().min(1).max(100) }))
     .query(({ ctx, input }) => sessionEvidence(ctx.user.orgId, input.sessionId)),
 
-  /** Marks a just-started twin call as a calibration (idempotent). */
-  start: studioProcedure
-    .input(slugInput.extend({ sessionId: z.string().min(1).max(100) }))
-    .mutation(({ ctx, input }) => twinCall(async () => {
-      const found = await findTwinAgent(ctx.user.orgId, input.slug);
-      const session = await db.interviewSession.findFirst({
-        where: { id: input.sessionId, orgId: ctx.user.orgId, userId: ctx.user.id, agentId: found.id },
-        select: { id: true },
-      });
-      if (!session) throw new TwinAccessError("That call is not yours to calibrate", 404);
-      const calibration = await db.twinCalibration.upsert({
-        where: { sessionId: session.id },
-        create: { sessionId: session.id, createdByUserId: ctx.user.id },
-        update: {},
-        select: { id: true },
-      });
-      return { calibrationId: calibration.id };
-    })),
-
-  /**
-   * Right after a calibration call ends: Jev counts the trainer's real turns and the "Feels off" they meant (mis-clicks
-   * and feedback lines left out), saved on the calibration. Raw counts if Jev can't be reached.
-   */
-  score: studioProcedure
-    .input(z.object({ calibrationId: z.string().min(1).max(100) }))
-    .mutation(async ({ ctx, input }) => {
-      const found = await db.twinCalibration.findFirst({ where: { id: input.calibrationId, session: { orgId: ctx.user.orgId } }, select: { id: true } });
-      if (!found) throw new TRPCError({ code: "NOT_FOUND", message: "Calibration not found" });
-      return scoreCalibration(ctx.user.orgId, found.id);
-    }),
-
   /** Rates one twin reply; rating the same turn again replaces it. */
   rate: studioProcedure
     .input(z.object({
@@ -606,11 +584,15 @@ const calibrationsRouter = t.router({
       rating: z.enum(["like", "off"]),
     }))
     .mutation(async ({ ctx, input }) => {
+      // The creator's own calibration, while its call is live (specs/practice.md rule 13).
       const calibration = await db.twinCalibration.findFirst({
-        where: { id: input.calibrationId, session: { orgId: ctx.user.orgId } },
-        select: { id: true },
+        where: { ...orgCalibration(ctx.user.orgId, input.calibrationId), createdByUserId: ctx.user.id },
+        select: { id: true, session: { select: { status: true } } },
       });
-      if (!calibration) throw new TRPCError({ code: "NOT_FOUND", message: "Calibration not found" });
+      if (!calibration) throw refusals.notFound();
+      if (!["activating", "active"].includes(calibration.session.status)) {
+        throw new AppError("calibration_ended", "This calibration call has ended.", 409);
+      }
       const fields = { question: input.question || null, reply: input.reply, rating: input.rating };
       await db.twinCalibrationRating.upsert({
         where: { calibrationId_turnIndex: { calibrationId: calibration.id, turnIndex: input.turnIndex } },

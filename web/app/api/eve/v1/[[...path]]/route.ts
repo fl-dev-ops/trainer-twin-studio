@@ -62,6 +62,8 @@ async function proxy(request: Request, { params }: Params) {
   if (!org) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const segments = (await params).path ?? [];
+  // Only the copilot's own session paths (specs/api.md rule 6): not info, health, cron or dev routes.
+  if (segments[0] !== "session") return notFound();
   // session            -> create (recorded below)
   // session/<id>[/...] -> only its owner
   const sessionId = segments[0] === "session" && segments[1] ? segments[1] : null;

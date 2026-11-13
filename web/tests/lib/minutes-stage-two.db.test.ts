@@ -1,9 +1,12 @@
+import { withLock } from "@/lib/db";
 import { fundOrg, availableOrgSeconds } from "../setup/meteroid";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
-  giveStartingMinutes, grantMinutes, grantMinutesToMany, learnerBalance,
+  giveStartingMinutes as startingMinutesInTx, grantMinutes, grantMinutesToMany, learnerBalance,
   recordSessionUsage } from "@/lib/minutes";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
+
+const giveStartingMinutes = (input: Parameters<typeof startingMinutesInTx>[1]) => withLock([`minutes:${input.orgId}`], (tx) => startingMinutesInTx(tx, input));
 
 describe.skipIf(!localMinutesDb)("credits stage two ledger (local database)", () => {
   let f: MinutesFixture;

@@ -10,6 +10,6 @@ export async function startSession(input: StartSessionInput): Promise<SessionSta
   "use workflow";
   const opened = await open(input);
   if (!opened.ok) return opened;
-  if (input.mode === "chat") return { ...opened, conversationToken: opened.session.runtimeToken };
+  if (input.mode === "chat") return { ...opened, conversationToken: opened.session.agentToken };
   return { ...opened, ...(await connect(input, opened.session)) };
 }

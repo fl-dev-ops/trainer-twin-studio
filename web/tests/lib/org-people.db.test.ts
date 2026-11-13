@@ -71,10 +71,10 @@ describe.skipIf(!localMinutesDb)("org-people (local database)", () => {
   });
 
   test("one admin per org: a second admin is refused, two at once too; the existing admin re-added is fine", async () => {
-    await expect(add([email("boss")], "admin")).rejects.toMatchObject({ name: "PeopleError", status: 403 });
+    await expect(add([email("boss")], "admin")).rejects.toMatchObject({ name: "PeopleError", code: "one_admin", status: 409 });
     expect(await add([f.trainer.email], "admin")).toEqual([expect.objectContaining({ role: "admin", added: false })]);
     await db.member.update({ where: { id: `${f.trainer.id}-member` }, data: { role: "team" } });
-    await expect(add([email("a1"), email("a2")], "admin")).rejects.toMatchObject({ status: 403 });
+    await expect(add([email("a1"), email("a2")], "admin")).rejects.toMatchObject({ code: "one_admin", status: 409 });
     const [admin] = await add([email("a1")], "admin");
     expect(admin).toMatchObject({ role: "admin", added: true });
     expect(await orgPerson(f.org.id, { email: email("a2") })).toBeNull();
@@ -84,7 +84,7 @@ describe.skipIf(!localMinutesDb)("org-people (local database)", () => {
     await fundOrg({ orgId: f.org.id, minutes: 100 });
     await db.member.update({ where: { id: `${f.learner.id}-member` }, data: { disabledAt: new Date() } });
     const error = await add([email("other"), f.learner.email]).catch((e: unknown) => e);
-    expect(error).toMatchObject({ name: "PeopleError", status: 409, message: expect.stringContaining("re-enable") });
+    expect(error).toMatchObject({ name: "PeopleError", status: 409, message: expect.stringContaining("Re-enable") });
     expect(await orgPerson(f.org.id, { email: email("other") })).toBeNull();
     expect((await orgPerson(f.org.id, { userId: f.learner.id }))?.disabled).toBe(true);
     for (const role of ["team", "admin"] as const) await expect(add([f.learner.email], role)).rejects.toMatchObject({ status: 409 });

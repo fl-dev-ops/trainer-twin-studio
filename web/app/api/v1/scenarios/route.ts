@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { isApiError, paginationFromUrl, requireExternalApi } from "@/lib/external-api";
+import { paginationFromUrl, requireExternalApi, apiRoute } from "@/lib/external-api";
 
 const listSelect = {
   slug: true,
@@ -15,16 +15,14 @@ const listSelect = {
 
 /** List the organization's published (not archived) role-play scenarios, in dashboard order. Read-only: scenario
  * configuration itself stays dashboard-only. Twins are not part of the public API. */
-export async function GET(request: Request) {
+async function handleGET(request: Request) {
   const api = await requireExternalApi(request, "scenarios", "read");
-  if (isApiError(api)) return api;
   const page = paginationFromUrl(new URL(request.url));
-  if (page instanceof Response) return page;
 
   const [scenarios, total] = await Promise.all([
     db.agent.findMany({
       where: { orgId: api.org.id, kind: "ROLEPLAY", archivedAt: null },
-      orderBy: [{ order: "asc" }, { createdAt: "desc" }],
+      orderBy: [{ order: "asc" }, { createdAt: "desc" }, { id: "desc" }],
       skip: page.offset,
       take: page.limit,
       select: listSelect,
@@ -37,3 +35,5 @@ export async function GET(request: Request) {
     pagination: { ...page, total },
   });
 }
+
+export const GET = apiRoute(handleGET);

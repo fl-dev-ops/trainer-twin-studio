@@ -1,5 +1,5 @@
 import { NextResponse, after } from "next/server";
-import { getTrainerOrg } from "@/lib/org";
+import { studioOrRefusal } from "@/lib/org";
 import { listPersonaSources, uploadPersonaSource } from "@/lib/persona-synthesis";
 
 export const maxDuration = 300;
@@ -8,8 +8,8 @@ import { drainPersonaAnalysisQueue } from "@/lib/persona-analysis-queue";
 type Params = { params: Promise<{ slug: string }> };
 
 export async function GET(_req: Request, { params }: Params) {
-  const org = await getTrainerOrg();
-  if (!org) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const org = await studioOrRefusal();
+  if (org instanceof Response) return org;
   const { slug } = await params;
   try {
     const sources = await listPersonaSources(slug, org.id);
@@ -20,8 +20,8 @@ export async function GET(_req: Request, { params }: Params) {
 }
 
 export async function POST(req: Request, { params }: Params) {
-  const org = await getTrainerOrg();
-  if (!org) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const org = await studioOrRefusal();
+  if (org instanceof Response) return org;
   const { slug } = await params;
   try {
     const form = await req.formData();

@@ -1,3 +1,4 @@
+import { errorResponse, refusals } from "@/lib/errors";
 import { beforeEach, expect, mock, test } from "bun:test";
 
 type DocData = { kbId: string; slug: string; title: string; ext: string; size: number; s3SourceKey: string; status: string };
@@ -17,7 +18,7 @@ const prefix = "test/org-1";
 
 mock.module("@/lib/ingestion-queue", () => ({ queueKnowledgeFile: queue }));
 mock.module("@/lib/main-collection", () => ({ MainCollectionService: { removeKnowledgeDoc: removeVectors } }));
-mock.module("@/lib/org", () => ({ getTrainerOrg: async () => studio ? { id: "org-1" } : null }));
+mock.module("@/lib/org", () => ({ getTrainerOrg: async () => studio ? { id: "org-1" } : null, studioOrRefusal: async () => (studio ? { id: "org-1" } : null) ?? errorResponse(refusals.signedOut()) }));
 mock.module("@/lib/db", () => ({
   db: {
     knowledgeBase: { findFirst: async () => ({ id: "kb-1", slug: "acme-knowledge" }) },

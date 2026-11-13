@@ -1,6 +1,6 @@
 import { type ToolSettings, toolSettings } from "@/lib/agent-tools";
 import { type BeforeSettings, beforeSettings } from "@/lib/context-upload";
-import { db } from "@/lib/db";
+import { db, withLock } from "@/lib/db";
 import { type RoleplayBuilder, roleplayBuilderFrom, roleplayBuilderSchema } from "@/lib/roleplay/skill";
 import { ROLEPLAY_SOURCE, saveRoleplay, ScenarioIngestError } from "@/lib/scenario-ingest";
 
@@ -23,7 +23,16 @@ export async function updateRoleplay(
 
   if (data.source !== ROLEPLAY_SOURCE) {
     if (patch.builder) throw new ScenarioIngestError("This role play was built from recordings: update its skill instead of builder fields", 400);
-    await db.agent.update({ where: { id: agent.id }, data: { data: { ...data, before, tools } } });
+    // Under the role play's save lock, reading its data again (practice rule 20), as the dashboard's settings save.
+    await withLock([`agent:${slug}`], async (tx) => {
+      const fresh = await tx.agent.findFirst({ where: { id: agent.id, archivedAt: null }, select: { data: true } });
+      if (!fresh) throw new ScenarioIngestError(`Role play "${slug}" was not found`, 404);
+      const latest = (fresh.data && typeof fresh.data === "object" ? fresh.data : {}) as Record<string, unknown>;
+      await tx.agent.update({
+        where: { id: agent.id },
+        data: { data: { ...latest, before: { ...beforeSettings(fresh.data), ...patch.before }, tools: { ...toolSettings(fresh.data), ...patch.tools } } },
+      });
+    });
     return { slug, changed: true };
   }
 

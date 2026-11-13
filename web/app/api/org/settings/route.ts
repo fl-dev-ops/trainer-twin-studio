@@ -1,50 +1,33 @@
-import { headers } from "next/headers";
-import { NextResponse } from "next/server";
 import { z } from "zod";
-import { db } from "@/lib/db";
-import { currentMembership, isStudioRole } from "@/lib/org";
+import { errorResponse, refusals } from "@/lib/errors";
+import { studioOrg, updateOrgSettings } from "@/lib/org";
+
+const httpsOrEmpty = z.string().trim().max(2048, "Enter a website URL up to 2048 characters.").refine((value) => {
+  if (!value) return true;
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}, "Enter a valid HTTPS website URL.");
 
 const bodySchema = z.object({
-  accentColor: z.string().regex(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i),
-  websiteUrl: z.string().trim().max(2048).refine((value) => {
-    if (!value) return true;
-    try {
-      return new URL(value).protocol === "https:";
-    } catch {
-      return false;
-    }
-  }),
+  name: z.string().trim().min(1, "Enter an organization name.").max(80, "Use an organization name up to 80 characters."),
+  logo: z.string().nullable(),
+  accentColor: z.string().regex(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i, "Choose an accent colour like #EC3013."),
+  websiteUrl: httpsOrEmpty,
 }).strict();
 
+/** The org's branding, saved in one request (specs/people.md rule 21). Studio only. */
 export async function PATCH(request: Request) {
-  const current = await currentMembership(await headers());
-  if (!current) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { member } = current;
-  if (!member) return NextResponse.json({ error: "No organization" }, { status: 403 });
-  if (!isStudioRole(member.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  try {
+    const org = await studioOrg();
+    const parsed = bodySchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) throw refusals.invalidInput(parsed.error.issues[0]?.message ?? "Send name, logo, accentColor and websiteUrl.");
+    const websiteUrl = parsed.data.websiteUrl ? new URL(parsed.data.websiteUrl).toString() : null;
+    const saved = await updateOrgSettings(org.id, { ...parsed.data, websiteUrl });
+    return Response.json({ ...saved, accentColor: parsed.data.accentColor });
+  } catch (error) {
+    return errorResponse(error);
   }
-
-  const parsed = bodySchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Enter a valid HTTPS website URL" }, { status: 422 });
-  }
-
-  const existing = (() => {
-    try { return JSON.parse(member.organization.metadata ?? "{}"); }
-    catch { return {}; }
-  })();
-  const websiteUrl = parsed.data.websiteUrl
-    ? new URL(parsed.data.websiteUrl).toString()
-    : null;
-
-  await db.organization.update({
-    where: { id: member.organization.id },
-    data: {
-      websiteUrl,
-      metadata: JSON.stringify({ ...existing, accentColor: parsed.data.accentColor }),
-    },
-  });
-
-  return NextResponse.json({ accentColor: parsed.data.accentColor, websiteUrl });
 }

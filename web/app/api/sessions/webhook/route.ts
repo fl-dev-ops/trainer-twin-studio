@@ -1,3 +1,4 @@
+import { orgOwnKey } from "@/lib/s3";
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -62,7 +63,7 @@ export async function POST(req: Request) {
     where: {
       OR: [{ id: rawSessionId }, { shareCode: rawSessionId }],
     },
-    select: { id: true, videoEgressId: true, agent: { select: { kind: true, data: true } } },
+    select: { id: true, orgId: true, videoEgressId: true, agent: { select: { kind: true, data: true } } },
   });
 
   if (!session) {
@@ -84,7 +85,8 @@ export async function POST(req: Request) {
   const updatedEvidence = {
     ...(body.report ?? {}),
     ...(body.video_url ? { videoUrl: body.video_url } : {}),
-    ...(body.video_s3_key ? { videoS3Key: body.video_s3_key } : {}),
+    // Only a file under this call's org is kept (practice rule 27).
+    ...(orgOwnKey(session.orgId, body.video_s3_key) ? { videoS3Key: body.video_s3_key } : {}),
     ...(body.audio_url ? { audioUrl: body.audio_url } : {}),
     ...(body.audio_s3_key ? { audioS3Key: body.audio_s3_key } : {}),
     ...(body.metrics ? { metrics: body.metrics } : {}),

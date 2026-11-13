@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { MainCollectionService } from "@/lib/main-collection";
-import { getSessionOrg } from "@/lib/org";
+import { studioOrRefusal } from "@/lib/org";
 
 export async function GET(request: Request) {
-  const org = await getSessionOrg();
-  if (!org) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const org = await studioOrRefusal();
+  if (org instanceof Response) return org;
 
   const query = new URL(request.url).searchParams.get("q")?.trim();
   if (!query) return NextResponse.json({ error: "Missing q" }, { status: 400 });

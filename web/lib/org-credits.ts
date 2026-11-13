@@ -26,13 +26,18 @@ async function uncountedSeconds(orgId: string, asOf: Date, tx: Tx) {
   return row?.seconds ?? 0;
 }
 
-/** Admin/team calls still running (no org_usage row yet), each up to the seconds it was allowed. */
+/**
+ * Admin/team calls with no org_usage row yet: a live one holds its whole allowance (specs/practice.md rule 4, so two
+ * trainers can't spend the same credits); an ended one counts the seconds it ran, up to its allowance.
+ */
 async function runningSeconds(orgId: string, tx: Tx) {
   const [row] = await tx.$queryRaw<{ seconds: number }[]>`
-    SELECT coalesce(sum(greatest(0, least(s."allowedSeconds",
-      floor(extract(epoch FROM (coalesce(s."endedAt", now() AT TIME ZONE 'UTC') - s."startedAt")))))), 0)::int AS seconds
+    SELECT coalesce(sum(CASE WHEN s."status" IN ('activating', 'active') THEN s."allowedSeconds"
+      ELSE greatest(0, least(s."allowedSeconds",
+        floor(extract(epoch FROM (coalesce(s."endedAt", now() AT TIME ZONE 'UTC') - s."startedAt"))))) END), 0)::int AS seconds
     FROM "InterviewSession" s
-    WHERE s."orgId" = ${orgId} AND s."chargesOrg" AND s."allowedSeconds" IS NOT NULL AND s."startedAt" IS NOT NULL
+    WHERE s."orgId" = ${orgId} AND s."chargesOrg" AND s."allowedSeconds" IS NOT NULL
+      AND (s."status" IN ('activating', 'active') OR s."startedAt" IS NOT NULL)
       AND s."status" NOT IN ('failed', 'revoked')
       AND NOT EXISTS (SELECT 1 FROM "MinuteLedger" m WHERE m."sessionId" = s."id")`;
   return row?.seconds ?? 0;

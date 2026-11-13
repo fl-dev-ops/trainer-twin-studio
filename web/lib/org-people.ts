@@ -1,8 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { db } from "@/lib/db";
+import { db, withLock } from "@/lib/db";
+import { AppError } from "@/lib/errors";
 import type { Prisma } from "@/lib/generated/prisma/client";
-import { DEFAULT_LEARNER_MINUTES, giveStartingMinutes } from "@/lib/minutes";
+import { DEFAULT_LEARNER_MINUTES, giveStartingMinutes, minutesLock } from "@/lib/minutes";
 import { isValidInviteEmail } from "@/lib/invite/emails";
+import { ADMIN_ROLE, isStudioRole, LEARNER_ROLE, STUDIO_ROLES, type OrgRole } from "@/lib/roles";
+import { scheduleOrgUsage } from "@/lib/schedule-org-credits";
 
 /**
  * An org's people (specs/people.md): an account (`user`), then a member of the org with a role, then (elsewhere) the
@@ -10,11 +13,10 @@ import { isValidInviteEmail } from "@/lib/invite/emails";
  * in web/ goes through here (tests/lib/org-people-architecture.test.ts keeps it that way).
  */
 
-export type PersonRole = "admin" | "team" | "user";
-export const ADMIN: PersonRole = "admin";
-export const LEARNER: PersonRole = "user";
-const STUDIO: PersonRole[] = ["admin", "team"];
-const isStudio = (role: string) => STUDIO.includes(role as PersonRole);
+export type PersonRole = OrgRole;
+export const ADMIN: PersonRole = ADMIN_ROLE;
+export const LEARNER: PersonRole = LEARNER_ROLE;
+const STUDIO: PersonRole[] = [...STUDIO_ROLES];
 
 export type OrgPerson = {
   memberId: string;
@@ -28,12 +30,20 @@ export type OrgPerson = {
   addedAt: Date;
 };
 
-export class PeopleError extends Error {
-  constructor(message: string, readonly status = 400) {
-    super(message);
-    this.name = "PeopleError";
-  }
-}
+/** A people refusal (specs/people.md Refusals). */
+export class PeopleError extends AppError {}
+
+/** The lock every change to one org's people takes (specs/people.md rule 17), after minutesLock when both are held. */
+export const peopleLock = (orgId: string) => `people:${orgId}`;
+
+export const peopleRefusals = {
+  invalidEmail: (emails: string[]) => new PeopleError("invalid_email", `Not a valid email: ${emails.join(", ")}`, 400),
+  personDisabled: (emails: string[]) =>
+    new PeopleError("person_disabled", `${emails.join(", ")} ${emails.length === 1 ? "is" : "are"} disabled in this organization. Re-enable them first.`, 409),
+  personIsStudio: (emails: string[]) =>
+    new PeopleError("person_is_studio", `${emails.join(", ")} ${emails.length === 1 ? "is" : "are"} on the team. Team members practise with the organization's credits, not as learners.`, 409),
+  oneAdmin: () => new PeopleError("one_admin", "This organization already has an admin. Add people as team or learner.", 409),
+};
 
 type Db = Prisma.TransactionClient | typeof db;
 const lower = (email: string) => email.trim().toLowerCase();
@@ -106,11 +116,12 @@ export type AddedPerson = OrgPerson & {
 };
 
 /**
- * Adds people to the org (specs/people.md rules 1, 2, 7, 8, 9): creates each account that doesn't exist, then makes
- * it a member with `role`. All or nothing, checked before anything is written: refused for invalid emails, a second
+ * Adds people to the org (specs/people.md rules 1, 2, 7, 8, 9, 17): creates each account that doesn't exist, then makes
+ * it a member with `role`. One transaction under the org's locks, all or nothing: refused for invalid emails, a second
  * admin, disabled members, and (for learners) people already on the studio team. Someone already in the org keeps
- * their role. New learners get their starting credits (`startingMinutes`, default DEFAULT_LEARNER_MINUTES) from the
- * org's balance; refused (MinutesError) when it can't cover them. Returns everyone, `added` marking new members.
+ * their role. Learners added by this call get their starting credits (`startingMinutes`, default
+ * DEFAULT_LEARNER_MINUTES) from the org's balance; refused (MinutesError) when it can't cover them. Returns everyone,
+ * `added` marking new members.
  */
 export async function addPeopleToOrg(input: {
   orgId: string;
@@ -119,64 +130,68 @@ export async function addPeopleToOrg(input: {
   /** Who is adding them (credits ledger). */
   byUserId?: string | null;
   startingMinutes?: number;
+  /** More writes for these people (their twin or role-play assignments) in the same locked transaction. */
+  then?: (tx: Prisma.TransactionClient, people: AddedPerson[]) => Promise<void>;
 }): Promise<AddedPerson[]> {
   const emails = [...new Set(input.emails.map(lower))].filter(Boolean);
   if (!emails.length) return [];
   const invalid = emails.filter((email) => !isValidInviteEmail(email));
-  if (invalid.length) throw new PeopleError(`Not a valid email: ${invalid.join(", ")}`);
+  if (invalid.length) throw peopleRefusals.invalidEmail(invalid);
 
-  const existing = await orgPeople(input.orgId, { emails, includeDisabled: true });
-  const disabled = existing.filter((person) => person.disabled).map((person) => person.email);
-  if (disabled.length) throw new PeopleError(`Disabled in this organization (re-enable them in Settings first): ${disabled.join(", ")}`, 409);
-  if (input.role === LEARNER) {
-    const studio = existing.filter((person) => isStudio(person.role)).map((person) => person.email);
-    if (studio.length) throw new PeopleError(`Already on the studio team (they practise from the organization's credits): ${studio.join(", ")}`, 409);
-  }
-  const known = new Map(existing.map((person) => [person.email, person]));
-  const fresh = emails.filter((email) => !known.has(email));
-  if (input.role === ADMIN && fresh.length) {
-    if (fresh.length > 1 || (await orgPeople(input.orgId, { roles: [ADMIN], includeDisabled: true })).length) {
-      throw new PeopleError("An organization has exactly one admin. Add people as team or user.", 403);
+  const result = await withLock([minutesLock(input.orgId), peopleLock(input.orgId)], async (tx) => {
+    const existing = await orgPeople(input.orgId, { emails, includeDisabled: true }, tx);
+    const disabled = existing.filter((person) => person.disabled).map((person) => person.email);
+    if (disabled.length) throw peopleRefusals.personDisabled(disabled);
+    if (input.role === LEARNER) {
+      const studio = existing.filter((person) => isStudioRole(person.role)).map((person) => person.email);
+      if (studio.length) throw peopleRefusals.personIsStudio(studio);
     }
-  }
-
-  // Starting credits first: when the org can't cover them, nobody is added.
-  const credited = input.role === LEARNER
-    ? new Set((await giveStartingMinutes({ orgId: input.orgId, emails, minutes: input.startingMinutes, actorUserId: input.byUserId ?? null })).given)
-    : new Set<string>();
-  const credits = (email: string) => (credited.has(email) ? input.startingMinutes ?? DEFAULT_LEARNER_MINUTES : 0);
-
-  const added: AddedPerson[] = [];
-  for (const email of fresh) {
-    const userId = await accountFor(email);
-    await db.member
-      .create({ data: { id: randomUUID(), organizationId: input.orgId, userId, role: input.role, createdAt: new Date() } })
-      .catch((error: unknown) => {
-        // Added twice at once: the unique (org, account) keeps one.
-        if (!isUniqueViolation(error)) throw error;
+    const known = new Map(existing.map((person) => [person.email, person]));
+    const fresh = emails.filter((email) => !known.has(email));
+    if (input.role === ADMIN && fresh.length && (fresh.length > 1 || (await orgPeople(input.orgId, { roles: [ADMIN], includeDisabled: true }, tx)).length)) {
+      throw peopleRefusals.oneAdmin();
+    }
+    // Starting credits only for learners this call adds; when the org can't cover them, nobody is added.
+    const credited = new Set(input.role === LEARNER && fresh.length
+      ? (await giveStartingMinutes(tx, { orgId: input.orgId, emails: fresh, minutes: input.startingMinutes, actorUserId: input.byUserId ?? null })).given
+      : []);
+    const userIds = await accountsFor(fresh, tx);
+    if (fresh.length) {
+      await tx.member.createMany({
+        data: fresh.map((email) => ({ id: randomUUID(), organizationId: input.orgId, userId: userIds.get(email)!, role: input.role, createdAt: new Date() })),
       });
-    const person = await orgPerson(input.orgId, { userId });
-    if (person) added.push({ ...person, added: true, startingCredits: credits(person.email) });
-  }
-  const addedEmails = new Set(added.map((person) => person.email));
-  return emails.map((email) =>
-    addedEmails.has(email) ? added.find((person) => person.email === email)! : { ...known.get(email)!, added: false, startingCredits: credits(email) });
-}
-
-/** The account for this email, created when there is none (name: the part before @). */
-async function accountFor(email: string) {
-  const found = await db.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } }, select: { id: true } });
-  if (found) return found.id;
-  try {
-    const user = await db.user.create({
-      data: { id: randomUUID(), email, name: email.split("@")[0] || email, emailVerified: false },
-      select: { id: true },
+    }
+    const added = new Map((await orgPeople(input.orgId, { emails: fresh }, tx)).map((person) => [person.email, person]));
+    const people = emails.map((email): AddedPerson => {
+      const startingCredits = credited.has(email) ? input.startingMinutes ?? DEFAULT_LEARNER_MINUTES : 0;
+      return added.has(email) ? { ...added.get(email)!, added: true, startingCredits } : { ...known.get(email)!, added: false, startingCredits };
     });
-    return user.id;
-  } catch (error) {
-    if (!isUniqueViolation(error)) throw error;
-    return (await db.user.findFirstOrThrow({ where: { email: { equals: email, mode: "insensitive" } }, select: { id: true } })).id;
-  }
+    await input.then?.(tx, people);
+    return people;
+  });
+  if (result.some((person) => person.startingCredits)) await scheduleOrgUsage(input.orgId);
+  return result;
 }
 
-const isUniqueViolation = (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "P2002";
+/** The account for each email (lower-cased), created when there is none (name: the part before @). */
+async function accountsFor(emails: string[], tx: Prisma.TransactionClient) {
+  const find = async () => new Map((await tx.user.findMany({
+    where: { OR: emails.map((email) => ({ email: { equals: email, mode: "insensitive" as const } })) },
+    select: { id: true, email: true },
+  })).map((user) => [user.email.toLowerCase(), user.id]));
+  if (!emails.length) return new Map<string, string>();
+  const found = await find();
+  const missing = emails.filter((email) => !found.has(email));
+  if (!missing.length) return found;
+  // Created by another org at the same moment: the unique email keeps one, and this finds it.
+  await tx.user.createMany({
+    data: missing.map((email) => ({ id: randomUUID(), email, name: email.split("@")[0] || email, emailVerified: false })),
+    skipDuplicates: true,
+  });
+  return find();
+}
+
+/** Whether this account is also a member (disabled included) of an org other than `orgId` (specs/api.md rule 5). */
+export async function inOtherOrgs(userId: string, orgId: string, tx: Db = db) {
+  return (await tx.member.count({ where: { userId, organizationId: { not: orgId } } })) > 0;
+}

@@ -4,7 +4,7 @@ import type { EmailProgress, OutboundEmail } from "@/workflows/send-emails";
 const workflow = await import("workflow");
 const { FatalError } = workflow;
 let stepId = "step-1";
-let result: { success: boolean; error?: string } = { success: true };
+let result: { success: boolean; error?: string; status?: number } = { success: true };
 const person = mock(async (_args: unknown) => result);
 const orgCredits = mock(async (_args: unknown) => result);
 const events: EmailProgress[] = [];
@@ -68,4 +68,15 @@ test("markFailed reports failed; finish reports done then closes the stream", as
   expect(events).toEqual([{ to: "a@example.com", status: "failed" }, { status: "done", sent: 1, failed: ["a@example.com"] }]);
   expect(close).toHaveBeenCalledTimes(1);
   expect(releaseLock.mock.invocationCallOrder[1]).toBeLessThan(close.mock.invocationCallOrder[0]);
+});
+
+test.each([422, 409, 400, 401, 403])("sendOne HTTP %s is FatalError and never reports sent", async (status) => {
+  result = { success: false, error: "Permanent rejection", status };
+  const error = await sendOne(emails[0]).catch((error: unknown) => error);
+  expect(FatalError.is(error)).toBe(true); expect(events).toEqual([]);
+});
+test.each([500, 429])("sendOne HTTP %s remains retryable and never reports sent", async (status) => {
+  result = { success: false, error: "Try again", status };
+  const error = await sendOne(emails[0]).catch((error: unknown) => error);
+  expect(error).toBeInstanceOf(Error); expect(FatalError.is(error)).toBe(false); expect(events).toEqual([]);
 });

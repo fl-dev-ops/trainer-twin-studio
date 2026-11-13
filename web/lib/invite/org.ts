@@ -1,6 +1,6 @@
 import { learnerMinutes } from "@/lib/minutes";
 import { orgName, personEmailFor } from "@/lib/invite/person-email";
-import { addPeopleToOrg, LEARNER, orgPeople, type PersonRole } from "@/lib/org-people";
+import { addPeopleToOrg, LEARNER, type PersonRole } from "@/lib/org-people";
 import { deliverEmail, queueEmails } from "@/lib/queue-emails";
 import type { OutboundEmail } from "@/workflows/send-emails";
 
@@ -50,13 +50,11 @@ export async function addOrgPeopleAndEmail(input: AddPeopleInput) {
 }
 
 /**
- * REST API (POST /api/v1/users): adds one learner as the API key's trainer (or the org's admin), emails them now (with
- * background retries), and returns them. Someone already a learner comes back unchanged (`created: false`).
+ * REST API (POST /api/v1/users): adds one learner as the API key's trainer, emails them now (with background retries),
+ * and returns them. Someone already a learner comes back unchanged (`created: false`).
  */
-export async function addLearnerByApi(input: { org: { id: string; slug: string }; actorUserId?: string | null; email: string }) {
-  const studio = await orgPeople(input.org.id, { roles: ["admin", "team"], ...(input.actorUserId ? { userIds: [input.actorUserId] } : {}) });
-  const by = studio[0];
-  if (!by) throw new ApiAddError("API key creator is no longer an organization trainer", 403);
+export async function addLearnerByApi(input: { org: { id: string; slug: string }; by: { userId: string; name: string }; email: string }) {
+  const { by } = input;
   const org = { ...input.org, name: await orgName(input.org.id) };
   const [person] = await addPeopleToOrg({ orgId: org.id, emails: [input.email], role: LEARNER, byUserId: by.userId });
   const [email] = await addedEmails(org, { id: by.userId, name: by.name }, [person]);
@@ -64,8 +62,3 @@ export async function addLearnerByApi(input: { org: { id: string; slug: string }
   return { person, created: person.added, emailSent: delivery.sent };
 }
 
-export class ApiAddError extends Error {
-  constructor(message: string, readonly status: number) {
-    super(message);
-  }
-}

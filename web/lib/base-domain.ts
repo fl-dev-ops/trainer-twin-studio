@@ -17,9 +17,14 @@ export function safeFamilyRedirect(value?: string) {
   }
 }
 
-export function signInUrl(hostHeader: string, returnPath?: string) {
+/** `https://<name>.<BASE_DOMAIN>`, keeping the request's port (local proxies such as portless :NNNN). */
+export function familyOrigin(hostHeader: string, name: string) {
   const port = hostHeader.includes(":") ? `:${hostHeader.split(":")[1]}` : "";
-  const url = new URL(`https://auth.${BASE_DOMAIN}${port}/sign-in`);
+  return `https://${name}.${BASE_DOMAIN}${port}`;
+}
+
+export function signInUrl(hostHeader: string, returnPath?: string) {
+  const url = new URL(`${familyOrigin(hostHeader, "auth")}/sign-in`);
   if (returnPath?.startsWith("/")) url.searchParams.set("redirect", `https://${hostHeader}${returnPath}`);
   return url.toString();
 }

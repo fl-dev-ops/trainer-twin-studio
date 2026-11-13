@@ -13,13 +13,17 @@ import { endTwinSession } from "@/workflows/end-twin-session";
 
 export type SessionEndKind = "twin" | "roleplay";
 
-/** Starts the session's end workflow (twin or role play). */
+/**
+ * Starts the session's end workflow (twin or role play) and notes when (`endWorkAt`). Never throws at the person
+ * ending the call: when it can't start, the room is closed here and `endWorkAt` stays empty, so the sweep starts it
+ * again later (specs/practice.md rule 24).
+ */
 export async function startSessionEnd(sessionId: string) {
-  const session = await db.interviewSession.findUnique({ where: { id: sessionId }, select: { agent: { select: { kind: true } } } });
-  if (!session) return;
-  const workflow = session.agent.kind === "TWIN" ? endTwinSession : endRoleplaySession;
   try {
-    await start(workflow, [sessionId]);
+    const session = await db.interviewSession.findUnique({ where: { id: sessionId }, select: { agent: { select: { kind: true } } } });
+    if (!session) return;
+    await start(session.agent.kind === "TWIN" ? endTwinSession : endRoleplaySession, [sessionId]);
+    await db.interviewSession.update({ where: { id: sessionId }, data: { endWorkAt: new Date() } });
   } catch (error) {
     console.error(`[session-end] ${sessionId}: workflow did not start; closing and charging here:`, error instanceof Error ? error.message : error);
     // The call has ended either way: a failure here is logged, never thrown at the person ending it.

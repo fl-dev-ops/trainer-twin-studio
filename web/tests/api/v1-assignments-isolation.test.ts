@@ -1,39 +1,27 @@
 import { expect, mock, test } from "bun:test";
 
-// docs/limits.mdx, organization isolation: a user of another organization answers like an unknown one. Assignments
-// used to look learners up by ID across every organization, so a key could assign (and read the email of) anyone.
-
-const memberWheres: Record<string, unknown>[] = [];
-mock.module("@/lib/auth", () => ({
-  auth: { api: { verifyApiKey: async () => ({ valid: true, key: { id: "k1", referenceId: "org1", metadata: null } }) } },
-}));
-mock.module("@/lib/db", () => ({
-  db: {
-    organization: { findUnique: async () => ({ id: "org1", slug: "acme", name: "Acme" }) },
-    // Only org1's learner u1 exists in org1; u2 is a learner of another organization.
-    member: {
-      findMany: async ({ where }: { where: Record<string, any> }) => {
-        memberWheres.push(where);
-        if (where.role.in.includes("user")) return [];
-        return [{ id: "trainer-member", role: "team", disabledAt: null, createdAt: new Date(0), user: { id: "t1", name: "Trainer", email: "trainer@acme.com", image: null } }];
-      },
-    },
-    user: { findUnique: async () => ({ id: "u2", name: "Other", email: "other@elsewhere.com" }) },
-    agent: { findFirst: async () => ({ id: "a1", slug: "acme-rp", name: "RP", data: {} }) },
+// The userId path must scope membership to the key's org and never fall back to an account lookup.
+const memberWheres: unknown[] = [];
+const db = {
+  member: {
+    findFirst: async ({ where }: { where: unknown }) => { memberWheres.push(where); return null; },
   },
+  deployment: { findUnique: async () => ({ id: "deployment" }) },
+  agent: { findFirst: async () => ({ id: "agent", slug: "acme-rp", name: "RP", data: {} }) },
+};
+mock.module("@/lib/db", () => ({ db, withLock: async (keys: string[], work: (tx: typeof db) => Promise<unknown>) => {
+  expect(keys).toEqual(["minutes:org1", "people:org1"]); return work(db);
+} }));
+const externalApi = await import("@/lib/external-api");
+mock.module("@/lib/external-api", () => ({
+  ...externalApi,
+  requireExternalApi: async () => ({ org: { id: "org1", slug: "acme" }, trainer: { userId: "trainer", name: "Trainer" }, actorUserId: "trainer", keyId: "key" }),
 }));
-
 const { POST } = await import("@/app/api/v1/assignments/route");
-const create = (body: unknown) =>
-  POST(new Request("https://dash.example.com/api/v1/assignments", {
-    method: "POST",
-    headers: { "x-api-key": "key", "content-type": "application/json" },
-    body: JSON.stringify(body),
-  }));
 
-test("POST /assignments with another organization's user ID answers 404 and reveals nothing", async () => {
-  const response = await create({ userId: "u2", scenario: "acme-rp" });
+test("refuses not_found for another organization's userId without revealing an account", async () => {
+  const response = await POST(new Request("https://test/api/v1/assignments", { method: "POST", body: JSON.stringify({ userId: "foreign-user", scenario: "acme-rp" }) }));
   expect(response.status).toBe(404);
-  expect(await response.json()).toEqual({ error: "User not found" });
-  expect(memberWheres).toContainEqual(expect.objectContaining({ organizationId: "org1", userId: { in: ["u2"] }, role: { in: ["user"] }, disabledAt: null }));
+  expect(await response.json()).toEqual({ code: "not_found", error: "Not found." });
+  expect(memberWheres).toEqual([{ organizationId: "org1", userId: "foreign-user" }]);
 });

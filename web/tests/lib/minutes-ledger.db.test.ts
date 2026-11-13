@@ -1,7 +1,10 @@
+import { withLock } from "@/lib/db";
 import { fundOrg, availableOrgSeconds } from "../setup/meteroid";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as minutes from "@/lib/minutes";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
+
+const giveStartingMinutes = (input: Parameters<typeof minutes.giveStartingMinutes>[1]) => withLock([`minutes:${input.orgId}`], (tx) => minutes.giveStartingMinutes(tx, input));
 
 describe.skipIf(!localMinutesDb)("minute ledger rules (local database)", () => {
   let f: MinutesFixture;
@@ -21,11 +24,11 @@ describe.skipIf(!localMinutesDb)("minute ledger rules (local database)", () => {
   test("starting minutes are all-or-nothing and do not charge known people again", async () => {
     await fund(59);
     const emails = [f.learner.email, `other-${f.learner.email}`];
-    await expect(minutes.giveStartingMinutes({ orgId: f.org.id, emails })).rejects.toMatchObject({ status: 409 });
+    await expect(giveStartingMinutes({ orgId: f.org.id, emails })).rejects.toMatchObject({ status: 409 });
     expect(await db.minuteLedger.count({ where: { orgId: f.org.id, type: "grant" } })).toBe(0);
     await fund(1);
-    expect(await minutes.giveStartingMinutes({ orgId: f.org.id, emails })).toEqual({ given: emails });
-    expect(await minutes.giveStartingMinutes({ orgId: f.org.id, emails })).toEqual({ given: [] });
+    expect(await giveStartingMinutes({ orgId: f.org.id, emails })).toEqual({ given: emails });
+    expect(await giveStartingMinutes({ orgId: f.org.id, emails })).toEqual({ given: [] });
     expect(await availableOrgSeconds(f.org.id)).toBe(0);
   });
 
@@ -51,7 +54,7 @@ describe.skipIf(!localMinutesDb)("minute ledger rules (local database)", () => {
 
   test("parallel starting-minute requests for one email grant it only once", async () => {
     await fund(300);
-    const results = await Promise.all(Array.from({ length: 6 }, () => minutes.giveStartingMinutes({ orgId: f.org.id, emails: [f.learner.email] })));
+    const results = await Promise.all(Array.from({ length: 6 }, () => giveStartingMinutes({ orgId: f.org.id, emails: [f.learner.email] })));
     expect(results.flatMap((r) => r.given)).toEqual([f.learner.email]);
     expect(await availableOrgSeconds(f.org.id)).toBe(270 * 60);
   });

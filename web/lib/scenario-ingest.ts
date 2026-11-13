@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
-import { db } from "@/lib/db";
+import { db, withLock } from "@/lib/db";
+import { stableJson } from "@/lib/stable-json";
 import { skillSourceRows } from "@/lib/skill-sources";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { MainCollectionService } from "@/lib/main-collection";
@@ -117,15 +118,6 @@ export const fileText = {
   plan: (plan: unknown) => `${JSON.stringify(plan, null, 1)}\n`,
 };
 
-/** JSON with object keys sorted, so data read back from jsonb (which reorders keys) compares equal. */
-function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
-  if (value && typeof value === "object") {
-    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`).join(",")}}`;
-  }
-  return JSON.stringify(value) ?? "null";
-}
-
 /** SKILL.md without its `---` YAML header. Only for reading step goals; the stored skill keeps its header. */
 export function skillBody(skill: string): string {
   const match = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/.exec(skill);
@@ -213,72 +205,77 @@ async function storeSkillAgent(input: {
   const { slug, agentData } = pkg;
   if (!validSlug(slug)) throw new ScenarioIngestError(`"${slug}" is not a valid scenario id`, 400);
 
-  // Slugs are global: refuse to touch another org's rows before writing anything.
-  const currentAgent = await db.agent.findUnique({ where: { slug } });
-  if (currentAgent && currentAgent.orgId !== org.id) {
-    throw new ScenarioIngestError(`Scenario "${slug}" belongs to another organization`, 409);
-  }
-  if (currentAgent && currentAgent.kind !== kind) {
-    throw new ScenarioIngestError(kind === "TWIN" ? `"${slug}" is a role play, not a twin skill` : `"${slug}" is a twin skill, not a role play`, 409);
-  }
+  // One save at a time per role play / skill (specs/practice.md rule 20): the version, its S3 files, its examples and
+  // the row are decided and written under one lock, so two saves can't pick the same version.
+  const stored = await withLock([`agent:${slug}`], async (tx) => {
+    // Slugs are global: refuse to touch another org's rows before writing anything.
+    const currentAgent = await tx.agent.findUnique({ where: { slug } });
+    if (currentAgent && currentAgent.orgId !== org.id) {
+      throw new ScenarioIngestError(`Scenario "${slug}" belongs to another organization`, 409);
+    }
+    if (currentAgent && currentAgent.kind !== kind) {
+      throw new ScenarioIngestError(kind === "TWIN" ? `"${slug}" is a role play, not a twin skill` : `"${slug}" is a twin skill, not a role play`, 409);
+    }
 
-  const previous = (currentAgent?.data ?? {}) as Record<string, unknown>;
-  const kept = Object.fromEntries(KEPT_ACROSS_DURING_WRITES.filter((key) => previous[key] !== undefined).map((key) => [key, previous[key]]));
-  // items.json and patterns.md are not in the Agent row; their hash is, so changing them makes a new version (a new S3
-  // folder and new vector items) instead of overwriting this version's files.
-  const filesHash = createHash("sha256").update(JSON.stringify(input.items)).update("\0").update(input.patterns ?? "").digest("hex").slice(0, 16);
-  const content = { ...agentData, ...kept, ...input.data, filesHash };
-  // Decide the version first: the S3 folder and the Agent row must carry the same number.
-  const previousContent = Object.fromEntries(Object.entries(previous).filter(([key]) => key !== "artifacts"));
-  const unchanged = Boolean(currentAgent) && currentAgent!.personaId === input.personaId && stableJson(previousContent) === stableJson(content);
-  const version = currentAgent ? (unchanged ? currentAgent.version : currentAgent.version + 1) : 1;
-  const artifacts = scenarioArtifactsPrefix(org.id, slug, version);
-  const data = { ...content, artifacts };
+    const previous = (currentAgent?.data ?? {}) as Record<string, unknown>;
+    const kept = Object.fromEntries(KEPT_ACROSS_DURING_WRITES.filter((key) => previous[key] !== undefined).map((key) => [key, previous[key]]));
+    // items.json and patterns.md are not in the Agent row; their hash is, so changing them makes a new version (a new S3
+    // folder and new vector items) instead of overwriting this version's files.
+    const filesHash = createHash("sha256").update(JSON.stringify(input.items)).update("\0").update(input.patterns ?? "").digest("hex").slice(0, 16);
+    const content = { ...agentData, ...kept, ...input.data, filesHash };
+    // Decide the version first: the S3 folder and the Agent row must carry the same number.
+    const previousContent = Object.fromEntries(Object.entries(previous).filter(([key]) => key !== "artifacts"));
+    const unchanged = Boolean(currentAgent) && currentAgent!.personaId === input.personaId && stableJson(previousContent) === stableJson(content);
+    const version = currentAgent ? (unchanged ? currentAgent.version : currentAgent.version + 1) : 1;
+    const artifacts = scenarioArtifactsPrefix(org.id, slug, version);
+    const data = { ...content, artifacts };
 
-  await Promise.all([
-    putObject(`${artifacts}/SKILL.md`, input.skill, "text/markdown; charset=utf-8"),
-    putObject(`${artifacts}/${pkg.manifestFile}`, fileText.scenario(pkg.manifest), "application/json"),
-    putObject(`${artifacts}/items.json`, fileText.items(input.items), "application/json"),
-    ...(input.patterns !== undefined ? [putObject(`${artifacts}/patterns.md`, input.patterns, "text/markdown; charset=utf-8")] : []),
-    ...(input.changes && !unchanged ? [putObject(`${artifacts}/changes.json`, JSON.stringify(input.changes, null, 1) + "\n", "application/json")] : []),
-  ]);
-  // The new version's items go in next to the live ones; the Agent row then switches to them. A failure before the
-  // switch leaves the live version untouched.
-  const itemCount = await MainCollectionService.writeScenarioItems(org.id, slug, pkg.scenarioId, version, input.items);
+    await Promise.all([
+      putObject(`${artifacts}/SKILL.md`, input.skill, "text/markdown; charset=utf-8"),
+      putObject(`${artifacts}/${pkg.manifestFile}`, fileText.scenario(pkg.manifest), "application/json"),
+      putObject(`${artifacts}/items.json`, fileText.items(input.items), "application/json"),
+      ...(input.patterns !== undefined ? [putObject(`${artifacts}/patterns.md`, input.patterns, "text/markdown; charset=utf-8")] : []),
+      ...(input.changes && !unchanged ? [putObject(`${artifacts}/changes.json`, JSON.stringify(input.changes, null, 1) + "\n", "application/json")] : []),
+    ]);
+    // The new version's items go in next to the live ones; the Agent row then switches to them. A failure before the
+    // switch leaves the live version untouched.
+    const itemCount = await MainCollectionService.writeScenarioItems(org.id, slug, pkg.scenarioId, version, input.items);
+    const done = { version, created: !currentAgent, items: itemCount, artifacts, pruneBelow: currentAgent && !unchanged ? version - 1 : 0 };
 
-  await db.$transaction(async (tx) => {
-    if (!currentAgent) {
-      const created = await tx.agent.create({
-        data: { slug, name: agentData.name, version, personaId: input.personaId, kind, data: json(data), orgId: org.id },
+    {
+      if (!currentAgent) {
+        const created = await tx.agent.create({
+          data: { slug, name: agentData.name, version, personaId: input.personaId, kind, data: json(data), orgId: org.id },
+        });
+        // Which knowledge base documents built this version (lib/skill-sources.ts), with the version itself.
+        await tx.skillSource.createMany({ data: await skillSourceRows(org.id, created.id, version, input.items, tx), skipDuplicates: true });
+        return done;
+      }
+      // Publishing onto an archived skill / role play brings it back (archive is a soft delete; the slug stays taken).
+      if (unchanged) {
+        if (currentAgent.archivedAt) await tx.agent.update({ where: { id: currentAgent.id }, data: { archivedAt: null } });
+        return done;
+      }
+      // Same versioning as a dashboard publish: snapshot the old spec, bump the version.
+      await tx.specVersion.create({
+        data: { entityType: "agents", entitySlug: slug, version: currentAgent.version, data: json(currentAgent.data), orgId: org.id },
       });
-      // Which knowledge base documents built this version (lib/skill-sources.ts), with the version itself.
-      await tx.skillSource.createMany({ data: await skillSourceRows(org.id, created.id, version, input.items, tx), skipDuplicates: true });
-      return;
+      await tx.agent.update({
+        where: { id: currentAgent.id },
+        data: { name: agentData.name, version, personaId: input.personaId, data: json(data), archivedAt: null },
+      });
+      await tx.skillSource.createMany({ data: await skillSourceRows(org.id, currentAgent.id, version, input.items, tx), skipDuplicates: true });
+      return done;
     }
-    // Publishing onto an archived skill / role play brings it back (archive is a soft delete; the slug stays taken).
-    if (unchanged) {
-      if (currentAgent.archivedAt) await tx.agent.update({ where: { id: currentAgent.id }, data: { archivedAt: null } });
-      return;
-    }
-    // Same versioning as a dashboard publish: snapshot the old spec, bump the version.
-    await tx.specVersion.create({
-      data: { entityType: "agents", entitySlug: slug, version: currentAgent.version, data: json(currentAgent.data), orgId: org.id },
-    });
-    await tx.agent.update({
-      where: { id: currentAgent.id },
-      data: { name: agentData.name, version, personaId: input.personaId, data: json(data), archivedAt: null },
-    });
-    await tx.skillSource.createMany({ data: await skillSourceRows(org.id, currentAgent.id, version, input.items, tx), skipDuplicates: true });
-  });
+  }, { timeout: 120_000, maxWait: 120_000 });
 
   // Now that the row points at the new version: keep its items and the previous version's (calls that started on it);
   // older ones only stay in S3. Programmatic, never the copilot; a failure leaves extra items, which no search reads.
-  if (currentAgent && !unchanged) {
-    await MainCollectionService.pruneScenarioItems(org.id, slug, version - 1)
+  if (stored.pruneBelow) {
+    await MainCollectionService.pruneScenarioItems(org.id, slug, stored.pruneBelow)
       .catch((error: unknown) => console.warn(`[scenario-ingest] could not prune old items of ${slug}`, error));
   }
-
-  return { slug, name: agentData.name, version, created: !currentAgent, items: itemCount, artifacts, runId: input.runId ?? null };
+  return { slug, name: agentData.name, version: stored.version, created: stored.created, items: stored.items, artifacts: stored.artifacts, runId: input.runId ?? null };
 }
 
 /** Creates or updates a skill twin from the scenario-ingest agent's files. */

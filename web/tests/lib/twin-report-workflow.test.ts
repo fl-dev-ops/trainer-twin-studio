@@ -17,7 +17,9 @@ mock.module("@/lib/db", () => ({
     },
   },
 }));
-const { reportState } = await import("@/lib/twin/session-report");
+const { isTwinReport } = await import("@/lib/twin/session-report");
+const { reportStateOf } = await import("@/lib/report-model");
+const reportState = (row: Parameters<typeof reportStateOf>[0], now: number) => reportStateOf(row, isTwinReport, now);
 const { generateTwinReport } = await import("@/workflows/steps/twin-session-report");
 const { FatalError, RetryableError } = await import("workflow");
 

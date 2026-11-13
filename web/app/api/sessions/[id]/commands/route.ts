@@ -1,5 +1,7 @@
+import { errorResponse } from "@/lib/errors";
+import { practiceRefusals } from "@/lib/practice";
 import { NextResponse } from "next/server";
-import { authorizeRuntimeSession } from "@/lib/interview-sessions";
+import { authorizeBrowserSession } from "@/lib/interview-sessions";
 import { listPendingWorkspaceCommands } from "@/lib/workspace-commands";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +12,7 @@ export async function GET(
 ) {
   const { id } = await params;
   const token = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
-  const session = await authorizeRuntimeSession(id, token);
-  if (!session || session.id !== id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const session = await authorizeBrowserSession(id, token);
+  if (!session || session.id !== id) return errorResponse(practiceRefusals.runtimeTokenInvalid());
   return NextResponse.json({ commands: await listPendingWorkspaceCommands(id) });
 }

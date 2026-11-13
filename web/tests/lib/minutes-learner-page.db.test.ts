@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import * as nextHeaders from "next/headers";
 import * as sessionUser from "@/lib/session-user";
 import { ensureDeployment } from "@/lib/deployments";
-import { dropLearnerAssignments } from "@/lib/members";
+import { changeMemberRole } from "@/lib/members";
 import { listUsers } from "@/lib/learners";
 import { loadSharedSession, loadTwinLink } from "@/lib/pages/learner";
 import { loadOrgHome } from "@/lib/pages/org-home";
@@ -50,7 +50,7 @@ describe.skipIf(!localMinutesDb)("learner pages with minutes (local database)", 
   test.each(["cancelled", "expired"])("loadSharedSession rejects %s status despite available minutes", async (status) => {
     await balance(600);
     await db.rolePlayAssignment.update({ where: { shareCode: code }, data: { status } });
-    expect(await loadSharedSession(code)).toEqual({ kind: "invalid" });
+    expect(await loadSharedSession(code)).toEqual({ kind: "twinUnavailable", email: f.learner.email, message: "Your access to this role play was removed. Ask your trainer." });
   });
 
   test("loadSharedSession asks the wrong account to switch on a used, past-date link", async () => {
@@ -111,7 +111,7 @@ describe.skipIf(!localMinutesDb)("learner pages with minutes (local database)", 
   });
 
   test.each(["admin", "team"])("studio %s sees no metering on common shared sessions or twin preview, without learner assignments", async (role) => {
-    await dropLearnerAssignments(f.org.id, `${f.learner.id}-member`);
+    await changeMemberRole({ orgId: f.org.id, email: f.learner.email, role: "team" });
     const link = await db.twinShareLink.create({ data: { orgId: f.org.id, agentId: f.twin.id, code: `${code}-studio`, minutesPerUser: 30 } });
     if (role === "admin") await db.member.update({ where: { id: `${f.trainer.id}-member` }, data: { role: "team" } });
     await db.member.update({ where: { id: `${f.learner.id}-member` }, data: { role } });
@@ -121,11 +121,15 @@ describe.skipIf(!localMinutesDb)("learner pages with minutes (local database)", 
     if (view.kind === "flow") expect(view.props.access).not.toHaveProperty("minutesLeft");
   });
 
-  test("assigned twin shows used below a minute, then passes minutesLeft and minutesTotal", async () => {
+  test("assigned twin shows used below a minute, blocked below five, then passes minutesLeft and minutesTotal", async () => {
     await db.twinAssignment.create({ data: { orgId: f.org.id, agentId: f.twin.id, userId: f.learner.id, minutesLimit: 999, shareCode: `${code}-twin` } });
     expect(await loadTwinLink("twin")).toMatchObject({ kind: "flow", props: { access: { ok: false, reason: "used" } } });
     await balance(119);
-    expect(await loadTwinLink("twin")).toMatchObject({ kind: "flow", props: { access: { ok: true, preview: false, minutesLeft: 1, minutesTotal: 10 } } });
+    expect(await loadTwinLink("twin")).toMatchObject({ kind: "flow", props: { access: { ok: false, reason: "blocked", message: "You need at least 5 minutes to start a call; you have 1. Ask your trainer for more." } } });
+    await db.minuteLedger.deleteMany({ where: { orgId: f.org.id } });
+    await db.interviewSession.deleteMany({ where: { orgId: f.org.id } });
+    await balance(300);
+    expect(await loadTwinLink("twin")).toMatchObject({ kind: "flow", props: { access: { ok: true, preview: false, minutesLeft: 5, minutesTotal: 10 } } });
   });
 
   test("Users page shares the same floored learner balance across modules", async () => {
@@ -137,7 +141,7 @@ describe.skipIf(!localMinutesDb)("learner pages with minutes (local database)", 
 
   test("listUsers leaves out someone moved to the studio team (one member row per account: their role decides)", async () => {
     await balance(119);
-    await dropLearnerAssignments(f.org.id, `${f.learner.id}-member`);
+    await changeMemberRole({ orgId: f.org.id, email: f.learner.email, role: "team" });
     await db.member.update({ where: { id: `${f.learner.id}-member` }, data: { role: "team" } });
     expect((await listUsers(f.org.id)).find((row) => row.email === f.learner.email)).toBeUndefined();
   });
@@ -199,7 +203,7 @@ describe.skipIf(!localMinutesDb)("learner pages with minutes (local database)", 
     await db.member.update({ where: { id: `${f.learner.id}-member` }, data: { disabledAt: new Date() } });
     const before = await commonState();
     const credits = await availableOrgSeconds(f.org.id);
-    expect(await loadSharedSession(link.code)).toEqual({ kind: "twinUnavailable", email: f.learner.email, message: "Your access has been disabled. Contact your trainer." });
+    expect(await loadSharedSession(link.code)).toEqual({ kind: "twinUnavailable", email: f.learner.email, message: "Your access to this organization has been turned off. Ask its admin to turn it back on." });
     expect(await commonState()).toEqual(before);
     expect(await availableOrgSeconds(f.org.id)).toBe(credits);
   });

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getTrainerOrg } from "@/lib/org";
+import { studioOrRefusal } from "@/lib/org";
 import { db } from "@/lib/db";
 
 const bodySchema = z.object({
@@ -10,8 +10,8 @@ const bodySchema = z.object({
 
 /** Toggle an agent between public (listed on the org's learner portal) and private. */
 export async function POST(request: Request) {
-  const org = await getTrainerOrg();
-  if (!org) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const org = await studioOrRefusal();
+  if (org instanceof Response) return org;
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid request" }, { status: 400 });

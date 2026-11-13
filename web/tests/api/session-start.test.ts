@@ -6,7 +6,8 @@ import * as warm from "@/lib/session-warm";
 import { POST } from "@/app/api/sessions/route";
 import type { OpenedSession } from "@/lib/session-activation";
 
-const session = { id: "session", runtimeToken: "runtime", secondsLeft: 300 } as OpenedSession;
+const session = { id: "session", runtimeToken: "browser", agentToken: "agent", secondsLeft: 300 } as OpenedSession;
+const { agentToken: _agentToken, ...publicSession } = session;
 let start: ReturnType<typeof spyOn<typeof runner, "runSessionStart">>;
 let after: ReturnType<typeof spyOn<typeof next, "after">>;
 let warming: ReturnType<typeof spyOn<typeof warm, "warmChatOpening">>;
@@ -34,20 +35,29 @@ test.each([
   expect(await response.json()).toEqual({ error: refusal.error, ...("code" in refusal ? { code: refusal.code } : {}) });
   expect(after).not.toHaveBeenCalled();
 });
-test("POST voice returns credentials and schedules opening warmup after the response", async () => {
+test("POST voice returns browser credentials without agentToken and schedules warmup after the response", async () => {
   const response = await POST(request({ shareCode: "invite", idempotencyKey: "retry", holdOpening: true }));
   expect(response.status).toBe(200);
-  expect(await response.json()).toEqual({ session, participantToken: "participant", room: "room" });
+  expect(await response.json()).toEqual({ session: publicSession, participantToken: "participant", room: "room" });
   expect(start).toHaveBeenCalledWith(expect.objectContaining({ orgId: "org", userId: "learner", userEmail: "learner@example.com", shareCode: "invite", mode: "voice", idempotencyKey: "retry", holdOpening: true }));
   expect(callbacks).toHaveLength(1);
   expect(warming).not.toHaveBeenCalled();
   await callbacks[0]();
   expect(warming).toHaveBeenCalledWith("session", "org");
 });
+test.each([true, false, "true", 1, null])("POST passes calibrate only for literal true and returns calibrationId (%j)", async (calibrate) => {
+  const calibrated = { ...session, calibrationId: "calibration" };
+  start.mockResolvedValue({ ok: true, session: calibrated, participantToken: "participant", room: "room" });
+  const response = await POST(request({ shareCode: "invite", calibrate }));
+  expect(response.status).toBe(200);
+  expect(start).toHaveBeenCalledWith(expect.objectContaining({ calibrate: calibrate === true }));
+  expect(await response.json()).toMatchObject({ session: { calibrationId: "calibration" } });
+});
+
 test("POST chat omits undefined voice credentials", async () => {
-  start.mockResolvedValue({ ok: true, session, conversationToken: "runtime" });
+  start.mockResolvedValue({ ok: true, session, conversationToken: "agent" });
   const response = await POST(request({ shareCode: "invite", mode: "chat" }));
-  expect(await response.json()).toEqual({ session, conversationToken: "runtime" });
+  expect(await response.json()).toEqual({ session: publicSession, conversationToken: "agent" });
 });
 test("unexpected start failures return a generic 500 without leaking internal errors", async () => {
   start.mockRejectedValue(new Error("private connection details"));

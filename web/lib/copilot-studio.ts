@@ -1,5 +1,4 @@
 import { resolveUpload, UploadError } from "@/lib/uploads";
-import { studioPeopleEmails } from "@/lib/org-people";
 import { z } from "zod";
 import { toolSettings } from "@/lib/agent-tools";
 import { beforeSettings } from "@/lib/context-upload";
@@ -219,18 +218,15 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
 
     case "inviteLearners": {
       const agent = await findAgent(d, orgId, input.slug, { archived: false });
-      const staff = await studioPeopleEmails(orgId, input.emails);
-      const learners = input.emails.filter((email) => !staff.has(email));
-      const refused = input.emails.filter((email) => staff.has(email));
-      if (!learners.length) return { invited: 0, refused, reason: "Studio members (admin / team) are not invited as learners." };
+      // As the dashboard does (specs/practice.md rules 10, 19): a team member or a disabled person in the list refuses
+      // the whole batch (person_is_studio / person_disabled), with nothing written.
       if (agent.kind === "TWIN") {
-        const result = await d.assignTwinAndInvite({
+        return emailsStatus(await d.assignTwinAndInvite({
           org: actor.org, by: actor.user, agent: { id: agent.id, name: agent.name },
-          emails: learners, accessUntil: input.accessUntil,
-        });
-        return { ...emailsStatus(result), refused };
+          emails: input.emails, accessUntil: input.accessUntil,
+        }));
       }
-      return { ...emailsStatus(await d.inviteToRoleplay({ org: actor.org, by: actor.user, agent, emails: learners })), refused };
+      return emailsStatus(await d.inviteToRoleplay({ org: actor.org, by: actor.user, agent, emails: input.emails }));
     }
 
     case "archive": {

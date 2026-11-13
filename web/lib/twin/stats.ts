@@ -129,8 +129,11 @@ export function titleFrom(text: string | null | undefined, fallback: string): st
 /** A calibration's counts: the trainer's real turns, and the "Feels off" they meant. */
 export type CalibrationScore = { turns: number; off: number };
 
-/** What the "Feels off" button sends as the trainer's message; never a turn of its own. */
-export const isFeelsOffMessage = (text: string) => /^feels off[.!]?$/i.test(text.trim());
+/**
+ * What the "Feels off" button sends as the trainer's message; never a turn of its own. The chat brain's own rule
+ * (chat/agent/channels/openai-compat.ts), so both agree (specs/practice.md rule 16): case and punctuation ignored.
+ */
+export const isFeelsOffMessage = (text: string) => /^feels? off$/.test(text.toLowerCase().replace(/[^a-z ]/g, "").replace(/\s+/g, " ").trim());
 
 /** Accuracy in %: turns whose reply wasn't meant as "Feels off", out of the trainer's turns. Null with no turns. */
 export function accuracyOf({ turns, off }: CalibrationScore): number | null {

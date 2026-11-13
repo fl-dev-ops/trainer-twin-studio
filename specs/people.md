@@ -51,9 +51,15 @@
    added.
 10. **Sign-in is Google or an email code.** No passwords anywhere (no password sign-in, sign-up or reset). The code
     is 6 digits, valid 10 minutes, 3 tries, sent through Resend. Only existing accounts may sign in, through either
-    method; operators create founders and org admins/team add other people. Unknown emails receive a generic success
-    response to a code request, but no code is sent and no account is created. Signing in alone gives no org access.
-    In development only, when Resend is not configured, the OTP is printed in the dev-server terminal instead.
+    method; operators create founders and org admins/team add other people. An unknown email's code request returns
+    `USER_NOT_FOUND` (404): “This email isn't on TrainerTwin. Ask your trainer to add you.” No code is sent or account
+    created, and the UI stays on email entry. This deliberately reveals registration status, an accepted usability
+    trade-off for the invite-only product. Known accounts see “Code expires in 10 minutes.” in every environment. Native email-format
+    validation remains; a server `INVALID_EMAIL` refusal says “Enter a valid email address.” Signing in alone gives no org access.
+    In development (`NODE_ENV=development`), the OTP is always printed in the dev-server terminal instead of emailed,
+    even when Resend is configured; the frontend does not describe or choose the delivery method.
+    It remains hashed, expiring and single-use; never return it in HTTP responses or print it in production.
+    Unknown-account requests additionally log “No local account found for this email” with the address only in development.
 11. **Emails.** Each action sends one email per affected person, combining what applies:
 
     | Action | Email says |
@@ -66,10 +72,51 @@
 
     A brand-new learner given a twin gets one email covering "added", the twin and their credits. Joining through a
     shared twin link sends none. Each email is sent at most once per event (Resend idempotency key).
+    Development suppresses all outbound email at the shared sender, regardless of configured credentials. Skipped
+    development sends report success so local workflows continue without delivery retries.
 12. **Emails go out through workflows** (`web/workflows/`), each email retried on its own. A failed email never undoes
     the action. Two exceptions, both keeping the email's idempotency key: the REST API sends at once so its response
     can say `emailSent` (a failure is then retried by the workflow), and when a workflow can't start the emails are
     sent directly.
+
+13. **Only the sign-in routes we use are open.** `/api/auth/*` answers only: `GET /get-session`, `POST /sign-out`,
+    `GET /ok`, `GET /error`, `POST /email-otp/send-verification-otp`, `POST /sign-in/email-otp`,
+    `POST /sign-in/social`, `GET|POST /callback/google`, `POST /organization/set-active` and `POST /update-user`
+    (name only). Every other path or method is `not_found` with nothing written, including anything a Better Auth
+    update adds. Better Auth's own member actions (add, invite, remove, change role) are refused even when called
+    from server code; leaving has no Better Auth hook, so no app code may call it (a test checks).
+14. **Access is checked against the database on every request.** A login is cached in its cookie for up to 5
+    minutes, so "has a login" never means "may use this org": every studio and portal check reads the person's
+    member row (enabled, role) from the database. Proxy cookie checks only route pages.
+15. **The studio is for admin and team.** Learners get the portal (their org home, twin and practice pages) and
+    their own account (name, sign out). Every studio page loader, tRPC procedure and API route refuses them with
+    `studio_only` — including the overview, talk, voices, developer, knowledge, version and TTS routes (speech too:
+    only studio members, or the voice agent with the TTS key) and the team, branding and billing parts of Settings.
+16. **A tab's org must still be yours.** A request with the tab's org header (`x-trainertwin-org`) is served only
+    for that org, and only while the person is an enabled admin/team member of it; otherwise `org_pin_invalid`
+    (the tab must reload). Without the header the org is picked as before (pinned → active → oldest studio org).
+17. **People changes in one org happen one at a time.** Adding people (with their starting credits), disabling,
+    re-enabling and changing a role take the org's people lock and re-check the rules inside it. A batch is all or
+    nothing: checks, starting credits (only for learners added by this call) and member rows commit together.
+18. **Disabling** keeps the person's history and turns off what they could still use in that org: active twin
+    assignments, pending role plays, practice sessions not yet started, and any call in progress (ended at once).
+    Their logins are deleted when no enabled membership is left. Disabling an already-disabled person changes
+    nothing but still ends any call left running. Ending one call failing never stops the others. The admin and
+    yourself can't be disabled. Re-enabling restores the membership only; assignments are given again.
+19. **Changing a role** is team ↔ learner only, by staff with `web/scripts/set-member-role.ts` (no page or API
+    does it). Becoming team removes the person's learner assignments in the same transaction. The admin's role
+    never changes and nobody becomes admin this way (how to hand over an admin is an open question).
+20. **Founder onboarding** uses a founder token once: it is spent in the same transaction that creates the org and
+    its admin, so two requests with one token make one org. A taken subdomain is `slug_taken` and spends nothing.
+    Once the org exists it is never deleted because a later step (switching to it, starting a connector) failed.
+21. **Org settings** are saved in one request (`PATCH /api/org/settings`): name, logo (PNG/JPEG/WebP, at most
+    1,000,000 bytes), website (HTTPS or empty) and accent colour (#RGB/#RRGGBB). The subdomain can't be changed and
+    other settings (such as hiding role plays) are staff-only; the request can't touch them.
+22. **API keys belong to a person.** A key acts for the enabled admin/team member who created it. A key without a
+    creator, or whose creator is no longer an enabled admin/team member, is refused (`api_key_owner_gone`).
+23. **Every refusal is ours.** Each refusal has a code, a status and a message from the table below, and the same
+    condition gives the same code, status and message wherever it is checked. Routes answer `{ error, code }`;
+    tRPC errors keep their tRPC code and carry ours in `data.refusal`. Anything not described in these rules is refused.
 
 ## Checks (must always hold; `web/scripts/check-org-people.ts`)
 
@@ -79,5 +126,45 @@
 - No admin or team member holds a twin or role-play assignment (moving someone to the studio removes theirs).
 - Every learner credits row (`MinuteLedger` types `grant`, `usage`, `reclaim`) belongs to an email that is a member of
   that org.
+- Every org has exactly one admin (also a database unique index).
+- No disabled member holds an active twin assignment, a pending role play or a call in progress.
 
 Run in the test suites, in every release rehearsal, and after every release.
+
+## Refusals
+
+One row per condition. **Where**: P proxy, PG page loader, T tRPC, R route handler, S service, BA Better Auth hook,
+DB database constraint — every layer listed must refuse it. Each code appears in at least one test title as
+`refuses <code>` (checked by `web/tests/specs-refusals.test.ts`). Better Auth's own sign-in errors (wrong, expired
+or used-up code; Google `signup_disabled`) keep its codes and are shown by the sign-in page.
+
+| Code | Status | Message | When | Where |
+| --- | --- | --- | --- | --- |
+| `not_found` | 404 | Not found. | A record that doesn't exist, is deleted, or belongs to another org; any closed `/api/auth` route (rule 13) | R, T, S |
+| `signed_out` | 401 | Sign in first. | No login on a page or route that needs one | P (dash pages), PG, T, R |
+| `no_org` | 403 | You're not a member of this organization. | Logged in, but no enabled membership in the org asked for | PG (to `/auth/no-org`), T, R |
+| `studio_only` | 403 | Only the organization's admin and team can do this. | A learner on a studio page, procedure or route (rule 15) | PG, T, R |
+| `org_pin_invalid` | 403 | This tab's organization is no longer available to you. Reload the page. | Tab org header isn't an enabled admin/team membership (rule 16) | T, R |
+| `member_disabled` | 403 | Your access to this organization has been turned off. Ask its admin to turn it back on. | The signed-in person is disabled in the org asked for (tab org header), or in every org they belong to (all orgs: also at sign-in) | BA (sign-in), PG, T, R, S |
+| `person_disabled` | 409 | {email} is disabled in this organization. Re-enable them first. | Adding or assigning a disabled person (giving credits skips them with the reason instead; see [Credits](credits.md)) | S |
+| `person_is_studio` | 409 | {email} is on the team. Team members practise with the organization's credits, not as learners. | A learner action (add as learner, assign) for admin/team (giving credits skips them with the reason) | S |
+| `invalid_email` | 400 | Not a valid email: {email} | Adding people with a malformed email | S |
+| `invalid_input` | 400 | (what is wrong, per field) | A request body that fails its schema | T, R |
+| `one_admin` | 409 | This organization already has an admin. Add people as team or learner. | Anything that would make a second admin | S, DB |
+| `admin_fixed` | 403 | The admin's role can't be changed and the admin can't be disabled. | Disabling or changing the role of the admin | S |
+| `calls_not_ended` | 500 | Disabled, but {n} call(s) in progress could not be ended yet. Disable again to retry. | Disabling committed but ending a running call failed (rule 18) | S |
+| `self_disable` | 400 | You can't disable yourself. | Disabling your own membership | S |
+| `member_action_closed` | 403 | Add, change and disable people from Settings. | Better Auth add/invite/remove/leave/role change (server code) | BA |
+| `token_invalid` | 400 | This setup link is invalid or already used. | Founder token missing or spent | R, S |
+| `token_email_mismatch` | 403 | This setup link is for a different email address. | Signed-in email isn't the token's email | S |
+| `slug_invalid` | 400 | (why the subdomain isn't allowed) | Subdomain fails the 3–30 character rule or is reserved | S |
+| `slug_taken` | 409 | That subdomain is taken. | Subdomain already used (including at the same moment) | S, DB |
+| `onboarding_failed` | 500 | Could not create the organization. Try again. | Setting up the new org (database, billing) failed; it is undone and the link works again | S |
+| `logo_invalid` | 400 | Use a PNG, JPEG or WebP logo up to 1 MB. | Org logo of another type or too big | S |
+| `api_key_owner_gone` | 403 | This API key's owner is no longer on the team. Create a new key. | Key with no creator, or creator not an enabled admin/team member (rule 22) | S |
+
+
+## Open questions
+
+- **Handing over an admin** (the admin leaves the company): the admin can't be disabled or changed (rules 18–19). Today only a manual database change does it.
+- **Founder tokens never expire.** Fine while operators create them by hand.

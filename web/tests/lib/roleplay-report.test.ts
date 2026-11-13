@@ -1,7 +1,9 @@
 import { expect, mock, test } from "bun:test";
 
 let row: Record<string, unknown> | null = null;
-mock.module("@/lib/db", () => ({ db: { interviewSession: { findUnique: async () => row } } }));
+mock.module("@/lib/db", () => ({
+  withLock: async () => { throw new Error("Unexpected locked write in read-only fixture"); },
+  isUniqueViolation: (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "P2002", db: { interviewSession: { findUnique: async () => row } } }));
 
 const { buildRoleplayReport, loadRoleplayReportInput, roleplayAfterOf, toRoleplayReport } = await import("@/lib/roleplay/session-report");
 const { ReportError } = await import("@/lib/report-model");

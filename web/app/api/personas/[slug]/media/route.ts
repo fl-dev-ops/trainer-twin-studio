@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getTrainerOrg } from "@/lib/org";
+import { studioOrRefusal } from "@/lib/org";
 import { PersonaMediaError, setPersonaAvatar, setPersonaVoice, setPersonaVoiceFrom } from "@/lib/persona-media";
 
 export const runtime = "nodejs";
@@ -11,8 +11,8 @@ export const maxDuration = 120;
  * (+ optional `transcript`) a recorded one; `image` and/or `video` set its avatar. Studio only. A trainer's own persona is set up on Twin's brain instead.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
-  const org = await getTrainerOrg();
-  if (!org) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const org = await studioOrRefusal();
+  if (org instanceof Response) return org;
   const slug = (await params).slug;
   const persona = await db.persona.findFirst({ where: { orgId: org.id, slug }, select: { isOwn: true } });
   if (!persona || persona.isOwn) return NextResponse.json({ error: "Persona not found" }, { status: 404 });

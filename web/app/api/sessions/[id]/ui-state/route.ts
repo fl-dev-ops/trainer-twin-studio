@@ -1,6 +1,8 @@
+import { errorResponse } from "@/lib/errors";
+import { practiceRefusals } from "@/lib/practice";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { authorizeRuntimeSession } from "@/lib/interview-sessions";
+import { authorizeBrowserSession } from "@/lib/interview-sessions";
 
 export const dynamic = "force-dynamic";
 
@@ -23,9 +25,9 @@ export async function POST(
 ) {
   const { id } = await params;
   const token = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
-  const session = await authorizeRuntimeSession(id, token);
+  const session = await authorizeBrowserSession(id, token);
   if (!session || session.id !== id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return errorResponse(practiceRefusals.runtimeTokenInvalid());
   }
 
   const body = await request.json().catch(() => null);
@@ -55,9 +57,9 @@ export async function GET(
 ) {
   const { id } = await params;
   const token = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
-  const session = await authorizeRuntimeSession(id, token);
+  const session = await authorizeBrowserSession(id, token);
   if (!session || session.id !== id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return errorResponse(practiceRefusals.runtimeTokenInvalid());
   }
   const runtimeState = (session.runtimeState ?? {}) as Record<string, unknown>;
   return NextResponse.json({ uiState: runtimeState.uiState ?? null });

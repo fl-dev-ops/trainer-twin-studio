@@ -1,13 +1,13 @@
+import { errorResponse, refusals } from "@/lib/errors";
 import { db } from "@/lib/db";
-import { isApiError, requireExternalApi } from "@/lib/external-api";
+import { requireExternalApi, apiRoute } from "@/lib/external-api";
 
 type Params = { params: Promise<{ slug: string }> };
 
 /** Get one scenario, including its role-play configuration (`data`). Read-only:
  * scenario configuration itself stays dashboard-only. A twin or an archived role play answers like an unknown scenario. */
-export async function GET(request: Request, { params }: Params) {
+async function handleGET(request: Request, { params }: Params) {
   const api = await requireExternalApi(request, "scenarios", "read");
-  if (isApiError(api)) return api;
   const { slug } = await params;
 
   const scenario = await db.agent.findFirst({
@@ -24,8 +24,10 @@ export async function GET(request: Request, { params }: Params) {
       deployments: { select: { _count: { select: { assignments: { where: { status: { in: ["pending", "used"] } } } } } } },
     },
   });
-  if (!scenario) return Response.json({ error: "Scenario not found" }, { status: 404 });
+  if (!scenario) return errorResponse(refusals.notFound());
 
   const { deployments, ...rest } = scenario;
   return Response.json({ scenario: { ...rest, assignmentCount: deployments[0]?._count.assignments ?? 0 } });
 }
+
+export const GET = apiRoute(handleGET);

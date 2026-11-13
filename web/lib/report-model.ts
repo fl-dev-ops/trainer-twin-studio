@@ -1,3 +1,4 @@
+import type { Prisma } from "@/lib/generated/prisma/client";
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
 import { chatCompletionItems, gatewayProvider, meterUsage } from "@/lib/usage";
@@ -45,7 +46,7 @@ export async function callReportModel(input: {
       model: REPORT_MODEL,
       messages: [
         { role: "system", content: input.system },
-        { role: "user", content: input.user },
+        { role: "user", content: input.user.length > MAX_PROMPT_CHARS ? `${CUT_MARK}${input.user.slice(-(MAX_PROMPT_CHARS - CUT_MARK.length))}` : input.user },
       ],
       response_format: { type: "json_schema", json_schema: { name: input.schemaName, strict: true, schema: input.schema } },
     }),
@@ -68,7 +69,48 @@ export async function callReportModel(input: {
   return data?.choices?.[0]?.message?.content;
 }
 
-/** After the last retry: the page stops waiting. A later completion event may claim it again. */
-export async function markReportFailed(sessionId: string) {
-  await db.interviewSession.updateMany({ where: { id: sessionId, reportStatus: { not: "completed" } }, data: { reportStatus: "failed" } });
+/** After the last retry: the page stops waiting. Only the run that claimed the report may say so (rule 25). */
+export async function markReportFailed(sessionId: string, runId: string) {
+  await db.interviewSession.updateMany({ where: { id: sessionId, reportWorkflowRunId: runId, reportStatus: "generating" }, data: { reportStatus: "failed" } });
 }
+
+/** Saves a report, only from the run that claimed it: a late run never overwrites another's (specs/practice.md rule 25). */
+export async function saveReport(sessionId: string, runId: string, report: unknown) {
+  await db.interviewSession.updateMany({
+    where: { id: sessionId, reportWorkflowRunId: runId, reportStatus: "generating" },
+    data: { report: report as Prisma.InputJsonValue, reportStatus: "completed" },
+  });
+}
+
+/** A report still "generating" this long after its call ended isn't coming (rule 25). */
+export const REPORT_STALE_MS = 30 * 60_000;
+const JUST_ENDED_MS = 10 * 60_000;
+
+export type ReportState = "ready" | "pending" | "unavailable";
+
+/** Where a session's report stands, for the page (twin and role play): shown, being made, or not coming. */
+export function reportStateOf(
+  row: { status: string; reportStatus: string | null; report: unknown; endedAt: Date | null },
+  ready: (report: unknown) => boolean,
+  now = Date.now(),
+): ReportState {
+  if (ready(row.report)) return "ready";
+  const since = row.endedAt ? now - row.endedAt.getTime() : 0;
+  if (row.reportStatus === "generating") return since < REPORT_STALE_MS ? "pending" : "unavailable";
+  // Just completed and not picked up yet: the completion events are still arriving.
+  if (row.status === "completed" && (!row.reportStatus || row.reportStatus === "none") && row.endedAt && since < JUST_ENDED_MS) return "pending";
+  return "unavailable";
+}
+
+/** The sweep: reports stuck "generating" long after their call ended are failed (rule 25). Returns how many. */
+export async function failStaleReports() {
+  const { count } = await db.interviewSession.updateMany({
+    where: { reportStatus: "generating", endedAt: { lt: new Date(Date.now() - REPORT_STALE_MS) } },
+    data: { reportStatus: "failed" },
+  });
+  return count;
+}
+
+/** The most of a transcript (characters) a report prompt carries; longer ones keep their end. */
+const MAX_PROMPT_CHARS = 120_000;
+const CUT_MARK = "[…earlier part cut]\n";

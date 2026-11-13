@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { getTrainerOrg } from "@/lib/org";
+import { studioOrRefusal } from "@/lib/org";
 import { OrganizationKnowledgeService } from "@/lib/org-knowledge";
 import { assertDriveOrigin, downloadDriveFile, driveAccess, DriveError, driveFileId, DRIVE_TOKEN_COOKIE } from "@/lib/google-drive";
 
@@ -11,8 +11,8 @@ const schema = z.object({ fileId: driveFileId }).strict();
 
 /** One file per request keeps partial failures retryable; no Drive crawl, SQS job or embeddings. */
 export async function POST(request: NextRequest) {
-  const actor = await getTrainerOrg();
-  if (!actor) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const actor = await studioOrRefusal();
+  if (actor instanceof Response) return actor;
   try {
     assertDriveOrigin(request);
     const parsed = schema.safeParse(await request.json().catch(() => null));

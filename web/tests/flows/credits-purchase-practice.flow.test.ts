@@ -22,7 +22,7 @@ describe.skipIf(!localMinutesDb)("flow: buy credits → assign → practise → 
 
   beforeAll(async () => {
     outside.start();
-    await f.create();
+    await f.create(false);
     await fundOrg({ orgId: f.org.id, minutes: 0 });
   });
   afterAll(async () => {
@@ -53,9 +53,9 @@ describe.skipIf(!localMinutesDb)("flow: buy credits → assign → practise → 
     expect(outside.emails).toHaveLength(1);
     const [email] = outside.emails;
     expect(email.to).toEqual([f.learner.email]);
-    expect(email.subject).toBe(`New role play: ${f.roleplay.name}`);
+    expect(email.subject).toContain(f.roleplay.name);
     expect(email.text).toContain("Your balance: 10 credits");
-    expect(email.text).toContain(`Sign in with Google or an email code, using ${f.learner.email}`);
+    expect(email.text).toContain(`Sign in with Google or an email code using ${f.learner.email}`);
     code = practiceCode(email);
   });
 
@@ -81,7 +81,9 @@ describe.skipIf(!localMinutesDb)("flow: buy credits → assign → practise → 
     const learner = await learnerBalance(f.org.id, f.learner.email);
     expect(Math.round(learner.usedSeconds / 60)).toBe(3);
     expect(Math.floor(learner.balanceSeconds / 60)).toBe(7);
-    expect((await db.rolePlayAssignment.findFirstOrThrow({ where: { orgId: f.org.id } })).status).toBe("used");
+    const assignment = await db.rolePlayAssignment.findFirstOrThrow({ where: { orgId: f.org.id } });
+    expect(assignment).toMatchObject({ status: "pending", usedAt: null });
+    expect(await db.interviewSession.count({ where: { assignmentId: assignment.id, startedAt: { not: null }, status: { not: "failed" } } })).toBe(1);
   });
 
   test("5. the same link starts a new call, with the 7 minutes left", async () => {

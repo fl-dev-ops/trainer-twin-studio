@@ -1,11 +1,20 @@
 import { expect, mock, test } from "bun:test";
+import { createHmac } from "node:crypto";
 
 let status = "used";
 let deploymentStatus = "active";
 let existing: { id: string; status: string; userId: string; agentSlug: string; mode: string; activationKey: string; allowedSeconds: number; startedAt: Date } | null = null;
 let updatedStatus = "";
 
-mock.module("@/lib/db", () => ({ db: {
+mock.module("@/lib/db", () => ({
+  withLock: async (keys: string[], work: (tx: { interviewSession: { updateMany: (args: unknown) => Promise<{ count: number }> } }) => Promise<unknown>) => {
+    expect(keys).toEqual(["minutes:org"]);
+    return work({ interviewSession: { updateMany: async (args) => {
+      expect(args).toMatchObject({ where: { id: "session", status: { in: ["activating", "active"] } }, data: { runtimeTokenHash: expect.any(String) } });
+      return { count: 1 };
+    } } });
+  },
+  isUniqueViolation: (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "P2002", db: {
   rolePlayAssignment: {
     findFirst: async () => ({
       id: "assignment", memberId: "member", member: { userId: "learner" }, status,
@@ -23,7 +32,7 @@ mock.module("@/lib/db", () => ({ db: {
   },
   twinAssignment: { findMany: async () => [] },
   user: { findUnique: async () => ({ email: "learner@example.com" }) },
-  member: { findMany: async () => [], findFirst: async () => null }, // not disabled in the org
+  member: { findMany: async () => [], findFirst: async ({ where }: { where: { userId: string } }) => where.userId === "learner" ? { id: "member", role: "user", disabledAt: null, createdAt: new Date(0), user: { id: "learner", name: "Learner", email: "learner@example.com", image: null } } : null },
 } }));
 
 const { activateSession } = await import("../../lib/interview-sessions");
@@ -36,10 +45,12 @@ test.each(["activating", "active"])("used assignments with a past expiry resume 
   process.env.COPILOT_SERVICE_SECRET = "test-only-secret";
   try {
     const resumed = await activateSession(input);
-    expect(resumed).toMatchObject({ id: "session", status: sessionStatus });
+    expect(resumed).toMatchObject({ id: "session", status: sessionStatus, resumed: true });
     expect(resumed?.secondsLeft).toBeGreaterThanOrEqual(89);
     expect(resumed?.secondsLeft).toBeLessThanOrEqual(90);
-    expect(resumed?.runtimeToken).toBeTruthy();
+    expect(resumed?.runtimeToken).toBe(createHmac("sha256", "test-only-secret").update("browser:session").digest("base64url"));
+    expect(resumed?.agentToken).toBe(createHmac("sha256", "test-only-secret").update("session:session").digest("base64url"));
+    expect(resumed?.agentToken).not.toBe(resumed?.runtimeToken);
   } finally {
     if (previousSecret === undefined) delete process.env.COPILOT_SERVICE_SECRET;
     else process.env.COPILOT_SERVICE_SECRET = previousSecret;
@@ -49,13 +60,13 @@ test.each(["activating", "active"])("used assignments with a past expiry resume 
 
 test("inactive deployments, expired/cancelled statuses and mismatched assignments still cannot activate", async () => {
   deploymentStatus = "disabled";
-  expect(await activateSession(input)).toBeNull();
+  await expect(activateSession(input)).rejects.toMatchObject({ code: "not_found", status: 404 });
   deploymentStatus = "active";
   status = "expired";
-  expect(await activateSession(input)).toBeNull();
+  await expect(activateSession(input)).rejects.toMatchObject({ code: "roleplay_access_removed", status: 403 });
   status = "pending";
-  expect(await activateSession({ ...input, userId: "outsider" })).toBeNull();
+  await expect(activateSession({ ...input, userId: "outsider" })).rejects.toMatchObject({ code: "no_org", status: 403 });
   status = "cancelled";
-  expect(await activateSession(input)).toBeNull();
+  await expect(activateSession(input)).rejects.toMatchObject({ code: "roleplay_access_removed", status: 403 });
   expect(updatedStatus).toBe("");
 });

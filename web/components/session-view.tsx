@@ -20,6 +20,7 @@ import {
   Track,
   type RemoteParticipant,
   type TranscriptionSegment,
+  DisconnectReason,
 } from "livekit-client";
 import { Button } from "@/components/ui/button";
 import {
@@ -488,16 +489,14 @@ export function SessionView({
       if (finalizedRef.current) return;
       finalizedRef.current = true;
       try {
+        // The browser's transcript only (evidence is the agent's and the server's: specs/practice.md rule 22).
+        const body = JSON.stringify({ sessionId: connection.sessionId, status, transcript: entriesRef.current });
         const response = await fetch("/api/sessions/finalize", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sessionId: connection.sessionId,
-            status,
-            transcript: entriesRef.current,
-            evidence: coverageRef.current,
-          }),
-          keepalive: true,
+          body,
+          // keepalive survives the page closing, but browsers refuse it over 64 KB: a long call's end is a normal request.
+          keepalive: body.length < 60_000,
         });
         if (!response.ok) throw new Error(`Session save failed (${response.status})`);
       } catch (saveError) {
@@ -920,8 +919,11 @@ export function SessionView({
       } catch {}
     }
 
-    function handleRoomDisconnected() {
+    function handleRoomDisconnected(reason?: DisconnectReason) {
       if (endingRef.current) return;
+      // The same person joined this call from another tab (a resume): the call goes on there, so don't end it here
+      // (specs/practice.md rule 18).
+      if (reason === DisconnectReason.DUPLICATE_IDENTITY) return;
       void handleDisconnect("disconnected");
     }
 
@@ -996,7 +998,7 @@ export function SessionView({
                   {endReason === "time_up"
                     ? sessionCode
                       ? "This call used the last of your practice minutes; it has been saved. Ask your trainer for more to practise again."
-                      : "This call used the last of your organization's credits; it has been saved. Contact TrainerTwin to add more."
+                      : "This call reached its time limit and has been saved. You can start another call if your organization has enough credits."
                     : sessionCode
                     ? endReason === "disconnected"
                       ? "The connection closed unexpectedly. Any captured session data has been saved. You may close this tab."

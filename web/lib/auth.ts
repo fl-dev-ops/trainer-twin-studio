@@ -1,6 +1,6 @@
 import { apiKey } from "@better-auth/api-key";
 import { betterAuth } from "better-auth";
-import { APIError } from "better-auth/api";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { emailOTP, organization } from "better-auth/plugins";
 import { organizationAccess, organizationRoles } from "@/lib/auth-roles";
@@ -8,8 +8,13 @@ import { nextCookies } from "better-auth/next-js";
 import { db } from "@/lib/db";
 import { BASE_DOMAIN, safeFamilyRedirect } from "@/lib/base-domain";
 import { sendOtpEmail } from "@/lib/email";
-import { ADMIN_ROLE, assertNoSecondAdmin, DISABLED_MESSAGE, dropLearnerAssignments, isDisabledUser, NO_REMOVAL_MESSAGE, ONE_ADMIN_MESSAGE } from "@/lib/members";
+import { AppError, refusals, toAPIError } from "@/lib/errors";
+import { isDisabledUser } from "@/lib/members";
 
+
+const memberActionClosed = async (): Promise<never> => {
+  throw toAPIError(new AppError("member_action_closed", "Add, change and disable people from Settings.", 403));
+};
 
 export const auth = betterAuth({
   appName: "TrainerTwin",
@@ -37,12 +42,28 @@ export const auth = betterAuth({
         },
       }
     : {},
+  hooks: {
+    after: createAuthMiddleware(async (ctx) => {
+      if (ctx.path !== "/email-otp/send-verification-otp" || ctx.body?.type !== "sign-in") return;
+      const result = ctx.context.returned;
+      if (!result || typeof result !== "object" || !("success" in result) || result.success !== true || typeof ctx.body.email !== "string") return;
+      // Explicit registration feedback is intentional (People rule 10); never send users to an empty code step.
+      const email = ctx.body.email.toLowerCase();
+      const account = await ctx.context.internalAdapter.findUserByEmail(email).catch(() => {
+        throw new APIError("INTERNAL_SERVER_ERROR", { message: "Could not check this email. Try again." });
+      });
+      if (!account) {
+        if (process.env.NODE_ENV === "development") console.info(`[Dev sign-in] No local account found for this email: ${email}`);
+        throw new APIError("NOT_FOUND", { code: "USER_NOT_FOUND", message: "This email isn't on TrainerTwin. Ask your trainer to add you." });
+      }
+    }),
+  },
   databaseHooks: {
     session: {
       create: {
         // Disabled members cannot sign in (any method); disabling also deletes their open sessions.
         before: async (session) => {
-          if (await isDisabledUser(session.userId)) throw new APIError("FORBIDDEN", { message: DISABLED_MESSAGE });
+          if (await isDisabledUser(session.userId)) throw toAPIError(refusals.memberDisabled());
         },
       },
     },
@@ -66,26 +87,14 @@ export const auth = betterAuth({
       // founder onboarding flow, never self-serve.
       allowUserToCreateOrganization: false,
       organizationLimit: 1,
+      // People are added, disabled and changed only through lib/org-people.ts and lib/members.ts (specs/people.md
+      // rules 6, 17–19), never through Better Auth's member actions, even from server code. (Leaving runs no hook;
+      // its route is closed in app/api/auth/[...all]/route.ts.)
       organizationHooks: {
-        // People may belong to several orgs (the studio works in one at a time: lib/org.ts).
-        // People are added straight to the org (lib/org-people.ts, Settings); there are no invitations to accept.
-        beforeCreateInvitation: async () => {
-          throw new APIError("FORBIDDEN", { message: "Add people from Settings; they sign in and are in." });
-        },
-        beforeAddMember: async ({ member, organization }) => {
-          await assertNoSecondAdmin(member.role, organization.id);
-        },
-        beforeUpdateMemberRole: async ({ member, newRole, organization }) => {
-          if (member.role === ADMIN_ROLE) throw new APIError("FORBIDDEN", { message: ONE_ADMIN_MESSAGE });
-          await assertNoSecondAdmin(newRole, organization.id);
-        },
-        // Admin and team hold no learner assignments (specs/people.md rule 7): moving to the studio drops them.
-        afterUpdateMemberRole: async ({ member, organization }) => {
-          if (member.role !== "user") await dropLearnerAssignments(organization.id, member.id);
-        },
-        beforeRemoveMember: async () => {
-          throw new APIError("FORBIDDEN", { message: NO_REMOVAL_MESSAGE });
-        },
+        beforeCreateInvitation: memberActionClosed,
+        beforeAddMember: memberActionClosed,
+        beforeUpdateMemberRole: memberActionClosed,
+        beforeRemoveMember: memberActionClosed,
       },
     }),
     emailOTP({

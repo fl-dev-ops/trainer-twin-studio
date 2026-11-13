@@ -1,9 +1,11 @@
 import { z } from "zod";
 import { randomBytes } from "node:crypto";
 import { BASE_DOMAIN } from "@/lib/base-domain";
-import { db } from "@/lib/db";
+import { db, withLock } from "@/lib/db";
+import type { Prisma } from "@/lib/generated/prisma/client";
+import { AppError, refusals } from "@/lib/errors";
 import { DEFAULT_LEARNER_MINUTES, learnerMinutes } from "@/lib/minutes";
-import { addPeopleToOrg, LEARNER, orgPeople, orgPerson } from "@/lib/org-people";
+import { addPeopleToOrg, LEARNER, orgPeople, orgPerson, peopleLock, peopleRefusals } from "@/lib/org-people";
 import { TWIN_SOURCE } from "@/lib/twins";
 
 /**
@@ -13,12 +15,15 @@ import { TWIN_SOURCE } from "@/lib/twins";
  * learner's own (lib/minutes.ts).
  */
 
-export class TwinAccessError extends Error {
-  constructor(message: string, readonly status: number) {
-    super(message);
-    this.name = "TwinAccessError";
-  }
-}
+/** A twin access refusal (specs/practice.md Refusals). */
+export class TwinAccessError extends AppError {}
+
+export const twinRefusals = {
+  notAssigned: () => new TwinAccessError("twin_not_assigned", "This twin isn't assigned to you. Ask your trainer for access.", 403),
+  revoked: () => new TwinAccessError("twin_access_revoked", "Your access to this twin was removed. Ask your trainer if you need it again.", 403),
+  ended: () => new TwinAccessError("twin_access_ended", "Your access to this twin has ended. Ask your trainer if you need more time.", 403),
+  linkDisabled: () => new TwinAccessError("twin_link_disabled", "This link is no longer active. Ask your trainer for a new one.", 403),
+};
 
 export const newTwinShareCode = () => randomBytes(18).toString("base64url");
 
@@ -43,7 +48,7 @@ export async function twinSharePath(orgId: string, orgSlug: string, agentId: str
     where: { id: agentId, orgId, kind: "TWIN" },
     select: { slug: true, data: true, persona: { select: { slug: true, isOwn: true } } },
   });
-  if (!agent) throw new TwinAccessError("Twin not found", 404);
+  if (!agent) throw refusals.notFound();
   if (isAllSkillsTwin(agent.data) && agent.persona.isOwn) return agent.persona.slug;
   const short = shortTwinSlug(orgSlug, agent.slug);
   if (short === agent.slug) return agent.slug;
@@ -104,11 +109,17 @@ export const withinAccess = (accessUntil: Date | null, now = new Date()) => !acc
  * Access only: how long a call may run comes from the learner's minutes (lib/minutes.ts), checked when it starts.
  */
 function usable(assignment: AssignmentRow | null, user: Person) {
-  if (!assignment || assignment.userId !== user.id) throw new TwinAccessError("This twin is not assigned to your account", 403);
-  if (assignment.status !== "active") throw new TwinAccessError("Your access to this twin was removed", 403);
+  if (!assignment || assignment.userId !== user.id) throw twinRefusals.notAssigned();
+  if (assignment.status !== "active") throw twinRefusals.revoked();
   // Checked when a call starts; a call already running finishes.
-  if (!withinAccess(assignment.accessUntil)) throw new TwinAccessError("Your access to this twin has ended", 403);
+  if (!withinAccess(assignment.accessUntil)) throw twinRefusals.ended();
   return { assignmentId: assignment.id, agentId: assignment.agentId };
+}
+
+/** A twin of this org that isn't archived (specs/practice.md rule 2); not_found otherwise. */
+export async function assertLiveTwin(orgId: string, agentId: string) {
+  const live = await db.agent.findFirst({ where: { id: agentId, orgId, kind: "TWIN", archivedAt: null }, select: { id: true } });
+  if (!live) throw refusals.notFound();
 }
 
 /** What a /s/<code> code is for twins: a personal assignment or a common share link (null: not a twin code). */
@@ -131,42 +142,43 @@ export async function findTwinCode(code: string) {
 export async function twinAccessByCode(input: { orgId: string; user: Person; code: string; join: boolean }) {
   const found = await findTwinCode(input.code);
   if (!found) return null;
-  if (found.orgId !== input.orgId) throw new TwinAccessError("This twin link belongs to another organization", 403);
-  if (found.type === "assignment") return usable(found.assignment, input.user);
-
-  if (found.link.status !== "active") throw new TwinAccessError("This twin link is no longer active", 403);
-  // A disabled member gets nothing through a link, even with an assignment left over (specs/people.md rule 8).
+  // Another org's code answers like an unknown one (it doesn't confirm the code exists).
+  if (found.orgId !== input.orgId) throw refusals.notFound();
+  await assertLiveTwin(input.orgId, found.agentId);
+  // A disabled member gets nothing through any code (specs/people.md rule 8); a personal code needs a member.
   const member = await orgPerson(input.orgId, { userId: input.user.id });
-  if (member?.disabled) throw new TwinAccessError("Your access has been disabled. Contact your trainer.", 403);
+  if (member?.disabled) throw refusals.memberDisabled();
+  if (found.type === "assignment") {
+    if (!member) throw refusals.noOrg();
+    return usable(found.assignment, input.user);
+  }
+
+  if (found.link.status !== "active") throw twinRefusals.linkDisabled();
   const existing = await db.twinAssignment.findUnique({
     where: { agentId_userId: { agentId: found.agentId, userId: input.user.id } },
     select: assignmentSelect,
   });
   if (existing) return usable(existing, input.user);
   if (member && member.role !== LEARNER) return { assignmentId: null, agentId: found.agentId };
-  if (!input.join) return { assignmentId: null, agentId: found.agentId };
-  await addPeopleToOrg({ orgId: input.orgId, emails: [input.user.email], role: LEARNER, byUserId: found.link.createdByUserId }).catch((error: unknown) => {
-    throw new TwinAccessError(error instanceof Error ? error.message : "Could not join", 403);
-  });
-  const created = await db.twinAssignment.create({
-    data: {
-      orgId: input.orgId,
-      agentId: found.agentId,
-      userId: input.user.id,
-      minutesLimit: DEFAULT_TWIN_MINUTES,
-      shareCode: newTwinShareCode(),
-      shareLinkId: found.link.id,
-    },
-    select: assignmentSelect,
-  }).catch(async (error: unknown) => {
-    // Two tabs joining at once: the unique (agentId, userId) keeps one; use it.
-    if (typeof error === "object" && error && "code" in error && error.code === "P2002") {
-      return db.twinAssignment.findUniqueOrThrow({
-        where: { agentId_userId: { agentId: found.agentId, userId: input.user.id } },
-        select: assignmentSelect,
+  // Start never adds anyone (specs/practice.md rule 3): without an assignment it's refused.
+  if (!input.join) throw member ? twinRefusals.notAssigned() : refusals.noOrg();
+  // The member and their assignment in one locked transaction; refused (credits short, org paused…) with its own code
+  // and status, and then nothing is written. Two tabs joining at once: the unique (agentId, userId) keeps one.
+  await addPeopleToOrg({
+    orgId: input.orgId,
+    emails: [input.user.email],
+    role: LEARNER,
+    byUserId: found.link.createdByUserId,
+    then: async (tx) => {
+      await tx.twinAssignment.createMany({
+        data: [{ orgId: input.orgId, agentId: found.agentId, userId: input.user.id, minutesLimit: DEFAULT_TWIN_MINUTES, shareCode: newTwinShareCode(), shareLinkId: found.link.id }],
+        skipDuplicates: true,
       });
-    }
-    throw error;
+    },
+  });
+  const created = await db.twinAssignment.findUniqueOrThrow({
+    where: { agentId_userId: { agentId: found.agentId, userId: input.user.id } },
+    select: assignmentSelect,
   });
   return usable(created, input.user);
 }
@@ -183,6 +195,7 @@ export async function twinAssignmentCode(input: { orgId: string; user: Person; a
 
 /** Twin access for a direct start (portal / talk page): the user's own assignment on that twin. */
 export async function twinAccessByAgent(input: { orgId: string; user: Person; agentId: string }) {
+  await assertLiveTwin(input.orgId, input.agentId);
   const assignment = await db.twinAssignment.findFirst({
     where: { orgId: input.orgId, agentId: input.agentId, userId: input.user.id },
     select: assignmentSelect,
@@ -195,7 +208,7 @@ export async function twinAccessByAgent(input: { orgId: string; user: Person; ag
 /** The org's twin agent by slug; role plays, other orgs' agents and archived twins are not found here. */
 export async function findTwinAgent(orgId: string, slug: string) {
   const agent = await db.agent.findFirst({ where: { orgId, slug, kind: "TWIN", archivedAt: null }, select: { id: true, slug: true, name: true } });
-  if (!agent) throw new TwinAccessError(`Twin "${slug}" was not found`, 404);
+  if (!agent) throw refusals.notFound();
   return agent;
 }
 
@@ -238,9 +251,9 @@ export async function assignTwin(input: {
   people: { userId: string; email: string }[];
   accessUntil?: Date | null;
   assignedByUserId: string;
-}) {
+}, tx: Prisma.TransactionClient) {
   const accessUntil = input.accessUntil ?? null;
-  const existing = await db.twinAssignment.findMany({
+  const existing = await tx.twinAssignment.findMany({
     where: { agentId: input.agentId, userId: { in: input.people.map((person) => person.userId) } },
     select: { id: true, userId: true, status: true },
   });
@@ -255,10 +268,10 @@ export async function assignTwin(input: {
     }
     const shareCode = newTwinShareCode();
     if (current) {
-      await db.twinAssignment.update({ where: { id: current.id }, data: { status: "active", accessUntil, shareCode } });
+      await tx.twinAssignment.update({ where: { id: current.id }, data: { status: "active", accessUntil, shareCode } });
       stats.reactivated++;
     } else {
-      await db.twinAssignment.create({
+      await tx.twinAssignment.create({
         data: { orgId: input.orgId, agentId: input.agentId, userId, minutesLimit: DEFAULT_TWIN_MINUTES, accessUntil, shareCode, assignedByUserId: input.assignedByUserId },
       });
       stats.added++;
@@ -268,14 +281,21 @@ export async function assignTwin(input: {
   return { stats, invites };
 }
 
-/** Revokes or restores one assignment. */
+/**
+ * Revokes or restores one assignment, under the org's people lock: restoring is refused for a disabled person or a
+ * team member (specs/practice.md rule 10).
+ */
 export async function updateTwinAssignment(input: { orgId: string; agentId: string; assignmentId: string; status: "active" | "revoked" }) {
-  const found = await db.twinAssignment.findFirst({ where: { id: input.assignmentId, orgId: input.orgId, agentId: input.agentId }, select: { id: true } });
-  if (!found) throw new TwinAccessError("Twin assignment not found", 404);
-  return db.twinAssignment.update({
-    where: { id: found.id },
-    data: { status: input.status },
-    select: { id: true, status: true },
+  return withLock([peopleLock(input.orgId)], async (tx) => {
+    const found = await tx.twinAssignment.findFirst({ where: { id: input.assignmentId, orgId: input.orgId, agentId: input.agentId }, select: { id: true, userId: true } });
+    if (!found) throw refusals.notFound();
+    if (input.status === "active") {
+      const person = await orgPerson(input.orgId, { userId: found.userId }, tx);
+      if (!person) throw refusals.notFound();
+      if (person.disabled) throw peopleRefusals.personDisabled([person.email]);
+      if (person.role !== LEARNER) throw peopleRefusals.personIsStudio([person.email]);
+    }
+    return tx.twinAssignment.update({ where: { id: found.id }, data: { status: input.status }, select: { id: true, status: true } });
   });
 }
 
@@ -297,7 +317,7 @@ export async function createTwinShareLink(input: { orgId: string; agentId: strin
 /** Disabling a link stops new joins; people who already joined keep their own assignment. */
 export async function setTwinShareLinkStatus(input: { orgId: string; agentId: string; linkId: string; status: "active" | "disabled" }) {
   const found = await db.twinShareLink.findFirst({ where: { id: input.linkId, orgId: input.orgId, agentId: input.agentId }, select: { id: true } });
-  if (!found) throw new TwinAccessError("Share link not found", 404);
+  if (!found) throw refusals.notFound();
   return db.twinShareLink.update({ where: { id: found.id }, data: { status: input.status }, select: { id: true, status: true } });
 }
 

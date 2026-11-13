@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { db } from "@/lib/db";
-import type { Prisma } from "@/lib/generated/prisma/client";
-import { callReportModel, markReportFailed, ReportError } from "@/lib/report-model";
+import { callReportModel, markReportFailed, ReportError, reportStateOf, saveReport, type ReportState } from "@/lib/report-model";
 import { transcriptTurns, type Turn } from "@/lib/twin/stats";
 
 /**
@@ -60,20 +59,9 @@ export function toTwinReport(content: unknown, now = new Date()): TwinReport {
 /** Why a report could not be made (shared with every Workflow-run report). */
 export { ReportError as TwinReportError };
 
-/** Where a twin session's report stands, for the page: shown, being made, or not coming. */
-export type ReportState = "ready" | "pending" | "unavailable";
-const JUST_ENDED_MS = 10 * 60_000;
-export function reportState(
-  row: { status: string; reportStatus: string | null; report: unknown; endedAt: Date | null },
-  now = Date.now(),
-): ReportState {
-  if (isTwinReport(row.report)) return "ready";
-  if (row.reportStatus === "generating") return "pending";
-  // Just completed and not picked up yet: the completion events are still arriving.
-  const fresh = row.endedAt !== null && now - row.endedAt.getTime() < JUST_ENDED_MS;
-  if (row.status === "completed" && (!row.reportStatus || row.reportStatus === "none") && fresh) return "pending";
-  return "unavailable";
-}
+/** Where a twin session's report stands, for the page (lib/report-model.ts reportStateOf). */
+export type { ReportState };
+export const reportState = (row: Parameters<typeof reportStateOf>[0], now = Date.now()) => reportStateOf(row, isTwinReport, now);
 
 export type TwinReportInput = { eligible: boolean; transcriptFinal: boolean; turns: Turn[]; agentName: string };
 
@@ -124,12 +112,7 @@ export async function buildTwinReport(sessionId: string, input: Pick<TwinReportI
   }
 }
 
-export async function saveTwinReport(sessionId: string, report: TwinReport) {
-  await db.interviewSession.update({
-    where: { id: sessionId },
-    data: { report: report as unknown as Prisma.InputJsonValue, reportStatus: "completed" },
-  });
-}
+export const saveTwinReport = (sessionId: string, runId: string, report: TwinReport) => saveReport(sessionId, runId, report);
 
 /** After the last retry: the page stops waiting. A later completion event may claim it again. */
 export const markTwinReportFailed = markReportFailed;

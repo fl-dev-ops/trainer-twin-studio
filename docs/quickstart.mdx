@@ -1,18 +1,18 @@
 ---
 title: "Quickstart"
-description: "Create an API key and make your first TrainerTwin request."
+description: "Create a key, add a learner, and assign a role play."
 ---
 
-<Steps>
-  <Step title="Generate an API key">
-    Open the [Developer API page](https://dash.trainertwin.com/developer), enter a descriptive key name, and select **Generate key**.
+The JSON field for a role play is `scenario`. The path that lists role plays is `/scenarios`. Those names stay so existing integrations do not break. Everywhere else, this guide says **role play** and **learner**. See [Names and limits](/limits).
 
-    Copy the key immediately. TrainerTwin only displays the full value once.
+<Steps>
+  <Step title="Create an API key">
+    Open the [Developer API page](https://dash.trainertwin.com/developer), name the key, and select **Generate key**.
+
+    Copy the `tt_...` value immediately. TrainerTwin shows it once.
   </Step>
 
   <Step title="Store the key on your server">
-    Save the key in your platform's secret manager or server environment.
-
     ```bash
     TRAINERTWIN_API_KEY=tt_your_key
     ```
@@ -22,31 +22,31 @@ description: "Create an API key and make your first TrainerTwin request."
     </Warning>
   </Step>
 
-  <Step title="List your learners">
-    Send the key in the `x-api-key` header.
-
+  <Step title="List published role plays">
     ```bash
-    curl "https://dash.trainertwin.com/api/v1/users" \
+    curl "https://dash.trainertwin.com/api/v1/scenarios" \
       --header "x-api-key: $TRAINERTWIN_API_KEY"
     ```
 
-    A successful response returns your organization's learners and pagination metadata (`invitations` is always empty).
-
-    ```json
-    {
-      "users": [],
-      "invitations": [],
-      "pagination": {
-        "limit": 50,
-        "offset": 0,
-        "total": 0
-      }
-    }
-    ```
+    Save `slug` from the role play you want to assign. That slug is the `scenario` value in the assignment request. Archived role plays and twins are not listed.
   </Step>
 
-  <Step title="Assign a published scenario">
-    Use a learner ID returned by the users endpoint and a published scenario slug from your TrainerTwin dashboard.
+  <Step title="Add a learner">
+    ```bash
+    curl "https://dash.trainertwin.com/api/v1/users" \
+      --request POST \
+      --header "x-api-key: $TRAINERTWIN_API_KEY" \
+      --header "content-type: application/json" \
+      --data '{ "email": "learner@example.com" }'
+    ```
+
+    A new learner returns `201` and receives **30 credits** once. One credit is one minute. Keep `user.id`. Sending the same email again returns `200`, the same learner, and does not grant another 30.
+
+    You can skip this step and assign by email instead. Assigning a new email adds the learner in the same request.
+  </Step>
+
+  <Step title="Assign the role play">
+    Send `userId` or `email`, never both. `scenario` is the role-play slug from the list above.
 
     ```bash
     curl "https://dash.trainertwin.com/api/v1/assignments" \
@@ -58,20 +58,35 @@ description: "Create an API key and make your first TrainerTwin request."
         "scenario": "react-mock-interview"
       }'
     ```
+
+    Give the returned `practiceUrl` to the learner, or rely on the TrainerTwin email. The learner signs in with the assigned email and practices in TrainerTwin. Repeating this request returns the same open assignment and does not send another email.
+  </Step>
+
+  <Step title="Read the result">
+    There is no webhook. Poll completed sessions, then read one:
+
+    ```bash
+    curl "https://dash.trainertwin.com/api/v1/sessions?userId=user_123&scenario=react-mock-interview&status=completed" \
+      --header "x-api-key: $TRAINERTWIN_API_KEY"
+    ```
+
+    `GET /sessions/{id}` returns the stored transcript, report, evidence, and recording links. `agentSlug` in that payload is the role-play slug.
   </Step>
 </Steps>
 
-## Postman collection
+To add credits later, reuse one `Idempotency-Key` for that grant, including after a timeout. See [Credits](/guides/credits).
 
-Download the <a href="/trainer-twin-api.postman_collection.json" download>TrainerTwin API Postman collection</a> and import it into Postman (`File → Import`). Then set the `apiKey` collection variable to your `tt_...` key — every request already sends it in the `x-api-key` header.
+## Postman
 
-## Next steps
+Download the <a href="/trainer-twin-api.postman_collection.json" download>TrainerTwin API collection</a> and import it. Set `apiKey` to your `tt_...` key. For each new credit grant, set a new `creditRequestKey` and keep that same value if you retry.
+
+## Next
 
 <CardGroup cols={2}>
-  <Card title="Authentication" icon="key" href="/authentication">
-    Understand scopes, expiration, and revocation.
+  <Card title="Practice flow" icon="route" href="/guides/role-plays">
+    From a published role play to the stored result.
   </Card>
-  <Card title="Assignments guide" icon="clipboard-check" href="/guides/assignments">
-    Learn assignment behavior and email delivery semantics.
+  <Card title="Authentication" icon="key" href="/authentication">
+    Permissions, expiry, and revocation.
   </Card>
 </CardGroup>

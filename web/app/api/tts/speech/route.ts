@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
+import { studioOrRefusal } from "@/lib/org";
 
 /**
  * Browser-facing proxy to the TTS service. Streams audio straight through so
  * the TTS_API_KEY never reaches the client and no CORS setup is needed.
  */
 export async function POST(request: NextRequest) {
+  // Studio members (voice previews), or the voice agent with the TTS key when it is pointed here instead of the TTS
+  // service: never anyone else (it spends our TTS service).
+  const key = process.env.TTS_SERVICE_KEY;
+  if (!key || request.headers.get("authorization") !== `Bearer ${key}`) {
+    const org = await studioOrRefusal();
+    if (org instanceof Response) return org;
+  }
   const serviceUrl = process.env.TTS_SERVICE_URL;
   if (!serviceUrl) return NextResponse.json({ error: "TTS_SERVICE_URL is not configured" }, { status: 500 });
 

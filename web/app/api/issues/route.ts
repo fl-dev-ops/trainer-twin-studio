@@ -1,3 +1,4 @@
+import { errorResponse, refusals } from "@/lib/errors";
 import { headers } from "next/headers";
 import { after, NextResponse } from "next/server";
 import { z } from "zod";
@@ -12,7 +13,8 @@ const bodySchema = z
     // support: the studio's Support dialog (subject on the first line of the message).
     kind: z.enum(["bug", "feature", "other", "support"]).default("bug"),
     message: z.string().trim().min(5).max(5000),
-    url: z.string().trim().max(2048).optional().nullable(),
+    // A web page link only (it becomes a link in the alert email: practice rule 28).
+    url: z.string().trim().max(2048).regex(/^https?:\/\//i, "A link must start with http:// or https://").optional().nullable(),
     // The browser's PostHog session replay, and the call the report is about (learner twin calls).
     replayUrl: z.string().trim().url().startsWith("https://").max(2048).optional().nullable(),
     sessionId: z.string().trim().max(100).optional().nullable(),
@@ -28,10 +30,7 @@ export async function POST(request: Request) {
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Please describe the issue (5–5000 characters)" },
-      { status: 422 },
-    );
+    return errorResponse(refusals.invalidInput(parsed.error.issues[0]?.path[0] === "url" ? parsed.error.issues[0].message : "Please describe the issue (5–5000 characters)"));
   }
 
   // Attribute the report to the reporter's organization: trainers belong via

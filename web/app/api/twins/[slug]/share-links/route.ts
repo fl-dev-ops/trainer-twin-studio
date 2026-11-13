@@ -1,7 +1,8 @@
+import { AppError, errorResponse } from "@/lib/errors";
 import { z } from "zod";
 import { BASE_DOMAIN } from "@/lib/base-domain";
-import { getTrainerOrg } from "@/lib/org";
-import { createTwinShareLink, findTwinAgent, listTwinShareLinks, setTwinShareLinkStatus, TwinAccessError } from "@/lib/twin-access";
+import { studioOrRefusal } from "@/lib/org";
+import { createTwinShareLink, findTwinAgent, listTwinShareLinks, setTwinShareLinkStatus } from "@/lib/twin-access";
 
 export const runtime = "nodejs";
 
@@ -9,14 +10,14 @@ const createSchema = z.object({ minutesPerUser: z.number().int().min(1).max(10_0
 const updateSchema = z.object({ linkId: z.string().min(1), status: z.enum(["active", "disabled"]) }).strict();
 
 const failed = (error: unknown) => {
-  if (error instanceof TwinAccessError) return Response.json({ error: error.message }, { status: error.status });
+  if (error instanceof AppError) return errorResponse(error);
   throw error;
 };
 
 /** The twin's common links; each person who opens one gets their own minutes. Studio only (admin, team). */
 export async function GET(_request: Request, { params }: { params: Promise<{ slug: string }> }) {
-  const trainer = await getTrainerOrg();
-  if (!trainer) return Response.json({ error: "Forbidden" }, { status: 403 });
+  const trainer = await studioOrRefusal();
+  if (trainer instanceof Response) return trainer;
   try {
     const agent = await findTwinAgent(trainer.id, (await params).slug);
     const links = await listTwinShareLinks(trainer.id, agent.id);
@@ -29,8 +30,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
-  const trainer = await getTrainerOrg();
-  if (!trainer) return Response.json({ error: "Forbidden" }, { status: 403 });
+  const trainer = await studioOrRefusal();
+  if (trainer instanceof Response) return trainer;
   const parsed = createSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Give the minutes each person gets" }, { status: 400 });
   try {
@@ -46,8 +47,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
 
 /** Disables (or re-enables) a link; people who already joined keep their own assignment. */
 export async function PATCH(request: Request, { params }: { params: Promise<{ slug: string }> }) {
-  const trainer = await getTrainerOrg();
-  if (!trainer) return Response.json({ error: "Forbidden" }, { status: 403 });
+  const trainer = await studioOrRefusal();
+  if (trainer instanceof Response) return trainer;
   const parsed = updateSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Give a linkId and a status" }, { status: 400 });
   try {

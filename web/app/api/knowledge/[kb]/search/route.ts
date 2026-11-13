@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { searchKnowledge } from "@/lib/knowledge";
-import { getSessionOrg } from "@/lib/org";
+import { studioOrRefusal } from "@/lib/org";
 
 /** Authenticated Studio search; live agents use the session-scoped search API. */
 export async function GET(req: Request, { params }: { params: Promise<{ kb: string }> }) {
-  const org = await getSessionOrg();
-  if (!org) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const org = await studioOrRefusal();
+  if (org instanceof Response) return org;
   const { kb } = await params;
   const knowledgeBase = await db.knowledgeBase.findFirst({
     where: { orgId: org.id, slug: kb },

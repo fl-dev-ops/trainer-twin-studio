@@ -11,11 +11,13 @@ mock.module("@/lib/auth", () => ({
   auth: { api: { getSession: async () => ({ user: { id: "u1", name: "U", email: "u@example.com" }, session: { activeOrganizationId: null } }) } },
 }));
 mock.module("@/lib/db", () => ({
+  withLock: async () => { throw new Error("Unexpected locked write in read-only fixture"); },
+  isUniqueViolation: (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "P2002",
   db: {
     member: {
       findMany: async ({ where }: { where: unknown }) => {
         memberWhere = where;
-        return [];
+        return [{ role: "user", disabledAt: new Date(), organization: { id: "org", slug: "acme", metadata: null } }];
       },
     },
   },
@@ -42,32 +44,30 @@ const studioOnly: Record<string, (c: Caller) => Promise<unknown>> = {
   personaEdit: (c) => c.personaEdit({ slug: "x" }),
   sessions: (c) => c.sessions({}),
   session: (c) => c.session({ id: "x" }),
-};
-const anyMember: Record<string, (c: Caller) => Promise<unknown>> = {
   twinKnowledge: (c) => c.twinKnowledge(),
   talk: (c) => c.talk({}),
   overview: (c) => c.overview(),
   voices: (c) => c.voices(),
   developer: (c) => c.developer(),
-  settings: (c) => c.settings(),
 };
+const anyMember: Record<string, (c: Caller) => Promise<unknown>> = { settings: (c) => c.settings() };
 
-test("studio pages refuse learners", async () => {
+test("refuses studio_only on every studio page loader", async () => {
   const learner = pageRouter.createCaller({ user: user("user"), signedIn: true });
-  for (const [name, call] of Object.entries(studioOnly)) expect([name, await codeOf(call(learner))]).toEqual([name, "FORBIDDEN"]);
+  for (const call of Object.values(studioOnly)) await expect(call(learner)).rejects.toMatchObject({ code: "FORBIDDEN", message: "Only the organization's admin and team can do this.", cause: { code: "studio_only", status: 403 } });
 });
 
-test("every studio and member page refuses anonymous callers (sign-in) and org-less users (/auth/no-org)", async () => {
+test("refuses signed_out and no_org with exact page-loader statuses/messages", async () => {
   const anonymous = pageRouter.createCaller({ user: null, signedIn: false });
   const orgless = pageRouter.createCaller({ user: null, signedIn: true });
   for (const [name, call] of Object.entries({ ...studioOnly, ...anyMember })) {
-    expect([name, await codeOf(call(anonymous))]).toEqual([name, "UNAUTHORIZED"]);
-    expect([name, await codeOf(call(orgless))]).toEqual([name, "FORBIDDEN"]);
+    await expect(call(anonymous)).rejects.toMatchObject({ code: "UNAUTHORIZED", message: "Sign in first.", cause: { code: "signed_out", status: 401 } });
+    await expect(call(orgless)).rejects.toMatchObject({ code: "FORBIDDEN", message: "You're not a member of this organization.", cause: { code: "no_org", status: 403 } });
   }
 });
 
-test("a disabled member gets no tRPC user (signed in, no org)", async () => {
+test("refuses member_disabled in the server page context despite cached signed-in identity", async () => {
   const ctx = await createTrpcContext({ req: new Request("https://dash.example.test/api/trpc") });
-  expect(memberWhere).toEqual({ userId: "u1", disabledAt: null });
-  expect(ctx).toMatchObject({ user: null, signedIn: true });
+  expect(memberWhere).toEqual({ userId: "u1" });
+  expect(ctx).toMatchObject({ user: null, signedIn: true, refusal: { code: "member_disabled", status: 403, message: "Your access to this organization has been turned off. Ask its admin to turn it back on." } });
 });

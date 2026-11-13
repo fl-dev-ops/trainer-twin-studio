@@ -3,7 +3,10 @@ import { orgPeople, type OrgPerson } from "@/lib/org-people";
 import { randomUUID } from "node:crypto";
 import type { AgentKind, Prisma } from "@/lib/generated/prisma/client";
 import { deletePrefix, getObjectText, kbPrefix, presignedGetUrl, putObject } from "@/lib/s3";
-import { db } from "@/lib/db";
+import { db, withLock } from "@/lib/db";
+import { refusals } from "@/lib/errors";
+import { ROLEPLAY_SOURCE } from "@/lib/scenario-ingest";
+import { stableJson } from "@/lib/stable-json";
 import {
   ALL_DOCUMENT_EXTENSIONS,
   documentToMarkdown,
@@ -289,6 +292,17 @@ export type SaveResult = {
  * Saves a spec (YAML text). On a changed update, snapshots the previous version
  * into SpecVersion and bumps the entity's version.
  */
+/**
+ * Spec uploads and draft publishes rewrite an agent's whole data and bump its version with no files or examples: only
+ * for older spec-built role plays. Builder role plays and twins are refused (specs/practice.md rule 20).
+ */
+export function assertSpecBuilt(agent: { kind?: AgentKind; data: unknown }) {
+  const data = (agent.data && typeof agent.data === "object" ? agent.data : {}) as Record<string, unknown>;
+  if (agent.kind === "TWIN" || data.source === ROLEPLAY_SOURCE || typeof data.skill === "string") {
+    throw refusals.invalidInput("Edit this one in its builder: spec uploads only change older spec-built role plays.");
+  }
+}
+
 export async function saveSpec(type: SpecType, slug: string, text: string, orgId: string): Promise<SaveResult> {
   if (!validSlug(slug)) throw new Error(`Invalid id: ${slug}`);
   const parsed = yaml.load(text.replace(/^```(?:ya?ml)?\s*\n?/i, "").replace(/\n?```\s*$/, ""));
@@ -335,22 +349,26 @@ export async function saveSpec(type: SpecType, slug: string, text: string, orgId
   }
 
   if (existing.orgId !== orgId) throw new Error("Not found");
-  if (JSON.stringify(existing.data) === JSON.stringify(data)) {
-    return { created: false, versionBumped: false, version: existing.version };
-  }
+  if (type === "agents") assertSpecBuilt(existing as { kind?: AgentKind; data: unknown });
 
-  const nextVersion = existing.version + 1;
-  await db.$transaction(async (tx) => {
+  // One save at a time per spec (specs/practice.md rule 20): its current row is read again under the lock.
+  return withLock([`agent:${slug}`], async (tx) => {
+    const current: SpecRow | null = type === "personas"
+      ? await tx.persona.findUnique({ where: { orgId_slug: { orgId, slug } } })
+      : await tx.agent.findUnique({ where: { slug } });
+    if (!current || current.orgId !== orgId) throw new Error("Not found");
+    if (stableJson(current.data) === stableJson(data)) return { created: false, versionBumped: false, version: current.version };
+    const nextVersion = current.version + 1;
     await tx.specVersion.create({
-      data: { entityType: type, entitySlug: slug, version: existing.version, data: existing.data as Prisma.InputJsonValue, orgId },
+      data: { entityType: type, entitySlug: slug, version: current.version, data: current.data as Prisma.InputJsonValue, orgId },
     });
     if (type === "personas") {
       await tx.persona.update({ where: { orgId_slug: { orgId, slug } }, data: { name, version: nextVersion, data } });
     } else {
       await tx.agent.update({ where: { slug }, data: { name, version: nextVersion, data: data as Prisma.InputJsonValue } });
     }
+    return { created: false, versionBumped: true, version: nextVersion };
   });
-  return { created: false, versionBumped: true, version: nextVersion };
 }
 
 export async function deleteSpec(type: SpecType, slug: string, orgId: string) {

@@ -9,10 +9,13 @@ const record = (name: string, where: Where) => ((seen[name] ??= []).push(where),
 
 const isRoleplay = (where: Where) => where.kind === "ROLEPLAY" || (where.agent as Where | undefined)?.kind === "ROLEPLAY";
 mock.module("@/lib/auth", () => ({
-  auth: { api: { verifyApiKey: async () => ({ valid: true, key: { id: "k1", referenceId: "org1", metadata: null } }) } },
+  auth: { api: { verifyApiKey: async () => ({ valid: true, key: { id: "k1", referenceId: "org1", metadata: { createdByUserId: "t1" } } }) } },
 }));
 mock.module("@/lib/db", () => ({
+  withLock: async () => { throw new Error("Unexpected locked write in read-only fixture"); },
+  isUniqueViolation: (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "P2002",
   db: {
+    member: { findMany: async () => [{ id: "trainer-member", role: "team", disabledAt: null, createdAt: new Date(0), user: { id: "t1", name: "Trainer", email: "trainer@acme.com", image: null } }] },
     organization: { findUnique: async () => ({ id: "org1", slug: "acme", name: "Acme" }) },
     agent: {
       findMany: async ({ where }: { where: Where }) => (record("agent.findMany", where), []),
@@ -60,7 +63,7 @@ test("GET /scenarios lists and counts role plays only", async () => {
 test("GET /scenarios/:slug answers 404 for a twin, like an unknown scenario", async () => {
   const twin = await getScenario(call("/scenarios/acme-twin"), { params: Promise.resolve({ slug: "acme-twin" }) });
   expect(twin.status).toBe(404);
-  expect(await twin.json()).toEqual({ error: "Scenario not found" });
+  expect(await twin.json()).toEqual({ code: "not_found", error: "Not found." });
   expect(seen["agent.findFirst"]).toEqual([{ orgId: "org1", slug: "acme-twin", kind: "ROLEPLAY", archivedAt: null }]);
 });
 

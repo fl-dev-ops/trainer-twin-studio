@@ -1,3 +1,5 @@
+import { errorResponse, refusals } from "@/lib/errors";
+import { resolveSessionUser, visibleSessions } from "@/lib/session-user";
 import {
   CodeExecutionProviderError,
   executeCode,
@@ -12,7 +14,11 @@ const languages = new Set<SupportedCodeExecutionLanguage>([
   "react",
 ]);
 
+/** Runs a learner's code in a practice call (components/session/code-editor.tsx): enabled members of the org only. */
 export async function POST(request: Request) {
+  const { org, user } = await resolveSessionUser();
+  if (!org || !user) return errorResponse(refusals.signedOut());
+  if (!(await visibleSessions(org.id, user.id))) return errorResponse(refusals.noOrg());
   const apiKey = process.env.ONECOMPILER_API_KEY?.trim();
   if (!apiKey) {
     return Response.json(

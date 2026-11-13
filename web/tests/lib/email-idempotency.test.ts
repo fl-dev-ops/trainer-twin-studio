@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, expect, spyOn, test } from "bun:test";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 
@@ -9,6 +9,7 @@ const server = setupServer(http.post("https://api.resend.com/emails", async ({ r
   return HttpResponse.json({ id: "email_test" });
 }));
 const originalKey = process.env.RESEND_API_KEY;
+const originalNodeEnv = process.env.NODE_ENV;
 let email: typeof import("@/lib/email");
 beforeAll(async () => {
   process.env.RESEND_API_KEY = "re_test_idempotency";
@@ -16,6 +17,10 @@ beforeAll(async () => {
   email = await import("@/lib/email");
 });
 beforeEach(() => { requests.length = 0; });
+afterEach(() => {
+  if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+  else Object.assign(process.env, { NODE_ENV: originalNodeEnv });
+});
 afterAll(() => {
   server.close();
   if (originalKey === undefined) delete process.env.RESEND_API_KEY;
@@ -34,6 +39,7 @@ test("sendEmail without a key keeps legacy sends working without an idempotency 
   expect(await email.sendEmail({ to: "a@example.com", subject: "Invite", html: "<p>Hello</p>" })).toMatchObject({ success: true });
   expect(requests).toHaveLength(1);
   expect(requests[0].key).toBeNull();
+  expect(requests[0].body.reply_to).toBe("support@trainertwin.com");
 });
 
 test.each([
@@ -55,9 +61,77 @@ test("sendOrgCreditsEmail forwards the grant's key", async () => {
   expect(requests[0].key).toBe("org-credits:g1");
 });
 
-test("sendOtpEmail sends the 6-digit code with its 10-minute expiry", async () => {
-  expect(await email.sendOtpEmail({ to: "a@example.com", otp: "123456" })).toMatchObject({ success: true });
+test("production sends the OTP with its expiry and never prints the code", async () => {
+  Object.assign(process.env, { NODE_ENV: "production" });
+  const info = spyOn(console, "info").mockImplementation(() => {});
+  try {
+    expect(await email.sendOtpEmail({ to: "a@example.com", otp: "123456" })).toMatchObject({ success: true });
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body).toMatchObject({ to: "a@example.com", subject: "Your TrainerTwin Sign In code: 123456" });
+    expect(String(requests[0].body.html)).toContain("expires in 10 minutes");
+    expect(info).not.toHaveBeenCalled();
+  } finally { info.mockRestore(); }
+});
+
+test("development with a configured Resend key logs the OTP and never contacts Resend", async () => {
+  Object.assign(process.env, { NODE_ENV: "development" });
+  const info = spyOn(console, "info").mockImplementation(() => {});
+  try {
+    expect(email.resend).not.toBeNull();
+    expect(await email.sendOtpEmail({ to: "a@example.com", otp: "123456" })).toEqual({ success: true });
+    expect(info).toHaveBeenCalledWith("[Dev sign-in] Code for a@example.com: 123456 (expires in 10 minutes)");
+    expect(requests).toHaveLength(0);
+  } finally { info.mockRestore(); }
+});
+
+test("development with a configured Resend key skips direct, person, credits, billing and support email", async () => {
+  Object.assign(process.env, { NODE_ENV: "development" });
+  const info = spyOn(console, "info").mockImplementation(() => {});
+  try {
+    const sends = [
+      () => email.sendEmail({ to: "a@example.com", subject: "Welcome", html: "<p>Hello</p>" }),
+      () => email.sendPersonEmail({ to: "a@example.com", orgName: "Org", credits: { added: 5, balance: 10 } }),
+      () => email.sendOrgCreditsEmail({ to: "a@example.com", orgName: "Org", added: 10, balance: 20, creditsUrl: "https://example.com/usage" }),
+      () => email.sendBillingEmail({ to: ["a@example.com"], args: { event: "paid", orgName: "Org", invoiceNumber: "INV-1", amount: "$25", dueDate: "13 Nov 2026", description: "Minute pack", billingUrl: "https://example.com/billing" } }),
+      () => email.sendIssueReportEmail({ to: "support@example.com", kind: "support", reporter: { name: "Lee", email: "a@example.com" }, org: "Org", message: "Help with billing", pageUrl: null, sessionUrl: null, posthogEventUrl: null, replayUrl: null }),
+    ];
+    for (const send of sends) expect(await send()).toEqual({ success: true, skipped: true });
+    expect(info).toHaveBeenCalledTimes(sends.length);
+    expect(requests).toHaveLength(0);
+  } finally { info.mockRestore(); }
+});
+
+test.each(["bug", "support"])("%s report delivery keeps the reporter reply-to and team CC", async (kind) => {
+  expect(await email.sendIssueReportEmail({
+    to: "devops@example.com", cc: ["team@example.com"], kind, reporter: { name: "Lee", email: "lee@example.com" },
+    org: "Acme", message: "Help with billing\nMore details", pageUrl: null, sessionUrl: null, posthogEventUrl: null, replayUrl: null,
+  })).toMatchObject({ success: true });
   expect(requests).toHaveLength(1);
-  expect(requests[0].body).toMatchObject({ to: "a@example.com", subject: "Your TrainerTwin Sign In code: 123456" });
-  expect(String(requests[0].body.html)).toContain("expires in 10 minutes");
+  expect(requests[0].body).toMatchObject({
+    to: "devops@example.com", cc: ["team@example.com"], reply_to: "lee@example.com",
+    subject: kind === "support" ? "Support: Help with billing · Acme · Lee" : "Issue reported (bug) · Acme · Lee",
+  });
+});
+
+test("billing delivery keeps its sender, attachments and event idempotency key", async () => {
+  expect(await email.sendBillingEmail({
+    to: ["accounts@example.com"], args: { event: "paid", orgName: "Acme", invoiceNumber: "INV-1", amount: "$25.00", dueDate: "13 Nov 2026", description: "Minute pack", billingUrl: "https://dash.example.com/billing" },
+    attachments: [{ filename: "RCPT-INV-1.pdf", content: Buffer.from("receipt") }], idempotencyKey: "billing-paid-inv1",
+  })).toMatchObject({ success: true });
+  expect(requests).toHaveLength(1);
+  expect(requests[0].key).toBe("billing-paid-inv1");
+  expect(requests[0].body).toMatchObject({
+    to: ["accounts@example.com"], from: email.BILLING_FROM_EMAIL, reply_to: "support@trainertwin.com",
+    subject: "Payment received for invoice INV-1: thank you",
+    attachments: [{ filename: "RCPT-INV-1.pdf", content: Buffer.from("receipt").toString("base64") }],
+  });
+});
+
+test("email subjects remove CR/LF while preserving the support reply-to", async () => {
+  expect(await email.sendEmail({ to: "a@example.com", subject: "  Hello\r\nInjected\nLine\rEnd  ", html: "<p>Safe</p>", replyTo: "reporter@example.com" })).toMatchObject({ success: true });
+  expect(requests[0].body).toMatchObject({ subject: "Hello Injected Line End", reply_to: "reporter@example.com" });
+});
+test("Resend rejection preserves the HTTP status for workflow retry classification", async () => {
+  server.use(http.post("https://api.resend.com/emails", () => HttpResponse.json({ name: "validation_error", message: "Invalid recipient", statusCode: 422 }, { status: 422 }), { once: true }));
+  expect(await email.sendEmail({ to: "bad", subject: "Invite", html: "<p>Hello</p>" })).toMatchObject({ success: false, error: "Invalid recipient", status: 422 });
 });

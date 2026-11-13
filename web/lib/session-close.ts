@@ -40,7 +40,8 @@ export async function reportFor(sessionId: string): Promise<"twin" | "roleplay" 
  */
 export async function claimReport(sessionId: string, runId: string) {
   const claimed = await db.interviewSession.updateMany({
-    where: { id: sessionId, status: { in: ["completed", "abandoned"] }, OR: [{ reportStatus: null }, { reportStatus: "none" }, { reportStatus: "failed" }] },
+    // Once per call (practice rule 25): a failed report isn't claimed again.
+    where: { id: sessionId, status: { in: ["completed", "abandoned"] }, OR: [{ reportStatus: null }, { reportStatus: "none" }] },
     data: { reportStatus: "generating", reportWorkflowRunId: runId },
   });
   return claimed.count === 1;

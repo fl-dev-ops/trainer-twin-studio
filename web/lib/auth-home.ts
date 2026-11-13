@@ -1,16 +1,7 @@
 import { headers } from "next/headers";
-import { BASE_DOMAIN } from "@/lib/base-domain";
+import { familyOrigin } from "@/lib/base-domain";
 import { currentMembership, isStudioRole } from "@/lib/org";
 
-
-function familyOrigin(name: string) {
-  // Preserve the port so local proxies (portless :NNNN) keep working.
-  return headers().then((h) => {
-    const host = h.get("host") ?? "";
-    const port = host.includes(":") ? `:${host.split(":")[1]}` : "";
-    return `https://${name}.${BASE_DOMAIN}${port}`;
-  });
-}
 
 /**
  * Where should this signed-in user land?
@@ -21,7 +12,8 @@ export async function resolveHome(): Promise<string | null> {
   const current = await currentMembership(await headers());
   if (!current) return null;
   if (!current.member) return "/auth/no-org";
+  const host = (await headers()).get("host") ?? "";
   // pickMembership prefers studio memberships, so a studio role anywhere lands on the dash.
-  if (isStudioRole(current.member.role)) return `${await familyOrigin("dash")}/`;
-  return `${await familyOrigin(current.member.organization.slug)}/`;
+  if (isStudioRole(current.member.role)) return `${familyOrigin(host, "dash")}/`;
+  return `${familyOrigin(host, current.member.organization.slug)}/`;
 }

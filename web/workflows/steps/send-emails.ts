@@ -21,6 +21,9 @@ export async function sendOne(email: OutboundEmail): Promise<void> {
   if (!result.success) {
     const message = `Email to ${email.args.to}: ${result.error}`;
     if (result.error === "RESEND_API_KEY is not set") throw new FatalError(message);
+    // Refused for good (a bad address, the same key with a changed body): retrying sends nothing (practice rule 28).
+    const status = "status" in result && typeof result.status === "number" ? result.status : null;
+    if (status !== null && status >= 400 && status < 500 && status !== 429) throw new FatalError(message);
     throw new Error(message);
   }
   await report({ to: email.args.to, status: "sent" });

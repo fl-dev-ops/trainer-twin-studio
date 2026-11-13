@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionOrg } from "@/lib/org";
+import { studioOrRefusal } from "@/lib/org";
 import { isSpecType, readVersion } from "@/lib/specs";
 
 type Params = { params: Promise<{ type: string; id: string }> };
@@ -11,8 +11,8 @@ export async function GET(req: Request, { params }: Params) {
   if (!Number.isInteger(version)) {
     return NextResponse.json({ error: "Missing version" }, { status: 400 });
   }
-  const org = await getSessionOrg();
-  if (!org) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const org = await studioOrRefusal();
+  if (org instanceof Response) return org;
   const row = await readVersion(type, id, version, org.id);
   if (row === null) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json({ text: row.text });

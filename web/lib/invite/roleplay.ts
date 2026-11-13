@@ -1,11 +1,11 @@
 import { BASE_DOMAIN } from "@/lib/base-domain";
 import { assignmentExpiresAt, newAssignmentShareCode } from "@/lib/assignments";
 import { contextUploadFromAgentData } from "@/lib/context-upload";
-import { db } from "@/lib/db";
+import type { Prisma } from "@/lib/generated/prisma/client";
 import { ensureDeployment } from "@/lib/deployments";
 import { learnerMinutes } from "@/lib/minutes";
 import { orgName, personEmailFor } from "@/lib/invite/person-email";
-import { addPeopleToOrg, LEARNER } from "@/lib/org-people";
+import { addPeopleToOrg, LEARNER, type AddedPerson } from "@/lib/org-people";
 import { queueEmails } from "@/lib/queue-emails";
 import type { OutboundEmail } from "@/workflows/send-emails";
 
@@ -26,48 +26,22 @@ export type RoleplayAssignInput = {
  * too when they joined just now). The assign-roleplay workflow's first step (workflows/assign-roleplay.ts).
  */
 export async function assignRoleplayLearners(input: RoleplayAssignInput) {
-  const people = await addPeopleToOrg({ orgId: input.org.id, emails: input.emails, role: LEARNER, byUserId: input.by.id, startingMinutes: input.startingMinutes });
   const deployment = await ensureDeployment(input.org.id, input.agent.id);
-  const assignments = await db.rolePlayAssignment.findMany({
-    where: { deploymentId: deployment.id, memberId: { in: people.map((person) => person.memberId) } },
-    select: { id: true, memberId: true, status: true, shareCode: true },
-  });
-  const assignmentByMember = new Map(assignments.map((assignment) => [assignment.memberId, assignment]));
-  const stats = { added: 0, resent: 0, skipped: 0, joined: people.filter((person) => person.added).length };
-  const links: Array<{ person: (typeof people)[number]; practiceUrl: string; key: string }> = [];
   const practiceUrl = (shareCode: string) => `https://${input.org.slug}.${BASE_DOMAIN}/s/${shareCode}`;
-
-  for (const person of people) {
-    const existing = assignmentByMember.get(person.memberId);
-    if (!existing || existing.status === "cancelled" || existing.status === "expired") {
-      const shareCode = newAssignmentShareCode();
-      if (existing) {
-        await db.rolePlayAssignment.update({
-          where: { id: existing.id },
-          data: { shareCode, status: "pending", assignedAt: new Date(), expiresAt: assignmentExpiresAt(), usedAt: null },
-        });
-      } else {
-        await db.rolePlayAssignment.create({
-          data: {
-            orgId: input.org.id,
-            deploymentId: deployment.id,
-            memberId: person.memberId,
-            assignedByUserId: input.by.id,
-            shareCode,
-            expiresAt: assignmentExpiresAt(),
-          },
-        });
-      }
-      stats.added++;
-      links.push({ person, practiceUrl: practiceUrl(shareCode), key: `roleplay:${shareCode}` });
-    } else if (existing.status === "pending" && input.resendPending) {
-      stats.resent++;
-      // A resend is a new email on purpose: keyed by time, not the (unchanged) link.
-      links.push({ person, practiceUrl: practiceUrl(existing.shareCode), key: `roleplay:${existing.shareCode}:resend:${Date.now()}` });
-    } else {
-      stats.skipped++;
-    }
-  }
+  let given: Awaited<ReturnType<typeof giveRoleplay<AddedPerson>>> = { links: [], stats: { added: 0, resent: 0, skipped: 0 } };
+  // People and their links in one locked transaction (specs/practice.md rule 19): all or nothing.
+  const people = await addPeopleToOrg({
+    orgId: input.org.id,
+    emails: input.emails,
+    role: LEARNER,
+    byUserId: input.by.id,
+    startingMinutes: input.startingMinutes,
+    then: async (tx, added) => {
+      given = await giveRoleplay(tx, { orgId: input.org.id, deploymentId: deployment.id, people: added, byUserId: input.by.id, resendPending: input.resendPending });
+    },
+  });
+  const stats = { ...given.stats, joined: people.filter((person) => person.added).length };
+  const links = given.links.map((link) => ({ ...link, practiceUrl: practiceUrl(link.shareCode) }));
 
   const data = input.agent.data as { objective?: unknown } | null;
   const objective = typeof data?.objective === "string" ? data.objective : undefined;
@@ -92,4 +66,46 @@ export async function assignRoleplayLearners(input: RoleplayAssignInput) {
 export async function inviteToRoleplay(input: RoleplayAssignInput) {
   const { stats, emails } = await assignRoleplayLearners(input);
   return { ...stats, ...(await queueEmails(input.org.id, emails)) };
+}
+
+/**
+ * The role-play links of people already in the org (specs/practice.md rule 19), in the caller's locked transaction:
+ * a new or reopened (cancelled, expired) link gets a fresh code; an open one is re-sent only on request; others are
+ * left as they are. Returns who should be emailed.
+ */
+export async function giveRoleplay<P extends { memberId: string }>(
+  tx: Prisma.TransactionClient,
+  input: { orgId: string; deploymentId: string; people: P[]; byUserId: string; resendPending?: boolean },
+) {
+  const existing = new Map((await tx.rolePlayAssignment.findMany({
+    where: { deploymentId: input.deploymentId, memberId: { in: input.people.map((person) => person.memberId) } },
+    select: { id: true, memberId: true, status: true, shareCode: true },
+  })).map((row) => [row.memberId, row]));
+  const stats = { added: 0, resent: 0, skipped: 0 };
+  const links: Array<{ person: P; shareCode: string; key: string; assignmentId: string }> = [];
+  for (const person of input.people) {
+    const current = existing.get(person.memberId);
+    if (!current || current.status === "cancelled" || current.status === "expired") {
+      const shareCode = newAssignmentShareCode();
+      const row = current
+        ? await tx.rolePlayAssignment.update({
+            where: { id: current.id },
+            data: { shareCode, status: "pending", assignedAt: new Date(), expiresAt: assignmentExpiresAt(), usedAt: null },
+            select: { id: true },
+          })
+        : await tx.rolePlayAssignment.create({
+            data: { orgId: input.orgId, deploymentId: input.deploymentId, memberId: person.memberId, assignedByUserId: input.byUserId, shareCode, expiresAt: assignmentExpiresAt() },
+            select: { id: true },
+          });
+      stats.added++;
+      links.push({ person, shareCode, key: `roleplay:${shareCode}`, assignmentId: row.id });
+    } else if (input.resendPending) {
+      stats.resent++;
+      // A resend is a new email on purpose: keyed by time, not the (unchanged) link.
+      links.push({ person, shareCode: current.shareCode, key: `roleplay:${current.shareCode}:resend:${Date.now()}`, assignmentId: current.id });
+    } else {
+      stats.skipped++;
+    }
+  }
+  return { stats, links };
 }

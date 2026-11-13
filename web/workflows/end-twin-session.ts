@@ -5,6 +5,7 @@
 // ./steps/twin-session-report.ts.
 
 import { sleep } from "workflow";
+import { readCalibration, scoreCalibration } from "./steps/calibration";
 import { chargeCall, closeRoom, takeReport } from "./steps/session-end";
 import { failTwinReport, generateTwinReport, readTwinSession, storeTwinReport } from "./steps/twin-session-report";
 
@@ -17,7 +18,14 @@ export async function endTwinSession(sessionId: string) {
   // A room that won't close (LiveKit down past the retries) doesn't hold up the charge and the report.
   await closeRoom(sessionId).catch(() => undefined);
   await chargeCall(sessionId);
-  // Learner calls only (completed, or abandoned when the learner spoke); calibrations save their ratings in the call.
+  // A calibration (specs/practice.md rule 14): no learner report; scored once the agent's final transcript is in.
+  const calibration = await readCalibration(sessionId);
+  if (calibration !== "none") {
+    for (let check = 0; check < TRANSCRIPT_CHECKS && (await readCalibration(sessionId)) === "waiting"; check++) await sleep(TRANSCRIPT_INTERVAL);
+    await scoreCalibration(sessionId);
+    return { status: "ended" as const, calibration: "scored" as const };
+  }
+  // Learner calls (completed, or abandoned when the learner spoke): the report.
   if ((await takeReport(sessionId)) !== "twin") return { status: "ended" as const };
   for (let check = 0; check < TRANSCRIPT_CHECKS; check++) {
     const state = await readTwinSession(sessionId);

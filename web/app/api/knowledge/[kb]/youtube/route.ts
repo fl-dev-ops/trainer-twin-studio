@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getTrainerOrg } from "@/lib/org";
+import { studioOrRefusal } from "@/lib/org";
 import {
   previewYouTubeImport,
   queueYouTubeSync,
@@ -13,8 +13,8 @@ export const dynamic = "force-dynamic";
 type Params = { params: Promise<{ kb: string }> };
 
 export async function POST(request: Request, { params }: Params) {
-  const trainer = await getTrainerOrg();
-  if (!trainer) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const trainer = await studioOrRefusal();
+  if (trainer instanceof Response) return trainer;
 
   const { kb } = await params;
   try {

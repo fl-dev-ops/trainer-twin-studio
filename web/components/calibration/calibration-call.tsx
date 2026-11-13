@@ -81,6 +81,8 @@ type CallProps = {
   learner?: LearnerCall;
   /** The twin lets people attach a file during the call (Configure: "Enable upload"): an image up to 5 MB or a PDF up to 10 MB. */
   attach?: boolean;
+  /** Why Start would be refused right now (the practice check, specs/practice.md rule 1): shown instead of Start. */
+  blocked?: string | null;
 };
 
 export type CallResult = { sessionId: string | null; seconds: number; turns: CalibrationTurn[]; files: AttachedFiles };
@@ -116,7 +118,7 @@ export function CalibrationCall(props: CallProps) {
   );
 }
 
-function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = null, learner, attach }: CallProps & { room: Room }) {
+function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = null, learner, attach, blocked }: CallProps & { room: Room }) {
   // Studio calls open on the pre-join, so a refresh or Back never starts a call; a learner's started from a click already.
   const [phase, setPhase] = useState<Phase>(learner ? "connecting" : "ready");
   const router = useRouter();
@@ -222,13 +224,9 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
       setEnding(false);
       const savedId = calibrationIdRef.current;
       if (twin && !learner && savedId && !unloading) {
-        // Off /calibrate (a refresh there starts over): the saved calibration's own page. Its score is counted on the
-        // way (that page shows the raw count meanwhile) and the page updates when it lands.
+        // Off /calibrate (a refresh there starts over): the saved calibration's own page. The end workflow scores it
+        // (that page shows the raw count meanwhile).
         setPhase("leaving");
-        void twinClient.calibrations.score
-          .mutate({ calibrationId: savedId })
-          .catch((scoreError) => console.error("Could not score the calibration:", scoreError))
-          .finally(() => void queryClient.invalidateQueries());
         void queryClient.invalidateQueries();
         router.replace(`/twin/${encodeURIComponent(slug)}/calibration/${encodeURIComponent(savedId)}`);
         return;
@@ -287,6 +285,8 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
         body: JSON.stringify({
           ...(learner?.code ? { shareCode: learner.code } : { agentSlug: slug }),
           idempotencyKey: crypto.randomUUID(),
+          // A studio call on the twin page is a calibration, created with the call (specs/practice.md rule 12).
+          ...(twin && !learner ? { calibrate: true } : {}),
           // The agent waits for "begin-opening" (sent after the countdown) before it speaks.
           holdOpening: true,
         }),
@@ -300,19 +300,9 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
       const active = { sessionId: launch.session.id as string, runtimeToken: launch.session.runtimeToken as string };
       connectionRef.current = active;
       setConnection(active);
-      if (twin && !learner) {
-        // Saved as a calibration before anything can be rated (rating stays off until then); a failure only
-        // loses the ratings, not the call. Creating it is idempotent, so retrying is safe.
-        void withRetries(() => twinClient.calibrations.start.mutate({ slug, sessionId: active.sessionId }))
-          .then(({ calibrationId: id }) => {
-            calibrationIdRef.current = id;
-            setCalibrationId(id);
-          })
-          .catch((saveError) => {
-            console.error("Could not save the calibration:", saveError);
-            setCalibrationFailed(true);
-            toast.error("Ratings in this call can't be saved.");
-          });
+      if (typeof launch.session.calibrationId === "string") {
+        calibrationIdRef.current = launch.session.calibrationId;
+        setCalibrationId(launch.session.calibrationId);
       }
       await room.connect(url, launch.participantToken).catch((connectError) => {
         console.error("LiveKit connect failed:", connectError);
@@ -580,7 +570,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
         )}
 
         {phase === "ready" ? (
-          <ReadyToCall twinName={twinName} photoUrl={photoUrl} onStart={() => void start()} />
+          <ReadyToCall twinName={twinName} photoUrl={photoUrl} blocked={blocked} onStart={() => void start()} />
         ) : phase === "leaving" ? (
           <p role="status" className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
             <LoaderCircle className="size-4 animate-spin" aria-hidden />
@@ -599,7 +589,6 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
             photoUrl={photoUrl}
             seconds={seconds}
             turns={turns}
-            calibrationId={twin ? calibrationId : null}
             onRestart={() => void start()}
           />
         ) : (
@@ -855,7 +844,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
  * The pre-join: the twin's portrait and the microphone, nothing else. Start asks for the mic (so the browser's prompt
  * comes from this click) and then starts the call; a blocked mic says how to fix it.
  */
-function ReadyToCall({ twinName, photoUrl, onStart }: { twinName: string; photoUrl: string | null; onStart: () => void }) {
+function ReadyToCall({ twinName, photoUrl, blocked, onStart }: { twinName: string; photoUrl: string | null; blocked?: string | null; onStart: () => void }) {
   const [mic, setMic] = useState<PermissionState | null>(null);
   const [problem, setProblem] = useState("");
   const [asking, setAsking] = useState(false);
@@ -887,7 +876,9 @@ function ReadyToCall({ twinName, photoUrl, onStart }: { twinName: string; photoU
     }
   }
 
-  const status = problem
+  const status = blocked
+    ? blocked
+    : problem
     ? problem
     : mic === "granted"
       ? "Microphone ready"
@@ -899,12 +890,12 @@ function ReadyToCall({ twinName, photoUrl, onStart }: { twinName: string; photoU
       <TwinPortrait name={twinName} photoUrl={photoUrl} className={cn("size-[min(320px,34dvh)] rounded-stage text-8xl", SOFT_SHADOW)} />
       <div className="flex max-w-sm flex-col items-center gap-2 text-center">
         <p className="m-0 text-sm text-muted-foreground">Talk to {twinName} like a learner would, and rate each answer.</p>
-        <p role="status" className={cn("m-0 flex items-center gap-1.5 text-body-s", problem || mic === "denied" ? "text-destructive" : "text-muted-foreground")}>
+        <p role="status" className={cn("m-0 flex items-center gap-1.5 text-body-s", blocked || problem || mic === "denied" ? "text-destructive" : "text-muted-foreground")}>
           <Mic className="size-4 shrink-0" aria-hidden />
           {status}
         </p>
       </div>
-      <Button variant="brand" size="lg" onClick={() => void begin()} disabled={asking}>
+      <Button variant="brand" size="lg" onClick={() => void begin()} disabled={asking || Boolean(blocked)}>
         {asking ? "Starting…" : "Start calibration"}
       </Button>
     </div>
@@ -919,7 +910,6 @@ function CallSummary({
   photoUrl,
   seconds,
   turns,
-  calibrationId,
   onRestart,
 }: {
   transcriptHref?: string;
@@ -929,8 +919,6 @@ function CallSummary({
   photoUrl: string | null;
   seconds: number;
   turns: CalibrationTurn[];
-  /** Twin calibrations: Jev counts the turns and the meant "Feels off" from the saved call. */
-  calibrationId: string | null;
   onRestart: () => void;
 }) {
   // What the call itself shows: every line of yours except the Feels off button's, every Feels off.
@@ -938,20 +926,8 @@ function CallSummary({
     turns: turns.filter((turn) => turn.speaker === "you" && !isFeelsOffMessage(turn.text)).length,
     off: turns.filter((turn) => turn.rating === "off").length,
   }), [turns]);
-  /** Jev's count for a twin calibration (the raw count if it fails); null while counting. */
-  const [counted, setCounted] = useState<CalibrationScore | null>(null);
-  useEffect(() => {
-    if (!calibrationId) return;
-    let live = true;
-    twinClient.calibrations.score
-      .mutate({ calibrationId })
-      .then((result) => live && setCounted({ turns: result.turns, off: result.off }))
-      .catch(() => live && setCounted(raw));
-    return () => {
-      live = false;
-    };
-  }, [calibrationId, raw]);
-  const score = calibrationId ? counted : raw;
+  // The call's own counts; the end workflow's score shows on the calibration's page.
+  const score = raw;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-6 pt-20 pb-10">

@@ -15,13 +15,13 @@ const TABS = ["account", "team", "branding"] as const;
 export default function SettingsPage() {
   const requested = useSearchParams().get("tab");
   const router = useRouter();
-  // Billing moved to its own page; old links (?tab=billing) land there.
-  useEffect(() => {
-    if (requested === "billing") router.replace("/billing");
-  }, [requested, router]);
   const { user, organization, team } = useApi(["page.settings"], () => api.page.settings.query());
-  // Learners have no Team tab, so ?tab=team falls back to Account for them.
-  const tab = TABS.find((name) => name === requested && (name !== "team" || team)) ?? "account";
+  // Billing moved to its own page; redirect old studio links, but keep learners on Account.
+  useEffect(() => {
+    if (requested === "billing" && team) router.replace("/billing");
+  }, [requested, router, team]);
+  // Learners only have Account; studio-only tabs fall back to it.
+  const tab = TABS.find((name) => name === requested && (name === "account" || team)) ?? "account";
   // The URL holds the tab, so the sidebar's Settings link (no ?tab) is Account again. replaceState: no server request.
   const selectTab = (value: unknown) => window.history.replaceState(null, "", value === "account" ? "/settings" : `/settings?tab=${value}`);
 
@@ -37,7 +37,7 @@ export default function SettingsPage() {
         <TabsList>
           <TabsTrigger value="account">Account</TabsTrigger>
           {team ? <TabsTrigger value="team">Team</TabsTrigger> : null}
-          <TabsTrigger value="branding">Branding</TabsTrigger>
+          {organization ? <TabsTrigger value="branding">Branding</TabsTrigger> : null}
         </TabsList>
 
         <TabsContent value="account" className="pt-8">
@@ -50,9 +50,11 @@ export default function SettingsPage() {
           </TabsContent>
         ) : null}
 
-        <TabsContent value="branding" className="pt-8">
-          <OrganizationForm organization={organization} />
-        </TabsContent>
+        {organization ? (
+          <TabsContent value="branding" className="pt-8">
+            <OrganizationForm organization={organization} />
+          </TabsContent>
+        ) : null}
       </Tabs>
     </PageContainer>
   );

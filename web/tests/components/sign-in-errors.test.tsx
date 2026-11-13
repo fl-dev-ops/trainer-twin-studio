@@ -14,7 +14,7 @@ mock.module("react", () => ({ ...realReact, useState: (initial: unknown) => {
 } }));
 const social = mock(async (_args: unknown) => ({ error: null }));
 const emailOtp = mock(async (_args: unknown): Promise<{ error: { code?: string; message?: string } | null }> => ({ error: null }));
-const send = mock(async (_args: unknown) => ({ error: null }));
+const send = mock(async (_args: unknown): Promise<{ error: { code?: string; message?: string } | null }> => ({ error: null }));
 const push = mock();
 mock.module("@/lib/auth-client", () => ({ authClient: { signIn: { social, emailOtp }, emailOtp: { sendVerificationOtp: send } } }));
 mock.module("next/navigation", () => ({ useRouter: () => ({ push }), redirect: mock() }));
@@ -24,7 +24,7 @@ const { SignInForm } = await import("@/components/auth/sign-in-form");
 const { GoogleSignInButton } = await import("@/components/auth/google-sign-in-button");
 const { default: SignInPage } = await import("@/app/auth/sign-in/page");
 
-type Element = ReactElement<Record<string, any>>;
+type Element = ReactElement<Record<string, unknown> & { children?: ReactNode; onChange(value: string | { target: { value: string } }): void; onSubmit(event: { preventDefault(): void }): Promise<void>; onClick(): Promise<void> }>;
 function find(node: ReactNode, predicate: (element: Element) => boolean): Element | undefined {
   if (Array.isArray(node)) return node.map((child) => find(child, predicate)).find(Boolean);
   if (!React.isValidElement(node)) return;
@@ -35,10 +35,73 @@ const render = <T,>(component: () => T) => { cursor = 0; return component(); };
 const form = () => render(() => SignInForm({ googleEnabled: true }));
 const alert = (node: ReactNode) => find(node, (element) => element.props.role === "alert")?.props.children;
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+const originalNodeEnv = process.env.NODE_ENV;
 beforeEach(() => { state = []; cursor = 0; for (const fn of [social, emailOtp, send, push]) fn.mockClear(); });
 afterEach(() => {
   if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
   else Reflect.deleteProperty(globalThis, "window");
+  if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+  else Object.assign(process.env, { NODE_ENV: originalNodeEnv });
+});
+
+test("email-first form keeps Google optional and codes private, complete and resendable", async () => {
+  expect(find(render(() => SignInForm({ googleEnabled: false })), (el) => el.type === GoogleSignInButton)).toBeUndefined();
+  expect(find(form(), (el) => el.type === GoogleSignInButton)).toBeDefined();
+  find(form(), (el) => el.props.id === "email")!.props.onChange({ target: { value: "learner@example.com" } });
+  await find(form(), (el) => el.type === "form")!.props.onSubmit({ preventDefault() {} });
+
+  const input = () => find(form(), (el) => el.props.id === "code")!;
+  const submit = () => find(form(), (el) => el.props.type === "submit")!;
+  expect(input().props).toMatchObject({ minLength: 6, maxLength: 6, autoComplete: "one-time-code", "aria-describedby": "code-help", required: true });
+  expect(find(form(), (el) => el.props.id === "code-help")!.props.children).toBe("Code expires in 10 minutes.");
+  expect(submit().props.disabled).toBe(true);
+  input().props.onChange("12345");
+  expect(submit().props.disabled).toBe(true);
+  input().props.onChange("123456");
+  expect(submit().props.disabled).toBe(false);
+
+  await find(form(), (el) => el.props.children === "Resend code")!.props.onClick();
+  expect(send).toHaveBeenCalledTimes(2);
+  expect(input().props.value).toBe("");
+  expect(submit().props.disabled).toBe(true);
+
+  find(form(), (el) => el.props.id === "email")!.props.onChange({ target: { value: "other@example.com" } });
+  expect(find(form(), (el) => el.props.id === "code")).toBeUndefined();
+  expect(submit().props.disabled).toBe(false);
+});
+
+test.each(["production", "development"])("code help is delivery-neutral in %s", async (nodeEnv) => {
+  Object.assign(process.env, { NODE_ENV: nodeEnv });
+  find(form(), (el) => el.props.id === "email")!.props.onChange({ target: { value: "known@example.com" } });
+  await find(form(), (el) => el.type === "form")!.props.onSubmit({ preventDefault() {} });
+  expect(find(form(), (el) => el.props.id === "code-help")!.props.children).toBe("Code expires in 10 minutes.");
+  expect(alert(form())).toBeUndefined();
+});
+
+test.each([false, true])("an unregistered email stays on email entry, including a refused resend (%s)", async (resend) => {
+  find(form(), (el) => el.props.id === "email")!.props.onChange({ target: { value: "unknown@example.com" } });
+  if (resend) {
+    await find(form(), (el) => el.type === "form")!.props.onSubmit({ preventDefault() {} });
+    find(form(), (el) => el.props.id === "code")!.props.onChange("123456");
+  }
+  send.mockResolvedValueOnce({ error: { code: "USER_NOT_FOUND", message: "This email isn't on TrainerTwin. Ask your trainer to add you." } });
+  if (resend) await find(form(), (el) => el.props.children === "Resend code")!.props.onClick();
+  else await find(form(), (el) => el.type === "form")!.props.onSubmit({ preventDefault() {} });
+  expect(alert(form())).toBe("This email isn't on TrainerTwin. Ask your trainer to add you.");
+  expect(find(form(), (el) => el.props.id === "code")).toBeUndefined();
+  expect(find(form(), (el) => el.props.type === "submit")!.props.disabled).toBe(false);
+  find(form(), (el) => el.props.id === "email")!.props.onChange({ target: { value: "known@example.com" } });
+  await find(form(), (el) => el.type === "form")!.props.onSubmit({ preventDefault() {} });
+  expect(find(form(), (el) => el.props.id === "code")!.props.value).toBe("");
+  expect(alert(form())).toBeUndefined();
+});
+
+test("a malformed-email refusal asks for a valid address without opening the code step", async () => {
+  find(form(), (el) => el.props.id === "email")!.props.onChange({ target: { value: "not-an-email" } });
+  send.mockResolvedValueOnce({ error: { code: "INVALID_EMAIL", message: "Invalid email" } });
+  await find(form(), (el) => el.type === "form")!.props.onSubmit({ preventDefault() {} });
+  expect(alert(form())).toBe("Enter a valid email address.");
+  expect(find(form(), (el) => el.props.id === "code")).toBeUndefined();
 });
 
 const invalid = "That code didn't work. Check the code, and that this is the email your trainer added.";
@@ -50,7 +113,7 @@ test.each([
   { error: { code: "UNKNOWN" }, message: invalid },
   { error: {}, message: invalid },
   { error: { code: "FORBIDDEN", message: "Your access has been disabled. Contact your trainer." }, message: "Your access has been disabled. Contact your trainer." },
-])("codeError displays $message without leaking account existence ($error)", async ({ error, message }) => {
+])("codeError displays $message for the OTP refusal ($error)", async ({ error, message }) => {
   find(form(), (el) => el.props.id === "email")!.props.onChange({ target: { value: " learner@example.com " } });
   await find(form(), (el) => el.type === "form")!.props.onSubmit({ preventDefault() {} });
   expect(send).toHaveBeenCalledWith({ email: "learner@example.com", type: "sign-in" });

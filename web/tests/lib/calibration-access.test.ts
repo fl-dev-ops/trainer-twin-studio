@@ -9,6 +9,8 @@ mock.module("@/lib/auth", () => ({
   auth: { api: { getSession: async () => (role === null ? null : { user: { id: "u1", name: "U", email: "u@example.com" }, session: { activeOrganizationId: null } }) } },
 }));
 mock.module("@/lib/db", () => ({
+  withLock: async () => { throw new Error("Unexpected locked write in read-only fixture"); },
+  isUniqueViolation: (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "P2002",
   db: {
     member: {
       findMany: async () => (role === null ? [] : [{ role, organization: { id: "org", slug: "acme", metadata: null } }]),
@@ -28,12 +30,16 @@ const codeOf = (promise: Promise<unknown>) => promise.then(() => "OK", (error: {
 const calls = {
   list: (c: ReturnType<typeof caller>) => c.calibrations.list({ slug: "acme-twin" }),
   get: (c: ReturnType<typeof caller>) => c.calibrations.get({ id: "cal" }),
-  start: (c: ReturnType<typeof caller>) => c.calibrations.start({ slug: "acme-twin", sessionId: "s1" }),
+  evidence: (c: ReturnType<typeof caller>) => c.calibrations.evidence({ sessionId: "s1" }),
   rate: (c: ReturnType<typeof caller>) => c.calibrations.rate({ calibrationId: "cal", turnIndex: 1, question: null, reply: "x", rating: "like" }),
 };
 
 test("API: learners (user role) are refused every calibration procedure", async () => {
   for (const [name, call] of Object.entries(calls)) expect([name, await codeOf(call(caller("user")))]).toEqual([name, "FORBIDDEN"]);
+});
+
+test("API: the separate calibration start and score mutations do not exist", () => {
+  expect(Object.keys(twinRouter._def.record.calibrations).sort()).toEqual(["evidence", "get", "list", "rate"]);
 });
 
 test("API: anonymous callers are refused", async () => {

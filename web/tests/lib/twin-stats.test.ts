@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { attachRatings, durationSeconds, firstExchange, lastSevenDays, likeRateByWeek, titleFrom, transcriptTurns } from "@/lib/twin/stats";
+import { attachRatings, durationSeconds, firstExchange, lastSevenDays, likeRateByWeek, isFeelsOffMessage, titleFrom, transcriptTurns } from "@/lib/twin/stats";
 
 test("calibration ratings land on the turn they rated, even when the final transcript is split differently", () => {
   const turns = transcriptTurns([
@@ -46,6 +46,16 @@ test("the Feels off button's message stays its own turn", () => {
     { who: "learner", text: "Feels off" },
     { who: "learner", text: "I'd never promise prices. I ask what they're waiting for." },
   ]);
+});
+
+// Copied from chat/agent/channels/openai-compat.ts:49; do not import the separate chat app.
+const chatFeelsOff = (text: string) => /^feels? off$/.test(text.toLowerCase().replace(/[^a-z ]/g, "").replace(/\s+/g, " ").trim());
+test.each([
+  ["Feels off", true], ["feels off!!", true], ["Feel off.", true],
+  ["FEELS  OFF", true], ["feels offf", false], ["it feels off", false],
+] as const)("Feels off parity with the chat brain: %s", (message, expected) => {
+  expect(isFeelsOffMessage(message)).toBe(expected);
+  expect(isFeelsOffMessage(message)).toBe(chatFeelsOff(message));
 });
 
 test("the first exchange skips the twin's greeting", () => {

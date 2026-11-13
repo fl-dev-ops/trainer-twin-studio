@@ -105,7 +105,8 @@ export type TurnEvidence = {
 /** Evidence of one twin session, oldest first, with each moment's source resolved to its knowledge document. */
 export async function sessionEvidence(orgId: string, sessionId: string): Promise<TurnEvidence[]> {
   const rows = await db.twinTurnEvidence.findMany({
-    where: { sessionId, session: { orgId } },
+    // A deleted call's or an archived twin's evidence answers like none (specs/practice.md rule 15).
+    where: { sessionId, session: { orgId, deletedAt: null, agent: { archivedAt: null } } },
     orderBy: { createdAt: "asc" },
     select: { id: true, data: true },
   });

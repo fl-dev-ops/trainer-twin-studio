@@ -1,30 +1,68 @@
 ---
 title: "Errors"
-description: "Handle TrainerTwin API errors consistently."
+description: "Read the code, then decide whether the same request is safe to send again."
 ---
 
-Errors use a standard JSON shape:
+Every error is JSON with a message and a stable `code`. Branch on `code`, not on the wording.
 
 ```json
 {
-  "error": "User not found"
+  "error": "Not found.",
+  "code": "not_found"
 }
 ```
 
-## HTTP status codes
+## Status codes
 
-| Status | Meaning | Recommended action |
+| Status | Meaning | What to do |
 | --- | --- | --- |
-| `400` | The request body or query is invalid | Correct the request before retrying |
-| `401` | The API key is missing, invalid, expired, or revoked | Replace or rotate the key |
-| `403` | The key creator is no longer an organization trainer | Generate a new key with a current owner or admin |
-| `404` | The resource does not exist in the key's organization | Verify the resource ID or scenario slug |
-| `409` | The requested state conflicts with existing data, or your organization's credits can't cover a new learner | Read the current resource, or top up credits, before retrying |
-| `429` | The key exceeded 120 requests per minute | Wait for the next rate-limit window |
-| `500` | TrainerTwin could not complete the request | Retry with exponential backoff |
+| `400` | Body, header, or query is invalid | Fix the request. Do not reuse a credit key for a different grant. |
+| `401` | Key missing, invalid, expired, or revoked | Replace the key |
+| `403` | Key permission, key owner, paused organization, or a closed assignment move | Read `code` before retrying |
+| `404` | That ID is unknown in this organization, or it is a trainer, disabled learner, twin, or archived role play | Check the ID. Do not treat this as an empty list. |
+| `409` | The current state conflicts with the request | Change the request, or reuse the original credit key only when the body is unchanged |
+| `429` | Rate limit | Wait `Retry-After` seconds, then send the same request |
+| `500` | TrainerTwin did not finish | Retry the same request. For a grant, reuse the `Idempotency-Key`. For a disable that returns `calls_not_ended`, send `DELETE` again. |
 
-## Retry safely
+A filter that matches nothing returns `200` and an empty page. A detail URL for an unknown ID returns `404`.
 
-Retry `429` and transient `5xx` responses. Do not automatically retry validation, authentication, authorization, or conflict responses.
+## Codes
 
-Assignment creation is idempotent for the same learner and scenario. While the assignment is pending or used, a repeated request returns it and does not send another email; a cancelled or expired one is reopened with a new link.
+| Code | Status | When | Message |
+| --- | --- | --- | --- |
+| `api_key_invalid` | 401 | Key cannot be verified | `Send a valid API key.` |
+| `scope_missing` | 403 | Key lacks that permission | `This API key can't read scenarios.` The verb is `read` or `write`; the noun is `users`, `scenarios`, `assignments`, or `sessions`. |
+| `api_key_owner_gone` | 403 | Key creator is gone or disabled | `This API key's owner is no longer on the team. Create a new key.` |
+| `rate_limited` | 429 | Over 120 requests in the current minute | `Too many requests. Try again in {n} seconds.` |
+| `invalid_input` | 400 | Malformed body, filter, pagination, or idempotency header | The message names the field to fix |
+| `not_found` | 404 | Unknown in this organization, or not eligible to be read | `Not found.` |
+| `person_disabled` | 409 | Grant or assignment targets a disabled learner | `{email} is disabled in this organization. Re-enable them first.` |
+| `person_is_studio` | 409 | Target is an admin or team member | `{email} is on the team. Team members practise with the organization's credits, not as learners.` |
+| `account_shared` | 409 | Rename of an account that also belongs to another organization | `This person's account is also used by another organization. They can change their name in Settings.` |
+| `assignment_exists` | 409 | Move onto a learner and role play that already has an open assignment | `That learner already has this role play.` |
+| `roleplay_access_removed` | 403 | Move whose source is already closed and whose destination is not open | `Your access to this role play was removed. Ask your trainer.` |
+| `idempotency_conflict` | 409 | Same credit key, different learner, amount, or note | `This Idempotency-Key was already used for a different credit grant.` |
+| `minutes` | 400 | New grant would exceed the learner cap of 360 allocated minutes | Names the learner and how many more minutes are possible |
+| `minutes` | 403 | Organization plan is paused | `Your organization's plan is paused because an invoice is overdue. Pay it on the Billing page to continue.` |
+| `minutes` | 409 | Organization balance cannot cover a new learner or a new grant | Names the minutes left and asks TrainerTwin to top the balance up |
+| `calls_not_ended` | 500 | Learner was disabled, but a live call could not be ended | `Disabled, but {n} call(s) in progress could not be ended yet. Disable again to retry.` |
+| `internal_error` | 500 | Unexpected failure | `Something went wrong. Try again.` |
+
+`minutes` is one code used for three different credit refusals. Use the status together with the code.
+
+## Retry the same request
+
+These are safe to send again unchanged:
+
+- `429` and `500`, including `internal_error`
+- `DELETE /users/{id}` after the learner is already disabled, including `calls_not_ended`
+- `POST /users` for an email that is already a learner: `200`, no second starting grant, no second email
+- `POST /assignments` for an open learner and role play: `200`, same assignment, no second email
+- `PATCH /assignments/{id}` with the same destination: `changed: false`, no second email
+- `POST /users/{id}/credits` with the same `Idempotency-Key`, learner, `minutes`, and `note`
+
+Do not automatically retry `400`, `401`, `403`, or `409`.
+
+A lost credit response is not a reason to mint a new `Idempotency-Key`. Resend the original key and body. `200` means that grant was already stored. `409` `idempotency_conflict` means the key was already used for a different grant; choose a new key only for a new grant.
+
+A matching credit replay can return `200` after the organization is later paused or its balance is spent. It does not allocate again. Balances in that response are current, not a frozen copy of the first response. `emailSent` is false on replay. Confirm the grant from `grant.id` and the balances, not from the email.

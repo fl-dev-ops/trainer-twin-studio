@@ -1,4 +1,5 @@
 import { beforeEach, expect, mock, test } from "bun:test";
+import { orgPrefix } from "@/lib/s3";
 
 process.env.COPILOT_SERVICE_SECRET = "s3cret";
 
@@ -11,7 +12,7 @@ const start = mock(async () => ({ runId: "end-run" }));
 mock.module("@/lib/db", () => ({
   db: {
     interviewSession: {
-      findFirst: async () => { lookups += 1; return { id: "s1", agent: { kind } }; },
+      findFirst: async () => { lookups += 1; return { id: "s1", orgId: "org", agent: { kind } }; },
     },
   },
 }));
@@ -42,7 +43,7 @@ const agentPayload = {
   session_id: "s1",
   room_name: "session-s1",
   audio_url: null,
-  video_s3_key: "org/recordings/s1/video.mp4",
+  video_s3_key: `${orgPrefix("org")}/recordings/s1/video.mp4`,
   status: "COMPLETED",
   participant_identity: null,
   transcript: [{ role: "user", text: "How do I follow up?" }, { role: "trainer", text: "Same evening." }],
@@ -68,7 +69,7 @@ test("twin: the agent's transcript replaces the browser's and is marked final", 
   expect(closed).toHaveLength(1);
   expect(closed[0].data.replaceTranscript).toBe(true);
   expect(closed[0].data.transcript).toEqual(agentPayload.transcript);
-  expect(closed[0].data.evidence).toEqual({ videoS3Key: "org/recordings/s1/video.mp4", transcriptFinal: true });
+  expect(closed[0].data.evidence).toEqual({ videoS3Key: `${orgPrefix("org")}/recordings/s1/video.mp4`, transcriptFinal: true });
   expect(closed[0]).toMatchObject({ id: "s1", status: "completed" });
   expect(start).not.toHaveBeenCalled(); // closeInterviewSession owns the end workflow; the route never starts reports.
 });
@@ -77,7 +78,7 @@ test("role play: first transcript still wins and no twin marker is added", async
   kind = "ROLEPLAY";
   await call(agentPayload, "Bearer s3cret");
   expect(closed[0].data.replaceTranscript).toBe(false);
-  expect(closed[0].data.evidence).toEqual({ videoS3Key: "org/recordings/s1/video.mp4" });
+  expect(closed[0].data.evidence).toEqual({ videoS3Key: `${orgPrefix("org")}/recordings/s1/video.mp4` });
   expect(start).not.toHaveBeenCalled();
 });
 
@@ -88,4 +89,13 @@ test("a later final transcript is saved without re-ending or starting a report i
   expect(finalized).toHaveLength(1);
   expect(finalized[0]).toMatchObject({ sessionId: "s1", transcript: payload.transcript, replaceTranscript: true, evidence: { transcriptFinal: true } });
   expect(start).not.toHaveBeenCalled();
+});
+
+test("webhook ignores another org's explicit video key, keeping only the transcript-final marker", async () => {
+  await call({ ...agentPayload, video_s3_key: `${orgPrefix("other-org")}/recordings/s1/video.mp4` }, "Bearer s3cret");
+  expect(closed[0].data.evidence).toEqual({ transcriptFinal: true });
+});
+test("webhook rejects a prefix-neighbor video key rather than accepting a partial org match", async () => {
+  await call({ ...agentPayload, video_s3_key: `${orgPrefix("org")}-other/recordings/s1/video.mp4` }, "Bearer s3cret");
+  expect(closed[0].data.evidence).not.toHaveProperty("videoS3Key");
 });

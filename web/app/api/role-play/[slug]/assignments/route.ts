@@ -1,8 +1,10 @@
+import { removeRoleplayAssignment } from "@/lib/roleplay-access";
 import { z } from "zod";
 import { MAX_ASSIGNMENT_RECIPIENTS } from "@/lib/assignments";
 import { db } from "@/lib/db";
-import { getTrainerOrg } from "@/lib/org";
-import { MAX_LEARNER_MINUTES, MinutesError } from "@/lib/minutes";
+import { studioOrRefusal } from "@/lib/org";
+import { AppError, errorResponse } from "@/lib/errors";
+import { MAX_LEARNER_MINUTES } from "@/lib/minutes";
 import { runRoleplayAssign } from "@/lib/workflow-runs";
 
 const bodySchema = z.object({
@@ -23,27 +25,18 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ slug: string }> },
 ) {
-  const trainer = await getTrainerOrg();
-  if (!trainer) return Response.json({ error: "Forbidden" }, { status: 403 });
+  const trainer = await studioOrRefusal();
+  if (trainer instanceof Response) return trainer;
 
   const parsed = deleteSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Invalid request" }, { status: 400 });
 
   const { slug } = await params;
-  const assignment = await db.rolePlayAssignment.findFirst({
-    where: {
-      id: parsed.data.assignmentId,
-      orgId: trainer.id,
-      deployment: { agent: { slug } },
-      status: "pending",
-    },
-    select: { id: true },
-  });
-  if (!assignment) {
+  const removed = await removeRoleplayAssignment(trainer.id, parsed.data.assignmentId, slug);
+  if (!removed) {
     return Response.json({ error: "Pending assignment not found" }, { status: 404 });
   }
 
-  await db.rolePlayAssignment.delete({ where: { id: assignment.id } });
   return Response.json({ removed: true });
 }
 
@@ -51,8 +44,8 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ slug: string }> },
 ) {
-  const trainer = await getTrainerOrg();
-  if (!trainer) return Response.json({ error: "Forbidden" }, { status: 403 });
+  const trainer = await studioOrRefusal();
+  if (trainer instanceof Response) return trainer;
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Invalid email list" }, { status: 400 });
@@ -76,7 +69,7 @@ export async function PUT(
       startingMinutes: parsed.data.startingMinutes,
     }));
   } catch (error) {
-    if (error instanceof MinutesError) return Response.json({ error: error.message }, { status: error.status });
+    if (error instanceof AppError) return errorResponse(error);
     throw error;
   }
 }

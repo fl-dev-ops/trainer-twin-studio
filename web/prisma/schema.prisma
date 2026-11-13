@@ -360,6 +360,9 @@ model InterviewSession {
   createdAt           DateTime  @default(now())
   startedAt           DateTime?
   endedAt             DateTime?
+  /// When the end work (room, report, calibration score) was started; null after an end means it still must be
+  /// (the sweep retries: specs/practice.md rule 24).
+  endWorkAt           DateTime?
   deletedAt           DateTime?
 
   organization      Organization               @relation(fields: [orgId], references: [id], onDelete: Cascade)
@@ -975,6 +978,8 @@ model TwinCalibration {
   turns           Int?
   offTurns        Int?
   scoredAt        DateTime?
+  /// The end workflow claims scoring before calling the model, so two workers never both pay for it (specs/practice.md rule 14).
+  scoreClaimedAt  DateTime?
 
   session InterviewSession        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   ratings TwinCalibrationRating[]
@@ -1057,12 +1062,15 @@ model MinuteLedger {
   sessionId      String?   @unique
   /// A paid top-up: its Razorpay payment (pay_…); a refund: its Razorpay refund (rfnd_…). One row each.
   externalId     String?   @unique
+  /// Integration credit grants: retry identity, unique per org; null for other ledger entries.
+  requestKey     String?
   actorUserId    String?
   note           String?
   createdAt      DateTime  @default(now())
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
+  @@unique([orgId, requestKey])
   @@index([orgId, email])
   @@index([orgId, type])
 }

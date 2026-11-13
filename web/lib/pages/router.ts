@@ -1,4 +1,3 @@
-import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { orgPeople } from "@/lib/org-people";
 import { db } from "@/lib/db";
@@ -25,6 +24,7 @@ import {
   listSpecSummaries,
   listUploads,
 } from "@/lib/specs";
+import { refusals, toTRPCError } from "@/lib/errors";
 import { protectedProcedure, publicProcedure, studioProcedure, t } from "@/lib/trpc";
 import { startableAgentSlugs } from "@/lib/twin-access";
 import { avatarState, ownTwinPersona } from "@/lib/twin/avatar";
@@ -39,7 +39,7 @@ import { avatarState, ownTwinPersona } from "@/lib/twin/avatar";
 const slugInput = z.object({ slug: z.string().min(1).max(200) });
 const optional = z.string().max(200).optional();
 const notFound = (): never => {
-  throw new TRPCError({ code: "NOT_FOUND" });
+  throw toTRPCError(refusals.notFound());
 };
 
 export const pageRouter = t.router({
@@ -73,7 +73,7 @@ export const pageRouter = t.router({
     };
   }),
 
-  twinKnowledge: protectedProcedure.query(async ({ ctx }) => {
+  twinKnowledge: studioProcedure.query(async ({ ctx }) => {
     const [initialDocs, initialStats] = await Promise.all([
       OrganizationKnowledgeService.getAllDocuments(ctx.user.orgId),
       OrganizationKnowledgeService.getStats(ctx.user.orgId),
@@ -139,7 +139,7 @@ export const pageRouter = t.router({
   session: studioProcedure.input(z.object({ id: z.string().min(1).max(200) })).query(({ ctx, input }) => loadSessionDetail(ctx.user.orgId, input.id)),
 
   /** Talk: the scenarios and twins this member can start, with what the session screen needs for each. */
-  talk: protectedProcedure.input(z.object({ agent: optional })).query(async ({ ctx, input }) => {
+  talk: studioProcedure.input(z.object({ agent: optional })).query(async ({ ctx, input }) => {
     const orgId = ctx.user.orgId;
     const user = { id: ctx.user.id, name: ctx.user.name, email: ctx.user.email };
     const [personas, runnable, contexts] = await Promise.all([
@@ -173,7 +173,7 @@ export const pageRouter = t.router({
   }),
 
   // Workspace pages any member may open.
-  overview: protectedProcedure.query(async ({ ctx }) => {
+  overview: studioProcedure.query(async ({ ctx }) => {
     const orgId = ctx.user.orgId;
     const [personas, agents, kbs, sessions] = await Promise.all([
       db.persona.count({ where: { orgId } }),
@@ -199,7 +199,7 @@ export const pageRouter = t.router({
     return { personas, agents, kbs, sessions };
   }),
 
-  voices: protectedProcedure.query(async ({ ctx }) => {
+  voices: studioProcedure.query(async ({ ctx }) => {
     const voices = await db.voice.findMany({
       where: { OR: [{ orgId: ctx.user.orgId }, { orgId: null }] },
       orderBy: { createdAt: "desc" },
@@ -209,7 +209,7 @@ export const pageRouter = t.router({
     return { mine: rows.filter((voice) => voice.kind === "cloned"), samples: rows.filter((voice) => voice.kind === "sample") };
   }),
 
-  developer: protectedProcedure.query(async ({ ctx }) => {
+  developer: studioProcedure.query(async ({ ctx }) => {
     const canManageApiKeys = isStudioRole(ctx.user.role);
     const apiKeys = canManageApiKeys
       ? await db.apikey.findMany({
@@ -232,15 +232,18 @@ export const pageRouter = t.router({
   settings: protectedProcedure.query(async ({ ctx }) => {
     const orgId = ctx.user.orgId;
     const studio = isStudioRole(ctx.user.role);
-    const organization = await db.organization.findUniqueOrThrow({
-      where: { id: orgId },
-      select: { id: true, name: true, slug: true, logo: true, websiteUrl: true, metadata: true },
-    });
+    // Learners get their own account only (specs/people.md rule 15): no branding, team or billing.
+    const organization = studio
+      ? await db.organization.findUniqueOrThrow({
+          where: { id: orgId },
+          select: { id: true, name: true, slug: true, logo: true, websiteUrl: true, metadata: true },
+        })
+      : null;
     // Team: studio only (admin, team). Everyone in the org (lib/org-people.ts); disabled members stay listed.
     const team = studio ? await orgPeople(orgId, { includeDisabled: true }) : null;
     return {
       user: { id: ctx.user.id, name: ctx.user.name, email: ctx.user.email },
-      organization: { ...organization, accentColor: parseAccentColor(organization.metadata) },
+      organization: organization ? { id: organization.id, name: organization.name, slug: organization.slug, logo: organization.logo, websiteUrl: organization.websiteUrl, accentColor: parseAccentColor(organization.metadata) } : null,
       team: team
         ? {
             members: team.map((person) => ({

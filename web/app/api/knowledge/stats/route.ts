@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { getSessionOrg } from "@/lib/org";
+import { studioOrRefusal } from "@/lib/org";
 import { OrganizationKnowledgeService } from "@/lib/org-knowledge";
 
 export async function GET() {
-  const org = await getSessionOrg();
-  if (!org) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const org = await studioOrRefusal();
+  if (org instanceof Response) return org;
 
   try {
     const stats = await OrganizationKnowledgeService.getStats(org.id);

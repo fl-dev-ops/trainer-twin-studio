@@ -1,9 +1,7 @@
-import { MIN_START_MINUTES } from "@/lib/minutes-config";
 import { headers } from "next/headers";
 import type { ComponentProps } from "react";
 import type { SessionView } from "@/components/session-view";
 import type { TwinLearnerFlow, LearnerAccess } from "@/components/twin/twin-learner-flow";
-import { assignmentMatchesUser } from "@/lib/assignments";
 import { signInUrl } from "@/lib/base-domain";
 import { db } from "@/lib/db";
 import { isStudioRole } from "@/lib/org";
@@ -13,7 +11,10 @@ import { presignedGetUrl } from "@/lib/s3";
 import { resolveSessionUser } from "@/lib/session-user";
 import { listAgentContextRequired, listAgentContextUploads, listScenarioIntroVideos } from "@/lib/specs";
 import { learnerBalance } from "@/lib/minutes";
-import { resolveTwinPath, TwinAccessError, twinAccessByCode, twinAssignmentCode } from "@/lib/twin-access";
+import { AppError } from "@/lib/errors";
+import { practicePerson, startAllowance } from "@/lib/practice";
+import { roleplayAccessByCode } from "@/lib/roleplay-access";
+import { assertLiveTwin, resolveTwinPath, twinAccessByCode, twinAssignmentCode } from "@/lib/twin-access";
 import { beforeSettings } from "@/lib/context-upload";
 
 /**
@@ -77,47 +78,45 @@ export async function loadSharedSession(code: string): Promise<SharedSessionView
     return Math.floor(Math.max(0, (await learnerBalance(org.id, user.email)).balanceSeconds) / 60);
   };
 
-  const assignment = org ? await db.rolePlayAssignment.findUnique({
-    where: { shareCode: code },
+  if (!org) return { kind: "invalid" };
+  const refusal = (error: unknown) => {
+    if (error instanceof AppError) return error;
+    throw error;
+  };
+  // A role-play link: the check Start runs, in its order (specs/practice.md rule 17).
+  // The page always starts a voice call: a role play that can't be one is refused here too.
+  const roleplay = await roleplayAccessByCode({ orgId: org.id, userId: user.id, code, mode: "voice" }).catch(refusal);
+  if (roleplay instanceof AppError) {
+    if (roleplay.code === "roleplay_not_assigned") return { kind: "switchAccount", email: user.email, returnTo: signInUrl(host, `/s/${encodeURIComponent(code)}`) };
+    if (roleplay.code === "not_found") return { kind: "invalid" };
+    return { kind: "twinUnavailable", message: roleplay.message, email: user.email };
+  }
+  if (!roleplay) {
+    // Not a role-play link: maybe a twin assignment or a twin share link (opening a share link adds an existing
+    // account to the org with the twin: specs/people.md rule 6; starting the call only uses that membership).
+    const twin = await twinAccessByCode({ orgId: org.id, user, code, join: true }).catch(refusal);
+    if (twin instanceof AppError) return { kind: "twinUnavailable", message: twin.message, email: user.email };
+    if (!twin) return { kind: "invalid" };
+    // The practice check Start uses (specs/practice.md rule 1): the page shows its refusal instead of a Start.
+    const refused = await practicePerson(org.id, user.id).then((person) => startAllowance(org.id, person)).then(() => null, refusal);
+    // Someone who just joined through a common link got their starting credits on the way in.
+    const left = twin.assignmentId ? await minutesLeft() : null;
+    if (refused?.code === "credits_out" || refused?.code === "credits_short") return { kind: "outOfMinutes", email: user.email, minutesLeft: Math.max(0, left ?? 0) };
+    if (refused) return { kind: "twinUnavailable", message: refused.message, email: user.email };
+    return { kind: "session", props: { ...(await twinSessionView(org.id, twin.agentId, code, user.name)), minutesLeft: left } };
+  }
+  const refused = await startAllowance(org.id, roleplay.person).then(() => null, refusal);
+  const left = await minutesLeft();
+  if (refused?.code === "credits_out" || refused?.code === "credits_short") return { kind: "outOfMinutes", email: user.email, minutesLeft: Math.max(0, left ?? 0) };
+  if (refused) return { kind: "twinUnavailable", message: refused.message, email: user.email };
+
+  const assignment = await db.rolePlayAssignment.findUniqueOrThrow({
+    where: { id: roleplay.assignmentId },
     select: {
-      id: true,
-      orgId: true,
-      status: true,
-      member: { select: { userId: true } },
-      deployment: {
-        select: {
-          agent: { select: { slug: true, name: true, persona: { select: { slug: true } } } },
-        },
-      },
+      deployment: { select: { agent: { select: { slug: true, name: true, persona: { select: { slug: true } } } } } },
       organization: { select: { name: true, logo: true } },
     },
-  }) : null;
-  // Not a role-play invite: maybe a twin assignment or a twin share link (opening a share link adds an existing
-  // account to the org with the twin: specs/people.md rule 6).
-  if (!assignment && org) {
-    // Opening a common twin link is where an existing account joins (specs/people.md rule 6); starting the call
-    // only uses that membership.
-    const twin = await twinAccessByCode({ orgId: org.id, user, code, join: true }).catch((error: unknown) => {
-      if (error instanceof TwinAccessError) return error;
-      throw error;
-    });
-    if (twin instanceof TwinAccessError) return { kind: "twinUnavailable", message: twin.message, email: user.email };
-    if (twin) {
-      // Someone who just joined through a common link got their starting credits on the way in.
-      const left = twin.assignmentId ? await minutesLeft() : null;
-      if (left !== null && left < MIN_START_MINUTES) return { kind: "outOfMinutes", email: user.email, minutesLeft: Math.max(0, left) };
-      return { kind: "session", props: { ...(await twinSessionView(org.id, twin.agentId, code, user.name)), minutesLeft: left } };
-    }
-  }
-  // Open while assigned, whether practised before or not, until cancelled: practice is limited only by minutes.
-  const open = assignment && assignment.orgId === org?.id && ["pending", "used"].includes(assignment.status);
-  if (open && !assignmentMatchesUser(assignment, user)) {
-    return { kind: "switchAccount", email: user.email, returnTo: signInUrl(host, `/s/${encodeURIComponent(code)}`) };
-  }
-  if (!open || !assignment || !org) return { kind: "invalid" };
-  const left = await minutesLeft();
-  if (left !== null && left < MIN_START_MINUTES) return { kind: "outOfMinutes", email: user.email, minutesLeft: Math.max(0, left) };
-
+  });
   const agent = assignment.deployment.agent;
   const [introVideos, agentPhotos, agentContextRequired, agentContextUploads] = await Promise.all([
     listScenarioIntroVideos(org.id, [agent.slug]),
@@ -179,25 +178,35 @@ export async function twinProfile(agentId: string): Promise<Pick<FlowProps, "tra
   };
 }
 
+/** The page's word for a refusal it has its own copy for; any other refusal shows its message (`blocked`). */
+const ACCESS_REASONS: Record<string, "notMember" | "unassigned" | "ended" | "used"> = {
+  no_org: "notMember",
+  twin_not_assigned: "unassigned",
+  twin_access_revoked: "ended",
+  twin_access_ended: "ended",
+  credits_out: "used",
+};
+
 /**
- * The signed-in person's access to a twin (null: signed out): their minutes left, or why they can't talk to it.
- * Studio members (admin, team) get a preview: calls started like Try as learner (no minutes, not counted).
+ * The signed-in person's access to a twin (null: signed out), from the practice check that Start uses
+ * (specs/practice.md rule 1): their minutes left, or why they can't talk to it. Studio members (admin, team) get a
+ * preview, refused too when Start would refuse it (org paused, org credits short).
  */
-export async function twinAccessFor(org: { id: string }, user: { id: string; name: string; email: string } | null, agentId: string, studio: boolean): Promise<LearnerAccess> {
+export async function twinAccessFor(org: { id: string }, user: { id: string; name: string; email: string } | null, agentId: string): Promise<LearnerAccess> {
   if (!user) return null;
-  if (studio) return { ok: true, preview: true, name: user.name || user.email, email: user.email };
+  const name = user.name || user.email;
   try {
-    const found = await twinAssignmentCode({ orgId: org.id, user, agentId });
+    const person = await practicePerson(org.id, user.id);
+    await assertLiveTwin(org.id, agentId);
+    const code = isStudioRole(person.role) ? null : (await twinAssignmentCode({ orgId: org.id, user, agentId })).code;
+    await startAllowance(org.id, person);
+    if (!code) return { ok: true, preview: true, name, email: user.email };
     // The learner's own minutes in this org, shared by every twin and role play they have.
     const minutes = await learnerBalance(org.id, user.email);
-    return minutes.balanceSeconds < 60
-      ? { ok: false, name: user.name || user.email, email: user.email, reason: "used" }
-      : { ok: true, preview: false, name: user.name || user.email, email: user.email, code: found.code, minutesLeft: Math.floor(minutes.balanceSeconds / 60), minutesTotal: Math.floor(minutes.grantedSeconds / 60) };
+    return { ok: true, preview: false, name, email: user.email, code, minutesLeft: Math.floor(minutes.balanceSeconds / 60), minutesTotal: Math.floor(minutes.grantedSeconds / 60) };
   } catch (error) {
-    if (!(error instanceof TwinAccessError)) throw error;
-    // In the learner's words: why they can't talk (messages from usable() in lib/twin-access.ts).
-    const reason = /removed|ended/.test(error.message) ? "ended" : (await orgPerson(org.id, { userId: user.id })) ? "unassigned" : "notMember";
-    return { ok: false, name: user.name || user.email, email: user.email, reason };
+    if (!(error instanceof AppError)) throw error;
+    return { ok: false, name, email: user.email, reason: ACCESS_REASONS[error.code] ?? "blocked", message: error.message };
   }
 }
 
@@ -217,7 +226,7 @@ export async function loadTwinLink(slug: string): Promise<TwinLinkView> {
   if (!org || !twin) return { kind: "notFound" };
   const [profile, access] = await Promise.all([
     twinProfile(twin.agentId),
-    twinAccessFor(org, user, twin.agentId, user ? await isStudioMember(org.id, user.id) : false),
+    twinAccessFor(org, user, twin.agentId),
   ]);
   return { kind: "flow", props: { path: `/t/${encodeURIComponent(slug)}`, ...profile, access } };
 }

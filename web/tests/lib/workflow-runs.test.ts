@@ -3,7 +3,7 @@ import * as workflow from "workflow/api";
 import * as twin from "@/lib/invite/twin";
 import * as org from "@/lib/invite/org";
 import * as credits from "@/lib/invite/credits";
-import { MinutesError } from "@/lib/minutes";
+import { AppError } from "@/lib/errors";
 import { PeopleError } from "@/lib/org-people";
 import { runAddOrgPeople, runAndWait, runGiveCredits, runTwinAssign } from "@/lib/workflow-runs";
 import { assignTwinToLearners } from "@/workflows/assign-twin";
@@ -56,11 +56,11 @@ for (const [name, run, definition, fallback] of [
   ["runAddOrgPeople", runAddOrgPeople, addPeopleToOrgFlow, () => orgDirect],
   ["runGiveCredits", runGiveCredits, giveCreditsToLearners, () => creditsDirect],
 ] as const) {
-  test(`${name}: a workflow refusal is thrown as MinutesError with its status and message`, async () => {
-    start.mockResolvedValue({ returnValue: Promise.resolve({ ok: false, status: 403, error: "An organization has exactly one admin." }) } as never);
+  test(`${name}: a workflow refusal is thrown as AppError preserving code, status and message`, async () => {
+    start.mockResolvedValue({ returnValue: Promise.resolve({ ok: false, code: "one_admin", status: 409, error: "This organization already has an admin. Add people as team or learner." }) } as never);
     const error = await run(input as never).catch((error: unknown) => error);
-    expect(error).toBeInstanceOf(MinutesError);
-    expect(error).toMatchObject({ status: 403, message: "An organization has exactly one admin." });
+    expect(error).toBeInstanceOf(AppError);
+    expect(error).toMatchObject({ code: "one_admin", status: 409, message: "This organization already has an admin. Add people as team or learner." });
     expect(start).toHaveBeenCalledTimes(1);
     expect(start).toHaveBeenCalledWith(definition, [input]);
     expect(fallback()).not.toHaveBeenCalled();
@@ -68,8 +68,8 @@ for (const [name, run, definition, fallback] of [
   test(`${name}: success drops ok; without the workflow a PeopleError is refused the same way`, async () => {
     expect(await run(input as never)).toEqual({ added: 1 } as never);
     start.mockRejectedValue(new Error("runtime down"));
-    fallback().mockRejectedValue(new PeopleError("Disabled in this organization", 409));
-    await expect(run(input as never)).rejects.toMatchObject({ name: "MinutesError", status: 409, message: "Disabled in this organization" });
+    fallback().mockRejectedValue(new PeopleError("person_disabled", "Disabled in this organization", 409));
+    await expect(run(input as never)).rejects.toMatchObject({ name: "AppError", code: "person_disabled", status: 409, message: "Disabled in this organization" });
     expect(fallback()).toHaveBeenCalledTimes(1);
     expect(fallback()).toHaveBeenCalledWith(input);
   });

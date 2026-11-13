@@ -1,3 +1,4 @@
+import { withLock } from "@/lib/db";
 import { fundOrg, availableOrgSeconds } from "../setup/meteroid";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import "./minutes-test-db";
@@ -29,9 +30,12 @@ async function session(fields: { status: string; startedAt: Date | null; endedAt
   });
 }
 
+const giveStartingMinutes = (input: Parameters<typeof minutes.giveStartingMinutes>[1]) => withLock([`minutes:${input.orgId}`], (tx) => minutes.giveStartingMinutes(tx, input));
+
 describe.skipIf(!local || !realDb)("practice minutes (local database)", () => {
   beforeAll(async () => {
-    await db.organization.create({ data: { id: orgId, name: "Minutes", slug: orgId, createdAt: new Date() } });
+    await db.user.create({ data: { id: `${orgId}-admin`, name: "Admin", email: `${orgId}-admin@example.com`, emailVerified: true } });
+    await db.organization.create({ data: { id: orgId, name: "Minutes", slug: orgId, createdAt: new Date(), members: { create: { id: `${orgId}-admin-member`, userId: `${orgId}-admin`, role: "admin", createdAt: new Date() } } } });
     await db.user.create({ data: { id: userId, name: "Learner", email: learner, emailVerified: true } });
     await db.member.create({ data: { id: `min-m-${run}`, organizationId: orgId, userId, role: "user", createdAt: new Date() } });
     const persona = await db.persona.create({ data: { orgId, slug: `min-p-${run}`, name: "P", data: {} }, select: { id: true } });
@@ -44,7 +48,7 @@ describe.skipIf(!local || !realDb)("practice minutes (local database)", () => {
     await db.agent.deleteMany({ where: { orgId } });
     await db.persona.deleteMany({ where: { orgId } });
     await db.organization.delete({ where: { id: orgId } }); // ledger, members cascade
-    await db.user.delete({ where: { id: userId } });
+    await db.user.deleteMany({ where: { id: { in: [userId, `${orgId}-admin`] } } });
   });
 
   test("minutes move from the org's balance to a learner; a short balance and the per-learner cap refuse", async () => {
@@ -60,12 +64,12 @@ describe.skipIf(!local || !realDb)("practice minutes (local database)", () => {
   });
 
   test("starting minutes: once per person, all or nothing", async () => {
-    const result = await minutes.giveStartingMinutes({ orgId, emails: [learner, other] });
+    const result = await giveStartingMinutes({ orgId, emails: [learner, other] });
     expect(result.given).toEqual([other]); // the learner already has minutes
     expect((await minutes.learnerBalance(orgId, other)).balanceSeconds).toBe(minutes.DEFAULT_LEARNER_MINUTES * 60);
     const orgLeft = Math.floor((await availableOrgSeconds(orgId)) / 60);
     const many = Array.from({ length: Math.floor(orgLeft / minutes.DEFAULT_LEARNER_MINUTES) + 1 }, (_, i) => `min-many-${i}-${run}@example.com`);
-    await expect(minutes.giveStartingMinutes({ orgId, emails: many })).rejects.toMatchObject({ status: 409 });
+    await expect(giveStartingMinutes({ orgId, emails: many })).rejects.toMatchObject({ status: 409 });
     expect(await db.minuteLedger.count({ where: { orgId, email: { in: many } } })).toBe(0);
   });
 

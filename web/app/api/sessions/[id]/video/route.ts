@@ -1,37 +1,30 @@
-import { orgPerson } from "@/lib/org-people";
 import { NextResponse } from "next/server";
+import { errorResponse, refusals } from "@/lib/errors";
 import { db } from "@/lib/db";
-import { resolveSessionUser } from "@/lib/session-user";
-import { orgPrefix, presignedGetUrl } from "@/lib/s3";
-import { isStudioRole } from "@/lib/org";
+import { resolveSessionUser, visibleSessions } from "@/lib/session-user";
+import { orgOwnKey, orgPrefix, presignedGetUrl } from "@/lib/s3";
 
 /** Video recording access is limited to its learner or a studio member (admin or team) in the same org. */
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { org, user } = await resolveSessionUser();
-  if (!org || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!org || !user) return errorResponse(refusals.signedOut());
   const { id } = await params;
+  // Someone without access gets the same answer as for a session that doesn't exist.
+  const visible = await visibleSessions(org.id, user.id);
+  if (!visible) return errorResponse(refusals.notFound());
   const session = await db.interviewSession.findFirst({
-    where: { id, orgId: org.id },
+    where: { id, ...visible },
     select: { userId: true, evidence: true },
   });
-  if (!session) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!session) return errorResponse(refusals.notFound());
 
-  if (session.userId !== user.id) {
-    const trainer = await orgPerson(org.id, { userId: user.id });
-    if (!isStudioRole(trainer?.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-  }
 
   const evidence =
     session.evidence && typeof session.evidence === "object"
       ? (session.evidence as Record<string, unknown>)
       : {};
 
-  const videoKey =
-    typeof evidence.videoS3Key === "string" && evidence.videoS3Key
-      ? evidence.videoS3Key
-      : `${orgPrefix(org.id)}/recordings/${id}/video.mp4`;
+  const videoKey = orgOwnKey(org.id, evidence.videoS3Key) ?? `${orgPrefix(org.id)}/recordings/${id}/video.mp4`;
 
   try {
     const signedUrl = await presignedGetUrl(videoKey, 3600);

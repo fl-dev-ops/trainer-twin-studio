@@ -40,7 +40,7 @@ describe.skipIf(!localMinutesDb)("flow: people first at every entry point", () =
   beforeEach(async () => {
     f = minutesFixture(); outside.start(); outside.reset(); await f.create();
     await fundOrg({ orgId: f.org.id, minutes: 300 });
-    key = spyOn(externalApi, "requireExternalApi").mockResolvedValue({ org: f.org, actorUserId: f.trainer.id, keyId: "test-key" });
+    key = spyOn(externalApi, "requireExternalApi").mockResolvedValue({ org: f.org, trainer: { memberId: `${f.trainer.id}-member`, userId: f.trainer.id, ...f.trainer, image: null, role: "admin", disabled: false, disabledAt: null, addedAt: new Date() }, actorUserId: f.trainer.id, keyId: "test-key" });
   });
   afterEach(async () => { key?.mockRestore(); await f.clean(); outside.stop(); });
 
@@ -51,7 +51,7 @@ describe.skipIf(!localMinutesDb)("flow: people first at every entry point", () =
     expect(outside.emails).toHaveLength(1);
     expect(outside.emails[0].to).toEqual([to]);
     expect(outside.emails[0].text).toContain("added you");
-    if (role === "user") expect(outside.emails[0].text).toContain("40 credits added");
+    if (role === "user") expect(outside.emails[0].text).toContain("Credits added: 40 credits");
     else expect(outside.emails[0].text).toContain("a team member");
     expect(await api().addPeople({ emails: [to], role })).toMatchObject({ added: 0, already: 1 });
     expect(outside.emails).toHaveLength(1);
@@ -68,8 +68,9 @@ describe.skipIf(!localMinutesDb)("flow: people first at every entry point", () =
     expect((await listTwinAssignments(f.org.id, f.twin.id)).find((p) => p.email === to)?.user.id).toBe(person.userId);
     expect(outside.emails).toHaveLength(1);
     expect(outside.emails[0].text).toContain("added you");
-    expect(outside.emails[0].text).toContain("You can now talk to Twin");
-    expect(outside.emails[0].text).toContain("30 credits added");
+    expect(outside.emails[0].subject).toContain("You can now talk to Twin");
+    expect(outside.emails[0].text).toContain("Twin: Twin");
+    expect(outside.emails[0].text).toContain("Credits added: 30 credits");
     await invariant();
   });
 
@@ -80,7 +81,7 @@ describe.skipIf(!localMinutesDb)("flow: people first at every entry point", () =
     expect(await db.rolePlayAssignment.findFirstOrThrow({ where: { orgId: f.org.id } })).toMatchObject({ memberId: person.memberId });
     expect(outside.emails).toHaveLength(1);
     expect(outside.emails[0].text).toContain("added you");
-    expect(outside.emails[0].text).toContain("30 credits added");
+    expect(outside.emails[0].text).toContain("Credits added: 30 credits");
     await invariant();
   });
 
@@ -94,7 +95,7 @@ describe.skipIf(!localMinutesDb)("flow: people first at every entry point", () =
     expect((await post(f.trainer.email)).status).toBe(409);
     await db.member.update({ where: { id: body.user.memberId }, data: { disabledAt: new Date() } });
     const disabled = await post(to); expect(disabled.status).toBe(409);
-    expect(await disabled.json()).toMatchObject({ error: expect.stringContaining("re-enable") });
+    expect(await disabled.json()).toMatchObject({ error: expect.stringContaining("Re-enable") });
     expect(outside.emails).toHaveLength(1);
     await invariant();
   });
@@ -110,7 +111,7 @@ describe.skipIf(!localMinutesDb)("flow: people first at every entry point", () =
     await invariant();
   });
 
-  test("REST PATCH to a new email: add member, replace account and link, email new person once", async () => {
+  test("REST PATCH to a new email: add member, cancel old link and create a new one, email new person once", async () => {
     const first = await (await assigned({ email: f.learner.email, scenario: f.roleplay.slug })).json();
     const to = email("moved");
     const response = await moveAssignment(request("PATCH", { email: to }), { params: Promise.resolve({ id: first.assignment.id }) });
@@ -118,7 +119,9 @@ describe.skipIf(!localMinutesDb)("flow: people first at every entry point", () =
     const body = await response.json(); expect(body).toMatchObject({ changed: true, emailSent: true, assignment: { email: to } });
     expect(body.practiceUrl).not.toBe(first.practiceUrl);
     const person = (await orgPerson(f.org.id, { email: to }))!;
-    expect(await db.rolePlayAssignment.findUniqueOrThrow({ where: { id: first.assignment.id } })).toMatchObject({ memberId: person.memberId });
+    expect(body.assignment.id).not.toBe(first.assignment.id);
+    expect(await db.rolePlayAssignment.findUniqueOrThrow({ where: { id: first.assignment.id } })).toMatchObject({ status: "cancelled", memberId: `${f.learner.id}-member` });
+    expect(await db.rolePlayAssignment.findUniqueOrThrow({ where: { id: body.assignment.id } })).toMatchObject({ memberId: person.memberId, status: "pending" });
     expect(outside.emails.map((e) => e.to)).toEqual([[f.learner.email], [to]]);
     await invariant();
   });
@@ -134,6 +137,7 @@ describe.skipIf(!localMinutesDb)("flow: people first at every entry point", () =
       await db.member.update({ where: { id: `${f.trainer.id}-member` }, data: { role } });
       expect(await twinAccessByCode({ orgId: f.org.id, user: f.trainer, code: link.code, join: true })).toEqual({ agentId: f.twin.id, assignmentId: null });
     }
+    await db.member.update({ where: { id: `${f.trainer.id}-member` }, data: { role: "admin" } });
     expect(await db.twinAssignment.count({ where: { userId: f.trainer.id } })).toBe(0);
     expect(outside.emails).toEqual([]);
     await invariant();
@@ -160,7 +164,8 @@ describe.skipIf(!localMinutesDb)("flow: people first at every entry point", () =
     ] });
     expect(outside.emails).toHaveLength(1);
     expect(outside.emails[0].to).toEqual([to]);
-    expect(outside.emails[0].text).toContain("10 credits added. Your balance: 40 credits");
+    expect(outside.emails[0].text).toContain("Credits added: 10 credits");
+    expect(outside.emails[0].text).toContain("Your balance: 40 credits");
     try {
       expect(outside.emails[0].idempotencyKey).toMatch(new RegExp(`^credits:${f.org.id}:${to}:\\d+$`));
     } finally {

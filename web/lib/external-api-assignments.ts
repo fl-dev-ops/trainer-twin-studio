@@ -1,9 +1,13 @@
 import { BASE_DOMAIN } from "@/lib/base-domain";
 import { contextUploadFromAgentData } from "@/lib/context-upload";
-import { db } from "@/lib/db";
 import { orgName, personEmailFor } from "@/lib/invite/person-email";
-import { learnerBalance } from "@/lib/minutes";
-import { addPeopleToOrg, LEARNER, orgPeople, type AddedPerson } from "@/lib/org-people";
+import { learnerBalance, minutesLock } from "@/lib/minutes";
+import { addPeopleToOrg, LEARNER, orgPerson, peopleLock, peopleRefusals, type AddedPerson, type OrgPerson } from "@/lib/org-people";
+import { db, withLock } from "@/lib/db";
+import { AppError, refusals } from "@/lib/errors";
+import { roleplayRefusals } from "@/lib/roleplay-access";
+import type { Prisma } from "@/lib/generated/prisma/client";
+import { giveRoleplay } from "@/lib/invite/roleplay";
 import { deliverEmail } from "@/lib/queue-emails";
 
 /** Shared by /api/v1/assignments and /api/v1/assignments/:id (docs/openapi.yaml, Assignments). */
@@ -18,20 +22,65 @@ export function findScenario(orgId: string, slug: string) {
   });
 }
 
-/** The trainer the key acts for: its creator while they are still a studio member (403 otherwise). */
-export async function findKeyTrainer(orgId: string, actorUserId: string | null) {
-  const [trainer] = await orgPeople(orgId, { roles: ["admin", "team"], ...(actorUserId ? { userIds: [actorUserId] } : {}) });
-  return trainer ?? null;
-}
-
 /**
- * The learner an API call names (specs/people.md): by `userId`, an existing learner of the org; by email, added to the
- * org as a learner when new (with their starting credits). Refused (PeopleError, MinutesError) like the dashboard.
+ * The learner an API call names and their link to a role play, in one locked transaction (specs/practice.md rule 19):
+ * by email (added to the org as a learner when new, with starting credits) or an existing learner by userId (a
+ * disabled or team person is refused like the dashboard). An open link is kept (`created: false`). `moveFrom`: the
+ * API's move of a link (PATCH): that link is cancelled and a new one made, refused when the target already has an
+ * open one (`assignment_exists`). Null: no such learner.
  */
-export async function learnerFor(orgId: string, by: { userId?: string; email?: string }, trainerUserId: string): Promise<AddedPerson | null> {
-  if (by.email) return (await addPeopleToOrg({ orgId, emails: [by.email], role: LEARNER, byUserId: trainerUserId }))[0];
-  const [person] = await orgPeople(orgId, { roles: [LEARNER], userIds: [by.userId!] });
-  return person ? { ...person, added: false, startingCredits: 0 } : null;
+export async function assignScenario(input: {
+  orgId: string;
+  by: { userId?: string; email?: string };
+  deploymentId: string;
+  trainerUserId: string;
+  moveFrom?: string;
+}): Promise<{ person: AddedPerson; assignment: { id: string; assignedAt: Date; shareCode: string }; created: boolean } | null> {
+  if (Boolean(input.by.email) === Boolean(input.by.userId)) throw refusals.invalidInput("Supply either email or userId, not both.");
+  let created = false;
+  let assignment: { id: string; assignedAt: Date; shareCode: string } | null = null;
+  const selection = { id: true, assignedAt: true, shareCode: true } as const;
+  const write = async (tx: Prisma.TransactionClient, person: OrgPerson) => {
+    const deployment = await tx.deployment.findFirst({
+      where: { id: input.deploymentId, orgId: input.orgId, agent: { kind: "ROLEPLAY", archivedAt: null } }, select: { id: true },
+    });
+    if (!deployment) throw refusals.notFound();
+    const source = input.moveFrom
+      ? await tx.rolePlayAssignment.findFirst({ where: { id: input.moveFrom, orgId: input.orgId }, select: { id: true, status: true } })
+      : null;
+    if (input.moveFrom && !source) throw refusals.notFound();
+    const open = await tx.rolePlayAssignment.findFirst({
+      where: { orgId: input.orgId, deploymentId: input.deploymentId, memberId: person.memberId, status: { in: ["pending", "used"] } }, select: selection,
+    });
+    if (source && !["pending", "used"].includes(source.status)) {
+      if (!open) throw roleplayRefusals.accessRemoved();
+      assignment = open; // A completed move's retry: no new destination, grant or email.
+      return;
+    }
+    if (open) {
+      if (source && open.id !== source.id) throw new AppError("assignment_exists", "That learner already has this role play.", 409);
+      assignment = open;
+      return;
+    }
+    created = (await giveRoleplay(tx, { orgId: input.orgId, deploymentId: input.deploymentId, people: [person], byUserId: input.trainerUserId })).links.length > 0;
+    if (source) await tx.rolePlayAssignment.update({ where: { id: source.id }, data: { status: "cancelled" } });
+    assignment = await tx.rolePlayAssignment.findUniqueOrThrow({
+      where: { deploymentId_memberId: { deploymentId: input.deploymentId, memberId: person.memberId } }, select: selection,
+    });
+  };
+  const person: AddedPerson | null = input.by.email
+    ? (await addPeopleToOrg({ orgId: input.orgId, emails: [input.by.email], role: LEARNER, byUserId: input.trainerUserId, then: (tx, [added]) => write(tx, added) }))[0]
+    : await withLock([minutesLock(input.orgId), peopleLock(input.orgId)], async (tx) => {
+        const found = await orgPerson(input.orgId, { userId: input.by.userId! }, tx);
+        if (!found) return null;
+        if (found.disabled) throw peopleRefusals.personDisabled([found.email]);
+        if (found.role !== LEARNER) throw peopleRefusals.personIsStudio([found.email]);
+        await write(tx, found);
+        return { ...found, added: false, startingCredits: 0 };
+      });
+  if (!person) return null;
+  if (!assignment) throw new Error("Assignment transaction returned no link");
+  return { person, assignment, created };
 }
 
 /** The assignment email ("added" too when they joined just now); delivery failure never undoes it (`emailSent`). */

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionOrg } from "@/lib/org";
+import { studioOrRefusal } from "@/lib/org";
 import {
   createKnowledgeBase,
   deleteKnowledge,
@@ -16,8 +16,8 @@ import { QuestionBank } from "@/lib/question-bank";
 type Params = { params: Promise<{ kb?: string[] }> };
 
 export async function GET(_req: Request, { params }: Params) {
-  const org = await getSessionOrg();
-  if (!org) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const org = await studioOrRefusal();
+  if (org instanceof Response) return org;
   const { kb } = await params;
   if (!kb) {
     const [bases, documents, stats] = await Promise.all([
@@ -50,8 +50,8 @@ export async function GET(_req: Request, { params }: Params) {
 /** POST /api/knowledge/<kb>            → create base (JSON {slug}) or upload file (multipart) */
 /** POST /api/knowledge/<kb>/digest[/<file>] → index into ChromaDB */
 export async function POST(req: Request, { params }: Params) {
-  const org = await getSessionOrg();
-  if (!org) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const org = await studioOrRefusal();
+  if (org instanceof Response) return org;
   const { kb } = await params;
   if (!kb || kb.length < 1) {
     return NextResponse.json({ error: "Expected /api/knowledge/<kb>" }, { status: 400 });
@@ -88,8 +88,8 @@ export async function POST(req: Request, { params }: Params) {
 }
 
 export async function DELETE(_req: Request, { params }: Params) {
-  const org = await getSessionOrg();
-  if (!org) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const org = await studioOrRefusal();
+  if (org instanceof Response) return org;
   const { kb } = await params;
   if (!kb || kb.length < 1) {
     return NextResponse.json({ error: "Expected /api/knowledge/<kb>[/<file>]" }, { status: 400 });

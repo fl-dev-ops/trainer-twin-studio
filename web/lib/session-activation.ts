@@ -2,9 +2,8 @@ import { BEFORE_UPLOAD_REFUSED } from "@/lib/context-upload";
 import { db } from "@/lib/db";
 import { activateSession } from "@/lib/interview-sessions";
 import { activateLiveKitSession, closeLiveKitSession } from "@/lib/livekit";
-import { MemberError } from "@/lib/members";
+import { AppError, refusals } from "@/lib/errors";
 import { MinutesError } from "@/lib/minutes";
-import { TwinAccessError } from "@/lib/twin-access";
 import type { DeliveryMode } from "@/lib/deployments";
 
 /**
@@ -20,16 +19,18 @@ export type StartSessionInput = {
   userEmail?: string;
   shareCode?: string;
   agentSlug?: string;
-  deploymentKey?: string;
   contextId?: string;
   mode: DeliveryMode;
   idempotencyKey?: string;
   /** The page releases the opening itself ("begin-opening"), e.g. after its get-ready countdown. */
   holdOpening?: boolean;
+  /** A studio member calibrating a twin: the call's calibration is created with it (specs/practice.md rule 12). */
+  calibrate?: boolean;
 };
 
 export type OpenedSession = NonNullable<Awaited<ReturnType<typeof activateSession>>>;
-export type Refusal = { ok: false; status: number; error: string; code?: "minutes" };
+/** `code`: "minutes" for credits refusals, else our refusal code (lib/errors.ts) when there is one. */
+export type Refusal = { ok: false; status: number; error: string; code?: string };
 export type SessionStart =
   | Refusal
   | { ok: true; session: OpenedSession; conversationToken?: string; participantToken?: string; room?: string };
@@ -37,7 +38,7 @@ export type SessionStart =
 /** A refusal the person should see (access, minutes, documents), with its HTTP status; anything else: null. */
 export function startRefusal(error: unknown): Refusal | null {
   if (error instanceof MinutesError) return { ok: false, status: error.status, error: error.message, code: "minutes" };
-  if (error instanceof MemberError || error instanceof TwinAccessError) return { ok: false, status: error.status, error: error.message };
+  if (error instanceof AppError) return { ok: false, status: error.status, error: error.message, code: error.code };
   const message = error instanceof Error ? error.message : "";
   if (message === "Context not found" || message === BEFORE_UPLOAD_REFUSED || message.startsWith("Deployment does not allow ")) {
     return { ok: false, status: 400, error: message };
@@ -49,7 +50,8 @@ export function startRefusal(error: unknown): Refusal | null {
 export async function openSession(input: StartSessionInput): Promise<Refusal | { ok: true; session: OpenedSession }> {
   try {
     const session = await activateSession(input);
-    return session ? { ok: true, session } : { ok: false, status: 403, error: "Invalid or already used session URL" };
+    // Null: a code that isn't a link of this org (or a used one-off start): answered like an unknown one.
+    return session ? { ok: true, session } : (startRefusal(refusals.notFound()) as Refusal);
   } catch (error) {
     const refusal = startRefusal(error);
     if (refusal) return refusal;
@@ -61,7 +63,7 @@ export async function openSession(input: StartSessionInput): Promise<Refusal | {
 export async function startSessionNow(input: StartSessionInput): Promise<SessionStart> {
   const opened = await openSession(input);
   if (!opened.ok) return opened;
-  if (input.mode === "chat") return { ...opened, conversationToken: opened.session.runtimeToken };
+  if (input.mode === "chat") return { ...opened, conversationToken: opened.session.agentToken };
   return { ...opened, ...(await connectVoice(input, opened.session)) };
 }
 
@@ -71,7 +73,6 @@ export async function connectVoice(input: StartSessionInput, session: OpenedSess
     where: { id: session.id },
     select: {
       id: true,
-      assignmentId: true,
       agentSlug: true,
       agent: { select: { data: true, kind: true, persona: { select: { voiceId: true } } } },
       livekitRoom: true,
@@ -100,7 +101,7 @@ export async function connectVoice(input: StartSessionInput, session: OpenedSess
       sessionId: session.id,
       userId: input.userId,
       userName: input.userName,
-      runtimeToken: session.runtimeToken,
+      runtimeToken: session.agentToken,
       orgId: input.orgId,
       agentSlug: row.agentSlug,
       holdOpening: Boolean(agentData?.introVideo) || Boolean(input.holdOpening),
@@ -128,24 +129,17 @@ export async function connectVoice(input: StartSessionInput, session: OpenedSess
     });
     return { participantToken: livekit.token, room: livekit.room };
   } catch (error) {
+    // Joining a live call (a resume) failing never fails that call (specs/practice.md rule 18).
+    if ("resumed" in session && session.resumed) throw error;
     await closeLiveKitSession({
       room: row.livekitRoom,
       dispatchId: row.livekitDispatchId,
       videoEgressId: row.videoEgressId,
     }).catch(() => {});
-    const failed = await db.interviewSession.updateMany({
-      where: { id: session.id, status: { notIn: ["completed", "abandoned"] } },
+    await db.interviewSession.updateMany({
+      where: { id: session.id, status: { in: ["activating", "active"] } },
       data: { status: "failed", endedAt: new Date(), runtimeTokenHash: null },
     });
-    const practised = row.assignmentId
-      ? await db.interviewSession.count({ where: { assignmentId: row.assignmentId, id: { not: session.id }, startedAt: { not: null }, status: { not: "failed" } } })
-      : 0;
-    if (failed.count === 1 && row.assignmentId && !practised) {
-      await db.rolePlayAssignment.updateMany({
-        where: { id: row.assignmentId, status: "used" },
-        data: { status: "pending", usedAt: null },
-      });
-    }
     throw error;
   }
 }

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getSessionOrg } from "@/lib/org";
+import { studioOrRefusal } from "@/lib/org";
 import { putObject, voicePrefix } from "@/lib/s3";
 
 /** List trainer voices. */
 export async function GET() {
-  const org = await getSessionOrg();
-  if (!org) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const org = await studioOrRefusal();
+  if (org instanceof Response) return org;
   const voices = await db.voice.findMany({
     where: { OR: [{ orgId: org.id }, { orgId: null }] },
     orderBy: { createdAt: "desc" },
@@ -17,8 +17,8 @@ export async function GET() {
 
 /** Upload a new trainer voice: reference audio + optional transcript. */
 export async function POST(request: NextRequest) {
-  const org = await getSessionOrg();
-  if (!org) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const org = await studioOrRefusal();
+  if (org instanceof Response) return org;
   if (!s3Configured()) return NextResponse.json({ error: "S3 is not configured" }, { status: 500 });
 
   const form = await request.formData();

@@ -2,8 +2,10 @@ import { fundOrg, availableOrgSeconds } from "../setup/meteroid";
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import * as nextServer from "next/server";
 import * as livekit from "@/lib/livekit";
+import { ensureDeployment } from "@/lib/deployments";
+import { MAX_STUDIO_CALL_MINUTES } from "@/lib/minutes-config";
 import { startSessionNow } from "@/lib/session-activation";
-import { activateSession, finalizeInterviewSession, ORG_OUT_OF_CREDITS } from "@/lib/interview-sessions";
+import { activateSession, finalizeInterviewSession } from "@/lib/interview-sessions";
 import { OUT_OF_MINUTES, grantMinutes, learnerBalance, recordSessionUsage, sessionUsageSeconds } from "@/lib/minutes";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
@@ -14,6 +16,8 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
   beforeEach(async () => {
     f = minutesFixture();
     await f.create();
+    const deployment = await ensureDeployment(f.org.id, f.roleplay.id);
+    await db.rolePlayAssignment.create({ data: { orgId: f.org.id, deploymentId: deployment.id, memberId: `${f.learner.id}-member`, shareCode: `${f.org.id}-roleplay`, assignedByUserId: f.trainer.id, expiresAt: new Date(0) } });
     secret = process.env.COPILOT_SERVICE_SECRET;
     process.env.COPILOT_SERVICE_SECRET = "minutes-test-secret";
     const networkFetch = globalThis.fetch;
@@ -31,7 +35,8 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
     fetchMock.mockClear();
   };
   const activate = (extra: Partial<Parameters<typeof activateSession>[0]> = {}) => activateSession({
-    orgId: f.org.id, userId: f.learner.id, userEmail: f.learner.email, agentSlug: f.roleplay.slug, mode: "voice", ...extra,
+    orgId: f.org.id, userId: f.learner.id, userEmail: f.learner.email,
+    ...(extra.userId === f.trainer.id ? { agentSlug: f.roleplay.slug } : { shareCode: `${f.org.id}-roleplay` }), mode: "voice", ...extra,
   });
 
   test("usage floors fractional seconds, caps at allowance, and clamps negative durations", () => {
@@ -68,7 +73,7 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
     const session = await f.session({ status });
     expect((await learnerBalance(f.org.id, f.learner.email)).usedSeconds).toBe(0);
     await recordSessionUsage(session.id);
-    expect(await db.minuteLedger.findMany({ where: { sessionId: session.id }, select: { seconds: true } })).toEqual([{ seconds: 0 }]);
+    expect(await db.minuteLedger.findMany({ where: { sessionId: session.id }, select: { seconds: true } })).toEqual([]);
     expect((await learnerBalance(f.org.id, f.learner.email)).usedSeconds).toBe(0);
   });
 
@@ -94,7 +99,7 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
   });
 
   test("zero-balance learners are refused before runtime initialization or session creation", async () => {
-    await expect(activate()).rejects.toMatchObject({ name: "MinutesError", status: 403 });
+    await expect(activate()).rejects.toMatchObject({ name: "PracticeError", status: 403 });
     expect(fetchMock).not.toHaveBeenCalled();
     expect(await db.interviewSession.count({ where: { orgId: f.org.id } })).toBe(0);
   });
@@ -106,7 +111,7 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
       expect(await activate()).toMatchObject({ secondsLeft: 300 });
     } else {
       const before = await db.interviewSession.count({ where: { orgId: f.org.id } });
-      await expect(activate()).rejects.toMatchObject({ name: "MinutesError", status: 403, message: seconds === 0 ? OUT_OF_MINUTES : `You need at least 5 minutes to start a call; you have ${Math.floor(seconds / 60)}. Ask your trainer for more.` });
+      await expect(activate()).rejects.toMatchObject({ name: "PracticeError", status: 403, message: seconds === 0 ? OUT_OF_MINUTES : `You need at least 5 minutes to start a call; you have ${Math.floor(seconds / 60)}. Ask your trainer for more.` });
       expect(fetchMock).not.toHaveBeenCalled();
       expect(await db.interviewSession.count({ where: { orgId: f.org.id } })).toBe(before);
     }
@@ -115,17 +120,58 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
   test.each(["admin", "team"])("billed %s refuses 299 seconds before creating a session", async (role) => {
     await db.member.update({ where: { id: `${f.trainer.id}-member` }, data: { role } });
     await fundOrg({ orgId: f.org.id, minutes: 299 / 60 });
-    await expect(activate({ userId: f.trainer.id, userEmail: f.trainer.email })).rejects.toMatchObject({ name: "MinutesError", status: 403, message: "Your organization needs at least 5 credits to start a call; it has 4. Contact TrainerTwin to add more." });
+    await expect(activate({ userId: f.trainer.id, userEmail: f.trainer.email })).rejects.toMatchObject({ name: "PracticeError", status: 403, message: "Your organization needs at least 5 credits to start a call; it has 4. Contact TrainerTwin to add more." });
     expect(fetchMock.mock.calls.every(([url]) => String(url).includes("meteroid.test"))).toBe(true);
     expect(await db.interviewSession.count({ where: { orgId: f.org.id } })).toBe(0);
   });
 
-  test("learners start voice calls with their balance as allowance and secondsLeft", async () => {
-    await fund();
+  test.each([10, 60])("learner's %s minutes remain their allowance, without the studio cap", async (minutes) => {
+    await fund(minutes);
     const result = await activate();
-    expect(result).toMatchObject({ status: "active", mode: "voice", secondsLeft: 600 });
-    expect(await db.interviewSession.findUniqueOrThrow({ where: { id: result!.id } })).toMatchObject({ allowedSeconds: 600, status: "active" });
+    expect(result).toMatchObject({ status: "active", mode: "voice", secondsLeft: minutes * 60 });
+    expect(await db.interviewSession.findUniqueOrThrow({ where: { id: result!.id } })).toMatchObject({ allowedSeconds: minutes * 60, status: "active" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([5, 12, MAX_STUDIO_CALL_MINUTES])("studio allowance uses the available %s credits when at or below the cap", async (minutes) => {
+    await fundOrg({ orgId: f.org.id, minutes });
+    expect(await activate({ userId: f.trainer.id })).toMatchObject({ secondsLeft: minutes * 60 });
+    expect(await availableOrgSeconds(f.org.id)).toBe(0);
+  });
+
+  test.each(["admin", "team"].flatMap((role) => ["twin", "calibration", "roleplay"].map((kind) => ({ role, kind }))))(
+    "$role $kind call reserves only the studio cap and forwards that deadline to LiveKit",
+    async ({ role, kind }) => {
+      await db.member.update({ where: { id: `${f.trainer.id}-member` }, data: { role } });
+      await fundOrg({ orgId: f.org.id, minutes: 100 });
+      const agent = kind === "roleplay" ? f.roleplay : f.twin;
+      const connect = spyOn(livekit, "activateLiveKitSession").mockResolvedValue({ room: "test-room", token: "participant", dispatchId: "dispatch", videoEgressId: null, videoS3Key: null });
+      try {
+        const before = Math.floor(Date.now() / 1000);
+        const result = await startSessionNow({ orgId: f.org.id, userId: f.trainer.id, agentSlug: agent.slug, mode: "voice", calibrate: kind === "calibration" });
+        if (!result.ok) throw new Error(result.error);
+        const seconds = MAX_STUDIO_CALL_MINUTES * 60;
+        expect(result.session.secondsLeft).toBe(seconds);
+        expect(await db.interviewSession.findUniqueOrThrow({ where: { id: result.session.id } })).toMatchObject({ allowedSeconds: seconds, chargesOrg: true });
+        expect(await availableOrgSeconds(f.org.id)).toBe((100 - MAX_STUDIO_CALL_MINUTES) * 60);
+        expect(connect.mock.calls[0][0].endsAt).toBeGreaterThanOrEqual(before + seconds);
+        expect(connect.mock.calls[0][0].endsAt).toBeLessThanOrEqual(Math.floor(Date.now() / 1000) + seconds);
+        expect(await db.twinCalibration.count({ where: { sessionId: result.session.id } })).toBe(kind === "calibration" ? 1 : 0);
+      } finally { connect.mockRestore(); }
+    },
+  );
+
+  test.each([MAX_STUDIO_CALL_MINUTES, 60])("resuming a studio call keeps its original %s-minute allowance, without renewal", async (minutes) => {
+    await fundOrg({ orgId: f.org.id, minutes: 100 });
+    const input = { userId: f.trainer.id, idempotencyKey: "studio-resume" };
+    const first = await activate(input);
+    // Also cover a call started before the cap: only new calls receive the new limit.
+    await db.interviewSession.update({ where: { id: first!.id }, data: { allowedSeconds: minutes * 60, startedAt: new Date(Date.now() - 420_000) } });
+    const resumed = await activate(input);
+    expect(resumed).toMatchObject({ id: first!.id, resumed: true });
+    expect(resumed!.secondsLeft).toBeGreaterThanOrEqual(minutes * 60 - 425);
+    expect(resumed!.secondsLeft).toBeLessThanOrEqual(minutes * 60 - 420);
+    expect(await db.interviewSession.findUniqueOrThrow({ where: { id: first!.id } })).toMatchObject({ allowedSeconds: minutes * 60 });
   });
 
   test.each(["admin", "team"])("studio role %s starts without credit and is never metered", async (role) => {
@@ -140,7 +186,7 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
   test.each(["admin", "team"])("billed %s voice calls use org credits directly; zero credits refuses before runtime", async (role) => {
     await db.member.update({ where: { id: `${f.trainer.id}-member` }, data: { role } });
     await fundOrg({ orgId: f.org.id, minutes: 0 });
-    await expect(activate({ userId: f.trainer.id, userEmail: f.trainer.email })).rejects.toMatchObject({ name: "MinutesError", status: 403, message: ORG_OUT_OF_CREDITS });
+    await expect(activate({ userId: f.trainer.id, userEmail: f.trainer.email })).rejects.toMatchObject({ name: "PracticeError", status: 403, code: "org_credits_out", message: "Your organization has no credits left. Contact TrainerTwin to add more." });
     expect(await db.interviewSession.count({ where: { orgId: f.org.id } })).toBe(0);
     await fundOrg({ orgId: f.org.id, minutes: 5 });
     const result = await activate({ userId: f.trainer.id, userEmail: f.trainer.email });
@@ -160,7 +206,7 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
 
   test("metered chat sessions are refused without consuming credit", async () => {
     await fund();
-    await expect(activate({ mode: "chat" })).rejects.toMatchObject({ name: "MinutesError", status: 400 });
+    await expect(activate({ mode: "chat" })).rejects.toMatchObject({ code: "mode_not_allowed", status: 400 });
     expect(fetchMock).not.toHaveBeenCalled();
     expect((await learnerBalance(f.org.id, f.learner.email)).balanceSeconds).toBe(600);
   });
@@ -195,7 +241,7 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
     const connect = spyOn(livekit, "activateLiveKitSession").mockResolvedValue({ room: "test-room", token: "participant", dispatchId: "dispatch", videoEgressId: null, videoS3Key: null });
     try {
       const before = Math.floor(Date.now() / 1000);
-      await startSessionNow({ orgId: f.org.id, userId: f.learner.id, userEmail: f.learner.email, agentSlug: agent.slug, mode: "voice" });
+      await startSessionNow({ orgId: f.org.id, userId: f.learner.id, userEmail: f.learner.email, shareCode: `${f.org.id}-${kind === "TWIN" ? "twin" : "roleplay"}`, mode: "voice" });
       const call = connect.mock.calls[0][0];
       expect(call.agentKind).toBe(kind);
       expect(call.endsAt).toBeGreaterThanOrEqual(before + 600);

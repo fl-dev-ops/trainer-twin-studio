@@ -238,9 +238,20 @@ describe.skipIf(!localMinutesDb)("billing phase 2 constraints and studio API (lo
     expect(existsSync(new URL("../../scripts/check-billing.ts", import.meta.url))).toBe(true);
   });
   test("spec Checks hold for pending upgrade → Paid → overdue/paused → paid/unpaused → Trial snapshots", async () => {
-    const { checkBilling } = await import("../../scripts/check-billing");
+    const { BILLING_CHECKS } = await import("../../scripts/check-billing");
     const checksHold = async () => {
-      const results = await checkBilling();
+      // Other parallel tests deliberately break invariants; run the exact checks against this org's snapshot.
+      const results = await db.$transaction(async (tx) => {
+        for (const table of ["OrgBilling", "BillingInvoice", "BillingPayment"]) {
+          await tx.$executeRawUnsafe(`CREATE TEMP TABLE "${table}" ON COMMIT DROP AS SELECT * FROM public."${table}" WHERE "orgId" = $1`, f.org.id);
+        }
+        const results = [];
+        for (const check of BILLING_CHECKS) {
+          const [row] = await tx.$queryRawUnsafe<{ n: number }[]>(check.sql);
+          results.push({ rule: check.rule, broken: row.n });
+        }
+        return results;
+      });
       expect(results).toHaveLength(8);
       expect(results.filter((result) => result.broken !== 0)).toEqual([]);
     };

@@ -1,22 +1,55 @@
 ---
-title: "Limits and conventions"
-description: "Pagination, identifiers, timestamps, and platform boundaries."
+title: "Names and limits"
+description: "The words this API uses, and the limits every request shares."
 ---
 
-## Rate limits
+Use these names in your integration. The JSON field is sometimes an older name than the product word. Send the field name exactly; do not rename it.
 
-Each API key allows **120 requests per minute**. A request over the limit returns `429`.
+## Names
+
+| You mean | Product word | What the API calls it |
+| --- | --- | --- |
+| A published role play | Role play | Path `/scenarios`. Response field `slug`. Assignment body and filters use `scenario`. A session stores the same slug as `agentSlug`. |
+| The person who practices | Learner | Path `/users`. `id` is the account ID. `memberId` is that person's membership in your organization. `role` is always `"member"`. |
+| Practice time | Credits | One credit is one minute. Grant body field `minutes`. Credit reads use `balanceMinutes`. Learner reads also include `creditsGiven` and `creditsLeft`. |
+| The personal practice link | Practice link | `practiceUrl`, shaped `https://{org}.trainertwin.com/s/{code}` |
+| The character in the role play | Persona | Session fields `personaSlug` and `personaVersion`. Configured in the dashboard, not by this API. |
+| An admin or team member | Trainer | Not returned by learner endpoints. Their role-play preview calls can appear in session lists. |
+| The trainer's own AI twin | Twin | Not part of this API. Twin calls are omitted from session reads. |
+
+Do not build on the words **agent**, **invitation**, or **scenario** except as the JSON fields above. `invitations` is always an empty array, kept so older clients do not break. `agentSlug` is not a second kind of resource; it is the role-play slug pinned to that call.
+
+A missing permission says `This API key can't read scenarios.` or `can't write users`. Credit routes use the **users** permission, so a credit refusal says `users`, not `credits`.
+
+## Permissions
+
+| What you are doing | Permission |
+| --- | --- |
+| List or read role plays | `scenarios:read` |
+| List or read learners, read org or learner credits | `users:read` |
+| Add, rename, or disable a learner; grant credits | `users:write` |
+| List or read assignments | `assignments:read` |
+| Assign, move, or remove an assignment | `assignments:write` |
+| List or read sessions | `sessions:read` |
+
+A new key from the [Developer API page](https://dash.trainertwin.com/developer) includes these. This API cannot create role plays, start calls, buy credits, or change organization billing.
+
+## Rate limit
+
+Each key allows **120 requests per minute**. Over the limit, the response is `429` with `Retry-After` set to a whole number of seconds. Wait that long and send the same request again. A credit grant must reuse its original `Idempotency-Key`.
+
+Checking the key counts toward the limit even when the body is later rejected.
 
 ## Pagination
 
 Collection endpoints accept:
 
-| Parameter | Default | Range |
+| Parameter | Default | Accepted |
 | --- | --- | --- |
-| `limit` | `50` | `1`–`100` |
-| `offset` | `0` | `0` or greater |
+| `limit` | `50` | Whole number `1`–`100` |
+| `offset` | `0` | Whole number `0`–`2147483647` |
 
-Responses include:
+Blank, fractional, or non-decimal values are `400`, not clamped. Unknown query parameters are ignored.
 
 ```json
 {
@@ -28,23 +61,14 @@ Responses include:
 }
 ```
 
-## Identifiers
+Increase `offset` by `limit` until `offset >= total`. Learner pages are taken from the organization's learner list in memory. Role-play, assignment, and session pages are taken in the database. Order is stable when two records share a timestamp: newest first, then by ID, except role plays, which follow dashboard order.
 
-- User endpoints use the learner's `userId`.
-- Assignment endpoints use the assignment `id`.
-- Session endpoints use the session `id`.
-- Scenario assignments use the published scenario `slug`.
+## Identifiers and time
 
-Treat all IDs as opaque strings.
+Treat every ID and slug as an opaque string. Do not parse them.
 
-## Dates and times
+Timestamps are ISO 8601 in UTC, for example `2026-09-01T09:30:00.000Z`. Session `from` and `to` filters compare `startedAt`, so a call that never started is left out of a date-filtered list.
 
-Timestamps are ISO 8601 strings in UTC, for example `2026-09-01T09:30:00.000Z`.
+## Organization boundary
 
-## Organization isolation
-
-Every resource query is filtered by the organization that owns the API key. A resource from another organization returns `404`, not the other organization's data.
-
-## Dashboard-only configuration
-
-The API does not create or modify scenarios, personas, knowledge bases, or voices. Configure and publish them in the TrainerTwin dashboard before assigning a scenario through the API.
+The key chooses the organization. A body, query, or header cannot switch it. Another organization's learner, role play, assignment, or session is `404`, the same as an unknown ID. An assignment or session filter for an unknown ID returns an empty page, not `404`.

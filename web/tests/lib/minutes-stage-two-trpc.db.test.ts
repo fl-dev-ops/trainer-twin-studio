@@ -72,7 +72,7 @@ describe.skipIf(!localMinutesDb)("credits stage two tRPC (local database)", () =
     await db.member.update({ where: { id: `${f.trainer.id}-member` }, data: { role } });
     await db.user.update({ where: { id: f.trainer.id }, data: { email: f.trainer.email.toUpperCase() } });
     await fund(100); const before = await rows();
-    await expect(add([`added-${f.learner.email}`, f.trainer.email], 45)).rejects.toMatchObject({ code: "CONFLICT", message: expect.stringContaining("studio team") });
+    await expect(add([`added-${f.learner.email}`, f.trainer.email], 45)).rejects.toMatchObject({ code: "CONFLICT", cause: { code: "person_is_studio" }, message: expect.stringContaining("is on the team") });
     expect(await rows()).toEqual(before); expect(send).not.toHaveBeenCalled();
     expect(await orgPerson(f.org.id, { email: `added-${f.learner.email}` })).toBeNull();
   });
@@ -88,7 +88,8 @@ describe.skipIf(!localMinutesDb)("credits stage two tRPC (local database)", () =
     await fund(90);
     expect(await add([f.learner.email, `added-${f.learner.email}`], 45)).toMatchObject({ added: 1, already: 1 });
     expect(send).toHaveBeenCalledTimes(1);
-    for (const e of [f.learner.email, `added-${f.learner.email}`]) expect((await learnerBalance(f.org.id, e)).grantedSeconds).toBe(2700);
+    expect((await learnerBalance(f.org.id, f.learner.email)).grantedSeconds).toBe(0);
+    expect((await learnerBalance(f.org.id, `added-${f.learner.email}`)).grantedSeconds).toBe(2700);
   });
 
   test.each([0, -1, 1.5, 361])("addPeople validates amount %d before writing or sending", async (minutes) => {

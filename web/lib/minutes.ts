@@ -1,5 +1,6 @@
-import { studioPeopleEmails } from "@/lib/org-people";
-import { db } from "@/lib/db";
+import { LEARNER, orgPerson, peopleLock, peopleRefusals, studioPeopleEmails } from "@/lib/org-people";
+import { db, withLock } from "@/lib/db";
+import { AppError, refusals } from "@/lib/errors";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { pausedReason } from "@/lib/billing/paused";
 import { DEFAULT_LEARNER_MINUTES, MAX_LEARNER_MINUTES } from "@/lib/minutes-config";
@@ -15,10 +16,10 @@ import { scheduleOrgUsage } from "@/lib/schedule-org-credits";
 
 export { DEFAULT_LEARNER_MINUTES, MAX_LEARNER_MINUTES };
 
-export class MinutesError extends Error {
-  constructor(message: string, readonly status: number) {
-    super(message);
-    this.name = "MinutesError";
+/** A credits refusal (code "minutes"; the session start page shows its own out-of-credits screen for it). */
+export class MinutesError extends AppError {
+  constructor(message: string, status: number) {
+    super("minutes", message, status);
   }
 }
 
@@ -91,13 +92,9 @@ export async function creditsLeftFor(orgId: string, emails: string[]): Promise<M
   }));
 }
 
-/** Grants of one org run one at a time, so two admins can't spend the same credits. */
-async function locked<T>(orgId: string, work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
-  return db.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`minutes:${orgId}`}))`;
-    return work(tx);
-  });
-}
+/** The lock key for one org's grants: they run one at a time, so two admins can't spend the same credits. */
+export const minutesLock = (orgId: string) => `minutes:${orgId}`;
+const locked = <T>(orgId: string, work: (tx: Prisma.TransactionClient) => Promise<T>) => withLock([minutesLock(orgId)], work);
 
 /** A paused org gives no credits (specs/billing.md rule 16). */
 async function refuseWhenPaused(orgId: string, tx: Prisma.TransactionClient) {
@@ -123,12 +120,34 @@ export async function grantMinutes(input: {
   userId?: string | null;
   note?: string | null;
   onlyIfNew?: boolean;
+  /** API retry identity; callers must supply the learner's userId too. */
+  requestKey?: string;
 }): Promise<{ grantedMinutes: number; balanceMinutes: number; orgBalanceMinutes: number }> {
   const amount = wholeMinutes(input.minutes);
   const email = lower(input.email);
-  return locked(input.orgId, async (tx) => {
+  if (input.requestKey && !input.userId) throw refusals.invalidInput("A learner ID is required for a retried grant.");
+  // Refresh before locking; the transaction subtracts current grants/reservations without a wallet network call.
+  await orgCredits(input.orgId, { fresh: true });
+  let reportUnsent = false;
+  return withLock([minutesLock(input.orgId), peopleLock(input.orgId)], async (tx) => {
+    if (input.userId) {
+      const person = await orgPerson(input.orgId, { userId: input.userId }, tx);
+      if (!person || person.email !== email) throw refusals.notFound();
+      if (person.disabled) throw peopleRefusals.personDisabled([email]);
+      if (person.role !== LEARNER) throw peopleRefusals.personIsStudio([email]);
+    }
+    const previous = input.requestKey
+      ? await tx.minuteLedger.findUnique({ where: { orgId_requestKey: { orgId: input.orgId, requestKey: input.requestKey } } })
+      : null;
+    if (previous && (previous.type !== "grant" || previous.userId !== input.userId || previous.email !== email || previous.seconds !== amount * 60 || previous.note !== (input.note ?? null))) {
+      throw new AppError("idempotency_conflict", "This Idempotency-Key was already used for a different credit grant.", 409);
+    }
     const learner = await learnerBalance(input.orgId, email, tx);
-    const orgBalance = (await orgCredits(input.orgId, { fresh: true, tx })).seconds;
+    const orgBalance = (await orgCredits(input.orgId, { tx })).seconds;
+    if (previous) {
+      reportUnsent = previous.meteroidSentAt === null;
+      return { grantedMinutes: 0, balanceMinutes: minutes(learner.balanceSeconds), orgBalanceMinutes: minutes(orgBalance) };
+    }
     if (input.onlyIfNew) {
       const given = await tx.minuteLedger.count({ where: { orgId: input.orgId, email, type: "grant" } });
       if (given > 0) return { grantedMinutes: 0, balanceMinutes: minutes(learner.balanceSeconds), orgBalanceMinutes: minutes(orgBalance) };
@@ -142,11 +161,11 @@ export async function grantMinutes(input: {
       throw new MinutesError(`${email} can be given at most ${MAX_LEARNER_MINUTES} minutes in total; ${minutes(Math.max(0, room))} more is possible.`, 400);
     }
     await tx.minuteLedger.create({
-      data: { orgId: input.orgId, email, userId: input.userId ?? null, type: "grant", seconds: amount * 60, actorUserId: input.actorUserId ?? null, note: input.note ?? null },
+      data: { orgId: input.orgId, email, userId: input.userId ?? null, type: "grant", seconds: amount * 60, actorUserId: input.actorUserId ?? null, note: input.note ?? null, ...(input.requestKey ? { requestKey: input.requestKey } : {}) },
     });
     return { grantedMinutes: amount, balanceMinutes: minutes(learner.balanceSeconds + amount * 60), orgBalanceMinutes: minutes(orgBalance - amount * 60) };
   }).then(async (result) => {
-    if (result.grantedMinutes) await scheduleOrgUsage(input.orgId);
+    if (result.grantedMinutes || reportUnsent) await scheduleOrgUsage(input.orgId);
     return result;
   });
 }
@@ -154,37 +173,36 @@ export async function grantMinutes(input: {
 /**
  * The starting credits for people invited or assigned: `minutes` each (DEFAULT_LEARNER_MINUTES unless the trainer chose),
  * once per person (someone already given credits gets nothing more). All or nothing: refused when the org balance
- * can't cover everyone new.
+ * can't cover everyone new. Runs in the caller's transaction, which must hold minutesLock(orgId); the caller schedules
+ * the org's usage report (scheduleOrgUsage) after it commits.
  */
-export async function giveStartingMinutes(input: { orgId: string; emails: string[]; minutes?: number; actorUserId?: string | null }) {
+export async function giveStartingMinutes(
+  tx: Prisma.TransactionClient,
+  input: { orgId: string; emails: string[]; minutes?: number; actorUserId?: string | null },
+) {
   const amount = input.minutes ?? DEFAULT_LEARNER_MINUTES;
   wholeMinutes(amount);
   if (amount > MAX_LEARNER_MINUTES) throw new MinutesError(`A learner can be given at most ${MAX_LEARNER_MINUTES} minutes in total.`, 400);
   const emails = [...new Set(input.emails.map(lower))];
   if (!emails.length) return { given: [] as string[] };
-  return locked(input.orgId, async (tx) => {
-    const had = await tx.minuteLedger.findMany({ where: { orgId: input.orgId, type: "grant", email: { in: emails } }, select: { email: true }, distinct: ["email"] });
-    const known = new Set(had.map((row) => row.email));
-    const given = emails.filter((email) => !known.has(email));
-    if (given.length) await refuseWhenPaused(input.orgId, tx);
-    const need = given.length * amount * 60;
-    const orgBalance = need ? (await orgCredits(input.orgId, { fresh: true, tx })).seconds : 0;
-    if (need > orgBalance) {
-      throw new MinutesError(
-        `Not enough credits in your organization's balance: ${given.length} new ${given.length === 1 ? "person needs" : "people need"} ${minutes(need)} min, ${minutes(orgBalance)} min left. Ask TrainerTwin to top it up.`,
-        409,
-      );
-    }
-    if (given.length) {
-      await tx.minuteLedger.createMany({
-        data: given.map((email) => ({ orgId: input.orgId, email, type: "grant", seconds: amount * 60, actorUserId: input.actorUserId ?? null, note: "Starting minutes" })),
-      });
-    }
-    return { given };
-  }).then(async (result) => {
-    if (result.given.length) await scheduleOrgUsage(input.orgId);
-    return result;
-  });
+  const had = await tx.minuteLedger.findMany({ where: { orgId: input.orgId, type: "grant", email: { in: emails } }, select: { email: true }, distinct: ["email"] });
+  const known = new Set(had.map((row) => row.email));
+  const given = emails.filter((email) => !known.has(email));
+  if (given.length) await refuseWhenPaused(input.orgId, tx);
+  const need = given.length * amount * 60;
+  const orgBalance = need ? (await orgCredits(input.orgId, { fresh: true, tx })).seconds : 0;
+  if (need > orgBalance) {
+    throw new MinutesError(
+      `Not enough credits in your organization's balance: ${given.length} new ${given.length === 1 ? "person needs" : "people need"} ${minutes(need)} min, ${minutes(orgBalance)} min left. Ask TrainerTwin to top it up.`,
+      409,
+    );
+  }
+  if (given.length) {
+    await tx.minuteLedger.createMany({
+      data: given.map((email) => ({ orgId: input.orgId, email, type: "grant", seconds: amount * 60, actorUserId: input.actorUserId ?? null, note: "Starting minutes" })),
+    });
+  }
+  return { given };
 }
 
 /**
@@ -231,23 +249,28 @@ export function sessionUsageSeconds(row: { allowedSeconds: number | null; starte
 }
 
 /**
- * Writes a closed metered call's usage row: a learner's minutes (usage), or the org's credits for an admin/team call
- * (org_usage, then sent to Meteroid). Safe to call more than once (one row per session).
+ * Writes an ended metered call's usage row in `tx` (specs/practice.md rule 8): a learner's minutes (usage), or the
+ * org's credits for an admin/team call (org_usage, sent to Meteroid after commit: `report`). One row per session;
+ * a second call writes nothing. `failed` and `revoked` calls spent nothing and get no row.
  */
-export async function recordSessionUsage(sessionId: string) {
-  const row = await db.interviewSession.findUnique({
+export async function writeSessionUsage(tx: Tx, sessionId: string) {
+  const row = await tx.interviewSession.findUnique({
     where: { id: sessionId },
     select: { id: true, orgId: true, userId: true, allowedSeconds: true, chargesOrg: true, startedAt: true, endedAt: true, status: true, user: { select: { email: true } } },
   });
-  if (!row || row.allowedSeconds == null || !row.endedAt) return;
+  if (!row || row.allowedSeconds == null || !row.endedAt || row.status === "failed" || row.status === "revoked") return { report: null };
   const seconds = sessionUsageSeconds(row);
-  const written = await db.minuteLedger.create({
-    data: { orgId: row.orgId, email: lower(row.user.email), userId: row.userId, type: row.chargesOrg ? "org_usage" : "usage", seconds: -seconds, sessionId: row.id },
-  }).then(() => true, (error: unknown) => {
-    if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) throw error;
-    return false;
+  const { count } = await tx.minuteLedger.createMany({
+    data: [{ orgId: row.orgId, email: lower(row.user.email), userId: row.userId, type: row.chargesOrg ? "org_usage" : "usage", seconds: -seconds, sessionId: row.id }],
+    skipDuplicates: true,
   });
-  if (written && row.chargesOrg && seconds > 0) await scheduleOrgUsage(row.orgId);
+  return { report: count && row.chargesOrg && seconds > 0 ? row.orgId : null };
+}
+
+/** writeSessionUsage on its own, then Meteroid's usage report. Safe to repeat (the end workflow's retry). */
+export async function recordSessionUsage(sessionId: string) {
+  const { report } = await writeSessionUsage(db, sessionId);
+  if (report) await scheduleOrgUsage(report);
 }
 
 /** Minutes added to a learner (a grant), with who did it. */

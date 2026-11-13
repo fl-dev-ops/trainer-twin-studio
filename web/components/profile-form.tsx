@@ -132,25 +132,15 @@ export function OrganizationForm({
     setError(null);
     setWebsiteError(null);
     setSaved(false);
-    const result = await authClient.organization.update({
-      organizationId: organization.id,
-      data: { name, logo },
-    });
-    if (result.error) {
-      setSaving(false);
-      setError(result.error.message ?? "Could not update the organization.");
-      return;
-    }
-
     const settingsResponse = await fetch("/api/org/settings", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ accentColor: accent, websiteUrl }),
+      body: JSON.stringify({ name, logo, accentColor: accent, websiteUrl }),
     }).catch(() => null);
     if (!settingsResponse?.ok) {
       const response = await settingsResponse?.json().catch(() => null);
       setSaving(false);
-      setWebsiteError(response?.error ?? "Could not update organization settings.");
+      setError(response?.error ?? "Could not update the organization.");
       return;
     }
 

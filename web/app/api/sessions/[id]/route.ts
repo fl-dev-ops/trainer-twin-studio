@@ -1,9 +1,9 @@
-import { orgPerson } from "@/lib/org-people";
+import { practiceRefusals } from "@/lib/practice";
 import { NextResponse } from "next/server";
+import { errorResponse, refusals } from "@/lib/errors";
 import { db } from "@/lib/db";
-import { resolveSessionUser } from "@/lib/session-user";
-import { authorizeRuntimeSession } from "@/lib/interview-sessions";
-import { isStudioRole } from "@/lib/org";
+import { resolveSessionUser, visibleSessions } from "@/lib/session-user";
+import { authorizeBrowserSession } from "@/lib/interview-sessions";
 
 /**
  * Returns snapshot of an interview session: coverage, phase, status.
@@ -20,8 +20,11 @@ export async function GET(
   const authHeader = request.headers.get("authorization") ?? "";
   const token = authHeader.replace(/^Bearer\s+/i, "").trim();
   if (token) {
-    const authorized = await authorizeRuntimeSession(token);
-    if (authorized && authorized.id === id) {
+    // The browser's own token for this call (practice rule 26).
+    const authorized = await authorizeBrowserSession(id, token);
+    // A token that isn't this live call's is refused, not tried as a login (practice rule 26).
+    if (!authorized) return errorResponse(practiceRefusals.runtimeTokenInvalid());
+    {
       session = {
         id: authorized.id,
         status: authorized.status,
@@ -36,11 +39,10 @@ export async function GET(
   if (!session) {
     try {
       const { org, user } = await resolveSessionUser();
-      if (org && user) {
-        const member = await orgPerson(org.id, { userId: user.id });
-        const trainer = isStudioRole(member?.role);
+      const visible = org && user ? await visibleSessions(org.id, user.id) : null;
+      if (visible) {
         session = await db.interviewSession.findFirst({
-          where: { id, orgId: org.id, deletedAt: null, ...(trainer ? {} : { userId: user.id }) },
+          where: { id, ...visible },
           select: {
             id: true,
             status: true,
@@ -56,7 +58,7 @@ export async function GET(
   }
 
   if (!session) {
-    return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    return errorResponse(refusals.notFound());
   }
 
   const runtimeState = session.runtimeState as Record<string, unknown> | null;

@@ -1,17 +1,20 @@
 import { expect, mock, test } from "bun:test";
 
 let user = { id: "learner", email: "harini@example.com" };
-let role: string | null = null;
+let role: string | null = "user";
 let trainerOrg: { id: string } | null = null;
 let documentWhere: Record<string, unknown> | undefined;
 let sessionWhere: Record<string, unknown> | undefined;
 let feedbackWhere: Record<string, unknown> | undefined;
 let feedbackData: Record<string, unknown> | undefined;
 
+const realSessionUser = await import("@/lib/session-user");
 mock.module("@/lib/session-user", () => ({
+  ...realSessionUser,
   resolveSessionUser: async () => ({ org: { id: "demo" }, user }),
 }));
 mock.module("@/lib/interview-sessions", () => ({
+  authorizeBrowserSession: async () => null,
   authorizeRuntimeSession: async () => null,
   activateSession: async () => null,
   finalizeInterviewSession: async () => null,
@@ -20,9 +23,11 @@ const realOrg = await import("@/lib/org");
 mock.module("@/lib/org", () => ({
   ...realOrg,
   getTrainerOrg: async () => trainerOrg,
+  studioOrRefusal: async () => trainerOrg ?? Response.json({ error: "Sign in first.", code: "signed_out" }, { status: 401 }),
   getSessionOrg: async () => ({ id: "demo" }),
 }));
 mock.module("@/lib/db", () => ({
+  withLock: async () => { throw new Error("Unexpected locked write"); },
   db: {
     member: { findFirst: async () => role ? { id: "member", role, disabledAt: null, user: { ...user, name: "Trainer", image: null } } : null },
     interviewSessionDocument: { findFirst: async ({ where }: { where: Record<string, unknown> }) => {
@@ -65,7 +70,7 @@ test("session snapshots are scoped to the owner, except for org trainers", async
   await readSession(new Request("https://demo.trainertwin.com/api/sessions/session"), context("session"));
   expect(sessionWhere).toMatchObject({ id: "session", orgId: "demo" });
   expect(sessionWhere).not.toHaveProperty("userId");
-  role = null;
+  role = "user";
   user = { id: "learner", email: "harini@example.com" };
 });
 

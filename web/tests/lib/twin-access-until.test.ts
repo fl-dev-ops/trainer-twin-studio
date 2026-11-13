@@ -4,7 +4,17 @@ type Row = { id: string; orgId: string; agentId: string; minutesLimit: number; s
 let assignment: Row;
 
 mock.module("@/lib/db", () => ({
+  withLock: async () => { throw new Error("Unexpected locked write in read-only fixture"); },
+  isUniqueViolation: (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "P2002",
   db: {
+    agent: { findFirst: async () => ({ id: "t1" }) },
+    // The learner is an enabled member (twinAccessByCode checks it before the code: specs/practice.md rule 1).
+    member: {
+      findFirst: async () => ({
+        id: "m1", role: "user", createdAt: new Date(0), disabledAt: null,
+        user: { id: "u1", name: "Ana", email: "ana@x.com", image: null },
+      }),
+    },
     twinAssignment: { findUnique: async () => assignment, update: async () => assignment },
     twinShareLink: { findUnique: async () => null },
   },
@@ -26,7 +36,7 @@ test("within the end date the learner can start; past it they can't, and are tol
   assignment.accessUntil = new Date(Date.now() + day);
   expect((await start())?.assignmentId).toBe("a1");
   assignment.accessUntil = new Date(Date.now() - 1000);
-  expect(start()).rejects.toThrow("Your access to this twin has ended");
+  await expect(start()).rejects.toThrow("Your access to this twin has ended");
 });
 
 test("the end date when assigning: optional, but never in the past", () => {

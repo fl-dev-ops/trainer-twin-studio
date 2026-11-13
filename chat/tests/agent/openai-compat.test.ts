@@ -3,6 +3,23 @@ import test from "node:test";
 import channel from "../../agent/channels/openai-compat";
 
 const handler = channel.routes!.find((route) => route.path === "/v1/chat/completions")!.handler as any;
+process.env.COPILOT_SERVICE_SECRET = "test-secret";
+
+test("refuses a completion without the service secret, even with an org header", async () => {
+  const cases: Record<string, string>[] = [
+    { "x-trainertwin-org-id": "org-test" },
+    { "x-trainertwin-org-id": "org-test", authorization: "Bearer some-token" },
+    { authorization: `Basic ${Buffer.from("org-test:wrong").toString("base64")}` },
+  ];
+  for (const headers of cases) {
+    const response: Response = await handler(new Request("http://localhost/v1/chat/completions", {
+      method: "POST",
+      headers: { "content-type": "application/json", ...headers },
+      body: JSON.stringify({ messages: [{ role: "user", content: "hi" }] }),
+    }), { from: () => { throw new Error("the model must not run"); } });
+    assert.equal(response.status, 401);
+  }
+});
 const privateText = "Private learner project and interview details";
 
 async function complete(budget?: string) {
@@ -23,7 +40,7 @@ async function complete(budget?: string) {
     ];
     const request = new Request("http://localhost/v1/chat/completions", {
       method: "POST",
-      headers: { "content-type": "application/json", "x-trainertwin-org-id": "org-test", "x-trainertwin-session-id": crypto.randomUUID(), ...(budget !== undefined ? { "x-thinking-budget": budget } : {}) },
+      headers: { "content-type": "application/json", authorization: `Basic ${Buffer.from("org-test:test-secret").toString("base64")}`, "x-trainertwin-session-id": crypto.randomUUID(), ...(budget !== undefined ? { "x-thinking-budget": budget } : {}) },
       body: JSON.stringify({ messages: [{ role: "user", content: privateText }] }),
     });
     const response: Response = await handler(request, {

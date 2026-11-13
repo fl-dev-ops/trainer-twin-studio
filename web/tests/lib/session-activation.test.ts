@@ -3,7 +3,7 @@ import * as sessions from "@/lib/interview-sessions";
 import * as livekit from "@/lib/livekit";
 
 import { BEFORE_UPLOAD_REFUSED } from "@/lib/context-upload";
-import { MemberError } from "@/lib/members";
+import { AppError } from "@/lib/errors";
 import { MinutesError } from "@/lib/minutes";
 import { TwinAccessError } from "@/lib/twin-access";
 import { connectVoice, openSession, startRefusal, startSessionNow, type OpenedSession } from "@/lib/session-activation";
@@ -16,10 +16,10 @@ const db = {
   },
   voice: { findFirst: mock(async () => null) },
 };
-mock.module("@/lib/db", () => ({ db }));
+mock.module("@/lib/db", () => ({ db, withLock: async () => { throw new Error("Unexpected locked write"); } }));
 
 const input = { orgId: "org", userId: "learner", mode: "voice" as const };
-const session = { id: "session", runtimeToken: "runtime", secondsLeft: 300 } as OpenedSession;
+const session = { id: "session", runtimeToken: "browser", agentToken: "agent", secondsLeft: 300 } as OpenedSession;
 let activate: ReturnType<typeof spyOn<typeof sessions, "activateSession">>;
 let connect: ReturnType<typeof spyOn<typeof livekit, "activateLiveKitSession">>;
 let close: ReturnType<typeof spyOn<typeof livekit, "closeLiveKitSession">>;
@@ -35,8 +35,8 @@ afterEach(() => { for (const spy of spies.splice(0).reverse()) spy.mockRestore()
 
 test.each([
   [new MinutesError("Need minutes", 403), { status: 403, code: "minutes", error: "Need minutes" }],
-  [new MemberError("Disabled", 403), { status: 403, error: "Disabled" }],
-  [new TwinAccessError("No access", 404), { status: 404, error: "No access" }],
+  [new AppError("member_disabled", "Disabled", 403), { status: 403, error: "Disabled", code: "member_disabled" }],
+  [new TwinAccessError("twin_not_assigned", "No access", 403), { status: 403, code: "twin_not_assigned", error: "No access" }],
   ...["Context not found", BEFORE_UPLOAD_REFUSED, "Deployment does not allow chat"].map((message) => [new Error(message), { status: 400, error: message }]),
 ])("startRefusal maps expected refusals: %s", (error, expected) => {
   expect(startRefusal(error)).toEqual({ ok: false, ...expected });
@@ -46,9 +46,9 @@ test("startRefusal leaves unknown errors and non-errors unclassified", () => {
   for (const error of [new Error("database unavailable"), "Context not found", null]) expect(startRefusal(error)).toBeNull();
 });
 
-test("openSession returns invalid-link and minutes refusals, but throws unknown failures", async () => {
+test("openSession returns not_found for an invalid link, minutes refusals, and throws unknown failures", async () => {
   activate.mockResolvedValueOnce(null);
-  expect(await openSession(input)).toEqual({ ok: false, status: 403, error: "Invalid or already used session URL" });
+  expect(await openSession(input)).toEqual({ ok: false, status: 404, error: "Not found.", code: "not_found" });
   activate.mockRejectedValueOnce(new MinutesError("Need minutes", 403));
   expect(await openSession(input)).toEqual({ ok: false, status: 403, error: "Need minutes", code: "minutes" });
   const error = new Error("database unavailable");
@@ -61,11 +61,11 @@ test("startSessionNow opens before connecting voice and returns credentials with
   expect(await startSessionNow(input)).toEqual({ ok: true, session, participantToken: "participant", room: "room" });
   expect(activate).toHaveBeenCalledWith(input);
   expect(activate.mock.invocationCallOrder[0]).toBeLessThan(connect.mock.invocationCallOrder[0]);
-  expect(connect).toHaveBeenCalledWith(expect.objectContaining({ sessionId: session.id, runtimeToken: session.runtimeToken, agentKind: "ROLEPLAY", endsAt: expect.any(Number) }));
+  expect(connect).toHaveBeenCalledWith(expect.objectContaining({ sessionId: session.id, runtimeToken: session.agentToken, agentKind: "ROLEPLAY", endsAt: expect.any(Number) }));
 });
 
 test("startSessionNow chat returns the conversation token without LiveKit", async () => {
-  expect(await startSessionNow({ ...input, mode: "chat" })).toEqual({ ok: true, session, conversationToken: "runtime" });
+  expect(await startSessionNow({ ...input, mode: "chat" })).toEqual({ ok: true, session, conversationToken: "agent" });
   expect(connect).not.toHaveBeenCalled();
 });
 
@@ -82,5 +82,5 @@ test("connectVoice closes LiveKit and invalidates a failed session even if closi
   close.mockRejectedValue(new Error("room cleanup unavailable"));
   await expect(connectVoice(input, session)).rejects.toBe(error);
   expect(close).toHaveBeenCalledWith({ room: "old-room", dispatchId: "old-dispatch", videoEgressId: null });
-  expect(failed).toHaveBeenCalledWith({ where: { id: "session", status: { notIn: ["completed", "abandoned"] } }, data: { status: "failed", endedAt: expect.any(Date), runtimeTokenHash: null } });
+  expect(failed).toHaveBeenCalledWith({ where: { id: "session", status: { in: ["activating", "active"] } }, data: { status: "failed", endedAt: expect.any(Date), runtimeTokenHash: null } });
 });

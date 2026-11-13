@@ -1,20 +1,24 @@
 ---
-title: "Scenarios"
-description: "Read the organization's role-play scenarios and their configuration."
+title: "Role plays"
+description: "List the role plays published in your organization. The path is /scenarios."
 ---
 
-Scenarios are the role-plays learners can practice (called agents in the dashboard). The API is **read-only** — creating or editing scenario configuration stays in the dashboard. Only published scenarios are returned: an archived scenario is not listed and returns `404`.
+A **role play** is the practice a learner can be assigned. This API can list and read published role plays. It cannot create, edit, archive, or publish them. Do that in the [TrainerTwin dashboard](https://dash.trainertwin.com) first.
 
-The API covers role plays only. Twins (the trainer's own AI, used through twin assignments and links) are not listed, and their sessions are not returned.
+The path is `/scenarios`, and the assignment field is `scenario`, because older integrations use those names. The value you store is the role play's `slug`.
 
-## List scenarios
+Twins are not listed. An archived role play is not listed and returns `404`. A private role play is included when it belongs to this organization and is not archived. `visibility` describes the dashboard setting; it does not hide the role play from this API key.
+
+Permission: `scenarios:read`.
+
+## List role plays
 
 ```bash
 curl "https://dash.trainertwin.com/api/v1/scenarios?limit=50" \
   --header "x-api-key: $TRAINERTWIN_API_KEY"
 ```
 
-Returns `200`:
+`200`:
 
 ```json
 {
@@ -34,16 +38,16 @@ Returns `200`:
 }
 ```
 
-Scenarios come in dashboard order. `assignmentCount` is how many learners currently have the scenario assigned: pending and used assignments count, cancelled and expired ones don't.
+Order matches the dashboard: `order` ascending, then newest first. `assignmentCount` counts open assignments (`pending` and historical `used`). Cancelled and expired assignments are not counted. `version` increases when the role play is saved in the dashboard. A call keeps the version it started with; read that from the session, not from this list.
 
-## Get a scenario
+## Read one role play
 
 ```bash
 curl "https://dash.trainertwin.com/api/v1/scenarios/react-mock-interview" \
   --header "x-api-key: $TRAINERTWIN_API_KEY"
 ```
 
-Returns the scenario plus its role-play configuration in `data` (objective, difficulty, persona hints — whatever the dashboard configures):
+`200` adds `data`, the dashboard configuration. It can contain an objective, difficulty, and persona hints. Treat `data` as display content. Its fields can change and are not a stable contract for running the call.
 
 ```json
 {
@@ -51,20 +55,20 @@ Returns the scenario plus its role-play configuration in `data` (objective, diff
     "slug": "react-mock-interview",
     "name": "React mock interview",
     "version": 3,
-    "visibility": "public",
+    "visibility": "private",
     "order": 0,
     "assignmentCount": 12,
     "createdAt": "2026-08-01T10:00:00.000Z",
     "updatedAt": "2026-08-30T14:20:00.000Z",
     "data": {
-      "objective": "Assess the candidate's React fundamentals under interview pressure."
+      "objective": "Assess React fundamentals under interview pressure."
     }
   }
 }
 ```
 
-Unknown slugs return `404`.
+An unknown slug, a twin slug, or an archived role play is `404` `not_found`.
 
-## Permissions
+## Use the slug
 
-Requires the `scenarios` **read** permission. Keys created after this endpoint existed get it automatically; pre-existing keys were granted it by migration. The scenario `data` payload is dashboard-controlled and may gain fields at any time — treat it as opaque display data, not a contract.
+Pass `slug` as `scenario` to [assign](/guides/assignments) it, and as the `scenario` filter when [listing sessions](/guides/sessions). On a session object the same value is `agentSlug`.

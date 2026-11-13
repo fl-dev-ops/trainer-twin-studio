@@ -1,109 +1,91 @@
 ---
-title: "Role plays end to end"
-description: "Assign a role play from your platform, send the learner to practise, and read the result."
+title: "Practice flow"
+description: "Assign a published role play, send the learner to practice, and read the stored result."
 ---
 
-This guide puts the endpoints together: from a published role play to the learner's result in your platform.
+This is the path an integration usually takes. The field and path names are in [Names and limits](/limits).
 
-## Before you start
+## Before the first request
 
 In the [TrainerTwin dashboard](https://dash.trainertwin.com):
 
-1. **Publish the role plays** you want to offer. The API can read them, but not create or edit them.
-2. **Create an API key** on the Developer page and keep it on your server.
-3. **Check your credits.** Practice time is prepaid: TrainerTwin tops up your organization's credits, and each learner gets credits from that balance. 1 credit = 1 minute of practice. Learners see their credits as minutes.
+1. Publish the role play. This API cannot author one.
+2. Create an API key on the Developer API page and store it on your server.
+3. Make sure the organization has credits to allocate. `GET /credits` shows the minutes still available. One credit is one minute.
 
-## Two things a learner needs
+A learner needs both of these:
 
-| | What it controls | How they get it |
+| They need | What it controls | How they get it |
 | --- | --- | --- |
-| **An assignment** | *Which* role play they can do, through a personal link, as many times as they like | `POST /assignments` |
-| **Credits** | *How long* they can practise, shared by every twin and role play | 30 when first added (by an assignment or `POST /users`); more from the dashboard |
+| An assignment | Which role play they can open, and their personal link | `POST /assignments` |
+| Credits | How long they can practice, across every role play | 30 when first added. More from `POST /users/{id}/credits`. |
 
-## The flow
+## Requests
 
 ```text
-Your platform                          TrainerTwin                           Learner
-─────────────                          ───────────                           ───────
-1. GET  /scenarios      ─────────▶  published role plays
-2. POST /assignments    ─────────▶  assigns it; someone new gets 30 credits
-   { email, scenario }  ◀─────────  practiceUrl  (+ TrainerTwin email)
-3. show "Start practice" ────────────────────────────────────────────▶  opens the link
-                                     signs in with the assigned email   ◀──
-                                     voice role play, sees minutes left
-4. GET  /sessions?userId=…&status=completed
-5. GET  /sessions/{id}  ─────────▶  transcript, evidence, recordings
+Your server                          TrainerTwin                         Learner
+──────────                          ───────────                         ───────
+GET  /scenarios                 →    published role plays
+POST /assignments               →    assignment + practiceUrl
+{ email or userId, scenario }   ←    email to the learner
+show practiceUrl                ───────────────────────────────→        opens the link
+                                    signs in with the assigned email
+GET  /sessions?status=completed
+GET  /sessions/{id}             →    transcript, report, recordings
 ```
 
 <Steps>
-  <Step title="List the role plays">
-    ```bash
-    curl "https://dash.trainertwin.com/api/v1/scenarios" \
-      --header "x-api-key: $TRAINERTWIN_API_KEY"
-    ```
-    Map each `slug` to a course or module in your platform. See [Scenarios](/guides/scenarios).
+  <Step title="Choose the role play">
+    `GET /scenarios` returns each published role play's `slug`. Store that slug against the course or module in your platform. The assignment field is `scenario`, and the session field is `agentSlug`; both are this slug. See [Role plays](/guides/scenarios).
   </Step>
-  <Step title="Assign one to a learner">
-    ```bash
-    curl "https://dash.trainertwin.com/api/v1/assignments" \
-      --request POST \
-      --header "x-api-key: $TRAINERTWIN_API_KEY" \
-      --header "content-type: application/json" \
-      --data '{ "email": "avery@example.com", "scenario": "react-mock-interview" }'
-    ```
-    An email is enough: someone new is added to your organization as a learner first, in the same request. The response includes `practiceUrl`, the learner's personal link.
+  <Step title="Assign it">
+    Send the learner's `userId` or `email`, and the slug as `scenario`. Do not send both identifiers.
 
-    Someone new to your organization's credits gets **30** from its balance. When the balance can't cover them, the request returns `409` and nothing is assigned. Repeating the request is safe: it returns the same assignment and sends no second email. See [Assign](/guides/assignments).
+    A new email is added as a learner in the same request and receives 30 credits once. If the organization balance cannot cover that grant, the response is `409` and no assignment is created.
+
+    Repeating the request for an open assignment returns it and does not send another email. See [Assignments](/guides/assignments).
   </Step>
-  <Step title="Send the learner to practise">
-    Show `practiceUrl` in your platform, for example as a **Start practice** button. TrainerTwin also emails it (see [Emails](#emails-the-learner-gets)).
+  <Step title="Send the learner to practice">
+    Put `practiceUrl` behind a button in your platform. TrainerTwin also emails it when `emailSent` is true.
 
-    The learner opens the link and signs in with **the email the role play was assigned to**, with Google or a code emailed to them. Another account sees a prompt to switch. The role play runs in TrainerTwin as a voice call, not inside your platform.
+    The learner signs in with the assigned email. Another TrainerTwin account is asked to switch. The call runs in TrainerTwin, not inside your product. A dropped connection rejoins the open call. A later visit starts a new session on the same link.
   </Step>
   <Step title="Read the result">
-    There are no webhooks yet. Check for finished sessions now and then:
+    There is no webhook.
+
     ```bash
     curl "https://dash.trainertwin.com/api/v1/sessions?userId=user_123&scenario=react-mock-interview&status=completed" \
       --header "x-api-key: $TRAINERTWIN_API_KEY"
     ```
-    Then read one for its transcript, evidence, and recordings with `GET /sessions/{id}`. Every session has the `assignmentId` it came from. See [Sessions](/guides/sessions).
+
+    `GET /sessions/{id}` returns the transcript, stored report, `reportStatus`, evidence, and one-hour recording URLs. A completed call can still have `reportStatus: "generating"`. See [Sessions](/guides/sessions).
   </Step>
 </Steps>
 
-## Practising again
+## Credits during the call
 
-There's no limit on attempts: a learner can practise an assigned role play as many times as their credits allow. After a call they can choose **Practise again**, or open the same `practiceUrl` later; each practice starts a new session. A learner whose connection drops mid-call rejoins the same call while it's still open.
+- Time is counted by the second.
+- A learner needs at least 5 credits to start. They see the minutes left before the call.
+- At zero, the call ends. They cannot start another until they receive more credits.
+- A learner has one live call at a time in your organization. Starting another ends the open one.
+- Trainer previews spend the organization balance and last at most 30 minutes. Learner calls are not under that 30-minute cap.
 
-The link keeps working until you remove the assignment (`DELETE /assignments/{id}`). To read every practice of one assignment:
+`GET /users/{id}/credits` is the learner balance. `POST /users/{id}/credits` adds more and requires an `Idempotency-Key`. See [Credits](/guides/credits).
 
-```bash
-curl "https://dash.trainertwin.com/api/v1/sessions?assignmentId=assignment_123" \
-  --header "x-api-key: $TRAINERTWIN_API_KEY"
-```
+## Emails
 
-`GET /assignments/{id}` also tells you how often it was practised (`practiceCount`) and when last (`lastPracticedAt`).
+| Request | What the learner receives |
+| --- | --- |
+| `POST /users` | Added to the organization, with their starting credits and a sign-in link |
+| `POST /assignments` when a link is created or reopened | The role play, their credit balance, the sign-in email, and `practiceUrl`. A new learner is told they were added in this same email. |
+| `PATCH /assignments/{id}` when the destination changes | The same role-play email to the destination learner |
+| `POST /users/{id}/credits` when the grant is new | Credits added and the balance. No practice link. |
 
-## Credits during practice
+`emailSent: false` means this request did not get a notification accepted. The learner, assignment, or grant is still saved. A retry of an unchanged assignment or credit grant does not send a second email.
 
-- Credits are counted by the second while the learner is in a call.
-- The learner sees the minutes they have left before they start. A call needs at least **5 minutes** to start.
-- When they run out, the call ends with a goodbye from the role play and a "Time's up" message, and the learner can't start another one until they get more.
-- A learner has one call at a time in your organization: starting a new one ends any other that is still open.
-- Admins' and team members' voice calls use your organization's credits directly (also at least 5 to start).
+## Not in this API
 
-Giving a learner more credits, choosing how many a new learner starts with, and seeing who is running low are done in the dashboard (**Users** and **Credits**). The API doesn't change credits, except for the 30 a new learner gets.
-
-## Emails the learner gets
-
-| Request | Email | Link |
-| --- | --- | --- |
-| `POST /assignments` (new or reopened), `PATCH /assignments/{id}` (changed) | **New role play**: the role play, its objective, the credits they have (to use on it as often as they like), and which email to sign in with. Someone new to your organization is told they were added, in the same email. | `practiceUrl`, their personal link |
-| `POST /users` | **You've been added to *your organization* on TrainerTwin**, with their credits | Your organization's home page, where they sign in with Google or an email code |
-
-You don't need `POST /users` before assigning a role play: assigning by email adds the learner to your organization first, with one email for both. Every response reports `emailSent`. An assignment or a new learner is kept even when the email fails, so you can send the link yourself.
-
-## Done in the dashboard
-
-- Creating and editing role plays, personas, and voices.
-- Adding credits, choosing starting credits, and the Credits page.
-- Twins: the API covers role plays only.
+- Creating or editing role plays, personas, and voices.
+- Buying organization credits or changing the plan.
+- Starting, ending, or joining the call.
+- Twins.

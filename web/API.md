@@ -26,7 +26,7 @@ Read-only: scenario configuration is dashboard-only.
 
 ## Sessions
 
-- `POST /api/v1/sessions` with `{ "userId", "scenario" | "deploymentKey", "mode": "chat"|"voice", "documentId?", "idempotencyKey?" }` — activate a session in `active` state; returns `conversationToken` (chat) or a LiveKit `participantToken` + `room` (voice). Idempotency key reuses the same active session.
+- `POST /api/v1/sessions` with `{ "userId", "scenario", "mode": "chat"|"voice", "documentId?", "idempotencyKey?" }` — activate a session in `active` state; returns `conversationToken` (chat) or a LiveKit `participantToken` + `room` (voice). Idempotency key reuses the same active session.
 - `GET /api/v1/sessions?status=…&userId=…&scenario=slug&from=…&to=…&limit=50&offset=0` — statuses: `assigned`, `activating`, `active`, `completed`, `abandoned`, `failed`, `revoked`; filters on `startedAt`, sorted by creation time
 - `GET /api/v1/sessions/:id` — includes transcript, evidence, and a presigned recording URL
 - `DELETE /api/v1/sessions/:id` — soft delete; the record is retained but hidden from all responses

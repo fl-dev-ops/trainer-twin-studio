@@ -1,7 +1,9 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { beforeSettings } from "@/lib/context-upload";
-import { db } from "@/lib/db";
+import { db, withLock } from "@/lib/db";
+import { reportStateOf, type ReportState } from "@/lib/report-model";
+import { refusals } from "@/lib/errors";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { assignablePeople } from "@/lib/learners";
 import { orgPeople } from "@/lib/org-people";
@@ -63,16 +65,9 @@ async function findRoleplay(orgId: string, slug: string) {
 const roleplayReport = (value: unknown): RoleplayReport | null =>
   isSessionReport(value) && asRecord(value).kind === "roleplay" ? (value as RoleplayReport) : null;
 
-/** Where a session's report stands, for quiet polling (same states as twin). */
-export type RoleplayReportState = "ready" | "pending" | "unavailable";
-const JUST_ENDED_MS = 10 * 60_000;
-function reportState(row: { status: string; reportStatus: string | null; report: unknown; endedAt: Date | null }, now = Date.now()): RoleplayReportState {
-  if (roleplayReport(row.report)) return "ready";
-  if (row.reportStatus === "generating") return "pending";
-  const fresh = row.endedAt !== null && now - row.endedAt.getTime() < JUST_ENDED_MS;
-  if (row.status === "completed" && (!row.reportStatus || row.reportStatus === "none") && fresh) return "pending";
-  return "unavailable";
-}
+/** Where a session's report stands, for quiet polling (the same states as twin: lib/report-model.ts). */
+export type RoleplayReportState = ReportState;
+const reportState = (row: Parameters<typeof reportStateOf>[0], now = Date.now()) => reportStateOf(row, (report) => Boolean(roleplayReport(report)), now);
 
 const sessionSelect = {
   id: true, agentId: true, status: true, reportStatus: true, report: true, startedAt: true, endedAt: true, createdAt: true,
@@ -255,10 +250,16 @@ const builderRouter = t.router({
     .input(slugInput.extend({ before: beforeInput.optional(), tools: toolSettingsInput.optional() }))
     .mutation(async ({ ctx, input }) => {
       const agent = await findRoleplay(ctx.user.orgId, input.slug);
-      const data = (agent.data && typeof agent.data === "object" ? agent.data : {}) as Record<string, unknown>;
-      await db.agent.update({
-        where: { id: agent.id },
-        data: { data: { ...data, ...(input.before ? { before: input.before } : {}), ...(input.tools ? { tools: input.tools } : {}) } as Prisma.InputJsonValue },
+      // Under the role play's save lock, reading its data again (specs/practice.md rule 20): a builder save that just
+      // landed isn't undone, and the version doesn't move.
+      await withLock([`agent:${agent.slug}`], async (tx) => {
+        const current = await tx.agent.findFirst({ where: { id: agent.id, archivedAt: null }, select: { data: true } });
+        if (!current) throw refusals.notFound();
+        const data = (current.data && typeof current.data === "object" ? current.data : {}) as Record<string, unknown>;
+        await tx.agent.update({
+          where: { id: agent.id },
+          data: { data: { ...data, ...(input.before ? { before: input.before } : {}), ...(input.tools ? { tools: input.tools } : {}) } as Prisma.InputJsonValue },
+        });
       });
       return { ok: true };
     }),

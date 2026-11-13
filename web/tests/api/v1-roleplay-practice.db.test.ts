@@ -30,7 +30,7 @@ describe.skipIf(!localMinutesDb)("v1 role-play practice (local database)", () =>
   beforeEach(async () => {
     f = minutesFixture(); other = minutesFixture();
     await f.create(); await other.create();
-    api = spyOn(externalApi, "requireExternalApi").mockResolvedValue({ org: f.org, actorUserId: f.trainer.id, keyId: "test-key" });
+    api = spyOn(externalApi, "requireExternalApi").mockResolvedValue({ org: f.org, trainer: { memberId: `${f.trainer.id}-member`, userId: f.trainer.id, ...f.trainer, image: null, role: "admin", disabled: false, disabledAt: null, addedAt: new Date() }, actorUserId: f.trainer.id, keyId: "test-key" });
     assignment = await assign(f, "practised");
     unpractised = await assign(f, "unpractised");
     foreign = await assign(other, "foreign");

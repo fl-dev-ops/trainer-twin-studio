@@ -1,3 +1,4 @@
+import { cronAuthorized } from "@/lib/cron";
 import { NextResponse } from "next/server";
 import { checkAllBilling } from "@/lib/billing/billing";
 
@@ -9,15 +10,8 @@ export const maxDuration = 300;
  * lost webhook or a failed workflow left behind (a missing copy or email, a payment not handled, an overdue renewal not
  * paused, an overdue upgrade not cancelled).
  */
-function isAuthorized(request: Request): boolean {
-  const secret = process.env.CRON_SECRET || process.env.INTERNAL_API_SECRET;
-  // Fail-open only off-Vercel (local dev); production must set CRON_SECRET.
-  if (!secret) return !process.env.VERCEL;
-  return request.headers.get("authorization") === `Bearer ${secret}` || request.headers.get("x-internal-secret") === secret;
-}
-
 export async function GET(request: Request) {
-  if (!isAuthorized(request)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!cronAuthorized(request)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const orgs = await checkAllBilling();
     return NextResponse.json({ ok: true, orgs });

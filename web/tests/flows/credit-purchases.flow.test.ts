@@ -14,7 +14,7 @@ import { outsideServices, razorpayWebhook } from "./harness";
 function story() {
   const f = minutesFixture();
   const outside = outsideServices();
-  beforeAll(async () => { outside.start(); await f.create(); await fundOrg({ orgId: f.org.id, minutes: 0 }); });
+  beforeAll(async () => { outside.start(); await f.create(false); await fundOrg({ orgId: f.org.id, minutes: 0 }); });
   afterAll(async () => { await f.clean(); outside.stop(); });
   const balance = async () => (await availableOrgSeconds(f.org.id)) / 60;
   const buy = () => createPaymentLinkPurchase({ org: f.org, credits: 100, amount: 800, currency: "INR" });
@@ -200,7 +200,7 @@ describe.skipIf(!localMinutesDb)("flow: partner assignment API funded by purchas
   const { f, outside, balance, buy, paid, refund } = story();
   const paymentId = `pay_${f.org.id}`;
   let api: ReturnType<typeof spyOn<typeof externalApi, "requireExternalApi">>;
-  beforeAll(() => { api = spyOn(externalApi, "requireExternalApi").mockResolvedValue({ org: f.org, actorUserId: f.trainer.id, keyId: "flow-key" }); });
+  beforeAll(() => { api = spyOn(externalApi, "requireExternalApi").mockResolvedValue({ org: f.org, trainer: { memberId: `${f.trainer.id}-member`, userId: f.trainer.id, ...f.trainer, image: null, role: "admin", disabled: false, disabledAt: null, addedAt: new Date() }, actorUserId: f.trainer.id, keyId: "flow-key" }); });
   afterAll(() => api?.mockRestore());
   const assign = (email: string) => assignRoleplay(new Request("http://dash.test/api/v1/assignments", {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, scenario: f.roleplay.slug }),
