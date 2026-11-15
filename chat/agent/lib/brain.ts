@@ -503,7 +503,7 @@ export async function loadSessionContext(
     sessionId: result.sessionId ?? sessionId,
     playbook: scenarioPlaybook(result.agent?.kind, agentData as Record<string, unknown>),
     roleplay,
-    tools: toolSettings(result.agent?.data),
+    tools: toolSettings(result.agent?.data, result.agent?.kind),
     twin: twinPlaybooks ? { playbooks: twinPlaybooks, inline: inlineTwinPlaybooks(twinPlaybooks) } : undefined,
     calibration,
     agentName: agentData.name ?? result.agent?.slug ?? agentSlug ?? "Training Session",
@@ -624,7 +624,7 @@ ${claimList}\n`;
     }
     lines.push("- Compose a FRESH greeting in this trainer's voice: never reuse or lightly edit the example sentences, openings (e.g. starting with 'Now'), or structures verbatim. Vary the wording, but keep it concise and natural.");
     lines.push(sessionMode(specs) === "roleplay-interview"
-      ? "- On the [OPENING] turn: deliver the greeting directly with NO tool calls. Do NOT call surface on the opening turn. Skip search_style (style is already provided above) and session_plan (auto-initializes from the scenario spec on your next turn)."
+      ? "- On the [OPENING] turn: greet using the provided style. Warming retrieves style only; it does not open documents. If an attached PDF and preview are available, call surface open_pdf with its real fileId. Skip search_style and session_plan; the plan initializes on the next turn."
       : "- On the [OPENING] turn: deliver the greeting directly with NO tool calls.");
     return `\n${lines.join("\n")}\n`;
   })();

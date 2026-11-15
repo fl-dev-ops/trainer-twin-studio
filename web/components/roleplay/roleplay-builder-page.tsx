@@ -165,7 +165,7 @@ function PersonaPicker({ personas, value, onChange }: { personas: Persona[]; val
 const TOOL_ROWS: { key: keyof ToolSettings; label: string; description: string }[] = [
   { key: "canvas", label: "Canvas", description: "A whiteboard the client can sketch on and read what the learner draws." },
   { key: "codeEditor", label: "Code editor", description: "An editor the client can open with code, read and run." },
-  { key: "preview", label: "Preview", description: "Show and point at a PDF the learner attached." },
+  { key: "preview", label: "Preview", description: "Show PDFs, images and presentations, and point at document text or slides." },
   { key: "choice", label: "Multiple choice", description: "A short question with options, checked when the learner picks one." },
 ];
 
@@ -361,7 +361,7 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, tool
 
           <FormCard title="The learner" description="Who the learner plays, and what they read before the call.">
             <Field id="rp-learner" label="Learner role">
-              <input id="rp-learner" maxLength={200} value={b.situation.learnerRole} placeholder="Example: Off-plan agent on a first call" onChange={(e) => setSituation("learnerRole", e.target.value)} className={cn(input, "h-10")} />
+              <input id="rp-learner" maxLength={100} value={b.situation.learnerRole} placeholder="Example: Off-plan agent on a first call" onChange={(e) => setSituation("learnerRole", e.target.value)} className={cn(input, "h-10")} />
             </Field>
             <Field id="rp-brief" label="Learner brief" hint="Shown to the learner before the call: what to expect and what to aim for.">
               <textarea id="rp-brief" rows={3} maxLength={1000} value={b.whatToExpect ?? ""} placeholder="Example: Listen first, then ask one question at a time." onChange={(e) => set("whatToExpect", e.target.value)} className={cn(input, "py-2")} />

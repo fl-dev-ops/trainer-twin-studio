@@ -148,11 +148,11 @@ describe("TrainerTwin retrieval policy", () => {
 });
 
 describe("pre-warmed opening contract", () => {
-  test("instructions skip all opening tool calls when the warm block is present", () => {
+  test("warming skips redundant retrieval but still permits the required PDF surface", () => {
     contains(contextRenderer, "PRE-WARMED OPENING");
-    contains(contextRenderer, "deliver the greeting directly with NO tool calls");
-    contains(contextRenderer, "Do NOT call surface on the opening turn");
+    contains(contextRenderer, "Warming retrieves style only; it does not open documents");
+    contains(contextRenderer, "call surface open_pdf with its real fileId");
     contains(instructions, "PRE-WARMED OPENING exception");
-    contains(instructions, "SKIP this initialization entirely");
+    contains(instructions, "but still open an attached PDF when preview is available");
   });
 });

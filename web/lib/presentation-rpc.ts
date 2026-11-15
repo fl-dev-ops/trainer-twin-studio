@@ -25,6 +25,12 @@ function ready(context: PresentationRpcContext) {
   return context.controller;
 }
 
+async function waitForViewer(check: () => boolean) {
+  const deadline = Date.now() + 2_000;
+  while (!check() && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 16));
+  if (!check()) throw new Error("Presentation did not confirm the requested change");
+}
+
 function nodeText(node: SlideNode): string[] {
   if (node.type === "shape") {
     return node.paragraphs?.map((paragraph) =>
@@ -98,17 +104,19 @@ export async function handlePresentationRpc(
       });
     }
     case "next":
-      await ready(context).next();
-      return JSON.stringify({ ok: true, result: state(context) });
     case "previous":
-      await ready(context).previous();
-      return JSON.stringify({ ok: true, result: state(context) });
     case "go_to_slide": {
-      const slideNumber = Number(payload.slideNumber);
+      const controller = ready(context);
+      const slideNumber = request.action === "next" ? Math.min(controller.getSlideIndex() + 2, context.slideCount)
+        : request.action === "previous" ? Math.max(controller.getSlideIndex(), 1)
+        : Number(payload.slideNumber);
       if (!Number.isInteger(slideNumber) || slideNumber < 1 || slideNumber > context.slideCount) {
         throw new Error(`Slide number must be between 1 and ${context.slideCount}`);
       }
-      await ready(context).goToSlide(clampSlideIndex(slideNumber - 1, context.slideCount));
+      const target = clampSlideIndex(slideNumber - 1, context.slideCount);
+      await controller.goToSlide(target);
+      // The controller promise resolves before React updates its live index.
+      await waitForViewer(() => controller.getSlideIndex() === target);
       return JSON.stringify({ ok: true, result: state(context) });
     }
     case "set_zoom": {
@@ -116,7 +124,9 @@ export async function handlePresentationRpc(
       if (!Number.isFinite(percent) || percent < 25 || percent > 400) {
         throw new Error("Zoom must be between 25 and 400 percent");
       }
+      const controller = ready(context);
       await context.setZoom(percent);
+      await waitForViewer(() => controller.getZoom() === percent);
       return JSON.stringify({ ok: true, result: state(context) });
     }
     case "fit":

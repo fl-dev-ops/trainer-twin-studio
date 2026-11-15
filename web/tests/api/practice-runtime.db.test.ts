@@ -55,8 +55,8 @@ describe.skipIf(!localMinutesDb)("Module 5 owner finalize, two tokens and record
     expect(response.status).toBe(status); expect(await response.json()).toMatchObject({ code });
   };
   const browserRoutes = (token: string) => {
-    const req = (method = "GET") => new Request(`https://test/api/sessions/${call.id}`, { method, headers: { authorization: `Bearer ${token}` }, ...(method === "POST" ? { body: JSON.stringify({ active: "code", key: "file.ts" }) } : {}) });
-    return [() => commands(req(), context()), () => completeCommand(req("POST"), context()), () => readUi(req(), context()), () => writeUi(req("POST"), context()), () => snapshot(req(), context())];
+    const req = (method = "GET", body: unknown = { active: "code", key: "file.ts", revision: 1 }) => new Request(`https://test/api/sessions/${call.id}`, { method, headers: { authorization: `Bearer ${token}` }, ...(method === "POST" ? { body: JSON.stringify(body) } : {}) });
+    return [() => commands(req(), context()), () => completeCommand(req("POST", { action: "claim", consumerId: "00000000-0000-4000-8000-000000000001" }), context()), () => readUi(req(), context()), () => writeUi(req("POST"), context()), () => snapshot(req(), context())];
   };
   test.each(["activating", "active"])("browser token works on commands, command completion, UI state and snapshot while %s; agent token stays separate", async (status) => {
     await db.interviewSession.update({ where: { id: call.id }, data: { status } });

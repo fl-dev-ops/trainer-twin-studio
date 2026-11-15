@@ -3,11 +3,12 @@ import { z } from "zod";
 import { anyToolOn, sessionToolSettings, type ToolSettings } from "../lib/agent-tools";
 import { activeMcqState, gradeMcqSelection, prepareMcqPayload } from "../lib/mcq-state";
 import { executeWorkspaceTool } from "../lib/workspace-tools";
+import { presentationTools } from "../lib/workspace/presentation-tools";
 
 /*
  * The workspace tools this session's agent may use (Agent.data.tools, the role play's Tools tab), resolved once when the
  * session starts: a switched-off surface's tools are not in the model's tool list at all. Tool names and behaviour are
- * the same as the static tools they replace. Slide tools stay in lib/workspace/presentation-tools.ts, not offered yet.
+ * the same as the static tools they replace. Preview includes PDF/image surfaces and presentation navigation.
  *
  * eve rebuilds these after a recovery, so every callback is a module-level function and every schema a module-level
  * constant (no values captured from the resolver).
@@ -55,7 +56,7 @@ function surfaceDescription(tools: ToolSettings): string {
     tools.codeEditor && "open_code_editor (payload { questionId, question, language, starterCode, readOnly })",
     tools.choice && "open_choice (payload { questionId, question, options: [{ id, text }], correctOptionId, code? })",
     tools.preview &&
-      "open_pdf (payload { fileId }) for an attached PDF, highlight_document (payload { fileId, highlightQuery }) to search for a phrase. Resume interviews must use start_resume_question with a claim ID for highlights, never highlight_document or a free-form query",
+      "open_pdf (payload { fileId }) for an attached PDF, open_image (payload { fileId }), open_presentation (payload { fileId, slideNumber? }), highlight_document (payload { fileId, highlightQuery }) to search for a phrase. Resume interviews must use start_resume_question with a claim ID for highlights, never highlight_document or a free-form query",
     "close_surface",
   ].filter(Boolean);
   return `Open or change the learner-visible workspace. Actions available in this conversation: ${actions.join("; ")}. For documents, pass a SESSION DATA fileId; never invent IDs.`;
@@ -72,6 +73,7 @@ export default defineDynamic(async (ctx) => {
           inputSchema: workspaceRequestInput,
           execute: executeWorkspaceTool,
         }),
+        ...(tools.preview && presentationTools),
         ...(tools.canvas && {
           add_canvas_component: defineTool({
             description: "Add a system architecture component box with a label to the whiteboard canvas.",

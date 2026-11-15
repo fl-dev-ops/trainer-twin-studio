@@ -26,6 +26,13 @@ test.each([undefined, DisconnectReason.CLIENT_INITIATED, DisconnectReason.SERVER
   create({ current: false }, DisconnectReason, end)(reason);
   expect(end).toHaveBeenCalledTimes(1); expect(end).toHaveBeenCalledWith("disconnected");
 });
+test("only the browser still connected to the voice room consumes workspace commands or reports UI state", () => {
+  expect(source).toContain("const roomState = useConnectionState(room)");
+  expect(source).toContain("const workspaceConnected = roomState === ConnectionState.Connected");
+  expect(source).toContain("active={workspaceConnected && (introSrc ? introDone : true)}");
+  expect(source).toContain("if (!connection || ended || !workspaceConnected) return");
+});
+
 test("a callback during an existing end never initiates another end", () => {
   const end = mock(async (_reason: string) => {});
   create({ current: true }, DisconnectReason, end)(DisconnectReason.CLIENT_INITIATED);
