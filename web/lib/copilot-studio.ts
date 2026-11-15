@@ -153,7 +153,7 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
       });
       return {
         ...base,
-        tools: toolSettings(agent.data),
+        tools: toolSettings(agent.data, agent.kind),
         builder: kind === "roleplay-builder" ? roleplayBuilderFrom(agent.data) : null,
         learners: invites.map((row) => ({ email: row.member.user.email.toLowerCase(), status: row.status })),
       };

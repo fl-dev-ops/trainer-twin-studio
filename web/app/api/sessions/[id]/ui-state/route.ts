@@ -3,15 +3,21 @@ import { practiceRefusals } from "@/lib/practice";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { authorizeBrowserSession } from "@/lib/interview-sessions";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
-const SURFACES = new Set(["code", "canvas", "pdf", "image", "presentation"]);
+const input = z.object({
+  active: z.enum(["code", "canvas", "pdf", "image", "presentation", "choice"]).nullable(),
+  key: z.string().max(120).nullable().optional(),
+  revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+}).strict();
 
 type UiState = {
   active: string | null;
   key?: string | null;
   updatedAt: string;
+  revision: number;
 };
 
 /**
@@ -30,25 +36,20 @@ export async function POST(
     return errorResponse(practiceRefusals.runtimeTokenInvalid());
   }
 
-  const body = await request.json().catch(() => null);
-  if (!body || typeof body !== "object" || Array.isArray(body)) {
+  const parsed = input.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   }
-  const raw = body as { active?: unknown; key?: unknown };
-  const active = typeof raw.active === "string" && SURFACES.has(raw.active) ? raw.active : null;
-  const key = typeof raw.key === "string" ? raw.key.slice(0, 120) : null;
-
-  const uiState: UiState = { active, key, updatedAt: new Date().toISOString() };
-
-  const current = (session.runtimeState ?? {}) as Record<string, unknown>;
-  const nextRuntimeState = { ...current, uiState };
-
-  await db.interviewSession.update({
-    where: { id: session.id },
-    data: { runtimeState: nextRuntimeState as object },
-  });
-
-  return NextResponse.json({ ok: true, uiState });
+  const { active, key = null, revision } = parsed.data;
+  const uiState: UiState = { active, key, revision, updatedAt: new Date().toISOString() };
+  // Patch only this field. A delayed request must not overwrite a newer surface or unrelated runtime state.
+  const applied = await db.$executeRaw`
+    UPDATE "InterviewSession"
+    SET "runtimeState" = jsonb_set(COALESCE("runtimeState", '{}'::jsonb), '{uiState}', ${JSON.stringify(uiState)}::jsonb)
+    WHERE id = ${session.id} AND status IN ('activating', 'active')
+      AND COALESCE(("runtimeState"->'uiState'->>'revision')::numeric, -1) <= ${revision}
+  `;
+  return NextResponse.json({ ok: true, applied: applied > 0, uiState });
 }
 
 export async function GET(

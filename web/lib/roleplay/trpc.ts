@@ -206,7 +206,7 @@ const builderRouter = t.router({
   /** The builder's fields and Before settings of a role play, for editing. */
   get: studioProcedure.input(slugInput).query(async ({ ctx, input }) => {
     const agent = await findRoleplay(ctx.user.orgId, input.slug);
-    return { slug: agent.slug, builder: roleplayBuilderFrom(agent.data), before: beforeSettings(agent.data), tools: toolSettings(agent.data) };
+    return { slug: agent.slug, builder: roleplayBuilderFrom(agent.data), before: beforeSettings(agent.data), tools: toolSettings(agent.data, "ROLEPLAY") };
   }),
 
   /** The org's personas the client can be (Persona Library), with photo and role. */

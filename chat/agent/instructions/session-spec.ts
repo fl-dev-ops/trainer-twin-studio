@@ -3,6 +3,7 @@ import { loadSessionContext } from "../lib/brain";
 import { composeInstructions, FALLBACK_INSTRUCTIONS } from "../lib/compose-instructions";
 import { sessionMode } from "../lib/session-mode";
 import { primeSessionMode } from "../lib/session-mode-lookup";
+import { loadWorkspaceState } from "../lib/workspace-state";
 
 /**
  * The session's instructions (lib/compose-instructions.ts): the platform rules, the session mode's operating
@@ -25,11 +26,13 @@ export default defineDynamic(async (ctx) => {
       const specs = await loadSessionContext(orgId, sessionId, agentSlug, personaSlug, mode, clientTools);
       // The channel and tools ask for the mode later; answer from the context already loaded.
       primeSessionMode(orgId, sessionId, agentSlug, sessionMode(specs));
-      return composeInstructions(specs);
+      return composeInstructions({ ...specs, uiState: null });
     } catch (err) {
       console.error("Failed to load session context for brain grounding:", err);
       return FALLBACK_INSTRUCTIONS;
     }
   });
-  return defineInstructions({ content });
+  const sessionId = attributes.sessionId;
+  const workspace = sessionId ? await loadWorkspaceState(orgId, sessionId) : "";
+  return defineInstructions({ content: `${content}\n\n${workspace}` });
 });

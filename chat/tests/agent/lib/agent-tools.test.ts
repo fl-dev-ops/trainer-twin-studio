@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, test } from "node:test";
-import { formatWorkspaceBlock, NO_TOOLS, toolSettings, workspaceAllowed, type ToolSettings } from "../../../agent/lib/agent-tools";
+import { formatWorkspaceBlock, NO_TOOLS, TOOL_SWITCHED_OFF, toolSettings, workspaceAllowed, type ToolSettings } from "../../../agent/lib/agent-tools";
 import { formatRoleplaySession, type RoleplaySkill } from "../../../agent/lib/roleplay";
 import workspace from "../../../agent/tools/workspace";
+import { executeWorkspaceTool } from "../../../agent/lib/workspace-tools";
 
 process.env.COPILOT_SERVICE_SECRET ??= "test-secret";
 const realFetch = globalThis.fetch;
@@ -33,6 +34,20 @@ describe("tool settings", () => {
     assert.deepEqual(toolSettings(undefined), NO_TOOLS);
     assert.deepEqual(toolSettings({ tools: { codeEditor: true, canvas: "yes" } }), on({ codeEditor: true }));
   });
+  test("legacy interviews without saved switches retain their original workspace, not new clients or twins", () => {
+    const all = on({ canvas: true, codeEditor: true, preview: true, choice: true });
+    for (const type of ["technical", "resume"]) {
+      const legacy = { config: { interview: { type }, tools: [] } };
+      assert.deepEqual(toolSettings(legacy, "ROLEPLAY"), all);
+      for (const tools of [{}, NO_TOOLS, null]) assert.deepEqual(toolSettings({ ...legacy, tools }, "ROLEPLAY"), NO_TOOLS);
+      assert.deepEqual(toolSettings({ ...legacy, tools: { preview: true } }, "ROLEPLAY"), on({ preview: true }));
+      assert.deepEqual(toolSettings(legacy, "TWIN"), NO_TOOLS);
+      assert.deepEqual(toolSettings(legacy), NO_TOOLS);
+      assert.deepEqual(toolSettings({ ...legacy, skill: "# Client" }, "ROLEPLAY"), NO_TOOLS);
+    }
+    assert.deepEqual(toolSettings({}, "ROLEPLAY"), NO_TOOLS);
+    assert.deepEqual(toolSettings({ config: { interview: { type: "unknown" } } }, "ROLEPLAY"), NO_TOOLS);
+  });
 });
 
 describe("workspace tools resolver: a session gets only its switched-on tools", () => {
@@ -46,10 +61,18 @@ describe("workspace tools resolver: a session gets only its switched-on tools", 
   test("multiple choice", async () => {
     assert.deepEqual(await resolve({ choice: true }), [...shared, "get_choice_state", "highlight_choice"].sort());
   });
-  test("preview (PDF) opens through surface only; no slide tools are ever offered", async () => {
-    assert.deepEqual(await resolve({ preview: true }), shared.sort());
-    const all = await resolve({ canvas: true, codeEditor: true, preview: true, choice: true });
-    assert.equal(all?.some((name) => name.includes("presentation")), false);
+  test("preview enables PDF/image/presentation surfaces and slide navigation", async () => {
+    assert.deepEqual(await resolve({ preview: true }), [...shared, "get_presentation_state", "set_presentation_slide", "next_presentation_slide", "previous_presentation_slide"].sort());
+    const withoutPreview = await resolve({ canvas: true, codeEditor: true, choice: true });
+    assert.equal(withoutPreview?.some((name) => name.includes("presentation")), false);
+  });
+  test("a real legacy context offers all supported surfaces and inspection tools", async () => {
+    studioReturns({ config: { interview: { type: "technical", question_counts: { coding: 1, "system-design": 1, mcq: 1 } } } });
+    const resolved = await (workspace as unknown as Record<symbol, (c: unknown) => Promise<unknown>>)[Symbol.for("eve.dynamic")](ctx());
+    const names = Object.keys(resolved as object);
+    for (const name of ["surface", "workspace_request", "get_code_state", "read_code_range", "read_canvas_scene", "get_choice_state"]) {
+      assert.ok(names.includes(name), name);
+    }
   });
   test("nothing on, no settings, or a failed lookup: no workspace tools", async () => {
     assert.equal(await resolve({ canvas: false }), null);
@@ -65,28 +88,61 @@ describe("backstop: a call is allowed only when its switch is on", () => {
     assert.equal(workspaceAllowed(on({ canvas: true }), "read_canvas_scene", {}), true);
     assert.equal(workspaceAllowed(on({ canvas: true }), "run_code", {}), false);
     assert.equal(workspaceAllowed(on({ choice: true }), "get_choice_state", {}), true);
+    assert.equal(workspaceAllowed(on({ preview: true }), "start_resume_question", {}), true);
+    assert.equal(workspaceAllowed(on({ codeEditor: true }), "start_resume_question", {}), false);
+    assert.equal(workspaceAllowed(NO_TOOLS, "start_resume_question", {}), false);
   });
   test("surface actions follow their switch; close_surface whenever anything is on; unknown actions refused", () => {
     const pdf = on({ preview: true });
     assert.equal(workspaceAllowed(pdf, "surface", { action: "open_pdf" }), true);
     assert.equal(workspaceAllowed(pdf, "surface", { action: "highlight_document" }), true);
     assert.equal(workspaceAllowed(pdf, "surface", { action: "open_whiteboard" }), false);
-    assert.equal(workspaceAllowed(pdf, "surface", { action: "open_image" }), false);
-    assert.equal(workspaceAllowed(pdf, "surface", { action: "open_presentation" }), false);
+    assert.equal(workspaceAllowed(pdf, "surface", { action: "open_image" }), true);
+    assert.equal(workspaceAllowed(pdf, "surface", { action: "open_presentation" }), true);
     assert.equal(workspaceAllowed(pdf, "surface", { action: "close_surface" }), true);
     assert.equal(workspaceAllowed(NO_TOOLS, "surface", { action: "close_surface" }), false);
     assert.equal(workspaceAllowed(pdf, "surface", { action: "something_new" }), false);
   });
-  test("workspace_request follows its method's switch; slides and unknown methods refused", () => {
+  test("workspace_request follows its method's switch; unknown methods are refused", () => {
     const code = on({ codeEditor: true });
     assert.equal(workspaceAllowed(code, "workspace_request", { method: "workspace.code" }), true);
     assert.equal(workspaceAllowed(code, "workspace_request", { method: "workspace.canvas" }), false);
     assert.equal(workspaceAllowed(on({ canvas: true }), "workspace_request", { method: "workspace.whiteboard" }), true);
     assert.equal(workspaceAllowed(code, "workspace_request", { method: "workspace.presentation" }), false);
+    assert.equal(workspaceAllowed(on({ preview: true }), "workspace_request", { method: "workspace.presentation" }), true);
     assert.equal(workspaceAllowed(code, "workspace_request", { method: "anything" }), false);
   });
   test("unknown tools are refused", () => {
-    assert.equal(workspaceAllowed(on({ canvas: true, codeEditor: true, preview: true, choice: true }), "next_presentation_slide", {}), false);
+    assert.equal(workspaceAllowed(on({ canvas: true, codeEditor: true, preview: true, choice: true }), "invented_tool", {}), false);
+    assert.equal(workspaceAllowed(on({ preview: true }), "next_presentation_slide", {}), true);
+    assert.equal(workspaceAllowed(NO_TOOLS, "next_presentation_slide", {}), false);
+  });
+});
+
+describe("legacy workspace calls reach Studio instead of being silently disabled", () => {
+  test("surface opens and claim-backed resume questions use the same command transport", async () => {
+    const sent: Record<string, unknown>[] = [];
+    globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+      const payload = JSON.parse(String(init?.body));
+      if (payload.action === "getSessionContext") return new Response(JSON.stringify({ agent: { kind: "ROLEPLAY", data: { config: { interview: { type: "resume" } } } } }));
+      sent.push(payload);
+      return new Response(JSON.stringify({ status: "completed", result: { ok: true } }));
+    }) as typeof fetch;
+    const context = ctx();
+    for (const action of ["open_code_editor", "open_whiteboard", "open_choice", "open_pdf"]) {
+      const result = await executeWorkspaceTool({ action, payload: {} }, { ...context, toolName: "surface", callId: `call-${action}` });
+      assert.deepEqual(result, { status: "completed", result: { ok: true } });
+    }
+    await executeWorkspaceTool({ claimId: "claim-1", question: "What did you build?" }, { ...context, toolName: "start_resume_question", callId: "resume-call" });
+    assert.equal(sent.length, 5);
+    for (const payload of sent) assert.equal(payload.action, "enqueueWorkspaceCommand");
+    assert.equal(sent[4].tool, "start_resume_question");
+    assert.deepEqual(sent[4].input, { claimId: "claim-1", question: "What did you build?" });
+  });
+  test("an explicit disabled preview still blocks a resume question", async () => {
+    studioReturns({ config: { interview: { type: "resume" } }, tools: NO_TOOLS });
+    const result = await executeWorkspaceTool({ claimId: "claim-1", question: "What did you build?" }, { ...ctx(), toolName: "start_resume_question", callId: "blocked" });
+    assert.deepEqual(result, TOOL_SWITCHED_OFF);
   });
 });
 

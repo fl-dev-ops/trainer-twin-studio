@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { FileUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PDFViewer, type PDFViewerHandle } from "@/components/extend/pdf-viewer";
+import { useWorkspaceHandlers } from "@/lib/livekit-workspaces";
 
 export function PdfViewerSurface({
   sourceUrl,
@@ -24,23 +25,29 @@ export function PdfViewerSurface({
   onHighlightResult?: (requestId: string, status: "highlighted" | "not_found" | "viewer_unavailable" | "document_mismatch") => void;
   title?: string;
 }) {
+  const register = useWorkspaceHandlers();
   const fileInput = useRef<HTMLInputElement>(null);
   const viewerRef = useRef<PDFViewerHandle>(null);
-  const [source, setSource] = useState<string | undefined>(sourceUrl);
+  const [localFile, setLocalFile] = useState<{ url: string; name: string; originalSource?: string }>();
   const [loadedSource, setLoadedSource] = useState<string | undefined>();
-  const [fileName, setFileName] = useState(
-    title || (sourceUrl ? decodeURIComponent(sourceUrl.split("/").pop()?.split("?")[0] || "Document.pdf") : "Document.pdf"),
-  );
+  const local = localFile?.originalSource === sourceUrl ? localFile : undefined;
+  const source = local?.url ?? sourceUrl;
+  const fileName = local?.name ?? title ?? (sourceUrl ? decodeURIComponent(sourceUrl.split("/").pop()?.split("?")[0] || "Document.pdf") : "Document.pdf");
+  useEffect(() => () => { if (localFile) URL.revokeObjectURL(localFile.url); }, [localFile]);
 
-  useEffect(() => {
-    if (sourceUrl) {
-      setSource(sourceUrl);
+  useEffect(() => register("workspace.preview", async (raw) => {
+    const request = JSON.parse(raw) as { action?: string; payload?: { query?: unknown } };
+    if (request.action === "get_state") return JSON.stringify({ ok: true, result: { ready: true } });
+    const query = request.payload?.query;
+    if (request.action !== "highlight" || typeof query !== "string" || !query.trim()) throw new Error("Invalid PDF highlight request");
+    for (const delay of [0, 100, 300, 600]) {
+      if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+      const status = await viewerRef.current?.searchExact?.(query) ?? "viewer_unavailable";
+      if (status === "highlighted") return JSON.stringify({ ok: true, result: { status } });
+      if (status === "not_found") throw new Error("Text was not found in the PDF");
     }
-  }, [sourceUrl]);
-
-  useEffect(() => {
-    if (title) setFileName(title);
-  }, [title]);
+    throw new Error("PDF viewer is not ready to highlight text");
+  }, () => Boolean(source && loadedSource === source)), [loadedSource, register, source]);
 
   useEffect(() => {
     if (!highlightQuery || exactHighlight) return;
@@ -98,8 +105,7 @@ export function PdfViewerSurface({
           const file = event.target.files?.[0];
           event.currentTarget.value = "";
           if (!file) return;
-          setSource(URL.createObjectURL(file));
-          setFileName(file.name);
+          setLocalFile({ url: URL.createObjectURL(file), name: file.name, originalSource: sourceUrl });
         }}
       />
       <header className="flex min-h-12 shrink-0 items-center gap-2 border-b bg-card px-3">

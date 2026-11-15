@@ -18,7 +18,7 @@ export async function updateRoleplay(
   const agent = await db.agent.findFirst({ where: { orgId, slug, kind: "ROLEPLAY", archivedAt: null }, select: { id: true, data: true } });
   if (!agent) throw new ScenarioIngestError(`Role play "${slug}" was not found`, 404);
   const before = { ...beforeSettings(agent.data), ...patch.before };
-  const tools = { ...toolSettings(agent.data), ...patch.tools };
+  const tools = { ...toolSettings(agent.data, "ROLEPLAY"), ...patch.tools };
   const data = (agent.data && typeof agent.data === "object" ? agent.data : {}) as Record<string, unknown>;
 
   if (data.source !== ROLEPLAY_SOURCE) {
@@ -30,7 +30,7 @@ export async function updateRoleplay(
       const latest = (fresh.data && typeof fresh.data === "object" ? fresh.data : {}) as Record<string, unknown>;
       await tx.agent.update({
         where: { id: agent.id },
-        data: { data: { ...latest, before: { ...beforeSettings(fresh.data), ...patch.before }, tools: { ...toolSettings(fresh.data), ...patch.tools } } },
+        data: { data: { ...latest, before: { ...beforeSettings(fresh.data), ...patch.before }, tools: { ...toolSettings(fresh.data, "ROLEPLAY"), ...patch.tools } } },
       });
     });
     return { slug, changed: true };

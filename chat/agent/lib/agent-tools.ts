@@ -2,7 +2,8 @@ import { studioFetch } from "./studio";
 
 /**
  * Which workspace surfaces an agent (role play or twin) may use: Agent.data.tools, saved from the role play's Tools tab.
- * Missing or partial settings are off. The web parses the same shape (web/lib/agent-tools.ts).
+ * Missing or partial switches are off, except legacy interviews with no tools field retain their original workspace.
+ * The web resolves the same policy (web/lib/agent-tools.ts).
  */
 export type ToolSettings = { canvas: boolean; codeEditor: boolean; preview: boolean; choice: boolean };
 export const NO_TOOLS: ToolSettings = { canvas: false, codeEditor: false, preview: false, choice: false };
@@ -10,8 +11,15 @@ export const NO_TOOLS: ToolSettings = { canvas: false, codeEditor: false, previe
 const asRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 
-export function toolSettings(agentData: unknown): ToolSettings {
-  const tools = asRecord(asRecord(agentData).tools);
+export function toolSettings(agentData: unknown, kind?: string | null): ToolSettings {
+  const data = asRecord(agentData);
+  const interview = asRecord(asRecord(data.config).interview);
+  // Older interviews predate the Tools tab; do not apply its opt-in default to them.
+  if (kind === "ROLEPLAY" && data.tools === undefined && data.skill === undefined &&
+      (interview.type === "technical" || interview.type === "resume")) {
+    return { canvas: true, codeEditor: true, preview: true, choice: true };
+  }
+  const tools = asRecord(data.tools);
   return {
     canvas: tools.canvas === true,
     codeEditor: tools.codeEditor === true,
@@ -22,6 +30,11 @@ export function toolSettings(agentData: unknown): ToolSettings {
 
 /** Which switch each workspace tool belongs to. `surface` and `workspace_request` are checked by action / method. */
 const TOOL_SWITCH: Record<string, keyof ToolSettings> = {
+  start_resume_question: "preview",
+  get_presentation_state: "preview",
+  set_presentation_slide: "preview",
+  next_presentation_slide: "preview",
+  previous_presentation_slide: "preview",
   add_canvas_component: "canvas",
   clear_canvas: "canvas",
   highlight_canvas_element: "canvas",
@@ -40,15 +53,18 @@ export const SURFACE_ACTIONS: Record<string, keyof ToolSettings> = {
   open_code_editor: "codeEditor",
   open_choice: "choice",
   open_pdf: "preview",
+  open_image: "preview",
+  open_presentation: "preview",
   highlight_pdf: "preview",
   highlight_document: "preview",
 };
-/** The browser workspace methods `workspace_request` may reach, by switch. Slides have no switch yet. */
+/** The browser workspace methods `workspace_request` may reach, by switch. */
 const METHOD_SWITCH: Record<string, keyof ToolSettings> = {
   "workspace.code": "codeEditor",
   "workspace.canvas": "canvas",
   "workspace.whiteboard": "canvas",
   "workspace.choice": "choice",
+  "workspace.presentation": "preview",
 };
 
 export const anyToolOn = (tools: ToolSettings) => tools.canvas || tools.codeEditor || tools.preview || tools.choice;
@@ -99,8 +115,8 @@ export function sessionToolSettings(ctx: SessionCtx): Promise<ToolSettings> {
   const key = `${orgId}:${sessionId ?? ""}:${agentSlug ?? ""}`;
   const cached = cache.get(key);
   if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.value;
-  const value = studioFetch<{ agent?: { data?: unknown } | null }>(orgId, { action: "getSessionContext", sessionId, agentSlug })
-    .then((result) => toolSettings(result.agent?.data))
+  const value = studioFetch<{ agent?: { kind?: string | null; data?: unknown } | null }>(orgId, { action: "getSessionContext", sessionId, agentSlug })
+    .then((result) => toolSettings(result.agent?.data, result.agent?.kind))
     .catch(() => {
       cache.delete(key);
       return NO_TOOLS;
@@ -123,7 +139,7 @@ export function formatWorkspaceBlock(tools: ToolSettings, { client }: { client: 
     tools.codeEditor &&
       "- Code editor: open it with surface({ action: \"open_code_editor\", payload: { questionId, question, language, starterCode, readOnly } }) when the conversation calls for code. Read what they wrote with get_code_state or read_code_range before reacting, and run it with run_code.",
     tools.preview &&
-      "- Documents: show a PDF the learner attached with surface({ action: \"open_pdf\", payload: { fileId } }) and point at a phrase with surface({ action: \"highlight_document\", payload: { fileId, highlightQuery } }). Read it first with read_document. Only use fileIds from ATTACHED ARTIFACTS; never invent one.",
+      "- Preview: show an attached PDF with surface({ action: \"open_pdf\", payload: { fileId } }), an image with open_image, or slides with open_presentation. Read PDFs with read_document and highlight a phrase with surface({ action: \"highlight_document\", payload: { fileId, highlightQuery } }). Navigate slides with get_presentation_state, set_presentation_slide (zero-based slide_index), next_presentation_slide, or previous_presentation_slide. Only use real fileIds from ATTACHED ARTIFACTS; never invent one.",
     tools.choice &&
       "- Multiple choice: put a short question on screen with surface({ action: \"open_choice\", payload: { questionId, question, options: [{ id, text }], correctOptionId } }). Call get_choice_state before reacting to their pick and trust its isCorrect.",
   ].filter(Boolean);
