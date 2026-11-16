@@ -1,133 +1,44 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useVoiceAssistant } from "@livekit/components-react";
-import { ArrowUp, X } from "lucide-react";
+import { X } from "lucide-react";
+import { AttachedTurn, ConversationBubble, ConversationScroll, type AttachedFiles } from "@/components/conversation/parts";
+import { CallComposer } from "@/components/conversation/controls";
 import type { Entry } from "@/lib/session-transcript";
 import { cn } from "@/lib/utils";
 
-/** Live chat (V2 prototype): the conversation so far and a message box to the trainer. */
-export function SessionSidebar({
-  entries,
-  trainerName = "Trainer",
-  onSendMessage,
-  onClose,
-  disabled = false,
-  className,
-}: {
+/** The twin's conversation presentation, fed by the existing role-play transcript and send handler. */
+export function SessionSidebar({ entries, trainerName = "Trainer", onSendMessage, onClose, disabled = false, className, liveText = "", files }: {
   entries: Entry[];
   trainerName?: string;
-  onSendMessage?: (text: string) => void;
+  onSendMessage?: (text: string) => void | Promise<void>;
   onClose?: () => void;
   disabled?: boolean;
   className?: string;
+  liveText?: string;
+  files?: AttachedFiles;
 }) {
   const { state } = useVoiceAssistant();
-  const isSpeaking = state === "speaking";
-  const isThinking = state === "thinking";
-  const [inputText, setInputText] = useState("");
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [entries, isSpeaking, isThinking]);
-
-  function handleSend() {
-    const trimmed = inputText.trim();
-    if (disabled || !trimmed) return;
-    onSendMessage?.(trimmed);
-    setInputText("");
-  }
-
-  return (
-    <aside
-      aria-label="Session chat"
-      className={cn(
-        // A real border: the slide-in wrapper clips anything drawn outside the box.
-        "flex h-full min-h-0 w-[360px] flex-col overflow-hidden rounded-2xl border bg-card",
-        className,
-      )}
-    >
-      <header className="flex h-14 shrink-0 items-center justify-between border-b px-4">
-        <h2 className="text-base font-semibold tracking-title">Chat</h2>
-        {onClose ? (
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close chat"
-            className="grid size-8 place-items-center rounded-full text-foreground/80 outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            <X className="size-[18px]" />
-          </button>
-        ) : null}
-      </header>
-
-      <div ref={scrollRef} aria-live="polite" className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-        {entries.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center px-4 text-center text-muted-foreground">
-            <p className="text-sm font-medium text-foreground/80">No messages yet</p>
-            <p className="mt-1 text-xs">What you and {trainerName} say appears here.</p>
-          </div>
-        ) : (
-          entries.map((entry, index) => {
-            const isUser = entry.role === "user";
-            return (
-              <div key={index} className={cn("flex flex-col gap-1.5", isUser && "items-end")}>
-                <span className="text-xs text-foreground/70">{isUser ? "You" : trainerName}</span>
-                <p
-                  className={cn(
-                    "max-w-[92%] rounded-2xl px-3.5 py-2.5 text-body leading-body whitespace-pre-wrap",
-                    isUser ? "bg-card ring-1 ring-border ring-inset" : "bg-muted",
-                  )}
-                >
-                  {entry.text}
-                </p>
-              </div>
-            );
-          })
-        )}
-
-        {isSpeaking || isThinking ? (
-          <p className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span aria-hidden className="flex gap-1">
-              {[0, 0.2, 0.4].map((delay) => (
-                <span
-                  key={delay}
-                  style={{ "--delay": `${delay}s` } as CSSProperties}
-                  className={cn("size-1 animate-pulse rounded-full [animation-delay:var(--delay)]", isSpeaking ? "bg-success" : "bg-caution")}
-                />
-              ))}
-            </span>
-            {trainerName} is {isSpeaking ? "speaking" : "thinking"}…
-          </p>
-        ) : null}
+  const last = entries.at(-1);
+  const streaming = state === "speaking" && liveText && !(last?.role === "trainer" && last.text === liveText);
+  return <section aria-label="Session transcript" className={cn("flex h-full min-h-0 w-full flex-col", className)}>
+    <header className="flex shrink-0 items-center justify-between gap-3 px-1 py-2">
+      <h2 className="text-xs font-medium text-muted-foreground">Transcript</h2>
+      {onClose && <button type="button" onClick={onClose} aria-label="Close transcript" className="grid size-10 place-items-center rounded-full text-muted-foreground outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"><X className="size-4" /></button>}
+    </header>
+    <ConversationScroll className="px-1">
+      <div aria-live="polite" className="flex flex-col gap-4 py-4">
+        {!entries.length && !streaming && <p className="py-5 text-center text-sm text-muted-foreground">What you and {trainerName} say appears here.</p>}
+        {entries.map((entry, index) => entry.role === "user" && entry.text.includes("[ATTACHED")
+          ? <AttachedTurn key={index} text={entry.text} files={files} />
+          : <div key={index} className={cn("flex flex-col gap-1.5", entry.role === "user" && "items-end")}>
+              <span className="sr-only">{entry.role === "user" ? "You" : trainerName}</span>
+              <ConversationBubble from={entry.role === "user" ? "you" : "agent"}>{entry.text}</ConversationBubble>
+            </div>)}
+        {streaming && <ConversationBubble from="agent">{liveText}</ConversationBubble>}
+        {state === "thinking" && <p role="status" className="text-sm text-muted-foreground"><span className="shimmer">Thinking…</span></p>}
       </div>
-
-      <form
-        className="flex shrink-0 items-center gap-2 border-t p-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          handleSend();
-        }}
-      >
-        <input
-          type="text"
-          value={inputText}
-          disabled={disabled}
-          onChange={(e) => setInputText(e.target.value)}
-          placeholder={disabled ? "Connecting to trainer…" : "Message the trainer…"}
-          aria-label="Message the trainer"
-          className="h-11 min-w-0 flex-1 rounded-full bg-card px-4 text-sm ring-1 ring-border outline-none ring-inset placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-        />
-        <button
-          type="submit"
-          disabled={disabled || !inputText.trim()}
-          aria-label="Send message"
-          className="grid size-9 shrink-0 place-items-center rounded-full bg-foreground text-background outline-none transition-opacity hover:opacity-85 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-35"
-        >
-          <ArrowUp className="size-[18px]" />
-        </button>
-      </form>
-    </aside>
-  );
+    </ConversationScroll>
+    {onSendMessage && <div className="flex shrink-0 justify-center pt-3"><CallComposer name={trainerName} onSend={onSendMessage} disabled={disabled} /></div>}
+  </section>;
 }

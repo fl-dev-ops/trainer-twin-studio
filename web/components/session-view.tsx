@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import { toast } from "sonner";
 import { Check, LoaderCircle, Play, ScreenShare, Upload as UploadIcon, Volume2 } from "lucide-react";
 import { type AgentContextUpload, BEFORE_UPLOAD_ACCEPT, beforeUploadProblem, DURING_UPLOAD_ACCEPT, duringUploadProblem } from "@/lib/context-upload";
@@ -42,14 +42,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AgentTile } from "@/components/session/agent-tile";
-import { Aurora } from "@/components/session/aurora";
+import { CallComposer } from "@/components/conversation/controls";
+import { ConversationWaves } from "@/components/conversation/waves";
+import { SessionConversationLayout } from "@/components/session/session-conversation-layout";
 import { CandidateTile } from "@/components/session/candidate-tile";
 import { SessionControlBar } from "@/components/session/session-control-bar";
 import { SessionSidebar } from "@/components/session/session-sidebar";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ReportIssueButton } from "@/components/report-issue-button";
-import { LiveSubtitles } from "@/components/session/live-subtitles";
 import { ChoicePanel } from "@/components/session/choice";
 import { CodeEditor } from "@/components/session/code-editor";
 import { Whiteboard } from "@/components/session/whiteboard";
@@ -199,7 +200,9 @@ export function SessionView({
   const [screenShareError, setScreenShareError] = useState("");
   const screenShareAutoPromptedRef = useRef(false);
   const screenShareValidationPendingRef = useRef(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mobileTranscriptOpen, setMobileTranscriptOpen] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(false);
   const isMobile = useIsMobile();
   const [latestSpokenText, setLatestSpokenText] = useState("");
   const [elapsed, setElapsed] = useState(0);
@@ -1051,20 +1054,20 @@ export function SessionView({
       <div className="flex h-dvh w-dvw flex-col overflow-hidden bg-panel text-foreground">
         <SessionHeader title={title} linkHome={!sessionCode} />
         <main className="flex min-h-0 flex-1 px-4 pb-20 sm:px-6">
-          <Stage>
-            <div role="status" className="relative flex size-full flex-col items-center justify-center gap-5 p-6 text-center text-night">
-              <span className="relative grid size-24 place-items-center rounded-full bg-white/80 shadow-elevation-2">
-                <span aria-hidden className="absolute inset-0 animate-spin rounded-full border-2 border-night/10 border-t-night/60 motion-reduce:animate-none" />
+          <div className="flex min-h-0 flex-1">
+            <div role="status" className="relative flex size-full flex-col items-center justify-center gap-5 p-6 text-center">
+              <span className="relative grid size-24 place-items-center rounded-full bg-card shadow-elevation-2">
+                <span aria-hidden className="absolute inset-0 animate-spin rounded-full border-2 border-foreground/10 border-t-foreground/60 motion-reduce:animate-none" />
                 <span className="text-4xl font-semibold tabular-nums">{countdown}</span>
               </span>
               <div className="flex max-w-sm flex-col gap-1.5">
                 <h2 className="text-xl font-semibold tracking-title">Get ready</h2>
-                <p className="text-sm text-night/70">
+                <p className="text-sm text-muted-foreground">
                   {trainerName} will start the conversation in a moment. Find a quiet spot and check your mic.
                 </p>
               </div>
             </div>
-          </Stage>
+          </div>
         </main>
       </div>
     );
@@ -1214,7 +1217,7 @@ export function SessionView({
   const elapsedLabel = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
 
   return (
-    <div className="flex h-dvh w-dvw flex-col overflow-hidden bg-panel text-foreground">
+    <div className="flex h-dvh w-dvw flex-col overflow-hidden bg-background text-foreground">
       <RoomContext.Provider value={room}>
         <LiveKitWorkspaceProvider
           sessionId={connection?.sessionId}
@@ -1233,8 +1236,7 @@ export function SessionView({
             {sessionCode ? <ReportIssueButton /> : null}
           </SessionHeader>
 
-          {/* Main Body: Stage (Left) & Chat Sidebar (Right) — EQUAL HEIGHT */}
-          <main className="relative flex min-h-0 flex-1 gap-4 px-4 sm:px-6">
+          <main className="relative flex min-h-0 flex-1 px-4 sm:px-6">
             {/* Blocking overlay when screen sharing is stopped */}
             {screenShareRequired && connected && !isScreenSharing && screenShareAttempted && !isScreenSharePending && (
               <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/30 p-6 backdrop-blur-sm">
@@ -1262,16 +1264,8 @@ export function SessionView({
               </div>
             )}
 
-            {/* Stage: the prototype's pastel wash, with the tiles centred or a workspace beside them. */}
-            <Stage aurora={!surface}>
-              <div
-                className={cn(
-                  "relative flex min-h-0 w-full max-md:flex-1",
-                  surface ? "gap-3 p-3" : "flex-col items-center justify-start gap-6 overflow-y-auto p-6 sm:flex-row sm:gap-8 md:justify-center",
-                )}
-              >
-                {/* Surface Presentation Mode (Left Large Workspace) */}
-                {surface && (
+            <SessionConversationLayout
+              workspace={surface && (
                   <motion.section
                     key={surface.key}
                     aria-label="Session workspace"
@@ -1280,7 +1274,7 @@ export function SessionView({
                     exit={reduceMotion ? undefined : { opacity: 0, scale: 0.98 }}
                     transition={reduceMotion ? { duration: 0 } : { duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
                     // Workspaces are dark-themed tools (code editor, whiteboard), so they keep a dark scope.
-                    className="dark flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl bg-night text-foreground shadow-elevation-3"
+                    className="dark flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border bg-night text-foreground"
                   >
                     <div className="min-h-0 flex-1">
                       {surface.tool === "code" && (
@@ -1362,91 +1356,35 @@ export function SessionView({
                       )}
                     </div>
                   </motion.section>
-                )}
-
-                {/* Tiles: centred side by side, or a small stack beside the workspace. */}
-                <div className={surface ? "flex w-[220px] shrink-0 flex-col gap-3" : "contents"}>
-                  {/* Side by side the tiles share the row and shrink to fit; the intro video gets twice the share. */}
-                  <div
-                    className={cn(
-                      "w-full shrink-0",
-                      surface
-                        ? "aspect-[4/3]"
-                        : introSrc && !introDone
-                          ? "aspect-video max-w-[640px] sm:min-w-0 sm:flex-[2_1_0]"
-                          : "aspect-[4/3] max-w-[340px] sm:min-w-0 sm:flex-[1_1_0]",
-                    )}
-                  >
-                    {introSrc && !introDone ? (
-                      <ScenarioIntro
-                        key={agent}
-                        src={introPlaybackSrc ?? introSrc}
-                        onFinished={() => setIntroDone(true)}
-                        className="h-full min-h-0 w-full"
-                      />
-                    ) : (
-                      <AgentTile persona={persona} photoUrl={agentPhotos[agent] ?? null} compact={surface !== null} />
-                    )}
-                  </div>
-                  <div className={cn("w-full shrink-0 aspect-[4/3]", !surface && "max-w-[340px] sm:min-w-0 sm:flex-[1_1_0]")}>
-                    <CandidateTile name={userName} compact={surface !== null} />
-                  </div>
-                </div>
-              </div>
-
-              {/* YouTube / Prime Video Style Streaming Subtitles */}
-              <LiveSubtitles
-                text={latestSpokenText}
-                visible={!sidebarOpen}
-                className="max-md:pointer-events-auto max-md:relative max-md:bottom-auto max-md:left-auto max-md:z-10 max-md:max-h-[30%] max-md:w-full max-md:max-w-none max-md:shrink-0 max-md:translate-x-0 max-md:overflow-y-auto max-md:px-3 max-md:pb-3"
-              />
-            </Stage>
-
-            {/* Bottom sheet on mobile; the desktop chat stays beside the stage. */}
-            {isMobile ? (
-              <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-                <SheetContent side="bottom" showCloseButton={false} className="h-[70dvh]! max-h-[85dvh] gap-0 overflow-hidden">
-                  <SheetTitle className="sr-only">Chat</SheetTitle>
-                  <SheetDescription className="sr-only">Your conversation with {trainerName}. Send a message or close chat to return to the call.</SheetDescription>
-                  <SessionSidebar
-                    entries={entries}
-                    trainerName={trainerName}
-                    onSendMessage={handleSendMessage}
-                    onClose={() => setSidebarOpen(false)}
-                    disabled={!connected}
-                    className="w-full rounded-none border-0"
-                  />
-                </SheetContent>
-              </Sheet>
-            ) : <AnimatePresence initial={false}>
-              {sidebarOpen && (
-                <motion.div
-                  initial={reduceMotion ? false : { opacity: 0, width: 0 }}
-                  animate={{ opacity: 1, width: 360 }}
-                  exit={reduceMotion ? undefined : { opacity: 0, width: 0 }}
-                  transition={reduceMotion ? { duration: 0 } : { duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-                  className="shrink-0 overflow-hidden"
-                >
-                  <SessionSidebar
-                    entries={entries}
-                    trainerName={trainerName}
-                    onSendMessage={handleSendMessage}
-                    onClose={() => setSidebarOpen(false)}
-                    disabled={!connected}
-                    className="h-full"
-                  />
-                </motion.div>
               )}
-            </AnimatePresence>}
+              portrait={introSrc && !introDone ? <ScenarioIntro key={agent} src={introPlaybackSrc ?? introSrc} onFinished={() => setIntroDone(true)} className="h-full min-h-0 w-full" />
+                : <AgentTile persona={persona} photoUrl={agentPhotos[agent] ?? null} compact={Boolean(surface)} />}
+              selfView={<CandidateTile name={userName} compact />}
+              transcript={<SessionSidebar entries={entries} liveText={latestSpokenText} trainerName={trainerName}
+                onClose={() => setSidebarOpen(false)} files={new Map(contextList.map(file => [file.id, { name: file.name, mediaType: null }]))} />}
+              transcriptOpen={sidebarOpen} name={trainerName} time={elapsedLabel}
+            />
+            {isMobile && surface && <Sheet open={mobileTranscriptOpen} onOpenChange={setMobileTranscriptOpen}>
+              <SheetContent side="bottom" showCloseButton={false} className="h-[70dvh]! max-h-[85dvh] gap-0 overflow-hidden px-4 pb-6">
+                <SheetTitle className="sr-only">Transcript</SheetTitle>
+                <SheetDescription className="sr-only">Your conversation with {trainerName}. Close to return to your workspace.</SheetDescription>
+                <SessionSidebar entries={entries} liveText={latestSpokenText} trainerName={trainerName} onSendMessage={handleSendMessage}
+                  onClose={() => setMobileTranscriptOpen(false)} disabled={!connected}
+                  files={new Map(contextList.map(file => [file.id, { name: file.name, mediaType: null }]))} />
+              </SheetContent>
+            </Sheet>}
           </main>
 
-          <footer className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 px-3 py-2 md:h-20 md:grid-cols-[1fr_auto_1fr] md:gap-3 md:px-6 md:py-0">
-            <time className="col-span-2 text-center font-mono text-sm tabular-nums md:col-span-1 md:text-left" aria-label="Session time">{elapsedLabel}</time>
+          <footer className="relative isolate flex shrink-0 flex-col items-center gap-3 overflow-hidden bg-background px-4 pt-4 pb-6">
+            <ConversationWaves active={workspaceConnected} />
+            {composerOpen && <CallComposer autoFocus name={trainerName} onSend={handleSendMessage} disabled={!connected} onClose={() => setComposerOpen(false)} />}
             <SessionControlBar
               room={room}
               isConnected={connected}
-              chatOpen={sidebarOpen}
-              onChatToggle={() => setSidebarOpen((v) => !v)}
+              chatOpen={isMobile && surface ? mobileTranscriptOpen : sidebarOpen}
+              onChatToggle={() => isMobile && surface ? setMobileTranscriptOpen(v => !v) : setSidebarOpen(v => !v)}
+              composerOpen={composerOpen}
+              onComposerToggle={() => setComposerOpen(v => !v)}
               onEnd={() => void handleDisconnect("manual")}
               onAttach={attachDuringSession ? () => attachInput.current?.click() : undefined}
               attaching={attaching}
@@ -1499,16 +1437,6 @@ export function SessionView({
 }
 
 const GET_READY_SECONDS = 5;
-/** The stage card: #f7f7f7 with the prototype's aurora, light in both themes like the role-play cards. */
-function Stage({ aurora = true, children }: { aurora?: boolean; children: React.ReactNode }) {
-  return (
-    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl bg-stage md:flex-row">
-      {aurora ? <Aurora className="pointer-events-none absolute inset-0 size-full opacity-80" /> : null}
-      {children}
-    </div>
-  );
-}
-
 /** Session top bar (V2 prototype): logo, the scenario in the middle, actions on the right. */
 function SessionHeader({ title, linkHome, children }: { title: string; linkHome: boolean; children?: React.ReactNode }) {
   const logo = (

@@ -4,9 +4,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowUp, Flag, LoaderCircle, Mic, Paperclip, Volume2 } from "lucide-react";
-import { RoomAudioRenderer, RoomContext, useLocalParticipant, useStartAudio, useTrackToggle, useVoiceAssistant } from "@livekit/components-react";
-import { type LocalAudioTrack, ParticipantEvent, type RemoteAudioTrack, Room, RoomEvent, Track, type TranscriptionSegment } from "livekit-client";
+import { Flag, LoaderCircle, Mic, Paperclip, Volume2 } from "lucide-react";
+import { CallComposer, CallControlButton } from "@/components/conversation/controls";
+import { ConversationScroll } from "@/components/conversation/parts";
+import { micProblem, useCallMicrophone } from "@/hooks/use-call-microphone";
+import { RoomAudioRenderer, RoomContext, useLocalParticipant, useStartAudio, useVoiceAssistant } from "@livekit/components-react";
+import { type LocalAudioTrack, type RemoteAudioTrack, Room, RoomEvent, type TranscriptionSegment } from "livekit-client";
 import {
   ArrowUpRightIcon,
   CallEndedIcon,
@@ -40,8 +43,6 @@ type Phase = "ready" | "connecting" | "live" | "ended" | "leaving" | "error";
 type Connection = { sessionId: string; runtimeToken: string };
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-const CONTROL =
-  "grid size-[54px] place-items-center rounded-full outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 [&_svg]:size-[22px]";
 const ignoreSurface = () => undefined;
 
 /** A failure retrying won't fix (4xx). */
@@ -96,15 +97,6 @@ export type LearnerCall = {
   onEnded: (result: CallResult) => void;
 };
 
-/** Why the mic couldn't start, in words the trainer can act on; `retry` is what to do next ("click the mic"). */
-function micProblem(error: unknown, retry = "click the mic") {
-  const name = error instanceof Error ? error.name : "";
-  if (name === "NotAllowedError") return `The browser blocked the microphone. Allow it for this site, then ${retry}.`;
-  if (name === "NotReadableError" || name === "AbortError") return `The microphone is busy (another app or tab may be using it). Close that, then ${retry}.`;
-  if (name === "NotFoundError") return `No microphone was found. Connect one, then ${retry}.`;
-  return `The microphone could not start${error instanceof Error && error.message ? `: ${error.message}` : ""}. Then ${retry}.`;
-}
-
 export function CalibrationCall(props: CallProps) {
   const room = useMemo(
     () => new Room({ adaptiveStream: true, audioCaptureDefaults: { autoGainControl: true, echoCancellation: true, noiseSuppression: true } }),
@@ -126,18 +118,15 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
   const [error, setError] = useState("");
   const [connection, setConnection] = useState<Connection | null>(null);
   const [turns, setTurns] = useState<CalibrationTurn[]>([]);
+  /** Files attached this call, resolved in both live and saved transcript cards. */
+  const [attachedFiles, setAttachedFiles] = useState<Map<string, { name: string; mediaType: string | null }>>(new Map());
   const [liveText, setLiveText] = useState("");
   const [seconds, setSeconds] = useState(0);
   // The mic button is LiveKit's (as the learner session's): it reads the real track, so it can't drift from it.
-  const { toggle: toggleMic, enabled: micOn, pending: micPending } = useTrackToggle({
-    room,
-    source: Track.Source.Microphone,
-    onDeviceError: (micError) => toast.error(micProblem(micError)),
-  });
+  const { enabled: micOn, pending: micPending, onClick: onMicClick } = useCallMicrophone(room);
   const muted = !micOn;
   /** Typing instead of speaking: the message box above the call controls. */
   const [composerOpen, setComposerOpen] = useState(false);
-  const [draft, setDraft] = useState("");
   const [confirmEnd, setConfirmEnd] = useState(false);
   /** The 5s "Get ready" before the twin speaks (null: over); the call connects meanwhile. */
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -443,14 +432,6 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
     pendingRatings.current.add(write);
   };
 
-  /** A typed message: the agent reads lk.chat like speech and replies; it counts as your turn here. */
-  async function sendMessage(event: React.FormEvent) {
-    event.preventDefault();
-    const text = draft.trim();
-    setDraft("");
-    await say(text);
-  }
-
   async function say(text: string) {
     if (!text || phase !== "live") return;
     typedEchoes.current.push(text);
@@ -471,8 +452,6 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
   // Evidence lands just after each reply; poll mildly so icons appear once a lookup actually pulled something.
   const evidenceTurns = useEvidenceTurns(twin && !learner ? connection?.sessionId : undefined, 3000);
   const [attaching, setAttaching] = useState(false);
-  /** Files attached this call, by marker id: the transcript line is re-rendered as a card above the message. */
-  const [attachedFiles, setAttachedFiles] = useState<Map<string, { name: string; mediaType: string | null }>>(new Map());
   const attachInput = useRef<HTMLInputElement>(null);
   /** Mid-call file, as in the learner's session: upload it, link it to this session, then tell the twin its ID (it reads by ID). */
   async function attachFile(file: File) {
@@ -501,58 +480,12 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
     }
   }
 
-  /** The browser's mic track, if it was stopped or paused by the browser itself (Safari does) rather than muted by you. */
-  const pausedMic = () => {
-    const track = room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track as LocalAudioTrack | undefined;
-    const raw = track?.mediaStreamTrack;
-    return track && raw && (raw.readyState === "ended" || raw.muted) ? track : null;
-  };
-
-  async function onMicClick() {
-    const paused = pausedMic();
-    if (!paused) return void (await toggleMic());
-    // Safari stopped or paused the capture: take a fresh one from this click and keep the mic on.
-    try {
-      await paused.restartTrack();
-      await toggleMic(true);
-    } catch (micError) {
-      console.error("Microphone restart failed:", micError);
-      toast.error(micProblem(micError));
-    }
-  }
-
-  // Tell the trainer when the browser itself pauses the mic mid-call (Safari does); a click on the mic brings it back.
-  useEffect(() => {
-    const local = room.localParticipant;
-    let raw: MediaStreamTrack | undefined;
-    const onBrowserPause = () => toast.warning("Your browser paused the microphone. Click the mic to turn it back on.");
-    const watch = () => {
-      raw?.removeEventListener("mute", onBrowserPause);
-      raw = local.getTrackPublication(Track.Source.Microphone)?.track?.mediaStreamTrack;
-      raw?.addEventListener("mute", onBrowserPause);
-    };
-    // A restarted mic is a new browser track, so watch again whenever the mic is (re)published or unmuted.
-    local.on(ParticipantEvent.LocalTrackPublished, watch).on(ParticipantEvent.TrackUnmuted, watch);
-    watch();
-    return () => {
-      local.off(ParticipantEvent.LocalTrackPublished, watch).off(ParticipantEvent.TrackUnmuted, watch);
-      raw?.removeEventListener("mute", onBrowserPause);
-    };
-  }, [room]);
-
   // Show the twin's words as they stream in, then the finished turn with its rating buttons.
   const captions: (CalibrationTurn & { streaming?: boolean })[] = liveText
     ? [...turns, { id: "streaming", speaker: "twin", text: liveText, streaming: true }]
     : turns;
   /** Only the twin's latest finished answer can be rated; earlier ones keep their rating (or none). */
   const latestTwinId = turns.findLast((t) => t.speaker === "twin")?.id;
-
-  // Follow the conversation: keep the newest turn in view as it grows.
-  const scrollRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [turns, liveText, thinking]);
 
   return (
     <LiveKitWorkspaceProvider
@@ -611,7 +544,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                 </button>
               ) : null}
 
-              <div ref={scrollRef} className="mask-edge-y mt-4 flex min-h-0 w-full flex-1 justify-center overflow-y-auto">
+              <ConversationScroll className="mt-4 w-full items-center">
               <div aria-live="polite" className="flex h-fit w-full max-w-[440px] flex-col gap-4 py-7">
                 {phase === "error" ? (
                   <div role="alert" className="flex flex-col items-center gap-3 text-center">
@@ -705,7 +638,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                   </Marker>
                 ) : null}
               </div>
-              </div>
+              </ConversationScroll>
             </div>
 
             {/* Pinned to the bottom of the window; the area above leaves room for it. The voice waves run behind it. */}
@@ -716,66 +649,24 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                   micTrack={microphoneTrack?.track as LocalAudioTrack | undefined}
                 />
               ) : null}
-              {composerOpen ? (
-                <form onSubmit={(event) => void sendMessage(event)} className="relative flex w-full max-w-[440px] items-center gap-2 rounded-full border bg-card p-1.5 pl-4">
-                  <label htmlFor="calibration-message" className="sr-only">
-                    Message {twinName}
-                  </label>
-                  <input
-                    id="calibration-message"
-                    autoFocus
-                    autoComplete="off"
-                    value={draft}
-                    onChange={(event) => setDraft(event.target.value)}
-                    onKeyDown={(event) => event.key === "Escape" && setComposerOpen(false)}
-                    placeholder={`Type a message to ${twinName}`}
-                    disabled={phase !== "live"}
-                    maxLength={2000}
-                    className="h-9 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:opacity-60"
-                  />
-                  <button
-                    type="submit"
-                    aria-label="Send message"
-                    disabled={phase !== "live" || !draft.trim()}
-                    className="grid size-9 shrink-0 place-items-center rounded-full bg-foreground text-background outline-none transition-opacity focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-40"
-                  >
-                    <ArrowUp className="size-4" />
-                  </button>
-                </form>
-              ) : null}
+              {composerOpen ? <CallComposer autoFocus name={twinName} onSend={say} disabled={phase !== "live"} onClose={() => setComposerOpen(false)} /> : null}
             <div className="relative flex justify-center gap-4">
-              <button
-                type="button"
-                aria-label={muted ? "Unmute" : "Mute"}
-                aria-pressed={muted}
-                disabled={phase !== "live" || micPending}
-                onClick={() => void onMicClick()}
-                className={cn(CONTROL, muted ? "bg-foreground text-background" : "border bg-muted hover:bg-border")}
-              >
+              <CallControlButton aria-label={muted ? "Unmute" : "Mute"} aria-pressed={muted}
+                disabled={phase !== "live" || micPending} onClick={() => void onMicClick()}
+                className={muted ? "bg-foreground text-background hover:bg-foreground/90" : undefined}>
                 <MicIcon off={muted} />
-              </button>
-              <button
-                type="button"
-                aria-label={composerOpen ? "Close message box" : "Type a message"}
-                aria-pressed={composerOpen}
-                onClick={() => setComposerOpen(!composerOpen)}
-                style={{ "--call-chat-lines": composerOpen ? "var(--card)" : "var(--muted)" } as React.CSSProperties}
-                className={cn(CONTROL, "border", composerOpen ? "bg-card" : "bg-muted hover:bg-border")}
-              >
+              </CallControlButton>
+              <CallControlButton aria-label={composerOpen ? "Close message box" : "Type a message"} aria-pressed={composerOpen}
+                onClick={() => setComposerOpen(!composerOpen)} style={{ "--call-chat-lines": composerOpen ? "var(--card)" : "var(--muted)" } as React.CSSProperties}
+                className={composerOpen ? "bg-card" : undefined}>
                 <ChatIcon />
-              </button>
+              </CallControlButton>
               {attach ? (
                 <>
-                  <button
-                    type="button"
-                    aria-label="Attach a file"
-                    title={`Attach a file. ${DURING_UPLOAD_RULE}`}
-                    disabled={phase !== "live" || attaching}
-                    onClick={() => attachInput.current?.click()}
-                    className={cn(CONTROL, "border bg-muted hover:bg-border")}
-                  >
-                    {attaching ? <LoaderCircle className="size-5 animate-spin" aria-hidden /> : <Paperclip className="size-5" aria-hidden />}
-                  </button>
+                  <CallControlButton aria-label="Attach a file" title={`Attach a file. ${DURING_UPLOAD_RULE}`}
+                    disabled={phase !== "live" || attaching} onClick={() => attachInput.current?.click()}>
+                    {attaching ? <LoaderCircle className="animate-spin" aria-hidden /> : <Paperclip aria-hidden />}
+                  </CallControlButton>
                   <input
                     ref={attachInput}
                     type="file"
@@ -790,25 +681,15 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                 </>
               ) : null}
               {learner ? (
-                <button
-                  type="button"
-                  aria-label="Report an issue"
-                  title="Report an issue"
-                  onClick={() => learner.onReport(connectionRef.current?.sessionId ?? null)}
-                  className={cn(CONTROL, "border bg-muted hover:bg-border")}
-                >
+                <CallControlButton aria-label="Report an issue" title="Report an issue" onClick={() => learner.onReport(connectionRef.current?.sessionId ?? null)}>
                   <Flag />
-                </button>
+                </CallControlButton>
               ) : null}
-              <button
-                type="button"
-                aria-label="End call"
-                disabled={phase === "error"}
+              <CallControlButton aria-label="End call" disabled={phase === "error"}
                 onClick={() => (phase === "live" ? setConfirmEnd(true) : void end("abandoned"))}
-                className={cn(CONTROL, "bg-live text-white hover:bg-live-hover")}
-              >
+                className="border-transparent bg-live text-white hover:bg-live-hover">
                 <HangUpIcon />
-              </button>
+              </CallControlButton>
             </div>
             </div>
 

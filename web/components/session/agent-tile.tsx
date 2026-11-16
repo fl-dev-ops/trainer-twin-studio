@@ -1,55 +1,18 @@
 "use client";
 
-import Image from "next/image";
 import { useVoiceAssistant } from "@livekit/components-react";
+import { ConversationPortrait } from "@/components/conversation/parts";
 import { cn } from "@/lib/utils";
 
-/** The trainer's tile (V2 prototype): the persona's photo, else an initial on the light wash; a status pill and a name tag. */
+/** Same portrait as twin conversations, with the role-play's existing live speaking state. */
 export function AgentTile({ persona, photoUrl = null, compact = false }: { persona: string; photoUrl?: string | null; compact?: boolean }) {
   const { state } = useVoiceAssistant();
-  const isSpeaking = state === "speaking";
-  const isThinking = state === "thinking";
-
-  const name = persona.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Trainer";
-
-  return (
-    <div
-      className={cn(
-        "relative size-full overflow-hidden rounded-2xl bg-art-pastel shadow-elevation-2 transition-shadow duration-300",
-        isSpeaking && "ring-2 ring-success-border",
-      )}
-    >
-      {photoUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element -- presigned S3 link to the persona's avatar photo
-        <img src={photoUrl} alt="" className="absolute inset-0 size-full object-cover object-[center_20%]" />
-      ) : persona.toLowerCase() === "vasanth" ? (
-        <Image src="/vasanth.png" alt="" fill sizes={compact ? "220px" : "360px"} className="object-cover" priority />
-      ) : (
-        <div aria-hidden className="grid size-full place-items-center">
-          <span
-            className={cn(
-              "grid place-items-center rounded-full bg-white/70 font-semibold text-night/75",
-              compact ? "size-14 text-2xl" : "size-24 text-4xl",
-            )}
-          >
-            {name.charAt(0)}
-          </span>
-        </div>
-      )}
-
-      {isSpeaking || isThinking ? (
-        <span className="absolute top-3 left-3 flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
-          <span
-            aria-hidden
-            className={cn("size-1.5 rounded-full", isSpeaking ? "bg-live" : "animate-pulse bg-caution")}
-          />
-          {isSpeaking ? "Speaking" : "Thinking"}
-        </span>
-      ) : null}
-
-      <span className="absolute bottom-3 left-3 max-w-[calc(100%-1.65rem)] truncate rounded-full bg-black/55 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
-        {name}
-      </span>
-    </div>
-  );
+  const speaking = state === "speaking";
+  const name = persona.replaceAll("-", " ").replace(/\b\w/g, letter => letter.toUpperCase()) || "Trainer";
+  return <div className={cn("relative size-full overflow-hidden rounded-stage bg-muted shadow-elevation-2 transition-shadow", speaking && "ring-2 ring-success-border")}>
+    <ConversationPortrait name={name} photoUrl={photoUrl ?? (persona.toLowerCase() === "vasanth" ? "/vasanth.png" : null)} className="size-full text-7xl" />
+    {(speaking || state === "thinking") && <span className={cn("absolute top-3 left-3 rounded-full bg-black/45 px-2.5 py-1 text-xs font-medium text-white", compact && "max-md:hidden")}>
+      {speaking ? "Speaking" : "Thinking"}
+    </span>}
+  </div>;
 }

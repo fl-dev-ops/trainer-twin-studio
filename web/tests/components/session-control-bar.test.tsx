@@ -16,18 +16,20 @@ const props = {
   onChatToggle: () => {},
   onEnd: () => {},
   onAttach: () => {},
+  onComposerToggle: () => {},
+  composerOpen: false,
 };
 
 test("all call controls fit the compact mobile layout with accessible names", () => {
   const html = renderToStaticMarkup(<SessionControlBar {...props} />);
-  for (const name of ["Turn on camera", "Unmute microphone", "Chat", "Attach a file", "End session"]) {
+  for (const name of ["Turn on camera", "Unmute microphone", "Transcript", "Type a message", "Attach a file", "End session"]) {
     expect(html).toContain(`aria-label="${name}"`);
   }
   expect(html).toContain('title="Enable audio"');
-  expect(html).toContain('class="sr-only md:not-sr-only">Enable audio</span>');
-  expect(html).toContain('class="sr-only md:not-sr-only">End</span>');
-  expect(html).toContain("md:col-start-2");
-  expect(html).toContain("md:col-start-3");
+  expect(html).toContain('aria-label="Enable audio"');
+  expect(html).toContain('role="toolbar"');
+  expect(html).toContain("size-10");
+  expect(html).toContain("flex-wrap");
 });
 
 test("controls remain hidden until connected", () => {
@@ -40,7 +42,7 @@ test("chat fills its mobile sheet without losing close or message controls", () 
   );
   expect(html).toContain("w-full");
   expect(html).not.toContain("w-[360px]");
-  expect(html).toContain('aria-label="Close chat"');
-  expect(html).toContain('aria-label="Message the trainer"');
+  expect(html).toContain('aria-label="Close transcript"');
+  expect(html).toContain('Message Trainer');
   expect(html).toContain('aria-label="Send message"');
 });

@@ -5,9 +5,12 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { strToU8, zipSync } from "fflate";
+import postcss from "postcss";
+import tailwind from "@tailwindcss/postcss";
 
 const out = mkdtempSync(join(tmpdir(), "tt-workspace-browser-"));
-await build({ entryPoints: ["e2e/workspace/fixture.tsx"], outdir: out, bundle: true, splitting: true, format: "esm", platform: "browser", jsx: "automatic",
+const theme = await postcss([tailwind({ base: process.cwd() })]).process(readFileSync("app/globals.css", "utf8"), { from: resolve("app/globals.css") });
+await build({ entryPoints: { fixture: "e2e/workspace/fixture.tsx", "call-ui": "e2e/workspace/call-ui.tsx" }, outdir: out, bundle: true, splitting: true, format: "esm", platform: "browser", jsx: "automatic",
   alias: { "next/dynamic": resolve("e2e/workspace/dynamic.tsx") },
   conditions: ["development"],
   define: { "process.env.NODE_ENV": '"development"', "process.env": "{}" },
@@ -35,6 +38,14 @@ async function handleRequest(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname;
   if (path === "/") return new Response(html, { headers: { "content-type": "text/html" } });
+  if (path === "/call-theme.css") return new Response(theme.css, { headers: { "content-type": "text/css" } });
+  if (path === "/call-ui") return new Response(`<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/call-ui.css"><link rel="stylesheet" href="/call-theme.css"><style>:root{--font-geist-sans:Arial;--font-geist-mono:monospace}body{font-family:Arial,sans-serif}</style></head><body><div id="root"></div><script>window.EXCALIDRAW_ASSET_PATH='/excalidraw/';</script><script type="module" src="/call-ui.js"></script></body></html>`, { headers: { "content-type": "text/html" } });
+  if (path.startsWith("/public/")) {
+    const file = resolve("public", path.slice(8));
+    if (!file.startsWith(`${resolve("public")}/`)) return new Response(null, { status: 404 });
+    try { return new Response(new Uint8Array(readFileSync(file)), { headers: { "content-type": "image/png" } }); }
+    catch { return new Response(null, { status: 404 }); }
+  }
   if (path === "/fixture.pdf") return new Response(new Uint8Array(pdfBytes), { headers: { "content-type": "application/pdf" } });
   if (path === "/fixture.pptx") return new Response(new Uint8Array(presentation), { headers: { "content-type": "application/vnd.openxmlformats-officedocument.presentationml.presentation" } });
   if (path === "/fixture.png") return new Response(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jB8kAAAAASUVORK5CYII=", "base64"), { headers: { "content-type": "image/png" } });
