@@ -3,7 +3,18 @@
 import Link from "next/link";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
-import { BillingIcon, BrandMark, PersonaIcon, RoleplayIcon, SessionsIcon, SettingsIcon, SetupIcon, SupportIcon, TwinIcon, UsersIcon } from "@/components/icons";
+import {
+  BillingIcon,
+  BrandMark,
+  PersonaIcon,
+  RoleplayIcon,
+  SessionsIcon,
+  SettingsIcon,
+  SetupIcon,
+  SupportIcon,
+  TwinIcon,
+  UsersIcon,
+} from "@/components/icons";
 import { SupportDialog } from "@/components/support-dialog";
 import { SidebarCredits } from "@/components/credits/sidebar-credits";
 import { OrgSwitcher, type SwitchableOrg } from "@/components/org-switcher";
@@ -11,17 +22,19 @@ import { SidebarAccountMenu } from "@/components/sidebar-account-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
 
-/**
- * Rail port of the reference sidebar (trainertwin-beta app.css `.rail`):
- * 248px expanded / 72px collapsed, sunken background, uppercase group labels,
- * 32px nav rows with white active pills, and a card-style user row at the foot.
- */
 const NAV_GROUPS = [
   {
     label: "Twin",
@@ -30,53 +43,81 @@ const NAV_GROUPS = [
       { title: "Twin sessions", href: "/twin/sessions", icon: SessionsIcon },
       { title: "Twin users", href: "/twin/users", icon: UsersIcon },
       // Knowledge opens from the brain canvas, so it lights this item too.
-      { title: "Twin’s brain", href: "/twin/brain", icon: TwinIcon, also: ["/twin/knowledge"] },
+      {
+        title: "Twin’s brain",
+        href: "/twin/brain",
+        icon: TwinIcon,
+        also: ["/twin/knowledge"],
+      },
     ],
   },
   {
     label: "Role play",
     items: [
       { title: "Scenarios", href: "/roleplay", icon: RoleplayIcon },
-      { title: "Role play sessions", href: "/roleplay/sessions", icon: SessionsIcon },
+      {
+        title: "Role play sessions",
+        href: "/roleplay/sessions",
+        icon: SessionsIcon,
+      },
       { title: "Roleplay users", href: "/roleplay/users", icon: UsersIcon },
       { title: "Personas", href: "/personas", icon: PersonaIcon },
     ],
   },
 ];
 
-/** Reference nav-item metrics: 32px row, 8px radius, 14px/20px text, 20px icon. */
-type NavItem = { title: string; href: string; icon: typeof TwinIcon; also?: string[] };
+type NavItem = {
+  title: string;
+  href: string;
+  icon: typeof TwinIcon;
+  also?: string[];
+};
 const NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((group) => group.items);
-const NAV_HREFS = [...NAV_ITEMS.flatMap((item) => [item.href, ...(item.also ?? [])]), "/usage", "/billing", "/settings"];
+const NAV_HREFS = [
+  ...NAV_ITEMS.flatMap((item) => [item.href, ...(item.also ?? [])]),
+  "/usage",
+  "/billing",
+  "/settings",
+];
 
-const matches = (pathname: string, href: string) => pathname === href || pathname.startsWith(`${href}/`);
+const matches = (pathname: string, href: string) =>
+  pathname === href || pathname.startsWith(`${href}/`);
 
 /** Only the most specific link is active: /twin/sessions lights "Twin sessions", not "Twin agents" too. */
 function isActive(pathname: string, href: string) {
-  const own = [href, ...(NAV_ITEMS.find((item) => item.href === href)?.also ?? [])];
-  const hit = own.filter((path) => matches(pathname, path)).sort((a, b) => b.length - a.length)[0];
+  const own = [
+    href,
+    ...(NAV_ITEMS.find((item) => item.href === href)?.also ?? []),
+  ];
+  const hit = own
+    .filter((path) => matches(pathname, path))
+    .sort((a, b) => b.length - a.length)[0];
   if (!hit) return false;
-  return !NAV_HREFS.some((other) => !own.includes(other) && other.length > hit.length && matches(pathname, other));
+  return !NAV_HREFS.some(
+    (other) =>
+      !own.includes(other) &&
+      other.length > hit.length &&
+      matches(pathname, other),
+  );
 }
 
-/** Brand lockup: mark + wordmark; clicking toggles the rail (reference behaviour). */
+/** The brand doubles as the sidebar toggle on desktop and mobile. */
 function Brand() {
-  const { state, toggleSidebar } = useSidebar();
-  const collapsed = state === "collapsed";
+  const { state, isMobile } = useSidebar();
+  const collapsed = !isMobile && state === "collapsed";
   return (
     <div className="flex min-h-8 items-center justify-between gap-2 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center">
-      <button
-        type="button"
-        onClick={toggleSidebar}
-        aria-label={collapsed ? "Expand menu" : "Collapse menu"}
-        aria-expanded={!collapsed}
-        className="flex h-8 items-center gap-1.5 rounded-md text-foreground transition-colors outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring hover:text-(--text-secondary) group-data-[collapsible=icon]:w-10 group-data-[collapsible=icon]:justify-center"
+      <SidebarTrigger
+        size={collapsed ? "icon" : "default"}
+        aria-label="Toggle menu"
+        variant={"link"}
+        className={"!no-underline"}
       >
-        <BrandMark className="size-5 shrink-0 text-primary" />
+        <BrandMark className="fill-brand" />
         <span className="text-base font-semibold leading-none tracking-title group-data-[collapsible=icon]:hidden">
           TrainerTwin
         </span>
-      </button>
+      </SidebarTrigger>
       <ThemeToggle />
     </div>
   );
@@ -87,7 +128,12 @@ function SidebarSupport() {
   const [open, setOpen] = useState(false);
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton onClick={() => setOpen(true)} tooltip="Support" variant="nav">
+      <SidebarMenuButton
+        onClick={() => setOpen(true)}
+        aria-label="Support"
+        tooltip="Support"
+        variant="nav"
+      >
         <SupportIcon />
         <span>Support</span>
       </SidebarMenuButton>
@@ -97,75 +143,96 @@ function SidebarSupport() {
 }
 
 /** hideRoleplay: a twin-only org (org metadata flag) gets no Role play group. */
-export function AppSidebar({ hideRoleplay = false, orgs = [], orgId = null }: {
+export function AppSidebar({
+  hideRoleplay = false,
+  orgs = [],
+  orgId = null,
+}: {
   hideRoleplay?: boolean;
   orgs?: SwitchableOrg[];
   orgId?: string | null;
 }) {
   const pathname = usePathname();
-  const groups = hideRoleplay ? NAV_GROUPS.filter((group) => group.label !== "Role play") : NAV_GROUPS;
+  const groups = hideRoleplay
+    ? NAV_GROUPS.filter((group) => group.label !== "Role play")
+    : NAV_GROUPS;
 
   return (
     <Sidebar variant="sidebar" collapsible="icon">
-      {/* Reference "rail-scroll": padded 16/12/12, children stacked with an 8px gap. */}
-      <div className="flex h-full min-h-0 flex-col gap-2 px-3 pt-4 pb-3 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-2">
+      <SidebarHeader>
         <Brand />
-        <nav aria-label="Sections" className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
-          {groups.map((group, index) => (
-            <div key={group.label} className={index === 0 ? "mt-1" : "mt-3"}>
-              <p className="px-2 text-overline leading-4 font-medium tracking-overline uppercase text-muted-foreground group-data-[collapsible=icon]:hidden">
-                {group.label}
-              </p>
-              <SidebarMenu className="mt-2 gap-2">
-                {group.items.map((item) => (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton
-                      render={<Link href={item.href} />}
-                      isActive={isActive(pathname, item.href)}
-                      tooltip={item.title}
-                      variant="nav"
-                    >
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </div>
+      </SidebarHeader>
+      <SidebarContent className="group-data-[collapsible=icon]:overflow-y-auto">
+        <nav aria-label="Sections" className="flex flex-col gap-4">
+          {groups.map((group) => (
+            <SidebarGroup key={group.label}>
+              <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu className="gap-1">
+                  {group.items.map((item) => (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton
+                        render={<Link href={item.href} />}
+                        isActive={isActive(pathname, item.href)}
+                        aria-label={item.title}
+                        aria-current={
+                          isActive(pathname, item.href) ? "page" : undefined
+                        }
+                        tooltip={item.title}
+                        variant="nav"
+                      >
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
           ))}
         </nav>
-        {/* Reference "rail-foot": pinned to the bottom, 12px gap, 12px top padding. */}
-        <div className="mt-auto flex flex-col gap-3 pt-3">
-          <SidebarMenu className="gap-2">
-            <SidebarCredits active={isActive(pathname, "/usage")} />
+      </SidebarContent>
+      <SidebarFooter>
+        <SidebarMenu className="gap-1">
+          <SidebarCredits active={isActive(pathname, "/usage")} />
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              render={<Link href="/billing" />}
+              isActive={isActive(pathname, "/billing")}
+              aria-label="Billing"
+              aria-current={isActive(pathname, "/billing") ? "page" : undefined}
+              tooltip="Billing"
+              variant="nav"
+            >
+              <BillingIcon />
+              <span>Billing</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarSupport />
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              render={<Link href="/settings" />}
+              isActive={isActive(pathname, "/settings")}
+              aria-label="Settings"
+              aria-current={
+                isActive(pathname, "/settings") ? "page" : undefined
+              }
+              tooltip="Settings"
+              variant="nav"
+            >
+              <SettingsIcon />
+              <span>Settings</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          {/* Only for people in two or more studio orgs. */}
+          {orgs.length >= 2 ? (
             <SidebarMenuItem>
-              <SidebarMenuButton render={<Link href="/billing" />} isActive={isActive(pathname, "/billing")} tooltip="Billing" variant="nav">
-                <BillingIcon />
-                <span>Billing</span>
-              </SidebarMenuButton>
+              <OrgSwitcher orgs={orgs} orgId={orgId} />
             </SidebarMenuItem>
-            <SidebarSupport />
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                render={<Link href="/settings" />}
-                isActive={isActive(pathname, "/settings")}
-                tooltip="Settings"
-                variant="nav"
-              >
-                <SettingsIcon />
-                <span>Settings</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            {/* Only for people in two or more studio orgs. */}
-            {orgs.length >= 2 ? (
-              <SidebarMenuItem>
-                <OrgSwitcher orgs={orgs} orgId={orgId} />
-              </SidebarMenuItem>
-            ) : null}
-          </SidebarMenu>
-          <SidebarAccountMenu />
-        </div>
-      </div>
+          ) : null}
+        </SidebarMenu>
+        <SidebarAccountMenu />
+      </SidebarFooter>
     </Sidebar>
   );
 }
