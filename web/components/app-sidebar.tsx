@@ -1,22 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import { usePathname } from "next/navigation";
 import {
-  BillingIcon,
   BrandMark,
   PersonaIcon,
   RoleplayIcon,
   SessionsIcon,
-  SettingsIcon,
   SetupIcon,
-  SupportIcon,
   TwinIcon,
   UsersIcon,
 } from "@/components/icons";
-import { SupportDialog } from "@/components/support-dialog";
-import { SidebarCredits } from "@/components/credits/sidebar-credits";
 import { OrgSwitcher, type SwitchableOrg } from "@/components/org-switcher";
 import { SidebarAccountMenu } from "@/components/sidebar-account-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -110,7 +104,7 @@ function Brand() {
       <SidebarTrigger
         size={collapsed ? "icon" : "default"}
         aria-label="Toggle menu"
-        variant={"link"}
+        variant={"ghost"}
         className={"!no-underline"}
       >
         <BrandMark className="fill-brand" />
@@ -120,25 +114,6 @@ function Brand() {
       </SidebarTrigger>
       <ThemeToggle />
     </div>
-  );
-}
-
-/** Opens the Support dialog from anywhere in the studio. */
-function SidebarSupport() {
-  const [open, setOpen] = useState(false);
-  return (
-    <SidebarMenuItem>
-      <SidebarMenuButton
-        onClick={() => setOpen(true)}
-        aria-label="Support"
-        tooltip="Support"
-        variant="nav"
-      >
-        <SupportIcon />
-        <span>Support</span>
-      </SidebarMenuButton>
-      <SupportDialog open={open} onOpenChange={setOpen} />
-    </SidebarMenuItem>
   );
 }
 
@@ -161,6 +136,13 @@ export function AppSidebar({
     <Sidebar variant="sidebar" collapsible="icon">
       <SidebarHeader>
         <Brand />
+        {orgs.length >= 2 ? (
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <OrgSwitcher orgs={orgs} orgId={orgId} />
+            </SidebarMenuItem>
+          </SidebarMenu>
+        ) : null}
       </SidebarHeader>
       <SidebarContent className="group-data-[collapsible=icon]:overflow-y-auto">
         <nav aria-label="Sections" className="flex flex-col gap-4">
@@ -193,44 +175,6 @@ export function AppSidebar({
         </nav>
       </SidebarContent>
       <SidebarFooter>
-        <SidebarMenu className="gap-1">
-          <SidebarCredits active={isActive(pathname, "/usage")} />
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              render={<Link href="/billing" />}
-              isActive={isActive(pathname, "/billing")}
-              aria-label="Billing"
-              aria-current={isActive(pathname, "/billing") ? "page" : undefined}
-              tooltip="Billing"
-              variant="nav"
-            >
-              <BillingIcon />
-              <span>Billing</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarSupport />
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              render={<Link href="/settings" />}
-              isActive={isActive(pathname, "/settings")}
-              aria-label="Settings"
-              aria-current={
-                isActive(pathname, "/settings") ? "page" : undefined
-              }
-              tooltip="Settings"
-              variant="nav"
-            >
-              <SettingsIcon />
-              <span>Settings</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          {/* Only for people in two or more studio orgs. */}
-          {orgs.length >= 2 ? (
-            <SidebarMenuItem>
-              <OrgSwitcher orgs={orgs} orgId={orgId} />
-            </SidebarMenuItem>
-          ) : null}
-        </SidebarMenu>
         <SidebarAccountMenu />
       </SidebarFooter>
     </Sidebar>

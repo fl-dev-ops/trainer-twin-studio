@@ -529,12 +529,11 @@ const sidebarMenuButtonVariants = cva(
           "group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:min-h-0! group-data-[collapsible=icon]:p-0!",
           "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:[&>span]:hidden",
         ),
-        // The signed-in account at the foot of the rail: a 48px card (12px radius, card border, elevation-1, sunken
-        // on hover); collapsed, a bare 32px photo.
+        // A flat profile row; collapsed, only the 32px avatar remains.
         account: cn(
-          "h-12 gap-3 rounded-tt-md border border-card-border bg-card px-2 pr-3 shadow-elevation-1",
-          "hover:bg-(--sidebar) hover:text-foreground data-open:bg-card dark:data-open:bg-card",
-          "group-data-[collapsible=icon]:h-8! group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:p-0! group-data-[collapsible=icon]:shadow-none",
+          "min-h-14 gap-3 rounded-[6px] bg-transparent px-2 py-2 text-foreground",
+          "hover:bg-(--tone-control) hover:text-foreground data-open:bg-transparent",
+          "group-data-[collapsible=icon]:min-h-0! group-data-[collapsible=icon]:h-8! group-data-[collapsible=icon]:p-0!",
         ),
       },
       size: {

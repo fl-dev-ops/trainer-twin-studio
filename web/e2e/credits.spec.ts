@@ -32,7 +32,7 @@ test("Usage: an external balance sync updates the sidebar and Remaining credits 
   await page.goto("/usage");
   await firstVersion;
   const remaining = page.locator("section").filter({ has: page.getByText("Remaining credits", { exact: true }) }).locator("p").nth(1);
-  const sidebar = page.getByRole("link", { name: /^Usage/ });
+  const sidebar = page.getByRole("button", { name: /^Account menu for / });
   await expect(remaining).toHaveText(/[\d,]+ min/);
   const before = Number((await remaining.innerText()).replace(/[^\d]/g, ""));
   await expect(sidebar).toContainText(`${before} min`);
