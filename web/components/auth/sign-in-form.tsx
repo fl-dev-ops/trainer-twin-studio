@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable shadcn/no-restyle -- Sign-in-only rounded/filled treatment; keep shared controls unchanged. */
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -19,6 +21,8 @@ import { REGEXP_ONLY_DIGITS } from "input-otp";
 import { Spinner } from "@/components/ui/spinner";
 import { authClient } from "@/lib/auth-client";
 import { safeFamilyRedirect } from "@/lib/base-domain";
+import { cn } from "@/lib/utils";
+import styles from "./sign-in-form.module.css";
 
 /**
  * Sign-in (specs/people.md rule 10): Google, or a 6-digit code emailed to you. No passwords or self-sign-up.
@@ -79,57 +83,65 @@ export function SignInForm({
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <form onSubmit={onSubmit}>
-        <FieldGroup>
-          <div className="flex flex-col items-center gap-2 text-center">
-            <Link
-              href="/"
-              className="flex flex-col items-center gap-2 font-medium"
-            >
-              <div className="flex size-8 items-center justify-center rounded-md">
-                <Image
-                  src="/trainertwin-mark.svg"
-                  alt=""
-                  width={24}
-                  height={24}
-                  className="size-6"
-                />
-              </div>
-              <span className="sr-only">TrainerTwin</span>
-            </Link>
-            <h1 className="text-xl font-bold tracking-tight text-foreground">
-              Welcome to TrainerTwin
-            </h1>
-            <FieldDescription>
-              Sign in with the email your trainer added.
-            </FieldDescription>
-          </div>
+    <div
+      data-sign-in
+      className={cn("flex flex-col gap-10", styles.entrance)}
+      onFocusCapture={(event) => {
+        // Finish instead of removing the animation, so blur cannot restart it.
+        event.target.closest<HTMLElement>("[data-enter]")?.getAnimations().forEach((animation) => animation.finish());
+      }}
+    >
+      <header data-enter="heading" className="flex flex-col items-center gap-3 text-center">
+        <Link href="/" aria-label="TrainerTwin home" className="mb-2 grid size-10 place-items-center rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <Image src="/trainertwin-mark.svg" alt="" width={28} height={28} />
+        </Link>
+        <h1 className="text-2xl leading-tight font-medium tracking-tight text-foreground">
+          {codeSent ? "Enter your code" : "Welcome to TrainerTwin"}
+        </h1>
+        <FieldDescription className="text-center">
+          {codeSent ? "Use your six-digit code to finish signing in." : "Sign in with the email your trainer added."}
+        </FieldDescription>
+      </header>
+
+      <form data-enter="form" onSubmit={onSubmit}>
+        <FieldGroup className="gap-6">
+          {googleEnabled && !codeSent ? (
+            <>
+              <Field>
+                <GoogleSignInButton className="h-11 w-full rounded-xl" />
+              </Field>
+              <FieldSeparator className="my-1 text-xs">or</FieldSeparator>
+            </>
+          ) : null}
 
           <Field data-invalid={Boolean(error) && !codeSent}>
             <FieldLabel htmlFor="email">Email</FieldLabel>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              placeholder="m@example.com"
-              autoComplete="email"
-              aria-invalid={Boolean(error) && !codeSent}
-              aria-describedby={error && !codeSent ? "sign-in-error" : undefined}
-              value={email}
-              onChange={(event) => {
-                setEmail(event.target.value);
-                setCodeSent(false);
-              }}
-              required
-            />
+            <div className="rounded-xl bg-muted">
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                placeholder="you@example.com"
+                className="h-11 rounded-xl border-transparent px-4"
+                disabled={busy}
+                autoComplete="email"
+                aria-invalid={Boolean(error) && !codeSent}
+                aria-describedby={error && !codeSent ? "sign-in-error" : undefined}
+                value={email}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  setCodeSent(false);
+                }}
+                required
+              />
+            </div>
           </Field>
 
           {codeSent ? (
             <Field data-invalid={Boolean(error)}>
               <div className="flex items-center justify-between gap-3">
                 <FieldLabel htmlFor="code">Code</FieldLabel>
-                <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void sendCode()}>
+                <Button type="button" variant="ghost" size="sm" className="h-10 rounded-lg" disabled={busy} onClick={() => void sendCode()}>
                   Resend code
                 </Button>
               </div>
@@ -143,13 +155,14 @@ export function SignInForm({
                 autoComplete="one-time-code"
                 value={code}
                 onChange={setCode}
+                disabled={busy}
                 aria-invalid={Boolean(error)}
                 aria-describedby={error ? "code-help sign-in-error" : "code-help"}
                 autoFocus
                 required
               >
                 <InputOTPGroup>
-                  {[0, 1, 2, 3, 4, 5].map((index) => <InputOTPSlot key={index} index={index} aria-invalid={Boolean(error)} />)}
+                  {[0, 1, 2, 3, 4, 5].map((index) => <InputOTPSlot key={index} index={index} className="h-11 rounded-xl" aria-invalid={Boolean(error)} />)}
                 </InputOTPGroup>
               </InputOTP>
               <FieldDescription id="code-help">
@@ -165,24 +178,15 @@ export function SignInForm({
           ) : null}
 
           <Field>
-            <Button type="submit" disabled={busy || (codeSent && code.length !== 6)} className="w-full">
+            <Button type="submit" variant="default" disabled={busy || (codeSent && code.length !== 6)} className="h-11 w-full rounded-xl">
               {busy ? <Spinner data-icon="inline-start" /> : null}
-              {busy ? (codeSent ? "Signing in…" : "Sending…") : codeSent ? "Sign in" : "Email me a code"}
+              {busy ? (codeSent ? "Signing in…" : "Sending…") : codeSent ? "Sign in" : "Continue"}
             </Button>
           </Field>
-
-          {googleEnabled ? (
-            <>
-              <FieldSeparator>Or</FieldSeparator>
-              <Field>
-                <GoogleSignInButton />
-              </Field>
-            </>
-          ) : null}
         </FieldGroup>
       </form>
 
-      <FieldDescription className="px-6 text-center text-xs">
+      <FieldDescription data-enter="footer" className="mt-2 px-6 text-center text-xs leading-relaxed">
         By continuing, you agree to our{" "}
         <a
           href="https://www.trainertwin.com/privacy"

@@ -3,8 +3,8 @@ import { e2eUrl } from "./env";
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
-for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
-  test(`email-first layout and OTP entry at ${viewport.width}px`, async ({ page }, testInfo) => {
+for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }, { width: 320, height: 568 }]) {
+  test(`minimal Google-first layout and OTP entry at ${viewport.width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize(viewport);
     let sends = 0;
     await page.route("**/api/auth/email-otp/send-verification-otp", (route) => {
@@ -12,8 +12,11 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
       return route.fulfill({ json: { success: true } });
     });
     await page.goto(e2eUrl("auth", "/sign-in"));
+    await page.locator("[data-sign-in]").evaluate(element => Promise.all(
+      element.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => {})),
+    ));
     const email = page.getByLabel("Email", { exact: true });
-    const send = page.getByRole("button", { name: "Email me a code", exact: true });
+    const send = page.getByRole("button", { name: "Continue", exact: true });
     await expect(email).toBeVisible();
     await expect(send).toBeVisible();
     const emailBox = (await email.boundingBox())!;
@@ -23,15 +26,27 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
       await expect(google).toBeVisible();
       const googleBox = (await google.boundingBox())!;
       const sendBox = (await send.boundingBox())!;
-      expect(googleBox.y).toBeGreaterThan(sendBox.y + sendBox.height);
+      expect(googleBox.y + googleBox.height).toBeLessThan(emailBox.y);
+      expect(googleBox.height).toBeGreaterThanOrEqual(44);
       expect(Math.abs(googleBox.height - sendBox.height)).toBeLessThan(2);
       expect(await google.evaluate((el) => getComputedStyle(el).borderRadius)).toBe(await send.evaluate((el) => getComputedStyle(el).borderRadius));
     }
-    await page.screenshot({ path: testInfo.outputPath("email.png"), fullPage: true, animations: "disabled" });
+    expect(emailBox.width).toBeLessThanOrEqual(400);
+    expect(emailBox.height).toBeGreaterThanOrEqual(44);
+    for (const theme of ["light", "dark"]) {
+      await page.evaluate((theme) => {
+        document.documentElement.classList.remove("light", "dark");
+        document.documentElement.classList.add(theme);
+        document.documentElement.style.colorScheme = theme;
+      }, theme);
+      await page.screenshot({ path: testInfo.outputPath(`email-${theme}.png`), fullPage: true, animations: "disabled" });
+    }
 
     await email.fill("learner.with.a.long.email.address@example.com");
     await send.click();
     await expect(page.locator("#code-help")).toHaveText("Code expires in 10 minutes.");
+    await expect(page.getByRole("heading", { name: "Enter your code", exact: true })).toBeVisible();
+    await expect(google).toHaveCount(0);
     const code = page.getByLabel("Code", { exact: true });
     const submit = page.getByRole("button", { name: "Sign in", exact: true });
     const slots = page.locator('[data-slot="input-otp-slot"]');
@@ -92,7 +107,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
     });
     await page.goto(e2eUrl("auth", "/sign-in"));
     const email = page.getByLabel("Email", { exact: true });
-    const send = page.getByRole("button", { name: "Email me a code", exact: true });
+    const send = page.getByRole("button", { name: "Continue", exact: true });
     await email.fill("unknown@example.com");
     await send.click();
     await expect(page.locator("form").getByRole("alert")).toHaveText("This email isn't on TrainerTwin. Ask your trainer to add you.");
@@ -107,6 +122,77 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
   });
 }
 
+test("page-entry blur reveal uses three groups and never replays on focus or blur", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto(e2eUrl("auth", "/sign-in"));
+  const items = page.locator("[data-sign-in] [data-enter]");
+  const timings = await items.evaluateAll(elements => elements.map(element => {
+    const style = getComputedStyle(element);
+    return { delay: parseFloat(style.animationDelay), duration: parseFloat(style.animationDuration) };
+  }));
+  expect(timings).toEqual([{ delay: 0, duration: 0.6 }, { delay: 0.2, duration: 0.7 }, { delay: 0.3, duration: 0.7 }]);
+  const firstFrame = await items.first().evaluate(element => {
+    const name = getComputedStyle(element).animationName;
+    for (const sheet of document.styleSheets) {
+      let rules: CSSRuleList;
+      try { rules = sheet.cssRules; } catch { continue; }
+      for (const rule of Array.from(rules)) {
+        if (rule instanceof CSSKeyframesRule && rule.name === name) return rule.cssRules[0].cssText;
+      }
+    }
+    return "";
+  });
+  expect(firstFrame).toContain("blur(8px)");
+  expect(firstFrame).toContain("scale(0.97)");
+  await expect(items.last()).toHaveCSS("opacity", "1");
+  await page.evaluate(() => {
+    const root = document.querySelector<HTMLElement>("[data-sign-in]")!;
+    root.dataset.restarts = "0";
+    root.addEventListener("animationstart", () => { root.dataset.restarts = String(Number(root.dataset.restarts) + 1); });
+  });
+  const email = page.getByLabel("Email", { exact: true });
+  await email.fill("learner@example.com");
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await email.focus();
+    await expect(page.locator('[data-enter="form"]')).toHaveCSS("filter", "none");
+    await email.blur();
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await expect(page.locator("[data-sign-in]")).toHaveAttribute("data-restarts", "0");
+    await expect(page.locator('[data-enter="form"]')).toHaveCSS("filter", "none");
+  }
+});
+
+test("focusing during the entrance clears the form permanently", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto(e2eUrl("auth", "/sign-in"));
+  const form = page.locator('[data-enter="form"]');
+  await form.evaluate(element => {
+    const animation = element.getAnimations()[0];
+    if (!animation) throw new Error("Missing form entrance animation");
+    animation.pause();
+    animation.currentTime = 250;
+  });
+  await expect.poll(() => form.evaluate(element => getComputedStyle(element).filter)).not.toBe("none");
+  const email = page.getByLabel("Email", { exact: true });
+  await email.focus();
+  await expect(form).toHaveCSS("filter", "none");
+  await email.blur();
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await expect(form).toHaveCSS("filter", "none");
+  expect(await form.evaluate(element => element.getAnimations().filter(animation => animation.playState !== "finished").length)).toBe(0);
+});
+
+test("reduced motion shows the complete sign-in form without an entrance animation", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto(e2eUrl("auth", "/sign-in"));
+  const styles = await page.locator("[data-sign-in] [data-enter]").evaluateAll(elements => elements.map(element => {
+    const style = getComputedStyle(element);
+    return { animation: style.animationName, opacity: style.opacity };
+  }));
+  expect(styles).toHaveLength(3);
+  for (const style of styles) expect(style).toEqual({ animation: "none", opacity: "1" });
+});
+
 for (const [code, message] of [
   ["signup_disabled", "There's no TrainerTwin account for that Google email. Sign in with the email your trainer added, or ask them to add you."],
   ["access_denied", "Google sign-in didn't work. Try again, or sign in with a code sent to your email."],
@@ -115,7 +201,7 @@ for (const [code, message] of [
     await page.goto(e2eUrl("auth", `/sign-in?error=${code}`));
     await expect(page.locator("form").getByRole("alert")).toHaveText(message);
     await expect(page.getByLabel("Email", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Email me a code", exact: true })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeEnabled();
     await expect(page.locator('input[type="password"]')).toHaveCount(0);
   });
 }
@@ -131,7 +217,7 @@ for (const [code, serverMessage, message] of [
     await page.route("**/api/auth/sign-in/email-otp", (route) => route.fulfill({ status: 400, json: { code, message: serverMessage } }));
     await page.goto(e2eUrl("auth", "/sign-in"));
     await page.getByLabel("Email", { exact: true }).fill("learner@example.com");
-    await page.getByRole("button", { name: "Email me a code", exact: true }).click();
+    await page.getByRole("button", { name: "Continue", exact: true }).click();
     await expect(page.getByText("Code expires in 10 minutes.", { exact: true })).toBeVisible();
     await page.getByLabel("Code", { exact: true }).fill("123456");
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
