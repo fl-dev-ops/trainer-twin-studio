@@ -336,9 +336,9 @@ const usersRouter = t.router({
       found.sessions += 1;
     }
     const credits = await creditsLeftFor(orgId, [...people.values()].map((row) => row.email));
-    return [...people.values()]
+    return [...people.entries()]
       // creditsLeft: their practice minutes left (shared with twins); null for admin and team.
-      .map(({ roleplays, ...rest }) => ({ ...rest, roleplays: roleplays.size, creditsLeft: credits.get(rest.email)?.left ?? null }))
+      .map(([userId, { roleplays, ...rest }]) => ({ ...rest, userId, roleplays: roleplays.size, creditsLeft: credits.get(rest.email)?.left ?? null }))
       .sort((a, b) => b.sessions - a.sessions || a.name.localeCompare(b.name));
   }),
 });

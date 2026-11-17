@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import Link from "next/link";
 import { LowCreditsBadge } from "@/components/credits/low-credits-badge";
 import { UsersIcon } from "@/components/icons";
 import { LOW_LEARNER_MINUTES } from "@/lib/minutes-config";
@@ -48,9 +49,11 @@ export function TwinUsersPage({ learners }: { learners: TwinOutputs["users"]["li
           const pct = Math.min(100, Math.round((l.used / l.minutes) * 100));
           const isHigh = pct >= 90;
           return (
-            <div
-              key={l.email}
-              className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1.5fr)_110px_120px_130px_minmax(0,1.3fr)] items-center gap-3 border-t border-(--border) px-5 py-3.5 text-sm"
+            <Link
+              key={l.userId}
+              href={`/users/${encodeURIComponent(l.userId)}`}
+              aria-label={`Open profile for ${l.name}`}
+              className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1.5fr)_110px_120px_130px_minmax(0,1.3fr)] items-center gap-3 border-t border-(--border) px-5 py-3.5 text-sm outline-none transition-colors hover:bg-sidebar focus-visible:bg-sidebar focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
               <span className="flex items-center gap-3 min-w-0 font-medium">
                 <UserAvatar user={l} size="sm" />
@@ -86,7 +89,7 @@ export function TwinUsersPage({ learners }: { learners: TwinOutputs["users"]["li
                   {left < LOW_LEARNER_MINUTES ? <LowCreditsBadge /> : null}
                 </span>
               </span>
-            </div>
+            </Link>
           );
         })}
       </div>

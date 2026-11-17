@@ -491,8 +491,8 @@ const usersRouter = t.router({
       person.agents += 1;
       people.set(row.userId, person);
     }
-    return [...people.values()]
-      .map((person) => ({ ...person, until: person.until?.toISOString() ?? null }))
+    return [...people.entries()]
+      .map(([userId, person]) => ({ ...person, userId, until: person.until?.toISOString() ?? null }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }),
 

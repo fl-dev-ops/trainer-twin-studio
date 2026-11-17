@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   BrandMark,
   PersonaIcon,
@@ -58,6 +58,13 @@ const NAV_GROUPS = [
       { title: "Personas", href: "/personas", icon: PersonaIcon },
     ],
   },
+  {
+    label: "People",
+    items: [
+      { title: "Users", href: "/users", icon: UsersIcon },
+      { title: "Team", href: "/settings?tab=team", icon: UsersIcon },
+    ],
+  },
 ];
 
 type NavItem = {
@@ -72,15 +79,17 @@ const NAV_HREFS = [
   "/usage",
   "/billing",
   "/settings",
-];
+].map((href) => href.split("?")[0]);
 
 const matches = (pathname: string, href: string) =>
   pathname === href || pathname.startsWith(`${href}/`);
 
 /** Only the most specific link is active: /twin/sessions lights "Twin sessions", not "Twin agents" too. */
-function isActive(pathname: string, href: string) {
+function isActive(pathname: string, href: string, tab: string | null) {
+  const [path, query] = href.split("?");
+  if (query && new URLSearchParams(query).get("tab") !== tab) return false;
   const own = [
-    href,
+    path,
     ...(NAV_ITEMS.find((item) => item.href === href)?.also ?? []),
   ];
   const hit = own
@@ -105,7 +114,6 @@ function Brand() {
         size={collapsed ? "icon" : "default"}
         aria-label="Toggle menu"
         variant={"ghost"}
-        className={"!no-underline"}
       >
         <BrandMark className="fill-brand" />
         <span className="text-base font-semibold leading-none tracking-title group-data-[collapsible=icon]:hidden">
@@ -128,6 +136,7 @@ export function AppSidebar({
   orgId?: string | null;
 }) {
   const pathname = usePathname();
+  const tab = useSearchParams().get("tab");
   const groups = hideRoleplay
     ? NAV_GROUPS.filter((group) => group.label !== "Role play")
     : NAV_GROUPS;
@@ -155,10 +164,10 @@ export function AppSidebar({
                     <SidebarMenuItem key={item.href}>
                       <SidebarMenuButton
                         render={<Link href={item.href} />}
-                        isActive={isActive(pathname, item.href)}
+                        isActive={isActive(pathname, item.href, tab)}
                         aria-label={item.title}
                         aria-current={
-                          isActive(pathname, item.href) ? "page" : undefined
+                          isActive(pathname, item.href, tab) ? "page" : undefined
                         }
                         tooltip={item.title}
                         variant="nav"
